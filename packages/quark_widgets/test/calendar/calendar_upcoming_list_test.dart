@@ -51,6 +51,7 @@ Widget _list({
   String? error,
   ValueChanged<CalendarEventItem>? onEventTap,
   VoidCallback? onAddEvent,
+  VoidCallback? onRetry,
 }) => CalendarUpcomingList(
   days: days ?? _days,
   today: _today,
@@ -59,6 +60,7 @@ Widget _list({
   error: error,
   onEventTap: onEventTap,
   onAddEvent: onAddEvent,
+  onRetry: onRetry,
 );
 
 void main() {
@@ -165,6 +167,42 @@ void main() {
     );
     expect(find.text("Couldn't load your calendar."), findsOneWidget);
     expect(find.text('Vet'), findsOneWidget);
+  });
+
+  // #2540: a failed load offers Try again, over events or in their place.
+  for (final (name, days) in [
+    ('with events on show', _days),
+    ('with nothing loaded', const <CalendarDayEvents>[]),
+  ]) {
+    testBothViewports('a load error $name offers Try again', (
+      tester,
+      size,
+    ) async {
+      var retries = 0;
+      await pumpAt(
+        tester,
+        _list(
+          days: days,
+          error: "Couldn't load your calendar.",
+          onRetry: () => retries++,
+        ),
+        size: size,
+      );
+      expect(find.text("Couldn't load your calendar."), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('calendar_upcoming_retry')));
+      expect(retries, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testBothViewports('no Try again without an error or a handler', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, _list(onRetry: () {}), size: size);
+    expect(find.byKey(const ValueKey('calendar_upcoming_retry')), findsNothing);
+    await pumpAt(tester, _list(error: 'Failed.'), size: size);
+    expect(find.byKey(const ValueKey('calendar_upcoming_retry')), findsNothing);
   });
 
   testBothViewports('an empty week offers to add an event', (

@@ -14,7 +14,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// A load that fails before anything has shown fills the body with a retry;
 /// one that fails later keeps the last view on show under an [ErrorBanner]
-/// with its own Try again (#2540).
+/// with its own Try again (#2540). Upcoming words its own error, Try again
+/// included.
 ///
 /// Month rows start on [firstWeekday], the same weekday the page loaded the
 /// span with (#2539). An empty Month or Day says so over its grid and offers
@@ -22,8 +23,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// new one has not arrived yet (#2538).
 ///
 /// Key prefixes: `calendar_retry` on the first load's retry button,
-/// `calendar_error_retry` on a later failed load's, and the keys of the
-/// package widget on show.
+/// `calendar_error_retry` on a later failed load's, `calendar_upcoming_retry`
+/// on Upcoming's, and the keys of the package widget on show.
 class CalendarBody extends StatelessWidget {
   /// Creates the body for [view].
   const CalendarBody({
@@ -158,6 +159,7 @@ class CalendarBody extends StatelessWidget {
         error: error,
         onEventTap: onEventTap,
         onAddEvent: onAddEvent,
+        onRetry: onRetry,
       ),
     };
 

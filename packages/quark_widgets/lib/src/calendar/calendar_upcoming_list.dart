@@ -42,6 +42,7 @@ class CalendarUpcomingList extends StatelessWidget {
     this.error,
     this.onEventTap,
     this.onAddEvent,
+    this.onRetry,
     super.key,
   });
 
@@ -66,6 +67,10 @@ class CalendarUpcomingList extends StatelessWidget {
   /// Called by the empty state's "Add an event". Null hides the button.
   final VoidCallback? onAddEvent;
 
+  /// Called by the "Try again" under [error], keyed
+  /// `calendar_upcoming_retry`. Null hides the button.
+  final VoidCallback? onRetry;
+
   /// Below this width the list runs edge to edge in the phone layout.
   static const double compactWidth = 600;
 
@@ -80,10 +85,23 @@ class CalendarUpcomingList extends StatelessWidget {
         ? null
         : Padding(
             padding: EdgeInsets.all(tokens.spacingMd),
-            child: Text(
-              error!,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: tokens.error),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  error!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: tokens.error),
+                ),
+                if (onRetry != null) ...[
+                  SizedBox(height: tokens.spacingSm),
+                  FilledButton(
+                    key: const ValueKey('calendar_upcoming_retry'),
+                    onPressed: onRetry,
+                    child: const Text('Try again'),
+                  ),
+                ],
+              ],
             ),
           );
 

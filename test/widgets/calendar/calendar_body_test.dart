@@ -98,6 +98,22 @@ void main() {
       });
     }
 
+    testWidgets('$name upcoming: a failed load offers Try again', (
+      tester,
+    ) async {
+      final retries = await pumpBody(
+        tester,
+        size,
+        view: CalendarView.upcoming,
+        isInitialLoad: false,
+        error: "Couldn't load your calendar.",
+      );
+
+      await tester.tap(find.byKey(const ValueKey('calendar_upcoming_retry')));
+      expect(retries(), 1);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('$name: the first failed load keeps its own retry', (
       tester,
     ) async {
