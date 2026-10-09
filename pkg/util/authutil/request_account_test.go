@@ -8,17 +8,18 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // setupFounder sets a Quark up with the founding admin, whose home lands in
-// filesDir like every other account's (#1908).
-func setupFounder(t *testing.T, database *db.DatabaseSqlc, filesDir string) {
+// files like every other account's (#1908).
+func setupFounder(t *testing.T, database *db.DatabaseSqlc, files vfs.VFS) {
 	t.Helper()
 	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{
 		Database: database,
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret,
-		FilesDir: filesDir,
+		Files: files,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func TestRequestAccount_RefusedWhenOffOrBeforeSetup(t *testing.T) {
 		t.Fatal("a refused request completed setup")
 	}
 
-	setupFounder(t, database, t.TempDir())
+	setupFounder(t, database, vfs.NewMemVFS("files"))
 	_, err := authutil.RequestAccount(ctx, q, authutil.RequestAccountParams{Username: "bob", AuthKey: dbtest.AuthKey("bob-password"), SaltSecret: dbtest.SaltSecret})
 	if !errors.Is(err, authutil.ErrAccessRequestsOff) {
 		t.Errorf("request with requests off = %v, want ErrAccessRequestsOff", err)
@@ -65,7 +66,7 @@ func TestRequestAccount_PendingUntilApproved(t *testing.T) {
 	database := newTestDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, database, t.TempDir())
+	setupFounder(t, database, vfs.NewMemVFS("files"))
 
 	if _, err := request(q, "bob", "bob-password"); err != nil {
 		t.Fatalf("request: %v", err)
@@ -84,7 +85,7 @@ func TestRequestAccount_PendingUntilApproved(t *testing.T) {
 	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
 		Database: database,
 		Username: "bob",
-		FilesDir: t.TempDir(),
+		Files:    vfs.NewMemVFS("files"),
 	}); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
@@ -97,7 +98,7 @@ func TestRequestAccount_PendingUntilApproved(t *testing.T) {
 	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
 		Database: database,
 		Username: "bob",
-		FilesDir: t.TempDir(),
+		Files:    vfs.NewMemVFS("files"),
 	}); !errors.Is(err, authutil.ErrRequestNotFound) {
 		t.Errorf("approve an active account = %v, want ErrRequestNotFound", err)
 	}
@@ -110,7 +111,7 @@ func TestRequestAccount_TakenAndDenied(t *testing.T) {
 	database := newTestDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, database, t.TempDir())
+	setupFounder(t, database, vfs.NewMemVFS("files"))
 
 	if _, err := request(q, "admin", "whatever-password"); !errors.Is(err, authutil.ErrUsernameTaken) {
 		t.Errorf("request an existing account's name = %v, want ErrUsernameTaken", err)
@@ -140,7 +141,7 @@ func TestRequestAccount_TakenAndDenied(t *testing.T) {
 func TestRequestAccount_Validation(t *testing.T) {
 	database := newTestDB(t)
 	q := database.Queries
-	setupFounder(t, database, t.TempDir())
+	setupFounder(t, database, vfs.NewMemVFS("files"))
 
 	for _, name := range []string{"../x", "a/b", ".trash", "Bob"} {
 		if _, err := request(q, name, "long-enough"); !errors.Is(err, authutil.ErrInvalidUsername) {

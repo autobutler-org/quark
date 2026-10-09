@@ -8,6 +8,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 func checkRecovery(queries *db.Queries, username, key string) error {
@@ -23,7 +24,7 @@ func setupWithKeys(t *testing.T) *db.DatabaseSqlc {
 	t.Helper()
 	database := newTestDB(t)
 	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{
-		Database: database, FilesDir: t.TempDir(), Username: "ada",
+		Database: database, Files: vfs.NewMemVFS("files"), Username: "ada",
 		AuthKey: authKeyOf(1), RecoveryKey: authKeyOf(9), SaltSecret: saltSecret,
 	}); err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -208,7 +209,7 @@ func TestNewAccount_RecoveryKey(t *testing.T) {
 		t.Errorf("malformed recovery key = %v, want ErrInvalidRecoveryKey", err)
 	}
 
-	if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: database, Username: "cy", AuthKey: authKeyOf(3), SaltSecret: saltSecret, FilesDir: t.TempDir()}); err != nil {
+	if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: database, Username: "cy", AuthKey: authKeyOf(3), SaltSecret: saltSecret, Files: vfs.NewMemVFS("files")}); err != nil {
 		t.Fatal(err)
 	}
 	result, err := authutil.Login(ctx, database.Queries, authutil.LoginParams{Username: "cy", AuthKey: authKeyOf(3)})

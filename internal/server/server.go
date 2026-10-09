@@ -244,7 +244,7 @@ func repairHomes(deps deputil.Dependencies) {
 	if database == nil {
 		return
 	}
-	filesDir, err := storageutil.GetFilesDir()
+	files, err := authutil.InternalFiles(deps.VFSRegistry())
 	if err != nil {
 		log.Printf("[auth] cannot repair homes: %v", err)
 		return
@@ -253,7 +253,7 @@ func repairHomes(deps deputil.Dependencies) {
 	defer cancel()
 	result, err := authutil.RepairHomes(ctx, authutil.RepairHomesParams{
 		Database: database,
-		FilesDir: filesDir,
+		Files:    files,
 	})
 	if len(result.Repaired) > 0 {
 		log.Printf("[auth] gave %d account(s) their home: %v", len(result.Repaired), result.Repaired)
@@ -265,7 +265,7 @@ func repairHomes(deps deputil.Dependencies) {
 	// and at the same moment (#2016).
 	groups, err := grouputil.RepairGroupFolders(ctx, grouputil.RepairGroupFoldersParams{
 		Database: database,
-		FilesDir: filesDir,
+		Files:    files,
 	})
 	if len(groups.Repaired) > 0 {
 		log.Printf("[groups] gave %d group(s) their folder: %v", len(groups.Repaired), groups.Repaired)

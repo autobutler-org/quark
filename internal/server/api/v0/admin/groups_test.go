@@ -1,11 +1,10 @@
 package v0_admin_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -75,8 +74,8 @@ func TestGroups_Endpoints(t *testing.T) {
 	expectEvents("create", []eventbus.EventKind{eventbus.EventAccountChanged, eventbus.EventNewFolder})
 	expectDir := func(step, rel string, want bool) {
 		t.Helper()
-		info, err := os.Stat(filepath.Join(h.filesDir, filepath.FromSlash(rel)))
-		if got := err == nil && info.IsDir(); got != want {
+		info, err := h.files.Stat(context.Background(), rel)
+		if got := err == nil && info.IsDir; got != want {
 			t.Errorf("%s: %s is a folder = %v, want %v", step, rel, got, want)
 		}
 	}
@@ -108,7 +107,7 @@ func TestGroups_Endpoints(t *testing.T) {
 	expectEvents("rename", []eventbus.EventKind{eventbus.EventMove, eventbus.EventAccessChanged, eventbus.EventAccountChanged})
 	expectDir("rename", "groups/Family", false)
 	expectDir("rename", "groups/Household", true)
-	if err := os.Mkdir(filepath.Join(h.filesDir, "groups", "Taken"), 0o755); err != nil {
+	if err := h.files.MkdirAll(context.Background(), "groups/Taken"); err != nil {
 		t.Fatal(err)
 	}
 	expectError("rename onto a folder", h.doJSON(http.MethodPut, familyPath, `{"name":"Taken"}`), http.StatusConflict, grouputil.ErrGroupFolderTaken)

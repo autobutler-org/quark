@@ -16,6 +16,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -70,7 +71,7 @@ func TestSetRecoveryKey_Rotation(t *testing.T) {
 	engine, database := newAuthKeyEngine(t)
 	queries := database.Queries
 	key := dbtest.AuthKey("original-password")
-	if _, err := authutil.CreateUser(context.Background(), authutil.CreateUserParams{Database: database, Username: "bob", AuthKey: key, SaltSecret: dbtest.SaltSecret, FilesDir: t.TempDir()}); err != nil {
+	if _, err := authutil.CreateUser(context.Background(), authutil.CreateUserParams{Database: database, Username: "bob", AuthKey: key, SaltSecret: dbtest.SaltSecret, Files: vfs.NewMemVFS("files")}); err != nil {
 		t.Fatal(err)
 	}
 	bob := userByName(t, queries, "bob")

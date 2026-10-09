@@ -9,6 +9,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 func userID(t *testing.T, q *db.Queries, name string) int64 {
@@ -27,7 +28,7 @@ func TestDisableUser_EndsSessionsAndKeepsOwnership(t *testing.T) {
 	database := dbtest.NewDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, database, t.TempDir())
+	setupFounder(t, database, vfs.NewMemVFS("files"))
 	mkStatusUser(t, q, "bob", authutil.StatusActive)
 	adminID, bobID := userID(t, q, "admin"), userID(t, q, "bob")
 
@@ -90,7 +91,7 @@ func TestDisableUser_Refusals(t *testing.T) {
 	database := dbtest.NewDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, database, t.TempDir())
+	setupFounder(t, database, vfs.NewMemVFS("files"))
 	mkStatusUser(t, q, "member", authutil.StatusActive)
 	mkStatusUser(t, q, "waiting", authutil.StatusPending)
 	adminID, memberID := userID(t, q, "admin"), userID(t, q, "member")

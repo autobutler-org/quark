@@ -18,7 +18,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -37,17 +37,13 @@ import (
 // internal/db is.
 func TestAlbums_ConcurrentClientsSurviveCanceledNeighbors(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	filesDir, err := storageutil.GetFilesDir()
-	if err != nil {
-		t.Fatal(err)
-	}
 	database, err := db.ConnectToDatabase()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { database.Db.Close() })
 	ctx := context.Background()
-	setup, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: filesDir, Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret})
+	setup, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret})
 	if err != nil {
 		t.Fatal(err)
 	}

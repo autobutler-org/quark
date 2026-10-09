@@ -16,6 +16,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 	_ "modernc.org/sqlite"
 )
@@ -37,7 +38,7 @@ func newSessionsTestEngine(t *testing.T) (*gin.Engine, *db.Queries, int64) {
 
 	// Setup a test user via authutil so password hashing is correct.
 	ctx := context.Background()
-	setup, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
+	setup, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, Files: vfs.NewMemVFS("files"),
 		Username: "testuser",
 		AuthKey:  dbtest.AuthKey("TestPassword123!"), SaltSecret: dbtest.SaltSecret,
 	})

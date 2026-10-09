@@ -7,6 +7,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // TestVerifyPassword checks the gate in front of account deletion and reset
@@ -16,7 +17,7 @@ import (
 func TestVerifyPassword(t *testing.T) {
 	database := newTestDB(t)
 	ctx := context.Background()
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "ada", AuthKey: dbtest.AuthKey("long-enough"), SaltSecret: dbtest.SaltSecret}); err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "ada", AuthKey: dbtest.AuthKey("long-enough"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
 

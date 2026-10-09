@@ -11,6 +11,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // Sliding session expiry (#1647). expires_at used to be stamped once at login
@@ -40,7 +41,7 @@ func newSignedInUser(t *testing.T, sqlDB *sql.DB, queries *db.Queries) string {
 	t.Helper()
 	res, err := authutil.Setup(context.Background(), authutil.SetupParams{
 		Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries},
-		FilesDir: t.TempDir(),
+		Files:    vfs.NewMemVFS("files"),
 		Username: "testuser",
 		AuthKey:  dbtest.AuthKey("testpassword"), SaltSecret: dbtest.SaltSecret,
 	})

@@ -11,7 +11,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -49,7 +48,7 @@ func createUser(c *gin.Context) *serverutil.Response {
 	if err := authutil.RefuseRawSecrets(req.Password); err != nil {
 		return serverutil.UpgradeRequired(err)
 	}
-	filesDir, err := storageutil.GetFilesDir()
+	files, err := authutil.InternalFiles(deps.VFSRegistry())
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
@@ -59,7 +58,7 @@ func createUser(c *gin.Context) *serverutil.Response {
 		Username:   req.Username,
 		AuthKey:    req.AuthKey,
 		SaltSecret: settingsutil.AuthSaltSecret,
-		FilesDir:   filesDir,
+		Files:      files,
 	})
 	if err != nil {
 		return accountErrorResponse(err)

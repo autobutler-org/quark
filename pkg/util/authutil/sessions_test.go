@@ -8,6 +8,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // setupUserWithSessions creates a user and N sessions, returning the user ID
@@ -252,7 +253,7 @@ func TestSessionID(t *testing.T) {
 	database := newTestDB(t)
 	ctx := context.Background()
 	result, err := authutil.Setup(ctx, authutil.SetupParams{
-		Database: database, FilesDir: t.TempDir(),
+		Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin", AuthKey: dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // TestLookupFailureIsUnavailable is #2858: a credential the database says
@@ -21,7 +22,7 @@ func TestLookupFailureIsUnavailable(t *testing.T) {
 	database := newTestDB(t)
 	q := database.Queries
 	key := dbtest.AuthKey("mypassword")
-	setup, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: key, SaltSecret: dbtest.SaltSecret})
+	setup, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: key, SaltSecret: dbtest.SaltSecret})
 	if err != nil {
 		t.Fatal(err)
 	}

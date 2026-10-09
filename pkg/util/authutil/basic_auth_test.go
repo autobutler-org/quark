@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // basicAuthFixture is a Quark with one active account, admin/mypassword, and
@@ -24,7 +25,7 @@ type basicAuthFixture struct {
 func newBasicAuthFixture(t *testing.T) *basicAuthFixture {
 	t.Helper()
 	f := &basicAuthFixture{database: newTestDB(t), now: time.Unix(1_000_000, 0)}
-	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: f.database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret}); err != nil {
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: f.database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	f.guard = ratelimitutil.NewLoginGuard(ratelimitutil.LoginGuardParams{Now: func() time.Time { return f.now }, PairThreshold: 3, BaseLockout: time.Minute})
@@ -97,7 +98,7 @@ func TestAuthenticateBasic_PendingDisabledOrDeletedRejected(t *testing.T) {
 	ctx := context.Background()
 	f := newBasicAuthFixture(t)
 	queries := f.database.Queries
-	if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: f.database, FilesDir: t.TempDir(), Username: "bob", AuthKey: dbtest.AuthKey("bob-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
+	if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: f.database, Files: vfs.NewMemVFS("files"), Username: "bob", AuthKey: dbtest.AuthKey("bob-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	admin, err := queries.GetUserByUsername(ctx, "admin")

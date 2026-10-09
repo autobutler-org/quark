@@ -12,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 type internalDevice struct{ mountPoint string }
@@ -21,10 +22,12 @@ func (d internalDevice) DetectDevices() ([]storageutil.Device, error) {
 }
 
 // createUserFixture is a set-up Quark with one internal device whose files
-// directory the created folders land in.
+// namespace the created folders land in. filesDir is that namespace's
+// directory on disk, for a test to look at or put something in the way.
 type createUserFixture struct {
 	database *db.DatabaseSqlc
 	storage  *storageutil.StorageService
+	files    vfs.VFS
 	filesDir string
 }
 
@@ -50,8 +53,9 @@ func newCreateUserFixtureWith(t *testing.T, beforeSetup func(filesDir string)) c
 		beforeSetup(devices[0].FilesDir)
 	}
 	database := dbtest.NewDB(t)
-	setupFounder(t, database, devices[0].FilesDir)
-	return createUserFixture{database: database, storage: storage, filesDir: devices[0].FilesDir}
+	files := vfs.NewStorageServiceVFS(storage, vfs.FilesNamespace(""))
+	setupFounder(t, database, files)
+	return createUserFixture{database: database, storage: storage, files: files, filesDir: devices[0].FilesDir}
 }
 
 func (f createUserFixture) create(username string) (authutil.CreateUserResult, error) {
@@ -59,7 +63,7 @@ func (f createUserFixture) create(username string) (authutil.CreateUserResult, e
 		Database: f.database,
 		Username: username,
 		AuthKey:  dbtest.AuthKey("initial-password"), SaltSecret: dbtest.SaltSecret,
-		FilesDir: f.filesDir,
+		Files: f.files,
 	})
 }
 

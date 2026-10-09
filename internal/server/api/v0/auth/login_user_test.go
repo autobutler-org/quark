@@ -17,6 +17,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -75,7 +76,7 @@ func setUserStatus(t *testing.T, queries *db.Queries, username, from, to string)
 // founding admin signs in exactly as before.
 func TestLoginUser_StatusRefusals(t *testing.T) {
 	database := dbtest.NewDB(t)
-	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	createRecoverableUser(t, database.Queries, "waiting", "apple-bread-cloud-delta-eagle-flame")
@@ -118,7 +119,7 @@ func TestLoginUser_StatusRefusals(t *testing.T) {
 // account is 403 with its status, the same shape login uses.
 func TestRecoverAccount_StatusRefusal(t *testing.T) {
 	database := dbtest.NewDB(t)
-	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	const phrase = "apple-bread-cloud-delta-eagle-flame"
@@ -142,7 +143,7 @@ func TestRecoverAccount_StatusRefusal(t *testing.T) {
 // database does.
 func TestAuthRoutes_LookupErrorIs503(t *testing.T) {
 	database := dbtest.NewDB(t)
-	setup, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret})
+	setup, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret})
 	if err != nil {
 		t.Fatal(err)
 	}

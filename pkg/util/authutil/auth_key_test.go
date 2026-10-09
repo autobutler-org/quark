@@ -12,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // saltSecret stands in for the install's salt secret.
@@ -52,7 +53,7 @@ func userRow(t *testing.T, queries *db.Queries, username string) db.User {
 func setupAda(t *testing.T) *db.DatabaseSqlc {
 	t.Helper()
 	database := newTestDB(t)
-	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "ada", AuthKey: authKeyOf(1), SaltSecret: saltSecret}); err != nil {
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "ada", AuthKey: authKeyOf(1), SaltSecret: saltSecret}); err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
 	return database
@@ -280,16 +281,16 @@ func TestNewAccount_AuthKey(t *testing.T) {
 		offered[name] = saltOf(t, queries, name).Salt
 	}
 
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "owner", AuthKey: key, SaltSecret: saltSecret}); err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "owner", AuthKey: key, SaltSecret: saltSecret}); err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
 	if _, err := authutil.RequestAccount(ctx, queries, authutil.RequestAccountParams{Username: "asker", AuthKey: key, SaltSecret: saltSecret, RequestsEnabled: true}); err != nil {
 		t.Fatalf("RequestAccount: %v", err)
 	}
-	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{Database: database, Username: "asker", FilesDir: t.TempDir()}); err != nil {
+	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{Database: database, Username: "asker", Files: vfs.NewMemVFS("files")}); err != nil {
 		t.Fatalf("ApproveRequest: %v", err)
 	}
-	if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: database, FilesDir: t.TempDir(), Username: "added", AuthKey: key, SaltSecret: saltSecret}); err != nil {
+	if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "added", AuthKey: key, SaltSecret: saltSecret}); err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
 
@@ -322,16 +323,16 @@ func TestNewAccount_MalformedKey(t *testing.T) {
 		"url alphabet": base64.URLEncoding.EncodeToString(bytes.Repeat([]byte{0xff}, 32)),
 	} {
 		database := newTestDB(t)
-		if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "owner", AuthKey: key, SaltSecret: saltSecret}); !errors.Is(err, authutil.ErrInvalidAuthKey) {
+		if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "owner", AuthKey: key, SaltSecret: saltSecret}); !errors.Is(err, authutil.ErrInvalidAuthKey) {
 			t.Errorf("Setup %s: err = %v, want ErrInvalidAuthKey", name, err)
 		}
-		if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "owner", AuthKey: authKeyOf(1), SaltSecret: saltSecret}); err != nil {
+		if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "owner", AuthKey: authKeyOf(1), SaltSecret: saltSecret}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := authutil.RequestAccount(ctx, database.Queries, authutil.RequestAccountParams{Username: "asker", AuthKey: key, SaltSecret: saltSecret, RequestsEnabled: true}); !errors.Is(err, authutil.ErrInvalidAuthKey) {
 			t.Errorf("RequestAccount %s: err = %v, want ErrInvalidAuthKey", name, err)
 		}
-		if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: database, FilesDir: t.TempDir(), Username: "added", AuthKey: key, SaltSecret: saltSecret}); !errors.Is(err, authutil.ErrInvalidAuthKey) {
+		if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "added", AuthKey: key, SaltSecret: saltSecret}); !errors.Is(err, authutil.ErrInvalidAuthKey) {
 			t.Errorf("CreateUser %s: err = %v, want ErrInvalidAuthKey", name, err)
 		}
 		if _, err := authutil.Recover(ctx, database, authutil.RecoverParams{Username: "owner", RecoveryKey: authKeyOf(9), NewAuthKey: key, SaltSecret: saltSecret}); !errors.Is(err, authutil.ErrInvalidAuthKey) {

@@ -23,7 +23,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/sqlutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -186,16 +186,16 @@ type CreateUserParams struct {
 	// SaltSecret returns the install's salt secret, to store the salt the key
 	// was derived with.
 	SaltSecret func() ([]byte, error)
-	// FilesDir is the internal device's files directory, where the account's
-	// home is made.
-	FilesDir string
+	// Files is the internal drive's files namespace, where the account's home
+	// is made.
+	Files vfs.VFS
 }
 
 // CreateUserResult is the account that was added.
 type CreateUserResult struct {
 	UserID    int64
 	CreatedAt time.Time
-	// FolderPath is the home's path relative to FilesDir — users/<username>.
+	// FolderPath is the home's path relative to the files root — users/<username>.
 	FolderPath string
 }
 
@@ -224,14 +224,14 @@ type RequestAccountResult struct{}
 type ApproveRequestParams struct {
 	Database *db.DatabaseSqlc
 	Username string
-	// FilesDir is the internal device's files directory, where the approved
+	// Files is the internal drive's files namespace, where the approved
 	// account's home is made.
-	FilesDir string
+	Files vfs.VFS
 }
 
 // ApproveRequestResult is the approved account's home.
 type ApproveRequestResult struct {
-	// FolderPath is the home's path relative to FilesDir — users/<username>.
+	// FolderPath is the home's path relative to the files root — users/<username>.
 	FolderPath string
 }
 
@@ -242,6 +242,55 @@ type DenyRequestParams struct {
 
 // DenyRequestResult is empty; a denial has nothing to report.
 type DenyRequestResult struct{}
+
+// InternalFiles returns the internal drive's files namespace from registry,
+// where every home and group folder lives (accessutil.IsHomeRoot,
+// IsGroupRoot). It is an error when there is none.
+func InternalFiles(registry vfs.Registry) (vfs.VFS, error) {
+	if registry != nil {
+		if files, ok := registry.Get(vfs.FilesNamespace("")); ok {
+			return files, nil
+		}
+	}
+	return nil, errors.New("files namespace not registered")
+}
+
+// MakeFolder makes the folder at relPath in files unless one is already
+// there, which is adopted, and reports whether it made it. Something other
+// than a folder at relPath is an error rather than passing as one. Its
+// parents are made as needed: users/ and groups/ are shared, so them already
+// existing is not a conflict.
+func MakeFolder(ctx context.Context, files vfs.VFS, relPath string) (made bool, err error) {
+	if files == nil {
+		return false, errors.New("files namespace not set")
+	}
+	info, err := files.Stat(ctx, relPath)
+	switch {
+	case err == nil && info.IsDir:
+		return false, nil
+	case err == nil:
+		return false, fmt.Errorf("%s is not a folder", relPath)
+	case !errors.Is(err, vfs.ErrNotFound):
+		return false, err
+	}
+	if err := files.MkdirAll(ctx, relPath); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// RemoveMadeFolder removes madeDir, a folder MakeFolder made for a creation
+// that then failed. It is best-effort and removes only an empty directory, so
+// whatever landed in it meanwhile survives; the error that got the caller
+// here is the one worth reporting. It runs even when ctx was canceled, since a
+// canceled request is one of the failures it cleans up after. An empty
+// madeDir, an adopted folder, is left alone.
+func RemoveMadeFolder(ctx context.Context, files vfs.VFS, madeDir string) {
+	if madeDir == "" {
+		return
+	}
+	_ = files.Delete(context.WithoutCancel(ctx), madeDir, vfs.DeleteOptions{})
+}
 
 // SetupParams contains parameters for first-boot user setup.
 type SetupParams struct {
@@ -257,9 +306,9 @@ type SetupParams struct {
 	// generated (#2430). Without it the account has no recovery credential
 	// until its client gives it one with SetRecoveryKey.
 	RecoveryKey string
-	// FilesDir is the internal device's files directory, where the founding
+	// Files is the internal drive's files namespace, where the founding
 	// admin's home is made.
-	FilesDir string
+	Files vfs.VFS
 }
 
 // SetupResult contains the result of first-boot setup.
@@ -585,16 +634,12 @@ func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 			return fmt.Errorf("promote first user to admin: %w", err)
 		}
 
-		_, dir, err := createHome(ctx, q, params.FilesDir, params.Username, user.ID)
+		_, dir, err := createHome(ctx, q, params.Files, params.Username, user.ID)
 		madeDir = dir
 		return err
 	})
 	if err != nil {
-		if madeDir != "" {
-			// Best-effort, and only the home this call made: it is new and
-			// empty, and the error that got here is the one worth reporting.
-			_ = os.Remove(madeDir)
-		}
+		RemoveMadeFolder(ctx, params.Files, madeDir)
 		return nil, err
 	}
 
@@ -676,7 +721,7 @@ func ApproveRequest(ctx context.Context, params ApproveRequestParams) (ApproveRe
 		if err != nil {
 			return fmt.Errorf("look up %q: %w", params.Username, err)
 		}
-		relPath, dir, err := createHome(ctx, q, params.FilesDir, params.Username, user.ID)
+		relPath, dir, err := createHome(ctx, q, params.Files, params.Username, user.ID)
 		madeDir = dir
 		if err != nil {
 			return err
@@ -685,11 +730,7 @@ func ApproveRequest(ctx context.Context, params ApproveRequestParams) (ApproveRe
 		return nil
 	})
 	if err != nil {
-		if madeDir != "" {
-			// Best-effort, and only the home this call made: it is new and
-			// empty, and the error that got here is the one worth reporting.
-			_ = os.Remove(madeDir)
-		}
+		RemoveMadeFolder(ctx, params.Files, madeDir)
 		return ApproveRequestResult{}, err
 	}
 	return result, nil
@@ -825,7 +866,7 @@ func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult,
 		}
 		result.UserID, result.CreatedAt = user.ID, user.CreatedAt
 
-		relPath, dir, err := createHome(ctx, q, params.FilesDir, params.Username, user.ID)
+		relPath, dir, err := createHome(ctx, q, params.Files, params.Username, user.ID)
 		madeDir = dir
 		if err != nil {
 			return err
@@ -834,12 +875,7 @@ func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult,
 		return nil
 	})
 	if err != nil {
-		if madeDir != "" {
-			// Best-effort, and only a home this call made: the users parent
-			// may hold other people's, and an adopted home is not ours to
-			// remove. The error that got here is the one worth reporting.
-			_ = os.Remove(madeDir)
-		}
+		RemoveMadeFolder(ctx, params.Files, madeDir)
 		return CreateUserResult{}, err
 	}
 	return result, nil
@@ -848,8 +884,8 @@ func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult,
 // RepairHomesParams is the Quark whose accounts are repaired.
 type RepairHomesParams struct {
 	Database *db.DatabaseSqlc
-	// FilesDir is the internal device's files directory, where homes live.
-	FilesDir string
+	// Files is the internal drive's files namespace, where homes live.
+	Files vfs.VFS
 }
 
 // RepairHomesResult names the accounts that were given their home.
@@ -874,8 +910,8 @@ func RepairHomes(ctx context.Context, params RepairHomesParams) (RepairHomesResu
 	if params.Database == nil {
 		return result, errors.New("database not initialized")
 	}
-	if params.FilesDir == "" {
-		return result, errors.New("files directory not set")
+	if params.Files == nil {
+		return result, errors.New("files namespace not set")
 	}
 	accounts, err := params.Database.Queries.ListAccountsMissingHome(ctx)
 	if err != nil {
@@ -889,9 +925,9 @@ func RepairHomes(ctx context.Context, params RepairHomesParams) (RepairHomesResu
 			slog.Warn("no home repaired: the username is not a folder name", "username", account.Username)
 			continue
 		}
-		// MkdirAll, not Mkdir: the repair ends with the directory there, so one
-		// that already exists is adopted rather than refused.
-		if err := os.MkdirAll(filepath.Join(params.FilesDir, UsersDirName, account.Username), 0o755); err != nil {
+		// The repair ends with the directory there, so one that already exists
+		// is adopted rather than refused.
+		if _, err := MakeFolder(ctx, params.Files, homeRelPath(account.Username)); err != nil {
 			return result, fmt.Errorf("create the home of %q: %w", account.Username, err)
 		}
 		if err := grantHome(ctx, params.Database.Queries, account.Username, account.ID); err != nil {

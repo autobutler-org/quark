@@ -4,7 +4,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,7 +33,7 @@ func setupAuth(c *gin.Context) *serverutil.Response {
 		return serverutil.UpgradeRequired(err)
 	}
 
-	filesDir, err := storageutil.GetFilesDir()
+	files, err := authutil.InternalFiles((*deps).VFSRegistry())
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
@@ -45,7 +44,7 @@ func setupAuth(c *gin.Context) *serverutil.Response {
 		AuthKey:     req.AuthKey,
 		RecoveryKey: req.RecoveryKey,
 		SaltSecret:  settingsutil.AuthSaltSecret,
-		FilesDir:    filesDir,
+		Files:       files,
 	})
 	if err != nil {
 		return serverutil.BadRequest(err)

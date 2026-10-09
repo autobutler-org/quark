@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db/dbtest"
@@ -32,7 +30,6 @@ func (h adminHarness) postJSON(path string, body any) *httptest.ResponseRecorder
 // (#2430).
 func TestCreateUser_Endpoint(t *testing.T) {
 	h := newAdminHarness(t)
-	filesDir := h.filesDir
 	ctx := context.Background()
 
 	key := dbtest.AuthKey("initial-password")
@@ -52,7 +49,7 @@ func TestCreateUser_Endpoint(t *testing.T) {
 	if created.ID == 0 || created.Username != "bob" || created.IsAdmin || created.Status != authutil.StatusActive {
 		t.Errorf("created = %+v, want bob, active, not admin", created)
 	}
-	if info, err := os.Stat(filepath.Join(filesDir, "users", "bob")); err != nil || !info.IsDir() {
+	if info, err := h.files.Stat(ctx, "users/bob"); err != nil || !info.IsDir {
 		t.Errorf("private folder: %v", err)
 	}
 	kinds := map[eventbus.EventKind]string{}

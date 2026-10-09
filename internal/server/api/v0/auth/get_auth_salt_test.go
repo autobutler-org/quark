@@ -12,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,7 +30,7 @@ func newAuthKeyEngine(t *testing.T) (*gin.Engine, *db.DatabaseSqlc) {
 	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
 	t.Cleanup(func() { settingsutil.ResetForTesting("") })
 	database := dbtest.NewDB(t)
-	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := database.Queries.CreateUser(context.Background(), db.CreateUserParams{Username: "old", PasswordHash: dbtest.BcryptHash(t, "old-password"), RecoveryPhraseHash: dbtest.BcryptHash(t, "old-phrase")}); err != nil {

@@ -4,12 +4,12 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -43,14 +43,14 @@ func createGroup(c *gin.Context) *serverutil.Response {
 		return serverutil.BadRequest(grouputil.ErrInvalidGroupName)
 	}
 
-	filesDir, err := storageutil.GetFilesDir()
+	files, err := authutil.InternalFiles(deps.VFSRegistry())
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
 
 	result, err := grouputil.CreateGroup(c.Request.Context(), grouputil.CreateGroupParams{
 		Database: database,
-		FilesDir: filesDir,
+		Files:    files,
 		Name:     body.Name,
 	})
 	if err != nil {

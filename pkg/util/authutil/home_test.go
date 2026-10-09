@@ -2,14 +2,17 @@ package authutil_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // homeOf is the path an account's home sits at under filesDir.
@@ -53,7 +56,7 @@ func repair(t *testing.T, f createUserFixture) authutil.RepairHomesResult {
 	t.Helper()
 	result, err := authutil.RepairHomes(context.Background(), authutil.RepairHomesParams{
 		Database: f.database,
-		FilesDir: f.filesDir,
+		Files:    f.files,
 	})
 	if err != nil {
 		t.Fatalf("RepairHomes: %v", err)
@@ -75,7 +78,7 @@ func TestApproveRequest_MakesTheHomeAndItsGrant(t *testing.T) {
 	result, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
 		Database: f.database,
 		Username: "bob",
-		FilesDir: f.filesDir,
+		Files:    f.files,
 	})
 	if err != nil {
 		t.Fatalf("approve: %v", err)
@@ -147,7 +150,7 @@ func TestNewAccounts_AdoptAnExistingHome(t *testing.T) {
 	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
 		Database: f.database,
 		Username: "bob",
-		FilesDir: f.filesDir,
+		Files:    f.files,
 	}); err != nil {
 		t.Fatalf("approve onto an existing home: %v", err)
 	}
@@ -362,17 +365,19 @@ func assertNoHome(t *testing.T, filesDir, username string) {
 
 func TestSetup_FailedGrantRemovesItsHome(t *testing.T) {
 	database := newTestDB(t)
-	filesDir := t.TempDir()
+	files := vfs.NewMemVFS("files")
 	refuseUserGrants(t, database)
 
-	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: filesDir,
+	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: files,
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("supersecret"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err == nil {
 		t.Fatal("Setup succeeded though the founder's grant was refused")
 	}
-	assertNoHome(t, filesDir, "admin")
+	if _, err := files.Stat(context.Background(), "users/admin"); !errors.Is(err, vfs.ErrNotFound) {
+		t.Errorf("a failed Setup left the home it made: %v", err)
+	}
 	if complete, _ := authutil.IsSetupComplete(context.Background(), database.Queries); complete {
 		t.Error("a failed Setup counts as complete")
 	}
@@ -421,7 +426,7 @@ func TestApproveRequest_FailedGrantRemovesItsHome(t *testing.T) {
 	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
 		Database: f.database,
 		Username: "bob",
-		FilesDir: f.filesDir,
+		Files:    f.files,
 	}); err == nil {
 		t.Fatal("approve succeeded though the grant was refused")
 	}
@@ -432,5 +437,52 @@ func TestApproveRequest_FailedGrantRemovesItsHome(t *testing.T) {
 	}
 	if bob.Status == authutil.StatusActive {
 		t.Error("a failed approval left the account active")
+	}
+}
+
+// TestRemoveMadeFolder_KeepsWhatLandedInIt checks a rollback removes the
+// folder a failed creation made only while it is still empty, and never an
+// adopted one.
+func TestRemoveMadeFolder_KeepsWhatLandedInIt(t *testing.T) {
+	ctx := context.Background()
+	files := vfs.NewMemVFS("files")
+	for _, rel := range []string{"users/empty", "users/filled"} {
+		if made, err := authutil.MakeFolder(ctx, files, rel); err != nil || !made {
+			t.Fatalf("MakeFolder(%s) = %v, %v; want made", rel, made, err)
+		}
+	}
+	if err := files.Write(ctx, "users/filled/photo.jpg", strings.NewReader("x"), vfs.WriteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	authutil.RemoveMadeFolder(ctx, files, "users/empty")
+	authutil.RemoveMadeFolder(ctx, files, "users/filled")
+	authutil.RemoveMadeFolder(ctx, files, "")
+
+	if _, err := files.Stat(ctx, "users/empty"); !errors.Is(err, vfs.ErrNotFound) {
+		t.Errorf("the empty folder it made is still there: %v", err)
+	}
+	if _, err := files.Stat(ctx, "users/filled/photo.jpg"); err != nil {
+		t.Errorf("a rollback deleted what landed in the folder: %v", err)
+	}
+	if made, err := authutil.MakeFolder(ctx, files, "users/filled"); err != nil || made {
+		t.Errorf("MakeFolder on an existing folder = %v, %v; want adopted", made, err)
+	}
+}
+
+func TestInternalFiles_RefusesARegistryWithoutIt(t *testing.T) {
+	if _, err := authutil.InternalFiles(nil); err == nil {
+		t.Error("InternalFiles(nil) succeeded")
+	}
+	registry := vfs.NewRegistry()
+	if _, err := authutil.InternalFiles(registry); err == nil {
+		t.Error("InternalFiles found a files namespace in an empty registry")
+	}
+	files := vfs.NewMemVFS("files")
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, files); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := authutil.InternalFiles(registry); err != nil || got != files {
+		t.Errorf("InternalFiles = %v, %v; want the registered namespace", got, err)
 	}
 }

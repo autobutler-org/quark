@@ -21,6 +21,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/featureflagutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -54,7 +55,7 @@ func newFeaturesHarness(t *testing.T) featuresHarness {
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
 	if _, err := authutil.Setup(ctx, authutil.SetupParams{
-		Database: database, Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret, FilesDir: t.TempDir(),
+		Database: database, Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret, Files: vfs.NewMemVFS("files"),
 	}); err != nil {
 		t.Fatal(err)
 	}
