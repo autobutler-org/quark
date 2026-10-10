@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
@@ -124,13 +123,6 @@ func takeFreeName(target string, create func(p string) error) (string, error) {
 			return p, err
 		}
 	}
-}
-
-// nameTaken is the error for an upload whose name is already in use when the
-// caller chose neither to overwrite nor to keep both. It wraps [fs.ErrExist],
-// which is how a caller tells it apart from a failed write.
-func nameTaken(rootDir, fileName string) error {
-	return fmt.Errorf("%w: %s", fs.ErrExist, path.Join(rootDir, fileName))
 }
 
 // rootDeviceName is what the UI calls the appliance's own disk.

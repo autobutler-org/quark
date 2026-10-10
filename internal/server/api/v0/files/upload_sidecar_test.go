@@ -56,6 +56,8 @@ type sidecarEnv struct {
 	engine   *gin.Engine
 	filesDir string
 	database *db.DatabaseSqlc
+	// target names the device the uploads go to.
+	target uploadTarget
 }
 
 // hasThumbnail reports whether the file at rel has a client thumbnail to
@@ -67,7 +69,7 @@ func (e sidecarEnv) hasThumbnail(t *testing.T, rel string) bool {
 		t.Fatalf("%s did not land: %v", rel, err)
 	}
 	result, err := thumbnailutil.FromClientThumbnail(thumbnailutil.FromClientThumbnailParams{
-		Queries: e.database.Queries, RelPath: rel, FilePath: "/" + rel,
+		Queries: e.database.Queries, Serial: e.target.serial, RelPath: rel, FilePath: "/" + rel,
 		SourceModTime: info.ModTime(), Size: thumbnailutil.SizeSm,
 	})
 	if err != nil {
@@ -76,22 +78,26 @@ func (e sidecarEnv) hasThumbnail(t *testing.T, rel string) bool {
 	return result.Found
 }
 
-// sidecarEnvs are the two multipart writers: the VFS for the internal
-// device, and the StorageService for everything the VFS does not cover.
+// sidecarEnvs are an upload to the internal drive and one to a USB drive.
+// Each device's files are a namespace of its own, and a thumbnail has to find
+// its file on either (#2643).
 func sidecarEnvs(t *testing.T) map[string]func() sidecarEnv {
-	build := func(withVFS bool) sidecarEnv {
+	build := func(target uploadTarget) sidecarEnv {
 		t.Setenv("HOME", t.TempDir())
 		deps, filesDir := newStorageVFSDeps(t)
-		if !withVFS {
-			deps = deps.WithVFSRegistry(nil)
+		if target.serial != "" {
+			deps, _, filesDir = newDeviceUploadDeps(t)
 		}
 		database := dbtest.NewDB(t)
-		return sidecarEnv{engine: newEngineForDeps(deps.WithDatabase(database)), filesDir: filesDir, database: database}
+		return sidecarEnv{
+			engine: newEngineForDeps(deps.WithDatabase(database)), filesDir: filesDir, database: database, target: target,
+		}
 	}
-	return map[string]func() sidecarEnv{
-		"vfs":             func() sidecarEnv { return build(true) },
-		"storage service": func() sidecarEnv { return build(false) },
+	envs := map[string]func() sidecarEnv{}
+	for _, target := range uploadTargets {
+		envs[target.name] = func() sidecarEnv { return build(target) }
 	}
+	return envs
 }
 
 // TestUploadWithThumbnails: a client sends each file's thumbnail right after
@@ -100,7 +106,7 @@ func TestUploadWithThumbnails(t *testing.T) {
 	for name, build := range sidecarEnvs(t) {
 		t.Run(name, func(t *testing.T) {
 			env := build()
-			code := uploadParts(t, env.engine, "/api/v0/files/upload/album",
+			code := uploadParts(t, env.engine, env.target.on("/api/v0/files/upload/album"),
 				uploadPart{"files", "clip.mov", []byte("video")},
 				uploadPart{"thumbnail", "clip.mov", sidecarJPEG(t, 400, 225)},
 				uploadPart{"files", "photo.heic", []byte("heic")},
@@ -131,7 +137,7 @@ func TestUploadThumbnailFollowsKeepBothRename(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			env := build()
 			writeFixture(t, env.filesDir, "clip.mov")
-			code := uploadParts(t, env.engine, "/api/v0/files/upload?keepBoth=true",
+			code := uploadParts(t, env.engine, env.target.on("/api/v0/files/upload?keepBoth=true"),
 				uploadPart{"files", "clip.mov", []byte("video")},
 				uploadPart{"thumbnail", "clip.mov", sidecarJPEG(t, 400, 225)},
 			)
@@ -155,7 +161,7 @@ func TestUploadIgnoresUnpairedOrBadThumbnails(t *testing.T) {
 	for name, build := range sidecarEnvs(t) {
 		t.Run(name, func(t *testing.T) {
 			env := build()
-			code := uploadParts(t, env.engine, "/api/v0/files/upload",
+			code := uploadParts(t, env.engine, env.target.on("/api/v0/files/upload"),
 				uploadPart{"thumbnail", "early.mov", sidecarJPEG(t, 400, 225)},
 				uploadPart{"files", "early.mov", []byte("video")},
 				uploadPart{"files", "bad.mov", []byte("video")},

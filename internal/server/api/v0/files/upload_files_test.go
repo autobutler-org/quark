@@ -49,16 +49,13 @@ func TestUploadStripsDirectoryFromFileName(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.name+" (storage service)", func(t *testing.T) {
-			t.Parallel()
-			e, filesDir := newTestEngine(t)
-			assertUploadLandsAt(t, e, filesDir, tc.uploaded, tc.want, tc.wantGone)
-		})
-		t.Run(tc.name+" (vfs)", func(t *testing.T) {
-			t.Parallel()
-			e, filesDir := newStorageVFSTestEngine(t)
-			assertUploadLandsAt(t, e, filesDir, tc.uploaded, tc.want, tc.wantGone)
-		})
+		for _, target := range uploadTargets {
+			t.Run(tc.name+" ("+target.name+")", func(t *testing.T) {
+				t.Parallel()
+				e, filesDir := target.engine(t)
+				assertUploadLandsAt(t, e, target.on("/api/v0/files/upload"), filesDir, tc.uploaded, tc.want, tc.wantGone)
+			})
+		}
 	}
 }
 
@@ -80,11 +77,11 @@ func TestUploadIntoNestedRootDirKeepsTheDirectory(t *testing.T) {
 func assertUploadLandsAt(
 	t *testing.T,
 	e *gin.Engine,
-	filesDir, uploaded, want, wantGone string,
+	url, filesDir, uploaded, want, wantGone string,
 ) {
 	t.Helper()
 
-	w := uploadFile(t, e, "/api/v0/files/upload", uploaded, "{}")
+	w := uploadFile(t, e, url, uploaded, "{}")
 	if w.Code != http.StatusOK {
 		t.Fatalf("upload of %q returned %d: %s", uploaded, w.Code, w.Body.String())
 	}
@@ -122,13 +119,7 @@ func TestConcurrentUploadsIntoTheSameNestedDir(t *testing.T) {
 
 	const workers = 8
 
-	for _, tc := range []struct {
-		name   string
-		engine func(t *testing.T) (*gin.Engine, string)
-	}{
-		{name: "storage service", engine: newTestEngine},
-		{name: "vfs", engine: newStorageVFSTestEngine},
-	} {
+	for _, tc := range uploadTargets {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			e, filesDir := tc.engine(t)
@@ -140,7 +131,7 @@ func TestConcurrentUploadsIntoTheSameNestedDir(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					name := fmt.Sprintf("file%d.txt", i)
-					w := uploadFile(t, e, "/api/v0/files/upload/notes/2024", name, name)
+					w := uploadFile(t, e, tc.on("/api/v0/files/upload/notes/2024"), name, name)
 					codes[i] = w.Code
 				}()
 			}

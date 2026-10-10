@@ -3,7 +3,6 @@ package v0_files
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -19,7 +18,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
@@ -94,7 +92,7 @@ func grantOwner(c *gin.Context, deps deputil.Dependencies, access accessutil.Acc
 
 // grantOwners records the caller as owner of every file an upload created. A
 // file the upload replaced keeps the rows it had (#1903).
-func grantOwners(c *gin.Context, deps deputil.Dependencies, access accessutil.Access, serial string, written []storageutil.UploadedFile) {
+func grantOwners(c *gin.Context, deps deputil.Dependencies, access accessutil.Access, serial string, written []uploadutil.UploadedFile) {
 	for _, file := range written {
 		if file.Created {
 			grantOwner(c, deps, access, serial, file.Path)
@@ -247,14 +245,12 @@ func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, ac
 	return nil
 }
 
-// uploadDestination is where an upload lands, for both this endpoint and the
-// chunked sessions in upload_session.go. Both have to make the same choice
-// between the VFS namespace and the StorageService, so the choice lives in one
-// place (#1629).
+// uploadDestination is where an upload lands, for both the multipart endpoint
+// and the chunked sessions: the files namespace of the device the request
+// names (#1629, #2643).
 func uploadDestination(deps deputil.Dependencies) uploadutil.Destination {
 	return uploadutil.Destination{
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		EventBus: deps.EventBus(),
 	}
 }
@@ -282,7 +278,8 @@ func uploadSessionError(c *gin.Context, err error) *serverutil.Response {
 	case errors.As(err, &mismatch):
 		c.Header(uploadOffsetHeader, strconv.FormatInt(mismatch.Offset, 10))
 		return serverutil.Conflict(err)
-	case errors.Is(err, uploadutil.ErrSessionNotFound):
+	case errors.Is(err, uploadutil.ErrSessionNotFound),
+		errors.Is(err, uploadutil.ErrNoDestination):
 		return serverutil.NotFound(err)
 	case nameTaken(err):
 		// Answered the way the multipart endpoint answers it. Unlike the offset
@@ -300,33 +297,37 @@ func uploadSessionError(c *gin.Context, err error) *serverutil.Response {
 }
 
 // nameTaken reports an upload refused because its name is in use and the
-// caller chose neither overwrite nor keepBoth (#2016). The VFS reports it as
-// vfs.ErrConflict and the StorageService as fs.ErrExist; both are a 409.
+// caller chose neither overwrite nor keepBoth (#2016). It is a 409.
 func nameTaken(err error) bool {
-	return errors.Is(err, vfs.ErrConflict) || errors.Is(err, fs.ErrExist)
+	return errors.Is(err, vfs.ErrConflict)
 }
 
 // errBothConflictChoices refuses an upload asking to overwrite and to keep
 // both at once.
 var errBothConflictChoices = errors.New("choose overwrite or keepBoth, not both")
 
+// errNoDevice refuses an upload to a serial with no files namespace: a drive
+// that is not attached.
+var errNoDevice = errors.New("storage device not found")
+
 // publishUpload announces the files an upload landed, so every open client
 // sees them. Nothing is published when nothing was written — including a
 // refused upload, which changed no file tree.
-func publishUpload(deps deputil.Dependencies, rootDir string, written []storageutil.UploadedFile) {
+func publishUpload(deps deputil.Dependencies, serial, rootDir string, written []uploadutil.UploadedFile) {
 	if len(written) == 0 {
 		return
 	}
 	deps.EventBus().Publish(eventbus.Event{
-		Kind: eventbus.EventUpload,
-		Path: rootDir,
+		Kind:         eventbus.EventUpload,
+		Path:         rootDir,
+		DeviceSerial: serial,
 	})
 }
 
 // uploadedPaths is the answer to an upload: where each file landed. The
 // nested route's rootDir keeps gin's leading slash on the VFS branch, so it is
 // trimmed to match the files-relative paths the photo and album APIs use.
-func uploadedPaths(written []storageutil.UploadedFile) uploadFilesResponse {
+func uploadedPaths(written []uploadutil.UploadedFile) uploadFilesResponse {
 	paths := make([]string, 0, len(written))
 	for _, file := range written {
 		paths = append(paths, strings.TrimPrefix(file.Path, "/"))

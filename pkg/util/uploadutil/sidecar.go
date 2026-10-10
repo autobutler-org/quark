@@ -1,6 +1,8 @@
 package uploadutil
 
 import (
+	"context"
+	"io"
 	"log/slog"
 	"mime/multipart"
 	"path/filepath"
@@ -15,7 +17,7 @@ import (
 // before it, belongs to a file that is not a photo or video, or does not hold
 // a valid JPEG is skipped: the file it came with has landed, and it only goes
 // without a client-rendered thumbnail, the same as from an older client.
-func (s Sidecars) Attach(part *multipart.Part, written []storageutil.UploadedFile) {
+func (s Sidecars) Attach(part *multipart.Part, written []UploadedFile) {
 	if part.FormName() != "thumbnail" {
 		return
 	}
@@ -41,19 +43,22 @@ func (s Sidecars) store(part *multipart.Part, relPath string) error {
 	if s.Database != nil {
 		queries = s.Database.Queries
 	}
-	sourcePath := ""
-	if s.Storage != nil {
-		if resolved, err := s.Storage.ResolvePath(storageutil.ResolvePathParams{RelPath: relPath, Serial: s.Serial}); err == nil {
-			sourcePath = resolved.FullPath
+	// The photo is read for its content hash. One that cannot be opened is
+	// stored with its perceptual hash alone.
+	var source io.ReadSeeker
+	if s.FS != nil {
+		if f, err := s.FS.Open(context.Background(), relPath); err == nil {
+			defer func() { _ = f.Close() }()
+			source = f
 		}
 	}
 	_, err := thumbnailutil.StoreClientThumbnail(thumbnailutil.StoreClientThumbnailParams{
-		Queries:    queries,
-		Serial:     s.Serial,
-		RelPath:    relPath,
-		SourcePath: sourcePath,
-		Reader:     part,
-		IsVideo:    fileType == storageutil.FileTypeVideo,
+		Queries: queries,
+		Serial:  s.Serial,
+		RelPath: relPath,
+		Source:  source,
+		Reader:  part,
+		IsVideo: fileType == storageutil.FileTypeVideo,
 	})
 	return err
 }

@@ -104,7 +104,7 @@ func ImportPptxToQslide(params ImportPptxParams) (ImportPptxResult, error) {
 
 	// Each file announces itself once the import has finished, so a client
 	// never opens a presentation whose pictures are still arriving.
-	dest := uploadutil.Destination{Registry: params.Registry, Storage: params.Storage}
+	dest := uploadutil.Destination{Registry: params.Registry}
 	var media []string
 	storeMedia := func(name string, r io.Reader) (string, error) {
 		written, err := dest.WriteFile(uploadutil.WriteFileParams{

@@ -97,8 +97,8 @@ func StoreClientThumbnail(params StoreClientThumbnailParams) (StoreClientThumbna
 		if err != nil {
 			return StoreClientThumbnailResult{}, fmt.Errorf("%w: %w", ErrInvalidThumbnail, err)
 		}
-		var source io.ReadSeeker
-		if params.SourcePath != "" {
+		source := params.Source
+		if source == nil && params.SourcePath != "" {
 			f, err := os.Open(params.SourcePath)
 			if err != nil {
 				return StoreClientThumbnailResult{}, fmt.Errorf("open photo to hash it: %w", err)

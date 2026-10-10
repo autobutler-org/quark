@@ -68,6 +68,11 @@ var (
 	// ErrNoDestination means there is nowhere for the finished file to land, so
 	// there is no point collecting bytes for it.
 	ErrNoDestination = errors.New("uploadutil: no writable upload destination")
+
+	// ErrInvalidBody marks a multipart body that could not be read to its
+	// end: cut off, or not multipart at all. The files before the break have
+	// landed; the client has to resend the rest.
+	ErrInvalidBody = errors.New("uploadutil: malformed multipart body")
 )
 
 // ContentRange is a parsed Content-Range request header: `bytes 0-262143/1000000`.
@@ -130,15 +135,31 @@ func ParseContentRange(header string) (ContentRange, error) {
 	return parsed, nil
 }
 
-// Destination is the pair of writers an upload can land in, plus the bus that
-// announces the arrival. Both the multipart endpoint and a chunked session
-// choose between the two the same way, which is the whole point of holding the
-// choice in one place.
+// Destination is where an upload lands: the files namespace of the device it
+// names, looked up in the registry, plus the bus that announces the arrival.
+// The multipart endpoint and a chunked session both write through it, so every
+// upload to every device has one writer, [vfs.VFS.Write] or
+// [vfs.FileMover.MoveFileIn] (#2643).
 type Destination struct {
 	Registry vfs.Registry
-	Storage  *storageutil.StorageService
 	EventBus *eventbus.Bus
 }
+
+// UploadedFile is one file an upload wrote.
+type UploadedFile struct {
+	// Path is where the file landed, files-relative, after any file_(1) rename.
+	Path string
+	// Created is false when the upload replaced a file that was already there.
+	Created bool
+	// SourceName is the file name the client sent, before any rename. A
+	// sidecar part names its file by it.
+	SourceName string
+}
+
+// SidecarFunc receives a part of a multipart upload that is not a file, with
+// the files written so far, while the part can still be read. A client
+// sends a file's thumbnail and preview this way (#2379), right after the file.
+type SidecarFunc func(part *multipart.Part, written []UploadedFile)
 
 // WriteFileParams is one finished file on its way into the namespace.
 type WriteFileParams struct {
@@ -182,7 +203,7 @@ type WriteMultipartParams struct {
 	// KeepBoth lands a part whose name is taken under a free numbered name.
 	KeepBoth bool
 	// Sidecar, when set, is handed every part that is not a file.
-	Sidecar storageutil.SidecarFunc
+	Sidecar SidecarFunc
 	// BeforeOverwrite, when set, is called with a file's path just before a
 	// part replaces it, while the old content is still there to snapshot.
 	BeforeOverwrite func(path string)
@@ -192,7 +213,7 @@ type WriteMultipartParams struct {
 // they arrived. When the write fails partway it still lists the files that
 // landed before the failure.
 type WriteMultipartResult struct {
-	Written []storageutil.UploadedFile
+	Written []UploadedFile
 }
 
 // Sidecars attaches the thumbnail parts of a multipart upload to the files
@@ -203,9 +224,9 @@ type Sidecars struct {
 	// Database stores a photo's hashes for duplicate detection. Nil skips
 	// them.
 	Database *db.DatabaseSqlc
-	// Storage resolves the uploaded file, which is read for its content hash.
-	// Nil stores only the perceptual hash.
-	Storage *storageutil.StorageService
+	// FS is the namespace the files are written into, read back for a
+	// photo's content hash. Nil stores only the perceptual hash.
+	FS vfs.VFS
 	// Serial is the device the upload goes to, empty for the internal one.
 	Serial string
 }

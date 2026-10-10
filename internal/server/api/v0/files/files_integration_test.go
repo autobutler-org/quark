@@ -79,7 +79,7 @@ func doRequest(engine *gin.Engine, method, path string, body io.Reader, contentT
 }
 
 // uploadFile uploads a file via multipart/form-data using the "files" field name
-// (matching the storageutil.UploadFilesStreamedImpl expectation).
+// the upload writer reads.
 func uploadFile(t *testing.T, engine *gin.Engine, uploadPath, filename, content string) *httptest.ResponseRecorder {
 	t.Helper()
 	var buf bytes.Buffer
@@ -141,7 +141,8 @@ func TestListFiles_EmptyDir(t *testing.T) {
 }
 
 func TestUploadAndList(t *testing.T) {
-	engine, _ := newTestEngine(t)
+	// An upload needs the files namespace it lands in (#2643).
+	engine, _ := newStorageVFSTestEngine(t)
 
 	w := uploadFile(t, engine, "/api/v0/files/upload", "hello.txt", "hello world")
 	if w.Code != http.StatusOK {
@@ -162,7 +163,8 @@ func TestUploadAndList(t *testing.T) {
 }
 
 func TestUploadMultipleFiles(t *testing.T) {
-	engine, _ := newTestEngine(t)
+	// An upload needs the files namespace it lands in (#2643).
+	engine, _ := newStorageVFSTestEngine(t)
 
 	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
 		w := uploadFile(t, engine, "/api/v0/files/upload", name, "content of "+name)
@@ -178,7 +180,8 @@ func TestUploadMultipleFiles(t *testing.T) {
 }
 
 func TestUploadToSubdirectory(t *testing.T) {
-	engine, _ := newTestEngine(t)
+	// An upload needs the files namespace it lands in (#2643).
+	engine, _ := newStorageVFSTestEngine(t)
 
 	// The route is registered as /files//upload/*rootDir (double slash avoids gin conflict
 	// with the top-level /files/upload route), but gin normalizes request URLs so the

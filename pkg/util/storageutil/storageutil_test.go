@@ -1,16 +1,12 @@
 package storageutil
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
-	"mime/multipart"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1954,83 +1950,6 @@ func TestBackupToDeviceWithDevices(t *testing.T) {
 	}
 }
 
-func TestUploadFilesStreamed_SingleFile(t *testing.T) {
-	device := makeManagedDeviceForImpl(t, "test-device")
-	content := []byte("hello world")
-	body, contentType := makeMultipartBody(t, "files", "test.txt", content)
-	r := multipart.NewReader(body, boundaryFromContentType(t, contentType))
-	_, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
-		Reader:       r,
-		RootDir:      "",
-		DeviceSerial: "",
-	}, device, device.FilesDir)
-	if err != nil {
-		t.Fatalf("UploadFilesStreamedImpl failed: %v", err)
-	}
-	dest := filepath.Join(device.FilesDir, "test.txt")
-	got, err := os.ReadFile(dest)
-	if err != nil {
-		t.Fatalf("Expected uploaded file at %s: %v", dest, err)
-	}
-	if string(got) != string(content) {
-		t.Errorf("Expected content %q, got %q", content, got)
-	}
-}
-
-// A taken name is the caller's to resolve (#2016): without Overwrite or
-// KeepBoth the upload is refused and nothing is written, not renamed.
-func TestUploadFilesStreamed_ConflictIsRefused(t *testing.T) {
-	device := makeManagedDeviceForImpl(t, "test-device")
-	existing := filepath.Join(device.FilesDir, "file.txt")
-	if err := os.WriteFile(existing, []byte("old"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	body, contentType := makeMultipartBody(t, "files", "file.txt", []byte("new content"))
-	result, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
-		Reader: multipart.NewReader(body, boundaryFromContentType(t, contentType)),
-	}, device, device.FilesDir)
-	if !errors.Is(err, fs.ErrExist) {
-		t.Fatalf("upload over a taken name returned %v, want fs.ErrExist", err)
-	}
-	if len(result.Written) != 0 {
-		t.Errorf("a refused upload reports writing %+v", result.Written)
-	}
-	if old, _ := os.ReadFile(existing); string(old) != "old" {
-		t.Errorf("original now reads %q", old)
-	}
-	if _, err := os.Stat(filepath.Join(device.FilesDir, "file_(1).txt")); !os.IsNotExist(err) {
-		t.Errorf("a refused upload was renamed instead: %v", err)
-	}
-}
-
-func TestUploadFilesStreamed_KeepBothRenames(t *testing.T) {
-	device := makeManagedDeviceForImpl(t, "test-device")
-	existing := filepath.Join(device.FilesDir, "file.txt")
-	if err := os.WriteFile(existing, []byte("old"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	content := []byte("new content")
-	body, contentType := makeMultipartBody(t, "files", "file.txt", content)
-	_, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
-		Reader:   multipart.NewReader(body, boundaryFromContentType(t, contentType)),
-		KeepBoth: true,
-	}, device, device.FilesDir)
-	if err != nil {
-		t.Fatalf("UploadFilesStreamedImpl failed: %v", err)
-	}
-	if old, _ := os.ReadFile(existing); string(old) != "old" {
-		t.Error("Original file was overwritten, expected keep both")
-	}
-	renamed := filepath.Join(device.FilesDir, "file_(1).txt")
-	got, err := os.ReadFile(renamed)
-	if err != nil {
-		t.Fatalf("Expected renamed file at %s: %v", renamed, err)
-	}
-	if string(got) != string(content) {
-		t.Errorf("Expected new content %q, got %q", content, got)
-	}
-}
-
 func TestNumberedName(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -2049,65 +1968,6 @@ func TestNumberedName(t *testing.T) {
 	}
 }
 
-func TestUploadFilesStreamed_SubDirectory(t *testing.T) {
-	device := makeManagedDeviceForImpl(t, "test-device")
-	content := []byte("nested file")
-	body, contentType := makeMultipartBody(t, "files", "notes.txt", content)
-	r := multipart.NewReader(body, boundaryFromContentType(t, contentType))
-	_, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
-		Reader:       r,
-		RootDir:      "docs/2024",
-		DeviceSerial: "",
-	}, device, device.FilesDir)
-	if err != nil {
-		t.Fatalf("UploadFilesStreamedImpl failed: %v", err)
-	}
-	dest := filepath.Join(device.FilesDir, "docs", "2024", "notes.txt")
-	got, err := os.ReadFile(dest)
-	if err != nil {
-		t.Fatalf("Expected uploaded file at %s: %v", dest, err)
-	}
-	if string(got) != string(content) {
-		t.Errorf("Expected content %q, got %q", content, got)
-	}
-}
-
-// TestUploadFilesStreamed_ReportsWhatItWrote pins the names the access layer
-// grants ownership on (#1903): keeping both reports the name the file really
-// landed under, and an overwrite reports that it created nothing.
-func TestUploadFilesStreamed_ReportsWhatItWrote(t *testing.T) {
-	device := makeManagedDeviceForImpl(t, "test-device")
-	if err := os.MkdirAll(filepath.Join(device.FilesDir, "docs"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(device.FilesDir, "docs", "file.txt"), []byte("old"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	upload := func(overwrite bool) UploadFilesStreamedResult {
-		t.Helper()
-		body, contentType := makeMultipartBody(t, "files", "file.txt", []byte("new"))
-		result, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
-			Reader:    multipart.NewReader(body, boundaryFromContentType(t, contentType)),
-			RootDir:   "docs",
-			Overwrite: overwrite,
-			KeepBoth:  !overwrite,
-		}, device, device.FilesDir)
-		if err != nil {
-			t.Fatalf("UploadFilesStreamedImpl failed: %v", err)
-		}
-		return result
-	}
-
-	renamed := upload(false)
-	if want := (UploadedFile{Path: "docs/file_(1).txt", Created: true, SourceName: "file.txt"}); len(renamed.Written) != 1 || renamed.Written[0] != want {
-		t.Errorf("rename upload wrote %+v, want [%+v]", renamed.Written, want)
-	}
-	replaced := upload(true)
-	if want := (UploadedFile{Path: "docs/file.txt", Created: false, SourceName: "file.txt"}); len(replaced.Written) != 1 || replaced.Written[0] != want {
-		t.Errorf("overwrite upload wrote %+v, want [%+v]", replaced.Written, want)
-	}
-}
-
 func TestBackupToDevice_SameSerial(t *testing.T) {
 	source := makeManagedDeviceForImpl(t, "source")
 	_, err := BackupToDeviceWithDevices(BackupToDeviceParams{
@@ -2117,31 +1977,6 @@ func TestBackupToDevice_SameSerial(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error when source and target serials are the same")
 	}
-}
-
-// makeMultipartBody builds a multipart/form-data body for testing uploads.
-func makeMultipartBody(t *testing.T, field, filename string, content []byte) (*bytes.Buffer, string) {
-	t.Helper()
-	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
-	part, err := w.CreateFormFile(field, filename)
-	if err != nil {
-		t.Fatalf("failed to create form file: %v", err)
-	}
-	if _, err := part.Write(content); err != nil {
-		t.Fatalf("failed to write form content: %v", err)
-	}
-	w.Close()
-	return &buf, w.FormDataContentType()
-}
-
-func boundaryFromContentType(t *testing.T, ct string) string {
-	t.Helper()
-	parts := strings.SplitN(ct, "boundary=", 2)
-	if len(parts) != 2 {
-		t.Fatalf("unexpected content type: %s", ct)
-	}
-	return parts[1]
 }
 
 // TestStatDownloadAgreeOnDeviceDir is a regression guard for #1538.

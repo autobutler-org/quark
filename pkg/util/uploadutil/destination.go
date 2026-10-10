@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"mime/multipart"
 	"path"
 	"path/filepath"
 
@@ -15,23 +14,15 @@ import (
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
-// filesNamespace is the VFS namespace holding the local file store. Registered
-// by deputil.DefaultDependencies; absent in older deployments and in tests that
-// exercise the StorageService directly.
-const filesNamespace = "files"
-
-// errNothingWritten reports a storage upload that finished without writing the
-// one file it was given.
-var errNothingWritten = errors.New("uploadutil: the upload wrote no file")
-
-// FilesVFS returns the VFS backing the local namespace, or nil when the write
-// has to go through the StorageService instead: a named device serial routes
-// past the VFS, and a deployment without the namespace has nothing to route to.
+// FilesVFS returns the namespace holding the files of the device with this
+// serial, the internal drive for the empty one (#2639), or nil when no such
+// namespace is registered: the device is not attached, or the deployment has
+// no registry.
 func (d Destination) FilesVFS(serial string) vfs.VFS {
-	if serial != "" || d.Registry == nil {
+	if d.Registry == nil {
 		return nil
 	}
-	fsys, ok := d.Registry.Get(filesNamespace)
+	fsys, ok := d.Registry.Get(vfs.FilesNamespace(serial))
 	if !ok {
 		return nil
 	}
@@ -41,7 +32,7 @@ func (d Destination) FilesVFS(serial string) vfs.VFS {
 // Writable reports whether an upload for this serial has anywhere to go. A
 // session is worth opening only if the bytes it collects can eventually land.
 func (d Destination) Writable(serial string) bool {
-	return d.FilesVFS(serial) != nil || d.Storage != nil
+	return d.FilesVFS(serial) != nil
 }
 
 // WriteMultipartVFS streams every file part of a multipart body into the VFS
@@ -59,8 +50,11 @@ func WriteMultipartVFS(params WriteMultipartParams) (WriteMultipartResult, error
 
 	for {
 		part, err := params.Reader.NextPart()
+		if errors.Is(err, io.EOF) {
+			return result, nil
+		}
 		if err != nil {
-			break // io.EOF or end of parts
+			return result, fmt.Errorf("%w: %w", ErrInvalidBody, err)
 		}
 
 		fileName := part.FileName()
@@ -83,15 +77,18 @@ func WriteMultipartVFS(params WriteMultipartParams) (WriteMultipartResult, error
 			return params.FS.Write(params.Ctx, p, part, opts)
 		})
 		part.Close()
+		if errors.Is(err, io.ErrUnexpectedEOF) {
+			// The body ended inside the part: the client's connection, not
+			// the disk. The atomic write left nothing under the name.
+			return result, fmt.Errorf("%w: %w", ErrInvalidBody, err)
+		}
 		if err != nil {
 			return result, err
 		}
-		result.Written = append(result.Written, storageutil.UploadedFile{
+		result.Written = append(result.Written, UploadedFile{
 			Path: destPath, Created: created, SourceName: filepath.Base(fileName),
 		})
 	}
-
-	return result, nil
 }
 
 // WriteFile streams one file into the destination and publishes the upload
@@ -100,30 +97,31 @@ func (d Destination) WriteFile(params WriteFileParams) (WriteFileResult, error) 
 	// The client-supplied name never carries structure; rootDir does (#1603).
 	fileName := filepath.Base(params.FileName)
 
-	var written storageutil.UploadedFile
-	var err error
-	if fsys := d.FilesVFS(params.Serial); fsys != nil {
-		written, err = d.writeToVFS(fsys, params, fileName)
-	} else {
-		written, err = d.writeToStorageService(params, fileName)
+	fsys := d.FilesVFS(params.Serial)
+	if fsys == nil {
+		return WriteFileResult{}, ErrNoDestination
 	}
+	written, err := writeToVFS(fsys, params, fileName)
 	if err != nil {
 		return WriteFileResult{}, err
 	}
 
 	if d.EventBus != nil {
 		d.EventBus.Publish(eventbus.Event{
-			Kind: eventbus.EventUpload,
-			Path: params.RootDir,
+			Kind:         eventbus.EventUpload,
+			Path:         params.RootDir,
+			DeviceSerial: params.Serial,
 		})
 	}
 	return WriteFileResult{Path: written.Path, Created: written.Created}, nil
 }
 
-func (d Destination) writeToVFS(fsys vfs.VFS, params WriteFileParams, fileName string) (storageutil.UploadedFile, error) {
+// writeToVFS lands one file in fsys: moved in when it is already a host file
+// and the namespace can take it by rename (#1828), streamed otherwise.
+func writeToVFS(fsys vfs.VFS, params WriteFileParams, fileName string) (UploadedFile, error) {
 	if params.RootDir != "" {
 		if err := fsys.MkdirAll(params.Ctx, params.RootDir); err != nil {
-			return storageutil.UploadedFile{}, err
+			return UploadedFile{}, err
 		}
 	}
 	opts := writeOptions(params.Overwrite)
@@ -135,52 +133,7 @@ func (d Destination) writeToVFS(fsys vfs.VFS, params WriteFileParams, fileName s
 		}
 		return fsys.Write(params.Ctx, p, params.Reader, opts)
 	})
-	return storageutil.UploadedFile{Path: destPath, Created: created}, err
-}
-
-// writeToStorageService replays the file through the same multipart-streaming
-// path POST /files/upload uses, so device routing and name-conflict handling
-// stay in one implementation instead of being copied here and
-// drifting. The pipe keeps it streaming: only the copy buffer is ever in
-// memory, which matters because this path exists for multi-gigabyte files.
-func (d Destination) writeToStorageService(params WriteFileParams, fileName string) (storageutil.UploadedFile, error) {
-	pr, pw := io.Pipe()
-	mw := multipart.NewWriter(pw)
-
-	go func() {
-		part, err := mw.CreateFormFile("files", fileName)
-		if err != nil {
-			pw.CloseWithError(err)
-			return
-		}
-		if _, err := io.Copy(part, params.Reader); err != nil {
-			pw.CloseWithError(err)
-			return
-		}
-		pw.CloseWithError(mw.Close())
-	}()
-	defer pr.Close()
-
-	result, err := d.Storage.UploadFilesStreamed(storageutil.UploadFilesStreamedParams{
-		Reader:       multipart.NewReader(pr, mw.Boundary()),
-		RootDir:      params.RootDir,
-		DeviceSerial: params.Serial,
-		Overwrite:    params.Overwrite,
-		KeepBoth:     params.KeepBoth,
-	})
-	if errors.Is(err, fs.ErrExist) {
-		// One sentinel for a taken name, whichever writer found it.
-		return storageutil.UploadedFile{}, fmt.Errorf("%w: %w", vfs.ErrConflict, err)
-	}
-	if err != nil {
-		return storageutil.UploadedFile{}, err
-	}
-	// Keeping both may have landed the file as file_(1).ext, so the name the
-	// storage service reports is the one the file really landed under.
-	if len(result.Written) == 0 {
-		return storageutil.UploadedFile{}, errNothingWritten
-	}
-	return result.Written[0], nil
+	return UploadedFile{Path: destPath, Created: created}, err
 }
 
 // vfsExists reports whether something occupies a path. Only a definite "not
@@ -218,14 +171,10 @@ func placeUnderFreeName(dir, fileName string, keepBoth bool, place func(p string
 // session can be refused before its bytes are sent. Only a definite answer
 // counts: an upload that cannot tell goes ahead, and the commit decides.
 func (d Destination) taken(ctx context.Context, serial, rootDir, fileName string) bool {
-	rel := path.Join(rootDir, fileName)
-	if fsys := d.FilesVFS(serial); fsys != nil {
-		_, err := fsys.Stat(ctx, rel)
-		return err == nil
-	}
-	if d.Storage == nil {
+	fsys := d.FilesVFS(serial)
+	if fsys == nil {
 		return false
 	}
-	_, err := d.Storage.StatFile(storageutil.StatFileParams{FilePath: rel, DeviceSerial: serial})
+	_, err := fsys.Stat(ctx, path.Join(rootDir, fileName))
 	return err == nil
 }

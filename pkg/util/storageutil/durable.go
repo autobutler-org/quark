@@ -140,14 +140,3 @@ func SyncDir(dir string) error {
 	}
 	return d.Close()
 }
-
-// copyIntoPlace copies the file at src to dst through [WriteFileAtomic], for a
-// move that cannot rename or link across the two.
-func copyIntoPlace(src, dst string) error {
-	f, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-	return WriteFileAtomic(dst, f)
-}

@@ -34,7 +34,7 @@ a user would see it. Each case runs `POWERCUT_ROUNDS` times (default 3), armed a
 
 | Scenario | Write path under test                                                                     | The check                                                                                          |
 | -------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `upload` | `LocalVFS.Write`, `LocalVFS.MoveFileIn`, `storageutil.UploadFilesStreamedImpl` in turn     | every acknowledged file holds its full content; every file a listing shows does too                |
+| `upload` | `LocalVFS.Write`, `LocalVFS.MoveFileIn`, `uploadutil.WriteMultipartVFS` into a device-serial namespace, in turn     | every acknowledged file holds its full content; every file a listing shows does too                |
 | `vault`  | `vaultutil.Setup`, `CreateEntry`, and a `ChangePassword` every ten entries                 | `integrity_check` passes; it unlocks with the last acknowledged password (or the one being set); every acknowledged entry is there and decrypts |
 
 The cut points are listed in `CASES` in `run.bash`: mid-stream into an upload's temp, the instant an upload is

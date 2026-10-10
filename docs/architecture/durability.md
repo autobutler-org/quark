@@ -45,9 +45,9 @@ Every write that lands a user file goes through a temp file beside its destinati
 
 `storageutil.WriteFileAtomic` does all four and backs `LocalVFS.Write` and `StorageServiceVFS.Write`.
 `vfs.moveFileIn` (resumable-upload commits, transcode output) flushes the staged file before renaming or linking
-it, and the directory after. `storageutil.UploadFilesStreamed` (uploads to a named device) flushes its temp the
-same way; where it cannot rename or link — another filesystem, or exFAT, which has no hard links — it copies
-through `WriteFileAtomic` rather than into the real name.
+it, and the directory after; where it cannot rename or link — another filesystem, or exFAT, which has no hard
+links — it copies through `Write` rather than into the real name. Every upload, to any device, lands through one
+of the two (#2643): a device's files are a `StorageServiceVFS` namespace of their own.
 
 The small state files Quark keeps beside the database go through the same helper, by way of
 `storageutil.WriteFileAtomicPerm`, which keeps a private file private (#2611):
