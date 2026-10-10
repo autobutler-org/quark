@@ -1,42 +1,50 @@
-// Package settingsutil reads and writes the Quark's settings, which live in settings.json in the data directory
-// rather than in the database.
+// Package settingsutil reads and writes the Quark's settings. They live in the database's settings table, one
+// row per setting, so every instance serving an install reads the same values and a change to one setting never
+// reverts another (#3083). Nothing is cached: each read is a query. Bind gives the package its database, and
+// imports the settings.json an older build kept in the data directory.
 package settingsutil
 
 import (
-	"bytes"
+	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
-	"sync"
+	"strings"
 
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/internal/db"
 )
 
 const settingsFileName = "settings.json"
+
+// featureFlagKeyPrefix starts the settings key of a feature flag, which has a
+// row of its own: featureFlags.<flag>.
+const featureFlagKeyPrefix = "featureFlags."
+
+// ErrNotBound reports a use of the settings before Bind gave them a database.
+var ErrNotBound = errors.New("settings have no database: call settingsutil.Bind first")
 
 // authSaltSecretSize is the salt secret's length in bytes.
 const authSaltSecretSize = 32
 
 // Settings holds application-level user-configurable settings.
 type Settings struct {
-	// SettingsVersion is how many of the package's migrations the file has
-	// been through. Load runs the rest; Save stamps the current count.
+	// SettingsVersion is how many of the package's migrations settings.json
+	// had been through. The import runs the rest, so Load always reports the
+	// current count; a change to stored settings is now a database migration.
 	SettingsVersion int  `json:"settingsVersion"`
 	AutoUpdate      bool `json:"autoUpdate"`
 	// RemoteAccessEnabled is the user's choice. The node's credential is its
 	// tsnet state dir, not a key kept here (#1876): files written before then
-	// still carry a remoteAccessAuthKey, which parsing ignores and the next
-	// Save drops.
+	// still carry a remoteAccessAuthKey, which the import leaves behind.
 	RemoteAccessEnabled bool `json:"remoteAccessEnabled"`
 	// RemoteAccessHousehold and RemoteAccessHouseholdToken are the Quark's
 	// Headscale household and the token that authenticates pair requests for
 	// it (#2358). They outlive Disable, so the next Enable rejoins the same
-	// household. The file is written 0600.
+	// household.
 	RemoteAccessHousehold      string `json:"remoteAccessHousehold,omitempty"`
 	RemoteAccessHouseholdToken string `json:"remoteAccessHouseholdToken,omitempty"`
 	DevMode                    bool   `json:"devMode"`
@@ -55,8 +63,7 @@ type Settings struct {
 	ThemeColor string `json:"themeColor,omitempty"`
 	// AuthSaltSecret is the hex of the 32 random bytes that key the salt
 	// /auth/salt answers with for an account that has none stored (#2430).
-	// AuthSaltSecret makes it on first use and Save never drops it. The file
-	// is written 0600.
+	// AuthSaltSecret makes it on first use and nothing clears it.
 	AuthSaltSecret string `json:"authSaltSecret,omitempty"`
 }
 
@@ -82,83 +89,50 @@ func ValidateThemeColor(themeColor string) error {
 	return nil
 }
 
-var (
-	// secretMu keeps two first calls of AuthSaltSecret from each making one.
-	secretMu     sync.Mutex
-	mu           sync.Mutex
-	cached       *Settings
-	pathOverride string // set by ResetForTesting only
-)
+// Bind gives the package the database its settings live in, and brings in the
+// settings.json an older build left in the data directory: see importFile.
+// The server calls it once, before anything reads a setting.
+//
+// A file that cannot be imported leaves the package unbound, so every read
+// fails and the getters answer off, as they did when the file could not be
+// parsed. Binding anyway would start the Quark on defaults: account requests
+// open, and a new salt secret.
+func Bind(database *db.DatabaseSqlc) error {
+	store.Store(database.Queries)
+	if err := importFile(settingsPath()); err != nil {
+		store.Store(nil)
+		return err
+	}
+	return nil
+}
 
-// Load reads settings from disk (or returns defaults if not present),
-// first bringing an older file up to date by running the migrations it has
-// not been through and writing it back. The result is cached for the lifetime of the process.
-// Returns a copy of the cached settings to prevent callers from mutating
-// the shared state without holding the lock.
+// Load reads every setting from the database. A setting with no row has its
+// zero value. The result is the caller's own: changing it changes nothing
+// stored, which is what the Set functions are for.
 func Load() (*Settings, error) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	if cached != nil {
-		return snapshotOf(cached), nil
-	}
-
-	path := settingsPath()
-
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		cached = &Settings{SettingsVersion: len(migrations)}
-		return snapshotOf(cached), nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to read settings file: %w", err)
-	}
-
-	data, err = migrate(path, data)
+	queries, err := bound()
 	if err != nil {
 		return nil, err
 	}
-
-	s := &Settings{}
-	if err := json.Unmarshal(data, s); err != nil {
-		return nil, fmt.Errorf("failed to parse settings file: %w", err)
-	}
-
-	cached = s
-	return snapshotOf(cached), nil
-}
-
-// Save writes settings to disk and updates the in-process cache.
-// Stores a copy so the caller's pointer cannot mutate the cache.
-func Save(s *Settings) error {
-	mu.Lock()
-	defer mu.Unlock()
-
-	path := settingsPath()
-
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return fmt.Errorf("failed to create settings directory: %w", err)
-	}
-
-	snapshot := snapshotOf(s)
-	snapshot.SettingsVersion = len(migrations)
-	// The salt secret is written once and never cleared. A caller holding
-	// settings read before it existed would otherwise save it away, and the
-	// next one made would not match the salts already handed out (#2430).
-	if snapshot.AuthSaltSecret == "" && cached != nil {
-		snapshot.AuthSaltSecret = cached.AuthSaltSecret
-	}
-	data, err := json.MarshalIndent(snapshot, "", "  ")
+	rows, err := queries.ListSettings(context.Background())
 	if err != nil {
-		return fmt.Errorf("failed to marshal settings: %w", err)
+		return nil, fmt.Errorf("failed to read settings: %w", err)
 	}
-
-	if err := storageutil.WriteFileAtomicPerm(path, bytes.NewReader(data), 0600); err != nil {
-		return fmt.Errorf("failed to write settings file: %w", err)
+	raw := map[string]json.RawMessage{}
+	flags := map[string]json.RawMessage{}
+	for _, row := range rows {
+		if flag, ok := strings.CutPrefix(row.Key, featureFlagKeyPrefix); ok {
+			flags[flag] = json.RawMessage(row.Value)
+		} else {
+			raw[row.Key] = json.RawMessage(row.Value)
+		}
 	}
-
-	cached = snapshot
-	return nil
+	s := &Settings{FeatureFlags: map[string]bool{}}
+	if err := decodeRaw(raw, flags, s); err != nil {
+		return nil, fmt.Errorf("failed to parse settings: %w", err)
+	}
+	s.SettingsVersion = len(migrations)
+	return s, nil
 }
 
 // GetAutoUpdate returns whether automatic updates are enabled.
@@ -172,19 +146,7 @@ func GetAutoUpdate() bool {
 
 // SetAutoUpdate sets the auto-update preference and persists it.
 func SetAutoUpdate(enabled bool) error {
-	mu.Lock()
-	s := cached
-	mu.Unlock()
-
-	if s == nil {
-		loaded, err := Load()
-		if err != nil {
-			loaded = &Settings{}
-		}
-		s = loaded
-	}
-	s.AutoUpdate = enabled
-	return Save(s)
+	return set("autoUpdate", enabled)
 }
 
 // GetRemoteAccess returns whether remote access is enabled.
@@ -198,19 +160,7 @@ func GetRemoteAccess() bool {
 
 // SetRemoteAccess sets the remote access enabled flag and persists it.
 func SetRemoteAccess(enabled bool) error {
-	mu.Lock()
-	s := cached
-	mu.Unlock()
-
-	if s == nil {
-		loaded, err := Load()
-		if err != nil {
-			loaded = &Settings{}
-		}
-		s = loaded
-	}
-	s.RemoteAccessEnabled = enabled
-	return Save(s)
+	return set("remoteAccessEnabled", enabled)
 }
 
 // GetHousehold returns the stored household credential, or two empty strings
@@ -225,25 +175,15 @@ func GetHousehold() (household, token string) {
 
 // SetHousehold persists the household credential.
 func SetHousehold(household, token string) error {
-	mu.Lock()
-	s := cached
-	mu.Unlock()
-
-	if s == nil {
-		loaded, err := Load()
-		if err != nil {
-			loaded = &Settings{}
-		}
-		s = loaded
+	if err := set("remoteAccessHousehold", household); err != nil {
+		return err
 	}
-	s.RemoteAccessHousehold = household
-	s.RemoteAccessHouseholdToken = token
-	return Save(s)
+	return set("remoteAccessHouseholdToken", token)
 }
 
 // GetAccessRequestsEnabled returns whether account requests are on. An unset
-// value is on; settings that cannot be read are off, so a broken file does not
-// open the sign-in page to requests.
+// value is on; settings that cannot be read are off, so a broken database does
+// not open the sign-in page to requests.
 func GetAccessRequestsEnabled() bool {
 	s, err := Load()
 	if err != nil {
@@ -254,19 +194,7 @@ func GetAccessRequestsEnabled() bool {
 
 // SetAccessRequestsEnabled turns account requests on or off and persists it.
 func SetAccessRequestsEnabled(enabled bool) error {
-	mu.Lock()
-	s := cached
-	mu.Unlock()
-
-	if s == nil {
-		loaded, err := Load()
-		if err != nil {
-			loaded = &Settings{}
-		}
-		s = loaded
-	}
-	s.AccessRequestsEnabled = &enabled
-	return Save(s)
+	return set("accessRequestsEnabled", enabled)
 }
 
 // GetFeatureFlag returns the stored value of the feature flag key, and
@@ -284,12 +212,7 @@ func GetFeatureFlag(key string) (enabled, set bool, err error) {
 // SetFeatureFlag stores the feature flag key as on or off and persists it.
 // It does not check key against the registry; featureflagutil does.
 func SetFeatureFlag(key string, enabled bool) error {
-	s, err := Load()
-	if err != nil {
-		return err
-	}
-	s.FeatureFlags[key] = enabled
-	return Save(s)
+	return set(featureFlagKeyPrefix+key, enabled)
 }
 
 // GetThemeColor returns the Quark's theme color, or the empty string when an admin has
@@ -308,12 +231,7 @@ func SetThemeColor(themeColor string) error {
 	if err := ValidateThemeColor(themeColor); err != nil {
 		return err
 	}
-	s, err := Load()
-	if err != nil {
-		return err
-	}
-	s.ThemeColor = themeColor
-	return Save(s)
+	return set("themeColor", themeColor)
 }
 
 // GetDeviceID returns the persisted device ID, or empty string if not set.
@@ -327,19 +245,7 @@ func GetDeviceID() string {
 
 // SetDeviceID persists the device ID.
 func SetDeviceID(id string) error {
-	mu.Lock()
-	s := cached
-	mu.Unlock()
-
-	if s == nil {
-		loaded, err := Load()
-		if err != nil {
-			loaded = &Settings{}
-		}
-		s = loaded
-	}
-	s.DeviceID = id
-	return Save(s)
+	return set("deviceId", id)
 }
 
 // GetActiveBranch returns the active dev branch, or empty string if not set.
@@ -353,52 +259,75 @@ func GetActiveBranch() string {
 
 // SetActiveBranch persists the active dev branch.
 func SetActiveBranch(branch string) error {
-	mu.Lock()
-	s := cached
-	mu.Unlock()
-
-	if s == nil {
-		loaded, err := Load()
-		if err != nil {
-			loaded = &Settings{}
-		}
-		s = loaded
-	}
-	s.ActiveBranch = branch
-	return Save(s)
+	return set("activeBranch", branch)
 }
 
 // AuthSaltSecret returns this install's salt secret, making and persisting it
 // on first use. Losing it locks nobody out: an account's real salt is stored
 // with the account, and the secret only decides the salt offered for a
 // username that has none.
+//
+// Two instances on a fresh install may both make one. Each offers its own to
+// the database, which keeps the first, and then both read back what is
+// stored, so they answer /auth/salt alike (#3083).
 func AuthSaltSecret() ([]byte, error) {
-	secretMu.Lock()
-	defer secretMu.Unlock()
-
-	s, err := Load()
+	queries, err := bound()
 	if err != nil {
 		return nil, err
 	}
-	if secret, err := hex.DecodeString(s.AuthSaltSecret); err == nil && len(secret) == authSaltSecretSize {
-		return secret, nil
+	ctx := context.Background()
+	if secret, err := storedSaltSecret(ctx, queries); secret != nil || err != nil {
+		return secret, err
 	}
 	secret := make([]byte, authSaltSecretSize)
 	if _, err := rand.Read(secret); err != nil {
 		return nil, fmt.Errorf("failed to generate the salt secret: %w", err)
 	}
-	s.AuthSaltSecret = hex.EncodeToString(secret)
-	if err := Save(s); err != nil {
+	value, err := json.Marshal(hex.EncodeToString(secret))
+	if err != nil {
 		return nil, err
+	}
+	offer := db.AddSettingParams{Key: authSaltSecretKey, Value: string(value)}
+	if err := queries.AddSetting(ctx, offer); err != nil {
+		return nil, fmt.Errorf("failed to store the salt secret: %w", err)
+	}
+	if stored, err := storedSaltSecret(ctx, queries); stored != nil || err != nil {
+		return stored, err
+	}
+	// What is stored is not a secret, so the offer was turned away: replace it.
+	if err := queries.SetSetting(ctx, db.SetSettingParams(offer)); err != nil {
+		return nil, fmt.Errorf("failed to store the salt secret: %w", err)
 	}
 	return secret, nil
 }
 
-// ResetForTesting resets in-memory state and redirects the settings file to
-// path. Call this at the start of each test that touches settingsutil.
+// ResetForTesting gives the package the database beside path, making it if
+// need be, and imports the settings file at path, if there is one, the way
+// Bind does on startup. A second call with the same path is a restart: it
+// reads what the first stored. The empty path leaves the package unbound.
+// Call this at the start of each test that touches settingsutil.
 func ResetForTesting(path string) {
-	mu.Lock()
-	defer mu.Unlock()
-	cached = nil
+	if testDB != nil {
+		testDB.Close()
+		testDB = nil
+	}
+	store.Store(nil)
+	pathOverride = ""
+	if path == "" {
+		return
+	}
+	sqlDB, err := sql.Open("sqlite", db.DSN(path+".db"))
+	if err != nil {
+		panic(fmt.Sprintf("settingsutil: open test database: %v", err))
+	}
+	testDB = sqlDB
+	database := &db.DatabaseSqlc{Db: sqlDB, Queries: db.New(sqlDB)}
+	// On a new file this only runs the migrations, and on one an earlier call
+	// made it keeps the settings, as every reset does.
+	if err := db.ResetDatabase(database); err != nil {
+		panic(fmt.Sprintf("settingsutil: migrate test database: %v", err))
+	}
 	pathOverride = path
+	// A file that cannot be imported leaves the package unbound, as in Bind.
+	_ = Bind(database)
 }

@@ -27,7 +27,7 @@ var ErrUnknownFlag = errors.New("unknown feature flag")
 
 // Flag declares one beta feature's switch.
 type Flag struct {
-	// Key is stable: it is the flag's name in the API and in settings.json.
+	// Key is stable: it is the flag's name in the API and in the settings table.
 	Key string `json:"key"`
 	// Label and Description are admin-facing copy. Description says what
 	// turning the flag off actually does.

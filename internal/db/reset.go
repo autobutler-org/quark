@@ -37,14 +37,68 @@ func ResetDatabase(database *DatabaseSqlc) error {
 		return fmt.Errorf("database not initialized")
 	}
 	return exclusively(database.Db, func(ctx context.Context, conn *sql.Conn) error {
+		kept, err := setAsideKeptTables(ctx, conn)
+		if err != nil {
+			return fmt.Errorf("failed to set aside the tables a reset keeps: %w", err)
+		}
 		if err := dropAllObjects(ctx, conn); err != nil {
 			return fmt.Errorf("failed to drop database objects: %w", err)
 		}
 		if err := migrateFromScratch(ctx, conn); err != nil {
 			return fmt.Errorf("failed to re-run migrations: %w", err)
 		}
+		if err := restoreKeptTables(ctx, conn, kept); err != nil {
+			return fmt.Errorf("failed to restore the tables a reset keeps: %w", err)
+		}
 		return nil
 	})
+}
+
+// keptTables are the tables whose rows outlive a reset: the Quark's settings
+// and the account request history. Both were files in the data directory that
+// a reset never touched (#3083), and the settings hold what a reset must not
+// lose: the remote access household, the device id and the salt secret.
+var keptTables = []string{"settings", "account_request_history"}
+
+// setAsideKeptTables copies each of keptTables that exists into a temporary
+// table, which dropAllObjects does not see, and returns the ones it copied. A
+// database from before a table existed, or an empty one, has nothing to copy.
+//
+// These statements and restoreKeptTables' are DDL with the table name built
+// in, from the fixed list above, which sqlc cannot express.
+func setAsideKeptTables(ctx context.Context, conn *sql.Conn) ([]string, error) {
+	kept := make([]string, 0, len(keptTables))
+	for _, table := range keptTables {
+		var exists bool
+		if err := conn.QueryRowContext(ctx,
+			`SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?)`, table,
+		).Scan(&exists); err != nil {
+			return nil, err
+		}
+		if !exists {
+			continue
+		}
+		if _, err := conn.ExecContext(ctx,
+			fmt.Sprintf(`CREATE TEMP TABLE "kept_%s" AS SELECT * FROM "%s"`, table, table),
+		); err != nil {
+			return nil, err
+		}
+		kept = append(kept, table)
+	}
+	return kept, nil
+}
+
+// restoreKeptTables puts the rows setAsideKeptTables copied back into the
+// tables the migrations just made, and drops the copies.
+func restoreKeptTables(ctx context.Context, conn *sql.Conn, kept []string) error {
+	for _, table := range kept {
+		if _, err := conn.ExecContext(ctx, fmt.Sprintf(
+			`INSERT INTO "%s" SELECT * FROM temp."kept_%s"; DROP TABLE temp."kept_%s"`, table, table, table,
+		)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ResetRawDatabase empties a database that carries no migration set — the

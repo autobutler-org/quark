@@ -2,7 +2,6 @@ package settingsutil_test
 
 import (
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
@@ -40,12 +39,9 @@ func TestAccessRequests_DefaultOnAndRoundTrip(t *testing.T) {
 	if err := settingsutil.SetAccessRequestsEnabled(true); err != nil {
 		t.Fatalf("turn on: %v", err)
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), `"accessRequestsEnabled": true`) {
-		t.Errorf("settings file %s does not record requests turned on", data)
+	value, err := settingsutil.QueriesForTesting().GetSetting(t.Context(), "accessRequestsEnabled")
+	if err != nil || value != "true" {
+		t.Errorf("stored accessRequestsEnabled = %q, %v; want it recorded as turned on", value, err)
 	}
 }
 
@@ -59,5 +55,8 @@ func TestAccessRequests_UnreadableSettingsAreOff(t *testing.T) {
 	settingsutil.ResetForTesting(path)
 	if settingsutil.GetAccessRequestsEnabled() {
 		t.Error("an unparseable settings file turned requests on")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("the file that could not be imported was moved or removed: %v", err)
 	}
 }

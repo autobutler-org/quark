@@ -127,9 +127,9 @@ type SnapshotBackupParams struct {
 	// files. Nil skips the chat export.
 	ChatDB      *sql.DB
 	IOSemaphore *iosemutil.Semaphore // throttles file copies to yield to interactive requests
-	// DataDir is the Quark's data directory, where a completed snapshot is
-	// recorded for [LastSnapshot]. Empty records nothing.
-	DataDir string
+	// Queries is the database a completed snapshot is recorded in for
+	// [LastSnapshot]. Nil records nothing.
+	Queries *db.Queries
 }
 
 type SyncWorker struct {

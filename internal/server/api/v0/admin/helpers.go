@@ -8,10 +8,10 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
+	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/requestlogutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -63,15 +63,19 @@ func idParam(c *gin.Context, name string, notFound error) (int64, error) {
 // history that cannot be written is logged rather than failing the request.
 func recordDecision(c *gin.Context, username, outcome string) {
 	decidedBy, _ := ctxutil.Get[string](c, "username")
-	if _, err := requestlogutil.Append(requestlogutil.AppendParams{
-		DataDir: storageutil.GetDataDir(),
-		Entry: requestlogutil.Entry{
-			Username:  username,
-			Outcome:   outcome,
-			DecidedBy: decidedBy,
-			DecidedAt: time.Now().UTC(),
-		},
-	}); err != nil {
+	err := errors.New("database unavailable")
+	if deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps"); ok && deps.Database() != nil {
+		_, err = requestlogutil.Append(c.Request.Context(), requestlogutil.AppendParams{
+			Queries: deps.Database().Queries,
+			Entry: requestlogutil.Entry{
+				Username:  username,
+				Outcome:   outcome,
+				DecidedBy: decidedBy,
+				DecidedAt: time.Now().UTC(),
+			},
+		})
+	}
+	if err != nil {
 		slog.Error("admin: could not record account request decision", "username", username, "outcome", outcome, "err", err)
 	}
 }

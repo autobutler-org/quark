@@ -20,6 +20,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/repairutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/sshutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
@@ -164,6 +165,11 @@ func DefaultDependencies() (Dependencies, error) {
 	deps := NewDependencies()                                // coverage: ignore - requires database connection
 	if database, err := db.ConnectToDatabase(); err == nil { // coverage: ignore - requires database connection success
 		deps.WithDatabase(database)
+		// A settings.json that cannot be imported does not stop the server:
+		// settingsutil stays unbound and its getters answer off.
+		if err := settingsutil.Bind(database); err != nil {
+			log.Printf("[settings] %v", err)
+		}
 	} else { // coverage: ignore - requires database connection failure
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}

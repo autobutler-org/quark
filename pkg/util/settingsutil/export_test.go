@@ -3,7 +3,15 @@ package settingsutil
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/autobutler-org/quark/internal/db"
 )
+
+// QueriesForTesting is the database the package is bound to, for a test that
+// has to look at the rows themselves.
+func QueriesForTesting() *db.Queries {
+	return store.Load()
+}
 
 // DropFeatureFlagForTesting is dropFeatureFlag, for a test that retires a flag
 // the real registry still has.

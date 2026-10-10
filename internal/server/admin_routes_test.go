@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -13,6 +14,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/hostnameutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/sshutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
@@ -25,6 +27,9 @@ import (
 func TestAdminGate_ApplianceRoutes(t *testing.T) {
 	// Handlers the admin reaches resolve the data directory from HOME.
 	t.Setenv("HOME", t.TempDir())
+	// The handlers read the Quark's settings, which need a database of their own.
+	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
+	t.Cleanup(func() { settingsutil.ResetForTesting("") })
 
 	database := dbtest.NewDB(t)
 	ctx := context.Background()

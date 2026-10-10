@@ -2,7 +2,9 @@ package v0_admin_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,6 +21,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -43,6 +46,9 @@ func newAdminHarness(t *testing.T) adminHarness {
 	// directory, which resolves from HOME, so every harness gets one of its
 	// own rather than the developer's.
 	t.Setenv("HOME", t.TempDir())
+	// The handlers read the Quark's settings, which need a database of their own.
+	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
+	t.Cleanup(func() { settingsutil.ResetForTesting("") })
 	// Creating and approving an account make a folder (#1908), and so do
 	// creating and renaming a group (#2016), all in the files namespace.
 	files := vfs.NewMemVFS("files")
@@ -80,6 +86,26 @@ func newAdminHarness(t *testing.T) adminHarness {
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_admin.NewRouter())
 	return adminHarness{database: database, engine: engine, events: events, adminID: admin.ID, files: files}
+}
+
+// saveSettings gives an account settings of its own.
+func (h adminHarness) saveSettings(t *testing.T, userID int64) {
+	t.Helper()
+	if _, err := usersettingsutil.Save(context.Background(), usersettingsutil.SaveParams{
+		Queries: h.database.Queries, UserID: userID, Settings: usersettingsutil.Settings{ThemeColor: "teal"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// hasSettings reports whether an account id has a settings row.
+func (h adminHarness) hasSettings(t *testing.T, userID int64) bool {
+	t.Helper()
+	_, err := h.database.Queries.GetUserSettings(context.Background(), userID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		t.Fatal(err)
+	}
+	return err == nil
 }
 
 func (h adminHarness) do(method, path string) *httptest.ResponseRecorder {
@@ -223,7 +249,7 @@ func TestPromoteUser_OnlyActive(t *testing.T) {
 }
 
 // TestDeleteUser_RemovesProfilePicture verifies an admin's delete takes the
-// account's picture and its settings with it, so a recycled id does not
+// account's picture and its settings row with it, so a recycled id does not
 // inherit them.
 func TestDeleteUser_RemovesProfilePicture(t *testing.T) {
 	h := newAdminHarness(t)
@@ -241,10 +267,7 @@ func TestDeleteUser_RemovesProfilePicture(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	settings := usersettingsutil.SaveParams{DataDir: storageutil.GetDataDir(), UserID: bob.ID, Settings: usersettingsutil.Settings{ThemeColor: "teal"}}
-	if _, err := usersettingsutil.Save(settings); err != nil {
-		t.Fatal(err)
-	}
+	h.saveSettings(t, bob.ID)
 
 	if w := h.do(http.MethodDelete, "/api/v0/admin/users/bob"); w.Code != http.StatusOK {
 		t.Fatalf("DELETE = %d: %s", w.Code, w.Body.String())
@@ -252,14 +275,14 @@ func TestDeleteUser_RemovesProfilePicture(t *testing.T) {
 	if _, err := os.Stat(picture); !os.IsNotExist(err) {
 		t.Errorf("bob's picture is still there (stat err %v)", err)
 	}
-	if _, err := os.Stat(usersettingsutil.Path(settings.DataDir, bob.ID)); !os.IsNotExist(err) {
-		t.Errorf("bob's settings are still there (stat err %v)", err)
+	if h.hasSettings(t, bob.ID) {
+		t.Error("bob's settings are still there")
 	}
 }
 
 // TestDeleteUser_RemovesSettingsWhenPictureRemovalFails verifies a picture
-// that cannot be removed does not stop the settings cleanup: the account is
-// already gone, so a retry would never reach it (#2773).
+// that cannot be removed does not leave the settings behind: they are a row
+// that went with the account, which a retry would never reach (#2773).
 func TestDeleteUser_RemovesSettingsWhenPictureRemovalFails(t *testing.T) {
 	h := newAdminHarness(t)
 	h.addUser(t, "bob", authutil.StatusActive, false)
@@ -274,15 +297,12 @@ func TestDeleteUser_RemovesSettingsWhenPictureRemovalFails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	settings := usersettingsutil.SaveParams{DataDir: storageutil.GetDataDir(), UserID: bob.ID, Settings: usersettingsutil.Settings{ThemeColor: "teal"}}
-	if _, err := usersettingsutil.Save(settings); err != nil {
-		t.Fatal(err)
-	}
+	h.saveSettings(t, bob.ID)
 
 	if w := h.do(http.MethodDelete, "/api/v0/admin/users/bob"); w.Code != http.StatusInternalServerError {
 		t.Fatalf("DELETE = %d, want 500: %s", w.Code, w.Body.String())
 	}
-	if _, err := os.Stat(usersettingsutil.Path(settings.DataDir, bob.ID)); !os.IsNotExist(err) {
-		t.Errorf("bob's settings are still there (stat err %v)", err)
+	if h.hasSettings(t, bob.ID) {
+		t.Error("bob's settings are still there")
 	}
 }

@@ -11480,7 +11480,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "key": {
-                    "description": "Key is stable: it is the flag's name in the API and in settings.json.",
+                    "description": "Key is stable: it is the flag's name in the API and in the settings table.",
                     "type": "string"
                 },
                 "label": {

@@ -6,9 +6,9 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
+	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/notificationutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 	"github.com/gin-gonic/gin"
 )
@@ -28,13 +28,17 @@ func listNotifications(c *gin.Context) *serverutil.Response {
 	if !ok || principal.UserID == 0 {
 		return serverutil.Unauthorized(errors.New("authentication required"))
 	}
-	dataDir := storageutil.GetDataDir()
-	settings, err := usersettingsutil.Load(usersettingsutil.LoadParams{DataDir: dataDir, UserID: principal.UserID})
+	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
+	if !ok || deps.Database() == nil {
+		return serverutil.InternalServerError(errors.New("database unavailable"))
+	}
+	queries := deps.Database().Queries
+	settings, err := usersettingsutil.Load(c.Request.Context(), usersettingsutil.LoadParams{Queries: queries, UserID: principal.UserID})
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
-	result, err := notificationutil.List(notificationutil.ListParams{
-		DataDir:  dataDir,
+	result, err := notificationutil.List(c.Request.Context(), notificationutil.ListParams{
+		Queries:  queries,
 		IsAdmin:  principal.IsAdmin,
 		Disabled: settings.Settings.DisabledNotifications,
 		Now:      time.Now(),

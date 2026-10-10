@@ -1,9 +1,12 @@
 package v0_admin
 
 import (
+	"errors"
+
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
+	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/requestlogutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,8 +22,12 @@ import (
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /admin/account-requests/history [get]
-func listAccountRequestHistory(_ *gin.Context) *serverutil.Response {
-	result, err := requestlogutil.List(requestlogutil.ListParams{DataDir: storageutil.GetDataDir()})
+func listAccountRequestHistory(c *gin.Context) *serverutil.Response {
+	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
+	if !ok || deps.Database() == nil {
+		return serverutil.InternalServerError(errors.New("database unavailable"))
+	}
+	result, err := requestlogutil.List(c.Request.Context(), requestlogutil.ListParams{Queries: deps.Database().Queries})
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}

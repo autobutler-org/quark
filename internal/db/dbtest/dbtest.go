@@ -101,7 +101,7 @@ func HideTable(t *testing.T, sqlDB *sql.DB, table string) (restore func()) {
 }
 
 // SaltSecret stands in for the install's salt secret, which settingsutil keeps
-// in settings.json, so an account a test makes with an auth key gets the same
+// in the settings table, so an account a test makes with an auth key gets the same
 // salt on every run.
 func SaltSecret() ([]byte, error) {
 	return []byte("dbtest salt secret, 32 bytes...."), nil

@@ -673,50 +673,73 @@ func TestDeleteAccount_DatabaseResetRemovesEveryPicture(t *testing.T) {
 	}
 }
 
-// TestDeleteAccount_RemovesOwnSettings verifies the caller's settings file
-// goes with their account, and only theirs, and that a reset takes them all:
-// SQLite hands a deleted id out again (#2740).
-func TestDeleteAccount_RemovesOwnSettings(t *testing.T) {
-	engine, sqlDB, _ := newDeleteAccountEngine(t)
-	var id int64
-	if err := sqlDB.QueryRow(`SELECT id FROM users WHERE username = ?`, deleteAccountUser).Scan(&id); err != nil {
+// seedUserSettings gives the test account, and a second admin it makes,
+// settings of their own, and returns both ids.
+func seedUserSettings(t *testing.T, sqlDB *sql.DB) (own, other int64) {
+	t.Helper()
+	queries := db.New(sqlDB)
+	ctx := context.Background()
+	user, err := queries.GetUserByUsername(ctx, deleteAccountUser)
+	if err != nil {
 		t.Fatal(err)
 	}
-	dataDir := storageutil.GetDataDir()
-	for _, userID := range []int64{id, id + 100} {
-		if _, err := usersettingsutil.Save(usersettingsutil.SaveParams{
-			DataDir: dataDir, UserID: userID, Settings: usersettingsutil.Settings{ThemeColor: "teal"},
+	second, err := queries.CreateUser(ctx, db.CreateUserParams{Username: "settings-other", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An admin, so the test account is not the last one and may delete itself.
+	if err := queries.SetUserAdmin(ctx, db.SetUserAdminParams{IsAdmin: 1, Username: second.Username}); err != nil {
+		t.Fatal(err)
+	}
+	for _, userID := range []int64{user.ID, second.ID} {
+		if _, err := usersettingsutil.Save(ctx, usersettingsutil.SaveParams{
+			Queries: queries, UserID: userID, Settings: usersettingsutil.Settings{ThemeColor: "teal"},
 		}); err != nil {
 			t.Fatal(err)
 		}
 	}
+	return user.ID, second.ID
+}
+
+// userSettingsRows counts the settings rows of one account, or of every
+// account when userID is 0.
+func userSettingsRows(t *testing.T, sqlDB *sql.DB, userID int64) int {
+	t.Helper()
+	var n int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM user_settings WHERE ? IN (0, user_id)`, userID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// TestDeleteAccount_RemovesOwnSettings verifies the caller's settings row
+// goes with their account, and only theirs: SQLite hands a deleted id out
+// again (#2740).
+func TestDeleteAccount_RemovesOwnSettings(t *testing.T) {
+	engine, sqlDB, _ := newDeleteAccountEngine(t)
+	own, other := seedUserSettings(t, sqlDB)
 
 	if w := deleteAccountRequest(engine, "account=true"); w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	if _, err := os.Stat(usersettingsutil.Path(dataDir, id)); !os.IsNotExist(err) {
-		t.Errorf("the deleted account's settings are still there (stat err %v)", err)
+	if n := userSettingsRows(t, sqlDB, own); n != 0 {
+		t.Error("the deleted account's settings are still there")
 	}
-	if _, err := os.Stat(usersettingsutil.Path(dataDir, id+100)); err != nil {
-		t.Errorf("another account's settings went too: %v", err)
+	if n := userSettingsRows(t, sqlDB, other); n != 1 {
+		t.Error("another account's settings went too")
 	}
 }
 
-// TestDeleteAccount_DatabaseResetRemovesEverySettingsFile verifies a reset
+// TestDeleteAccount_DatabaseResetRemovesEverySettingsRow verifies a reset
 // leaves no settings for a recycled account id to inherit.
-func TestDeleteAccount_DatabaseResetRemovesEverySettingsFile(t *testing.T) {
-	engine, _, _ := newDeleteAccountEngine(t)
-	dataDir := storageutil.GetDataDir()
-	if _, err := usersettingsutil.Save(usersettingsutil.SaveParams{
-		DataDir: dataDir, UserID: 99, Settings: usersettingsutil.Settings{ThemeColor: "teal"},
-	}); err != nil {
-		t.Fatal(err)
-	}
+func TestDeleteAccount_DatabaseResetRemovesEverySettingsRow(t *testing.T) {
+	engine, sqlDB, _ := newDeleteAccountEngine(t)
+	seedUserSettings(t, sqlDB)
 
 	if w := deleteAccountRequest(engine, "database=true"); w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	if _, err := os.Stat(usersettingsutil.Path(dataDir, 99)); !os.IsNotExist(err) {
-		t.Errorf("a settings file outlived the reset (stat err %v)", err)
+	if n := userSettingsRows(t, sqlDB, 0); n != 0 {
+		t.Errorf("%d settings rows outlived the reset", n)
 	}
 }

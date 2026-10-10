@@ -1,36 +1,51 @@
 package v0_notifications_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	v0_notifications "github.com/autobutler-org/quark/internal/server/api/v0/notifications"
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
+	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/notificationutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 	"github.com/gin-gonic/gin"
 )
 
-const (
-	adminID  int64 = 1
-	memberID int64 = 2
-)
+// harness is the router on a real database holding an admin and a member.
+type harness struct {
+	engine            *gin.Engine
+	queries           *db.Queries
+	adminID, memberID int64
+}
 
-// newEngine serves the router to a caller named by the X-Test-User header:
-// "admin", "member", or nobody. The data directory is a temp dir.
-func newEngine(t *testing.T) *gin.Engine {
+// newHarness serves the router to a caller named by the X-Test-User header:
+// "admin", "member", or nobody.
+func newHarness(t *testing.T) harness {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	database := dbtest.NewDB(t)
+	addUser := func(username string) int64 {
+		user, err := database.Queries.CreateUser(context.Background(), db.CreateUserParams{Username: username, PasswordHash: "h", RecoveryPhraseHash: "r"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return user.ID
+	}
+	adminID, memberID := addUser("admin"), addUser("member")
+	deps := deputil.NewDependencies().WithDatabase(database)
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
+		c = ctxutil.With(c, "deps", deps)
 		switch c.GetHeader("X-Test-User") {
 		case "admin":
 			c = ctxutil.With(c, "principal", accessutil.Principal{UserID: adminID, IsAdmin: true})
@@ -40,15 +55,26 @@ func newEngine(t *testing.T) *gin.Engine {
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_notifications.NewRouter())
-	return engine
+	return harness{engine: engine, queries: database.Queries, adminID: adminID, memberID: memberID}
 }
 
-func list(t *testing.T, engine *gin.Engine, user string) []notificationutil.Notification {
+// disable turns backup_due off in one account's own settings.
+func (h harness) disable(t *testing.T, userID int64) {
+	t.Helper()
+	if _, err := usersettingsutil.Save(context.Background(), usersettingsutil.SaveParams{
+		Queries: h.queries, UserID: userID,
+		Settings: usersettingsutil.Settings{DisabledNotifications: []notificationutil.Type{notificationutil.TypeBackupDue}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (h harness) list(t *testing.T, user string) []notificationutil.Notification {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/api/v0/notifications", nil)
 	req.Header.Set("X-Test-User", user)
 	w := httptest.NewRecorder()
-	engine.ServeHTTP(w, req)
+	h.engine.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("GET as %s = %d: %s", user, w.Code, w.Body.String())
 	}
@@ -63,38 +89,38 @@ func list(t *testing.T, engine *gin.Engine, user string) []notificationutil.Noti
 }
 
 func TestListNotifications_AdminWithNoBackupIsDue(t *testing.T) {
-	engine := newEngine(t)
-	got := list(t, engine, "admin")
+	h := newHarness(t)
+	got := h.list(t, "admin")
 	if len(got) != 1 || got[0].Type != notificationutil.TypeBackupDue || got[0].Link != notificationutil.BackupLink {
 		t.Fatalf("notifications = %+v, want one backup_due linking to %s", got, notificationutil.BackupLink)
 	}
 }
 
 func TestListNotifications_ClearsAfterSnapshot(t *testing.T) {
-	engine := newEngine(t)
-	if err := backup.RecordSnapshot(storageutil.GetDataDir(), time.Now()); err != nil {
+	h := newHarness(t)
+	if err := backup.RecordSnapshot(context.Background(), h.queries, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if got := list(t, engine, "admin"); len(got) != 0 {
+	if got := h.list(t, "admin"); len(got) != 0 {
 		t.Fatalf("notifications after a snapshot = %+v, want none", got)
 	}
 }
 
 func TestListNotifications_AdminWithOldBackupIsStale(t *testing.T) {
-	engine := newEngine(t)
+	h := newHarness(t)
 	last := time.Now().Add(-notificationutil.BackupStaleAfter - time.Hour)
-	if err := backup.RecordSnapshot(storageutil.GetDataDir(), last); err != nil {
+	if err := backup.RecordSnapshot(context.Background(), h.queries, last); err != nil {
 		t.Fatal(err)
 	}
-	got := list(t, engine, "admin")
+	got := h.list(t, "admin")
 	if len(got) != 1 || got[0].Type != notificationutil.TypeBackupStale || got[0].LastBackupAt == nil {
 		t.Fatalf("notifications = %+v, want one backup_stale with lastBackupAt", got)
 	}
 }
 
 func TestListNotifications_NonAdminGetsNone(t *testing.T) {
-	engine := newEngine(t)
-	if got := list(t, engine, "member"); len(got) != 0 {
+	h := newHarness(t)
+	if got := h.list(t, "member"); len(got) != 0 {
 		t.Fatalf("a member's notifications = %+v, want none", got)
 	}
 }
@@ -103,31 +129,21 @@ func TestListNotifications_NonAdminGetsNone(t *testing.T) {
 // is the one read: another account turning backup_due off changes nothing for
 // the admin, and the admin turning it off leaves them with none.
 func TestListNotifications_DisabledTypeIsOmitted(t *testing.T) {
-	engine := newEngine(t)
-	if _, err := usersettingsutil.Save(usersettingsutil.SaveParams{
-		DataDir: storageutil.GetDataDir(), UserID: memberID,
-		Settings: usersettingsutil.Settings{DisabledNotifications: []notificationutil.Type{notificationutil.TypeBackupDue}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if got := list(t, engine, "admin"); len(got) != 1 {
+	h := newHarness(t)
+	h.disable(t, h.memberID)
+	if got := h.list(t, "admin"); len(got) != 1 {
 		t.Fatalf("notifications after another account turned backup_due off = %+v, want one", got)
 	}
-	if _, err := usersettingsutil.Save(usersettingsutil.SaveParams{
-		DataDir: storageutil.GetDataDir(), UserID: adminID,
-		Settings: usersettingsutil.Settings{DisabledNotifications: []notificationutil.Type{notificationutil.TypeBackupDue}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if got := list(t, engine, "admin"); len(got) != 0 {
+	h.disable(t, h.adminID)
+	if got := h.list(t, "admin"); len(got) != 0 {
 		t.Fatalf("notifications with backup_due turned off = %+v, want none", got)
 	}
 }
 
 func TestListNotifications_RequiresSignIn(t *testing.T) {
-	engine := newEngine(t)
+	h := newHarness(t)
 	w := httptest.NewRecorder()
-	engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v0/notifications", nil))
+	h.engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v0/notifications", nil))
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("GET with no caller = %d, want 401: %s", w.Code, w.Body.String())
 	}

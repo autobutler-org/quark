@@ -60,13 +60,20 @@ The small state files Quark keeps beside the database go through the same helper
 
 | File                                   | Written by                                                         |
 | -------------------------------------- | ------------------------------------------------------------------ |
-| `settings.json` (0600)                 | `settingsutil.Save`, and the write-back after a settings migration |
 | A trashed item's `.meta.json` sidecar  | `StorageServiceVFS.Trash`; if it fails, the item goes back         |
 | `certs/server.key`, `certs/server.crt` | `tlsutil`, key first: the cert decides whether to regenerate       |
 | `backup_manifest.json`                 | `backup.WriteManifest`                                             |
-| `last-snapshot-backup`                 | `backup.RecordSnapshot`, when a snapshot backup completes          |
 
 A power cut during one of those writes leaves the previous version whole, never an empty or partial file.
+
+Four things that used to be files beside the database are rows in it now, so that every instance on one database
+shares them (#3083) and SQLite's own journal is what makes a write whole: the Quark's settings (`settingsutil`, one
+row of `settings` each), when the last snapshot backup completed (`backup.RecordSnapshot`, the `lastSnapshotBackup`
+row of `settings`), each account's own settings
+(`usersettingsutil.Save`, `user_settings`), and the account request history (`requestlogutil.Append`,
+`account_request_history`). On start the server imports `settings.json`, `last-snapshot-backup`, `user-settings/` and
+`account-request-history.jsonl` from the data directory of an older Quark and renames each with an `.imported`
+suffix; a value already in the database wins.
 
 Resumable uploads stage under `<data dir>/tmp/upload-sessions`. A session interrupted by a crash is never
 committed, so no partial file reaches the user's folders; `storageutil.ClearTmpDir` removes the staged bytes on
@@ -91,7 +98,7 @@ In plain English, for support copy:
 
 - Unit tests pin each ordering rule: `storageutil/durable_test.go`, `vaultutil/location_test.go`,
   `backup/vault_migrate_test.go`. The state files above each have a test that hard-links the old file before
-  rewriting it, so a write that truncates in place shows up as the link changing: `settingsutil/durability_test.go`,
+  rewriting it, so a write that truncates in place shows up as the link changing:
   `storageutil/trash_durable_test.go`, `tlsutil/tlsutil_test.go`, `backup/manifest_test.go`.
 - `make test/chaos/powercut` runs the real write paths on [LazyFS](https://github.com/dsrhaslab/lazyfs), a FUSE
   file system that loses everything not yet flushed when it is killed, cuts the power at chosen points mid-write,

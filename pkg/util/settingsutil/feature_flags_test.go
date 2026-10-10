@@ -1,8 +1,9 @@
 package settingsutil_test
 
 import (
+	"database/sql"
+	"errors"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
@@ -36,7 +37,7 @@ func TestFeatureFlag_UnsetAndRoundTrip(t *testing.T) {
 }
 
 // TestMigrate_ChatEnabledMovesToFeatureFlags checks a file #2421 wrote has
-// its chatEnabled moved to featureFlags.chat and dropped on load.
+// its chatEnabled moved to featureFlags.chat and dropped on import.
 func TestMigrate_ChatEnabledMovesToFeatureFlags(t *testing.T) {
 	for _, tc := range []struct {
 		file      string
@@ -58,19 +59,15 @@ func TestMigrate_ChatEnabledMovesToFeatureFlags(t *testing.T) {
 		if !settingsutil.GetAutoUpdate() {
 			t.Errorf("%s: autoUpdate lost", tc.file)
 		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.Contains(string(data), "chatEnabled") {
-			t.Errorf("%s: chatEnabled survived the migration:\n%s", tc.file, data)
+		if _, err := settingsutil.QueriesForTesting().GetSetting(t.Context(), "chatEnabled"); !errors.Is(err, sql.ErrNoRows) {
+			t.Errorf("%s: chatEnabled survived the migration (err=%v)", tc.file, err)
 		}
 	}
 }
 
 // TestMigrate_RetiredFlagKeyRemoved checks retiring a flag, one
 // dropFeatureFlag entry on the migration list, removes its persisted value on
-// load and leaves the other flags alone.
+// import and leaves the other flags alone.
 func TestMigrate_RetiredFlagKeyRemoved(t *testing.T) {
 	settingsutil.SetMigrationsForTesting(t,
 		settingsutil.DropFeatureFlagForTesting("unused"),
@@ -89,11 +86,7 @@ func TestMigrate_RetiredFlagKeyRemoved(t *testing.T) {
 	if chat, set, _ := settingsutil.GetFeatureFlag("chat"); !set || chat {
 		t.Error("retiring one flag changed another")
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(data), "retired") {
-		t.Errorf("retired key still on disk:\n%s", data)
+	if _, err := settingsutil.QueriesForTesting().GetSetting(t.Context(), "featureFlags.retired"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("retired flag still has a row (err=%v)", err)
 	}
 }
