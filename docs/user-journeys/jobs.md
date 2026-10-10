@@ -23,6 +23,10 @@ Cancel and Retry.
 **Notes:**
 
 - The old `/jobs` address redirects here, with the query kept.
+- Only video conversions are listed. A snapshot backup is also a job on the Quark's queue, but its progress shows
+  on the Storage tab (JN-SD-008), not here.
+- The list reloads when the event stream reconnects (a `resync`), so a conversion that finished while the connection
+  was down shows its final state without a refresh.
 
 ---
 
@@ -53,6 +57,11 @@ Cancel and Retry.
 
 - The job is queued again, and its row shows **Queued** or **Running**.
 - If the Quark refuses, a snack bar says why.
+
+**Notes:**
+
+- A job that was running when the Quark restarted comes back **Failed** ("interrupted by restart") and can be
+  retried.
 
 ---
 

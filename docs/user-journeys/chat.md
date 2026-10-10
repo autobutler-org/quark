@@ -434,3 +434,5 @@ on two devices or browsers, one with `general` open and one on **Files**.
 - Nothing is marked read while chat is locked (JN-CHAT-004) or while a search is filtering the channel
   (JN-CHAT-018).
 - Mentions are not built, so there is no separate badge for a message that names you.
+- When the connection to the Quark drops and comes back, the counts are read again, so messages that arrived while
+  it was down are counted without a reload.

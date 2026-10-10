@@ -124,14 +124,28 @@ Covers the System page's Storage tab (`/system/storage`) — listing, mounting, 
 **Steps:**
 
 1. Navigate to `/system/storage`.
-2. Initiate a backup for a device.
+2. Initiate a backup for a device (**Back Up**), confirm your credentials, then tap **Start Backup**.
 3. Monitor the backup status.
 
 **Expected result:**
 
-- Backup job starts and a status indicator updates with progress.
+- Backup job starts and a status indicator updates with progress: "Preparing backup...", "Scanning files...", then
+  "Copying files" with a percentage and file and byte counts.
 - On completion, a success state is shown.
 - Polling stops when the job is done.
+- While your own backup runs, **Back Up** and **Verify** are disabled on the device cards.
+
+**Notes:**
+
+- A backup is a job on the Quark's job queue, so the Quark, not the page, owns it. Any instance of the Quark can
+  answer the status poll, and reloading the page does not stop the backup.
+- Only one backup per target drive runs at a time, whichever instance or admin started it. A second start onto the
+  same drive is refused with a snack bar saying a backup is already running for it.
+- A backup the Quark restarted in the middle of reads as **Backup failed**, with the snack bar "Backup failed:
+  interrupted by restart". Start a new backup.
+- If the status poll gets a 404, the job is gone for good: polling stops, the progress card clears and a snack bar
+  says the backup couldn't be checked. Any other poll error keeps polling.
+- Backups are not listed on the Jobs tab (JN-JOB-001), which shows video conversions only.
 
 ---
 
