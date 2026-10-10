@@ -630,6 +630,33 @@ func readers(ctx context.Context, queries *db.Queries, channelID int64) ([]int64
 	return audience, nil
 }
 
+// unreadCounts is an account's unread count in each channel that has one:
+// the messages after its read marker that someone else wrote and nobody
+// deleted. It covers every channel, readable or not; callers keep only the
+// channels the account reads.
+func unreadCounts(ctx context.Context, queries *db.Queries, userID int64) (map[int64]int64, error) {
+	rows, err := queries.CountChatUnreadForUser(ctx, userID)
+	counts := make(map[int64]int64, len(rows))
+	for _, row := range rows {
+		counts[row.ChannelID] = row.Unread
+	}
+	return counts, err
+}
+
+// attachUnread sets UnreadCount on each channel the account reads.
+func attachUnread(ctx context.Context, queries *db.Queries, userID int64, channels []Channel) error {
+	unread, err := unreadCounts(ctx, queries, userID)
+	if err != nil {
+		return err
+	}
+	for i := range channels {
+		if channels[i].Permissions.Has(PermReadMessages) {
+			channels[i].UnreadCount = unread[channels[i].ID]
+		}
+	}
+	return nil
+}
+
 // readableMessage is a message and the caller's set on its channel, or
 // ErrMessageNotFound when either the message doesn't exist or the caller
 // doesn't hold read_messages there.

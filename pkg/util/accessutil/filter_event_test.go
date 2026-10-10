@@ -209,3 +209,42 @@ func TestFilterEventChatReactions(t *testing.T) {
 		t.Errorf("event JSON = %s, want %s", body, want)
 	}
 }
+
+// TestFilterEventChatReadMarker passes chat_read_marker_changed only to the
+// account whose marker moved, never to another member or an admin (#2424).
+func TestFilterEventChatReadMarker(t *testing.T) {
+	f := newFixture(t)
+	stranger := f.load(t, accessutil.Principal{UserID: createUser(t, f.database, "carol")})
+	admin := f.load(t, accessutil.Principal{UserID: createUser(t, f.database, "root"), IsAdmin: true})
+	owner := f.load(t, accessutil.Principal{UserID: f.userID})
+	moved := eventbus.Event{
+		Kind: eventbus.EventChatReadMarkerChanged,
+		Data: eventbus.ChatReadMarkerChanged{ChannelID: 7, LastReadMessageID: 3, UnreadCount: 2, UserID: f.userID},
+	}
+	for _, tc := range []struct {
+		name   string
+		access accessutil.Access
+		event  eventbus.Event
+		want   bool
+	}{
+		{name: "owner", access: owner, event: moved, want: true},
+		{name: "another member", access: stranger, event: moved},
+		{name: "admin", access: admin, event: moved},
+		{name: "system", access: f.load(t, accessutil.System), event: moved},
+		{name: "no data", access: owner, event: eventbus.Event{Kind: eventbus.EventChatReadMarkerChanged}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := accessutil.FilterEvent(accessutil.FilterEventParams{Access: tc.access, Event: tc.event}); got.Deliver != tc.want {
+				t.Errorf("Deliver = %v, want %v", got.Deliver, tc.want)
+			}
+		})
+	}
+
+	body, err := json.Marshal(moved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"kind":"chat_read_marker_changed","data":{"channelId":7,"lastReadMessageId":3,"unreadCount":2}}`; string(body) != want {
+		t.Errorf("event JSON = %s, want %s", body, want)
+	}
+}

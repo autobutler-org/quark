@@ -519,6 +519,9 @@ type FilterEventResult struct {
 //     pass only to their audience, the channel's readers: holders of read_messages, never a
 //     delegated manager. Admins get no pass: a message is for the people in
 //     the conversation.
+//   - chat_read_marker_changed passes only to the account whose marker moved,
+//     so its other sessions clear their unread count. Admins get no pass here
+//     either.
 //   - Otherwise an admin hears every event unchanged.
 //   - trash_changed and account_changed carry no path and pass: each tells an
 //     open app to refetch something that answers for the caller already. The
@@ -551,6 +554,10 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 	if evt.Kind == eventbus.EventChatReactionChanged {
 		changed, ok := evt.Data.(eventbus.ChatReactionChanged)
 		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
+	}
+	if evt.Kind == eventbus.EventChatReadMarkerChanged {
+		changed, ok := evt.Data.(eventbus.ChatReadMarkerChanged)
+		return FilterEventResult{Event: evt, Deliver: ok && changed.UserID != 0 && changed.UserID == access.principal.UserID}
 	}
 	if access.principal.IsAdmin {
 		return FilterEventResult{Event: evt, Deliver: true}

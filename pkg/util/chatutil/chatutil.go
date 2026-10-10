@@ -50,6 +50,13 @@
 // one needs add_reactions, removing your own the same, and removing someone
 // else's manage_reactions. Both publish chat_reaction_changed to the readers
 // alone, and a deleted message's reactions go with its tombstone.
+//
+// Read markers (#2424) record how far each account has read in each channel,
+// and never move backward. ListChannels counts what is unread past the
+// caller's from message ids alone: messages someone else wrote that nobody
+// deleted, in channels the caller holds read_messages on. MarkRead moves a
+// marker and publishes chat_read_marker_changed to that account's own
+// sessions, so reading on one clears the count on the others.
 package chatutil
 
 import (
@@ -275,6 +282,10 @@ type Channel struct {
 	// and for a channel whose creator was deleted.
 	CreatedBy int64     `json:"createdBy,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
+	// UnreadCount is how many messages after the caller's read marker someone
+	// else wrote and nobody deleted (#2424). It is 0 without read_messages,
+	// so 0 on every channel an admin lists without being in it.
+	UnreadCount int64 `json:"unreadCount"`
 }
 
 // Member is one row on a channel: an account or a group.
@@ -391,6 +402,9 @@ func ListChannels(params ListChannelsParams) (ListChannelsResult, error) {
 			CreatedBy:   row.CreatedBy.Int64,
 			CreatedAt:   row.CreatedAt,
 		})
+	}
+	if err := attachUnread(params.Ctx, params.Database.Queries, params.Principal.UserID, channels); err != nil {
+		return ListChannelsResult{}, err
 	}
 	if !params.All {
 		return ListChannelsResult{Channels: channels}, nil
@@ -1791,6 +1805,74 @@ func ListMessages(params ListMessagesParams) (ListMessagesResult, error) {
 		return ListMessagesResult{}, err
 	}
 	return ListMessagesResult{Messages: messages}, nil
+}
+
+// MaxMarkReadRequestBytes caps a mark-read request's body.
+const MaxMarkReadRequestBytes = 1 << 10
+
+// MarkReadParams moves the caller's read marker in a channel.
+type MarkReadParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_read_marker_changed. Nil skips it.
+	EventBus  *eventbus.Bus
+	Principal accessutil.Principal
+	ChannelID int64
+	// MessageID is the newest message the caller has read there.
+	MessageID int64
+}
+
+// MarkReadResult is where the caller's marker stands and what is still
+// unread past it.
+type MarkReadResult struct {
+	ChannelID         int64 `json:"channelId"`
+	LastReadMessageID int64 `json:"lastReadMessageId"`
+	UnreadCount       int64 `json:"unreadCount"`
+}
+
+// MarkRead moves the caller's read marker in a channel up to a message
+// there, for a holder of read_messages (#2424). The marker never moves
+// backward: an id at or before it changes nothing and returns the marker as
+// it stands. A move publishes chat_read_marker_changed to the caller's own
+// sessions. Access errors are GetChannelKeys'; an id that names no message in
+// the channel is ErrMessageNotFound, and a deleted message's id is fine.
+func MarkRead(params MarkReadParams) (MarkReadResult, error) {
+	if params.Database == nil {
+		return MarkReadResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	userID := params.Principal.UserID
+	if _, err := memberPerms(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
+		return MarkReadResult{}, err
+	}
+	message, err := queries.GetChatMessage(params.Ctx, params.MessageID)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && message.ChannelID != params.ChannelID) {
+		return MarkReadResult{}, ErrMessageNotFound
+	}
+	if err != nil {
+		return MarkReadResult{}, err
+	}
+	moved, err := queries.SetChatReadMarker(params.Ctx, db.SetChatReadMarkerParams{
+		UserID: userID, ChannelID: params.ChannelID, LastReadMessageID: params.MessageID,
+	})
+	if err != nil {
+		return MarkReadResult{}, err
+	}
+	marker, err := queries.GetChatReadMarker(params.Ctx, db.GetChatReadMarkerParams{UserID: userID, ChannelID: params.ChannelID})
+	if err != nil {
+		return MarkReadResult{}, err
+	}
+	unread, err := unreadCounts(params.Ctx, queries, userID)
+	if err != nil {
+		return MarkReadResult{}, err
+	}
+	result := MarkReadResult{ChannelID: params.ChannelID, LastReadMessageID: marker, UnreadCount: unread[params.ChannelID]}
+	if moved > 0 && params.EventBus != nil {
+		params.EventBus.Publish(eventbus.Event{Kind: eventbus.EventChatReadMarkerChanged, Data: eventbus.ChatReadMarkerChanged{
+			ChannelID: result.ChannelID, LastReadMessageID: result.LastReadMessageID, UnreadCount: result.UnreadCount, UserID: userID,
+		}})
+	}
+	return result, nil
 }
 
 // DeleteMessageParams deletes one message.

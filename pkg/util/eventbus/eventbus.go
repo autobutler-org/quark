@@ -85,6 +85,10 @@ const (
 	// EventChatReactionChanged fires when a reaction is added to or removed
 	// from a chat message (#2426). Data is a ChatReactionChanged.
 	EventChatReactionChanged EventKind = "chat_reaction_changed"
+	// EventChatReadMarkerChanged fires when an account's read marker in a
+	// channel moves forward (#2424), so its other sessions clear their unread
+	// count. Data is a ChatReadMarkerChanged.
+	EventChatReadMarkerChanged EventKind = "chat_read_marker_changed"
 
 	// EventResync tells a subscriber it missed events and should refetch or
 	// reconcile everything it holds (#2753). Data is a Resync; Path is empty.
@@ -145,6 +149,19 @@ type ChatReactionChanged struct {
 	// Audience is the channel's readers, the accounts holding read_messages.
 	// It is never sent.
 	Audience []int64 `json:"-"`
+}
+
+// ChatReadMarkerChanged is the data of a chat_read_marker_changed event. It
+// reaches only the sessions of the account whose marker moved: no other
+// member hears it, and neither does an admin.
+type ChatReadMarkerChanged struct {
+	ChannelID int64 `json:"channelId"`
+	// LastReadMessageID is where the marker stands now.
+	LastReadMessageID int64 `json:"lastReadMessageId"`
+	// UnreadCount is the account's unread count in the channel after the move.
+	UnreadCount int64 `json:"unreadCount"`
+	// UserID is the account whose marker moved. It is never sent.
+	UserID int64 `json:"-"`
 }
 
 type Event struct {

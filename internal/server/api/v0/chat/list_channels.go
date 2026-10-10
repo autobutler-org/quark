@@ -9,7 +9,7 @@ import (
 
 // listChannels godoc
 // @Summary List the caller's chat channels
-// @Description Returns the channels the caller is a member of, directly, through a group, or through everyone, general first and then by name, each with the caller's effective permissions there: the union of every row that reaches them. A channel on which that set is empty is left out. Admins get only their own channels too, unless they pass all=1: then the channels they are not in follow, in the same order, with an empty set.
+// @Description Returns the channels the caller is a member of, directly, through a group, or through everyone, general first and then by name, each with the caller's effective permissions there: the union of every row that reaches them, and unreadCount: the messages after the caller's read marker (PUT /chat/channels/{id}/read) that someone else wrote and nobody deleted, 0 on a channel the caller lacks read_messages on. A channel on which that set is empty is left out. Admins get only their own channels too, unless they pass all=1: then the channels they are not in follow, in the same order, with an empty set.
 // @Tags chat
 // @Produce json
 // @Param all query string false "1 adds the channels an admin is not in; refused for anyone else"

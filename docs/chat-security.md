@@ -329,10 +329,44 @@ the oldest, which also picks up deletions the socket dropped.
 - `POST /api/v0/chat/messages/:id/reactions` takes `{ciphertext, keyVersion}`.
 - `DELETE /api/v0/chat/reactions/:id` removes one.
 
+## Read markers
+
+A read marker is how far an account has read in a channel (#2424): one row per account and channel, holding the
+id of the newest message read. The app moves it when a channel is viewed at the bottom, and it never moves
+backward. Unread counts come from it: the channel list carries, for each channel the caller holds `read_messages`
+on, how many messages after their marker someone else wrote and nobody deleted.
+
+### What the Quark sees
+
+- **Which message each account has read up to in each channel.** That is new metadata: roughly when someone last
+  looked at a channel, never what they read.
+- Counting needs ids, authors and tombstones, all of which the Quark already holds. It opens no ciphertext.
+- A chat backup (#2428) leaves read markers out, so a restored Quark starts with everything unread.
+
+### Delivery
+
+`chat_read_marker_changed` carries the channel, where the marker stands, and the unread count past it. It goes to
+the sessions of the account whose marker moved and to no one else, admins included, so reading on a phone clears
+the count on the web without telling the channel who has read what. A message arriving or being deleted changes
+a count too; the app hears those through the message events and adjusts, or reads the channel list again.
+
+### Mentions
+
+Mentions aren't built. The Quark can't read `@name` inside ciphertext, so a mention badge needs either a
+plaintext list of mentioned accounts sent beside each message, which tells the Quark who was mentioned, or
+counting on the app alone, which shows nothing until a channel is fetched and decrypted. Which of the two is an
+open decision on #2424.
+
+### Routes
+
+- `PUT /api/v0/chat/channels/:id/read` takes `{messageId}` and needs `read_messages`: anyone else gets 404,
+  delegated managers and admins included, and so does an id that names no message in the channel.
+- `GET /api/v0/chat/channels` carries `unreadCount` on each channel.
+
 ## Rate limits
 
-Posting a message, creating a key version, and uploading key grants are each limited per account (#2485), with a
-separate bucket per route, so a member can't flood a channel with ciphertext or grant rows. The limit is a burst of
+Posting a message, creating a key version, uploading key grants, and moving a read marker are each limited per
+account (#2485), with a separate bucket per route, so a member can't flood a channel with ciphertext or grant rows. The limit is a burst of
 100 and then 10 a second (`ChatWriteRate` and `ChatWriteBurst` in `pkg/util/deputil`), far above what the app
 sends: a grant upload carries up to 256 grants, so one burst refills a rotation for thousands of members. Going
 over gets 429, which the app shows as "wait a moment and try again". The limits live in memory and reset when the

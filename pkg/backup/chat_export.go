@@ -18,6 +18,8 @@ const backupChatFilename = "chat_backup.db"
 
 // chatBackupTables is every chat table, parents before children: the order a
 // restore has to load them in for the live foreign keys to hold.
+// chat_read_markers (#2424) is left out on purpose: it is only how far each
+// account has read, so a restored Quark starts with everything unread.
 var chatBackupTables = []string{
 	"chat_servers",
 	"chat_channels",

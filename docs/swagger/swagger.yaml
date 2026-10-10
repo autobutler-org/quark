@@ -156,6 +156,12 @@ definitions:
         type: integer
       topic:
         type: string
+      unreadCount:
+        description: |-
+          UnreadCount is how many messages after the caller's read marker someone
+          else wrote and nobody deleted (#2424). It is 0 without read_messages,
+          so 0 on every channel an admin lists without being in it.
+        type: integer
     type: object
   chatutil.ChannelEvent:
     properties:
@@ -355,6 +361,15 @@ definitions:
         type: array
       rotationNeeded:
         type: boolean
+    type: object
+  chatutil.MarkReadResult:
+    properties:
+      channelId:
+        type: integer
+      lastReadMessageId:
+        type: integer
+      unreadCount:
+        type: integer
     type: object
   chatutil.Member:
     properties:
@@ -1293,6 +1308,11 @@ definitions:
           type: integer
         type: array
       version:
+        type: integer
+    type: object
+  v0_chat.markReadBody:
+    properties:
+      messageId:
         type: integer
     type: object
   v0_chat.postMessageBody:
@@ -4463,9 +4483,11 @@ paths:
       description: 'Returns the channels the caller is a member of, directly, through
         a group, or through everyone, general first and then by name, each with the
         caller''s effective permissions there: the union of every row that reaches
-        them. A channel on which that set is empty is left out. Admins get only their
-        own channels too, unless they pass all=1: then the channels they are not in
-        follow, in the same order, with an empty set.'
+        them, and unreadCount: the messages after the caller''s read marker (PUT /chat/channels/{id}/read)
+        that someone else wrote and nobody deleted, 0 on a channel the caller lacks
+        read_messages on. A channel on which that set is empty is left out. Admins
+        get only their own channels too, unless they pass all=1: then the channels
+        they are not in follow, in the same order, with an empty set.'
       parameters:
       - description: 1 adds the channels an admin is not in; refused for anyone else
         in: query
@@ -5259,6 +5281,64 @@ paths:
       security:
       - BearerAuth: []
       summary: Post an encrypted message to a chat channel
+      tags:
+      - chat
+  /chat/channels/{id}/read:
+    put:
+      consumes:
+      - application/json
+      description: 'Moves the caller''s read marker in the channel to messageId, the
+        newest message they have read there, and returns where the marker stands with
+        the unread count past it: the messages after it that someone else wrote and
+        nobody deleted. The marker never moves backward: an id at or before it changes
+        nothing and still answers 200 with the marker as it stands. A move publishes
+        chat_read_marker_changed with {channelId, lastReadMessageId, unreadCount}
+        to the caller''s own sessions alone, so their other devices clear the count.
+        Needs read_messages; anyone else gets 404, delegated managers and admins included.'
+      parameters:
+      - description: Channel id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: The newest message read
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_chat.markReadBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chatutil.MarkReadResult'
+        "400":
+          description: the body isn't JSON with a messageId
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no such channel, the caller lacks read_messages, or the channel
+            has no message with that id
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "429":
+          description: the caller sent too many of these in a short time; the limit
+            is per account
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Mark a chat channel read up to a message
       tags:
       - chat
   /chat/keys/{userId}:
