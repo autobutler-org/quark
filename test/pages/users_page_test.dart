@@ -10,7 +10,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/text_scale.dart';
 
-/// The Users page in two tabs (#1910): the accounts, and the groups.
+/// The Users page in two tabs (#1910): the accounts with the recent decisions
+/// on their requests (#2730), and the groups.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -31,6 +32,14 @@ void main() {
             'members': [
               {'id': 1, 'username': 'ada'},
             ],
+          },
+        ],
+        '/api/v0/admin/account-requests/history' => [
+          {
+            'username': 'eli',
+            'outcome': 'denied',
+            'decidedBy': 'ada',
+            'decidedAt': DateTime.now().toUtc().toIso8601String(),
           },
         ],
         _ => null,
@@ -77,11 +86,50 @@ void main() {
     // Disposing the page stops its refresh timer.
     await tester.pumpWidget(const SizedBox());
   });
+  // #2730: who was let in or turned away, by whom and when.
+  testWidgets('lists the recent decisions under the accounts', (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),
+        home: const UsersPage(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final row = find.byKey(const ValueKey('decision_row_0'));
+    await tester.ensureVisible(row);
+    expect(find.text('Recent decisions'), findsOneWidget);
+    expect(
+      find.descendant(of: row, matching: find.text('eli')),
+      findsOneWidget,
+    );
+    expect(find.text('Denied by ada · just now'), findsOneWidget);
+    expect(
+      tester.getTopLeft(row).dy,
+      greaterThan(
+        tester.getTopLeft(find.byKey(const ValueKey('user_row_ada'))).dy,
+      ),
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
   // #2482: an approved or denied request leaves the list, so the page says
-  // what happened to it.
-  for (final (action, said) in [
-    ('approve', 'Approved grace. They can sign in now.'),
-    ('deny', "Denied grace's request."),
+  // what happened to it. #2730: and the decision joins the recent ones
+  // without waiting for the Quark's event.
+  for (final (action, said, outcome, recorded) in [
+    (
+      'approve',
+      'Approved grace. They can sign in now.',
+      'approved',
+      'Approved by ada · just now',
+    ),
+    ('deny', "Denied grace's request.", 'denied', 'Denied by ada · just now'),
   ]) {
     testWidgets('says what $action did to the request', (tester) async {
       var decided = false;
@@ -107,6 +155,15 @@ void main() {
             'accessRequestsEnabled': true,
           },
           '/api/v0/admin/groups' => <Object>[],
+          '/api/v0/admin/account-requests/history' => [
+            if (decided)
+              {
+                'username': 'grace',
+                'outcome': outcome,
+                'decidedBy': 'ada',
+                'decidedAt': DateTime.now().toUtc().toIso8601String(),
+              },
+          ],
           _ => null,
         };
         return body == null
@@ -124,12 +181,15 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.text('No decisions yet'), findsOneWidget);
       await tester.tap(find.byKey(ValueKey('request_${action}_grace')));
       await tester.pumpAndSettle();
 
       expect(decided, isTrue);
       expect(find.byKey(const ValueKey('request_row_grace')), findsNothing);
       expect(find.text(said), findsOneWidget);
+      expect(find.text('No decisions yet'), findsNothing);
+      expect(find.text(recorded), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
     });

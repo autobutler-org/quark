@@ -195,6 +195,10 @@ lib/widgets/
   users/
     user_avatar.dart            UserAvatar, a QuarkAvatar showing an account's
                                 picture from UsersService.avatarUrl
+    recent_decisions/
+      recent_decisions_list.dart  the Users page's approved and denied account
+      recent_decision_row.dart    requests, one row each; reads the app's
+                                  AccountRequestDecision and formatRelative
   video_viewer/
     convert_video.dart          runs TranscodeDialogHost, queues the job and
                                 shows its snack bar; the viewer and Files share it

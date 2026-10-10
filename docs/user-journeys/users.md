@@ -170,12 +170,15 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 - The request leaves **Requests** and the account appears in **Accounts**.
 - The requester can sign in (JN-AUTH-011).
 - A folder `users/<username>` exists in Files, owned by them, so their first upload lands somewhere.
+- **Recent decisions**, under **Accounts**, lists the username first: "Approved by <admin>" and how long ago.
 
 **Notes:**
 
 - The list refreshes on its own when a new request arrives, on any client.
 - A home of that name that already exists becomes theirs, with whatever is in it. An account is never approved
   without a home it owns.
+- **Recent decisions** keeps the last 100 approvals and denials, newest first, and every admin sees the same
+  list. Before any decision it reads "No decisions yet".
 
 ---
 
@@ -193,6 +196,7 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 - The request leaves **Requests** and no account is created.
 - The username is free again at once: a new request or an admin-created account can take it.
+- **Recent decisions**, under **Accounts**, lists the username first: "Denied by <admin>" and how long ago.
 
 ---
 
