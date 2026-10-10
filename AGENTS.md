@@ -34,6 +34,8 @@ datalinks/                    symlinks to system directories, an in-repo view of
 ### Where to read next
 
 - [`docs/dev-onboarding.md`](docs/dev-onboarding.md) — running it locally, the two backend modes, `AS_ROOT=1`.
+- [`docs/architecture/postgres-dev.md`](docs/architecture/postgres-dev.md) — the local PostgreSQL instance and
+  the `DB_BACKEND=sqlite|postgres` switch on the targets that start or test the server.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`docs/architecture/`](docs/architecture/README.md) — how Quark is
   built: backend layers, request flows, data, the Flutter frontend, and
   [frontend styling](docs/architecture/styling.md) — the design tokens and theme that keep pages visually

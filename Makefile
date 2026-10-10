@@ -24,6 +24,30 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
+# DB_BACKEND picks the database for every target that starts or tests the server:
+# sqlite (the default, and exactly what ran before this variable existed) or postgres,
+# the compose.yaml instance `make serve/postgres` starts. The server reads the choice
+# from QUARK_DB_BACKEND and QUARK_DATABASE_URL. They are exported for the recipes that
+# run it directly, and DB_ENV repeats them for the ones that go through sudo, which
+# scrubs the environment. See docs/architecture/postgres-dev.md.
+DB_BACKEND ?= sqlite
+ifeq ($(filter sqlite postgres,$(DB_BACKEND)),)
+$(error DB_BACKEND=$(DB_BACKEND) is not a database backend. Use DB_BACKEND=sqlite or DB_BACKEND=postgres)
+endif
+POSTGRES_PORT := 5432
+POSTGRES_URL = postgres://quark:quark@$(1):$(POSTGRES_PORT)/quark?sslmode=disable
+DB_ENV :=
+DOCKER_DB_ARGS :=
+ifeq ($(DB_BACKEND),postgres)
+export QUARK_DB_BACKEND := postgres
+export QUARK_DATABASE_URL := $(call POSTGRES_URL,127.0.0.1)
+DB_ENV := QUARK_DB_BACKEND=$(QUARK_DB_BACKEND) QUARK_DATABASE_URL='$(QUARK_DATABASE_URL)'
+# serve/docker: a container cannot reach the host's loopback, where compose.yaml publishes
+# PostgreSQL, so it joins the compose network and uses the service name instead.
+DOCKER_DB_ARGS := --network quark_default -e QUARK_DB_BACKEND=postgres \
+	-e QUARK_DATABASE_URL='$(call POSTGRES_URL,postgres)'
+endif
+
 # Keep git's per-invocation environment out of recipes. When make runs from a git
 # hook (see `make setup/hooks`), git exports GIT_DIR and friends pointing at this
 # repository. Flutter reads its own version with git, so it then inspects the wrong
@@ -100,7 +124,7 @@ GO_MOD_VERSION := $(shell awk '/^go /{print $$2; exit}' go.mod)
 export GOTOOLCHAIN=go$(GO_MOD_VERSION)
 
 .PHONY: clean
-clean: clean/go clean/flutter clean/docker ## Clean all build and test artifacts
+clean: clean/go clean/flutter clean/docker clean/postgres ## Clean all build and test artifacts
 
 .PHONY: clean/go
 clean/go: ## Clean Go build artifacts
@@ -117,6 +141,17 @@ clean/flutter: ## Clean flutter project
 .PHONY: clean/docker
 clean/docker: ## Remove the $(DOCKER_CONTAINER) container (keeps the $(DOCKER_VOLUME) volume)
 	docker rm -f $(DOCKER_CONTAINER) >/dev/null 2>&1 || true
+
+# Silent for the same reason as clean/docker. Leaves the quark_postgres volume alone, so the
+# next `make serve/postgres` comes back with the same data; clean/postgres/data drops it.
+.PHONY: clean/postgres
+clean/postgres: ## Stop the development PostgreSQL (keeps its data)
+	docker compose down >/dev/null 2>&1 || true
+
+.PHONY: clean/postgres/data
+clean/postgres/data: check/docker/compose ## Stop the development PostgreSQL and delete its data
+	docker compose down --volumes
+	echo "The development database is gone. make serve/postgres starts an empty one."
 
 .PHONY: setup
 setup: setup/gotools setup/probe setup/air setup/sqlc setup/swag setup/flutter setup/skills setup/hooks ## Setup development environment
@@ -722,6 +757,36 @@ check/docker: ## Check that the Docker daemon is reachable
 		exit 1
 	fi
 
+.PHONY: check/docker/compose
+check/docker/compose: check/docker ## Check that Docker Compose v2 is installed
+	if ! docker compose version >/dev/null 2>&1; then
+		echo "Error: this Docker has no Compose plugin (docker compose)."
+		echo "  Fix: update Docker Desktop, or install the plugin from https://docs.docker.com/compose/install/"
+		exit 1
+	fi
+
+# Every target that starts or tests the server depends on this, so DB_BACKEND=postgres with no
+# database behind it stops here with the fix rather than further in with a connection error.
+# It asks the port, not Docker, so a PostgreSQL started some other way on $(POSTGRES_PORT) counts.
+.PHONY: check/db
+check/db: ## Check that the DB_BACKEND database is reachable (sqlite needs nothing)
+	if [ "$(DB_BACKEND)" != postgres ]; then
+		exit 0
+	fi
+	if (exec 3<>/dev/tcp/127.0.0.1/$(POSTGRES_PORT)) 2>/dev/null; then
+		# Nothing in the server reads QUARK_DB_BACKEND until #2957 lands; say so rather
+		# than let a SQLite run pass for a PostgreSQL one. Remove this with that change.
+		echo "Note: DB_BACKEND=postgres is passed to the server, which does not read it yet (#2957)." >&2
+		exit 0
+	fi
+	echo "Error: DB_BACKEND=postgres, and no PostgreSQL is listening on 127.0.0.1:$(POSTGRES_PORT)."
+	if docker info >/dev/null 2>&1; then
+		echo "  Fix: make serve/postgres"
+	else
+		echo "  Fix: start Docker (make check/docker says how), then make serve/postgres"
+	fi
+	exit 1
+
 .PHONY: build/docker
 build/docker: check/docker ## Build the container image for a released version
 	if [ -z "$(BUILD_NAME)" ]; then
@@ -855,17 +920,17 @@ unmount-drive: ## Detach the highest-numbered MyDrive volume currently mounted
 	hdiutil detach "/Volumes/$$highest_name"
 
 .PHONY: serve/backend
-serve/backend: generate/backend ## Serve backend over plain HTTP on :8080 (insecure)
-	$(SUDO) env QUARK_INSECURE=true $(GO) run $(GO_LDFLAGS) $(ENTRYPOINT) serve
+serve/backend: check/db generate/backend ## Serve backend over plain HTTP on :8080 (insecure; DB_BACKEND=sqlite|postgres)
+	$(SUDO) env $(DB_ENV) QUARK_INSECURE=true $(GO) run $(GO_LDFLAGS) $(ENTRYPOINT) serve
 
 .PHONY: serve/backend/secure
-serve/backend/secure: generate/backend ## Serve backend over HTTPS on :443 (self-signed)
-	$(SUDO) $(GO) run $(GO_LDFLAGS) $(ENTRYPOINT) serve
+serve/backend/secure: check/db generate/backend ## Serve backend over HTTPS on :443 (self-signed)
+	$(SUDO) env $(DB_ENV) $(GO) run $(GO_LDFLAGS) $(ENTRYPOINT) serve
 
 # State persists in the $(DOCKER_VOLUME) volume between runs, on purpose: a fresh volume every
 # time would drop the account created on first launch. `docker volume rm $(DOCKER_VOLUME)` resets.
 .PHONY: serve/docker
-serve/docker: check/docker ## Serve the container image on :$(DOCKER_PORT), state in a named volume
+serve/docker: check/docker check/db ## Serve the container image on :$(DOCKER_PORT), state in a named volume
 	if [ -z "$(BUILD_NAME)" ]; then
 		echo "Error: no git tag found to derive the Quark version from."
 		echo "  Fix: git fetch --tags, or pass BUILD_NAME=X.Y.Z explicitly."
@@ -913,7 +978,15 @@ serve/docker: check/docker ## Serve the container image on :$(DOCKER_PORT), stat
 			;;
 	esac
 	echo "Quark is at http://localhost:$(DOCKER_PORT)"
-	docker run -it --rm --name $(DOCKER_CONTAINER) -p $(DOCKER_PORT):8080 -v "$${data:-$(DOCKER_VOLUME)}:/var/lib/quark" $(DOCKER_IMAGE):$(BUILD_NAME)
+	docker run -it --rm --name $(DOCKER_CONTAINER) $(DOCKER_DB_ARGS) -p $(DOCKER_PORT):8080 -v "$${data:-$(DOCKER_VOLUME)}:/var/lib/quark" $(DOCKER_IMAGE):$(BUILD_NAME)
+
+# Detached, unlike its neighbors: the server and the tests run beside it, and --wait
+# returns once the health check in compose.yaml passes, so the next command can connect.
+.PHONY: serve/postgres
+serve/postgres: check/docker/compose ## Start the development PostgreSQL in the background (stop: clean/postgres, reset: clean/postgres/data)
+	docker compose up --detach --wait postgres
+	echo "PostgreSQL is at $(call POSTGRES_URL,127.0.0.1)"
+	echo "  Use it:  make serve/backend DB_BACKEND=postgres"
 
 .PHONY: serve/frontend
 serve/frontend: serve/frontend/web ## Serve frontend
@@ -1078,7 +1151,7 @@ test/stress/capacity: build/backend ## Simulate STRESS_USERS app clients against
 test/unit: test/unit/backend test/unit/frontend ## Run unit tests
 
 .PHONY: test/unit/backend
-test/unit/backend: internal/server/public/stub.txt ## Run unit tests for backend
+test/unit/backend: check/db internal/server/public/stub.txt ## Run unit tests for backend
 	# Generate coverage report for unit tests (excludes integration test packages)
 	$(GO) test -v $(shell $(GO) list ./... | grep -v '/internal/server/api/v0/' | grep -v '/test/chaos') \
 		-coverprofile=coverage.out \
@@ -1202,7 +1275,7 @@ test/chaos/powercut: check/docker ## Cut the power under the upload and vault wr
 test/integration: test/integration/backend ## Run integration tests
 
 .PHONY: test/integration/backend
-test/integration/backend: internal/server/public/stub.txt ## Run backend integration tests (requires real filesystem, spins up gin engine)
+test/integration/backend: check/db internal/server/public/stub.txt ## Run backend integration tests (requires real filesystem, spins up gin engine)
 	$(GO) test -v ./internal/server/api/v0/...
 
 # Packages test/mutation/backend mutates: pure business logic with fast tests (#2855).
@@ -1268,12 +1341,12 @@ upgrade/go: generate/backend ## Upgrade dependencies (go)
 	$(MAKE) tidy/go
 
 .PHONY: watch/backend
-watch/backend: build/backend ## Watch backend for changes, plain HTTP on :8080 (insecure)
-	$(SUDO) env QUARK_INSECURE=true $(AIR)
+watch/backend: check/db build/backend ## Watch backend for changes, plain HTTP on :8080 (insecure; DB_BACKEND=sqlite|postgres)
+	$(SUDO) env $(DB_ENV) QUARK_INSECURE=true $(AIR)
 
 .PHONY: watch/backend/secure
-watch/backend/secure: build/backend ## Watch backend for changes, HTTPS on :443 (self-signed)
-	$(SUDO) $(AIR)
+watch/backend/secure: check/db build/backend ## Watch backend for changes, HTTPS on :443 (self-signed)
+	$(SUDO) env $(DB_ENV) $(AIR)
 
 .PHONY: watch/frontend
 watch/frontend: generate/frontend ## Watch frontend on web
@@ -1331,7 +1404,7 @@ check/lint/flutter: generate/frontend/icons generate/frontend/sbom ## Lint Flutt
 	flutter analyze
 
 .PHONY: check/lint/go
-check/lint/go: internal/server/public/stub.txt check/structure/go ## Check Go code
+check/lint/go: internal/server/public/stub.txt check/structure/go test/db-backend ## Check Go code
 	if ! command -v golangci-lint >/dev/null 2>&1; then
 		echo "golangci-lint is not installed. Run 'make setup/golangci-lint' first."
 		exit 1
@@ -1351,6 +1424,10 @@ check/structure/go: test/structure/go ## Check Go package layout and file-access
 .PHONY: test/structure/go
 test/structure/go: ## Prove check-go-structure.bash fails on a planted violation of each file-access rule
 	./scripts/check-go-structure-test.bash
+
+.PHONY: test/db-backend
+test/db-backend: ## Prove the DB_BACKEND switch rejects a bad value and reaches the server recipes
+	./scripts/check-db-backend-test.bash "$(MAKE)"
 
 MIGRATION_BASE_REF ?= origin/main
 

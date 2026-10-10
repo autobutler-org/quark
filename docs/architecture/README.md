@@ -16,6 +16,7 @@ repository root; everything here expands on it. Diagrams are Mermaid, so GitHub 
 | [Frontend](frontend.md)               | Flutter app layers, routing, the widget package                |
 | [Styling](styling.md)                 | design tokens, the theme, and what keeps pages visually consistent |
 | [Build and tooling](tooling.md)       | code generation, checks, how the knowledge base stays true     |
+| [PostgreSQL for development](postgres-dev.md) | the local instance and the `DB_BACKEND` switch         |
 
 These pages describe structure, which changes slowly. For what Quark does feature by feature, the inventory is
 [`docs/user-journeys/`](../user-journeys/README.md); for where files go and what the checks enforce, it is
