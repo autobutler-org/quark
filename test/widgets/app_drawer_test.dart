@@ -89,6 +89,7 @@ void main() {
       QuarkDrawerSection.trash,
       QuarkDrawerSection.docs,
       QuarkDrawerSection.sheets,
+      QuarkDrawerSection.books,
       QuarkDrawerSection.system,
       QuarkDrawerSection.vault,
       QuarkDrawerSection.users,

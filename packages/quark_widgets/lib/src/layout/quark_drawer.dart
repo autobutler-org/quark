@@ -32,6 +32,9 @@ enum QuarkDrawerSection {
   /// The presentation list, a beta: its row carries a [QuarkBetaBadge].
   slides,
 
+  /// The book list: every PDF and EPUB on the Quark.
+  books,
+
   /// Chat, a beta: its row carries a [QuarkBetaBadge].
   chat,
 
@@ -108,6 +111,7 @@ class QuarkDrawer extends StatelessWidget {
     this.onTapDocs,
     this.onTapSheets,
     this.onTapSlides,
+    this.onTapBooks,
     this.onTapChat,
     this.onTapSystem,
     this.onTapVault,
@@ -153,6 +157,9 @@ class QuarkDrawer extends StatelessWidget {
 
   /// Called when the Slides row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapSlides;
+
+  /// Called when the Books row is tapped. Null hides the row.
+  final FutureOr<void> Function()? onTapBooks;
 
   /// Called when the Chat row is tapped. Null hides the row, as when an admin
   /// has turned the chat beta off.
@@ -216,6 +223,12 @@ class QuarkDrawer extends StatelessWidget {
         QuarkIcons.slideshow_outlined,
         'Slides',
         onTapSlides,
+      ),
+      (
+        QuarkDrawerSection.books,
+        QuarkIcons.menu_book_outlined,
+        'Books',
+        onTapBooks,
       ),
       (QuarkDrawerSection.chat, QuarkIcons.forum_outlined, 'Chat', onTapChat),
       (QuarkDrawerSection.system, QuarkIcons.memory, 'System', onTapSystem),

@@ -81,6 +81,7 @@ class AppDrawer extends StatelessWidget {
         onTapSlides: settings.isFeatureEnabled(FeatureFlag.slides)
             ? goTo(QuarkDrawerSection.slides, AppRoutes.slides)
             : null,
+        onTapBooks: goTo(QuarkDrawerSection.books, AppRoutes.books),
         onTapChat: settings.isFeatureEnabled(FeatureFlag.chat)
             ? goTo(QuarkDrawerSection.chat, AppRoutes.chat)
             : null,
