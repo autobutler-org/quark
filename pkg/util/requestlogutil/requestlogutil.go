@@ -1,21 +1,24 @@
 // Package requestlogutil keeps the history of account request decisions: who
 // asked, whether an admin approved or denied them, which admin, and when.
 // authutil keeps none of that — a denial deletes the pending row and an
-// approval only flips its status (#2730). The history is one JSON object per
-// line in the Quark's data directory, account-request-history.jsonl, written
-// 0600 and capped at the last MaxEntries decisions.
+// approval only flips its status (#2730). The history is the
+// account_request_history table, capped at the last MaxEntries decisions, so
+// every instance on one database reads and adds to the same history (#3083).
+// Import moves in the file it used to be, account-request-history.jsonl in
+// the Quark's data directory.
 package requestlogutil
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
-	"slices"
-	"sync"
 	"time"
+
+	"github.com/autobutler-org/quark/internal/db"
 )
 
 // MaxEntries is how many decisions the history keeps. Older ones are dropped.
@@ -26,10 +29,6 @@ const (
 	OutcomeApproved = "approved"
 	OutcomeDenied   = "denied"
 )
-
-// mu serializes Append's read, trim and rewrite, so two decisions made at
-// once both land. The one server process is the file's only writer.
-var mu sync.Mutex
 
 // Entry is one decision an admin made about an account request.
 type Entry struct {
@@ -45,8 +44,7 @@ type Entry struct {
 
 // AppendParams is a decision to add to the history.
 type AppendParams struct {
-	// DataDir is the Quark's data directory (storageutil.GetDataDir).
-	DataDir string
+	Queries *db.Queries
 	Entry   Entry
 }
 
@@ -55,7 +53,7 @@ type AppendResult struct{}
 
 // ListParams locates the history.
 type ListParams struct {
-	DataDir string
+	Queries *db.Queries
 }
 
 // ListResult is the history, newest decision first and never nil.
@@ -63,71 +61,86 @@ type ListResult struct {
 	Entries []Entry
 }
 
-// Path returns the history file.
-func Path(dataDir string) string {
-	return filepath.Join(dataDir, "account-request-history.jsonl")
+// ImportParams locates the history file of a Quark from before the history
+// moved into the database.
+type ImportParams struct {
+	Queries *db.Queries
+	// DataDir is the Quark's data directory (storageutil.GetDataDir).
+	DataDir string
+}
+
+// ImportResult reports what Import found.
+type ImportResult struct {
+	// Entries is how many decisions the file held. Zero when there was no file.
+	Entries int
 }
 
 // Append adds a decision to the history and drops whatever falls past
-// MaxEntries. The file is replaced by rename, so a reader never sees half of
-// it.
-func Append(params AppendParams) (AppendResult, error) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	listed, err := List(ListParams{DataDir: params.DataDir})
-	if err != nil {
+// MaxEntries. The database keeps DecidedAt to the second.
+func Append(ctx context.Context, params AppendParams) (AppendResult, error) {
+	if err := add(ctx, params.Queries, params.Entry); err != nil {
 		return AppendResult{}, err
 	}
-	entries := append([]Entry{params.Entry}, listed.Entries...)
-	entries = entries[:min(len(entries), MaxEntries)]
-
-	// Whole in memory is fine: MaxEntries short records, bounded by us.
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	for _, entry := range slices.Backward(entries) {
-		if err := enc.Encode(entry); err != nil {
-			return AppendResult{}, fmt.Errorf("encode account request history: %w", err)
-		}
-	}
-	if err := os.MkdirAll(params.DataDir, 0o700); err != nil {
-		return AppendResult{}, fmt.Errorf("create data directory: %w", err)
-	}
-	path := Path(params.DataDir)
-	if err := os.WriteFile(path+".tmp", buf.Bytes(), 0o600); err != nil {
-		return AppendResult{}, fmt.Errorf("write account request history: %w", err)
-	}
-	if err := os.Rename(path+".tmp", path); err != nil {
-		return AppendResult{}, fmt.Errorf("replace account request history: %w", err)
+	if err := params.Queries.TrimAccountRequestHistory(ctx, MaxEntries); err != nil {
+		return AppendResult{}, fmt.Errorf("trim account request history: %w", err)
 	}
 	return AppendResult{}, nil
 }
 
 // List returns the history, newest decision first. A Quark that has decided
-// nothing has no file and an empty history. A line that does not parse is
-// skipped, so one damaged record does not hide the rest.
-func List(params ListParams) (ListResult, error) {
-	f, err := os.Open(Path(params.DataDir))
-	if os.IsNotExist(err) {
-		return ListResult{Entries: []Entry{}}, nil
+// nothing has an empty history.
+func List(ctx context.Context, params ListParams) (ListResult, error) {
+	rows, err := params.Queries.ListAccountRequestHistory(ctx, MaxEntries)
+	if err != nil {
+		return ListResult{}, fmt.Errorf("list account request history: %w", err)
+	}
+	entries := make([]Entry, 0, len(rows))
+	for _, row := range rows {
+		entries = append(entries, Entry{
+			Username: row.Username, Outcome: row.Outcome, DecidedBy: row.DecidedBy, DecidedAt: row.DecidedAt.UTC(),
+		})
+	}
+	return ListResult{Entries: entries}, nil
+}
+
+// Import moves the history file of an older Quark into the database, oldest
+// decision first, and renames it account-request-history.jsonl.imported so
+// the next start finds nothing to do. A line that does not parse is skipped.
+// A decision already in the database is not added twice, so two instances
+// importing the same file at once end up with one copy. No file is nothing to
+// do.
+func Import(ctx context.Context, params ImportParams) (ImportResult, error) {
+	path := legacyPath(params.DataDir)
+	f, err := os.Open(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return ImportResult{}, nil
 	}
 	if err != nil {
-		return ListResult{}, fmt.Errorf("open account request history: %w", err)
+		return ImportResult{}, fmt.Errorf("open account request history: %w", err)
 	}
 	defer f.Close()
 
-	entries := []Entry{}
+	result := ImportResult{}
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		var entry Entry
 		if json.Unmarshal(scanner.Bytes(), &entry) != nil {
 			continue
 		}
-		entries = append(entries, entry)
+		if err := add(ctx, params.Queries, entry); err != nil {
+			return ImportResult{}, err
+		}
+		result.Entries++
 	}
 	if err := scanner.Err(); err != nil {
-		return ListResult{}, fmt.Errorf("read account request history: %w", err)
+		return ImportResult{}, fmt.Errorf("read account request history: %w", err)
 	}
-	slices.Reverse(entries)
-	return ListResult{Entries: entries[:min(len(entries), MaxEntries)]}, nil
+	if err := params.Queries.TrimAccountRequestHistory(ctx, MaxEntries); err != nil {
+		return ImportResult{}, fmt.Errorf("trim account request history: %w", err)
+	}
+	// Another instance may have renamed it first; its rows are the same ones.
+	if err := os.Rename(path, path+".imported"); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return ImportResult{}, fmt.Errorf("retire account request history file: %w", err)
+	}
+	return result, nil
 }

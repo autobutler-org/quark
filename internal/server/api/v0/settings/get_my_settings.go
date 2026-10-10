@@ -2,7 +2,6 @@ package v0_settings
 
 import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 	"github.com/gin-gonic/gin"
 )
@@ -22,7 +21,11 @@ func getMySettings(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.Unauthorized(err)
 	}
-	result, err := usersettingsutil.Load(usersettingsutil.LoadParams{DataDir: storageutil.GetDataDir(), UserID: userID})
+	queries, err := callerQueries(c)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	result, err := usersettingsutil.Load(c.Request.Context(), usersettingsutil.LoadParams{Queries: queries, UserID: userID})
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}

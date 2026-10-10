@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"maps"
@@ -35,6 +36,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
 	"github.com/autobutler-org/quark/pkg/util/remoteutil"
+	"github.com/autobutler-org/quark/pkg/util/requestlogutil"
 	"github.com/autobutler-org/quark/pkg/util/resetutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
@@ -44,6 +46,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/trashutil"
 	"github.com/autobutler-org/quark/pkg/util/updateutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
+	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 	"github.com/autobutler-org/quark/pkg/util/workerutil"
 
 	"github.com/gin-gonic/gin"
@@ -57,6 +60,9 @@ import (
 func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error) {
 	if err := storageutil.SetupFilesDir(); err != nil {
 		return nil, nil, fmt.Errorf("failed to setup files directory: %w", err)
+	}
+	if err := importLegacyState(deps); err != nil {
+		return nil, nil, err
 	}
 	repairHomes(deps)
 	go func() {
@@ -82,7 +88,6 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 			Registry:    deps.VFSRegistry(),
 			EventBus:    deps.EventBus(),
 			IOSemaphore: deps.IOSemaphore().For(iosemutil.Copy),
-			DataDir:     storageutil.GetDataDir(),
 		}),
 	})
 	jobsCtx, cancelJobs := context.WithCancel(context.Background())
@@ -285,6 +290,23 @@ func repairHomes(deps deputil.Dependencies) {
 	if err != nil {
 		log.Printf("[groups] group folder repair stopped early: %v", err)
 	}
+}
+
+// importLegacyState moves the state an older Quark kept as files in the data
+// directory into the database: the account request history, each account's
+// own settings and when the last snapshot backup completed (#3083). Each
+// import retires its file, so on every later start this finds nothing. All
+// three are tried, so one that fails does not hold the others back.
+func importLegacyState(deps deputil.Dependencies) error {
+	ctx := context.Background()
+	queries := deps.Database().Queries
+	dataDir := storageutil.GetDataDir()
+	_, historyErr := requestlogutil.Import(ctx, requestlogutil.ImportParams{Queries: queries, DataDir: dataDir})
+	_, settingsErr := usersettingsutil.Import(ctx, usersettingsutil.ImportParams{Queries: queries, DataDir: dataDir})
+	if err := errors.Join(historyErr, settingsErr, backup.ImportLastSnapshot(ctx, queries, dataDir)); err != nil {
+		return fmt.Errorf("failed to import state from the data directory: %w", err)
+	}
+	return nil
 }
 
 // clearDataTmp empties <DataDir>/tmp and logs what it freed, so an orphan

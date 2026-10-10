@@ -1,10 +1,12 @@
 package notificationutil_test
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/notificationutil"
 )
@@ -50,14 +52,15 @@ func TestList_BackupNotifications(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dataDir := t.TempDir()
+			ctx := context.Background()
+			queries := dbtest.NewDB(t).Queries
 			if !tt.lastBackup.IsZero() {
-				if err := backup.RecordSnapshot(dataDir, tt.lastBackup); err != nil {
+				if err := backup.RecordSnapshot(ctx, queries, tt.lastBackup); err != nil {
 					t.Fatal(err)
 				}
 			}
-			result, err := notificationutil.List(notificationutil.ListParams{
-				DataDir: dataDir, IsAdmin: tt.isAdmin, Disabled: tt.disabled, Now: now,
+			result, err := notificationutil.List(ctx, notificationutil.ListParams{
+				Queries: queries, IsAdmin: tt.isAdmin, Disabled: tt.disabled, Now: now,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -87,7 +90,7 @@ func TestList_BackupNotifications(t *testing.T) {
 }
 
 func TestList_NoNotificationsEncodesAsEmptyArray(t *testing.T) {
-	result, err := notificationutil.List(notificationutil.ListParams{DataDir: t.TempDir(), Now: time.Now()})
+	result, err := notificationutil.List(context.Background(), notificationutil.ListParams{Queries: dbtest.NewDB(t).Queries, Now: time.Now()})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,14 @@ import (
 	"time"
 )
 
+type AccountRequestHistory struct {
+	ID        int64
+	Username  string
+	Outcome   string
+	DecidedBy string
+	DecidedAt time.Time
+}
+
 type Calendar struct {
 	ID        int64
 	Name      string
@@ -245,6 +253,11 @@ type Session struct {
 	LastUsedAt time.Time
 }
 
+type Setting struct {
+	Key   string
+	Value string
+}
+
 type User struct {
 	ID                 int64
 	Username           string
@@ -269,6 +282,11 @@ type UserChatKey struct {
 	KdfParams         string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+}
+
+type UserSetting struct {
+	UserID   int64
+	Settings string
 }
 
 type VaultConfig struct {

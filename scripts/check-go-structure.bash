@@ -132,10 +132,11 @@ OS_FILE_ALLOWED=(
     "pkg/util/tlsutil/"
     "pkg/util/aptutil/"
     "pkg/util/memutil/"
-    # Avatars and per-user settings live in the data directory, not the user's files.
+    # Avatars live in the data directory, not the user's files.
     "pkg/util/avatarutil/"
+    # Per-user settings and the account request history are in the database;
+    # each imports, then retires, the files an older Quark kept in the data directory.
     "pkg/util/usersettingsutil/"
-    # The account request history is a file in the data directory too.
     "pkg/util/requestlogutil/"
     # The thumbnail cache, and the temp files dcraw and ffmpeg write into.
     "pkg/util/thumbnailutil/"
@@ -155,7 +156,8 @@ OS_FILE_ALLOWED=(
     "pkg/backup/vault_import.go"
     "pkg/backup/chat_export.go"
     "pkg/backup/chat_import.go"
-    # When the last snapshot backup completed, a file in the data directory.
+    # When the last snapshot backup completed is in the database; this imports,
+    # then retires, the file an older Quark kept in the data directory.
     "pkg/backup/last_snapshot.go"
 )
 

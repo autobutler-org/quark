@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -85,8 +84,7 @@ func TestDefaultDeviceID_StableSha256(t *testing.T) {
 }
 
 // TestEnroll_StoresAndReusesHousehold verifies the first enrollment stores
-// the household credential the service returns, in a 0600 settings file, and
-// that the next one (after Disable, then Enable) presents it instead of
+// the household credential the service returns, and that the next one (after Disable, then Enable) presents it instead of
 // creating a new household (#2358).
 func TestEnroll_StoresAndReusesHousehold(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
@@ -117,12 +115,8 @@ func TestEnroll_StoresAndReusesHousehold(t *testing.T) {
 	if h, tok := settingsutil.GetHousehold(); h != "household-abc" || tok != "token-abc" {
 		t.Errorf("stored credential = %q, %q; want the service's", h, tok)
 	}
-	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Errorf("settings file mode = %v, %v; want 0600", info, err)
-	}
 
-	// A restart reads the credential from disk.
+	// A restart reads the credential from the database.
 	settingsutil.ResetForTesting(path)
 	if _, err := Enroll(); err != nil {
 		t.Fatalf("second Enroll() = %v", err)

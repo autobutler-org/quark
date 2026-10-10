@@ -1,20 +1,27 @@
 // Package usersettingsutil stores the settings one account chooses for
 // itself, as opposed to settingsutil's, which apply to the whole Quark. Each
-// account has one JSON file in the Quark's data directory,
-// user-settings/<user id>.json, outside every user's home and written 0600.
-// An account with no file has chosen nothing.
+// account has one row in the user_settings table holding the JSON of its
+// Settings, so every instance on one database reads the same choice (#3083).
+// An account with no row has chosen nothing, and the row goes with its
+// account: the foreign key deletes it. Import moves in the files they used to
+// be, user-settings/<user id>.json in the Quark's data directory.
 package usersettingsutil
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"log/slog"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/notificationutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 )
@@ -49,8 +56,8 @@ func (s Settings) Validate() error {
 		if !t.Valid() {
 			return fmt.Errorf("%w: unknown notification type %q", ErrInvalid, t)
 		}
-		// A repeat changes nothing, and refusing it keeps the stored file
-		// within the MaxRequestBytes that Load reads.
+		// A repeat changes nothing, and refusing it keeps what is stored
+		// within MaxRequestBytes.
 		if slices.Contains(s.DisabledNotifications[:i], t) {
 			return fmt.Errorf("%w: notification type %q is listed twice", ErrInvalid, t)
 		}
@@ -60,8 +67,7 @@ func (s Settings) Validate() error {
 
 // LoadParams names the account whose settings to read.
 type LoadParams struct {
-	// DataDir is the Quark's data directory (storageutil.GetDataDir).
-	DataDir string
+	Queries *db.Queries
 	UserID  int64
 }
 
@@ -72,7 +78,7 @@ type LoadResult struct {
 
 // SaveParams is an account's new settings, replacing the stored ones whole.
 type SaveParams struct {
-	DataDir  string
+	Queries  *db.Queries
 	UserID   int64
 	Settings Settings
 }
@@ -82,30 +88,19 @@ type SaveResult struct {
 	Settings Settings
 }
 
-// RemoveParams names the account whose settings to remove.
-type RemoveParams struct {
-	DataDir string
-	UserID  int64
-}
-
-// RemoveResult reports whether there were settings to remove.
-type RemoveResult struct {
-	Removed bool
-}
-
-// RemoveAllParams locates every account's settings.
-type RemoveAllParams struct {
+// ImportParams locates the settings files of a Quark from before the
+// settings moved into the database.
+type ImportParams struct {
+	Queries *db.Queries
+	// DataDir is the Quark's data directory (storageutil.GetDataDir).
 	DataDir string
 }
 
-// Dir returns the directory the settings files are stored in.
-func Dir(dataDir string) string {
-	return filepath.Join(dataDir, "user-settings")
-}
-
-// Path returns the settings file of one account.
-func Path(dataDir string, userID int64) string {
-	return filepath.Join(Dir(dataDir), strconv.FormatInt(userID, 10)+".json")
+// ImportResult reports what Import found.
+type ImportResult struct {
+	// Files is how many settings files were read and offered to the database.
+	// Zero when there was no directory.
+	Files int
 }
 
 // Decode reads settings from a request body. Anything but a single JSON
@@ -127,21 +122,20 @@ func Decode(r io.Reader) (Settings, error) {
 	return s, nil
 }
 
-// Load returns an account's settings. An account with no file gets the zero
+// Load returns an account's settings. An account with no row gets the zero
 // Settings, which follows the Quark in everything.
-func Load(params LoadParams) (LoadResult, error) {
-	f, err := os.Open(Path(params.DataDir, params.UserID))
-	if os.IsNotExist(err) {
+func Load(ctx context.Context, params LoadParams) (LoadResult, error) {
+	stored, err := params.Queries.GetUserSettings(ctx, params.UserID)
+	if errors.Is(err, sql.ErrNoRows) {
 		return LoadResult{}, nil
 	}
 	if err != nil {
-		return LoadResult{}, fmt.Errorf("open user settings: %w", err)
+		return LoadResult{}, fmt.Errorf("read user settings: %w", err)
 	}
-	defer f.Close()
-	// Lenient where Decode is strict: a file written by a newer build may
+	// Lenient where Decode is strict: a row written by a newer build may
 	// carry fields this one does not know.
 	var s Settings
-	if err := json.NewDecoder(io.LimitReader(f, MaxRequestBytes)).Decode(&s); err != nil {
+	if err := json.Unmarshal([]byte(stored), &s); err != nil {
 		return LoadResult{}, fmt.Errorf("parse user settings: %w", err)
 	}
 	return LoadResult{Settings: s}, nil
@@ -149,40 +143,55 @@ func Load(params LoadParams) (LoadResult, error) {
 
 // Save replaces an account's settings. Settings with a value its field
 // rejects are ErrInvalid and nothing is written.
-func Save(params SaveParams) (SaveResult, error) {
+func Save(ctx context.Context, params SaveParams) (SaveResult, error) {
 	if err := params.Settings.Validate(); err != nil {
 		return SaveResult{}, err
 	}
-	if err := os.MkdirAll(Dir(params.DataDir), 0o700); err != nil {
-		return SaveResult{}, fmt.Errorf("create user settings directory: %w", err)
-	}
-	data, err := json.MarshalIndent(params.Settings, "", "  ")
+	data, err := json.Marshal(params.Settings)
 	if err != nil {
 		return SaveResult{}, fmt.Errorf("marshal user settings: %w", err)
 	}
-	if err := os.WriteFile(Path(params.DataDir, params.UserID), data, 0o600); err != nil {
+	if err := params.Queries.SetUserSettings(ctx, db.SetUserSettingsParams{UserID: params.UserID, Settings: string(data)}); err != nil {
 		return SaveResult{}, fmt.Errorf("write user settings: %w", err)
 	}
 	return SaveResult{Settings: params.Settings}, nil
 }
 
-// Remove deletes an account's settings. An account with none is not an error.
-func Remove(params RemoveParams) (RemoveResult, error) {
-	err := os.Remove(Path(params.DataDir, params.UserID))
-	if os.IsNotExist(err) {
-		return RemoveResult{}, nil
+// Import moves the settings files of an older Quark into the database and
+// renames their directory user-settings.imported so the next start finds
+// nothing to do. Settings already in the database are kept, and a file whose
+// account no longer exists is dropped. A file that cannot be read or parsed
+// is logged and skipped, so one damaged file does not keep the rest out. No
+// directory is nothing to do.
+func Import(ctx context.Context, params ImportParams) (ImportResult, error) {
+	dir := legacyDir(params.DataDir)
+	files, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return ImportResult{}, nil
 	}
 	if err != nil {
-		return RemoveResult{}, fmt.Errorf("remove user settings: %w", err)
+		return ImportResult{}, fmt.Errorf("read user settings directory: %w", err)
 	}
-	return RemoveResult{Removed: true}, nil
-}
-
-// RemoveAll deletes every account's settings, for a Quark whose accounts are
-// reset and whose ids will be handed out again.
-func RemoveAll(params RemoveAllParams) error {
-	if err := os.RemoveAll(Dir(params.DataDir)); err != nil {
-		return fmt.Errorf("remove user settings: %w", err)
+	result := ImportResult{}
+	for _, file := range files {
+		name, isSettings := strings.CutSuffix(file.Name(), ".json")
+		userID, err := strconv.ParseInt(name, 10, 64)
+		if !isSettings || err != nil {
+			continue
+		}
+		settings, err := readLegacyFile(dir, file.Name())
+		if err != nil {
+			slog.Warn("user settings: skipping a file that cannot be imported", "file", file.Name(), "err", err)
+			continue
+		}
+		if err := params.Queries.AddUserSettings(ctx, db.AddUserSettingsParams{UserID: userID, Settings: settings}); err != nil {
+			return ImportResult{}, fmt.Errorf("import user settings: %w", err)
+		}
+		result.Files++
 	}
-	return nil
+	// Another instance may have renamed it first; its rows are the same ones.
+	if err := os.Rename(dir, dir+".imported"); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return ImportResult{}, fmt.Errorf("retire user settings directory: %w", err)
+	}
+	return result, nil
 }

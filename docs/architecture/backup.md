@@ -81,16 +81,18 @@ An admin is reminded when this Quark has no snapshot backup (`backup_due`) or wh
 
 ```mermaid
 flowchart LR
-    snapshot["SnapshotBackup completes"] -- "RecordSnapshot" --> record[/"last-snapshot-backup<br/>in the data dir"/]
+    snapshot["SnapshotBackup completes"] -- "RecordSnapshot" --> record[("settings row<br/>lastSnapshotBackup")]
     snapshot -- "backup_completed" --> client["client"]
     client -- "GET /api/v0/notifications" --> list["notificationutil.List"]
     record -- "LastSnapshot" --> list
-    prefs[/"the caller's user-settings file<br/>disabledNotifications"/] --> list
+    prefs[("the caller's user_settings row<br/>disabledNotifications")] --> list
 ```
 
-1. When a snapshot backup completes, `SnapshotBackup` writes the completion time to `last-snapshot-backup` in the
-   data directory (`backup.RecordSnapshot`). The job's row is pruned with the rest of the job history and the
-   manifest sits on a drive that may be unplugged, so this file is what still knows. A failed backup writes nothing.
+1. When a snapshot backup completes, `SnapshotBackup` writes the completion time to the `lastSnapshotBackup` row
+   of the `settings` table (`backup.RecordSnapshot`), where every instance on the database reads it (#3083). The
+   job's row is pruned with the rest of the job history and the manifest sits on a drive that may be unplugged, so
+   this row is what still knows. A failed backup writes nothing. A Quark that kept the time in the file
+   `last-snapshot-backup` in its data directory has it imported on the next start (`backup.ImportLastSnapshot`).
 2. `GET /api/v0/notifications` (`v0_notifications`) reads the caller's own settings and calls
    `notificationutil.List`, which reads the record (`backup.LastSnapshot`). A caller who is not an admin gets an
    empty list. An admin gets `backup_due` when there is no record, `backup_stale` when the record is at least

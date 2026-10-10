@@ -3,7 +3,9 @@ package v0_settings
 import (
 	"errors"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
+	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
 	"github.com/autobutler-org/quark/pkg/util/remoteutil"
 	"github.com/gin-gonic/gin"
@@ -17,6 +19,16 @@ func callerID(c *gin.Context) (int64, error) {
 		return 0, errors.New("authentication required")
 	}
 	return userID, nil
+}
+
+// callerQueries returns the database the /settings/me routes keep an
+// account's settings in.
+func callerQueries(c *gin.Context) (*db.Queries, error) {
+	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
+	if !ok || deps.Database() == nil {
+		return nil, errors.New("database unavailable")
+	}
+	return deps.Database().Queries, nil
 }
 
 // remoteAccessResponse pairs the persisted on/off setting with what the tsnet

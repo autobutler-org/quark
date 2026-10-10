@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 	"github.com/gin-gonic/gin"
 )
@@ -32,8 +31,12 @@ func updateMySettings(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.BadRequest(err)
 	}
-	result, err := usersettingsutil.Save(usersettingsutil.SaveParams{
-		DataDir:  storageutil.GetDataDir(),
+	queries, err := callerQueries(c)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	result, err := usersettingsutil.Save(c.Request.Context(), usersettingsutil.SaveParams{
+		Queries:  queries,
 		UserID:   userID,
 		Settings: settings,
 	})

@@ -57,9 +57,6 @@ type NewHandlerParams struct {
 	EventBus *eventbus.Bus
 	// IOSemaphore throttles file copies to yield to interactive requests.
 	IOSemaphore *iosemutil.Semaphore
-	// DataDir is the Quark's data directory, where a completed snapshot is
-	// recorded. Empty records nothing.
-	DataDir string
 }
 
 // NewHandler returns the jobutil Handler for Kind. Run looks the target and
@@ -145,7 +142,7 @@ func runSnapshotJob(ctx context.Context, params NewHandlerParams, raw json.RawMe
 		VaultExport: jobParams.VaultExport,
 		ChatDB:      params.Database.Db,
 		IOSemaphore: params.IOSemaphore,
-		DataDir:     params.DataDir,
+		Queries:     params.Database.Queries,
 	}, sources, target)
 }
 

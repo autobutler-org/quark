@@ -3,13 +3,11 @@ package v0_settings_test
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 )
 
@@ -26,6 +24,29 @@ func themeColorOf(t *testing.T, body []byte) string {
 		t.Fatalf(`body = %s; want exactly {"themeColor": "<string>"}`, body)
 	}
 	return themeColor
+}
+
+// userSettings returns what the user_settings table holds, as "<user
+// id>:<theme color>" for each row in id order, joined by spaces.
+func (h featuresHarness) userSettings(t *testing.T) string {
+	t.Helper()
+	rows, err := h.database.Db.Query(`SELECT user_id, settings FROM user_settings ORDER BY user_id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var held []string
+	for rows.Next() {
+		var id, settings string
+		if err := rows.Scan(&id, &settings); err != nil {
+			t.Fatal(err)
+		}
+		held = append(held, id+":"+themeColorOf(t, []byte(settings)))
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return strings.Join(held, " ")
 }
 
 // publishedPublicSettings counts the public_settings_changed events so far.
@@ -138,7 +159,7 @@ func TestUpdateThemeColor_Refusals(t *testing.T) {
 }
 
 // TestMySettings_OwnAccountOnly checks each account reads and writes only its
-// own file: the id comes from the session, so nothing a caller sends can name
+// own row: the id comes from the session, so nothing a caller sends can name
 // another account. It also checks an account that has chosen nothing follows
 // the Quark, and that an override publishes no event.
 func TestMySettings_OwnAccountOnly(t *testing.T) {
@@ -181,19 +202,8 @@ func TestMySettings_OwnAccountOnly(t *testing.T) {
 		t.Errorf("admin's theme color = %q, want #112233", got)
 	}
 
-	entries, err := os.ReadDir(usersettingsutil.Dir(storageutil.GetDataDir()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
-		if info, err := e.Info(); err != nil || info.Mode().Perm() != 0o600 {
-			t.Errorf("%s: mode %v, err %v; want 0600", e.Name(), info.Mode().Perm(), err)
-		}
-	}
-	if len(names) != 2 || names[0] == names[1] || !strings.Contains(strings.Join(names, " "), adminID+".json") || !strings.Contains(strings.Join(names, " "), memberID+".json") {
-		t.Errorf("user-settings holds %v; want %s.json and %s.json", names, adminID, memberID)
+	if got := h.userSettings(t); got != adminID+":#112233 "+memberID+":teal" {
+		t.Errorf("user_settings holds %q; want #112233 for %s and teal for %s", got, adminID, memberID)
 	}
 	if n := h.publishedPublicSettings(); n != 0 {
 		t.Errorf("user overrides published %d public_settings_changed events; want none", n)
@@ -223,7 +233,7 @@ func TestMySettings_Refusals(t *testing.T) {
 			t.Errorf("%s: PUT = %d, want 400: %s", name, w.Code, w.Body.String())
 		}
 	}
-	if _, err := os.Stat(usersettingsutil.Dir(storageutil.GetDataDir())); !os.IsNotExist(err) {
-		t.Errorf("a refused PUT stored something (stat err %v)", err)
+	if got := h.userSettings(t); got != "" {
+		t.Errorf("a refused PUT stored %q", got)
 	}
 }

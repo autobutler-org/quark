@@ -168,8 +168,8 @@ func SnapshotBackup(
 
 	// Recorded before the event, so a client that asks again on it sees the
 	// new time. The backup itself succeeded, so a failed record is only logged.
-	if params.DataDir != "" {
-		if err := RecordSnapshot(params.DataDir, completedAt); err != nil {
+	if params.Queries != nil {
+		if err := RecordSnapshot(ctx, params.Queries, completedAt); err != nil {
 			log.Printf("snapshot backup: %v", err)
 		}
 	}

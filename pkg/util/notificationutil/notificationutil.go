@@ -6,10 +6,12 @@
 package notificationutil
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/backup"
 )
 
@@ -58,8 +60,8 @@ type Notification struct {
 
 // ListParams describes the account to list notifications for.
 type ListParams struct {
-	// DataDir is the Quark's data directory (storageutil.GetDataDir).
-	DataDir string
+	// Queries is the database the last snapshot backup is recorded in.
+	Queries *db.Queries
 	// IsAdmin is whether the account is an admin.
 	IsAdmin bool
 	// Disabled is the types the account turned off.
@@ -82,12 +84,12 @@ type ListResult struct {
 // is derived, there is at most one backup notification however often it is
 // asked for, and it clears itself when a snapshot backup completes. That is
 // all the coalescing and rate limiting these types need.
-func List(params ListParams) (ListResult, error) {
+func List(ctx context.Context, params ListParams) (ListResult, error) {
 	result := ListResult{Notifications: []Notification{}}
 	if !params.IsAdmin {
 		return result, nil
 	}
-	last, err := backup.LastSnapshot(params.DataDir)
+	last, err := backup.LastSnapshot(ctx, params.Queries)
 	if err != nil {
 		return ListResult{}, fmt.Errorf("list notifications: %w", err)
 	}

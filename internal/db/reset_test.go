@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -155,5 +156,41 @@ func TestResetDatabase_IssuesANewInstallID(t *testing.T) {
 	}
 	if after == before {
 		t.Fatalf("install id %q survived the reset", before)
+	}
+}
+
+// A reset has never touched settings.json or the account request history, so
+// it must not empty the tables they moved into (#3083): losing the settings
+// would drop the remote access household and change the salt secret.
+func TestResetDatabase_KeepsSettingsAndRequestHistory(t *testing.T) {
+	database := openInstance(t, filepath.Join(t.TempDir(), "quark.db"))
+	if err := ResetDatabase(database); err != nil {
+		t.Fatalf("initial migrate: %v", err)
+	}
+	ctx := t.Context()
+	if err := database.Queries.SetSetting(ctx, SetSettingParams{Key: "themeColor", Value: `"ocean"`}); err != nil {
+		t.Fatalf("set setting: %v", err)
+	}
+	decision := AddAccountRequestDecisionParams{
+		Username: "ada", Outcome: "approved", DecidedBy: "root", DecidedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+	}
+	if err := database.Queries.AddAccountRequestDecision(ctx, decision); err != nil {
+		t.Fatalf("add decision: %v", err)
+	}
+
+	if err := ResetDatabase(database); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+
+	value, err := database.Queries.GetSetting(ctx, "themeColor")
+	if err != nil || value != `"ocean"` {
+		t.Errorf("themeColor after reset = %q, %v; want it kept", value, err)
+	}
+	history, err := database.Queries.ListAccountRequestHistory(ctx, 10)
+	if err != nil {
+		t.Fatalf("list history: %v", err)
+	}
+	if len(history) != 1 || history[0].Username != "ada" || !history[0].DecidedAt.Equal(decision.DecidedAt) {
+		t.Errorf("history after reset = %+v; want the one decision kept", history)
 	}
 }
