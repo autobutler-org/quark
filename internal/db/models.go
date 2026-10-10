@@ -161,6 +161,11 @@ type GroupMember struct {
 	UserID  int64
 }
 
+type Install struct {
+	ID        int64
+	InstallID string
+}
+
 type Job struct {
 	ID         int64
 	Kind       string

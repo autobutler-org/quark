@@ -1,8 +1,12 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"slices"
 )
 
@@ -16,7 +20,14 @@ import (
 // survives until the last descriptor closes, so queries keep succeeding against
 // a file that no longer has a name and the reset only appears to have happened
 // after a restart. Dropping and re-migrating in place keeps every handle valid,
-// re-runs the migrations from 000, and needs no restart.
+// and re-runs the migrations from 000.
+//
+// The drop and the re-migration are one transaction that holds SQLite's write
+// lock from its first statement (#3085). Another instance on the same database
+// waits on that lock, or gives up busy, and then reads a complete first-boot
+// schema: it never finds a table missing. The migrations issue a new install
+// id (029_install), in that same transaction, which is what tells every
+// instance to restart: see resetutil.Watch.
 //
 // golang-migrate's own Drop() cannot stand in for this: it issues DROP TABLE
 // for every row in sqlite_master, sqlite_sequence included, and SQLite refuses
@@ -25,13 +36,15 @@ func ResetDatabase(database *DatabaseSqlc) error {
 	if database == nil || database.Db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	if err := dropAllObjects(database.Db); err != nil {
-		return fmt.Errorf("failed to drop database objects: %w", err)
-	}
-	if err := initSchema(database); err != nil {
-		return fmt.Errorf("failed to re-run migrations: %w", err)
-	}
-	return nil
+	return exclusively(database.Db, func(ctx context.Context, conn *sql.Conn) error {
+		if err := dropAllObjects(ctx, conn); err != nil {
+			return fmt.Errorf("failed to drop database objects: %w", err)
+		}
+		if err := migrateFromScratch(ctx, conn); err != nil {
+			return fmt.Errorf("failed to re-run migrations: %w", err)
+		}
+		return nil
+	})
 }
 
 // ResetRawDatabase empties a database that carries no migration set — the
@@ -46,8 +59,98 @@ func ResetRawDatabase(database *DatabaseRaw) error {
 	if database == nil || database.Db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	if err := dropAllObjects(database.Db); err != nil {
-		return fmt.Errorf("failed to drop health database objects: %w", err)
+	return exclusively(database.Db, func(ctx context.Context, conn *sql.Conn) error {
+		if err := dropAllObjects(ctx, conn); err != nil {
+			return fmt.Errorf("failed to drop health database objects: %w", err)
+		}
+		return nil
+	})
+}
+
+// exclusively runs work in one transaction on one connection, holding the
+// database's write lock from the start so that no other connection, in this
+// process or another, sees work half done.
+//
+// BEGIN IMMEDIATE is issued by hand, which sqlc cannot express and
+// database/sql's BeginTx does not offer: its BEGIN is deferred, and a deferred
+// transaction that finds a writer ahead of it when it first writes fails busy
+// at once instead of waiting its turn.
+func exclusively(sqlDB *sql.DB, work func(ctx context.Context, conn *sql.Conn) error) (err error) {
+	ctx := context.Background()
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to take a database connection: %w", err)
+	}
+	defer func() { err = errors.Join(err, conn.Close()) }()
+
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return fmt.Errorf("failed to lock the database: %w", err)
+	}
+	if err := work(ctx, conn); err != nil {
+		_, rollbackErr := conn.ExecContext(ctx, `ROLLBACK`)
+		return errors.Join(err, rollbackErr)
+	}
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+		_, rollbackErr := conn.ExecContext(ctx, `ROLLBACK`)
+		return errors.Join(fmt.Errorf("failed to commit: %w", err), rollbackErr)
+	}
+	return nil
+}
+
+// migrateFromScratch applies every embedded migration to an empty database on
+// conn, inside the caller's transaction, and records the version the way
+// golang-migrate does, so the next boot's m.Up() finds nothing to do.
+//
+// golang-migrate cannot do this itself: it commits each migration on its own
+// connection, which would release the lock ResetDatabase holds between the
+// drop and the last migration. TestResetDatabase_LeavesTheSchemaMigrationsBuild
+// holds this to what golang-migrate builds.
+func migrateFromScratch(ctx context.Context, conn *sql.Conn) error {
+	migrationSource, err := newMigrationSource()
+	if err != nil {
+		return err
+	}
+	// DDL, and the statements of golang-migrate's sqlite driver word for word.
+	if _, err := conn.ExecContext(ctx, `
+	CREATE TABLE IF NOT EXISTS schema_migrations (version uint64,dirty bool);
+  CREATE UNIQUE INDEX IF NOT EXISTS version_unique ON schema_migrations (version);
+  `); err != nil {
+		return fmt.Errorf("failed to create schema_migrations: %w", err)
+	}
+
+	version, err := migrationSource.First()
+	if err != nil {
+		return fmt.Errorf("failed to find the first migration: %w", err)
+	}
+	for {
+		body, _, err := migrationSource.ReadUp(version)
+		if err != nil {
+			return fmt.Errorf("failed to open migration %d: %w", version, err)
+		}
+		// A migration is a file embedded in this binary, so reading it whole
+		// is bounded by us.
+		statements, err := io.ReadAll(body)
+		if err := errors.Join(err, body.Close()); err != nil {
+			return fmt.Errorf("failed to read migration %d: %w", version, err)
+		}
+		if _, err := conn.ExecContext(ctx, string(statements)); err != nil {
+			return fmt.Errorf("failed to apply migration %d: %w", version, err)
+		}
+
+		next, err := migrationSource.Next(version)
+		if errors.Is(err, fs.ErrNotExist) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to find the migration after %d: %w", version, err)
+		}
+		version = next
+	}
+
+	if _, err := conn.ExecContext(ctx,
+		`INSERT INTO schema_migrations (version, dirty) VALUES (?, ?)`, version, false,
+	); err != nil {
+		return fmt.Errorf("failed to record schema version %d: %w", version, err)
 	}
 	return nil
 }
@@ -67,12 +170,12 @@ func ResetRawDatabase(database *DatabaseRaw) error {
 // parent cascades into a child whose first parent no longer exists, and
 // SQLite rejects that. Verified against a populated database by the
 // delete-account tests, which reset one holding a user and a live session.
-func dropAllObjects(sqlDB *sql.DB) error {
+func dropAllObjects(ctx context.Context, conn *sql.Conn) error {
 	const listObjects = `
 		SELECT type, name, COALESCE(sql LIKE 'CREATE VIRTUAL TABLE%', 0) FROM sqlite_master
 		WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'`
 
-	rows, err := sqlDB.Query(listObjects)
+	rows, err := conn.QueryContext(ctx, listObjects)
 	if err != nil {
 		return fmt.Errorf("failed to list database objects: %w", err)
 	}
@@ -115,7 +218,7 @@ func dropAllObjects(sqlDB *sql.DB) error {
 		// from sqlite_master, so neither is caller-controlled; DDL takes no
 		// bound parameters for identifiers in any case.
 		statement := fmt.Sprintf(`DROP %s IF EXISTS "%s"`, o.kind, o.name)
-		if _, err := sqlDB.Exec(statement); err != nil {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("failed to drop %s %s: %w", o.kind, o.name, err)
 		}
 	}

@@ -248,3 +248,40 @@ func TestDeleteAccount_ResetsHealthDatabase(t *testing.T) {
 		t.Errorf("expected the health database emptied, %d tables remain", tables)
 	}
 }
+
+// TestDeleteAccount_ResetIssuesANewInstallID is how the other instances
+// serving this install learn it was reset (#3085): every factory-reset aspect
+// has to change the install id they watch, and deleting one account must not.
+func TestDeleteAccount_ResetIssuesANewInstallID(t *testing.T) {
+	cases := []struct {
+		name      string
+		configure func(p *authutil.DeleteAccountParams)
+		wantNewID bool
+	}{
+		{"database", func(p *authutil.DeleteAccountParams) { p.DeleteDatabase = true }, true},
+		{"files", func(p *authutil.DeleteAccountParams) { p.DeleteFiles = true }, true},
+		{"devices", func(p *authutil.DeleteAccountParams) { p.DeleteDevices = true }, true},
+		{"account", func(p *authutil.DeleteAccountParams) { p.DeleteAccount = true }, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newDeleteAccountFixture(t)
+			before, err := f.database.Queries.GetInstallID(context.Background())
+			if err != nil {
+				t.Fatalf("GetInstallID: %v", err)
+			}
+			params := f.params()
+			tc.configure(&params)
+			if _, err := authutil.DeleteAccount(context.Background(), params); err != nil {
+				t.Fatalf("DeleteAccount: %v", err)
+			}
+			after, err := f.database.Queries.GetInstallID(context.Background())
+			if err != nil {
+				t.Fatalf("GetInstallID after: %v", err)
+			}
+			if got := after != before; got != tc.wantNewID {
+				t.Errorf("install id changed = %v, want %v", got, tc.wantNewID)
+			}
+		})
+	}
+}
