@@ -21,21 +21,24 @@ Stream<List<HostEntry>> _browse() {
   late final StreamController<List<HostEntry>> out;
 
   void onEvent(BonsoirDiscoveryEvent event) {
-    final service = event.service;
-    if (service == null) return;
-    switch (event.type) {
-      case BonsoirDiscoveryEventType.discoveryServiceFound:
+    switch (event) {
+      case BonsoirDiscoveryServiceFoundEvent(:final service):
         service.resolve(discovery!.serviceResolver);
         return;
-      case BonsoirDiscoveryEventType.discoveryServiceResolved:
+      case BonsoirDiscoveryServiceResolvedEvent(:final service) ||
+          BonsoirDiscoveryServiceUpdatedEvent(:final service):
+        // iOS keeps addressing a Quark by its SRV target and Android by its
+        // IP address, as before bonsoir reported both.
         final entry = discoveredQuark(
           name: service.name,
-          host: service is ResolvedBonsoirService ? service.host : null,
+          hosts: Platform.isIOS
+              ? [service.hostname, ...service.hostAddresses]
+              : [...service.hostAddresses, service.hostname],
           port: service.port,
         );
         if (entry == null) return;
         found[service.name] = entry;
-      case BonsoirDiscoveryEventType.discoveryServiceLost:
+      case BonsoirDiscoveryServiceLostEvent(:final service):
         if (found.remove(service.name) == null) return;
       default:
         return;
@@ -47,7 +50,7 @@ Stream<List<HostEntry>> _browse() {
     try {
       final d = BonsoirDiscovery(type: quarkServiceType);
       discovery = d;
-      await d.ready;
+      await d.initialize();
       if (canceled) return;
       events = d.eventStream!.listen(onEvent, onError: out.addError);
       await d.start();

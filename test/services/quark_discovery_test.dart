@@ -6,7 +6,7 @@ import 'package:quark/services/quark_discovery.dart';
 void main() {
   String? address(String? host, [int port = 443]) => discoveredQuark(
     name: 'Quark on quark',
-    host: host,
+    hosts: [host],
     port: port,
   )?.hostAddress;
 
@@ -35,10 +35,19 @@ void main() {
   test('the entry is named after the service', () {
     final entry = discoveredQuark(
       name: 'Quark on quark-2',
-      host: 'quark-2.local',
+      hosts: ['quark-2.local'],
       port: 443,
     );
     expect(entry?.name, 'Quark on quark-2');
+  });
+
+  test('the first usable host wins', () {
+    final entry = discoveredQuark(
+      name: 'Quark on quark',
+      hosts: [null, 'fe80::1%en0', '192.168.1.20', 'quark.local.'],
+      port: 443,
+    );
+    expect(entry?.hostAddress, 'https://192.168.1.20');
   });
 
   // #2518: a router that appends .lan answers for quark.lan in its own DNS

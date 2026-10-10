@@ -17,24 +17,27 @@ const String quarkServiceType = '_quark._tcp';
 QuarkBrowser? get quarkBrowser => platform.quarkBrowser;
 
 /// The entry a resolved Quark service becomes, named [name] and addressed by
-/// [host] and [port], or null when [host] is not usable in a URL.
+/// the first of [hosts] usable in a URL with [port], or null when none is.
 ///
-/// [host] is whatever the platform resolved: the SRV target on iOS
-/// (`quark-2.local.`), the IP address on Android.
+/// [hosts] is whatever the platform resolved, most preferred first: the SRV
+/// target (`quark-2.local.`) and the IP addresses it resolves to.
 HostEntry? discoveredQuark({
   required String name,
-  required String? host,
+  required Iterable<String?> hosts,
   required int port,
 }) {
-  var h = host?.trim() ?? '';
-  if (h.endsWith('.')) h = h.substring(0, h.length - 1);
-  // ponytail: a scoped IPv6 address (fe80::1%en0) is dropped rather than
-  // escaped into a URL. Escape the zone as %25 if a Quark ever resolves only
-  // to one.
-  if (h.isEmpty || h.contains('%')) return null;
-  if (h.contains(':')) h = '[$h]';
-  final portSuffix = port == 443 || port <= 0 ? '' : ':$port';
-  return HostEntry(name: name, hostAddress: 'https://$h$portSuffix');
+  for (final host in hosts) {
+    var h = host?.trim() ?? '';
+    if (h.endsWith('.')) h = h.substring(0, h.length - 1);
+    // ponytail: a scoped IPv6 address (fe80::1%en0) is dropped rather than
+    // escaped into a URL. Escape the zone as %25 if a Quark ever resolves only
+    // to one.
+    if (h.isEmpty || h.contains('%')) continue;
+    if (h.contains(':')) h = '[$h]';
+    final portSuffix = port == 443 || port <= 0 ? '' : ':$port';
+    return HostEntry(name: name, hostAddress: 'https://$h$portSuffix');
+  }
+  return null;
 }
 
 /// Suffixes a home network puts on a local name: mDNS's `.local`, and the

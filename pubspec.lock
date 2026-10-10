@@ -69,50 +69,50 @@ packages:
     dependency: "direct main"
     description:
       name: bonsoir
-      sha256: "2e2cf3be580deccad9a48dcaddddf90de092e74b7de2015ef58fb24e11d66496"
+      sha256: "20fed01e4616e625f4bafd9007ff899d231d8d79bebc8564853fa1e3570294a6"
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.11"
+    version: "7.1.5"
   bonsoir_android:
     dependency: transitive
     description:
       name: bonsoir_android
-      sha256: "9a65b6e50c5718c3f1a7ed6ff57ab9ed8ae990ff9c36d2b1ab3d1b90f28f7d1b"
+      sha256: "0dda1164e826553b8ee90a3fd1aabd462d17f19348f542b95f9d5b5455e4157f"
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.6"
+    version: "7.1.3"
   bonsoir_darwin:
     dependency: transitive
     description:
       name: bonsoir_darwin
-      sha256: "2d25c70f0d09260be1c2ab583b80dd89cbbfd59997579dadf789c5af00c7b2e4"
+      sha256: "6f695a0b4465514b75fc1a457746ab6dfc10d7180f0d04810fd9512e6520df69"
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.3"
+    version: "7.1.1"
   bonsoir_linux:
     dependency: transitive
     description:
       name: bonsoir_linux
-      sha256: f2639aded6e15943a9822de98a663a1056f37cbfd0a74d72c9eaa941965945c2
+      sha256: "9afae7bb9509c5bd20a0ea2ca02a0f2b1ef09cca1ceb2ea288ed58a0f03d1e11"
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.3"
+    version: "7.1.0"
   bonsoir_platform_interface:
     dependency: transitive
     description:
       name: bonsoir_platform_interface
-      sha256: "08bb8b35d0198168b3bce87dbc718e4e510336cff1d97e43762e030c01636d45"
+      sha256: "6c55c786b01ad279f675ae72cea3a885aa746e416d2e8c1f0c46e9d2c06420b0"
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.3"
+    version: "7.0.0"
   bonsoir_windows:
     dependency: transitive
     description:
       name: bonsoir_windows
-      sha256: d4a0ca479d4f3679487a61f3174fb9fe1651e323c778b02dfa630490366be65d
+      sha256: aaabbb652fe68d3eb26a9b2cddefaae26cd9ca6ebe737d476ab9ed535c7c2516
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.5"
+    version: "7.3.0"
   boolean_selector:
     dependency: transitive
     description:
