@@ -22,6 +22,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///  1. Create account (username + password)
 ///  2. Acknowledge recovery phrase
 ///  3. Choose app theme (persisted immediately — live preview)
+///
+/// A [QuarkStepIndicator] above each one says which it is and how many there
+/// are (#2026).
 class SetupPage extends StatefulWidget {
   final VoidCallback onSetupComplete;
 
@@ -32,6 +35,9 @@ class SetupPage extends StatefulWidget {
 }
 
 class _SetupPageState extends State<SetupPage> {
+  /// The steps as the progress indicator names them, in order.
+  static const _steps = ['Create account', 'Recovery phrase', 'Theme'];
+
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -76,6 +82,13 @@ class _SetupPageState extends State<SetupPage> {
   /// on this Quark is ours, so a status answer must not move the user off the
   /// wizard.
   bool get _accountStarted => _loading || _recoveryPhrase != null;
+
+  /// Where the wizard is in [_steps].
+  int get _stepIndex => _showThemeStep
+      ? 2
+      : _recoveryPhrase != null
+      ? 1
+      : 0;
 
   /// Asks the active Quark whether it has been claimed: a claimed one belongs
   /// on login, an unreachable one gets the disconnected banner.
@@ -172,17 +185,26 @@ class _SetupPageState extends State<SetupPage> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
-                child: _showThemeStep
-                    ? ThemeStep(onContinue: widget.onSetupComplete)
-                    : _recoveryPhrase != null
-                    ? RecoveryPhraseStep(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    QuarkStepIndicator(
+                      key: const ValueKey('setup_step_indicator'),
+                      steps: _steps,
+                      currentIndex: _stepIndex,
+                    ),
+                    const SizedBox(height: 24),
+                    switch (_stepIndex) {
+                      2 => ThemeStep(onContinue: widget.onSetupComplete),
+                      1 => RecoveryPhraseStep(
                         phrase: _recoveryPhrase!,
                         acknowledged: _phraseAcknowledged,
                         onAcknowledgedChanged: (v) =>
                             setState(() => _phraseAcknowledged = v ?? false),
                         onContinue: _confirmPhraseAndProceed,
-                      )
-                    : SetupForm(
+                      ),
+                      _ => SetupForm(
                         formKey: _formKey,
                         usernameController: _usernameController,
                         passwordController: _passwordController,
@@ -225,6 +247,9 @@ class _SetupPageState extends State<SetupPage> {
                           ],
                         ),
                       ),
+                    },
+                  ],
+                ),
               ),
             ),
           ),

@@ -47,6 +47,7 @@ export 'src/core/quark_file_icon.dart';
 export 'src/core/quark_loader.dart';
 export 'src/core/quark_menu_button.dart';
 export 'src/core/quark_name_dialog.dart';
+export 'src/core/quark_step_indicator.dart';
 export 'src/core/quark_storage_bar.dart';
 export 'src/core/quark_submenu_button.dart';
 export 'src/core/quark_tappable.dart';
