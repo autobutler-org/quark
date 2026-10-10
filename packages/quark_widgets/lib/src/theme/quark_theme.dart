@@ -9,15 +9,18 @@ import 'quark_tokens.dart';
 /// reach values the Material [ColorScheme] has no slot for — `sidebar`,
 /// `warning`, `success`, the spacing scale — with [QuarkTokens.of].
 ///
-/// Both constructors take the theme color the whole theme is derived from.
-/// It is required, so a caller cannot fall back to classic by leaving it out
-/// while the rest of the app wears the picked color (#2786):
+/// All four constructors take the theme color the whole theme is derived
+/// from, the high-contrast pair included (#3071). It is required, so a caller
+/// cannot fall back to classic by leaving it out while the rest of the app
+/// wears the picked color (#2786):
 ///
 /// ```dart
 /// final themeColor = QuarkThemeColor.parse(settings.themeColor);
 /// MaterialApp(
 ///   theme: QuarkTheme.light(themeColor: themeColor),
 ///   darkTheme: QuarkTheme.dark(themeColor: themeColor),
+///   highContrastTheme: QuarkTheme.highContrastLight(themeColor: themeColor),
+///   highContrastDarkTheme: QuarkTheme.highContrastDark(themeColor: themeColor),
 /// );
 /// ```
 abstract final class QuarkTheme {
@@ -31,16 +34,24 @@ abstract final class QuarkTheme {
   static ThemeData light({required QuarkThemeColor themeColor}) =>
       from(themeColor.tokensFor(Brightness.light), Brightness.light);
 
-  /// Quark's high-contrast dark theme, built from
-  /// [QuarkTokens.highContrastDark]. It takes no theme color: a tinted surface
-  /// would cost the contrast it exists for.
-  static ThemeData highContrastDark() =>
-      from(QuarkTokens.highContrastDark, Brightness.dark);
+  /// Quark's high-contrast dark theme, built from the high-contrast dark
+  /// tokens of [themeColor]: neutral surfaces, which a tint would cost the
+  /// contrast they exist for, under an accent in the theme color's hue. That
+  /// is [QuarkTokens.highContrastDark] for [QuarkThemeColor.classic].
+  static ThemeData highContrastDark({required QuarkThemeColor themeColor}) =>
+      from(
+        themeColor.tokensFor(Brightness.dark, highContrast: true),
+        Brightness.dark,
+      );
 
-  /// Quark's high-contrast light theme, built from
-  /// [QuarkTokens.highContrastLight].
-  static ThemeData highContrastLight() =>
-      from(QuarkTokens.highContrastLight, Brightness.light);
+  /// Quark's high-contrast light theme, built from the high-contrast light
+  /// tokens of [themeColor]. That is [QuarkTokens.highContrastLight] for
+  /// [QuarkThemeColor.classic].
+  static ThemeData highContrastLight({required QuarkThemeColor themeColor}) =>
+      from(
+        themeColor.tokensFor(Brightness.light, highContrast: true),
+        Brightness.light,
+      );
 
   /// Builds a [ThemeData] for [brightness] out of [tokens].
   ///

@@ -22,8 +22,15 @@ void main() {
   for (final (name, tokens, brightness) in [
     ('dark', QuarkTokens.dark, Brightness.dark),
     ('light', QuarkTokens.light, Brightness.light),
-    ('high-contrast dark', QuarkTokens.highContrastDark, Brightness.dark),
-    ('high-contrast light', QuarkTokens.highContrastLight, Brightness.light),
+    // #3071: the high-contrast set of every preset, `classic` being the
+    // shipped pair.
+    for (final themeColor in QuarkThemeColor.presets)
+      for (final brightness in Brightness.values)
+        (
+          'high-contrast ${themeColor.storageValue} ${brightness.name}',
+          themeColor.tokensFor(brightness, highContrast: true),
+          brightness,
+        ),
   ]) {
     group(name, () {
       final content = {

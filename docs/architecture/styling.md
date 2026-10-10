@@ -164,8 +164,23 @@ in dark and at least twice the page's, content surfaces stay within 0.03 of the 
 and dark sets of one color share a hue, and preset hues keep 25 degrees from the status colors and from each
 other.
 
-In the app, `AppSettings.themeColor` is the theme color in effect and `QuarkApp` in `lib/main.dart` rebuilds both
-themes from it. It resolves two inputs: the Quark's default from `GET /settings/public` and the signed-in user's
+### High contrast
+
+High contrast is a variant of the theme color, not a replacement for it (#3071).
+`tokensFor(brightness, highContrast: true)` starts from `QuarkTokens.highContrastDark` or
+`QuarkTokens.highContrastLight` and recolors only the accent: `primary` and `chromePrimary` take the seed's hue at
+up to 0.9 saturation and move away from the surfaces until they are 7:1, plus the 0.1 margin, on `background`,
+`card`, `input`, `sidebar` and `chrome`, and `primaryForeground` is whichever of black and white reads better on
+the result. Filled buttons, selection, links, switches and the focus ring are drawn in the accent, so that is
+where the theme shows. Surfaces, text and outlines stay neutral, because a tint on any of them costs the contrast
+the mode exists for. `classic` yields the shipped high-contrast pair untouched.
+`QuarkTheme.highContrastLight(themeColor:)` and `QuarkTheme.highContrastDark(themeColor:)` build from those sets.
+`quark_theme_color_test.dart` holds every preset and custom seed to the 7:1 ratios, and `quark_tokens_test.dart`
+runs the full high-contrast table over every preset.
+
+In the app, `AppSettings.themeColor` is the theme color in effect and `QuarkApp` in `lib/main.dart` rebuilds all
+four themes from it: the everyday pair and the high-contrast pair, which the Settings switch and the platform's
+contrast setting both select. It resolves two inputs: the Quark's default from `GET /settings/public` and the signed-in user's
 own from `GET /settings/me`, which wins when it is not empty. `SettingsService.refreshThemeColor` fetches both
 whenever the account is refreshed, the active host changes, or a `public_settings_changed` event arrives. The
 resolved value is cached per host in `shared_preferences`, so the sign-in page wears the color last seen on that

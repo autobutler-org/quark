@@ -69,7 +69,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
-        theme: QuarkTheme.highContrastDark(),
+        theme: QuarkTheme.highContrastDark(themeColor: QuarkThemeColor.classic),
         home: Scaffold(body: tappable(onTap: () {})),
       ),
     );

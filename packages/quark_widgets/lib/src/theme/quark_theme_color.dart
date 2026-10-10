@@ -14,11 +14,17 @@ import 'quark_tokens.dart';
 /// and the accent, which nobody picks. It is saved as its [storageValue] and
 /// read back with [parse].
 ///
+/// High contrast is a variant of the theme color, not a replacement for it:
+/// `tokensFor(brightness, highContrast: true)` keeps the hue in the accent
+/// over neutral surfaces.
+///
 /// ```dart
 /// final themeColor = QuarkThemeColor.parse(settings.themeColor);
 /// MaterialApp(
 ///   theme: QuarkTheme.light(themeColor: themeColor),
 ///   darkTheme: QuarkTheme.dark(themeColor: themeColor),
+///   highContrastTheme: QuarkTheme.highContrastLight(themeColor: themeColor),
+///   highContrastDarkTheme: QuarkTheme.highContrastDark(themeColor: themeColor),
 /// );
 /// ```
 @immutable
@@ -75,9 +81,52 @@ class QuarkThemeColor {
   /// takes to reach the contrast that role needs against the surfaces it is
   /// drawn on. `docs/architecture/styling.md` has the table. Status colors,
   /// event colors, radii and spacing are the shipped ones.
-  QuarkTokens tokensFor(Brightness brightness) {
+  ///
+  /// With [highContrast] the set is the high-contrast one for [brightness],
+  /// [QuarkTokens.highContrastDark] or [QuarkTokens.highContrastLight], with
+  /// the accent in this theme color's hue: `primary` and `chromePrimary`,
+  /// which filled buttons, selection, links and the focus ring are drawn in,
+  /// and `primaryForeground` to suit. The accent is moved until it is 7:1 on
+  /// every surface. The surfaces, the text and the outlines stay neutral,
+  /// because a tint on any of them costs the contrast the mode exists for.
+  /// [classic] returns the shipped high-contrast set untouched.
+  QuarkTokens tokensFor(Brightness brightness, {bool highContrast = false}) {
     final dark = brightness == Brightness.dark;
     final seed = this.seed;
+    if (highContrast) {
+      final base = dark
+          ? QuarkTokens.highContrastDark
+          : QuarkTokens.highContrastLight;
+      if (seed == null) return base;
+      final hsl = HSLColor.fromColor(seed);
+      // The accent is all of the theme that is left here, and it covers
+      // little, so it keeps more of the seed's saturation than
+      // [_maxStrength] allows the everyday sets.
+      final strength = (hsl.saturation / 0.5).clamp(0.0, 1.0);
+      final surfaces = [
+        base.background,
+        base.card,
+        base.input,
+        base.sidebar,
+        base.chrome,
+      ];
+      final primary = _moveLightness(
+        HSLColor.fromAHSL(1, hsl.hue, 0.9 * strength, dark ? 0.70 : 0.30),
+        toward: dark ? 1 : 0,
+        until: (color) => surfaces.every(
+          (surface) => contrastRatio(color, surface) >= _highContrastText,
+        ),
+      );
+      return base.copyWith(
+        primary: primary,
+        chromePrimary: primary,
+        primaryForeground: moreLegibleOn(
+          primary,
+          const Color(0xFFFFFFFF),
+          const Color(0xFF000000),
+        ),
+      );
+    }
     if (seed == null) return dark ? QuarkTokens.dark : QuarkTokens.light;
 
     final hsl = HSLColor.fromColor(seed);
@@ -321,6 +370,10 @@ const double _margin = 0.1;
 /// buttons, links and icons are drawn in, are held to it on every surface
 /// they sit on.
 const double _text = 4.5 + _margin;
+
+/// WCAG AAA for text, plus [_margin]: what the accent of a high-contrast set
+/// is held to on every surface.
+const double _highContrastText = 7 + _margin;
 
 /// What secondary text is held to, so it stays a step above muted text.
 const double _secondaryText = 6;

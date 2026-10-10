@@ -27,7 +27,9 @@ import '../layout/quark_chrome.dart';
 /// app ships, and what the `classic` theme color yields. Every other theme
 /// color derives a set of its own; see `QuarkThemeColor.tokensFor`.
 /// [QuarkTokens.highContrastDark] and [QuarkTokens.highContrastLight] replace
-/// them, whatever the theme color, for someone who asks for more contrast.
+/// them for someone who asks for more contrast; a theme color other than
+/// `classic` recolors their accent and nothing else, through
+/// `QuarkThemeColor.tokensFor(brightness, highContrast: true)`.
 @immutable
 class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// Creates a token set. Every value is required so a new token cannot be
@@ -282,8 +284,10 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// The high-contrast dark set, for someone who has asked for more contrast.
   ///
   /// Aims for WCAG AAA: every text token is at least 7:1 on every surface,
-  /// borders are at least 3:1, and the focus ring is heavier. It ignores the
-  /// theme color — a tinted surface costs contrast.
+  /// borders are at least 3:1, and the focus ring is heavier. This is the
+  /// `classic` set. Another theme color swaps in an accent of its own hue,
+  /// held to the same 7:1, and leaves the surfaces neutral: a tinted surface
+  /// costs contrast.
   static const QuarkTokens highContrastDark = QuarkTokens(
     background: Color(0xFF000000),
     card: Color(0xFF0A0A0A),

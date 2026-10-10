@@ -543,6 +543,94 @@ void main() {
     });
   });
 
+  /// #3071: high contrast is a variant of the theme color. The accent wears
+  /// the picked hue at the AAA ratio; nothing else moves off the shipped
+  /// high-contrast set.
+  group('high contrast', () {
+    for (final brightness in Brightness.values) {
+      final mode = brightness.name;
+      final shipped = brightness == Brightness.dark
+          ? QuarkTokens.highContrastDark
+          : QuarkTokens.highContrastLight;
+      QuarkTokens tokensOf(QuarkThemeColor themeColor) =>
+          themeColor.tokensFor(brightness, highContrast: true);
+
+      test('$mode: classic is the shipped set, untouched', () {
+        expect(tokensOf(QuarkThemeColor.classic), shipped);
+      });
+
+      test('$mode: every theme color keeps the 7:1 contrast targets', () {
+        for (final themeColor in _derived) {
+          final tokens = tokensOf(themeColor);
+          for (final accent in [tokens.primary, tokens.chromePrimary]) {
+            for (final MapEntry(key: name, value: surface) in {
+              ..._content(tokens),
+              ..._chromeSurfaces(tokens),
+            }.entries) {
+              expect(
+                contrastRatio(accent, surface),
+                greaterThanOrEqualTo(7 + _margin),
+                reason: '$themeColor: accent on $name',
+              );
+              // A selected chip draws the accent on its own tint.
+              expect(
+                contrastRatio(
+                  accent,
+                  Color.alphaBlend(
+                    accent.withValues(alpha: _selectionTint),
+                    surface,
+                  ),
+                ),
+                greaterThanOrEqualTo(_aa),
+                reason: '$themeColor: accent on tinted $name',
+              );
+            }
+            expect(
+              contrastRatio(tokens.primaryForeground, accent),
+              greaterThanOrEqualTo(7),
+              reason: '$themeColor: text on the accent',
+            );
+          }
+        }
+      });
+
+      test('$mode: only the accent moves, so no surface takes a tint', () {
+        for (final themeColor in _derived) {
+          final tokens = tokensOf(themeColor);
+          expect(
+            tokens.copyWith(
+              primary: shipped.primary,
+              chromePrimary: shipped.chromePrimary,
+              primaryForeground: shipped.primaryForeground,
+            ),
+            shipped,
+            reason: '$themeColor',
+          );
+        }
+      });
+
+      test('$mode: the accent keeps the hue that was picked', () {
+        for (final themeColor in _chromatic) {
+          final accent = tokensOf(themeColor).primary;
+          expect(
+            _hueDistance(_hue(accent), _hue(themeColor.seed!)),
+            lessThanOrEqualTo(3),
+            reason: '$themeColor',
+          );
+          expect(_chroma(accent), greaterThan(0.1), reason: '$themeColor');
+        }
+      });
+
+      test('$mode: each preset has an accent of its own', () {
+        final accents = {
+          for (final preset in QuarkThemeColor.presets)
+            tokensOf(preset).primary,
+        };
+        expect(accents, hasLength(QuarkThemeColor.presets.length));
+      });
+    }
+  });
+
   group('classic', () {
     test('is the shipped tokens, untouched', () {
       expect(
