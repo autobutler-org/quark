@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:quark/controllers/feature_flags_controller.dart';
 import 'package:quark/controllers/remote_access_controller.dart';
+import 'package:quark/models/feature_flag.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
@@ -226,10 +227,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// Everything the theme controls show: the mode the app bar toggle also
   /// changes (#2053), and the theme color pickers' state (#2740). The
-  /// left-handed switch (#1812) rides along.
+  /// left-handed switch (#1812) and the view Calendar opens on (#2521) ride
+  /// along.
   final Listenable _themeColors = Listenable.merge([
     AppSettings.instance.themeMode,
     AppSettings.instance.leftHanded,
+    AppSettings.instance.defaultCalendarView,
     AppSettings.instance.themeColor,
     AppSettings.instance.quarkThemeColor,
     AppSettings.instance.userThemeColor,
@@ -583,6 +586,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   : null,
               onQuarkThemeColorChanged: hasHost && isAdmin
                   ? _setQuarkThemeColor
+                  : null,
+              defaultCalendarView: settings.defaultCalendarView.value,
+              // Hidden with the drawer's Calendar entry (#2609); the page
+              // already rebuilds as the flags change.
+              onDefaultCalendarViewChanged:
+                  settings.isFeatureEnabled(FeatureFlag.calendar)
+                  ? settings.setDefaultCalendarView
                   : null,
               refreshIntervalSeconds: _refreshIntervalSeconds,
               onRefreshIntervalChanged: _setRefreshInterval,

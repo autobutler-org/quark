@@ -56,7 +56,8 @@ class CalendarBarBottom extends StatelessWidget implements PreferredSizeWidget {
     CalendarView.upcoming,
   ];
 
-  static String _label(CalendarView view) => switch (view) {
+  /// The name [view] goes by, in the switch and in Settings.
+  static String label(CalendarView view) => switch (view) {
     CalendarView.day => 'Day',
     CalendarView.week => 'Week',
     CalendarView.month => 'Month',
@@ -136,7 +137,7 @@ class CalendarBarBottom extends StatelessWidget implements PreferredSizeWidget {
         QuarkBarSegmentedToggle(
           segments: [
             for (final v in order)
-              QuarkBarSegment(id: v.slug, icon: _icon(v), label: _label(v)),
+              QuarkBarSegment(id: v.slug, icon: _icon(v), label: label(v)),
           ],
           selectedId: view.slug,
           onSelected: (slug) => onViewSelected(
@@ -144,7 +145,7 @@ class CalendarBarBottom extends StatelessWidget implements PreferredSizeWidget {
           ),
         ),
       ],
-      menuLabel: _label(view),
+      menuLabel: label(view),
       menuIcon: _icon(view),
       menuChildren: [
         if (view != CalendarView.upcoming)
@@ -159,7 +160,7 @@ class CalendarBarBottom extends StatelessWidget implements PreferredSizeWidget {
             key: ValueKey('calendar_menu_${v.slug}'),
             leadingIcon: Icon(v == view ? QuarkIcons.check_rounded : _icon(v)),
             onPressed: v == view ? null : () => onViewSelected(v),
-            child: Text(_label(v)),
+            child: Text(label(v)),
           ),
       ],
     );
