@@ -299,6 +299,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/account-requests/history": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the most recent approvals and denials of account requests, newest first: who asked, the outcome, which admin decided and when. The last 100 decisions are kept. Admin-only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List account request decisions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/requestlogutil.Entry"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/approve/{username}": {
             "put": {
                 "security": [
@@ -306,7 +352,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing folder of that name under users/ becomes the home. Admin-only.",
+                "description": "Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing folder of that name under users/ becomes the home. The approval is added to the account request history. Admin-only.",
                 "tags": [
                     "admin"
                 ],
@@ -425,7 +471,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deletes a pending account request. Its username is free again at once. Admin-only.",
+                "description": "Deletes a pending account request. Its username is free again at once. The denial is added to the account request history. Admin-only.",
                 "tags": [
                     "admin"
                 ],
@@ -11454,6 +11500,27 @@ const docTemplate = `{
                 "takenAt": {
                     "description": "TakenAt is the EXIF capture date in Unix seconds, set under SortTaken\nfor a photo whose date is known (#2592).",
                     "type": "integer"
+                }
+            }
+        },
+        "requestlogutil.Entry": {
+            "type": "object",
+            "properties": {
+                "decidedAt": {
+                    "description": "DecidedAt is when they decided.",
+                    "type": "string"
+                },
+                "decidedBy": {
+                    "description": "DecidedBy is the username of the admin who decided.",
+                    "type": "string"
+                },
+                "outcome": {
+                    "description": "Outcome is approved or denied.",
+                    "type": "string"
+                },
+                "username": {
+                    "description": "Username is the account that asked.",
+                    "type": "string"
                 }
             }
         },
