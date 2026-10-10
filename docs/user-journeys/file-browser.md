@@ -409,6 +409,10 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 **Notes:** Uploads, deletes, moves and new folders each publish their own event. A sharing change, or a change to a
 group the user is in, publishes `access_changed`.
 
+When the connection to the Quark drops and comes back, the app sends itself a `resync`, since events published
+while it was down are gone. The open listing refreshes at once, once, and takes any pending debounced refresh with
+it, so what changed while the client was away shows without a manual refresh.
+
 ---
 
 ### JN-FB-025: Deep-link directly to a subfolder

@@ -491,6 +491,14 @@ The password travels in the request body, never the URL, and attempts share the 
   one box.
 - A wrong password shows "That password isn't right. Nothing was deleted."
 - The right one erases what was chosen and returns the Quark to first-boot setup.
+- Every instance of the Quark serving this install then restarts within a few seconds, the one that handled the
+  request included, so requests can fail briefly after the reset goes through. Nothing the old install left in
+  memory (the vault key, caches, the file index) survives the restart.
+
+**Notes:**
+
+- A reset of only **Stored files** or **Quark data on attached drives** restarts the Quark too. Deleting just your
+  own account (JN-ST-026) is not a reset and restarts nothing.
 
 ---
 
@@ -674,3 +682,31 @@ The Quark has at least one feature in beta, such as Chat.
   before it is written.
 - The web app keeps no log and shows no **Copy app logs** button; the browser console has what was printed.
 - Nothing is sent anywhere. Sending logs to support from inside the app is not built yet (#1822).
+
+---
+
+### JN-ST-035: Turn on high contrast
+
+**Preconditions:** Logged in. A theme color other than **Classic** is picked (JN-ST-031).
+
+**Steps:**
+
+1. Navigate to `/settings/general` and turn on **High contrast**, below **Theme**.
+2. Pick another theme color.
+3. Turn **High contrast** off.
+
+**Expected result:**
+
+- After step 1 the app switches to its high-contrast theme in light or dark mode, whichever **Theme** (JN-ST-006)
+  selects: stronger colors and bolder outlines.
+- High contrast follows the theme color: buttons, selection, links, switches and the focus ring take the picked
+  color's hue, darkened or lightened until they stay at least 7:1 against every surface. Surfaces, text and
+  outlines stay neutral. After step 2 the accent changes with the color and stays high contrast.
+- With **Classic**, the shipped high-contrast colors show untouched.
+- After step 3 the everyday theme returns, in the same theme color.
+
+**Notes:**
+
+- The setting belongs to this device, unlike the theme color (JN-ST-031), and survives an app restart.
+- A platform that has its own contrast setting (an OS high-contrast mode) selects the same high-contrast theme, in
+  the picked theme color, with the switch off.

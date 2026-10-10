@@ -484,3 +484,27 @@ added outside Quark shows up once its thumbnail loads or after the next restart.
   matches more files than that can miss photos. A narrower term finds them.
 - A device photo is matched by its title, which iOS does not always report.
 - Demo mode searches the sample library on the device.
+
+---
+
+### JN-PH-024: Photos stay current without a refresh
+
+**Preconditions:** Photos is open on a Quark connection (JN-PH-001), and a second client can reach the same Quark.
+
+**Steps:**
+
+1. From the second client, upload a photo, or delete or move one.
+2. Watch the grid.
+3. Lose the connection to the Quark (switch the device offline), change a photo from the second client, then
+   reconnect.
+
+**Expected result:**
+
+- After step 1 the grid reloads itself with the change, without a manual refresh. A sharing change reloads it too.
+- After step 3 the grid reloads once the connection is back, so the change made while it was down shows.
+
+**Notes:**
+
+- The page's own upload reloads the grid once it finishes, not on each file's event.
+- A reconnect reaches the page as a `resync` event the app sends itself, the same one the Quark sends when it
+  dropped events a slow client missed.
