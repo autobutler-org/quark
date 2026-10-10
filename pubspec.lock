@@ -544,10 +544,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_probe_agent
-      sha256: c5394aade43a46b9e7b17cf6bb1d7834ea7506aab575584d7d24d3babe6bfc33
+      sha256: f553fdc66a6576fb022422057ae79abecf87d0cb908c750235a3e36719225666
       url: "https://pub.dev"
     source: hosted
-    version: "0.19.2"
+    version: "0.22.1"
   flutter_quill:
     dependency: "direct main"
     description:
