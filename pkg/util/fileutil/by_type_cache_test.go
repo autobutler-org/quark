@@ -36,7 +36,6 @@ func newByTypeFixture(t testing.TB) byTypeFixture {
 	return byTypeFixture{filesDir: filesDir, params: ListByTypeParams{
 		Ctx:      context.Background(),
 		Registry: registry,
-		Storage:  svc,
 		Access:   system.Access,
 		FileType: storageutil.FileTypeQdoc,
 	}}

@@ -46,8 +46,8 @@ func prepare(c *gin.Context, p string, level accessutil.Level) (deputil.Dependen
 	if !check.Allowed {
 		return nil, nil, serverutil.Forbidden(errReadOnly)
 	}
-	fsys := fileutil.FilesVFS(deps.VFSRegistry())
-	if fsys == nil {
+	fsys, err := fileutil.FilesVFS(deps.VFSRegistry(), "")
+	if err != nil {
 		return nil, nil, serverutil.InternalServerError(errNoFilesNamespace)
 	}
 	return deps, fsys, nil

@@ -15,6 +15,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -65,7 +66,7 @@ func TestZipDirsStoreCompressedEntries(t *testing.T) {
 	}
 	contents := map[string]string{"notes.txt": text, "photo.jpg": jpeg, "sub/v.mp4": jpeg, "sub/ok.txt": "ok"}
 
-	dir := t.TempDir()
+	dir, device := deviceFolder(t)
 	fsys := vfs.NewMemVFS("files")
 	for name, content := range contents {
 		if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(name)), 0o755); err != nil {
@@ -82,7 +83,9 @@ func TestZipDirsStoreCompressedEntries(t *testing.T) {
 	}
 
 	for label, write := range map[string]func(io.Writer) error{
-		"ZipDir": func(w io.Writer) error { return fileutil.ZipDir(w, dir, "My Folder") },
+		"ZipVFSDir on a device": func(w io.Writer) error {
+			return fileutil.ZipVFSDir(context.Background(), device, "", "My Folder", system.Access, w)
+		},
 		"ZipVFSDir": func(w io.Writer) error {
 			return fileutil.ZipVFSDir(context.Background(), fsys, "folder", "My Folder", system.Access, w)
 		},
@@ -143,10 +146,34 @@ func (s *heapSampler) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// makeSmallFiles writes n files of size bytes each, half photos and half text.
-func makeSmallFiles(tb testing.TB, n, size int) string {
+// deviceFolder is the files directory of a USB device and the namespace
+// serving it, the way a folder download on a device reads it.
+func deviceFolder(tb testing.TB) (string, vfs.VFS) {
 	tb.Helper()
-	dir := tb.TempDir()
+	mountPoint := tb.TempDir()
+	dir := filepath.Join(mountPoint, "quark", "data", "files")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		tb.Fatal(err)
+	}
+	svc := storageutil.NewStorageService(&oneUSBDetector{mountPoint: mountPoint, serial: "USB-ZIP"})
+	return dir, vfs.NewDeviceStorageServiceVFS(svc, "USB-ZIP")
+}
+
+// zipAll zips everything on a device as the system principal.
+func zipAll(tb testing.TB, fsys vfs.VFS, w io.Writer, root string) error {
+	tb.Helper()
+	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		tb.Fatal(err)
+	}
+	return fileutil.ZipVFSDir(context.Background(), fsys, "", root, system.Access, w)
+}
+
+// makeSmallFiles writes n files of size bytes each, half photos and half text,
+// onto a device.
+func makeSmallFiles(tb testing.TB, n, size int) vfs.VFS {
+	tb.Helper()
+	dir, fsys := deviceFolder(tb)
 	body := []byte(strings.Repeat("x", size))
 	for i := range n {
 		ext := ".txt"
@@ -157,14 +184,14 @@ func makeSmallFiles(tb testing.TB, n, size int) string {
 			tb.Fatal(err)
 		}
 	}
-	return dir
+	return fsys
 }
 
 // A 5,000-file folder streams: the heap stays a small fraction of the
 // archive, so nothing accumulates the archive or its entries' contents.
-func TestZipDirStreamsManySmallFiles(t *testing.T) {
+func TestZipVFSDirStreamsManySmallFiles(t *testing.T) {
 	const files, size = 5000, 16 << 10
-	dir := makeSmallFiles(t, files, size)
+	fsys := makeSmallFiles(t, files, size)
 
 	// Collect often, so the sampled heap is close to what is live rather than
 	// garbage from the walk waiting for the next cycle.
@@ -174,7 +201,7 @@ func TestZipDirStreamsManySmallFiles(t *testing.T) {
 	runtime.ReadMemStats(&before)
 
 	s := &heapSampler{}
-	if err := fileutil.ZipDir(s, dir, "many"); err != nil {
+	if err := zipAll(t, fsys, s, "many"); err != nil {
 		t.Fatal(err)
 	}
 	if s.n < files*size/2 {
@@ -190,11 +217,11 @@ func TestZipDirStreamsManySmallFiles(t *testing.T) {
 	}
 }
 
-func BenchmarkZipDir5000SmallFiles(b *testing.B) {
-	dir := makeSmallFiles(b, 5000, 4<<10)
+func BenchmarkZipVFSDir5000SmallFiles(b *testing.B) {
+	fsys := makeSmallFiles(b, 5000, 4<<10)
 	b.ReportAllocs()
 	for b.Loop() {
-		if err := fileutil.ZipDir(io.Discard, dir, "many"); err != nil {
+		if err := zipAll(b, fsys, io.Discard, "many"); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -245,11 +272,11 @@ func (r *tailRecorder) ReadAt(p []byte, off int64) (int, error) {
 
 // An entry past 4 GiB, stored now that it is a video, still gets the zip64
 // records that let a reader find and size it.
-func TestZipDirWritesZip64ForAnEntryOver4GiB(t *testing.T) {
+func TestZipVFSDirWritesZip64ForAnEntryOver4GiB(t *testing.T) {
 	if testing.Short() {
 		t.Skip("streams 4 GiB")
 	}
-	dir := t.TempDir()
+	dir, fsys := deviceFolder(t)
 	const size = 4<<30 + 1<<20
 	if err := os.WriteFile(filepath.Join(dir, "small.txt"), []byte("hello"), 0o600); err != nil {
 		t.Fatal(err)
@@ -265,7 +292,7 @@ func TestZipDirWritesZip64ForAnEntryOver4GiB(t *testing.T) {
 	f.Close()
 
 	rec := &tailRecorder{}
-	if err := fileutil.ZipDir(rec, dir, "big"); err != nil {
+	if err := zipAll(t, fsys, rec, "big"); err != nil {
 		t.Fatal(err)
 	}
 	zr, err := zip.NewReader(rec, rec.n)

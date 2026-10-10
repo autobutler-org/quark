@@ -12,7 +12,6 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/pptxutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -22,11 +21,8 @@ import (
 type ImportPptxParams struct {
 	// Ctx bounds the read and the writes.
 	Ctx context.Context
-	// Registry reads and writes through the VFS when no serial routes past it.
+	// Registry holds the namespace of the device Serial names.
 	Registry vfs.Registry
-	// Storage serves the request for a device-scoped path, or when there is
-	// no VFS namespace to route to.
-	Storage *storageutil.StorageService
 	// EventBus is told about the files that appeared. Required, as it is for
 	// every other mutation here.
 	EventBus *eventbus.Bus
@@ -85,18 +81,16 @@ func ImportPptxToQslide(params ImportPptxParams) (ImportPptxResult, error) {
 	base := path.Base(cleanRelPath(params.FilePath))
 	stem := strings.TrimSuffix(base, filepath.Ext(base))
 	mediaDir := path.Join(rootDir, stem+"_media")
-	mediaDirExisted, err := fileExists(params.Ctx, params.Registry, params.Storage, params.Serial, mediaDir)
+	fsys, err := FilesVFS(params.Registry, params.Serial)
+	if err != nil {
+		return ImportPptxResult{}, err
+	}
+	mediaDirExisted, err := exists(params.Ctx, fsys, mediaDir)
 	if err != nil {
 		return ImportPptxResult{}, err
 	}
 
-	source, size, closer, err := openXlsxSource(ConvertXlsxParams{
-		Ctx:      params.Ctx,
-		Registry: params.Registry,
-		Storage:  params.Storage,
-		FilePath: params.FilePath,
-		Serial:   params.Serial,
-	})
+	source, size, closer, err := openXlsx(params.Ctx, fsys, params.FilePath)
 	if err != nil {
 		return ImportPptxResult{}, err
 	}
@@ -151,7 +145,7 @@ func ImportPptxToQslide(params ImportPptxParams) (ImportPptxResult, error) {
 	outcome := <-imported
 
 	if outcome.err != nil || writeErr != nil {
-		discardImport(params, media, mediaDir, mediaDirExisted)
+		discardImport(params, fsys, media, mediaDir, mediaDirExisted)
 		if outcome.err != nil {
 			return ImportPptxResult{}, importError(outcome.err)
 		}
@@ -160,7 +154,7 @@ func ImportPptxToQslide(params ImportPptxParams) (ImportPptxResult, error) {
 
 	publish := func(dir string) {
 		if params.EventBus != nil {
-			params.EventBus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: dir})
+			params.EventBus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: dir, DeviceSerial: params.Serial})
 		}
 	}
 	publish(rootDir)
@@ -211,13 +205,12 @@ func importError(err error) error {
 // their folder when the import created it. The .qslide itself is written
 // atomically, so a failed one never lands. It is best effort: the error that
 // got us here is the one worth reporting.
-func discardImport(params ImportPptxParams, media []string, mediaDir string, mediaDirExisted bool) {
-	remove := ConvertXlsxParams{Ctx: params.Ctx, Registry: params.Registry, Storage: params.Storage, Serial: params.Serial}
+func discardImport(params ImportPptxParams, fsys vfs.VFS, media []string, mediaDir string, mediaDirExisted bool) {
 	for _, p := range media {
-		discardTemp(remove, p)
+		discardTemp(params.Ctx, fsys, p)
 	}
 	if len(media) > 0 && !mediaDirExisted {
-		discardTemp(remove, mediaDir)
+		discardTemp(params.Ctx, fsys, mediaDir)
 	}
 	if len(media) > 0 {
 		slog.Info("pptx: removed the pictures of a failed import", "path", params.FilePath, "count", len(media))

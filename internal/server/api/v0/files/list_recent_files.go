@@ -34,7 +34,6 @@ func listRecentFiles(c *gin.Context) *serverutil.Response {
 	result, err := fileutil.ListRecent(fileutil.ListRecentParams{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		Serials:  c.QueryArray("serial"),
 		Access:   access,
 		Limit:    fileutil.ParseRecentLimit(c.Query("limit")),

@@ -59,7 +59,6 @@ func newFolder(c *gin.Context) *serverutil.Response {
 	result, err := fileutil.CreateFolder(fileutil.CreateFolderParams{
 		Ctx:        c.Request.Context(),
 		Registry:   deps.VFSRegistry(),
-		Storage:    deps.StorageService(),
 		EventBus:   deps.EventBus(),
 		FolderDir:  folderDir,
 		FolderName: folderName,

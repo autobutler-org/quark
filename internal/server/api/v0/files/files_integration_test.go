@@ -42,8 +42,8 @@ func (f *fakeDetector) DetectDevices() ([]storageutil.Device, error) {
 	}, f.extra...), nil
 }
 
-// newTestEngine creates a gin engine with the files routes registered and
-// a fake StorageService pointing at a temp directory injected via deps.
+// newTestEngine creates a gin engine with the files routes registered over a
+// fake StorageService pointing at a temp directory injected via deps.
 // This avoids relying on HOME env var tricks and works across all platforms.
 func newTestEngine(t *testing.T) (*gin.Engine, string) {
 	t.Helper()
@@ -56,10 +56,12 @@ func newTestEngine(t *testing.T) (*gin.Engine, string) {
 	}
 
 	// Build a deps with a fake StorageService so handlers get a real-looking
-	// device list pointing at our temp dir — no real device detection happens.
+	// device list pointing at our temp dir — no real device detection happens —
+	// and the files namespaces production registers over it.
 	svc := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})
 	deps := deputil.NewDependencies().
 		WithStorageService(svc).
+		WithVFSRegistry(newFilesRegistry(t, svc)).
 		WithEventBus(eventbus.New()).
 		WithUploadSessions(newTestSessionStore(mountPoint))
 

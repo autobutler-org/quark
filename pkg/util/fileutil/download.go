@@ -7,15 +7,12 @@ import (
 	"image"
 	"image/jpeg"
 	"io"
-	"io/fs"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 
 	// Registers the HEIC decoder with image.Decode.
@@ -44,92 +41,12 @@ const (
 	DownloadContents DownloadKind = "contents"
 )
 
-// OpenDownloadParams resolves a download request against the StorageService,
-// which is what serial routing and RAW conversion need: both want a real
-// filesystem path.
-type OpenDownloadParams struct {
-	// Storage resolves the request path to a device and a full path.
-	Storage *storageutil.StorageService
-	// FilePath is the requested files-relative path.
-	FilePath string
-	// Serial routes the request to one device, empty for the internal one.
-	Serial string
-	// WantsJPEG asks for an image to come back as JPEG.
-	WantsJPEG bool
-}
-
-// OpenDownloadResult is a resolved download: what to write, and the open
-// source file to write it from.
-type OpenDownloadResult struct {
-	// Kind says how the response is produced.
-	Kind DownloadKind
-	// FullPath is the resolved path on disk.
-	FullPath string
-	// File is the opened source, nil for a folder. The caller closes it.
-	File *os.File
-	// FileName is the name the client is offered in Content-Disposition.
-	FileName string
-	// ContentType is the type to serve, set for DownloadContents.
-	ContentType string
-}
-
-// OpenDownload resolves a download through the StorageService and opens the
-// source file, so a missing file is reported before any bytes are written.
-func OpenDownload(params OpenDownloadParams) (OpenDownloadResult, error) {
-	resolved, err := params.Storage.DownloadFile(storageutil.DownloadFileParams{
-		FilePath:     params.FilePath,
-		DeviceSerial: params.Serial,
-	})
-	if err != nil {
-		return OpenDownloadResult{}, notFound(err)
-	}
-
-	if resolved.IsFolder {
-		return OpenDownloadResult{
-			Kind:     DownloadFolder,
-			FullPath: resolved.FullPath,
-			FileName: filepath.Base(resolved.FullPath) + ".zip",
-		}, nil
-	}
-
-	f, err := os.Open(resolved.FullPath)
-	if err != nil {
-		if storageutil.IsNotExist(err) {
-			return OpenDownloadResult{}, notFoundf("file not found: %s", params.FilePath)
-		}
-		return OpenDownloadResult{}, fmt.Errorf("failed to open file: %w", err)
-	}
-
-	if params.WantsJPEG && resolved.FileType == storageutil.FileTypeImage {
-		// RAW files carry a JPEG preview an external tool extracts; everything
-		// else is decoded and re-encoded from the file already open here.
-		kind := DownloadJPEG
-		if photoutil.IsRawFile(resolved.FullPath) {
-			kind = DownloadRawJPEG
-		}
-		return OpenDownloadResult{
-			Kind:     kind,
-			FullPath: resolved.FullPath,
-			File:     f,
-			FileName: JPEGFileName(resolved.FullPath),
-		}, nil
-	}
-
-	return OpenDownloadResult{
-		Kind:        DownloadContents,
-		FullPath:    resolved.FullPath,
-		File:        f,
-		FileName:    filepath.Base(resolved.FullPath),
-		ContentType: downloadContentType(resolved.FileType, filepath.Ext(resolved.FullPath)),
-	}, nil
-}
-
-// OpenVFSDownloadParams resolves a download against the VFS namespace. RAW
-// files are excluded before this is called: their conversion needs an OS path.
+// OpenVFSDownloadParams resolves a download against one device's files
+// namespace.
 type OpenVFSDownloadParams struct {
 	// Ctx bounds the stat.
 	Ctx context.Context
-	// FS is the files namespace.
+	// FS is the files namespace of the device the request names.
 	FS vfs.VFS
 	// FilePath is the requested path inside the namespace.
 	FilePath string
@@ -149,6 +66,9 @@ type OpenVFSDownloadResult struct {
 	FileName string
 	// ContentType is the type to serve, empty for a folder.
 	ContentType string
+	// HostPath is the file on the host, set for DownloadRawJPEG only: the
+	// tool that extracts a RAW file's preview reads a path, not a stream.
+	HostPath string
 }
 
 // OpenVFSDownload resolves a download through the VFS layer.
@@ -169,6 +89,24 @@ func OpenVFSDownload(params OpenVFSDownloadParams) (OpenVFSDownloadResult, error
 	mimeType := fi.MimeType
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
+	}
+
+	if params.WantsJPEG && photoutil.IsRawFile(params.FilePath) {
+		hp, ok := params.FS.(vfs.HostPather)
+		if !ok {
+			return OpenVFSDownloadResult{}, &UnsupportedError{Err: fmt.Errorf("cannot convert %s to JPEG here", fi.Name)}
+		}
+		hostPath, err := hp.HostPath(params.Ctx, params.FilePath)
+		if err != nil {
+			return OpenVFSDownloadResult{}, err
+		}
+		return OpenVFSDownloadResult{
+			Kind:        DownloadRawJPEG,
+			Info:        fi,
+			FileName:    JPEGFileName(params.FilePath),
+			ContentType: "image/jpeg",
+			HostPath:    hostPath,
+		}, nil
 	}
 
 	if params.WantsJPEG && strings.HasPrefix(mimeType, "image/") {
@@ -195,74 +133,6 @@ func JPEGFileName(filePath string) string {
 	return strings.TrimSuffix(filepath.Base(filePath), ext) + ".jpg"
 }
 
-// downloadContentType is the type a file is served as, which for the media
-// types is derived from the extension rather than sniffed.
-func downloadContentType(fileType storageutil.FileType, ext string) string {
-	switch fileType {
-	case storageutil.FileTypePDF:
-		return "application/pdf"
-	case storageutil.FileTypeImage, storageutil.FileTypeSvg:
-		return storageutil.ImageMIMETypeFromExtension(ext)
-	case storageutil.FileTypeVideo:
-		return storageutil.VideoMIMETypeFromExtension(ext)
-	case storageutil.FileTypeAudio:
-		return storageutil.AudioMIMETypeFromExtension(ext)
-	}
-	return "application/octet-stream"
-}
-
-// ZipDir streams a zip of the directory at fullPath onto w, every entry under a
-// top-level folder named root, so extracting the archive makes that folder
-// rather than spilling its contents into the current directory. Each entry is
-// stored or deflated as ZipMethod says. Nothing is buffered beyond the zip
-// writer's own: the archive goes onto w as it is built, and entries over
-// 4 GiB, or archives past 65,535 entries, get zip64 records.
-func ZipDir(w io.Writer, fullPath string, root string) error {
-	zipWriter := newFolderZipWriter(w)
-	defer zipWriter.Close()
-	buf := make([]byte, zipCopyBuffer)
-	// zip.Writer.AddFS, with each name joined onto root.
-	fsys := os.DirFS(fullPath)
-	err := fs.WalkDir(fsys, ".", func(name string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() && !info.Mode().IsRegular() {
-			return fmt.Errorf("cannot add non-regular file %s", name)
-		}
-		h, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-		h.Name = path.Join(root, name)
-		h.Method = zip.Store
-		if d.IsDir() {
-			h.Name += "/"
-		} else {
-			h.Method = ZipMethod(name, "", info.Size())
-		}
-		zw, err := zipWriter.CreateHeader(h)
-		if err != nil || d.IsDir() {
-			return err
-		}
-		f, err := fsys.Open(name)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		_, err = copyEntry(zw, f, buf)
-		return err
-	})
-	if err != nil {
-		return fmt.Errorf("failed to zip folder: %w", err)
-	}
-	return nil
-}
-
 // ZipVFSDir streams a zip of a VFS directory onto w. Entry paths are stored
 // under a top-level folder named root, followed by the path relative to
 // basePath, so the archive unpacks as the folder the client asked for rather
@@ -273,8 +143,11 @@ func ZipDir(w io.Writer, fullPath string, root string) error {
 // the link — so a link inside a shared folder would otherwise carry whatever
 // it points at into the archive (#1903).
 //
-// Each entry is stored or deflated as ZipMethod says, and the archive is
-// streamed as ZipDir's is.
+// Each entry is stored or deflated as ZipMethod says. Nothing is buffered
+// beyond the zip writer's own: the archive goes onto w as it is built, and
+// entries over 4 GiB, or archives past 65,535 entries, get zip64 records. The
+// listing leaves out the names the storage layer keeps for itself
+// (storageutil.IsInternalName), so they never reach the archive either.
 func ZipVFSDir(ctx context.Context, fsys vfs.VFS, basePath string, root string, access accessutil.Access, w io.Writer) error {
 	zipWriter := newFolderZipWriter(w)
 	defer zipWriter.Close()

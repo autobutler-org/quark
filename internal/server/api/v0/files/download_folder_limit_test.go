@@ -17,7 +17,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -36,13 +35,27 @@ func (w *stalledClient) Write(p []byte) (int, error) {
 	return 0, errors.New("connection reset by peer")
 }
 
-// newZipLimitEngine serves downloads with one zip slot and a short wait, over
-// the VFS path or, with useVFS false, the StorageService fallback.
-func newZipLimitEngine(t *testing.T, useVFS bool) (*gin.Engine, *downloadutil.ZipSlots) {
+// zipLimitTargets are the devices a folder download is limited on alike: the
+// internal drive and a USB drive, each through its own namespace (#2642).
+var zipLimitTargets = map[string]string{"internal": "", "device": testUsbSerial}
+
+// zipURL downloads the "big" folder from the device serial names.
+func zipURL(serial string) string {
+	url := "/api/v0/files/download?filePath=big"
+	if serial != "" {
+		url += "&serial=" + serial
+	}
+	return url
+}
+
+// newZipLimitEngine serves downloads with one zip slot and a short wait, with
+// the "big" folder on the device serial names.
+func newZipLimitEngine(t *testing.T, serial string) (*gin.Engine, *downloadutil.ZipSlots) {
 	t.Helper()
-	deps, filesDir := newStorageVFSDeps(t)
-	if !useVFS {
-		deps.WithVFSRegistry(vfs.NewRegistry())
+	deps, internalDir, usbDir := newDeviceUploadDeps(t)
+	filesDir := internalDir
+	if serial != "" {
+		filesDir = usbDir
 	}
 	slots := downloadutil.NewZipSlots(downloadutil.ZipSlotsParams{Slots: 1, Wait: 50 * time.Millisecond})
 	deps.WithZipSlots(slots)
@@ -72,14 +85,14 @@ func newZipLimitEngine(t *testing.T, useVFS bool) (*gin.Engine, *downloadutil.Zi
 
 // startStalledZip starts a folder download whose client stops reading, and
 // returns once the zip holds its slot. Canceling the returned func ends it.
-func startStalledZip(t *testing.T, engine *gin.Engine) (cancel func(), done <-chan struct{}) {
+func startStalledZip(t *testing.T, engine *gin.Engine, url string) (cancel func(), done <-chan struct{}) {
 	t.Helper()
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	w := &stalledClient{ResponseRecorder: httptest.NewRecorder(), ctx: ctx, started: make(chan struct{})}
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		req := httptest.NewRequest(http.MethodGet, "/api/v0/files/download?filePath=big", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodGet, url, nil).WithContext(ctx)
 		engine.ServeHTTP(w, req)
 	}()
 	select {
@@ -95,14 +108,14 @@ func startStalledZip(t *testing.T, engine *gin.Engine) (cancel func(), done <-ch
 // download is turned away with 503 and a Retry-After rather than starting a
 // second deflate on a busy board (#2757).
 func TestDownloadFolder_BusyZipSlotsAnswer503(t *testing.T) {
-	for name, useVFS := range map[string]bool{"vfs": true, "storage": false} {
+	for name, serial := range zipLimitTargets {
 		t.Run(name, func(t *testing.T) {
-			engine, _ := newZipLimitEngine(t, useVFS)
-			cancel, done := startStalledZip(t, engine)
+			engine, _ := newZipLimitEngine(t, serial)
+			cancel, done := startStalledZip(t, engine, zipURL(serial))
 			defer func() { cancel(); <-done }()
 
 			w := httptest.NewRecorder()
-			engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v0/files/download?filePath=big", nil))
+			engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, zipURL(serial), nil))
 			if w.Code != http.StatusServiceUnavailable {
 				t.Fatalf("status: got %d, want 503", w.Code)
 			}
@@ -119,10 +132,10 @@ func TestDownloadFolder_BusyZipSlotsAnswer503(t *testing.T) {
 // A download whose client goes away gives its slot back, so the next one
 // runs.
 func TestDownloadFolder_CanceledZipReleasesItsSlot(t *testing.T) {
-	for name, useVFS := range map[string]bool{"vfs": true, "storage": false} {
+	for name, serial := range zipLimitTargets {
 		t.Run(name, func(t *testing.T) {
-			engine, slots := newZipLimitEngine(t, useVFS)
-			cancel, done := startStalledZip(t, engine)
+			engine, slots := newZipLimitEngine(t, serial)
+			cancel, done := startStalledZip(t, engine, zipURL(serial))
 			if slots.Available() != 0 {
 				t.Fatalf("Available() = %d while zipping, want 0", slots.Available())
 			}
@@ -133,7 +146,7 @@ func TestDownloadFolder_CanceledZipReleasesItsSlot(t *testing.T) {
 			}
 
 			w := httptest.NewRecorder()
-			engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v0/files/download?filePath=big", nil))
+			engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, zipURL(serial), nil))
 			if w.Code != http.StatusOK {
 				t.Fatalf("status after release: got %d, want 200", w.Code)
 			}

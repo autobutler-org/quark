@@ -2,7 +2,7 @@ package fileutil
 
 import (
 	"context"
-	"path/filepath"
+	"errors"
 	"slices"
 	"sort"
 	"strconv"
@@ -20,12 +20,11 @@ const maxRecentLimit = 200
 // ListFilesParams lists one directory level, merged across the devices the
 // serials select.
 type ListFilesParams struct {
-	// Ctx bounds the VFS listing.
+	// Ctx bounds the listing.
 	Ctx context.Context
-	// Registry serves the listing when it is present; nil walks the devices.
+	// Registry holds a files namespace per device; the listing fans out over
+	// the ones Serials selects.
 	Registry vfs.Registry
-	// Storage enumerates the managed devices for the device walk.
-	Storage *storageutil.StorageService
 	// Access decides what the listing may show (#1903). The zero value shows
 	// nothing.
 	Access accessutil.Access
@@ -52,34 +51,15 @@ func ListFiles(params ListFilesParams) (ListFilesResult, error) {
 		return ListFilesResult{}, notFoundf("folder not found: %s", params.RootDir)
 	}
 
-	// Use VFS when available — one namespace per device, fanned out over the
-	// ones Serials selects.
-	if params.Registry != nil {
-		files, err := listFilesVFS(params.Ctx, params.Registry, params.RootDir, params.Serials)
-		if err != nil {
-			return ListFilesResult{}, err
-		}
-		return ListFilesResult{Files: visibleFiles(params.Access, files)}, nil
-	}
-
-	devices, err := params.Storage.GetManagedRoots()
-	if err != nil {
-		return ListFilesResult{}, err
-	}
-	selectedDevices := SelectDevices(devices, params.Serials)
-	if len(params.Serials) > 0 && len(selectedDevices) == 0 {
-		return ListFilesResult{Files: []FileNode{}}, nil
-	}
-	files, err := listFilesOnDevices(params.RootDir, selectedDevices)
+	files, err := listFilesVFS(params.Ctx, params.Registry, params.RootDir, params.Serials)
 	if err != nil {
 		return ListFilesResult{}, err
 	}
 	return ListFilesResult{Files: visibleFiles(params.Access, files)}, nil
 }
 
-// visibleFiles keeps the listed files the caller may see. DirPath is the
-// files-relative path on both listing branches; FullPath is absolute on the
-// device walk.
+// visibleFiles keeps the listed files the caller may see, located by their
+// files-relative DirPath.
 func visibleFiles(access accessutil.Access, files []FileNode) []FileNode {
 	return accessutil.VisibleChildren(accessutil.VisibleChildrenParams[FileNode]{
 		Access:   access,
@@ -97,15 +77,15 @@ func readable(access accessutil.Access, serial, relPath string) bool {
 
 // listFilesVFS lists files via the VFS registry, optionally scoped to specific device serials.
 func listFilesVFS(ctx context.Context, registry vfs.Registry, rootDir string, serials []string) ([]FileNode, error) {
-	if _, ok := registry.Get(filesNamespace); !ok {
-		return nil, ErrNoFilesNamespace
+	if _, err := FilesVFS(registry, ""); err != nil {
+		return nil, err
 	}
 	infos, err := vfs.ListDevices(vfs.ListDevicesParams{
 		Ctx: ctx, Registry: registry, Path: rootDir,
 		Filter: &vfs.ListFilter{Recursive: false, SerialFilter: serials},
 	})
 	if err != nil {
-		if err == vfs.ErrNotFound {
+		if errors.Is(err, vfs.ErrNotFound) {
 			return nil, notFoundf("folder not found: %s", rootDir)
 		}
 		return nil, err
@@ -133,62 +113,6 @@ func vfsFileNode(fi vfs.FileInfo) FileNode {
 	}
 }
 
-// listFilesOnDevices lists files across the given devices (serial-scoped fallback).
-func listFilesOnDevices(rootDir string, devices []storageutil.ManagedDevice) ([]FileNode, error) {
-	var allFiles []*storageutil.DeviceFileInfo
-	sawListing := false
-	sawNotFound := false
-	for _, device := range devices {
-		filesDir := device.FilesDir
-		fullPathDir, err := storageutil.SafeJoin(filesDir, rootDir)
-		if err != nil {
-			return nil, err
-		}
-		files, err := storageutil.StatFilesInDir(fullPathDir, device.Name, device.DataDir, DeviceSerial(device))
-		if err != nil {
-			if rootDir != "" {
-				sawNotFound = true
-			}
-			continue
-		}
-		sawListing = true
-		allFiles = append(allFiles, files...)
-	}
-	if rootDir != "" && sawNotFound && !sawListing {
-		return nil, notFoundf("folder not found: %s", rootDir)
-	}
-	// Only deduplicate folders (isDir), show all files across all devices
-	seenFolders := make(map[string]bool)
-	filteredFiles := make([]*storageutil.DeviceFileInfo, 0, len(allFiles))
-	for _, file := range allFiles {
-		name := file.FileInfo.Name()
-		if file.IsDir() {
-			if seenFolders[name] {
-				continue
-			}
-			seenFolders[name] = true
-		}
-		filteredFiles = append(filteredFiles, file)
-	}
-	allFiles = filteredFiles
-	result := make([]FileNode, len(allFiles))
-	for i, file := range allFiles {
-		result[i] = FileNode{
-			Name:         file.Name(),
-			Size:         file.Size(),
-			IsDir:        file.IsDir(),
-			DeviceName:   file.DeviceName,
-			DevicePath:   file.DevicePath,
-			DirPath:      filepath.Join(rootDir, file.Name()),
-			FullPath:     file.FullPath,
-			DeviceSerial: file.DeviceSerial,
-			FileType:     string(storageutil.DetermineFileTypeFromPath(file.FullPath)),
-			ModifiedAt:   file.ModTime(),
-		}
-	}
-	return result, nil
-}
-
 // ParseRecentLimit reads the ?limit= query parameter for the recent listing,
 // falling back to the default for anything missing or unparseable and clamping
 // the page size to the maximum.
@@ -208,12 +132,10 @@ func ParseRecentLimit(raw string) int {
 
 // ListRecentParams describes the newest-first listing across every managed device.
 type ListRecentParams struct {
-	// Ctx bounds the VFS listing and the device walk.
+	// Ctx bounds the listing.
 	Ctx context.Context
-	// Registry serves the listing when the files namespace is registered.
+	// Registry holds a files namespace per device.
 	Registry vfs.Registry
-	// Storage enumerates the managed devices for the fallback walk.
-	Storage *storageutil.StorageService
 	// Serials scopes the listing to those devices, empty for all of them.
 	Serials []string
 	// Access drops the files the caller cannot read, before the limit applies.
@@ -229,66 +151,11 @@ type ListRecentResult struct {
 
 // ListRecent returns the most recently modified files, newest first.
 func ListRecent(params ListRecentParams) (ListRecentResult, error) {
-	var allFiles []FileNode
-
-	// VFS path: use recursive list when registry is available.
-	if FilesVFS(params.Registry) != nil {
-		infos, err := vfs.ListDevices(vfs.ListDevicesParams{
-			Ctx: params.Ctx, Registry: params.Registry,
-			Filter: &vfs.ListFilter{Recursive: true, SerialFilter: params.Serials},
-		})
-		if err != nil {
-			return ListRecentResult{}, err
-		}
-		for _, fi := range infos {
-			if fi.IsDir {
-				continue
-			}
-			allFiles = append(allFiles, vfsFileNode(fi))
-		}
-		return ListRecentResult{Files: readableNewestFirst(params.Access, allFiles, params.Limit)}, nil
-	}
-
-	// Fallback: walk devices via StorageService.
-	devices, err := params.Storage.GetManagedRoots()
+	files, err := listAllFiles(params.Ctx, params.Registry, params.Serials, func(vfs.FileInfo) bool { return true })
 	if err != nil {
 		return ListRecentResult{}, err
 	}
-
-	for _, device := range SelectDevices(devices, params.Serials) {
-		deviceSerial := DeviceSerial(device)
-		// Walk all files recursively. This used to call StatFilesInDir, a
-		// single-level read, so "recent files" could never surface anything
-		// outside the storage root (#1605). WalkedFile.RelPath is the
-		// API-relative path the client uses directly — the same shape
-		// the file listing produces.
-		walkErr := storageutil.WalkFilesInDir(
-			params.Ctx, device.FilesDir, device.Name, device.DataDir, deviceSerial,
-			func(f storageutil.WalkedFile) error {
-				info := f.Info
-				if info.IsDir() {
-					return nil // only return files, not directories
-				}
-				allFiles = append(allFiles, FileNode{
-					Name:         info.Name(),
-					Size:         info.FileInfo.Size(),
-					IsDir:        false,
-					DeviceName:   info.DeviceName,
-					DevicePath:   info.DevicePath,
-					DirPath:      f.RelPath,
-					FullPath:     info.FullPath,
-					DeviceSerial: deviceSerial,
-					ModifiedAt:   info.ModTime(),
-				})
-				return nil
-			},
-		)
-		if walkErr != nil {
-			continue
-		}
-	}
-
-	return ListRecentResult{Files: readableNewestFirst(params.Access, allFiles, params.Limit)}, nil
+	return ListRecentResult{Files: readableNewestFirst(params.Access, files, params.Limit)}, nil
 }
 
 // readableNewestFirst drops the files the caller cannot read, orders the rest
@@ -310,12 +177,10 @@ func readableNewestFirst(access accessutil.Access, files []FileNode, limit int) 
 
 // ListByTypeParams describes the whole-library listing of one file type.
 type ListByTypeParams struct {
-	// Ctx bounds the VFS listing and the device walk.
+	// Ctx bounds the listing.
 	Ctx context.Context
-	// Registry serves the listing when the files namespace is registered.
+	// Registry holds a files namespace per device.
 	Registry vfs.Registry
-	// Storage enumerates the managed devices for the fallback walk.
-	Storage *storageutil.StorageService
 	// Serials scopes the listing to those devices, empty for all of them.
 	Serials []string
 	// Access drops the files the caller cannot read.
@@ -334,16 +199,13 @@ type ListByTypeResult struct {
 // ListByType returns every file whose type matches, sorted newest-first. With a
 // Cache, the walk is shared between requests until the file tree changes.
 func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
-	devices, err := params.Storage.GetManagedRoots()
-	if err != nil {
-		return ListByTypeResult{}, err
-	}
-	selectedDevices := SelectDevices(devices, params.Serials)
-
-	key := byTypeKey(params.FileType, params.Serials, selectedDevices)
+	key := byTypeKey(params.FileType, params.Serials, params.Registry)
 	files, gen, ok := params.Cache.get(key)
 	if !ok {
-		files, err = walkByType(params, selectedDevices)
+		var err error
+		files, err = listAllFiles(params.Ctx, params.Registry, params.Serials, func(fi vfs.FileInfo) bool {
+			return storageutil.DetermineFileTypeFromPath(fi.Path) == params.FileType
+		})
 		if err != nil {
 			return ListByTypeResult{}, err
 		}
@@ -355,84 +217,38 @@ func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 	return ListByTypeResult{Files: readableNewestFirst(params.Access, files, 0)}, nil
 }
 
-// walkByType lists every file of the requested type on selectedDevices,
-// unsorted and unfiltered by access.
-func walkByType(params ListByTypeParams, selectedDevices []storageutil.ManagedDevice) ([]FileNode, error) {
-	// Use make() instead of var to ensure JSON serialization produces []
-	// instead of null when there are no files (nil slice encodes as null).
-	allFiles := make([]FileNode, 0)
-
-	// VFS path: recursive list + type filter.
-	if FilesVFS(params.Registry) != nil {
-		infos, listErr := vfs.ListDevices(vfs.ListDevicesParams{
-			Ctx: params.Ctx, Registry: params.Registry,
-			Filter: &vfs.ListFilter{Recursive: true, SerialFilter: params.Serials},
-		})
-		if listErr != nil {
-			return nil, listErr
-		}
-		for _, fi := range infos {
-			if fi.IsDir {
-				continue
-			}
-			if storageutil.DetermineFileTypeFromPath(fi.Path) != params.FileType {
-				continue
-			}
-			allFiles = append(allFiles, vfsFileNode(fi))
-		}
-		return allFiles, nil
+// listAllFiles walks every device Serials selects and returns the files keep
+// accepts, unsorted and unfiltered by access. Folders are left out.
+func listAllFiles(ctx context.Context, registry vfs.Registry, serials []string, keep func(vfs.FileInfo) bool) ([]FileNode, error) {
+	if _, err := FilesVFS(registry, ""); err != nil {
+		return nil, err
 	}
-
-	for _, device := range selectedDevices {
-		deviceSerial := DeviceSerial(device)
-
-		// Walk the whole subtree. This used to call StatFilesInDir, a
-		// single-level read, so the endpoint only ever returned files sitting
-		// at the storage root despite promising a recursive walk (#1605).
-		walkErr := storageutil.WalkFilesInDir(
-			params.Ctx, device.FilesDir, device.Name, device.DataDir, deviceSerial,
-			func(f storageutil.WalkedFile) error {
-				info := f.Info
-				if info.IsDir() {
-					return nil
-				}
-				if storageutil.DetermineFileTypeFromPath(info.FullPath) != params.FileType {
-					return nil
-				}
-				allFiles = append(allFiles, FileNode{
-					Name:         info.Name(),
-					Size:         info.FileInfo.Size(),
-					IsDir:        false,
-					DeviceName:   info.DeviceName,
-					DevicePath:   info.DevicePath,
-					DirPath:      f.RelPath,
-					FullPath:     info.FullPath,
-					DeviceSerial: deviceSerial,
-					FileType:     string(params.FileType),
-					ModifiedAt:   info.ModTime(),
-				})
-				return nil
-			},
-		)
-		if walkErr != nil {
-			continue
+	infos, err := vfs.ListDevices(vfs.ListDevicesParams{
+		Ctx: ctx, Registry: registry,
+		Filter: &vfs.ListFilter{Recursive: true, SerialFilter: serials},
+	})
+	if err != nil {
+		return nil, err
+	}
+	// make() rather than var, so an empty listing encodes as [] and not null.
+	files := make([]FileNode, 0)
+	for _, fi := range infos {
+		if !fi.IsDir && keep(fi) {
+			files = append(files, vfsFileNode(fi))
 		}
 	}
-
-	return allFiles, nil
+	return files, nil
 }
 
 // SearchFilesParams describes a filename search across the library.
 type SearchFilesParams struct {
-	// Ctx bounds the VFS listing and the device walk.
+	// Ctx bounds the listing and the stats.
 	Ctx context.Context
 	// Index answers the search outright when one has been built.
 	Index *indexutil.FileIndex
-	// Registry resolves each index match to its device's namespace, and
-	// serves the fallback listing when there is no index.
+	// Registry stats each index hit on its device's namespace, and serves the
+	// listing the search falls back to when there is no index.
 	Registry vfs.Registry
-	// Storage enumerates the managed devices for the disk walk.
-	Storage *storageutil.StorageService
 	// Query is the substring a file name must contain. An empty one, which
 	// would match every file on the appliance, finds nothing.
 	Query string
@@ -451,16 +267,15 @@ type SearchFilesResult struct {
 // appliance costs a bounded amount of work and response (#2758).
 const MaxSearchResults = 500
 
-// statFile reads a match's size and modification time through its device's
-// namespace; a variable so a test can prove stat never runs on an unreadable
-// match.
+// statFile reads a match's size and modification time; a variable so a test can prove stat never
+// runs on an unreadable match.
 var statFile = func(ctx context.Context, fsys vfs.VFS, p string) (vfs.FileInfo, error) {
 	return fsys.Stat(ctx, p)
 }
 
 // SearchFiles finds up to MaxSearchResults files whose name contains the
 // query, keeping only the ones the caller can read (#1907): from the index
-// when one has been built, from a VFS listing or a disk walk otherwise. The
+// when one has been built, from a VFS listing otherwise. The
 // index stays appliance-wide; a match is checked against the caller's access before
 // anything about it is read from disk, and the search stops at the cap
 // (#2758).
@@ -470,11 +285,7 @@ func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 		return SearchFilesResult{Files: []FileNode{}}, nil
 	}
 	if params.Index == nil {
-		// VFS fallback: recursive list then name-match (avoids disk-walk when VFS is registered).
-		if params.Registry != nil {
-			return searchFilesVFS(params)
-		}
-		return searchFilesDiskWalk(params)
+		return searchFilesVFS(params)
 	}
 
 	serialSet := make(map[string]bool, len(params.Serials))
@@ -499,17 +310,14 @@ func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 		if !readable(params.Access, f.DeviceSerial, f.RelPath) {
 			continue
 		}
-		// The index is keyed by serial; the match is read through that
-		// device's namespace. A device unplugged since is skipped.
-		var fsys vfs.VFS
-		if params.Registry != nil {
-			fsys, _ = params.Registry.Get(vfs.FilesNamespace(f.DeviceSerial))
-		}
-		if fsys == nil {
+		// The index holds no size or modification time, which would go stale on
+		// every write, so stat at search time, on the namespace of the device
+		// the hit is on. A file deleted since it was indexed, or on a device
+		// since detached, is skipped.
+		fsys, err := FilesVFS(params.Registry, f.DeviceSerial)
+		if err != nil {
 			continue
 		}
-		// The index holds no size or modification time, which would go stale on
-		// every write, so stat at search time. A file deleted since it was indexed is skipped.
 		info, err := statFile(params.Ctx, fsys, f.RelPath)
 		if err != nil {
 			continue
@@ -536,8 +344,8 @@ func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 
 // searchFilesVFS uses VFS.List(Recursive: true) as the fallback when no file index is available.
 func searchFilesVFS(params SearchFilesParams) (SearchFilesResult, error) {
-	if _, ok := params.Registry.Get(filesNamespace); !ok {
-		return SearchFilesResult{}, ErrNoFilesNamespace
+	if _, err := FilesVFS(params.Registry, ""); err != nil {
+		return SearchFilesResult{}, err
 	}
 	all, err := vfs.ListDevices(vfs.ListDevicesParams{
 		Ctx: params.Ctx, Registry: params.Registry,
@@ -561,48 +369,4 @@ func searchFilesVFS(params SearchFilesParams) (SearchFilesResult, error) {
 		}
 	}
 	return SearchFilesResult{Files: result}, nil
-}
-
-// searchFilesDiskWalk is the original BFS implementation used as fallback when the
-// in-memory index is unavailable.
-func searchFilesDiskWalk(params SearchFilesParams) (SearchFilesResult, error) {
-	devices, err := params.Storage.GetManagedRoots()
-	if err != nil {
-		return SearchFilesResult{}, err
-	}
-	selectedDevices := SelectDevices(devices, params.Serials)
-	if len(params.Serials) > 0 && len(selectedDevices) == 0 {
-		return SearchFilesResult{Files: []FileNode{}}, nil
-	}
-	allFiles := make([]FileNode, 0)
-	dirsToScan := []string{""}
-	seenDirs := map[string]bool{"": true}
-
-	for len(dirsToScan) > 0 && len(allFiles) < MaxSearchResults {
-		currentDir := dirsToScan[0]
-		dirsToScan = dirsToScan[1:]
-
-		entries, err := listFilesOnDevices(currentDir, selectedDevices)
-		if err != nil {
-			continue
-		}
-
-		for _, entry := range entries {
-			if entry.IsDir {
-				if !seenDirs[entry.DirPath] {
-					seenDirs[entry.DirPath] = true
-					dirsToScan = append(dirsToScan, entry.DirPath)
-				}
-				continue
-			}
-
-			if len(allFiles) < MaxSearchResults &&
-				strings.Contains(strings.ToLower(entry.Name), strings.ToLower(params.Query)) &&
-				readable(params.Access, entry.DeviceSerial, entry.DirPath) {
-				allFiles = append(allFiles, entry)
-			}
-		}
-	}
-
-	return SearchFilesResult{Files: allFiles}, nil
 }

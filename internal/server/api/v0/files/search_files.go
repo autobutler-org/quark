@@ -38,7 +38,6 @@ func searchFiles(c *gin.Context) *serverutil.Response {
 		Ctx:      c.Request.Context(),
 		Index:    deps.FileIndex(),
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		Query:    c.Query("query"),
 		Serials:  c.QueryArray("serial"),
 		Access:   access,

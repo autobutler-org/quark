@@ -6,13 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/util/xlsxutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -23,11 +21,8 @@ import (
 type ConvertXlsxParams struct {
 	// Ctx bounds the read and the write.
 	Ctx context.Context
-	// Registry reads and writes through the VFS when no serial routes past it.
+	// Registry holds the namespace of the device Serial names.
 	Registry vfs.Registry
-	// Storage serves the request for a device-scoped path, or when there is
-	// no VFS namespace to route to.
-	Storage *storageutil.StorageService
 	// EventBus is told about the file that appeared. Required, as it is for
 	// every other mutation here.
 	EventBus *eventbus.Bus
@@ -79,15 +74,19 @@ func ConvertXlsxToQsheet(params ConvertXlsxParams) (ConvertXlsxResult, error) {
 	stem := strings.TrimSuffix(base, filepath.Ext(base))
 	target := path.Join(dir, stem+".qsheet")
 
-	exists, err := fileExists(params.Ctx, params.Registry, params.Storage, params.Serial, target)
+	fsys, err := FilesVFS(params.Registry, params.Serial)
 	if err != nil {
 		return ConvertXlsxResult{}, err
 	}
-	if exists && !params.Overwrite {
+	existed, err := exists(params.Ctx, fsys, target)
+	if err != nil {
+		return ConvertXlsxResult{}, err
+	}
+	if existed && !params.Overwrite {
 		return ConvertXlsxResult{}, fmt.Errorf("%w: %s already exists", vfs.ErrConflict, target)
 	}
 
-	source, size, closer, err := openXlsxSource(params)
+	source, size, closer, err := openXlsx(params.Ctx, fsys, params.FilePath)
 	if err != nil {
 		return ConvertXlsxResult{}, err
 	}
@@ -131,31 +130,30 @@ func ConvertXlsxToQsheet(params ConvertXlsxParams) (ConvertXlsxResult, error) {
 
 	tempPath := path.Join(dir, tempName)
 	if outcome.err != nil {
-		discardTemp(params, tempPath)
+		discardTemp(params.Ctx, fsys, tempPath)
 		return ConvertXlsxResult{}, convertError(outcome.err)
 	}
 	if writeErr != nil {
-		discardTemp(params, tempPath)
+		discardTemp(params.Ctx, fsys, tempPath)
 		return ConvertXlsxResult{}, writeErr
 	}
 
 	if _, err := MoveFile(MoveFileParams{
 		Ctx:             params.Ctx,
 		Registry:        params.Registry,
-		Storage:         params.Storage,
 		EventBus:        params.EventBus,
 		OldFilePath:     tempPath,
 		NewFilePath:     target,
 		OldDeviceSerial: params.Serial,
 		NewDeviceSerial: params.Serial,
 	}); err != nil {
-		discardTemp(params, tempPath)
+		discardTemp(params.Ctx, fsys, tempPath)
 		return ConvertXlsxResult{}, err
 	}
 
 	return ConvertXlsxResult{
 		Path:     target,
-		Replaced: exists,
+		Replaced: existed,
 		Tabs:     outcome.result.Tabs,
 		Rows:     outcome.result.Rows,
 		Cells:    outcome.result.Cells,
@@ -198,90 +196,24 @@ func cleanRelPath(filePath string) string {
 	return strings.TrimPrefix(path.Clean("/"+filepath.ToSlash(filePath)), "/")
 }
 
-// fileExists reports whether something already occupies a files-relative path,
-// asking the same source a write to that serial would go through.
-func fileExists(ctx context.Context, registry vfs.Registry, storage *storageutil.StorageService, serial, filePath string) (bool, error) {
-	if serial == "" {
-		if fsys := FilesVFS(registry); fsys != nil {
-			_, err := fsys.Stat(ctx, filePath)
-			if err == nil {
-				return true, nil
-			}
-			if errors.Is(err, vfs.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
-				return false, nil
-			}
-			return false, err
-		}
-	}
-	if storage == nil {
-		return false, ErrNoFilesNamespace
-	}
-	if _, err := storage.StatFile(storageutil.StatFileParams{
-		FilePath:     filePath,
-		DeviceSerial: serial,
-	}); err != nil {
-		// The storage service reports every stat failure the same way, and a
-		// missing file is the one this asked about.
-		return false, nil
-	}
-	return true, nil
-}
-
 // discardTemp removes the half-written conversion. It is best effort: the
 // error that got us here is the one worth reporting, and a leftover temporary
 // file is a smaller problem than losing it.
-func discardTemp(params ConvertXlsxParams, tempPath string) {
-	var err error
-	if fsys := FilesVFS(params.Registry); params.Serial == "" && fsys != nil {
-		err = fsys.Delete(params.Ctx, tempPath, vfs.DeleteOptions{})
-	} else if params.Storage != nil {
-		_, err = params.Storage.DeleteFiles(storageutil.DeleteFilesParams{
-			RootDir:      path.Dir(tempPath),
-			FilePaths:    []string{path.Base(tempPath)},
-			DeviceSerial: params.Serial,
-		})
-	}
+func discardTemp(ctx context.Context, fsys vfs.VFS, tempPath string) {
+	err := fsys.Delete(ctx, tempPath, vfs.DeleteOptions{})
 	if err != nil && !errors.Is(err, vfs.ErrNotFound) {
 		slog.Warn("xlsx: could not remove the partial conversion", "path", tempPath, "err", err)
 	}
 }
 
-// openXlsxSource opens the workbook for random access, which is what reading a
-// zip needs: the central directory sits at the end of the file. The namespaces
-// that hand back an *os.File satisfy that directly, so nothing is copied.
-func openXlsxSource(params ConvertXlsxParams) (io.ReaderAt, int64, io.Closer, error) {
-	if params.Serial == "" {
-		if fsys := FilesVFS(params.Registry); fsys != nil {
-			return openXlsxVFS(params.Ctx, fsys, params.FilePath)
-		}
-	}
-	if params.Storage == nil {
-		return nil, 0, nil, ErrNoFilesNamespace
-	}
-
-	opened, err := OpenDownload(OpenDownloadParams{
-		Storage:  params.Storage,
-		FilePath: params.FilePath,
-		Serial:   params.Serial,
-	})
-	if err != nil {
-		return nil, 0, nil, err
-	}
-	if opened.File == nil {
-		return nil, 0, nil, &UnsupportedError{Err: fmt.Errorf("not a file: %s", params.FilePath)}
-	}
-	info, err := opened.File.Stat()
-	if err != nil {
-		opened.File.Close()
-		return nil, 0, nil, err
-	}
-	return opened.File, info.Size(), opened.File, nil
-}
-
-// openXlsxVFS opens a workbook in the VFS namespace for random access. A
-// vfs.File reads at an offset, so the workbook is read in place.
-func openXlsxVFS(ctx context.Context, fsys vfs.VFS, filePath string) (io.ReaderAt, int64, io.Closer, error) {
+// openXlsx opens a workbook for random access, which is what reading a zip
+// needs: the central directory sits at the end of the file. A vfs.File reads
+// at an offset, so the workbook is read in place and nothing is copied.
+func openXlsx(ctx context.Context, fsys vfs.VFS, filePath string) (io.ReaderAt, int64, io.Closer, error) {
 	f, err := fsys.Open(ctx, filePath)
+	if errors.Is(err, vfs.ErrIsDirectory) {
+		return nil, 0, nil, &UnsupportedError{Err: fmt.Errorf("not a file: %s", filePath)}
+	}
 	if err != nil {
 		return nil, 0, nil, notFound(err)
 	}

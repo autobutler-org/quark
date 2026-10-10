@@ -58,7 +58,6 @@ func exportXlsx(c *gin.Context) *serverutil.Response {
 	_, err = fileutil.ExportQsheetToXlsx(fileutil.ExportXlsxParams{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		FilePath: filePath,
 		Serial:   serial,
 		Out:      c.Writer,

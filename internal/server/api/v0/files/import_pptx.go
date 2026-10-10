@@ -61,7 +61,6 @@ func importPptx(c *gin.Context) *serverutil.Response {
 	result, err := fileutil.ImportPptxToQslide(fileutil.ImportPptxParams{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		EventBus: deps.EventBus(),
 		FilePath: filePath,
 		RootDir:  rootDir,

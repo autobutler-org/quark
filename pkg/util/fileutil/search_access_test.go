@@ -57,9 +57,8 @@ func TestSearchFilesKeepsOnlyReadableMatches(t *testing.T) {
 	}
 
 	for name, params := range map[string]SearchFilesParams{
-		"index":     {Index: index, Registry: registry, Storage: svc},
-		"vfs":       {Registry: registry, Storage: svc},
-		"disk walk": {Storage: svc},
+		"index": {Index: index, Registry: registry},
+		"vfs":   {Registry: registry},
 	} {
 		t.Run(name, func(t *testing.T) {
 			params.Ctx = ctx
