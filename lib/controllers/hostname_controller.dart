@@ -12,7 +12,8 @@ import 'package:quark/utils/error_text.dart';
 ///
 /// A renamed Quark stops answering to `<old>.local`. When the app's saved
 /// address used that name, a rename made here, or a `hostname_changed` event
-/// from one made elsewhere, moves the saved address to `<new>.local`. A page
+/// from one made elsewhere, moves the saved address to `<new>.local`. A
+/// `resync`, which a reconnect also sends, reads the name again. A page
 /// the browser loaded from the old name cannot move itself, so
 /// [reopenAddress] says where to go instead.
 ///
@@ -114,6 +115,12 @@ class HostnameController extends ChangeNotifier {
   }
 
   void _onEvent(FileEvent event) {
+    // A resync means events were missed, a rename maybe among them. Before
+    // the first load there is nothing to bring up to date.
+    if (event.kind == 'resync' && _status != null) {
+      unawaited(load());
+      return;
+    }
     final data = event.data;
     if (event.kind != 'hostname_changed' || data is! Map<String, dynamic>) {
       return;

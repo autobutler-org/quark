@@ -71,6 +71,25 @@ void main() {
     expect(controller.isLoading, isFalse);
   });
 
+  // #3087: a rename made while the socket was down sent no event this
+  // controller saw; the reconnect arrives as a resync.
+  test('a resync reads the name again', () async {
+    var name = 'quark';
+    final events = StreamController<FileEvent>.broadcast(sync: true);
+    addTearDown(events.close);
+    final controller = HostnameController(
+      getStatus: () async => _named(name),
+      events: events.stream,
+      activeHost: () => null,
+    );
+    await controller.load();
+
+    name = 'kitchen';
+    events.add(const FileEvent(kind: 'resync', path: ''));
+    await pumpEventQueue();
+    expect(controller.status?.hostname, 'kitchen');
+  });
+
   test('a rename moves the saved address to the new .local name', () async {
     final h = _harness();
     await h.controller.load();

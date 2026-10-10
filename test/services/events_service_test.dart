@@ -106,6 +106,32 @@ void main() {
     events.stop();
   });
 
+  // #3087: events published while the socket was down are gone, and most
+  // listeners follow `events` alone, so a reconnect has to reach them there.
+  testWidgets('a reconnect delivers a resync, but the first connect does not', (
+    tester,
+  ) async {
+    await settings.addHost(
+      HostEntry(name: 'Quark', hostAddress: 'https://quark.local'),
+    );
+    await settings.setSessionToken('a-token');
+    final events = EventsService.instance;
+    final kinds = <String>[];
+    final sub = events.events.listen((e) => kinds.add(e.kind));
+    addTearDown(sub.cancel);
+
+    events.start();
+    await tester.pump();
+    expect(kinds, isEmpty);
+
+    channels.single.closeFromServer();
+    await tester.pump(const Duration(seconds: 2));
+    expect(channels, hasLength(2));
+    expect(kinds, ['resync']);
+
+    events.stop();
+  });
+
   // #2763: reconnects had no jitter, so after a restart every app came back,
   // and refreshed, in the same instant.
   group('reconnect delay', () {

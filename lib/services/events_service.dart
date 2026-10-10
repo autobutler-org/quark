@@ -38,7 +38,8 @@ class FileEvent {
   /// `access_changed` means something was shared or unshared with this
   /// account, or its groups changed, so what it can see may have too.
   /// `resync` means the Quark dropped events this socket was too slow for,
-  /// so anything might have changed.
+  /// or the socket reconnected and missed whatever was published while it
+  /// was down, so anything might have changed.
   bool get changesListing => const {
     'upload',
     'delete',
@@ -68,6 +69,9 @@ class EventsService {
 
   final _controller = StreamController<FileEvent>.broadcast();
 
+  /// The Quark's events, plus a `resync` of this service's own each time
+  /// [reconnects] fires: events published while the socket was down are
+  /// gone, and a rollout drops every client's socket at once.
   Stream<FileEvent> get events => _controller.stream;
 
   final _connections = StreamController<void>.broadcast();
@@ -223,7 +227,12 @@ class EventsService {
             if (!identical(channel, _channel)) return;
             debugPrint('[EventsService] connected to ${_redact(wsUri)}');
             _connections.add(null);
-            if (_hasConnected) _reconnects.add(null);
+            if (_hasConnected) {
+              _reconnects.add(null);
+              // Most listeners follow [events] alone and already reload on
+              // the Quark's own resync, so a reconnect reaches them as one.
+              _controller.add(const FileEvent(kind: 'resync', path: ''));
+            }
             _hasConnected = true;
           })
           .catchError((Object e) {
