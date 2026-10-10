@@ -101,10 +101,17 @@ abstract final class CalendarLabels {
   }
 
   /// An hour line's label: "9 AM", "12 PM", or "09:00" with [use24Hour].
-  static String hour(int hour, {bool use24Hour = false}) {
-    if (use24Hour) return '${hour.toString().padLeft(2, '0')}:00';
+  /// [compact] is the three characters a phone week's gutter has room for:
+  /// "9a", "12p", or "09".
+  static String hour(int hour, {bool use24Hour = false, bool compact = false}) {
+    if (use24Hour) {
+      final padded = hour.toString().padLeft(2, '0');
+      return compact ? padded : '$padded:00';
+    }
     final h = hour % 12 == 0 ? 12 : hour % 12;
-    return '$h ${hour < 12 ? 'AM' : 'PM'}';
+    return compact
+        ? '$h${hour < 12 ? 'a' : 'p'}'
+        : '$h ${hour < 12 ? 'AM' : 'PM'}';
   }
 
   /// "4:00 – 4:45 PM", naming AM or PM once when both ends share it, and the

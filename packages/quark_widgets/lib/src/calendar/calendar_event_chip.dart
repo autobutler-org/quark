@@ -11,6 +11,11 @@ import 'calendar_labels.dart';
 /// phone size: smaller type, and no time, which a narrow cell has no room for.
 /// The color is `QuarkTokens.eventColors[item.colorIndex]`.
 ///
+/// A chip that takes taps is a 48dp-tall target on a touch platform (see
+/// [wantsTouchTargets]): the bar keeps its height and the space around it
+/// answers too (#2939). A list too tight for that, a month cell, passes no
+/// [onTap] there and takes the tap itself.
+///
 /// Key prefixes: `calendar_event_<item.key>` on the chip, for example
 /// `calendar_event_7_2026-09-29`.
 ///
@@ -51,6 +56,10 @@ class CalendarEventChip extends StatelessWidget {
     final use24Hour = MediaQuery.alwaysUse24HourFormatOf(context);
     final fontSize = dense ? 10.5 : 12.0;
     final radius = BorderRadius.circular(tokens.radiusSm);
+    final barHeight = dense ? denseHeight : height;
+    final margin = onTap != null && wantsTouchTargets(context)
+        ? (kMinInteractiveDimension - barHeight) / 2
+        : 0.0;
     final time = CalendarLabels.time(
       item.start,
       use24Hour: use24Hour,
@@ -65,15 +74,19 @@ class CalendarEventChip extends StatelessWidget {
       // carries its own, or a screen reader cannot press it (#2603).
       onTap: onTap,
       child: Material(
-        color: item.allDay ? color.withValues(alpha: 0.24) : Colors.transparent,
-        borderRadius: radius,
+        type: MaterialType.transparency,
         child: InkWell(
           key: ValueKey('calendar_event_${item.key}'),
           onTap: onTap,
           borderRadius: radius,
-          child: SizedBox(
-            height: dense ? denseHeight : height,
-            child: Padding(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: margin),
+            child: Ink(
+              height: barHeight,
+              decoration: BoxDecoration(
+                color: item.allDay ? color.withValues(alpha: 0.24) : null,
+                borderRadius: radius,
+              ),
               padding: EdgeInsets.symmetric(horizontal: dense ? 3 : 6),
               child: Row(
                 children: [
@@ -125,6 +138,23 @@ class CalendarEventChip extends StatelessWidget {
     );
   }
 }
+
+/// Whether the platform wants 48dp touch targets: the theme's platform is
+/// Android, iOS or Fuchsia, and not a desktop, where a mouse does the pointing.
+///
+/// The calendar's dense parts ask this rather than always growing, so a
+/// desktop month keeps its rows (#2939). It asks the platform and not
+/// `materialTapTargetSize`, which `QuarkTheme` pads on every platform for
+/// stock buttons.
+bool wantsTouchTargets(BuildContext context) =>
+    switch (Theme.of(context).platform) {
+      TargetPlatform.android ||
+      TargetPlatform.iOS ||
+      TargetPlatform.fuchsia => true,
+      TargetPlatform.linux ||
+      TargetPlatform.macOS ||
+      TargetPlatform.windows => false,
+    };
 
 /// The color an event with [colorIndex] is drawn in: one of
 /// `QuarkTokens.eventColors`, or the first for an index the tokens lack.

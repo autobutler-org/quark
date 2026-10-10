@@ -36,6 +36,9 @@ void main() {
     expect(CalendarLabels.hour(12), '12 PM');
     expect(CalendarLabels.hour(0), '12 AM');
     expect(CalendarLabels.hour(7, use24Hour: true), '07:00');
+    expect(CalendarLabels.hour(12, compact: true), '12p');
+    expect(CalendarLabels.hour(9, compact: true), '9a');
+    expect(CalendarLabels.hour(7, use24Hour: true, compact: true), '07');
   });
 
   test('time ranges name AM or PM once when they share it', () {

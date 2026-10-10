@@ -4,6 +4,7 @@ import '../../models/calendar_event_item.dart';
 import '../../theme/quark_tokens.dart';
 import '../calendar_dates.dart';
 import '../calendar_event_chip.dart';
+import '../calendar_labels.dart';
 import '../calendar_month_grid.dart';
 
 /// The all-day row above `CalendarTimeGrid`'s timeline, one cell per date.
@@ -11,7 +12,9 @@ import '../calendar_month_grid.dart';
 /// It keeps its height with nothing in it, so the timeline below never jumps
 /// when an all-day event comes or goes. A single day says so when it has none.
 /// A cell shows up to [maxPerDay] events and a "+N" line for the rest, which
-/// opens that day.
+/// opens that day. On a touch platform (see [wantsTouchTargets]) each chip
+/// and the "+N" line is a 48dp-tall target, so the row is taller there
+/// (#2939).
 ///
 /// Key prefixes: `calendar_all_day_more_<yyyy-mm-dd>` on a cell's overflow
 /// line, and each chip's own `calendar_event_` key.
@@ -22,6 +25,7 @@ class TimeGridAllDayRow extends StatelessWidget {
     required this.events,
     required this.gutterWidth,
     required this.narrow,
+    this.snug = false,
     this.maxPerDay = 2,
     this.onEventTap,
     this.onMoreTap,
@@ -40,6 +44,11 @@ class TimeGridAllDayRow extends StatelessWidget {
   /// Whether the cells are narrow week columns on a phone.
   final bool narrow;
 
+  /// Whether a cell is only just a touch target wide, and the gutter beside
+  /// the row narrow to match: chips take the whole cell, and the label two
+  /// lines.
+  final bool snug;
+
   /// The most events a cell lists before its "+N" line.
   final int maxPerDay;
 
@@ -54,6 +63,7 @@ class TimeGridAllDayRow extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
     final byDay = eventsByDay(events.where((e) => e.allDay));
     final muted = TextStyle(fontSize: 11, color: tokens.secondaryForeground);
+    final touch = wantsTouchTargets(context);
 
     return Container(
       constraints: const BoxConstraints(minHeight: 44),
@@ -68,23 +78,41 @@ class TimeGridAllDayRow extends StatelessWidget {
             SizedBox(
               width: gutterWidth,
               child: Padding(
-                padding: EdgeInsets.only(right: tokens.spacingSm),
+                padding: EdgeInsets.only(
+                  right: snug ? tokens.spacingXs : tokens.spacingSm,
+                ),
                 child: Align(
                   alignment: Alignment.centerRight,
-                  child: Text('All day', maxLines: 1, style: muted),
+                  // Scaled down rather than clipped when large text outgrows
+                  // the gutter.
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      snug ? 'All\nday' : 'All day',
+                      textAlign: TextAlign.right,
+                      semanticsLabel: 'All day',
+                      style: muted,
+                    ),
+                  ),
                 ),
               ),
             ),
             for (final (index, day) in days.indexed)
               Expanded(
                 child: Container(
-                  decoration: BoxDecoration(
+                  // In front, because a background border would inset the
+                  // chips by its width and leave them short of the column.
+                  foregroundDecoration: BoxDecoration(
                     border: index == 0
                         ? const Border()
                         : Border(left: BorderSide(color: tokens.border)),
                   ),
                   padding: EdgeInsets.symmetric(
-                    horizontal: narrow ? 1 : 4,
+                    horizontal: snug
+                        ? 0
+                        : narrow
+                        ? 1
+                        : 4,
                     vertical: 6,
                   ),
                   alignment: Alignment.centerLeft,
@@ -116,22 +144,40 @@ class TimeGridAllDayRow extends StatelessWidget {
                                 : () => onEventTap!(item),
                           ),
                         if (dayEvents.length > maxPerDay)
-                          InkWell(
-                            key: ValueKey(
-                              'calendar_all_day_more_${CalendarDates.key(day)}',
-                            ),
+                          Semantics(
+                            button: onMoreTap != null,
+                            label:
+                                '${dayEvents.length - maxPerDay + 1} more, '
+                                'show ${CalendarLabels.dayTitle(day)}',
+                            excludeSemantics: true,
+                            // Excluding the child's semantics drops its tap
+                            // too, so the node carries its own (#2603).
                             onTap: onMoreTap == null
                                 ? null
                                 : () => onMoreTap!(day),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 1,
+                            child: InkWell(
+                              key: ValueKey(
+                                'calendar_all_day_more_${CalendarDates.key(day)}',
                               ),
-                              child: Text(
-                                '+${dayEvents.length - maxPerDay + 1}',
-                                style: muted.copyWith(
-                                  fontWeight: FontWeight.w500,
+                              onTap: onMoreTap == null
+                                  ? null
+                                  : () => onMoreTap!(day),
+                              child: Container(
+                                constraints: BoxConstraints(
+                                  minHeight: touch
+                                      ? kMinInteractiveDimension
+                                      : 0,
+                                ),
+                                alignment: Alignment.centerLeft,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 1,
+                                ),
+                                child: Text(
+                                  '+${dayEvents.length - maxPerDay + 1}',
+                                  style: muted.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ),

@@ -8,7 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import '../examples/widget_gallery/lib/registry.dart';
 import 'support/pump.dart';
 
-/// Holds every gallery entry to the tap target guidelines (#2603, #2605).
+/// Holds every gallery entry to the tap target guidelines (#2603, #2605,
+/// #2939), the calendar's month, week and day among them.
 ///
 /// The gallery renders every exported widget with fake data, so this one file
 /// reaches widgets whose own test never shows the part that fails — a menu
@@ -17,16 +18,6 @@ import 'support/pump.dart';
 /// variants side by side and is not built for a phone. Each widget's own test
 /// covers the narrow viewport.
 void main() {
-  // These draw their events to the calendar's scale — an 18px chip in a month
-  // cell, a block as tall as its event lasts — so their targets cannot reach
-  // 48dp without redesigning the calendar views, which #2605 leaves open. They
-  // are still held to the label and button tap-action guidelines.
-  const denseCalendars = {
-    'CalendarEventChip',
-    'CalendarMonthGrid',
-    'CalendarTimeGrid',
-  };
-
   for (final entry in registry) {
     testWidgets('${entry.name} meets the tap target guidelines', (
       tester,
@@ -42,10 +33,7 @@ void main() {
           ),
         ),
       );
-      await expectTapTargetGuidelines(
-        tester,
-        checkSize: !denseCalendars.contains(entry.name),
-      );
+      await expectTapTargetGuidelines(tester);
     });
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
 import '../../models/calendar_event_item.dart';
@@ -7,13 +9,14 @@ import '../calendar_dates.dart';
 @immutable
 class TimeGridPlacement {
   /// Places [item] from [startMinute] to [endMinute] of its day, in lane
-  /// [lane] of [lanes] side-by-side lanes.
+  /// [lane] of [lanes] side-by-side lanes, in overlap group [group].
   const TimeGridPlacement({
     required this.item,
     required this.startMinute,
     required this.endMinute,
     required this.lane,
     required this.lanes,
+    required this.group,
   });
 
   /// The occurrence placed.
@@ -30,10 +33,18 @@ class TimeGridPlacement {
 
   /// How many lanes its group of overlapping events splits the column into.
   final int lanes;
+
+  /// Which group of overlapping events it belongs to, counted down the day.
+  /// Every placement in a group has the same [lanes].
+  final int group;
 }
 
-/// The shortest a block is drawn, so a five-minute event is still tappable.
+/// The shortest a block is drawn, so a five-minute event is still tappable
+/// with a mouse. A touch platform asks [layoutDay] for more.
 const int minimumBlockMinutes = 20;
+
+/// The pixels a block gives up to the gaps above and below it.
+const double blockGap = 3;
 
 /// Places the timed events among [events] that fall on [day].
 ///
@@ -43,10 +54,15 @@ const int minimumBlockMinutes = 20;
 /// width: each group of overlapping events is split into as many lanes as it
 /// needs at its busiest, and each event takes the leftmost lane free when it
 /// starts.
+///
+/// No block is drawn shorter than [minimumMinutes]: a shorter event runs on
+/// past its end, or backs up from midnight when the day has no room left, and
+/// overlaps whatever it then reaches.
 List<TimeGridPlacement> layoutDay(
   DateTime day,
-  Iterable<CalendarEventItem> events,
-) {
+  Iterable<CalendarEventItem> events, {
+  int minimumMinutes = minimumBlockMinutes,
+}) {
   final dayStart = CalendarDates.dateOnly(day);
   final dayEnd = CalendarDates.addDays(dayStart, 1);
 
@@ -60,10 +76,8 @@ List<TimeGridPlacement> layoutDay(
     final end = item.end.isBefore(dayEnd)
         ? item.end.hour * 60 + item.end.minute
         : 24 * 60;
-    final drawnEnd = end - start < minimumBlockMinutes
-        ? (start + minimumBlockMinutes).clamp(0, 24 * 60)
-        : end;
-    spans.add((item, start, drawnEnd));
+    final drawnEnd = math.min(math.max(end, start + minimumMinutes), 24 * 60);
+    spans.add((item, math.min(start, drawnEnd - minimumMinutes), drawnEnd));
   }
   spans.sort((a, b) {
     final byStart = a.$2.compareTo(b.$2);
@@ -76,6 +90,7 @@ List<TimeGridPlacement> layoutDay(
   var group = <(CalendarEventItem, int, int, int)>[];
   var laneEnds = <int>[];
   var groupEnd = -1;
+  var groups = 0;
 
   void closeGroup() {
     for (final (item, start, end, lane) in group) {
@@ -86,9 +101,11 @@ List<TimeGridPlacement> layoutDay(
           endMinute: end,
           lane: lane,
           lanes: laneEnds.length,
+          group: groups,
         ),
       );
     }
+    if (group.isNotEmpty) groups++;
     group = [];
     laneEnds = [];
   }

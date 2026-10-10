@@ -23,18 +23,11 @@ void setViewport(WidgetTester tester, Size size) {
 /// held to the same guidelines as `packages/quark_widgets`.
 ///
 /// The size check skips a target touching the edge of the screen or of a
-/// scrollable, so pump the widget inset from both. [checkSize] false skips it
-/// altogether, for a screen holding package views that draw their targets to
-/// a scale of their own (the calendar grids); say why where it is called.
-Future<void> expectTapTargetGuidelines(
-  WidgetTester tester, {
-  bool checkSize = true,
-}) async {
+/// scrollable, so pump the widget inset from both.
+Future<void> expectTapTargetGuidelines(WidgetTester tester) async {
   final handle = tester.ensureSemantics();
   await tester.pump();
-  if (checkSize) {
-    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
-  }
+  await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
   await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
   handle.dispose();
 }

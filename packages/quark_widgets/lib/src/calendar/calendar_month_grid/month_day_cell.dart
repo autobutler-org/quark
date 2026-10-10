@@ -17,6 +17,12 @@ import 'month_day_dots.dart';
 /// It is stateful only for the pointer: hovering shows an add button in the
 /// corner, the desktop stand-in for a long press.
 ///
+/// On a touch platform (see [wantsTouchTargets]) a cell with an [onTap]
+/// takes its chips' taps too: a 22px line is not a target a finger can hit,
+/// so the whole cell is the one target and opens the date, where each event
+/// is (#2939). A mouse still opens an event from its chip, and the hover add
+/// button is a mouse's alone, at a mouse's size.
+///
 /// Key prefixes: `calendar_day_<yyyy-mm-dd>` on the cell,
 /// `calendar_add_<yyyy-mm-dd>` on its add button, `calendar_more_<yyyy-mm-dd>`
 /// on its overflow line, each event chip's own `calendar_event_` key, and a
@@ -75,7 +81,8 @@ class MonthDayCell extends StatefulWidget {
   /// Called on a long press of the cell.
   final VoidCallback? onLongPress;
 
-  /// Called with the event whose chip was tapped.
+  /// Called with the event whose chip was tapped. Not on a touch platform
+  /// when [onTap] is given, where a tap on a chip is a tap on the cell.
   final ValueChanged<CalendarEventItem>? onEventTap;
 
   /// Called from the hover add button. Null hides it.
@@ -97,6 +104,9 @@ class _MonthDayCellState extends State<MonthDayCell> {
     final headerHeight = dense ? 30.0 : 34.0;
     const moreHeight = 18.0;
     final count = widget.events.length;
+    final onEventTap = wantsTouchTargets(context) && widget.onTap != null
+        ? null
+        : widget.onEventTap;
 
     final Color background;
     if (widget.isSelected) {
@@ -257,9 +267,9 @@ class _MonthDayCellState extends State<MonthDayCell> {
                             padding: const EdgeInsets.only(bottom: 2),
                             child: CalendarEventChip(
                               item: item,
-                              onTap: widget.onEventTap == null
+                              onTap: onEventTap == null
                                   ? null
-                                  : () => widget.onEventTap!(item),
+                                  : () => onEventTap(item),
                             ),
                           ),
                         if (shown < count)
