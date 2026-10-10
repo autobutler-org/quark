@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/services/thumbnail_cache_manager.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.dart';
 import 'package:quark/widgets/thumbnails/backfilling_thumbnail.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -34,7 +35,7 @@ class FileGridPreview extends StatelessWidget {
     final url = FilesService.constructThumbnailUrl(
       item.apiPath,
       serial: item.deviceSerial,
-    ).toString();
+    );
     return SizedBox(
       width: double.infinity,
       child: !hasServerThumbnail(item)
@@ -42,26 +43,33 @@ class FileGridPreview extends StatelessWidget {
           : BackfillingThumbnail(
               path: item.apiPath,
               serial: item.deviceSerial,
-              builder: (context, generation, onFailed) => CachedNetworkImage(
-                key: thumbKey,
-                imageUrl: url,
-                cacheKey: '$url#$generation',
-                imageBuilder: (context, imageProvider) => Image(
-                  image: imageProvider,
-                  fit: BoxFit.cover,
-                  excludeFromSemantics: true,
+              // Each generation is a new element: a failed load is not cached,
+              // so the element after a backfill loads afresh under the same
+              // cache key.
+              builder: (context, generation, onFailed) => KeyedSubtree(
+                key: ValueKey(generation),
+                child: CachedNetworkImage(
+                  key: thumbKey,
+                  imageUrl: url.toString(),
+                  cacheKey: ThumbnailCacheManager.keyFor(url),
+                  cacheManager: ThumbnailCacheManager.instance,
+                  imageBuilder: (context, imageProvider) => Image(
+                    image: imageProvider,
+                    fit: BoxFit.cover,
+                    excludeFromSemantics: true,
+                  ),
+                  placeholder: (context, url) => Shimmer.fromColors(
+                    baseColor: Colors.grey[800]!,
+                    highlightColor: Colors.grey[700]!,
+                    child: Container(color: Colors.grey[800]),
+                  ),
+                  // A video or HEIC with no thumbnail yet gets one rendered
+                  // here and uploaded (#2381).
+                  errorWidget: (context, url, error) {
+                    onFailed();
+                    return icon;
+                  },
                 ),
-                placeholder: (context, url) => Shimmer.fromColors(
-                  baseColor: Colors.grey[800]!,
-                  highlightColor: Colors.grey[700]!,
-                  child: Container(color: Colors.grey[800]),
-                ),
-                // A video or HEIC with no thumbnail yet gets one rendered
-                // here and uploaded (#2381).
-                errorWidget: (context, url, error) {
-                  onFailed();
-                  return icon;
-                },
               ),
             ),
     );

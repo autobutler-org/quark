@@ -1,12 +1,18 @@
 import 'dart:typed_data';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:quark/services/demo_photos_service.dart';
+import 'package:quark/services/thumbnail_cache_manager.dart';
+import 'package:quark/utils/thumbnail_cache_config.dart';
 import 'package:quark/widgets/thumbnails/backfilling_thumbnail.dart';
 
 /// The picture inside a photo tile: a Quark photo's thumbnail over the
 /// network, or a device photo's straight off disk through photo_manager.
+/// A Quark photo's thumbnail is kept on disk by [ThumbnailCacheManager], under
+/// a key without the session token, so a cold launch or a new sign-in draws
+/// the grid without downloading it again (#1777).
 /// A [url] with [DemoPhotosService.assetScheme] names a bundled sample photo,
 /// drawn from the asset bundle with no request at all.
 ///
@@ -49,35 +55,38 @@ class PhotoThumbnail extends StatelessWidget {
         excludeFromSemantics: true,
       );
     }
-    final path = this.path;
-    if (url != null && path != null) {
-      return BackfillingThumbnail(
-        path: path,
-        serial: serial,
-        // A failed load is not cached, so a new element loads it afresh.
-        builder: (context, generation, onFailed) => Image.network(
-          url.toString(),
-          key: ValueKey(generation),
+    if (url != null) {
+      // Each generation is a new element: a failed load is not cached, so the
+      // element after a backfill loads afresh under the same cache key.
+      Widget thumbnail(
+        BuildContext context,
+        int generation,
+        VoidCallback onFailed,
+      ) => ExcludeSemantics(
+        key: ValueKey(generation),
+        child: CachedNetworkImage(
+          imageUrl: url.toString(),
+          cacheKey: ThumbnailCacheManager.keyFor(url),
+          cacheManager: ThumbnailCacheManager.instance,
+          memCacheWidth: ThumbnailCacheConfig.memCacheWidth,
           fit: BoxFit.cover,
-          excludeFromSemantics: true,
-          loadingBuilder: (context, child, progress) =>
-              progress == null ? child : placeholder,
-          errorBuilder: (context, error, stack) {
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          placeholder: (context, url) => placeholder,
+          errorWidget: (context, url, error) {
             onFailed();
             return placeholder;
           },
         ),
       );
-    }
-    if (url != null) {
-      return Image.network(
-        url.toString(),
-        fit: BoxFit.cover,
-        excludeFromSemantics: true,
-        loadingBuilder: (context, child, progress) =>
-            progress == null ? child : placeholder,
-        errorBuilder: (context, error, stack) => placeholder,
-      );
+      final path = this.path;
+      return path == null
+          ? thumbnail(context, 0, () {})
+          : BackfillingThumbnail(
+              path: path,
+              serial: serial,
+              builder: thumbnail,
+            );
     }
     return FutureBuilder<Uint8List?>(
       future: asset!.thumbnailDataWithSize(const ThumbnailSize(200, 200)),

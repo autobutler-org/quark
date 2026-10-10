@@ -68,6 +68,9 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   cached_network_image: ^4.0.0
+  # The thumbnail disk cache's own store (#1777); cached_network_image
+  # already pulls it in, declared here so the app may import it.
+  flutter_cache_manager: ^3.4.1
   shimmer: ^4.0.0
   flutter_quill_to_pdf: ^2.3.9
   printing: ^5.15.0
