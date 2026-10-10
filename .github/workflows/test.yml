@@ -8,8 +8,9 @@ on:
   push:
     branches: [main]
   pull_request:
-  # The merge queue runs every job on the pull request combined with main and whatever
-  # is queued ahead of it, so a pull request does not have to be up to date to merge.
+  # The merge queue runs on the pull request combined with main and whatever is queued
+  # ahead of it, so a pull request does not have to be up to date to merge. The `changes`
+  # job below decides which jobs that run needs.
   merge_group:
   workflow_dispatch:
 # Superseded runs of the same pull request are canceled. Pushes to main share one group
@@ -24,8 +25,9 @@ defaults:
   run:
     shell: bash
 jobs:
-  # Works out which areas a pull request touches, from .github/path-filters.yml. See the
-  # same job in build.yml for why jobs skip with `if:` rather than `on: paths:`.
+  # Works out which areas a pull request or a merge-queue entry touches, from
+  # .github/path-filters.yml. See the same job in build.yml for what each is compared
+  # against and why jobs skip with `if:` rather than `on: paths:`.
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -39,13 +41,17 @@ jobs:
         uses: actions/checkout@v7
       - name: Filter paths
         id: filter
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        # A filter that fails leaves the outputs empty, and every job runs. Without this
+        # the jobs would skip behind a failed `changes`, and a skipped required check
+        # counts as passed.
+        continue-on-error: true
         uses: dorny/paths-filter@v4
         with:
           filters: .github/path-filters.yml
   test-backend:
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.backend != 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -68,7 +74,7 @@ jobs:
           make test/integration/backend
   api-chaos:
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.backend != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -94,7 +100,7 @@ jobs:
           if-no-files-found: warn
   power-cut:
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.backend != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -116,7 +122,7 @@ jobs:
           if-no-files-found: warn
   test-frontend-suite:
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.frontend != 'false'
     runs-on: ubuntu-latest
     # A leg takes about six minutes; a stuck `flutter test` would otherwise
     # hold the runner for the six-hour default (#2768).

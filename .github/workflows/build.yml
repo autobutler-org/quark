@@ -8,8 +8,9 @@ on:
   push:
     branches: [main]
   pull_request:
-  # The merge queue runs every job on the pull request combined with main and whatever
-  # is queued ahead of it, so a pull request does not have to be up to date to merge.
+  # The merge queue runs on the pull request combined with main and whatever is queued
+  # ahead of it, so a pull request does not have to be up to date to merge. The `changes`
+  # job below decides which jobs that run needs.
   merge_group:
   workflow_dispatch:
 # Superseded runs of the same pull request are canceled. Pushes to main share one group
@@ -24,12 +25,15 @@ defaults:
   run:
     shell: bash
 jobs:
-  # Works out which areas a pull request touches, from .github/path-filters.yml. Each
-  # job below skips itself with a job-level `if:` rather than the workflow using
-  # `on: paths:`: a job skipped by `if:` reports success, but a workflow skipped by
-  # paths never reports its checks, and a required one like build-ios waits forever.
-  # Pushes to main, the merge queue and manual runs build everything, so the badges
-  # stay accurate and nothing merges on a filtered run alone.
+  # Works out which areas a change touches, from .github/path-filters.yml. For a pull
+  # request that is its own diff. In the merge queue it is the diff between an entry and
+  # the one queued ahead of it, or main for the first: a job whose paths did not move
+  # since then would only repeat the result it had there. Each job below skips itself
+  # with a job-level `if:` rather than the workflow using `on: paths:`: a job skipped by
+  # `if:` reports success, but a workflow skipped by paths never reports its checks, and
+  # a required one like build-ios waits forever. A job runs unless its filter said
+  # 'false', so pushes to main and manual runs, where the filter is skipped and its
+  # outputs are empty, build everything and the badges stay accurate.
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -45,13 +49,17 @@ jobs:
         uses: actions/checkout@v7
       - name: Filter paths
         id: filter
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        # A filter that fails leaves the outputs empty, and every job runs. Without this
+        # the jobs would skip behind a failed `changes`, and a skipped required check
+        # counts as passed.
+        continue-on-error: true
         uses: dorny/paths-filter@v4
         with:
           filters: .github/path-filters.yml
   build-backend:
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.backend != 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -86,7 +94,7 @@ jobs:
           make build/backend
   build-web:
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web != 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -103,7 +111,7 @@ jobs:
           make build/frontend/web
   build-android:
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.android == 'true'
+    if: needs.changes.outputs.android != 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -156,9 +164,9 @@ jobs:
     # dependabot's -- fall back to an unsigned build in the steps below.
     needs: changes
     if: >-
-      github.event_name != 'pull_request'
-      || (needs.changes.outputs.ios == 'true'
-        && github.event.pull_request.head.repo.full_name == github.repository)
+      needs.changes.outputs.ios != 'false'
+      && (github.event_name != 'pull_request'
+        || github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
