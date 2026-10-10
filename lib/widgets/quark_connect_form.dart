@@ -3,6 +3,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/quark_discovery.dart';
+import 'package:quark/widgets/hosts/emulator_loopback_hint.dart';
 import 'package:quark/widgets/nearby_quarks.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/utils/error_text.dart';
@@ -16,6 +17,9 @@ import 'package:quark/utils/error_text.dart';
 /// (#2312); tapping one fills in its address. Typing one stays the fallback,
 /// and a typed local name that does not answer is retried as `.local`, `.lan`
 /// and bare before the form gives up (#2518).
+///
+/// On Android a typed `localhost` gets an [EmulatorLoopbackHint] under the
+/// field (#2070).
 class QuarkConnectForm extends StatefulWidget {
   const QuarkConnectForm({
     super.key,
@@ -148,6 +152,7 @@ class _QuarkConnectFormState extends State<QuarkConnectForm> {
             prefixIcon: const Icon(QuarkIcons.link_rounded),
           ),
         ),
+        EmulatorLoopbackHint(controller: _controller),
         const SizedBox(height: 16),
         FilledButton(
           onPressed: _saving ? null : _connect,
