@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -136,11 +137,42 @@ func inject(deps deputil.Dependencies) gin.HandlerFunc {
 	}
 }
 
+// trackDeviceInterval is how often one device's requests are written to
+// connected_devices. The devices page is the only reader, so last_seen_at
+// may lag by this much.
+const trackDeviceInterval = time.Minute
+
+// trackDeviceMaxPeers caps the peers trackDevice remembers between writes.
+// The key includes the User-Agent, which a client picks freely.
+const trackDeviceMaxPeers = 4096
+
 // trackDevice records the client IP and User-Agent in connected_devices,
-// which deviceutil keeps bounded.
+// which deviceutil keeps bounded, at most once per trackDeviceInterval for
+// each device: a request is not a reason to flush the disk (#2766).
+// request_count therefore counts those writes, not every request.
 // Runs asynchronously so it never blocks the request, under
 // deps.Background() so whoever closes the database can wait for it (#2772).
 func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
+	type peer struct{ ip, ua string }
+	var mu sync.Mutex
+	lastWrite := map[peer]time.Time{}
+	// due reports whether p has gone an interval unrecorded, and marks it
+	// recorded now so the requests arriving beside this one do not write too.
+	due := func(p peer) bool {
+		now := time.Now()
+		mu.Lock()
+		defer mu.Unlock()
+		if last, ok := lastWrite[p]; ok && now.Sub(last) < trackDeviceInterval {
+			return false
+		}
+		// ponytail: forgetting everyone at the cap costs one early write per
+		// device; evict the oldest instead if that ever shows up.
+		if len(lastWrite) >= trackDeviceMaxPeers {
+			clear(lastWrite)
+		}
+		lastWrite[p] = now
+		return true
+	}
 	return func(c *gin.Context) {
 		c.Next()
 		if deps.Database() == nil {
@@ -148,6 +180,9 @@ func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
 		}
 		ip := c.ClientIP()
 		ua := c.Request.UserAgent()
+		if !due(peer{ip, ua}) {
+			return
+		}
 		deps.Background().Go(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()

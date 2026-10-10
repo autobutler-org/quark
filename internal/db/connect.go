@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -24,10 +23,7 @@ func ConnectToDatabase() (*DatabaseSqlc, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %v", err)
 	}
-	database.Queries, err = sharedQueries(database.Db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get database connection: %v", err)
-	}
+	database.Queries = pooledQueries(database.Db)
 
 	if err := initSchema(&database); err != nil {
 		return nil, fmt.Errorf("failed to initialize database schema: %v", err)
@@ -53,54 +49,36 @@ func ConnectToVaultDatabase(dbPath string) (*DatabaseSqlc, error) {
 		return nil, fmt.Errorf("failed to init vault schema: %v", err)
 	}
 
-	database.Queries, err = sharedQueries(database.Db)
-	if err != nil {
-		database.Db.Close()
-		return nil, fmt.Errorf("failed to get vault db connection: %v", err)
-	}
+	database.Queries = pooledQueries(database.Db)
 
 	return &database, nil
 }
 
-// sharedQueries binds Queries to one connection taken out of sqlDB, which every
-// caller then shares.
+// maxOpenConns bounds the pool every sqlc query draws from. Each connection
+// costs a file descriptor and its own page cache, and the device has four
+// cores, so more connections than this only queue inside SQLite instead of
+// inside database/sql.
+const maxOpenConns = 16
+
+// pooledQueries binds Queries to sqlDB's connection pool, bounded to
+// maxOpenConns, so one request's query never waits for another's (#2766).
 //
-// The connection never sees a caller's cancellation (#2743). The driver answers
-// a canceled context with sqlite3_interrupt, and that interrupts the
-// connection, not the one query: every statement running on it fails, and so
-// does every statement prepared on it until none is left running. On a shared
-// connection that turns one client going away into errors for every other
-// request in flight — under load, a burst of 401s, since requireAuth cannot
-// tell a failed session lookup from a bad token. A pooled connection would be
-// checked and discarded after an interrupt; this one is never handed back, so
-// it is never checked. Queries here are short, so a canceled caller just lets
-// its query finish.
-func sharedQueries(sqlDB *sql.DB) (*Queries, error) {
-	sqlConn, err := sqlDB.Conn(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	return New(detachedConn{sqlConn}), nil
-}
-
-// detachedConn runs every call on conn with the caller's context stripped of
-// its cancellation and deadline, keeping its values.
-type detachedConn struct{ conn *sql.Conn }
-
-func (u detachedConn) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	return u.conn.ExecContext(context.WithoutCancel(ctx), query, args...)
-}
-
-func (u detachedConn) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
-	return u.conn.PrepareContext(context.WithoutCancel(ctx), query)
-}
-
-func (u detachedConn) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	return u.conn.QueryContext(context.WithoutCancel(ctx), query, args...)
-}
-
-func (u detachedConn) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	return u.conn.QueryRowContext(context.WithoutCancel(ctx), query, args...)
+// A caller's cancellation reaches its query. The driver answers a canceled
+// context with sqlite3_interrupt, which interrupts the connection rather than
+// the one query (#2743); a pooled connection belongs to one caller until its
+// statement or rows are done, so the interrupt fails nobody else, and a
+// request whose client went away stops costing anything.
+//
+// The bound covers everything else that uses sqlDB too. A caller that holds
+// one connection and asks for a second (a query run while iterating another's
+// rows, or outside a transaction from inside it) waits for a free one, so
+// keep such nesting off hot paths.
+func pooledQueries(sqlDB *sql.DB) *Queries {
+	sqlDB.SetMaxOpenConns(maxOpenConns)
+	// Idle connections are kept, not closed: the default of two would reopen a
+	// connection, and rerun its pragmas, on most requests under load.
+	sqlDB.SetMaxIdleConns(maxOpenConns)
+	return New(sqlDB)
 }
 
 func ConnectToHealthDatabase() (*DatabaseRaw, error) {

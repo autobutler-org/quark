@@ -88,6 +88,32 @@ func TestTrackDevice_BackgroundAwaitsTheRecord(t *testing.T) {
 	}
 }
 
+// TestTrackDevice_CoalescesWritesPerDevice shows a device's requests inside one
+// interval cost one connected_devices write, not one each (#2766), and that
+// another device still gets its own row.
+func TestTrackDevice_CoalescesWritesPerDevice(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: queries})
+	engine := newMiddlewareEngine(t, deps)
+
+	for _, ua := range []string{"coalesce-a", "coalesce-a", "coalesce-a", "coalesce-b"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v0/auth/status", nil)
+		req.Header.Set("User-Agent", ua)
+		doMiddlewareReq(engine, req)
+	}
+	deps.Background().Wait()
+
+	for ua, want := range map[string]int{"coalesce-a": 1, "coalesce-b": 1} {
+		var writes int
+		if err := sqlDB.QueryRow(`SELECT request_count FROM connected_devices WHERE user_agent = ?`, ua).Scan(&writes); err != nil {
+			t.Fatalf("%s: %v", ua, err)
+		}
+		if writes != want {
+			t.Errorf("%s: connected_devices writes = %d, want %d", ua, writes, want)
+		}
+	}
+}
+
 // TestRequireAuth_NoDatabaseReturns503 verifies that when no database is
 // configured, API routes return 503 (fail closed).
 func TestRequireAuth_NoDatabaseReturns503(t *testing.T) {
