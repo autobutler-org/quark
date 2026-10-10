@@ -35,6 +35,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
 	"github.com/autobutler-org/quark/pkg/util/remoteutil"
+	"github.com/autobutler-org/quark/pkg/util/resetutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -487,6 +488,20 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 	systemCollector, err := healthutil.Register()
 	if err != nil {
 		return fmt.Errorf("failed to initialize system collector: %w", err)
+	}
+
+	// Before anything is built on the install: a factory reset, served by this
+	// instance or by another on the same database, restarts this process, so
+	// no vault key, cache, index or cached "setup is done" outlives the
+	// install it was built for (#3085).
+	if _, err := resetutil.Watch(context.Background(), resetutil.WatchParams{
+		Queries: deps.Database().Queries,
+		OnReset: func() {
+			log.Println("[server] this install was factory reset; restarting")
+			updateutil.ExitForRestart()
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to watch for a factory reset: %w", err)
 	}
 
 	deps.WithWorker(workerutil.NewWorker())

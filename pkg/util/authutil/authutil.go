@@ -1619,6 +1619,13 @@ type DeleteAccountResult struct {
 // the reset drops the users table wholesale a few steps later. The row is still
 // deleted first so that a failure in between cannot leave the account standing.
 //
+// Every factory-reset aspect ends with a new install id, issued by the
+// database reset or rotated here, and every instance serving the install
+// restarts when it sees one (resetutil.Watch), the one that served this call
+// included. Nothing held in memory for the old install outlives that: the
+// vault key, the caches, the file index, the cached "setup is done" (#3085).
+// Deleting one account is not a reset and restarts nothing.
+//
 // Every step is idempotent: removing a directory that is already gone,
 // re-migrating an already-empty database, and dropping objects from an already
 // empty one all succeed.
@@ -1690,6 +1697,14 @@ func DeleteAccount(ctx context.Context, params DeleteAccountParams) (DeleteAccou
 			return result, fmt.Errorf("failed to reset database: %w", err)
 		}
 		result.DatabaseDeleted = true
+	} else if result.FilesDeleted || result.DevicesDeleted {
+		// The database reset issues a new install id itself. A reset that
+		// leaves the database standing has to rotate it, or the other
+		// instances keep their file index, caches and vault key for trees
+		// that are gone (#3085).
+		if err := params.Queries.RotateInstallID(ctx); err != nil {
+			return result, fmt.Errorf("failed to issue a new install id: %w", err)
+		}
 	}
 
 	// Recorded because it is the security-relevant outcome, not merely a summary
