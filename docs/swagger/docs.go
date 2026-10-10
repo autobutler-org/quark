@@ -12654,6 +12654,10 @@ const docTemplate = `{
                 "remoteUrl": {
                     "description": "RemoteURL is set only when Connected.",
                     "type": "string"
+                },
+                "tailscaleHostname": {
+                    "description": "TailscaleHostname is the node's fully-qualified *.ts.net DNS name when\nTailscale is connected and the Quark is reachable via a Let's Encrypt\ncertificate. Empty when not connected.",
+                    "type": "string"
                 }
             }
         },
