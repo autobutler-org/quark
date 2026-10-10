@@ -16,6 +16,9 @@ type ConnectedDeviceJSON struct {
 	FirstSeenAt  time.Time `json:"firstSeenAt"`
 	LastSeenAt   time.Time `json:"lastSeenAt"`
 	RequestCount int64     `json:"requestCount"`
+	// Current is true for the row whose IP address and User-Agent match the
+	// request that asked for the list.
+	Current bool `json:"current"`
 }
 
 func NewRouter() serverutil.Router {

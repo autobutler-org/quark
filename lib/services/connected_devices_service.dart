@@ -4,7 +4,10 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
+/// A client that has talked to this Quark, one per IP address and
+/// User-Agent, as `/api/v0/devices` lists it.
 class ConnectedDevice {
+  /// Creates a device record.
   const ConnectedDevice({
     required this.id,
     required this.ipAddress,
@@ -12,6 +15,7 @@ class ConnectedDevice {
     required this.firstSeenAt,
     required this.lastSeenAt,
     required this.requestCount,
+    this.current = false,
   });
 
   factory ConnectedDevice.fromJson(Map<String, dynamic> json) {
@@ -22,6 +26,8 @@ class ConnectedDevice {
       firstSeenAt: DateTime.parse(json['firstSeenAt'] as String),
       lastSeenAt: DateTime.parse(json['lastSeenAt'] as String),
       requestCount: json['requestCount'] as int,
+      // Absent from a Quark older than #2051.
+      current: json['current'] as bool? ?? false,
     );
   }
 
@@ -31,6 +37,9 @@ class ConnectedDevice {
   final DateTime firstSeenAt;
   final DateTime lastSeenAt;
   final int requestCount;
+
+  /// Whether this is the client that asked for the list.
+  final bool current;
 }
 
 /// Calls `/api/v0/devices`: the clients that have connected to this Quark, and removing one.

@@ -167,3 +167,46 @@ func TestListDevices_RequestCountIncrementsOnUpsert(t *testing.T) {
 		t.Errorf("RequestCount = %d; want >= 3", devices[0].RequestCount)
 	}
 }
+
+// TestListDevices_MarksCallersRowCurrent verifies GET /devices sets current
+// on the row whose IP address and User-Agent match the request, and on no
+// other: the same browser seen from another address is a different row.
+func TestListDevices_MarksCallersRowCurrent(t *testing.T) {
+	sqlDB, queries := newDevicesTestDB(t)
+	engine := newDevicesEngine(t, sqlDB, queries)
+	ctx := context.Background()
+
+	const userAgent = "Mozilla/5.0 (this browser)"
+	req := httptest.NewRequest(http.MethodGet, "/api/v0/devices", nil)
+	req.Header.Set("User-Agent", userAgent)
+	// httptest.NewRequest's RemoteAddr, which is what gin's ClientIP reports
+	// when no proxy header is set.
+	const callerIP = "192.0.2.1"
+
+	for _, ip := range []string{callerIP, "192.0.2.99"} {
+		if _, err := queries.UpsertConnectedDevice(ctx, db.UpsertConnectedDeviceParams{
+			IpAddress: ip,
+			UserAgent: userAgent,
+		}); err != nil {
+			t.Fatalf("UpsertConnectedDevice(%s): %v", ip, err)
+		}
+	}
+
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /devices returned %d: %s", w.Code, w.Body.String())
+	}
+	var devices []v0_devices.ConnectedDeviceJSON
+	if err := json.Unmarshal(w.Body.Bytes(), &devices); err != nil {
+		t.Fatalf("decode: %v; body: %s", err, w.Body.String())
+	}
+	if len(devices) != 2 {
+		t.Fatalf("expected 2 devices, got %d; body: %s", len(devices), w.Body.String())
+	}
+	for _, d := range devices {
+		if want := d.IPAddress == callerIP; d.Current != want {
+			t.Errorf("device %s: Current = %v; want %v", d.IPAddress, d.Current, want)
+		}
+	}
+}

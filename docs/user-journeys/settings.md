@@ -258,23 +258,26 @@ nobody needs to type or paste it.
 
 **Expected result:**
 
-- List of connected devices is shown with: request count, last-seen timestamp.
+- Each device is named for what it is ("Chrome on macOS", "Safari on iPhone", "Quark app") with when it was last
+  active. No IP address, User-Agent string or request count is shown.
+- The device showing the list is named "This browser", or "This device" in the app.
 
 ---
 
-### JN-ST-015: Revoke a connected device
+### JN-ST-015: Remove a connected device from the list
 
-**Preconditions:** User is signed in as an admin. At least one connected device is listed (JN-ST-014).
+**Preconditions:** User is signed in as an admin. A device other than the one in use is listed (JN-ST-014).
 
 **Steps:**
 
-1. Tap **Delete** / revoke on a device.
+1. Tap **Remove from this list** on a device. The device in use has no such button.
 2. Confirm.
 
 **Expected result:**
 
 - Device is removed from the list.
-- That device must re-authenticate to access the quark.
+- It is not signed out, and it is listed again the next time it talks to the quark. Signing a device out is
+  JN-ST-029.
 
 ---
 

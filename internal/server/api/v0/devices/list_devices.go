@@ -9,7 +9,7 @@ import (
 
 // listDevices godoc
 // @Summary List connected devices
-// @Description Returns the unique client IP + User-Agent combinations that have connected to the quark, most recently seen first. The list is bounded: the least recently seen are dropped past a cap and after a month unseen.
+// @Description Returns the unique client IP + User-Agent combinations that have connected to the quark, most recently seen first, with current set on the one that matches this request. The list is bounded: the least recently seen are dropped past a cap and after a month unseen.
 // @Tags devices
 // @Produce json
 // @Success 200 {array} ConnectedDeviceJSON
@@ -25,6 +25,8 @@ func listDevices(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
+	// The same two values trackDevice keys the row on.
+	ip, userAgent := c.ClientIP(), c.Request.UserAgent()
 	result := make([]ConnectedDeviceJSON, len(rows))
 	for i, d := range rows {
 		result[i] = ConnectedDeviceJSON{
@@ -34,6 +36,7 @@ func listDevices(c *gin.Context) *serverutil.Response {
 			FirstSeenAt:  d.FirstSeenAt,
 			LastSeenAt:   d.LastSeenAt,
 			RequestCount: d.RequestCount,
+			Current:      d.IpAddress == ip && d.UserAgent == userAgent,
 		}
 	}
 	return serverutil.Ok().WithData(result)
