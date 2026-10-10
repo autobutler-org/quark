@@ -1,8 +1,8 @@
 # What each job in build.yml, test.yml and performance.yml reads, for
-# dorny/paths-filter. On a pull request a job runs only when its set matched; the merge
-# queue and pushes to main run everything. A path missing here means a pull request
-# that breaks that job stays green until it fails in the merge queue, so when a job
-# starts reading something new, add it.
+# dorny/paths-filter. On a pull request and in the merge queue a job runs only when its
+# set matched; pushes to main run everything. A path missing here means a pull request
+# that breaks that job merges green and fails on main afterwards, so when a job starts
+# reading something new, add it.
 ci: &ci
   - Makefile
   - .github/path-filters.yml
