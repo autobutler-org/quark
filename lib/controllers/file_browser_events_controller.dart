@@ -11,17 +11,16 @@ import 'package:quark/utils/file_event_scope.dart';
 /// folder on screen, and counted events are debounced: the refresh runs once
 /// [quiet] has passed with no more of them, or [maxWait] after the first, so
 /// a 500-file upload into the folder costs one refresh rather than 500, and
-/// one into some other folder costs none. A resync or a reconnect means
-/// events were lost, so it refreshes at once and takes any pending refresh
-/// with it. Nothing refreshes while [isBusy] says the page's own upload is
-/// running: that refreshes once when it drains.
+/// one into some other folder costs none. A resync, which the events service
+/// also sends on a reconnect, means events were lost, so it refreshes at once
+/// and takes any pending refresh with it. Nothing refreshes while [isBusy]
+/// says the page's own upload is running: that refreshes once when it drains.
 class FileBrowserEventsController {
   FileBrowserEventsController({
     required String Function() currentFolder,
     required bool Function() isBusy,
     required void Function() onRefresh,
     Stream<FileEvent>? events,
-    Stream<void>? reconnects,
     this.quiet = EventsConfig.refreshQuiet,
     this.maxWait = EventsConfig.refreshMaxWait,
     DateTime Function()? now,
@@ -32,9 +31,6 @@ class FileBrowserEventsController {
        _now = now ?? DateTime.now,
        _timer = timer ?? Timer.new {
     _eventSub = (events ?? EventsService.instance.events).listen(_onEvent);
-    _reconnectSub = (reconnects ?? EventsService.instance.reconnects).listen(
-      (_) => _refreshNow(),
-    );
   }
 
   /// How long after the last counted event the refresh waits.
@@ -50,7 +46,6 @@ class FileBrowserEventsController {
   final Timer Function(Duration, void Function()) _timer;
 
   late final StreamSubscription<FileEvent> _eventSub;
-  late final StreamSubscription<void> _reconnectSub;
   Timer? _pending;
 
   /// When the first event the pending refresh is waiting on arrived.
@@ -80,6 +75,5 @@ class FileBrowserEventsController {
   void dispose() {
     _pending?.cancel();
     _eventSub.cancel();
-    _reconnectSub.cancel();
   }
 }

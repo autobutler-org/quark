@@ -41,7 +41,12 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The Photos page: the photo library as a grid, filtered by album and by a
 /// search for a file name, with upload.
 class PhotosPage extends StatefulWidget {
-  const PhotosPage({this.album, super.key});
+  const PhotosPage({this.album, this.controller, super.key});
+
+  /// A controller to show instead of the page's own, so a test can count the
+  /// refreshes it asks for. The page disposes it either way.
+  @visibleForTesting
+  final PhotosController? controller;
 
   /// The `?album=` query naming the album the grid shows — a name path or an
   /// id, see `resolveAlbumLink` — or null for All photos. Albums open in
@@ -59,9 +64,9 @@ class PhotosPageState extends State<PhotosPage>
   /// page on the way back.
   final bool _demo = AppSettings.instance.demoMode.value;
 
-  late final PhotosController _controller = _demo
-      ? PhotosController.demo()
-      : PhotosController();
+  late final PhotosController _controller =
+      widget.controller ??
+      (_demo ? PhotosController.demo() : PhotosController());
 
   // Above-viewport nav: the hidden nav panel is measured once on first layout,
   // then the scroll controller's initial offset is set so the photo grid is
@@ -87,7 +92,6 @@ class PhotosPageState extends State<PhotosPage>
 
   ScrollController _scrollController = ScrollController();
   StreamSubscription<FileEvent>? _eventSub;
-  StreamSubscription<void>? _reconnectSub;
 
   @override
   void initState() {
@@ -95,14 +99,11 @@ class PhotosPageState extends State<PhotosPage>
     EventsService.instance.start();
     // A photo deleted, moved or uploaded anywhere, the duplicates view
     // underneath this page included, or a sharing change. This page's own
-    // upload reloads once it finishes.
+    // upload reloads once it finishes. A reconnect arrives here as a resync,
+    // so it needs no listener of its own.
     _eventSub = EventsService.instance.events.listen((evt) {
       if (evt.changesListing && !_controller.isUploading) manualRefresh();
     });
-    // Whatever changed while the socket was down sent no event we saw.
-    _reconnectSub = EventsService.instance.reconnects.listen(
-      (_) => manualRefresh(),
-    );
     _scrollController.addListener(_onScroll);
     _scheduleNavMeasure();
     _controller.addListener(_scheduleAlbumUrlSync);
@@ -219,7 +220,6 @@ class PhotosPageState extends State<PhotosPage>
   @override
   void dispose() {
     _eventSub?.cancel();
-    _reconnectSub?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _controller.removeListener(_scheduleAlbumUrlSync);
