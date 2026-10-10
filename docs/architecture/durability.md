@@ -20,6 +20,12 @@ flushes the database before it deletes the journal, so a committed transaction s
 uncommitted one is rolled back when the database is next opened. Nothing in Quark changes those settings; do not
 switch to WAL or lower `synchronous` without revisiting this page.
 
+Queries run on a pool of connections to that one file (`db.pooledQueries`, #2766), each opened with the same
+`db.DSN`. The pool changes who waits for whom, not what a commit means: readers run side by side, a writer still
+commits alone, and a connection that finds the database locked retries for `busy_timeout` before it gives up.
+The journal mode stayed as it was on purpose. WAL was measured and bought no throughput once requests stopped
+writing, and it would put a `-wal` file beside every database, the vault on a removable drive included.
+
 | Write                                  | Commit point                                                       |
 | -------------------------------------- | ------------------------------------------------------------------ |
 | Vault setup                            | one `INSERT` of the config row (salt, verification blob)           |
