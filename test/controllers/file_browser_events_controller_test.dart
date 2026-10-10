@@ -8,7 +8,6 @@ import 'package:quark/services/events_service.dart';
 /// refresh per file of an upload.
 void main() {
   late StreamController<FileEvent> events;
-  late StreamController<void> reconnects;
   late FakeClock clock;
   late int refreshes;
   late String folder;
@@ -17,14 +16,12 @@ void main() {
 
   setUp(() {
     events = StreamController<FileEvent>.broadcast();
-    reconnects = StreamController<void>.broadcast();
     clock = FakeClock();
     refreshes = 0;
     folder = '/groups/family';
     busy = false;
     controller = FileBrowserEventsController(
       events: events.stream,
-      reconnects: reconnects.stream,
       currentFolder: () => folder,
       isBusy: () => busy,
       onRefresh: () => refreshes++,
@@ -38,7 +35,6 @@ void main() {
   tearDown(() {
     controller.dispose();
     events.close();
-    reconnects.close();
   });
 
   FileEvent upload(String path) => FileEvent(kind: 'upload', path: path);
@@ -92,24 +88,22 @@ void main() {
     expect(refreshes, 1);
   });
 
-  test(
-    'a reconnect refreshes at once and takes a pending one with it',
-    () async {
-      events.add(upload('groups/family'));
-      await pumpEventQueue();
-      reconnects.add(null);
-      await pumpEventQueue();
-      expect(refreshes, 1);
+  test('a resync refreshes at once and takes a pending one with it', () async {
+    events.add(upload('groups/family'));
+    await pumpEventQueue();
+    events.add(const FileEvent(kind: 'resync', path: ''));
+    await pumpEventQueue();
+    expect(refreshes, 1);
 
-      clock.elapse(const Duration(seconds: 30));
-      expect(refreshes, 1);
-    },
-  );
+    clock.elapse(const Duration(seconds: 30));
+    expect(refreshes, 1);
+  });
 
   test('nothing refreshes while the page is busy uploading', () async {
     busy = true;
-    events.add(upload('groups/family'));
-    reconnects.add(null);
+    events
+      ..add(upload('groups/family'))
+      ..add(const FileEvent(kind: 'resync', path: ''));
     await pumpEventQueue();
     clock.elapse(const Duration(seconds: 30));
     expect(refreshes, 0);
@@ -120,7 +114,7 @@ void main() {
     await pumpEventQueue();
     controller.dispose();
     clock.elapse(const Duration(seconds: 30));
-    reconnects.add(null);
+    events.add(const FileEvent(kind: 'resync', path: ''));
     await pumpEventQueue();
     expect(refreshes, 0);
   });
