@@ -733,6 +733,55 @@ class AppSettings {
     }
   }
 
+  /// Moves every saved Quark at [from] to the address [to], along with what
+  /// is kept for it: its session, username, accepted terms, welcome and
+  /// cached theme color. A renamed Quark stops answering to its old `.local`
+  /// name, and the app follows it (#2344).
+  ///
+  /// [updateHost] would not do: it publishes the new address before anything
+  /// is stored under it, so [sessionTokenNotifier] reads null for a moment
+  /// and the router sends the user to sign in. Here every store is re-keyed
+  /// before the one publish at the end.
+  Future<void> moveHost(String from, String to) async {
+    final oldKey = _hostKey(from);
+    final address = normalizeHostAddress(to);
+    final newKey = _hostKey(address);
+    final moving = [
+      for (var i = 0; i < _hosts.length; i++)
+        if (_hostKey(_hosts[i].hostAddress) == oldKey) i,
+    ];
+    if (oldKey == newKey || moving.isEmpty) return;
+    for (final i in moving) {
+      _hosts[i] = HostEntry(
+        name: _hosts[i].name,
+        hostAddress: address,
+        remoteAddress: _hosts[i].remoteAddress,
+      );
+    }
+    // Re-keyed with no await in between, so nothing reads a half-moved host.
+    final token = _sessionTokens.remove(oldKey);
+    if (token != null) _sessionTokens[newKey] = token;
+    final username = _usernames.remove(oldKey);
+    if (username != null) _usernames[newKey] = username;
+    final themeColor = _themeColors.remove(oldKey);
+    if (themeColor != null) _themeColors[newKey] = themeColor;
+    final acceptedTerms = _acceptedTermsHosts.remove(oldKey);
+    if (acceptedTerms) _acceptedTermsHosts.add(newKey);
+    final ownerWelcome = _ownerWelcomeHosts.remove(oldKey);
+    if (ownerWelcome) _ownerWelcomeHosts.add(newKey);
+    if (_signInGreetingHost == oldKey) _signInGreetingHost = newKey;
+
+    // As in [removeHost], storage is touched only for what was there.
+    if (token != null) await _persistSessionTokens();
+    if (username != null) {
+      await _prefs?.setString(_usernamesKey, jsonEncode(_usernames));
+    }
+    if (themeColor != null) await _persistThemeColors();
+    if (acceptedTerms) await _persistAcceptedTermsHosts();
+    if (ownerWelcome) await _persistOwnerWelcomeHosts();
+    await _saveHosts();
+  }
+
   /// Ensures the host address has a scheme, defaulting bare hostnames to
   /// `https://`. See [normalizeHostAddress].
   HostEntry _normalizeHost(HostEntry h) {

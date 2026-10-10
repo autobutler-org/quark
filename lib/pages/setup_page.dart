@@ -7,6 +7,7 @@ import 'package:quark/services/auth_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/login/host_switcher.dart';
+import 'package:quark/widgets/settings/hostname_section.dart';
 import 'package:quark/widgets/setup/recovery_phrase_step.dart';
 import 'package:quark/widgets/setup/setup_form.dart';
 import 'package:quark/widgets/setup/theme_step.dart';
@@ -21,7 +22,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Three steps:
 ///  1. Create account (username + password)
 ///  2. Acknowledge recovery phrase
-///  3. Choose app theme (persisted immediately — live preview)
+///  3. Choose app theme (persisted immediately — live preview), and name
+///     the Quark when it can be renamed (#2344). The name comes last because
+///     only the owner, who exists from step 2 on, may read or change it.
 ///
 /// A [QuarkStepIndicator] above each one says which it is and how many there
 /// are (#2026).
@@ -196,7 +199,10 @@ class _SetupPageState extends State<SetupPage> {
                     ),
                     const SizedBox(height: 24),
                     switch (_stepIndex) {
-                      2 => ThemeStep(onContinue: widget.onSetupComplete),
+                      2 => ThemeStep(
+                        onContinue: widget.onSetupComplete,
+                        footer: const HostnameSection(title: 'Name this Quark'),
+                      ),
                       1 => RecoveryPhraseStep(
                         phrase: _recoveryPhrase!,
                         acknowledged: _phraseAcknowledged,

@@ -383,6 +383,11 @@ abstract final class Errors {
       'Use up to 32 lowercase letters, numbers, dots, dashes or underscores, '
       'starting with a letter or number.';
 
+  /// A device name the Quark can't take. It refuses one with a 400 (#2344).
+  static const String invalidHostname =
+      'Use 1 to 63 lowercase letters, numbers or hyphens, with at least one '
+      'letter and no hyphen at the start or end.';
+
   /// Adding an account to a group, which the Quark refuses with a 404 when
   /// the account can't sign in: waiting for approval, turned off, or gone.
   static const String cannotJoinGroup =

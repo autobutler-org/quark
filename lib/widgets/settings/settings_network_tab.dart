@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/settings/hostname_section.dart';
 import 'package:quark/widgets/settings/ssh_access_section.dart';
 
 /// The Network tab of Settings (#2350): remote access, the connected
-/// devices, and, for an admin, SSH access.
+/// devices, and, for an admin, the device name (#2344) and SSH access.
 ///
 /// The page loads the data and builds [remoteAccess] and [connectedDevices];
 /// this tab lays them out and says what is missing while no Quark is set.
@@ -20,8 +21,8 @@ class SettingsNetworkTab extends StatelessWidget {
   /// Whether a Quark address is set. Without one there is nothing to read.
   final bool hasHost;
 
-  /// Whether the Quark says this user is an admin; SSH access is theirs
-  /// only (#2131).
+  /// Whether the Quark says this user is an admin; the device name (#2344)
+  /// and SSH access (#2131) are theirs only.
   final bool isAdmin;
 
   /// The remote access card, shown while a Quark is set.
@@ -56,9 +57,13 @@ class SettingsNetworkTab extends StatelessWidget {
             'Not connected — add your Quark address under Backend hosts, '
             'on the General tab',
           ),
-        // Admin-only: a shell login on the device (#2131).
+        // Admin-only: what the device is called on the network (#2344), and
+        // a shell login on it (#2131).
         if (hasHost && isAdmin) ...[
           const SizedBox(height: 24),
+          // Brings its own heading and the gap under it, and takes no space
+          // on a Quark that can't be renamed.
+          const HostnameSection(),
           const Text('SSH access', style: heading),
           const SizedBox(height: 8),
           const SshAccessSection(),
