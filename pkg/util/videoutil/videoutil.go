@@ -2,17 +2,18 @@
 // pure Go: none of the three decodes a frame, so they work for every codec and
 // need nothing installed on the device.
 //
-// ExtractFrame is the exception. It still runs ffmpeg for video thumbnails, so
-// callers check [Available] before it, until thumbnails move off the device
-// (#2382).
+// Keyframe is the one that decodes, for video thumbnails, and it is pure Go
+// too. sprocket carries a decoder for AV1 and VP8 only, so every other codec
+// answers ErrNoDecoder and is left for a client to render.
 package videoutil
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/autobutler-org/sprocket/pkg/sprocket"
@@ -41,6 +42,11 @@ type Format string
 // ErrCannotTrim is returned by Trim for a source it cannot cut on the device:
 // an MPEG-TS file, or a fragmented MP4.
 var ErrCannotTrim = errors.New("this video's container can't be trimmed")
+
+// ErrNoDecoder is returned by Keyframe for a video whose codec the device has
+// no decoder for, which is every one but AV1 and VP8, and for a frame over the
+// decoder's size cap. The file is fine; the device just cannot picture it.
+var ErrNoDecoder = errors.New("this video's codec can't be decoded on the device")
 
 // Formats returns every Format Remux writes, in the order clients list them.
 func Formats() []Format {
@@ -175,30 +181,41 @@ func Remux(ctx context.Context, params RemuxParams) error {
 	})
 }
 
-// Available reports whether ffmpeg, which ExtractFrame runs, is on PATH.
-func Available() bool {
-	_, err := exec.LookPath("ffmpeg")
-	return err == nil
+// KeyframeParams describes one Keyframe.
+type KeyframeParams struct {
+	// Source is the video to read.
+	Source string
+	// At is the time the keyframe is taken nearest to.
+	At time.Duration
 }
 
-// ExtractFrame writes a single JPEG frame at timestamp to outPath.
-// outPath should not already exist; use storageutil.GetNonConflictingPath beforehand.
-func ExtractFrame(ctx context.Context, filePath string, timestamp time.Duration, outPath string) error {
-	ffmpegPath, err := exec.LookPath("ffmpeg")
+// KeyframeResult is what a Keyframe decoded.
+type KeyframeResult struct {
+	// Image is the keyframe at its own size, the way up a player shows it:
+	// the rotation an MP4 track carries is already applied.
+	Image image.Image
+}
+
+// Keyframe decodes the keyframe of Source nearest At, without running
+// anything outside the process. It reads that one sample rather than the
+// file, and holds one decoded frame. A time past the end takes the last
+// keyframe. A codec with no decoder returns ErrNoDecoder.
+func Keyframe(params KeyframeParams) (KeyframeResult, error) {
+	src, err := os.Open(params.Source)
 	if err != nil {
-		return fmt.Errorf("ffmpeg not found: %w", err)
+		return KeyframeResult{}, err
 	}
-	ts := formatTimestamp(timestamp)
-	cmd := exec.CommandContext(ctx, ffmpegPath,
-		"-ss", ts,
-		"-i", filePath,
-		"-frames:v", "1",
-		"-q:v", "2",
-		"-y",
-		outPath,
-	)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("ffmpeg extract frame: %w\n%s", err, out)
+	defer src.Close()
+	stat, err := src.Stat()
+	if err != nil {
+		return KeyframeResult{}, err
 	}
-	return nil
+	frame, err := sprocket.Thumbnail(src, stat.Size(), params.At, sprocket.ThumbnailOptions{})
+	if errors.Is(err, sprocket.ErrUnsupportedCodec) {
+		return KeyframeResult{}, fmt.Errorf("%w: %w", ErrNoDecoder, err)
+	}
+	if err != nil {
+		return KeyframeResult{}, fmt.Errorf("keyframe of %s: %w", filepath.Base(params.Source), err)
+	}
+	return KeyframeResult{Image: frame.Image}, nil
 }

@@ -316,3 +316,30 @@ func TestGetThumbnail_DeviceFile(t *testing.T) {
 		}
 	}
 }
+
+// TestGetThumbnail_VideoKeyframe: the device renders an AV1 or VP8 video's
+// thumbnail itself, with no ffmpeg to run, and still asks a client to render
+// a codec it has no decoder for (#2865).
+func TestGetThumbnail_VideoKeyframe(t *testing.T) {
+	// Nothing on PATH, so no external process can have rendered it.
+	t.Setenv("PATH", t.TempDir())
+	engine, dir, _ := newThumbnailEngine(t, false)
+	for _, name := range []string{"av1-opus.webm", "vp8-vorbis.webm", "h264-gop12.mp4", "hevc-aac-copy.mkv"} {
+		clip, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "pkg", "util", "videoutil", "testdata", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), clip, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, name := range []string{"av1-opus.webm", "vp8-vorbis.webm"} {
+		expectJPEG(t, get(engine, "/api/v0/thumbnails/"+name+"?size=sm"), 96, 96)
+	}
+	for _, name := range []string{"h264-gop12.mp4", "hevc-aac-copy.mkv"} {
+		if !clientRender(t, get(engine, "/api/v0/thumbnails/"+name+"?size=sm")) {
+			t.Errorf("%s: want clientRender on the 404", name)
+		}
+	}
+}

@@ -17,8 +17,66 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
+	"github.com/autobutler-org/quark/pkg/util/videoutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
+
+// videoFixtures is the namespace of videoutil's tiny synthetic clips, 128x72.
+func videoFixtures(t *testing.T) vfs.VFS {
+	t.Helper()
+	fsys, err := vfs.NewLocalVFS(filepath.Join("..", "videoutil", "testdata"), vfs.FilesNamespace(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fsys
+}
+
+// TestGenerateRendersAV1AndVP8Video: a video thumbnail used to need ffmpeg
+// whatever the codec. These two the device decodes itself (#2865).
+func TestGenerateRendersAV1AndVP8Video(t *testing.T) {
+	// Nothing on PATH, so no external process can have rendered it.
+	t.Setenv("PATH", t.TempDir())
+	for _, name := range []string{"av1-opus.webm", "vp8-vorbis.webm"} {
+		cachedPath := filepath.Join(t.TempDir(), "entry")
+		if _, err := Generate(GenerateParams{
+			Ctx: context.Background(), FS: videoFixtures(t), RelPath: name, Ext: ".webm", IsVideo: true,
+			Width: 96, Height: 96, CachedPath: cachedPath,
+		}); err != nil {
+			t.Errorf("Generate %s: %v", name, err)
+			continue
+		}
+		f, err := os.Open(cachedPath)
+		if err != nil {
+			t.Fatalf("%s: cache entry not committed: %v", name, err)
+		}
+		cfg, format, err := image.DecodeConfig(f)
+		f.Close()
+		if err != nil {
+			t.Fatalf("%s: cache entry is not a decodable image: %v", name, err)
+		}
+		if format != "jpeg" || cfg.Width != 96 || cfg.Height != 96 {
+			t.Errorf("%s: cache entry is a %dx%d %s, want a 96x96 jpeg", name, cfg.Width, cfg.Height, format)
+		}
+	}
+}
+
+// TestGenerateReportsAVideoCodecWithNoDecoder: H.264 and HEVC are a client's
+// to render, so they fail with an error the caller can tell from a broken file.
+func TestGenerateReportsAVideoCodecWithNoDecoder(t *testing.T) {
+	for _, name := range []string{"h264-gop12.mp4", "hevc-aac-copy.mkv"} {
+		cachedPath := filepath.Join(t.TempDir(), "entry")
+		_, err := Generate(GenerateParams{
+			Ctx: context.Background(), FS: videoFixtures(t), RelPath: name, Ext: filepath.Ext(name), IsVideo: true,
+			Width: 96, Height: 96, CachedPath: cachedPath,
+		})
+		if !errors.Is(err, videoutil.ErrNoDecoder) {
+			t.Errorf("Generate %s = %v, want videoutil.ErrNoDecoder", name, err)
+		}
+		if _, statErr := os.Stat(cachedPath); !os.IsNotExist(statErr) {
+			t.Errorf("%s: a failed generation must not leave a cache entry behind: %v", name, statErr)
+		}
+	}
+}
 
 // sourceJPEG returns the bytes of a small solid-color JPEG to thumbnail.
 func sourceJPEG(t *testing.T) []byte {

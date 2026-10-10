@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/autobutler-org/sprocket/pkg/sprocket"
 )
@@ -84,13 +83,4 @@ func ffprobeCodecName(name string) string {
 // [0, 360): a phone's portrait video is 90 in one and 270 in the other.
 func counterclockwise(clockwise int) int {
 	return (360 - clockwise%360) % 360
-}
-
-// formatTimestamp converts a Duration to an ffmpeg timestamp string (HH:MM:SS.mmm).
-func formatTimestamp(d time.Duration) string {
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	s := int(d.Seconds()) % 60
-	ms := int(d.Milliseconds()) % 1000
-	return fmt.Sprintf("%02d:%02d:%02d.%03d", h, m, s, ms)
 }

@@ -26,8 +26,9 @@ const (
 	// CPU-bound and costs the decoded pixels in memory — up to
 	// photoutil.MaxDecodePixels — so it gets half the cores, at least two.
 	Decode Class = iota
-	// Video is ffmpeg pulling a frame out of a video for its thumbnail.
-	// ffmpeg threads on its own, so it also gets half the cores, at least one.
+	// Video is a keyframe decoded in-process out of a video for its
+	// thumbnail. It is CPU-bound and holds one decoded frame, so it gets half
+	// the cores, at least one.
 	Video
 	// Raw is a camera RAW converted through dcraw, exiftool or ffmpeg. Each
 	// runs a child process and decodes a full-size preview, so it gets a

@@ -125,8 +125,19 @@ func GenerateThumbnailFromReader(rs io.ReadSeeker, ext string, width, height uin
 	return &GenerateThumbnailResult{Thumbnail: cropped, Format: format, DHash: uprightDHash(img, orientation)}, nil
 }
 
+// GenerateThumbnailFromImage creates a thumbnail from an image that is
+// already decoded and upright, such as a video's keyframe. It has no source
+// format to report beyond the JPEG the thumbnail is cached as, and no DHash.
+func GenerateThumbnailFromImage(img image.Image, width, height uint) (*GenerateThumbnailResult, error) {
+	cropped, format, err := cropToFit(img, width, height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate thumbnail: %w", err)
+	}
+	return &GenerateThumbnailResult{Thumbnail: cropped, Format: format}, nil
+}
+
 // GenerateThumbnail creates a thumbnail image from an image file. A video's
-// frame is extracted by the caller first and passed in as an image.
+// frame goes through GenerateThumbnailFromImage instead.
 func GenerateThumbnail(params GenerateThumbnailParams) (*GenerateThumbnailResult, error) {
 	ext := strings.ToLower(filepath.Ext(params.FilePath))
 	if storageutil.DetermineFileTypeFromPath("file"+ext) != storageutil.FileTypeImage {

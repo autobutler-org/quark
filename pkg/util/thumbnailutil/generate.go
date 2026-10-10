@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
 	"io"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -18,8 +18,8 @@ import (
 // the cache. It is the one generation path for a library file: an image is
 // decoded from the namespace through [GenerateFromReader], which stores its
 // hashes; a camera RAW is converted by an external tool from its host path
-// and hashed from the namespace; a video's frame is extracted by ffmpeg from
-// its host path and goes through the same image pipeline as a photo.
+// and hashed from the namespace; a video's representative keyframe is decoded
+// in-process from its host path and then cropped the same way a photo is.
 func Generate(params GenerateParams) (GenerateResult, error) {
 	if !params.IsVideo && !photoutil.IsRawFile(params.RelPath) {
 		source, err := params.FS.Open(params.Ctx, params.RelPath)
@@ -44,21 +44,7 @@ func Generate(params GenerateParams) (GenerateResult, error) {
 	if err != nil {
 		return GenerateResult{}, err
 	}
-	thumbSrcPath := hostPath
-	if params.IsVideo {
-		framePath, cleanup, err := extractVideoFrame(params.Ctx, hostPath)
-		if err != nil {
-			return GenerateResult{}, err
-		}
-		defer cleanup()
-		thumbSrcPath = framePath
-	}
-
-	result, err := photoutil.GenerateThumbnail(photoutil.GenerateThumbnailParams{
-		FilePath: thumbSrcPath,
-		Width:    params.Width,
-		Height:   params.Height,
-	})
+	result, err := render(params, hostPath)
 	if err != nil {
 		return GenerateResult{}, err
 	}
@@ -135,37 +121,35 @@ func storeHashes(queries *db.Queries, serial, relPath, dhash string, source io.R
 	}
 }
 
-// extractVideoFrame writes a representative frame of a video to a temporary
-// JPEG and returns its path along with the cleanup that removes it. The
-// timestamp is 2s in, or a tenth of the way through a video too short for
-// that to land inside it.
-func extractVideoFrame(ctx context.Context, videoPath string) (string, func(), error) {
-	if !videoutil.Available() {
-		return "", nil, ErrFFmpegUnavailable
+// render produces the cropped thumbnail image for the RAW or video at
+// hostPath: from a video's keyframe, or from the converted RAW.
+func render(params GenerateParams, hostPath string) (*photoutil.GenerateThumbnailResult, error) {
+	if !params.IsVideo {
+		return photoutil.GenerateThumbnail(photoutil.GenerateThumbnailParams{
+			FilePath: hostPath,
+			Width:    params.Width,
+			Height:   params.Height,
+		})
 	}
+	frame, err := videoFrame(params.Ctx, hostPath)
+	if err != nil {
+		return nil, err
+	}
+	return photoutil.GenerateThumbnailFromImage(frame, params.Width, params.Height)
+}
 
-	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	seekTs := 2 * time.Second
-	if info, probeErr := videoutil.Probe(probeCtx, videoPath); probeErr == nil {
-		if tenth := info.Duration / 10; info.Duration < 20*time.Second && tenth < seekTs {
-			seekTs = tenth
-		}
+// videoFrame decodes a representative frame of a video: the keyframe nearest
+// 2s in, or nearest a tenth of the way through a video too short for that to
+// land inside it. A codec the device has no decoder for comes back as
+// [videoutil.ErrNoDecoder].
+func videoFrame(ctx context.Context, videoPath string) (image.Image, error) {
+	at := 2 * time.Second
+	if info, err := videoutil.Probe(ctx, videoPath); err == nil {
+		at = min(at, info.Duration/10)
 	}
-
-	tmpFile, tmpErr := os.CreateTemp("", "vthumb-*.jpg")
-	if tmpErr != nil {
-		return "", nil, fmt.Errorf("video thumb temp file: %w", tmpErr)
+	frame, err := videoutil.Keyframe(videoutil.KeyframeParams{Source: videoPath, At: at})
+	if err != nil {
+		return nil, fmt.Errorf("decode video frame: %w", err)
 	}
-	tmpFile.Close()
-	framePath := tmpFile.Name()
-	cleanup := func() { os.Remove(framePath) }
-
-	extractCtx, extractCancel := context.WithTimeout(ctx, 30*time.Second)
-	defer extractCancel()
-	if extractErr := videoutil.ExtractFrame(extractCtx, videoPath, seekTs, framePath); extractErr != nil {
-		cleanup()
-		return "", nil, fmt.Errorf("extract video frame: %w", extractErr)
-	}
-	return framePath, cleanup, nil
+	return frame.Image, nil
 }

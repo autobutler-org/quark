@@ -1,13 +1,13 @@
 // Package thumbnailutil generates and caches image and video thumbnails on
 // disk. It owns everything between "which file, which size" and "here are the
 // cached bytes": the size tiers, the cache key and directory, thumbnail
-// rendering (including the ffmpeg frame grab for video), and the perceptual
-// hash that photo deduplication reads back out of the database.
+// rendering (including the keyframe decoded out of an AV1 or VP8 video), and
+// the perceptual hash that photo deduplication reads back out of the database.
 //
 // A thumbnail a client rendered and uploaded (#2379) is kept in the same
 // cache and comes first: the size tiers are resized from it, and generating
 // from the file is the fallback. A file the device cannot decode itself
-// (H.264/HEVC video, HEIC) is answered with [NeedsClientRender] so a client
+// (H.264, HEVC or VP9 video, HEIC) is answered with [NeedsClientRender] so a client
 // can render one and upload it.
 //
 // HTTP concerns — ETag negotiation, status codes, the IO semaphore — stay with
@@ -30,8 +30,8 @@ import (
 )
 
 // SemaphoreClass is the kind of work generating the thumbnail for the file at
-// path is, so the caller holds that class's semaphore: an ffmpeg frame grab
-// for a video, a RAW conversion for a camera RAW, and an image decode for
+// path is, so the caller holds that class's semaphore: a keyframe decode for
+// a video, a RAW conversion for a camera RAW, and an image decode for
 // everything else.
 func SemaphoreClass(path string, isVideo bool) iosemutil.Class {
 	switch {
@@ -51,10 +51,6 @@ const (
 	SizeMd Size = "md" // 240×240 – card previews
 	SizeLg Size = "lg" // 400×400 – detail view (legacy default)
 )
-
-// ErrFFmpegUnavailable reports a video thumbnail request on a host without
-// ffmpeg. Callers map it to 404, the same as a missing file.
-var ErrFFmpegUnavailable = errors.New("video thumbnails require ffmpeg (not installed)")
 
 // ErrInvalidThumbnail reports an uploaded thumbnail that is not a JPEG, is
 // larger than [MaxClientThumbnailBytes], or is bigger on a side than a
@@ -116,10 +112,11 @@ type PrepareResult struct {
 }
 
 // GenerateParams renders the thumbnail of a file in a namespace. An image is
-// decoded from the namespace; a camera RAW and a video are handed to their
-// external tool by host path, the one thing those tools can take.
+// decoded from the namespace; a camera RAW is handed to its external tool by
+// host path, and a video has a representative keyframe decoded from its host
+// path, which fails with videoutil.ErrNoDecoder for any codec but AV1 and VP8.
 type GenerateParams struct {
-	// Ctx bounds the namespace reads, the ffmpeg probe and frame extraction.
+	// Ctx bounds the namespace reads and the video probe.
 	Ctx context.Context
 	// Queries stores a photo's hashes for duplicate detection. Nil skips them.
 	Queries *db.Queries
@@ -131,7 +128,7 @@ type GenerateParams struct {
 	RelPath string
 	// Ext is the lowercase source extension, which picks the cache encoding.
 	Ext string
-	// IsVideo selects the ffmpeg frame grab.
+	// IsVideo selects the keyframe decode.
 	IsVideo bool
 	// Width and Height are the target dimensions.
 	Width  uint

@@ -132,7 +132,6 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		}
 
 		generated, genErr := thumbnailutil.Generate(thumbnailutil.GenerateParams{
-			Ctx:              c.Request.Context(),
 			Queries:          deps.Database().Queries,
 			FS:               fsys,
 			Serial:           serial,
@@ -149,10 +148,9 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		if genErr != nil && thumbnailutil.NeedsClientRender(relPath) {
 			return clientRenderNotFound(filePath, srcInfo.ModTime, genErr)
 		}
-		// A namespace with no host path has nothing to hand ffmpeg or a RAW
-		// converter, so its RAW and video files have no thumbnail.
-		if errors.Is(genErr, thumbnailutil.ErrFFmpegUnavailable) || errors.Is(genErr, photoutil.ErrImageTooLarge) ||
-			errors.Is(genErr, vfs.ErrNotFound) {
+		// A namespace with no host path has nothing to hand a RAW converter
+		// or the keyframe decoder, so its RAW and video files have no thumbnail.
+		if errors.Is(genErr, photoutil.ErrImageTooLarge) || errors.Is(genErr, vfs.ErrNotFound) {
 			return serverutil.NotFound(genErr)
 		}
 		if genErr != nil {
