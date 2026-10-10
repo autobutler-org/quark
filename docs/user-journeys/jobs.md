@@ -60,8 +60,9 @@ Cancel and Retry.
 
 **Notes:**
 
-- A job that was running when the Quark restarted comes back **Failed** ("interrupted by restart") and can be
-  retried.
+- A job that was running when the Quark restarted is **Queued** again and runs from the start. After a crash that
+  can take about a minute. A job that was running through three crashes comes back **Failed** ("interrupted by
+  restart") and can be retried.
 
 ---
 

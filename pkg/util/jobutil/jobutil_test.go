@@ -2,6 +2,7 @@ package jobutil
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,9 @@ import (
 const (
 	testKind    = "test"
 	testTimeout = 5 * time.Second
+	// testHeartbeat is how often a test's queue beats and polls, so a test of
+	// what a beat does need not wait ten seconds for one.
+	testHeartbeat = 20 * time.Millisecond
 )
 
 // fakeHandler reports the configured progress, then blocks until the test
@@ -27,6 +31,8 @@ type fakeHandler struct {
 	progress []float64
 	started  chan json.RawMessage
 	release  chan error
+	// canceled gets a value each time a job's context is canceled under it.
+	canceled chan struct{}
 }
 
 func (f *fakeHandler) run(ctx context.Context, params json.RawMessage, report func(float64)) error {
@@ -36,6 +42,7 @@ func (f *fakeHandler) run(ctx context.Context, params json.RawMessage, report fu
 	}
 	select {
 	case <-ctx.Done():
+		f.canceled <- struct{}{}
 		return ctx.Err()
 	case err := <-f.release:
 		return err
@@ -51,12 +58,24 @@ type harness struct {
 
 func newHarness(t *testing.T, progress ...float64) harness {
 	t.Helper()
-	database := dbtest.NewDB(t)
+	return newInstance(t, dbtest.NewDB(t), progress...)
+}
+
+// newInstance is one Quark process over database: a queue with an event bus
+// and a handler of its own.
+func newInstance(t *testing.T, database *db.DatabaseSqlc, progress ...float64) harness {
+	t.Helper()
 	bus := eventbus.New()
 	events, unsub := bus.Subscribe("jobutil-test")
 	t.Cleanup(unsub)
-	fake := &fakeHandler{progress: progress, started: make(chan json.RawMessage, 8), release: make(chan error, 8)}
+	fake := &fakeHandler{
+		progress: progress,
+		started:  make(chan json.RawMessage, 8),
+		release:  make(chan error, 8),
+		canceled: make(chan struct{}, 8),
+	}
 	queue := NewQueue(NewQueueParams{Database: database, EventBus: bus})
+	queue.heartbeatInterval = testHeartbeat
 	queue.Register(RegisterParams{Kind: testKind, Handler: Handler{
 		Run: fake.run,
 		Validate: func(params json.RawMessage) error {
@@ -67,6 +86,53 @@ func newHarness(t *testing.T, progress ...float64) harness {
 		},
 	}})
 	return harness{database: database, queue: queue, fake: fake, events: events}
+}
+
+// peer is a second instance on the same database file through a handle of
+// its own, which is as far apart as two instances get until the two-process
+// harness (#2971) lands.
+func (h harness) peer(t *testing.T) harness {
+	t.Helper()
+	var seq int
+	var name, file string
+	if err := h.database.Db.QueryRow("PRAGMA database_list").Scan(&seq, &name, &file); err != nil {
+		t.Fatalf("find the database file: %v", err)
+	}
+	sqlDB, err := sql.Open("sqlite", db.DSN(file))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+	return newInstance(t, &db.DatabaseSqlc{Db: sqlDB, Queries: db.New(sqlDB)})
+}
+
+// orphan leaves what an instance that died mid-job leaves behind: a row
+// running its attempt-th run under an owner that stopped beating an hour ago.
+func (h harness) orphan(t *testing.T, n int, attempt int64) db.Job {
+	t.Helper()
+	ctx := context.Background()
+	row, err := h.database.Queries.CreateJob(ctx, db.CreateJobParams{Kind: testKind, Name: "orphan", Params: fmt.Sprintf(`{"n":%d}`, n)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.database.Queries.ClaimJob(ctx, db.ClaimJobParams{Owner: "dead", ID: row.ID, LaneLimit: 1}); err != nil {
+		t.Fatal(err)
+	}
+	h.stopBeating(t, row.ID, attempt)
+	return row
+}
+
+// stopBeating ages a running job's heartbeat past any lease and sets how many
+// times it has started.
+func (h harness) stopBeating(t *testing.T, id, attempts int64) {
+	t.Helper()
+	// Raw SQL because no query ages a heartbeat or sets attempts: the code
+	// under test only ever beats now and counts up.
+	if _, err := h.database.Db.Exec(
+		"UPDATE jobs SET heartbeat_at = datetime('now', '-1 hour'), attempts = ? WHERE id = ?", attempts, id,
+	); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // run starts the worker and stops it when the test ends. The returned func
@@ -451,7 +517,9 @@ func TestHandlerErrorFailsJob(t *testing.T) {
 	}
 }
 
-func TestShutdownMarksRunningJobFailed(t *testing.T) {
+// A job its instance was running at shutdown goes back in the queue (#2966,
+// J6), so a rollout does not fail every job on the instance it drains.
+func TestShutdownReleasesRunningJob(t *testing.T) {
 	h := newHarness(t)
 	job := h.enqueue(t, 1)
 	stop := h.run(t)
@@ -460,22 +528,45 @@ func TestShutdownMarksRunningJobFailed(t *testing.T) {
 	stop()
 
 	got := h.job(t, job.ID)
-	if got.Status != StatusFailed || got.Error != interruptedError {
-		t.Errorf("job after shutdown = %+v, want failed as interrupted", got)
+	if got.Status != StatusPending || got.StartedAt != nil || got.Error != "" {
+		t.Fatalf("job after shutdown = %+v, want pending again", got)
 	}
+
+	h.run(t)
+	if n := h.started(t); n != 1 {
+		t.Fatalf("the next start ran job %d, want the released job 1", n)
+	}
+	h.fake.release <- nil
+	h.waitStatus(t, job.ID, StatusCompleted)
 }
 
-func TestStartupFailsJobsLeftRunningAndRunsPendingOnes(t *testing.T) {
+// A job left running by a process that died is run again once its owner has
+// stopped beating, by whichever instance notices (#2966, J1).
+func TestStartupRerunsJobsADeadOwnerLeftRunningAndRunsPendingOnes(t *testing.T) {
 	h := newHarness(t)
-	ctx := context.Background()
-	// What a process that died mid-job leaves behind: a row stuck running.
-	orphan, err := h.database.Queries.CreateJob(ctx, db.CreateJobParams{Kind: testKind, Name: "orphan", Params: `{"n":1}`})
-	if err != nil {
-		t.Fatal(err)
+	orphan := h.orphan(t, 1, 1)
+	pending := h.enqueue(t, 2)
+
+	h.run(t)
+
+	if n := h.started(t); n != 1 {
+		t.Fatalf("worker started job %d, want the orphaned job 1", n)
 	}
-	if _, err := h.database.Queries.ClaimJob(ctx, orphan.ID); err != nil {
-		t.Fatal(err)
+	h.fake.release <- nil
+	if got := h.waitStatus(t, orphan.ID, StatusCompleted); got.Attempts != 2 {
+		t.Errorf("orphaned job ran %d time(s), want its second", got.Attempts)
 	}
+	if n := h.started(t); n != 2 {
+		t.Fatalf("worker started job %d, want the pending job 2", n)
+	}
+	h.fake.release <- nil
+	h.waitStatus(t, pending.ID, StatusCompleted)
+}
+
+// A job that keeps killing the process running it is failed, not run forever.
+func TestStaleJobOutOfAttemptsFailsAsInterrupted(t *testing.T) {
+	h := newHarness(t)
+	orphan := h.orphan(t, 1, maxAttempts)
 	h.enqueue(t, 2)
 
 	h.run(t)
@@ -487,8 +578,130 @@ func TestStartupFailsJobsLeftRunningAndRunsPendingOnes(t *testing.T) {
 	if got.Status != StatusFailed || got.Error != interruptedError || got.FinishedAt == nil {
 		t.Fatalf("orphaned job = %+v, want failed as interrupted", got)
 	}
-	if _, err := h.queue.Retry(ctx, RetryParams{ID: orphan.ID}); err != nil {
+	if _, err := h.queue.Retry(context.Background(), RetryParams{ID: orphan.ID}); err != nil {
 		t.Errorf("an interrupted job is not retryable: %v", err)
+	}
+}
+
+// Starting a second instance used to fail every job the first was running
+// (#2966, J1): its startup took any running row for a dead process's.
+func TestSecondInstanceLeavesTheFirstsRunningJobAlone(t *testing.T) {
+	first := newHarness(t)
+	job := first.enqueue(t, 1)
+	first.run(t)
+	first.started(t)
+
+	second := first.peer(t)
+	second.run(t)
+	time.Sleep(10 * testHeartbeat)
+
+	if got := first.job(t, job.ID); got.Status != StatusRunning {
+		t.Fatalf("job after a second instance started = %+v, want still running", got)
+	}
+	first.fake.release <- nil
+	first.waitStatus(t, job.ID, StatusCompleted)
+	if len(second.fake.started) != 0 {
+		t.Error("the second instance ran the first's job as well")
+	}
+}
+
+// The "done when" of #2966: a job whose owner is killed is picked up by
+// another instance.
+func TestJobWhoseOwnerStoppedBeatingIsPickedUpByAnotherInstance(t *testing.T) {
+	first := newHarness(t)
+	second := first.peer(t)
+	second.run(t)
+	// Nothing woke the second instance: it finds the job on its own poll.
+	orphan := first.orphan(t, 1, 1)
+
+	if n := second.started(t); n != 1 {
+		t.Fatalf("the other instance started job %d, want the orphaned job 1", n)
+	}
+	second.fake.release <- nil
+	second.waitStatus(t, orphan.ID, StatusCompleted)
+}
+
+// An instance that stalled long enough to lose its job must not settle the
+// run another instance has since started.
+func TestReclaimedJobCannotBeFinishedByItsOldOwner(t *testing.T) {
+	first := newHarness(t)
+	first.queue.heartbeatInterval = time.Hour // stalled: it never beats
+	job := first.enqueue(t, 1)
+	first.run(t)
+	first.started(t)
+	first.stopBeating(t, job.ID, 1)
+
+	second := first.peer(t)
+	second.run(t)
+	second.started(t)
+
+	first.fake.release <- nil
+	time.Sleep(10 * testHeartbeat)
+	if got := second.job(t, job.ID); got.Status != StatusRunning {
+		t.Fatalf("job after its old owner finished = %+v, want still running on the new one", got)
+	}
+	second.fake.release <- nil
+	second.waitStatus(t, job.ID, StatusCompleted)
+}
+
+// Lane limits were counted in memory, so each instance ran a full lane's
+// worth (#2966, J2).
+func TestLaneLimitHoldsAcrossInstances(t *testing.T) {
+	first := newHarness(t)
+	second := first.peer(t)
+	jobs := []Job{first.enqueue(t, 1), first.enqueue(t, 2)}
+	first.run(t)
+	second.run(t)
+
+	// startedOn waits for either instance to start a job.
+	startedOn := func() harness {
+		t.Helper()
+		select {
+		case <-first.fake.started:
+			return first
+		case <-second.fake.started:
+			return second
+		case <-time.After(testTimeout):
+			t.Fatal("no job started on either instance")
+			return harness{}
+		}
+	}
+	running := startedOn()
+	select {
+	case <-first.fake.started:
+		t.Fatal("a second job started in a lane of one")
+	case <-second.fake.started:
+		t.Fatal("a second job started in a lane of one")
+	case <-time.After(10 * testHeartbeat):
+	}
+
+	running.fake.release <- nil
+	startedOn().fake.release <- nil
+	for _, job := range jobs {
+		first.waitStatus(t, job.ID, StatusCompleted)
+	}
+}
+
+// A cancel served by another instance only changed the row, and the handler
+// ran to its end while the UI said canceled (#2966, J3).
+func TestCancelOnAnotherInstanceStopsTheHandler(t *testing.T) {
+	first := newHarness(t)
+	job := first.enqueue(t, 1)
+	first.run(t)
+	first.started(t)
+
+	second := first.peer(t)
+	if _, err := second.queue.Cancel(context.Background(), CancelParams{ID: job.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-first.fake.canceled:
+	case <-time.After(testTimeout):
+		t.Fatal("the handler was not stopped on the instance running it")
+	}
+	if got := first.job(t, job.ID); got.Status != StatusCanceled {
+		t.Errorf("job = %+v, want canceled", got)
 	}
 }
 
@@ -838,7 +1051,7 @@ func TestEnqueueRefusesWhatTheLaneHookRefuses(t *testing.T) {
 	}
 }
 
-func TestShutdownFailsEveryRunningJob(t *testing.T) {
+func TestShutdownReleasesEveryRunningJob(t *testing.T) {
 	h := newHarness(t)
 	gated := newGatedHandler(map[int]string{1: "encode", 2: "copy", 3: "copy"})
 	h.queue.Register(RegisterParams{Kind: gatedKind, Handler: gated.handler()})
@@ -849,8 +1062,8 @@ func TestShutdownFailsEveryRunningJob(t *testing.T) {
 	stop()
 
 	for _, job := range jobs {
-		if got := h.job(t, job.ID); got.Status != StatusFailed || got.Error != interruptedError {
-			t.Errorf("job %d after shutdown = %+v, want failed as interrupted", job.ID, got)
+		if got := h.job(t, job.ID); got.Status != StatusPending {
+			t.Errorf("job %d after shutdown = %+v, want pending again", job.ID, got)
 		}
 	}
 }

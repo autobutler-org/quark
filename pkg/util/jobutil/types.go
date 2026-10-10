@@ -5,12 +5,21 @@ import (
 	"time"
 )
 
-// ponytail: the jobs table is never pruned, so history grows with every job;
-// add retention once someone decides how much of it to keep.
 const (
-	// interruptedError is the error on a job that was running when its process
-	// stopped, whether on a clean shutdown or found at the next startup.
+	// interruptedError is the error on a job whose process died while running
+	// it for the maxAttempts-th time.
 	interruptedError = "interrupted by restart"
+
+	// maxAttempts is how many times a job may start and be left running by a
+	// process that died before it is failed rather than queued again, so a
+	// job that kills its process does not do it forever.
+	maxAttempts = 3
+
+	// An instance beats every defaultHeartbeatInterval, and a running job
+	// with no beat for defaultLeaseDuration has lost its owner. The lease is
+	// several beats long, so a slow write or two does not cost a job its run.
+	defaultHeartbeatInterval = 10 * time.Second
+	defaultLeaseDuration     = time.Minute
 
 	// Progress is saved and published when the fraction has moved by
 	// progressStep or progressInterval has passed since it last was.

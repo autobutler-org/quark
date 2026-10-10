@@ -4,6 +4,11 @@
 // jobs run at once per lane, so kinds never wait on each other and a quick job
 // in one lane is not held behind a long one in another.
 //
+// Several instances may run one queue over a shared database (#2966). A
+// running job's row names the instance that owns it, which keeps it with a
+// heartbeat; lane limits are counted in the claim itself, so they hold across
+// instances; and a job whose owner stops beating is run again by another.
+//
 // Every change publishes a job_* event, but the bus drops events for a
 // subscriber that falls behind, so clients treat GET /jobs, backed by
 // [Queue.List], as the source of truth and the events as a hint to refresh.
@@ -11,11 +16,11 @@ package jobutil
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -165,6 +170,15 @@ type Queue struct {
 	database *db.DatabaseSqlc
 	bus      *eventbus.Bus
 	wake     chan struct{}
+	// instance names this process in the rows of the jobs it is running. It
+	// is new on every start, so a restarted process does not own what the one
+	// before it left behind.
+	instance string
+	// heartbeatInterval is how often Run says its jobs are still running and
+	// looks for work it was not woken for. A running job whose owner has not
+	// said so for leaseDuration is taken from it.
+	heartbeatInterval time.Duration
+	leaseDuration     time.Duration
 
 	// mu guards handlers and running, and is held across picking and claiming
 	// a job and across canceling one, so the two cannot interleave.
@@ -188,6 +202,11 @@ func NewQueue(params NewQueueParams) *Queue {
 		database: params.Database,
 		bus:      params.EventBus,
 		wake:     make(chan struct{}, 1),
+		instance: rand.Text(),
+
+		heartbeatInterval: defaultHeartbeatInterval,
+		leaseDuration:     defaultLeaseDuration,
+
 		handlers: map[string]Handler{},
 		running:  map[int64]runningJob{},
 	}
@@ -332,7 +351,8 @@ type CancelResult struct {
 
 // Cancel stops a pending or running job and publishes job_canceled. A pending
 // job never runs; a running job has its context canceled and its Handler
-// cleans up. It returns ErrJobNotFound for an unknown id and ErrJobFinished
+// cleans up, at once when this instance is running it and on its owner's next
+// heartbeat otherwise. It returns ErrJobNotFound for an unknown id and ErrJobFinished
 // for a job that is already over.
 func (q *Queue) Cancel(ctx context.Context, params CancelParams) (CancelResult, error) {
 	q.mu.Lock()
@@ -438,23 +458,33 @@ func (q *Queue) Prune(ctx context.Context, params PruneParams) (PruneResult, err
 	return PruneResult{Removed: removed}, nil
 }
 
-// Run is the dispatcher. It first marks jobs a previous process left running
-// as failed, then starts the oldest pending job whose lane has a free slot,
-// over and over, each on its own goroutine, until none fits. It then sleeps on
-// a channel, rather than polling, until a job is queued or one finishes. When
-// ctx is canceled, every running job is stopped and marked failed, so it can
-// be retried, and Run returns once they all have.
+// Run is the dispatcher. It starts the oldest pending job whose lane has a
+// free slot, over and over, each on its own goroutine, until none fits, then
+// sleeps until a job is queued here, one finishes here, or heartbeatInterval
+// passes. On that beat, and once at the start, it says the jobs it is running
+// are still running, stops any that another instance canceled or took, and
+// takes back jobs whose owner has stopped beating: those are queued again, or
+// failed once they have started maxAttempts times. The beat is also the poll
+// that finds a job queued through another instance. Any number of instances
+// may Run over one database. When ctx is canceled, every running job is
+// stopped and put back in the queue for another instance, or this one's next
+// start, and Run returns once they all have.
 func (q *Queue) Run(ctx context.Context) {
-	if err := q.database.Queries.InterruptRunningJobs(ctx, interruptedError); err != nil {
-		log.Printf("[jobs] mark interrupted jobs failed: %v", err)
-	}
+	ticker := time.NewTicker(q.heartbeatInterval)
+	defer ticker.Stop()
 	var jobs sync.WaitGroup
-	for ctx.Err() == nil {
+	for beat := true; ctx.Err() == nil; {
+		if beat {
+			q.beat(ctx)
+		}
 		for q.startNext(ctx, &jobs) {
 		}
+		beat = false
 		select {
 		case <-ctx.Done():
 		case <-q.wake:
+		case <-ticker.C:
+			beat = true
 		}
 	}
 	jobs.Wait()

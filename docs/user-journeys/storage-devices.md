@@ -141,8 +141,9 @@ Covers the System page's Storage tab (`/system/storage`) — listing, mounting, 
   answer the status poll, and reloading the page does not stop the backup.
 - Only one backup per target drive runs at a time, whichever instance or admin started it. A second start onto the
   same drive is refused with a snack bar saying a backup is already running for it.
-- A backup the Quark restarted in the middle of reads as **Backup failed**, with the snack bar "Backup failed:
-  interrupted by restart". Start a new backup.
+- A backup the Quark restarted in the middle of is queued again and runs from the start. Only one that was
+  running through three crashes reads as **Backup failed**, with the snack bar "Backup failed: interrupted by
+  restart". Start a new backup.
 - If the status poll gets a 404, the job is gone for good: polling stops, the progress card clears and a snack bar
   says the backup couldn't be checked. Any other poll error keeps polling.
 - Backups are not listed on the Jobs tab (JN-JOB-001), which shows video conversions only.

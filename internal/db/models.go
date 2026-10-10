@@ -175,20 +175,28 @@ type Install struct {
 }
 
 type Job struct {
-	ID         int64
-	Kind       string
-	Name       string
-	Status     string
-	Params     string
-	Progress   float64
-	Lane       string
-	Attempts   int64
-	Error      string
-	CreatedAt  time.Time
-	StartedAt  sql.NullTime
-	FinishedAt sql.NullTime
-	UserID     sql.NullInt64
-	Detail     string
+	ID          int64
+	Kind        string
+	Name        string
+	Status      string
+	Params      string
+	Progress    float64
+	Lane        string
+	Attempts    int64
+	Error       string
+	CreatedAt   time.Time
+	StartedAt   sql.NullTime
+	FinishedAt  sql.NullTime
+	UserID      sql.NullInt64
+	Detail      string
+	Owner       string
+	HeartbeatAt sql.NullTime
+}
+
+type MaintenanceRun struct {
+	Name      string
+	Owner     string
+	StartedAt time.Time
 }
 
 type PathAccess struct {

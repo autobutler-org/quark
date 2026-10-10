@@ -97,7 +97,8 @@ stateDiagram-v2
     [*] --> pending: POST /videos/transcode
     pending --> running: lane has capacity
     running --> completed: remux finished, output written
-    running --> failed: error or server shutdown
+    running --> failed: error
+    running --> pending: server shutdown, or its instance died
     pending --> canceled: DELETE /jobs/:id
     running --> canceled: DELETE /jobs/:id
     failed --> pending: POST /jobs/:id/retry
@@ -105,7 +106,8 @@ stateDiagram-v2
     canceled --> [*]
 ```
 
-A job is a row in the `jobs` table, so history survives a restart. Every transition publishes a `job_*` event;
+A job is a row in the `jobs` table, so history survives a restart. A running row names the instance that owns
+it, which keeps it with a heartbeat, so several instances can share the queue. Every transition publishes a `job_*` event;
 `GET /api/v0/jobs` remains the source of truth for the Jobs page.
 
 ## Vault unlock

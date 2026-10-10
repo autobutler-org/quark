@@ -161,7 +161,7 @@ type GetSnapshotBackupStatusResult struct {
 
 // GetSnapshotBackupStatus reads a backup's status from its job row, so any
 // instance answers for a backup another one is running, and a backup cut off
-// by a restart reads as failed. It returns ErrBackupJobNotFound for an id that
+// by a restart reads as pending until an instance runs it again. It returns ErrBackupJobNotFound for an id that
 // is not a snapshot backup's.
 func GetSnapshotBackupStatus(params GetSnapshotBackupStatusParams) (GetSnapshotBackupStatusResult, error) {
 	id, err := strconv.ParseInt(params.JobID, 10, 64)
