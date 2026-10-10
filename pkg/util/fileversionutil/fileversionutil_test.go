@@ -476,7 +476,7 @@ func TestSweep_RemovesStoresOfFilesGoneForGood(t *testing.T) {
 func TestWatch_FollowsAMove(t *testing.T) {
 	f := newFixture(t)
 	bus := eventbus.New()
-	f.store.Watch(WatchParams{Bus: bus, Registry: f.registry, Storage: f.svc})
+	f.store.Watch(WatchParams{Bus: bus, Registry: f.registry})
 
 	f.write(t, "a.qslide", "A")
 	f.snapshot(t, "a.qslide", KindNamed, "A")
@@ -498,7 +498,7 @@ func TestWatch_FollowsAMove(t *testing.T) {
 // Events are handed over directly so each step can be checked after it.
 func TestWatch_KeepsHistoryInTheTrashAndDropsItAfter(t *testing.T) {
 	f := newFixture(t)
-	params := WatchParams{Registry: f.registry, Storage: f.svc}
+	params := WatchParams{Registry: f.registry}
 	handle := func(evt eventbus.Event) { f.store.handleEvent(params, evt) }
 
 	f.write(t, "dir/b.qslide", "B")
@@ -506,7 +506,7 @@ func TestWatch_KeepsHistoryInTheTrashAndDropsItAfter(t *testing.T) {
 	f.snapshot(t, "dir/b.qslide", KindNamed, "B")
 	f.snapshot(t, "dir/kept.qslide", KindNamed, "K")
 
-	if _, err := f.svc.TrashFiles(storageutil.TrashFilesParams{FilePaths: []string{"dir/b.qslide"}}); err != nil {
+	if _, err := f.fs.(vfs.Trasher).Trash(f.ctx, []string{"dir/b.qslide"}, vfs.TrashOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	handle(eventbus.Event{Kind: eventbus.EventTrashChanged})

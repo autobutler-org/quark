@@ -149,18 +149,6 @@ func TestSafeJoin_MissingBaseIsLexicalOnly(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestDownloadFileImpl_RefusesSymlinkEscape(t *testing.T) {
-	base, outside := symlinkFixture(t)
-	require.NoError(t, os.Symlink(outside, filepath.Join(base, "out")))
-
-	_, err := DownloadFileImpl(DownloadFileParams{FilePath: "out/secret.txt"}, nil, base)
-	assert.Error(t, err)
-
-	res, err := DownloadFileImpl(DownloadFileParams{FilePath: "docs/a.txt"}, nil, base)
-	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(base, "docs", "a.txt"), res.FullPath)
-}
-
 // Concurrent uploads into one new folder race to create it (#2767): one
 // request finds notes/2024 missing, another's MkdirAll creates it, and the
 // first then sees it exist. That is a directory that appeared, not a dangling

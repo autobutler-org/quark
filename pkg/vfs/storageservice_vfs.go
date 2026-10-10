@@ -27,7 +27,7 @@ func serialSet(serials []string) map[string]bool {
 // every device.
 //
 // filter.Recursive walks the whole subtree. It used to be silently ignored:
-// the implementation always delegated to storageutil.StatFilesInDir, a
+// the implementation always delegated to a
 // single-level os.ReadDir, so every caller asking for a recursive listing —
 // the Docs page, Recent files, filename search, folder download — only ever
 // saw files sitting at the storage root (#1605).
@@ -60,7 +60,7 @@ func (v *StorageServiceVFS) List(ctx context.Context, path string, filter *ListF
 	// add applies dedup and the per-entry filters. Filtering happens here, as
 	// each entry is produced, so MaxResults can stop a recursive walk instead of
 	// materializing the whole library and truncating afterwards.
-	add := func(f storageutil.WalkedFile) {
+	add := func(f walkedFile) {
 		if f.Info.IsDir() {
 			if seenDirs[f.RelPath] {
 				return
@@ -117,11 +117,11 @@ func (v *StorageServiceVFS) listDevice(
 	device storageutil.ManagedDevice,
 	serial string,
 	recursive bool,
-	add func(storageutil.WalkedFile),
+	add func(walkedFile),
 	full func() bool,
 ) error {
 	if !recursive {
-		files, err := storageutil.StatFilesInDir(fullDir, device.Name, device.DataDir, serial)
+		files, err := hostListDir(fullDir, device.Name, device.DataDir, serial)
 		if err != nil {
 			return err
 		}
@@ -130,13 +130,13 @@ func (v *StorageServiceVFS) listDevice(
 				break
 			}
 			// At a single level the relative path is just the entry name.
-			add(storageutil.WalkedFile{Info: f, RelPath: f.Name()})
+			add(walkedFile{Info: f, RelPath: f.Name()})
 		}
 		return nil
 	}
 
-	return storageutil.WalkFilesInDir(ctx, fullDir, device.Name, device.DataDir, serial,
-		func(f storageutil.WalkedFile) error {
+	return hostWalkDir(ctx, fullDir, device.Name, device.DataDir, serial,
+		func(f walkedFile) error {
 			add(f)
 			if full() {
 				return fs.SkipAll
@@ -165,10 +165,10 @@ func matchesFilter(fi FileInfo, filter *ListFilter) bool {
 }
 
 // filesDir resolves the base directory for this namespace, preferring the
-// managed device's files directory over the default. StatFile, DownloadFile,
-// and DeleteFiles all resolve this way internally; this exists so the paths
-// derived directly in this file agree with them. Only the internal namespace
-// has a default: a device namespace whose device is gone is [ErrNotFound].
+// managed device's files directory over the default. Every operation in this
+// file resolves through it, so they all agree on where a path is. Only the
+// internal namespace has a default: a device namespace whose device is gone is
+// [ErrNotFound].
 func (v *StorageServiceVFS) filesDir() (string, error) {
 	device, err := v.svc.FindManagedDeviceBySerial(v.serial)
 	if err != nil {
@@ -313,7 +313,7 @@ func (v *StorageServiceVFS) resolveRead(path string) (string, error) {
 		return "", err
 	}
 	if rel := cleanPath(path); storageutil.IsTrashPath(rel) {
-		trashPath, err := storageutil.JoinTrashPath(filesDir, rel)
+		trashPath, err := joinTrashPath(filesDir, rel)
 		if err != nil {
 			return "", ErrPermissionDenied
 		}
@@ -347,27 +347,23 @@ func (v *StorageServiceVFS) MkdirAll(_ context.Context, path string) error {
 	if err := v.attached(); err != nil {
 		return err
 	}
-	dir, name := filepath.Split(strings.TrimRight(path, "/"))
-	_, err := v.svc.CreateFolder(storageutil.CreateFolderParams{
-		FolderDir:    dir,
-		FolderName:   name,
-		DeviceSerial: v.serial,
-	})
-	return err
+	filesDir, err := v.filesDir()
+	if err != nil {
+		return err
+	}
+	return hostMkdirAll(filesDir, path)
 }
 
-// Move renames src to dst on this namespace's device via the StorageService.
+// Move renames src to dst on this namespace's device.
 func (v *StorageServiceVFS) Move(_ context.Context, src, dst string) error {
 	if err := v.attached(); err != nil {
 		return err
 	}
-	_, err := v.svc.MoveFile(storageutil.MoveFileParams{
-		OldFilePath:     src,
-		NewFilePath:     dst,
-		OldDeviceSerial: v.serial,
-		NewDeviceSerial: v.serial,
-	})
-	return err
+	filesDir, err := v.filesDir()
+	if err != nil {
+		return err
+	}
+	return hostMove(filesDir, src, dst)
 }
 
 // Copy copies the file at src to dst through Write. See [VFS.Copy].

@@ -20,6 +20,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/videoutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 const testSerial = "test-serial"
@@ -44,6 +45,7 @@ func (fakeUsb) GetSerial() string { return testSerial }
 
 type harness struct {
 	storage  *storageutil.StorageService
+	registry vfs.Registry
 	filesDir string
 	events   <-chan eventbus.Event
 	bus      *eventbus.Bus
@@ -61,8 +63,14 @@ func newHarness(t *testing.T) harness {
 	bus := eventbus.New()
 	events, unsub := bus.Subscribe("transcodeutil-test")
 	t.Cleanup(unsub)
+	storage := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})
+	registry := vfs.NewRegistry()
+	if _, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: storage}); err != nil {
+		t.Fatal(err)
+	}
 	return harness{
-		storage:  storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint}),
+		storage:  storage,
+		registry: registry,
 		filesDir: filesDir,
 		events:   events,
 		bus:      bus,
@@ -83,7 +91,7 @@ func (h harness) exists(name string) bool {
 
 // handler builds the transcode Handler around a fake remux func.
 func (h harness) handler(remux RemuxFunc) jobutil.Handler {
-	return NewHandler(NewHandlerParams{Storage: h.storage, Database: h.database, EventBus: h.bus, Remux: remux})
+	return NewHandler(NewHandlerParams{Storage: h.storage, Registry: h.registry, Database: h.database, EventBus: h.bus, Remux: remux})
 }
 
 // withAccounts gives the harness a database holding bob, who may write the
@@ -231,7 +239,7 @@ func TestRunFailsWhenTheCreatorLosesAccess(t *testing.T) {
 				if tc.during != nil {
 					tc.during(t, h, bob)
 				}
-				return os.WriteFile(p.Output, []byte("encoded"), 0o644)
+				return write(p, "encoded")
 			}
 
 			err := h.handler(transcode).Run(jobutil.WithUserID(context.Background(), bob), params(t, "videos/clip.mov", "mp4"), func(float64) {})
@@ -292,14 +300,26 @@ func paramsAt(t *testing.T, relPath string, format videoutil.Format, quality str
 	return raw
 }
 
-// writingTranscode writes outPath and reports halfway, the way a successful
-// remux would. It records every path it was asked to write.
+// writingTranscode writes its output and reports halfway, the way a
+// successful remux would. It records the host path of every staged file it
+// was asked to write.
 func writingTranscode(paths *[]string) RemuxFunc {
 	return func(_ context.Context, p videoutil.RemuxParams) error {
-		*paths = append(*paths, p.Output)
+		*paths = append(*paths, staged(p))
 		p.OnProgress(0.5)
-		return os.WriteFile(p.Output, []byte("encoded"), 0o644)
+		return write(p, "encoded")
 	}
+}
+
+// staged is the host path of the staging file a remux writes into.
+func staged(p videoutil.RemuxParams) string {
+	return p.Output.(*os.File).Name()
+}
+
+// write writes content as a remux's output.
+func write(p videoutil.RemuxParams, content string) error {
+	_, err := io.WriteString(p.Output, content)
+	return err
 }
 
 func TestRunWritesOutputBesideSourceAndPublishesUpload(t *testing.T) {
@@ -366,12 +386,11 @@ func TestRunStagesOutputOutsideTheFilesTree(t *testing.T) {
 	var duringRun []string
 	var outDir string
 	observing := func(_ context.Context, p videoutil.RemuxParams) error {
-		outPath := p.Output
-		if err := os.WriteFile(outPath, []byte("encoded"), 0o644); err != nil {
+		if err := write(p, "encoded"); err != nil {
 			return err
 		}
 		duringRun = entries(t, h.filesDir)
-		outDir = filepath.Dir(outPath)
+		outDir = filepath.Dir(staged(p))
 		return nil
 	}
 
@@ -455,8 +474,7 @@ func TestRunRemovesTempFileOnFailure(t *testing.T) {
 	h := newHarness(t)
 	h.write(t, "clip.mov")
 	failing := func(_ context.Context, p videoutil.RemuxParams) error {
-		outPath := p.Output
-		if err := os.WriteFile(outPath, []byte("partial"), 0o644); err != nil {
+		if err := write(p, "partial"); err != nil {
 			return err
 		}
 		return errors.New("remux exploded")
@@ -476,8 +494,7 @@ func TestRunRemovesTempFileOnCancel(t *testing.T) {
 	h.write(t, "clip.mov")
 	started := make(chan struct{})
 	blocking := func(ctx context.Context, p videoutil.RemuxParams) error {
-		outPath := p.Output
-		if err := os.WriteFile(outPath, []byte("partial"), 0o644); err != nil {
+		if err := write(p, "partial"); err != nil {
 			return err
 		}
 		close(started)
@@ -506,9 +523,8 @@ func TestRunPicksAFreeNameWhenOneAppearsMidRun(t *testing.T) {
 	h.write(t, "clip.mov")
 	// Someone uploads clip.mp4 while the remux is still writing.
 	racing := func(_ context.Context, p videoutil.RemuxParams) error {
-		outPath := p.Output
 		h.write(t, "clip.mp4")
-		return os.WriteFile(outPath, []byte("encoded"), 0o644)
+		return write(p, "encoded")
 	}
 
 	if err := h.handler(racing).Run(context.Background(), params(t, "clip.mov", "mp4"), func(float64) {}); err != nil {
@@ -522,6 +538,28 @@ func TestRunPicksAFreeNameWhenOneAppearsMidRun(t *testing.T) {
 	}
 }
 
+// TestRunFailsWhenTheDeviceIsUnplugged checks that a retry of a job whose
+// device has gone neither runs nor lands anything: its namespace is gone, and
+// nothing falls back to the internal drive.
+func TestRunFailsWhenTheDeviceIsUnplugged(t *testing.T) {
+	h := newHarness(t)
+	h.write(t, "clip.mov")
+	h.registry.Unregister(vfs.FilesNamespace(testSerial))
+	ran := false
+	remux := func(_ context.Context, p videoutil.RemuxParams) error {
+		ran = true
+		return write(p, "encoded")
+	}
+
+	err := h.handler(remux).Run(context.Background(), params(t, "clip.mov", "mp4"), func(float64) {})
+	if !errors.Is(err, ErrSourceNotFound) || ran {
+		t.Fatalf("Run error = %v, remux ran = %v; want ErrSourceNotFound before any remux", err, ran)
+	}
+	if h.exists("clip.mp4") {
+		t.Error("the output landed")
+	}
+}
+
 func TestValidate(t *testing.T) {
 	h := newHarness(t)
 	h.write(t, "clip.mov")
@@ -530,6 +568,9 @@ func TestValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(outside, filepath.Join(h.filesDir, "escape.mov")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(h.filesDir, "videos.mov"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	validate := h.handler(nil).Validate
@@ -544,6 +585,7 @@ func TestValidate(t *testing.T) {
 		{"source gone", params(t, "gone.mov", "mp4"), ErrSourceNotFound},
 		{"path traversal", params(t, "../../../etc/passwd", "mp4"), ErrInvalidPath},
 		{"symlink out of the files dir", params(t, "escape.mov", "mp4"), ErrInvalidPath},
+		{"a folder", params(t, "videos.mov", "mp4"), ErrSourceNotFound},
 		{"unknown format", params(t, "clip.mov", "h264"), ErrInvalidFormat},
 		{"small quality, which only a re-encode offered", paramsAt(t, "clip.mov", "mp4", "small"), ErrInvalidQuality},
 		{"same format", params(t, "clip.mp4", "mp4"), ErrInvalidFormat},
@@ -593,7 +635,7 @@ func (h harness) queue(t *testing.T) *jobutil.Queue {
 func TestEnqueueQueuesARemuxInTheCopyLane(t *testing.T) {
 	h := newHarness(t)
 	h.fixture(t, "clip.mp4")
-	result, err := Enqueue(context.Background(), EnqueueParams{Queue: h.queue(t), Storage: h.storage, Params: Params{RelPath: "clip.mp4", Serial: testSerial, Format: "mkv"}})
+	result, err := Enqueue(context.Background(), EnqueueParams{Queue: h.queue(t), Registry: h.registry, Params: Params{RelPath: "clip.mp4", Serial: testSerial, Format: "mkv"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -634,10 +676,13 @@ func TestEnqueueRejectsBadRequests(t *testing.T) {
 		{"path traversal", Params{RelPath: "../../../etc/passwd", Serial: testSerial, Format: "mp4"}, ErrInvalidPath},
 		{"missing source", Params{RelPath: "gone.mov", Serial: testSerial, Format: "mp4"}, ErrSourceNotFound},
 		{"not a video", Params{RelPath: "notes.txt", Serial: testSerial, Format: "mp4"}, ErrSourceNotFound},
+		// The internal drive is never asked in its place.
+		{"a device that is not attached", Params{RelPath: "clip.mp4", Serial: "unplugged", Format: "mkv"}, ErrSourceNotFound},
+		{"the device root", Params{RelPath: ".", Serial: testSerial, Format: "mkv"}, ErrInvalidPath},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := Enqueue(context.Background(), EnqueueParams{Queue: queue, Storage: h.storage, Params: c.params})
+			_, err := Enqueue(context.Background(), EnqueueParams{Queue: queue, Registry: h.registry, Params: c.params})
 			if !errors.Is(err, c.wantErr) {
 				t.Errorf("Enqueue error = %v, want %v", err, c.wantErr)
 			}

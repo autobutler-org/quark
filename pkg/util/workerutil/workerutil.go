@@ -1,11 +1,9 @@
-// Package workerutil runs the background worker that processes backup-to-device requests off a channel and reports
-// their errors.
+// Package workerutil runs the background worker the server starts beside it: a loop that runs until it is told to
+// quit, and a logger for the errors it reports.
 package workerutil
 
 import (
 	"log"
-
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
 type Worker interface {
@@ -13,29 +11,18 @@ type Worker interface {
 	GetQuitChannel() chan struct{}
 	GetErrorChannel() chan error
 	LogErrors() error
-	GetBackupToDeviceChannel() storageutil.BackupToDeviceChannel
 }
 
-func NewWorker(svc *storageutil.StorageService) Worker {
+func NewWorker() Worker {
 	return &worker{
-		quitChannel:           make(chan struct{}),
-		errorChannel:          make(chan error),
-		backupToDeviceChannel: make(storageutil.BackupToDeviceChannel),
-		storageService:        svc,
+		quitChannel:  make(chan struct{}),
+		errorChannel: make(chan error),
 	}
 }
 
 func (w *worker) Process() error {
-	for {
-		select {
-		case backupReq := <-w.backupToDeviceChannel:
-			if _, err := w.storageService.BackupToDevice(backupReq); err != nil {
-				w.errorChannel <- err
-			}
-		case <-w.quitChannel:
-			return nil
-		}
-	}
+	<-w.quitChannel
+	return nil
 }
 
 func (w *worker) GetQuitChannel() chan struct{} {
@@ -53,8 +40,4 @@ func (w *worker) LogErrors() error {
 			log.Printf("Worker service error: %v\n", err)
 		}
 	}
-}
-
-func (w *worker) GetBackupToDeviceChannel() storageutil.BackupToDeviceChannel {
-	return w.backupToDeviceChannel
 }

@@ -493,8 +493,6 @@ type WatchParams struct {
 	Bus *eventbus.Bus
 	// Registry holds the files namespace the stores are in.
 	Registry vfs.Registry
-	// Storage lists the trash a permanent delete is checked against.
-	Storage *storageutil.StorageService
 }
 
 // Watch subscribes to the bus and follows the internal device's files: a

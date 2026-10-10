@@ -37,7 +37,6 @@ func trashDevice(c *gin.Context, deps deputil.Dependencies, serial string) trash
 	return trashutil.Device{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		Serial:   serial,
 	}
 }

@@ -1,6 +1,7 @@
 package healthutil_test
 
 import (
+	"os"
 	"sync"
 	"testing"
 
@@ -86,6 +87,19 @@ func TestCurrentHealth_HealthyByDefault(t *testing.T) {
 	// We can't guarantee the exact value on a busy CI runner, but we can
 	// verify the field exists and is readable without panicking.
 	_ = h.Healthy
+}
+
+// TestCurrentHealth_Hostname checks the sample carries the host's name, which
+// the health handler reports without reaching for os itself.
+func TestCurrentHealth_Hostname(t *testing.T) {
+	want, err := os.Hostname()
+	if err != nil {
+		t.Skipf("os.Hostname: %v", err)
+	}
+	c, _ := healthutil.Register()
+	if got := c.CurrentHealth().Hostname; got != want {
+		t.Errorf("Hostname = %q, want %q", got, want)
+	}
 }
 
 // TestCurrentHealth_ConcurrentCallers pins that one Collector serves

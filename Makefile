@@ -1336,8 +1336,14 @@ check/lint/go: internal/server/public/stub.txt check/structure/go ## Check Go co
 	golangci-lint run $$(go list -f '{{.Dir}}' ./... | grep -v '^$(CURDIR)/build/')
 
 .PHONY: check/structure/go
-check/structure/go: ## Check Go package layout conventions (AGENTS.md)
+check/structure/go: test/structure/go ## Check Go package layout and file-access conventions (AGENTS.md)
 	./scripts/check-go-structure.bash
+
+# Runs before the check itself, so a rule that silently stopped matching fails the
+# build rather than passing the tree forever.
+.PHONY: test/structure/go
+test/structure/go: ## Prove check-go-structure.bash fails on a planted violation of each file-access rule
+	./scripts/check-go-structure-test.bash
 
 MIGRATION_BASE_REF ?= origin/main
 

@@ -31,6 +31,7 @@ type HealthStatus struct {
 	DiskUsedBytes      uint64
 	DiskTotalBytes     uint64
 	TemperatureCelsius float64 // highest thermal zone reading, 0 if unavailable
+	Hostname           string  // the host's name, empty if unavailable
 }
 
 // Collector samples host hardware metrics for the health endpoint.

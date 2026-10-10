@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"image"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -28,6 +29,34 @@ const (
 	av1Fixture     = "testdata/av1-opus.webm"
 	vp8Fixture     = "testdata/vp8-vorbis.webm"
 )
+
+// openFixture opens the video at the host path p as a Source, closed when the
+// test ends.
+func openFixture(t *testing.T, p string) Source {
+	t.Helper()
+	f, err := os.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = f.Close() })
+	stat, err := f.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Source{File: f, Size: stat.Size(), Name: filepath.Base(p)}
+}
+
+// create creates the host file at p for a Trim or Remux to write, closed when
+// the test ends.
+func create(t *testing.T, p string) *os.File {
+	t.Helper()
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = f.Close() })
+	return f
+}
 
 func TestProbe(t *testing.T) {
 	info, err := Probe(context.Background(), gopFixture)
@@ -115,7 +144,7 @@ func TestTargets(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := Targets(c.source)
+			got, err := Targets(openFixture(t, c.source))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -149,7 +178,7 @@ func TestTrimStartsWhereAsked(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			out := filepath.Join(t.TempDir(), "clip."+c.format)
-			result, err := Trim(context.Background(), TrimParams{Source: c.source, Output: out, Start: c.start, End: c.end})
+			result, err := Trim(context.Background(), TrimParams{Source: openFixture(t, c.source), Output: create(t, out), Start: c.start, End: c.end})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -174,7 +203,7 @@ func TestTrimStartsWhereAsked(t *testing.T) {
 // the start of the source.
 func TestTrimKeepsTheMiddle(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "clip.mp4")
-	if _, err := Trim(context.Background(), TrimParams{Source: gopFixture, Output: out, Start: 1200 * time.Millisecond, End: 2200 * time.Millisecond}); err != nil {
+	if _, err := Trim(context.Background(), TrimParams{Source: openFixture(t, gopFixture), Output: create(t, out), Start: 1200 * time.Millisecond, End: 2200 * time.Millisecond}); err != nil {
 		t.Fatal(err)
 	}
 	source, clip := mdatPayload(t, gopFixture), mdatPayload(t, out)
@@ -192,15 +221,14 @@ func TestTrimACutAgain(t *testing.T) {
 	for _, format := range []Format{"mp4", "mov", "mkv"} {
 		dir := t.TempDir()
 		source := filepath.Join(dir, "source."+string(format))
-		if err := Remux(context.Background(), RemuxParams{Source: gopFixture, Output: source, Format: format}); err != nil {
+		if err := Remux(context.Background(), RemuxParams{Source: openFixture(t, gopFixture), Output: create(t, source), Format: format}); err != nil {
 			t.Fatalf("%s: %v", format, err)
 		}
 		clip := filepath.Join(dir, "clip."+string(format))
-		if _, err := Trim(context.Background(), TrimParams{Source: source, Output: clip, Start: 1200 * time.Millisecond, End: 2900 * time.Millisecond}); err != nil {
+		if _, err := Trim(context.Background(), TrimParams{Source: openFixture(t, source), Output: create(t, clip), Start: 1200 * time.Millisecond, End: 2900 * time.Millisecond}); err != nil {
 			t.Fatalf("%s: %v", format, err)
 		}
-		again := filepath.Join(dir, "again."+string(format))
-		result, err := Trim(context.Background(), TrimParams{Source: clip, Output: again, Start: 600 * time.Millisecond, End: 1500 * time.Millisecond})
+		result, err := Trim(context.Background(), TrimParams{Source: openFixture(t, clip), Output: io.Discard, Start: 600 * time.Millisecond, End: 1500 * time.Millisecond})
 		if err != nil {
 			t.Fatalf("%s: %v", format, err)
 		}
@@ -229,20 +257,16 @@ func mdatPayload(t *testing.T, path string) []byte {
 }
 
 func TestTrimRefusesATransportStream(t *testing.T) {
-	out := filepath.Join(t.TempDir(), "clip.ts")
-	_, err := Trim(context.Background(), TrimParams{Source: tsFixture, Output: out, Start: 0, End: time.Second})
+	_, err := Trim(context.Background(), TrimParams{Source: openFixture(t, tsFixture), Output: io.Discard, Start: 0, End: time.Second})
 	if !errors.Is(err, ErrCannotTrim) {
 		t.Fatalf("err = %v, want ErrCannotTrim", err)
-	}
-	if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
-		t.Fatalf("a failed trim left its output behind: %v", statErr)
 	}
 }
 
 func TestRemux(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "out")
 	var progress []float64
-	err := Remux(context.Background(), RemuxParams{Source: gopFixture, Output: out, Format: "mkv", OnProgress: func(f float64) {
+	err := Remux(context.Background(), RemuxParams{Source: openFixture(t, gopFixture), Output: create(t, out), Format: "mkv", OnProgress: func(f float64) {
 		progress = append(progress, f)
 	}})
 	if err != nil {
@@ -260,7 +284,7 @@ func TestRemux(t *testing.T) {
 	}
 }
 
-func TestRemuxFailuresLeaveNothingBehind(t *testing.T) {
+func TestRemuxFailures(t *testing.T) {
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	cases := []struct {
@@ -274,20 +298,16 @@ func TestRemuxFailuresLeaveNothingBehind(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			out := filepath.Join(t.TempDir(), "out")
-			err := Remux(c.ctx, RemuxParams{Source: gopFixture, Output: out, Format: c.format})
+			err := Remux(c.ctx, RemuxParams{Source: openFixture(t, gopFixture), Output: io.Discard, Format: c.format})
 			if err == nil || (c.want != nil && !errors.Is(err, c.want)) {
 				t.Fatalf("err = %v, want %v", err, c.want)
-			}
-			if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
-				t.Fatalf("a failed remux left its output behind: %v", statErr)
 			}
 		})
 	}
 }
 
 func TestRemuxRefusesAnUnknownFormat(t *testing.T) {
-	if err := Remux(context.Background(), RemuxParams{Source: gopFixture, Output: filepath.Join(t.TempDir(), "out"), Format: "avi"}); err == nil {
+	if err := Remux(context.Background(), RemuxParams{Source: openFixture(t, gopFixture), Output: io.Discard, Format: "avi"}); err == nil {
 		t.Fatal("Remux into avi succeeded")
 	}
 }

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -25,11 +24,8 @@ type Device struct {
 	// Ctx is the operation's context; nil is context.Background().
 	Ctx context.Context
 	// Registry resolves the device's namespace, [vfs.FilesNamespace](Serial).
-	// Nil — a server or a test built without one — stands in the namespaces
-	// Storage's managed devices would have registered.
+	// Nil holds no namespaces, so every device is not found.
 	Registry vfs.Registry
-	// Storage backs the stand-in namespaces when Registry is nil.
-	Storage *storageutil.StorageService
 	// Serial names the device, empty for the internal one.
 	Serial string
 }
@@ -210,9 +206,8 @@ func Empty(params EmptyParams) (EmptyResult, error) {
 type PurgeExpiredParams struct {
 	Ctx context.Context
 	// Registry holds a namespace per device; every files namespace with a
-	// trash is swept. Nil stands in Storage's devices, as for [Device].
+	// trash is swept. Nil sweeps nothing.
 	Registry vfs.Registry
-	Storage  *storageutil.StorageService
 	// EventBus hears trash_changed for each device that lost an item. Nil
 	// skips it.
 	EventBus *eventbus.Bus

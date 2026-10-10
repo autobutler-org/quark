@@ -61,15 +61,16 @@ func TestFilterPhotoFiles(t *testing.T) {
 	}
 }
 
-func TestImageToThumbnail(t *testing.T) {
+func TestGenerateThumbnail_Crops(t *testing.T) {
 	tmpDir := t.TempDir()
 	imagePath := filepath.Join(tmpDir, "test.png")
 	createTestImage(t, imagePath, 200, 200)
 
-	thumbnail, format, err := ImageToThumbnail(imagePath, 50, 50)
+	result, err := GenerateThumbnail(GenerateThumbnailParams{FilePath: imagePath, Width: 50, Height: 50})
 	if err != nil {
-		t.Fatalf("ImageToThumbnail failed: %v", err)
+		t.Fatalf("GenerateThumbnail failed: %v", err)
 	}
+	thumbnail, format := result.Thumbnail, result.Format
 
 	if thumbnail == nil {
 		t.Fatal("Expected non-nil thumbnail")
@@ -85,15 +86,16 @@ func TestImageToThumbnail(t *testing.T) {
 	}
 }
 
-func TestImageToThumbnail_NonSquareLandscape(t *testing.T) {
+func TestGenerateThumbnail_Crops_NonSquareLandscape(t *testing.T) {
 	tmpDir := t.TempDir()
 	imagePath := filepath.Join(tmpDir, "landscape.png")
 	createTestImage(t, imagePath, 400, 200) // 2:1 landscape
 
-	thumbnail, _, err := ImageToThumbnail(imagePath, 50, 50)
+	result, err := GenerateThumbnail(GenerateThumbnailParams{FilePath: imagePath, Width: 50, Height: 50})
 	if err != nil {
-		t.Fatalf("ImageToThumbnail failed: %v", err)
+		t.Fatalf("GenerateThumbnail failed: %v", err)
 	}
+	thumbnail := result.Thumbnail
 
 	bounds := thumbnail.Bounds()
 	if bounds.Dx() != 50 || bounds.Dy() != 50 {
@@ -101,15 +103,16 @@ func TestImageToThumbnail_NonSquareLandscape(t *testing.T) {
 	}
 }
 
-func TestImageToThumbnail_NonSquarePortrait(t *testing.T) {
+func TestGenerateThumbnail_Crops_NonSquarePortrait(t *testing.T) {
 	tmpDir := t.TempDir()
 	imagePath := filepath.Join(tmpDir, "portrait.png")
 	createTestImage(t, imagePath, 200, 400) // 1:2 portrait
 
-	thumbnail, _, err := ImageToThumbnail(imagePath, 50, 50)
+	result, err := GenerateThumbnail(GenerateThumbnailParams{FilePath: imagePath, Width: 50, Height: 50})
 	if err != nil {
-		t.Fatalf("ImageToThumbnail failed: %v", err)
+		t.Fatalf("GenerateThumbnail failed: %v", err)
 	}
+	thumbnail := result.Thumbnail
 
 	bounds := thumbnail.Bounds()
 	if bounds.Dx() != 50 || bounds.Dy() != 50 {
@@ -284,8 +287,8 @@ func TestFilterPhotoFiles_MixedFiles(t *testing.T) {
 	}
 }
 
-func TestImageToThumbnail_NonExistentFile(t *testing.T) {
-	_, _, err := ImageToThumbnail("/nonexistent/file.jpg", 50, 50)
+func TestGenerateThumbnail_NonExistentFile(t *testing.T) {
+	_, err := GenerateThumbnail(GenerateThumbnailParams{FilePath: "/nonexistent/file.jpg", Width: 50, Height: 50})
 	if err == nil {
 		t.Error("Expected error for non-existent file")
 	}
@@ -344,12 +347,12 @@ func photoNames(photos []PhotoSummary) []string {
 	return names
 }
 
-func TestImageToThumbnail_InvalidImage(t *testing.T) {
+func TestGenerateThumbnail_InvalidImage(t *testing.T) {
 	tmpDir := t.TempDir()
 	invalidFile := filepath.Join(tmpDir, "invalid.jpg")
 	os.WriteFile(invalidFile, []byte("not an image"), 0644)
 
-	_, _, err := ImageToThumbnail(invalidFile, 50, 50)
+	_, err := GenerateThumbnail(GenerateThumbnailParams{FilePath: invalidFile, Width: 50, Height: 50})
 	if err == nil {
 		t.Error("Expected error for invalid image file")
 	}

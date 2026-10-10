@@ -113,7 +113,16 @@ flowchart TD
 ## Virtual filesystem
 
 `pkg/vfs` puts one interface over every place bytes can live. Handlers and services ask the registry for a
-namespace; today the server registers one, `files`, backed by the storage service across all managed devices.
+namespace. The server registers one per managed device: `files` for the internal drive and `files:<serial>` for
+each USB drive (`vfs.FilesNamespace`), each a `StorageServiceVFS` rooted at that device's files directory. The
+storage service finds the devices; it has no file operations of its own, and the disk work behind a device
+namespace (listing, walking, moving, the trash) is private to `pkg/vfs`.
+
+The compiler keeps the storage service's file operations out of reach; `scripts/check-go-structure.bash` covers
+what it cannot see, a path built by hand. Handlers may not import `os`, and the files directory, a namespace's
+host path (`vfs.HostPather`, for external tools such as dcraw and ffmpeg) and `os` file calls under `pkg/util/`
+are each confined to a commented allowlist in that script. The packages on the `os` list own data outside the
+user's files: the thumbnail cache, upload and transcode staging, settings, system configuration.
 
 ```mermaid
 classDiagram
@@ -137,6 +146,13 @@ classDiagram
         <<interface>>
         MoveFileIn(ctx, srcAbs, path, opts)
     }
+    class Trasher {
+        <<interface>>
+        Trash(ctx, paths, opts) []TrashedItem
+        ListTrash(ctx) []TrashItem
+        RestoreTrash(ctx, refs) []RestoredItem
+        DeleteTrash(ctx, refs) []string
+    }
     class Registry {
         Register(Namespace, VFS)
         Get(id) VFS
@@ -153,6 +169,7 @@ classDiagram
     HostPather <|.. StorageServiceVFS
     FileMover <|.. LocalVFS
     FileMover <|.. StorageServiceVFS
+    Trasher <|.. StorageServiceVFS
     Registry o-- VFS
     MetadataStore <|.. SQLiteMetadataStore : vfs_metadata
 ```
@@ -170,6 +187,9 @@ Every implementation keeps one contract, which `pkg/vfs/conformance_test.go` hol
 - `Delete` of a non-empty directory without `Recursive` is `ErrNotEmpty`.
 - `HostPather` gives a host-backed namespace's path to an external process (dcraw, exiftool, ffmpeg) or to
   symlink resolution. It is never a way around `Open`.
+- `Trasher` is the trash of a device namespace. A user delete moves an item there; `Delete` stays the permanent
+  removal. A trashed item keeps an address, `.trash/<trash name>/...`, which `Stat`, `Open` and `HostPath`
+  resolve into the trash beside the device's files directory.
 
 ## The vault
 

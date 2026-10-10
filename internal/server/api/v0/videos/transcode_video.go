@@ -50,8 +50,8 @@ func transcodeVideo(c *gin.Context) *serverutil.Response {
 	}
 
 	result, err := transcodeutil.Enqueue(c.Request.Context(), transcodeutil.EnqueueParams{
-		Queue:   deps.JobQueue(),
-		Storage: deps.StorageService(),
+		Queue:    deps.JobQueue(),
+		Registry: deps.VFSRegistry(),
 		Params: transcodeutil.Params{
 			RelPath: req.RelPath,
 			Serial:  req.Serial,

@@ -26,12 +26,7 @@ func (v *StorageServiceVFS) Trash(_ context.Context, paths []string, opts TrashO
 	if err != nil {
 		return nil, err
 	}
-	result, err := storageutil.TrashFilesImpl(storageutil.TrashFilesParams{
-		RootDir:   opts.RootDir,
-		FilePaths: paths,
-		TrashedBy: opts.TrashedBy,
-	}, filesDir)
-	return result.Trashed, err
+	return hostTrash(filesDir, paths, opts)
 }
 
 // ListTrash lists this device's trash. See [Trasher].
@@ -40,7 +35,7 @@ func (v *StorageServiceVFS) ListTrash(_ context.Context) ([]TrashItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	return storageutil.ListTrashImpl(filesDir)
+	return hostListTrash(filesDir)
 }
 
 // ReadTrashEntry reads one item's record in this device's trash. See
@@ -50,7 +45,7 @@ func (v *StorageServiceVFS) ReadTrashEntry(_ context.Context, trashName string) 
 	if err != nil {
 		return TrashEntry{}, err
 	}
-	return storageutil.ReadTrashEntryImpl(filesDir, trashName)
+	return hostReadTrashEntry(filesDir, trashName)
 }
 
 // ListTrashContents lists a folder in this device's trash. See [Trasher].
@@ -59,7 +54,7 @@ func (v *StorageServiceVFS) ListTrashContents(_ context.Context, ref TrashRef) (
 	if err != nil {
 		return TrashContents{}, err
 	}
-	return storageutil.ListTrashContentsImpl(ref, filesDir)
+	return hostListTrashContents(filesDir, ref)
 }
 
 // RestoreTrash puts items from this device's trash back. See [Trasher].
@@ -68,8 +63,7 @@ func (v *StorageServiceVFS) RestoreTrash(_ context.Context, refs []TrashRef) ([]
 	if err != nil {
 		return nil, err
 	}
-	result, err := storageutil.RestoreTrashImpl(storageutil.RestoreTrashParams{Items: refs}, filesDir)
-	return result.Restored, err
+	return hostRestoreTrash(filesDir, refs)
 }
 
 // DeleteTrash deletes items from this device's trash for good. See [Trasher].
@@ -78,8 +72,7 @@ func (v *StorageServiceVFS) DeleteTrash(_ context.Context, refs []TrashRef) ([]s
 	if err != nil {
 		return nil, err
 	}
-	result, err := storageutil.DeleteTrashImpl(storageutil.DeleteTrashParams{Items: refs}, filesDir)
-	return result.Removed, err
+	return hostDeleteTrash(filesDir, refs)
 }
 
 // EmptyTrash deletes everything in this device's trash. See [Trasher].
@@ -88,7 +81,7 @@ func (v *StorageServiceVFS) EmptyTrash(_ context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return storageutil.EmptyTrashImpl(filesDir)
+	return hostEmptyTrash(filesDir)
 }
 
 // PurgeExpiredTrash deletes the expired items in this device's trash. See
@@ -98,5 +91,5 @@ func (v *StorageServiceVFS) PurgeExpiredTrash(_ context.Context, now time.Time) 
 	if err != nil {
 		return nil, err
 	}
-	return storageutil.PurgeExpiredTrashImpl(filesDir, now)
+	return hostPurgeExpiredTrash(filesDir, now)
 }

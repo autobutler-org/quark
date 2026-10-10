@@ -53,7 +53,8 @@ The handler contract, from `AGENTS.md`:
    handler streamed the response itself.
 
 Directory names match URL segments (`/api/v0/albums/*` → `api/v0/albums/`), packages are named `v0_<segment>`,
-and `scripts/check-go-structure.bash` enforces the file layout.
+and `scripts/check-go-structure.bash` enforces the file layout and keeps handlers off `os`: file access goes
+through `pkg/vfs` (see [Data](data.md#virtual-filesystem)).
 
 ## Dependency graph
 
@@ -85,9 +86,9 @@ classDiagram
     Dependencies --> DatabaseSqlc : quark.db
     Dependencies --> DatabaseRaw : quark.health.db
     Dependencies --> StorageService : managed devices
-    Dependencies --> Registry : namespace "files"
+    Dependencies --> Registry : a files namespace per device
     Registry --> StorageServiceVFS
-    StorageServiceVFS --> StorageService
+    StorageServiceVFS --> StorageService : finds its device
     Dependencies --> Bus
     Dependencies --> Queue
     Queue --> DatabaseSqlc : jobs table
