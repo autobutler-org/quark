@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
@@ -265,14 +266,16 @@ type MetaEntry struct {
 	Meta      map[string]json.RawMessage `json:"meta"`
 }
 
-// SQLiteMetadataStore implements MetadataStore using raw SQL against the vfs_metadata table.
+// SQLiteMetadataStore implements MetadataStore on the vfs_metadata table.
 type SQLiteMetadataStore struct {
-	db *sql.DB
+	// db opens the transaction a multi-key write runs in.
+	db      *sql.DB
+	queries *db.Queries
 }
 
 // NewSQLiteMetadataStore returns a MetadataStore backed by the given *sql.DB.
-func NewSQLiteMetadataStore(db *sql.DB) *SQLiteMetadataStore {
-	return &SQLiteMetadataStore{db: db}
+func NewSQLiteMetadataStore(conn *sql.DB) *SQLiteMetadataStore {
+	return &SQLiteMetadataStore{db: conn, queries: db.New(conn)}
 }
 
 // LocalVFS is a VFS backed by a directory on the host filesystem.
@@ -318,13 +321,13 @@ func NewMemVFS(namespaceID string) *MemVFS {
 // Used for namespaces whose data is virtual (no physical disk backing),
 // such as the photos namespace (albums, playlists).
 type DBVFS struct {
-	db          *sql.DB
+	queries     *db.Queries
 	namespaceID string
 }
 
-// NewDBVFS returns a DBVFS for the given namespace backed by db.
-func NewDBVFS(db *sql.DB, namespaceID string) *DBVFS {
-	return &DBVFS{db: db, namespaceID: namespaceID}
+// NewDBVFS returns a DBVFS for the given namespace backed by conn.
+func NewDBVFS(conn *sql.DB, namespaceID string) *DBVFS {
+	return &DBVFS{queries: db.New(conn), namespaceID: namespaceID}
 }
 
 // StorageServiceVFS adapts storageutil.StorageService to the VFS interface

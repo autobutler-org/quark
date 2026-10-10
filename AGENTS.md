@@ -240,8 +240,6 @@ Every query lives in `sql/queries/*.sql` and reaches Go as generated code in `in
   statements built from `sqlite_master` at runtime (`internal/db/reset.go`), and writes to a database
   outside the migration set (the external backup vault in `pkg/backup/vault_export.go`, whose schema is
   `internal/db/vault_schema.go`).
-- `pkg/vfs` still issues its `vfs_metadata` and `vfs_db_entries` statements as raw SQL. That is a conversion
-  nobody has done yet, not an exception — do not cite it as precedent.
 
 ### Backend development assumptions
 

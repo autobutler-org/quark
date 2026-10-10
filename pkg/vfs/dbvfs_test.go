@@ -2,9 +2,11 @@ package vfs_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -217,5 +219,65 @@ func TestDBVFS_WatchNotSupported(t *testing.T) {
 	_, err := v.Watch(ctx, "/")
 	if err != vfs.ErrWatchNotSupported {
 		t.Fatalf("expected ErrWatchNotSupported, got %v", err)
+	}
+}
+
+// A directory name outside ASCII is as long in characters as SQLite's substr
+// counts it, not as long in bytes.
+func TestDBVFS_NonASCIIDirectory(t *testing.T) {
+	v := newDBVFS(t, "photos")
+	ctx := context.Background()
+
+	if err := v.Write(ctx, "/été/a.txt", strings.NewReader("a"), vfs.WriteOptions{}); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	entries, err := v.List(ctx, "/été", nil)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Path != "été/a.txt" {
+		t.Fatalf("expected [été/a.txt], got %v", entries)
+	}
+
+	if err := v.Delete(ctx, "/été", vfs.DeleteOptions{}); !errors.Is(err, vfs.ErrNotEmpty) {
+		t.Fatalf("Delete non-empty: got %v, want ErrNotEmpty", err)
+	}
+
+	if err := v.Move(ctx, "/été", "/winter"); err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+	if _, err := v.Stat(ctx, "/winter/a.txt"); err != nil {
+		t.Fatalf("Stat after move: %v", err)
+	}
+
+	if err := v.Delete(ctx, "/winter", vfs.DeleteOptions{Recursive: true}); err != nil {
+		t.Fatalf("Delete recursive: %v", err)
+	}
+	if _, err := v.Stat(ctx, "/winter/a.txt"); !errors.Is(err, vfs.ErrNotFound) {
+		t.Fatalf("Stat after delete: got %v, want ErrNotFound", err)
+	}
+}
+
+func TestDBVFS_ModTime(t *testing.T) {
+	v := newDBVFS(t, "photos")
+	ctx := context.Background()
+
+	if err := v.Write(ctx, "/a.txt", strings.NewReader("a"), vfs.WriteOptions{}); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	info, err := v.Stat(ctx, "/a.txt")
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if age := time.Since(info.ModTime); age < -time.Minute || age > time.Minute {
+		t.Fatalf("ModTime %v is not the write time", info.ModTime)
+	}
+	entries, err := v.List(ctx, "/", nil)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(entries) != 1 || !entries[0].ModTime.Equal(info.ModTime) {
+		t.Fatalf("List ModTime: got %v, want %v", entries, info.ModTime)
 	}
 }
