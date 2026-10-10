@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // MaxExtractBytes is the maximum number of bytes read from a file for indexing.
@@ -104,19 +106,55 @@ func DeleteContentBySerial(ctx context.Context, sqlDB *sql.DB, serial string) er
 	return db.New(sqlDB).DeleteFileContentBySerial(ctx, serial)
 }
 
-// IndexFile extracts text from path and upserts it into the index.
-// If the file is not indexable (non-text format), the call is a no-op.
-func IndexFile(ctx context.Context, sqlDB *sql.DB, serial, relPath, absPath string) error {
-	text := ExtractText(absPath)
-	if text == "" {
+// IndexFile extracts the text of the file at relPath in fsys, the files
+// namespace of the device with serial, and upserts it into the index. A file
+// that is not indexable (a non-text format) is never opened, and one in the
+// trash is never indexed: both are no-ops.
+func IndexFile(ctx context.Context, sqlDB *sql.DB, fsys vfs.VFS, serial, relPath string) error {
+	if !IsIndexable(relPath) || storageutil.IsTrashPath(relPath) {
 		return nil
+	}
+	text, err := extractFile(ctx, fsys, relPath)
+	if err != nil || text == "" {
+		return err
 	}
 	return UpsertContent(ctx, sqlDB, serial, relPath, text)
 }
 
 // IndexFileWithTimeout is like IndexFile but cancels extraction after d.
-func IndexFileWithTimeout(sqlDB *sql.DB, serial, relPath, absPath string, d time.Duration) error {
+func IndexFileWithTimeout(sqlDB *sql.DB, fsys vfs.VFS, serial, relPath string, d time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), d)
 	defer cancel()
-	return IndexFile(ctx, sqlDB, serial, relPath, absPath)
+	return IndexFile(ctx, sqlDB, fsys, serial, relPath)
+}
+
+// BackfillTreeParams names the device whose files BackfillTree indexes.
+type BackfillTreeParams struct {
+	// DB holds the content index.
+	DB *sql.DB
+	// Serial is the device's serial, empty for the internal drive.
+	Serial string
+	// FS is the device's files namespace.
+	FS vfs.VFS
+}
+
+// BackfillTree walks the device's files namespace and indexes the contents of
+// every indexable file in it, attributing them to its serial.
+//
+// The content index is kept in sync by file events, which only covers files
+// written after the indexer starts. This pass is what makes files that were
+// already on disk searchable, so it must run at least once per device — at
+// startup, or after a change to what ExtractText understands.
+//
+// Every file is re-extracted rather than skipped by timestamp. That costs a
+// re-read of each file per pass, which is cheap at MaxExtractBytes, and it
+// means improvements to extraction are picked up on the next run instead of
+// silently applying only to newly written files.
+//
+// The walk streams through vfs.Walk and is best-effort: an unreadable subtree
+// is skipped, and unreadable files and failed inserts are counted in the
+// result and skipped. The trash is never walked. An error is returned only
+// when the walk itself cannot proceed, and ctx cancellation stops it early.
+func BackfillTree(ctx context.Context, params BackfillTreeParams) (BackfillResult, error) {
+	return backfillTree(ctx, params)
 }

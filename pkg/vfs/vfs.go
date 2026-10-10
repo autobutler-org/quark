@@ -55,6 +55,20 @@ type HostPather interface {
 	HostPath(ctx context.Context, path string) (string, error)
 }
 
+// Walker is implemented by namespaces that can stream a subtree one entry at a
+// time. [Walk] uses it when it is there, so a walk of a whole library never
+// holds more than one entry, and falls back to one [VFS.List] per directory
+// when it is not.
+type Walker interface {
+	// Walk calls visit for every entry under path. See [Walk].
+	Walk(ctx context.Context, path string, visit WalkFunc) error
+}
+
+// WalkFunc is called by [Walk] for each entry. Returning fs.SkipDir from a
+// directory skips its contents, fs.SkipAll ends the walk, and both count as
+// success; any other error stops the walk and is returned.
+type WalkFunc func(FileInfo) error
+
 // FileMover is implemented by namespaces backed by a host directory. A caller
 // already holding the finished file on disk — a completed chunked upload —
 // hands it over instead of copying it, so a 4 GiB file is not written twice
@@ -362,6 +376,14 @@ func FilesNamespaceSerial(namespaceID string) (string, bool) {
 	return "", false
 }
 
+// FilesNamespaces returns every managed device's files namespace registered
+// in registry, keyed by device serial ("" for the internal drive). A walker of
+// the whole library — the filename index, the content index backfill — visits
+// these.
+func FilesNamespaces(registry Registry) map[string]VFS {
+	return filesNamespaces(registry)
+}
+
 // SyncDeviceNamespacesParams names the registry to reconcile and the storage
 // service whose managed devices it should hold.
 type SyncDeviceNamespacesParams struct {
@@ -411,4 +433,14 @@ func ListDevices(params ListDevicesParams) ([]FileInfo, error) {
 // half-written, and it honors opts.IfNoneMatch.
 func CopyBetween(ctx context.Context, src VFS, srcPath string, dst VFS, dstPath string, opts CopyOptions) error {
 	return copyFile(ctx, src, srcPath, dst, dstPath, opts)
+}
+
+// Walk calls visit for every entry under path in fsys, in lexical order within
+// each directory, a directory before what it holds. path itself is not
+// visited. Walks are best-effort: a subtree that cannot be read is skipped
+// rather than failing the walk. A path that does not exist is [ErrNotFound],
+// and a ".trash/..." path is [ErrPermissionDenied], since the trash is never
+// part of a walk of the user tree.
+func Walk(ctx context.Context, fsys VFS, path string, visit WalkFunc) error {
+	return walk(ctx, fsys, path, visit)
 }

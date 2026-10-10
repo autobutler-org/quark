@@ -156,3 +156,20 @@ func listDevices(params ListDevicesParams) ([]FileInfo, error) {
 	}
 	return out, nil
 }
+
+func filesNamespaces(registry Registry) map[string]VFS {
+	out := make(map[string]VFS)
+	if registry == nil {
+		return out
+	}
+	for _, ns := range registry.List("") {
+		serial, ok := FilesNamespaceSerial(ns.ID)
+		if !ok {
+			continue
+		}
+		if fsys, ok := registry.Get(ns.ID); ok {
+			out[serial] = fsys
+		}
+	}
+	return out
+}

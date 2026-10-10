@@ -55,6 +55,7 @@ func TestListBooks_Access(t *testing.T) {
 	}
 	deps := deputil.NewDependencies().
 		WithStorageService(storageutil.NewStorageService(systemDevice{})).
+		WithVFSRegistry(internalRegistry(t)).
 		WithDatabase(database)
 	principal := accessutil.System
 

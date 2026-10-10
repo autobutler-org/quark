@@ -2,10 +2,13 @@ package searchutil
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // --- .qdoc / .qsheet / .qslide extraction ---
@@ -30,7 +33,7 @@ func TestExtractText_Qdoc(t *testing.T) {
 	const delta = `{"ops":[{"insert":"hello world"},{"insert":"\nsecond line\n"}]}`
 	path := writeTemp(t, "notes.qdoc", delta)
 
-	got := ExtractText(path)
+	got := extractTemp(t, path)
 	const want = "hello world\nsecond line"
 	if got != want {
 		t.Errorf("ExtractText = %q, want %q", got, want)
@@ -47,7 +50,7 @@ func TestExtractText_QdocSkipsEmbeds(t *testing.T) {
 	const delta = `{"ops":[{"insert":"before "},{"insert":{"image":"a.png"}},{"insert":"after"}]}`
 	path := writeTemp(t, "embed.qdoc", delta)
 
-	if got, want := ExtractText(path), "before after"; got != want {
+	if got, want := extractTemp(t, path), "before after"; got != want {
 		t.Errorf("ExtractText = %q, want %q", got, want)
 	}
 }
@@ -56,7 +59,7 @@ func TestExtractText_Qsheet(t *testing.T) {
 	const sheet = `{"tabs":[{"name":"Budget","data":{"rows":[["=B1+B2","rent"],["",42]]}}]}`
 	path := writeTemp(t, "budget.qsheet", sheet)
 
-	got := ExtractText(path)
+	got := extractTemp(t, path)
 	for _, want := range []string{"Budget", "=B1+B2", "rent", "42"} {
 		if !containsAny(got, want) {
 			t.Errorf("ExtractText = %q, missing %q", got, want)
@@ -76,7 +79,7 @@ func TestExtractText_Qslide(t *testing.T) {
 		`"notes":"say thanks"}]}`
 	path := writeTemp(t, "review.qslide", deck)
 
-	got := ExtractText(path)
+	got := extractTemp(t, path)
 	for _, want := range []string{"Quarterly review", "Revenue grew", "second", "say thanks"} {
 		if !containsAny(got, want) {
 			t.Errorf("ExtractText = %q, missing %q", got, want)
@@ -93,7 +96,7 @@ func TestExtractText_MalformedQdocFallsBackToRaw(t *testing.T) {
 	const broken = `{"ops":[{"insert":"unterminated`
 	path := writeTemp(t, "broken.qdoc", broken)
 
-	if got := ExtractText(path); got != broken {
+	if got := extractTemp(t, path); got != broken {
 		t.Errorf("ExtractText = %q, want raw fallback %q", got, broken)
 	}
 }
@@ -106,7 +109,7 @@ func TestBackfillThenSearch_Qdoc(t *testing.T) {
 	writeAt(t, filepath.Join(dir, "something.txt.qdoc"),
 		`{"ops":[{"insert":"sdfsdfsadfsdffsdfasdf\n"}]}`)
 
-	res, err := BackfillTree(context.Background(), db, "", dir)
+	res, err := backfill(t, db, "", dir)
 	if err != nil {
 		t.Fatalf("BackfillTree: %v", err)
 	}
@@ -135,7 +138,7 @@ func TestBackfillTree_IndexesNestedAndSkipsBinary(t *testing.T) {
 	writeAt(t, filepath.Join(dir, "sub", "nested.md"), "bravo")
 	writeAt(t, filepath.Join(dir, "photo.jpg"), "not indexable")
 
-	res, err := BackfillTree(context.Background(), db, "SERIAL1", dir)
+	res, err := backfill(t, db, "SERIAL1", dir)
 	if err != nil {
 		t.Fatalf("BackfillTree: %v", err)
 	}
@@ -168,9 +171,9 @@ func TestBackfillTree_SkipsTrash(t *testing.T) {
 	db := newTestDB(t)
 	dir := t.TempDir()
 	writeAt(t, filepath.Join(dir, "kept.txt"), "charlie")
-	writeAt(t, filepath.Join(dir, trashDirName, "deleted.txt"), "charlie")
+	writeAt(t, filepath.Join(dir, ".trash", "deleted.txt"), "charlie")
 
-	res, err := BackfillTree(context.Background(), db, "", dir)
+	res, err := backfill(t, db, "", dir)
 	if err != nil {
 		t.Fatalf("BackfillTree: %v", err)
 	}
@@ -198,11 +201,11 @@ func TestBackfillTree_RerunUpdatesInPlace(t *testing.T) {
 	path := filepath.Join(dir, "note.txt")
 	writeAt(t, path, "original")
 
-	if _, err := BackfillTree(context.Background(), db, "", dir); err != nil {
+	if _, err := backfill(t, db, "", dir); err != nil {
 		t.Fatalf("first BackfillTree: %v", err)
 	}
 	writeAt(t, path, "revised")
-	if _, err := BackfillTree(context.Background(), db, "", dir); err != nil {
+	if _, err := backfill(t, db, "", dir); err != nil {
 		t.Fatalf("second BackfillTree: %v", err)
 	}
 
@@ -232,7 +235,15 @@ func TestBackfillTree_RerunUpdatesInPlace(t *testing.T) {
 
 func TestBackfillTree_MissingDirIsNotAnError(t *testing.T) {
 	db := newTestDB(t)
-	res, err := BackfillTree(context.Background(), db, "", filepath.Join(t.TempDir(), "absent"))
+	dir := filepath.Join(t.TempDir(), "absent")
+	fsys, err := vfs.NewLocalVFS(dir, "files")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(dir); err != nil {
+		t.Fatal(err)
+	}
+	res, err := BackfillTree(context.Background(), BackfillTreeParams{DB: db, FS: fsys})
 	if err != nil {
 		t.Errorf("BackfillTree on missing dir returned %v, want nil", err)
 	}
@@ -241,7 +252,54 @@ func TestBackfillTree_MissingDirIsNotAnError(t *testing.T) {
 	}
 }
 
+// The walk goes through the namespace it is handed, any namespace: an
+// in-memory one indexes the same as the disk.
+func TestBackfillTree_MemVFS(t *testing.T) {
+	db := newTestDB(t)
+	mem := vfs.NewMemVFS("files:USB1")
+	for p, content := range map[string]string{"a/notes.md": "delta", "b.jpg": "delta", ".trash/x.txt": "delta"} {
+		if err := mem.Write(context.Background(), p, strings.NewReader(content), vfs.WriteOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := BackfillTree(context.Background(), BackfillTreeParams{DB: db, Serial: "USB1", FS: mem})
+	if err != nil {
+		t.Fatalf("BackfillTree: %v", err)
+	}
+	if res.Scanned != 2 || res.Indexed != 1 {
+		t.Errorf("result = %+v, want 2 scanned and 1 indexed", res)
+	}
+	hits, err := Search(context.Background(), db, "delta", 10)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(hits) != 1 || hits[0].RelPath != "a/notes.md" || hits[0].Serial != "USB1" {
+		t.Errorf("hits = %+v, want a/notes.md on USB1", hits)
+	}
+}
+
 // --- helpers ---
+
+// backfill indexes dir through a namespace rooted at it.
+func backfill(t *testing.T, db *sql.DB, serial, dir string) (BackfillResult, error) {
+	t.Helper()
+	fsys, err := vfs.NewLocalVFS(dir, "files")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return BackfillTree(context.Background(), BackfillTreeParams{DB: db, Serial: serial, FS: fsys})
+}
+
+// extractTemp extracts the text of the file at path.
+func extractTemp(t *testing.T, path string) string {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	return ExtractText(filepath.Base(path), f)
+}
 
 func writeTemp(t *testing.T, name, content string) string {
 	t.Helper()

@@ -263,6 +263,7 @@
     "imageutil",
     "imgs",
     "impls",
+    "indexutil",
     "ineffassign",
     "injectutil",
     "inotify",

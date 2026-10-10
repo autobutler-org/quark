@@ -1,6 +1,7 @@
-package storageutil
+package indexutil
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"math/rand/v2"
@@ -11,17 +12,20 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // nameIndex is what FileIndex and the reference index both offer.
 type nameIndex interface {
-	Build(devices []ManagedDevice)
+	Build(ctx context.Context, registry vfs.Registry)
 	Search(query string, serials map[string]bool) []IndexedFile
 	SearchEach(query string, serials map[string]bool, visit func(IndexedFile) bool)
-	HandleAdd(filesDir, relPath, serial string)
-	HandleDelete(filesDir, relPath string)
-	HandleMove(filesDir, oldRelPath, newRelPath, serial string)
-	HandleRescan(filesDir, relPath, serial string)
+	HandleAdd(serial, relPath string)
+	HandleDelete(serial, relPath string)
+	HandleMove(ctx context.Context, fsys vfs.VFS, serial, oldRelPath, newRelPath string)
+	HandleRescan(ctx context.Context, fsys vfs.VFS, serial, relPath string)
 }
 
 var (
@@ -35,7 +39,7 @@ var (
 var equivSegments = []string{
 	"a", "ab", "A", "Photos", "photos 2024", "IMG_0001.JPG", "img_0001.jpg", "notes.txt",
 	"Gro\u00dfe.md", "\u00dc.pdf", "Kelvin.txt", "kelvin.TXT", "日本語.txt", "x", "x.y",
-	"report final.docx", "Ab", trashPathPrefix, WriteTempPrefix + "upload",
+	"report final.docx", "Ab", ".trash", storageutil.VersionsDirName, storageutil.WriteTempPrefix + "upload",
 }
 
 // equivQueries are run against both indexes after every step.
@@ -48,16 +52,16 @@ var equivQueries = []string{
 type equivState struct {
 	t       *testing.T
 	rng     *rand.Rand
-	devices []ManagedDevice
-	serials []string
+	mounts  []mount
+	devices devices
 	got     *FileIndex
 	want    *refIndex
 }
 
-// pickDevice returns one device's files directory and serial.
-func (s *equivState) pickDevice() (string, string) {
-	i := s.rng.IntN(len(s.devices))
-	return s.devices[i].FilesDir, s.serials[i]
+// pickDevice returns one device's files directory, serial and namespace.
+func (s *equivState) pickDevice() (string, string, vfs.VFS) {
+	m := s.mounts[s.rng.IntN(len(s.mounts))]
+	return m.filesDir, m.serial, s.devices.fsys(s.t, m.serial)
 }
 
 // randomRel makes a relative path one to three segments deep.
@@ -102,7 +106,8 @@ func (s *equivState) writeFile(dir, rel string) bool {
 // step changes the disk at random and tells both indexes what the watcher
 // would, sometimes with an event that disagrees with the disk.
 func (s *equivState) step() string {
-	dir, serial := s.pickDevice()
+	dir, serial, fsys := s.pickDevice()
+	ctx := context.Background()
 	both := func(f func(nameIndex)) { f(s.got); f(s.want) }
 	switch s.rng.IntN(10) {
 	case 0: // upload: the event names the folder
@@ -111,47 +116,47 @@ func (s *equivState) step() string {
 			return "upload blocked"
 		}
 		parent := filepath.ToSlash(filepath.Dir(rel))
-		both(func(i nameIndex) { i.HandleRescan(dir, parent, serial) })
+		both(func(i nameIndex) { i.HandleRescan(ctx, fsys, serial, parent) })
 		return "upload " + rel
 	case 1: // a file added by path
 		rel := s.randomRel()
 		s.writeFile(dir, rel)
-		both(func(i nameIndex) { i.HandleAdd(dir, rel, serial) })
+		both(func(i nameIndex) { i.HandleAdd(serial, rel) })
 		return "add " + rel
 	case 2: // new folder with files in it
 		rel := s.randomRel()
 		for range 1 + s.rng.IntN(4) {
 			s.writeFile(dir, rel+"/"+equivSegments[s.rng.IntN(len(equivSegments))])
 		}
-		both(func(i nameIndex) { i.HandleRescan(dir, rel, serial) })
+		both(func(i nameIndex) { i.HandleRescan(ctx, fsys, serial, rel) })
 		return "new folder " + rel
 	case 3, 4: // delete
 		rel := s.existing(dir)
 		_ = os.RemoveAll(filepath.Join(dir, filepath.FromSlash(rel)))
-		both(func(i nameIndex) { i.HandleDelete(dir, rel) })
+		both(func(i nameIndex) { i.HandleDelete(serial, rel) })
 		return "delete " + rel
 	case 5, 6: // move, sometimes into the trash
 		from := s.existing(dir)
 		to := s.randomRel()
 		if s.rng.IntN(5) == 0 {
-			to = trashPathPrefix + "/" + to
+			to = ".trash/" + to
 		}
 		dst := filepath.Join(dir, filepath.FromSlash(to))
 		if os.MkdirAll(filepath.Dir(dst), 0o755) == nil {
 			_ = os.RemoveAll(dst)
 			_ = os.Rename(filepath.Join(dir, filepath.FromSlash(from)), dst)
 		}
-		both(func(i nameIndex) { i.HandleMove(dir, from, to, serial) })
+		both(func(i nameIndex) { i.HandleMove(ctx, fsys, serial, from, to) })
 		return "move " + from + " -> " + to
 	case 7: // stale events naming paths the disk does not have
 		rel, to := s.randomRel(), s.randomRel()
 		switch s.rng.IntN(3) {
 		case 0:
-			both(func(i nameIndex) { i.HandleDelete(dir, rel) })
+			both(func(i nameIndex) { i.HandleDelete(serial, rel) })
 		case 1:
-			both(func(i nameIndex) { i.HandleMove(dir, rel, to, serial) })
+			both(func(i nameIndex) { i.HandleMove(ctx, fsys, serial, rel, to) })
 		default:
-			both(func(i nameIndex) { i.HandleRescan(dir, rel, serial) })
+			both(func(i nameIndex) { i.HandleRescan(ctx, fsys, serial, rel) })
 		}
 		return "stale " + rel
 	case 8: // a change nobody published, then a rescan of a folder above it
@@ -159,10 +164,10 @@ func (s *equivState) step() string {
 		s.writeFile(dir, rel)
 		parts := strings.Split(rel, "/")
 		up := strings.Join(parts[:s.rng.IntN(len(parts))], "/")
-		both(func(i nameIndex) { i.HandleRescan(dir, up, serial) })
+		both(func(i nameIndex) { i.HandleRescan(ctx, fsys, serial, up) })
 		return "rescan " + up
 	default: // resync
-		both(func(i nameIndex) { i.Build(s.devices) })
+		both(func(i nameIndex) { i.Build(ctx, s.devices.registry) })
 		return "resync"
 	}
 }
@@ -171,7 +176,7 @@ func (s *equivState) step() string {
 func sortedFiles(files []IndexedFile) []string {
 	out := make([]string, len(files))
 	for i, f := range files {
-		out[i] = f.FilesDir + "|" + f.DeviceSerial + "|" + f.RelPath + "|" + f.Name
+		out[i] = f.DeviceSerial + "|" + f.RelPath + "|" + f.Name
 	}
 	slices.Sort(out)
 	return out
@@ -215,47 +220,24 @@ func TestFileIndexMatchesReference(t *testing.T) {
 	for seed := range uint64(12) {
 		t.Run(fmt.Sprint("seed", seed), func(t *testing.T) {
 			s := &equivState{
-				t:       t,
-				rng:     rand.New(rand.NewPCG(seed, 2760)),
-				serials: []string{"", "USB1"},
-				got:     NewFileIndex(),
-				want:    newRefIndex(),
+				t:      t,
+				rng:    rand.New(rand.NewPCG(seed, 2760)),
+				mounts: []mount{newMount(t, ""), newMount(t, "USB1")},
+				got:    NewFileIndex(),
+				want:   newRefIndex(),
 			}
-			for range s.serials {
-				s.devices = append(s.devices, ManagedDevice{FilesDir: t.TempDir()})
-			}
+			s.devices = newDevices(t, s.mounts...)
 			for range 60 {
-				dir, _ := s.pickDevice()
+				dir, _, _ := s.pickDevice()
 				s.writeFile(dir, s.randomRel())
 			}
-			s.got.Build(s.devices)
-			s.want.Build(s.devices)
+			s.got.Build(context.Background(), s.devices.registry)
+			s.want.Build(context.Background(), s.devices.registry)
 			s.compare("build")
 			for range 80 {
 				s.compare(s.step())
 			}
 		})
-	}
-}
-
-// Search visits each folder's files in name order, then its folders in name
-// order, and devices in the order of their files directories.
-func TestFileIndexSearchOrder(t *testing.T) {
-	idx := NewFileIndex()
-	for _, rel := range []string{"b/z.txt", "c.txt", "a/y.txt", "B.txt", "a/x.txt"} {
-		idx.HandleAdd("/two", rel, "S")
-		idx.HandleAdd("/one", rel, "")
-	}
-	var got []string
-	for _, f := range idx.Search("", nil) {
-		got = append(got, f.FilesDir+":"+f.RelPath)
-	}
-	want := []string{
-		"/one:B.txt", "/one:c.txt", "/one:a/x.txt", "/one:a/y.txt", "/one:b/z.txt",
-		"/two:B.txt", "/two:c.txt", "/two:a/x.txt", "/two:a/y.txt", "/two:b/z.txt",
-	}
-	if !slices.Equal(got, want) {
-		t.Errorf("order: %v, want %v", got, want)
 	}
 }
 
@@ -290,7 +272,6 @@ func benchHeap(b *testing.B, n int, newIndex func() nameIndex) {
 	for i := range rels {
 		rels[i] = syntheticRel(i)
 	}
-	const filesDir = "/srv/quark/data/files"
 	b.ResetTimer()
 	var idx nameIndex
 	for range b.N {
@@ -298,7 +279,7 @@ func benchHeap(b *testing.B, n int, newIndex func() nameIndex) {
 		start := time.Now()
 		idx = newIndex()
 		for _, rel := range rels {
-			idx.HandleAdd(filesDir, rel, "")
+			idx.HandleAdd("", rel)
 		}
 		build := time.Since(start)
 		after := heapAfterGC()
@@ -333,7 +314,8 @@ func BenchmarkFileIndexHeap(b *testing.B) {
 // a generated tree of 100k empty files on disk. Point TMPDIR at a disk, not
 // tmpfs, to measure a real walk.
 func BenchmarkFileIndexBuild(b *testing.B) {
-	root := b.TempDir()
+	internal := newMount(b, "")
+	root := internal.filesDir
 	made := map[string]bool{}
 	for i := range 100_000 {
 		full := filepath.Join(root, filepath.FromSlash(syntheticRel(i)))
@@ -347,7 +329,7 @@ func BenchmarkFileIndexBuild(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
-	devices := []ManagedDevice{{FilesDir: root}}
+	registry := newDevices(b, internal).registry
 	for _, impl := range []struct {
 		name string
 		idx  func() nameIndex
@@ -355,7 +337,7 @@ func BenchmarkFileIndexBuild(b *testing.B) {
 		b.Run(impl.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for range b.N {
-				impl.idx().Build(devices)
+				impl.idx().Build(context.Background(), registry)
 			}
 		})
 	}

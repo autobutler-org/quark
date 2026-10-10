@@ -2079,8 +2079,9 @@ func TestStorageService_FileExists(t *testing.T) {
 }
 
 // A file's version store (#1173) is Quark's bookkeeping, not the user's: the
-// folder listing, the recursive walk every by-type and recent view uses, and
-// the file-name index all skip it, while the file it versions stays visible.
+// folder listing and the recursive walk every by-type and recent view uses
+// both skip it, while the file it versions stays visible. The file-name
+// index skips it too (indexutil.TestBuildPopulatesIndex).
 func TestVersionStoreIsHidden(t *testing.T) {
 	if !IsInternalName(VersionsDirName) {
 		t.Fatalf("IsInternalName(%q) = false, want true", VersionsDirName)
@@ -2118,11 +2119,5 @@ func TestVersionStoreIsHidden(t *testing.T) {
 	}
 	if len(walked) != 1 || walked[0] != "docs/pitch.qslide" {
 		t.Errorf("walk = %v, want only docs/pitch.qslide", walked)
-	}
-	idx := NewFileIndex()
-	idx.Build([]ManagedDevice{*device})
-	results := idx.Search("", nil)
-	if len(results) != 1 || results[0].RelPath != "docs/pitch.qslide" {
-		t.Errorf("file index = %+v, want only pitch.qslide", results)
 	}
 }

@@ -30,7 +30,7 @@ the client's refresh-on-every-event turns each shared upload into a request stor
 | Rate limiters (`pkg/util/ratelimitutil`) | map of IP → limiter behind one mutex, auth and vault paths only, swept every 5 min | ~200 B per IP |
 | Upload sessions (`pkg/util/uploadutil`) | map behind one mutex, O(1) lookups; per-session mutex held for one chunk's `io.CopyN` | one fd each, 24 h TTL, 32 per account and 256 overall, then 429 (#2756) |
 | Health collector (`pkg/util/healthutil`) | one `Collector` for every `/health` call | one host read per 5 s, shared (#2750) |
-| Filename index (`storageutil.FileIndex`) | one folder tree per device, each folder's file names sorted end to end in one string; linear scan per search under `RLock`, stopping at 500 readable matches | ~30 B per file, about the name's length plus 4 (#2760) |
+| Filename index (`indexutil.FileIndex`) | one folder tree per device, each folder's file names sorted end to end in one string; linear scan per search under `RLock`, stopping at 500 readable matches | ~30 B per file, about the name's length plus 4 (#2760) |
 
 Streaming is in good shape: uploads, downloads and archive entries go through `io.Copy`/`http.ServeContent`, and
 no handler on a file path buffers a whole body (the one unbounded read is inside `gen2brain/heic`, which #2378
@@ -155,9 +155,11 @@ cover ffmpeg children too: the kernel throttles and then kills inside the servic
   its contents in one step (#2754), and a search checks access before it reads anything about a match from disk
   and stops at 500 (#2758). Each folder keeps its file names sorted, end to end in one string with a 4-byte
   offset each, and a search lowercases only non-ASCII names and builds a path only for a match. At 1M generated
-  files (`BenchmarkFileIndexHeap`, `BenchmarkFileIndexBuild` in `pkg/util/storageutil`): 98 B a file and ~200 ms
-  a search with a map per folder, 30 B and ~60 ms after; a build from disk of 100,000 files allocates 18 MB
-  instead of 24. A library of millions of files still costs tens of MB and a scan per search; an on-disk index
+  files (`BenchmarkFileIndexHeap`, `BenchmarkFileIndexBuild` in `pkg/util/indexutil`): 98 B a file and ~200 ms
+  a search with a map per folder, 30 B and ~60 ms after. The build walks each device through `vfs.Walk`
+  since #2647, which stats every entry for the size and time a `vfs.FileInfo` carries: 100,000 files take
+  ~0.8 s and allocate ~120 MB of short-lived garbage, against ~0.1 s and 24 MB reading names straight off the
+  disk. The live index is the same size either way. A library of millions of files still costs tens of MB and a scan per search; an on-disk index
   is the step past that.
 - **Uncached HEIC view conversion** goes away with #2378.
 - **bcrypt on every Basic-auth request** (#2765).

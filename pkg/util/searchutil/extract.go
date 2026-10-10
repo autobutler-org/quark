@@ -3,7 +3,6 @@ package searchutil
 import (
 	"encoding/json"
 	"io"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -45,21 +44,17 @@ var extractableExtensions = map[string]bool{
 	".tex":  true,
 }
 
-// ExtractText reads the file at path and returns its contents as a UTF-8
-// string suitable for FTS5 indexing. At most MaxExtractBytes are read.
-// If the file cannot be opened, is not indexable, or its contents are not
-// valid UTF-8, an empty string is returned (no error — non-indexable files
-// are silently skipped to keep the indexer simple).
-func ExtractText(path string) string {
-	if !IsIndexable(path) {
+// ExtractText reads the contents of the file called name from r and returns
+// them as a UTF-8 string suitable for FTS5 indexing. name decides whether the
+// file is indexable and how its contents are read; r is never read past
+// MaxExtractBytes, however large the file. A file that is not indexable, or
+// whose contents are not valid UTF-8, returns an empty string (no error —
+// non-indexable files are silently skipped to keep the indexer simple).
+func ExtractText(name string, r io.Reader) string {
+	if !IsIndexable(name) {
 		return ""
 	}
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	raw := extractReader(f)
+	raw := extractReader(r)
 	if raw == "" {
 		return ""
 	}
@@ -69,7 +64,7 @@ func ExtractText(path string) string {
 	// noise and queries would match on JSON keys, so pull the text out instead.
 	// A document too large for MaxExtractBytes arrives here truncated and will
 	// not parse; falling back to the raw text keeps it searchable.
-	switch strings.ToLower(filepath.Ext(path)) {
+	switch strings.ToLower(filepath.Ext(name)) {
 	case ".qdoc":
 		if text := extractDelta(raw); text != "" {
 			return text

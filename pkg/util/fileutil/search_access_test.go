@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
@@ -31,12 +32,8 @@ func TestSearchFilesKeepsOnlyReadableMatches(t *testing.T) {
 	}
 	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial})
 	registry := newDeviceRegistry(t, svc)
-	devices, err := svc.GetManagedDevices()
-	if err != nil {
-		t.Fatal(err)
-	}
-	index := storageutil.NewFileIndex()
-	index.Build(devices)
+	index := indexutil.NewFileIndex()
+	index.Build(context.Background(), registry)
 
 	ctx := context.Background()
 	database := dbtest.NewDB(t)
@@ -60,7 +57,7 @@ func TestSearchFilesKeepsOnlyReadableMatches(t *testing.T) {
 	}
 
 	for name, params := range map[string]SearchFilesParams{
-		"index":     {Index: index, Storage: svc},
+		"index":     {Index: index, Registry: registry, Storage: svc},
 		"vfs":       {Registry: registry, Storage: svc},
 		"disk walk": {Storage: svc},
 	} {

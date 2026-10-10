@@ -7,6 +7,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 
 	"github.com/gin-gonic/gin"
 )
@@ -37,29 +38,32 @@ func listBooks(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
-	rootDir, err := storageutil.GetFilesDir()
-	if err != nil {
-		return serverutil.NewResponse().WithStatusCode(500).WithError(err)
+	// Books are listed from the internal drive's namespace alone, which
+	// answers to the empty serial (#2647).
+	registry := deps.VFSRegistry()
+	if registry == nil {
+		return serverutil.InternalServerError(nil)
 	}
-	books, err := bookutil.FindAllBooksRecursively(rootDir)
+	fsys, ok := registry.Get(vfs.FilesNamespace(""))
+	if !ok {
+		return serverutil.InternalServerError(nil)
+	}
+	found, err := bookutil.FindBooks(c.Request.Context(), bookutil.FindBooksParams{FS: fsys})
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
 
-	result := make([]BookJSON, 0, len(books))
-	for _, book := range books {
-		// The walk covers the internal drive, which answers to the empty serial.
-		if !access.Check("", book.RelPath, accessutil.Read).Readable {
+	result := make([]BookJSON, 0, len(found.Books))
+	for _, book := range found.Books {
+		if !access.Check("", book.Path, accessutil.Read).Readable {
 			continue
 		}
-		info := book.FileInfo
-		fileType := storageutil.DetermineFileTypeFromPath(info.Name())
 		result = append(result, BookJSON{
-			RelPath:  book.RelPath,
-			FileName: info.Name(),
-			Size:     info.Size(),
-			MTime:    info.ModTime().Unix(),
-			Type:     string(fileType),
+			RelPath:  book.Path,
+			FileName: book.Name,
+			Size:     book.Size,
+			MTime:    book.ModTime.Unix(),
+			Type:     string(storageutil.DetermineFileTypeFromPath(book.Name)),
 		})
 	}
 
