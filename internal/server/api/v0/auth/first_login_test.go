@@ -7,6 +7,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // TestLoginUser_NoPhraseFromTheQuark checks POST /auth/login never hands out
@@ -16,11 +17,11 @@ import (
 func TestLoginUser_NoPhraseFromTheQuark(t *testing.T) {
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
-	filesDir := t.TempDir()
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: filesDir, Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), RecoveryKey: dbtest.AuthKey("admin-phrase"), SaltSecret: dbtest.SaltSecret}); err != nil {
+	files := vfs.NewMemVFS("files")
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: files, Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), RecoveryKey: dbtest.AuthKey("admin-phrase"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: database, Username: "bob", AuthKey: dbtest.AuthKey("initial-password"), SaltSecret: dbtest.SaltSecret, FilesDir: filesDir}); err != nil {
+	if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: database, Username: "bob", AuthKey: dbtest.AuthKey("initial-password"), SaltSecret: dbtest.SaltSecret, Files: files}); err != nil {
 		t.Fatal(err)
 	}
 	engine := newPublicAuthEngine(t, database)

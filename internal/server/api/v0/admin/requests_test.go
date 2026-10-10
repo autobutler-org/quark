@@ -3,8 +3,6 @@ package v0_admin_test
 import (
 	"context"
 	"net/http"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db/dbtest"
@@ -31,7 +29,7 @@ func TestApproveUser_PendingOnly(t *testing.T) {
 	}
 	// The grant is what an upload is checked against, so it matters more than
 	// the directory: without it the approved account is refused every write.
-	if info, err := os.Stat(filepath.Join(h.filesDir, "users", "waiting")); err != nil || !info.IsDir() {
+	if info, err := h.files.Stat(ctx, "users/waiting"); err != nil || !info.IsDir {
 		t.Errorf("home of the approved account: %v", err)
 	}
 	var level string

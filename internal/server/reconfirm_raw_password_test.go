@@ -16,6 +16,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/vaultcrypto"
 	"github.com/autobutler-org/quark/pkg/util/vaultutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -32,7 +33,7 @@ func TestReconfirm_RawPasswordIsUpdateTheApp(t *testing.T) {
 	ctx := context.Background()
 
 	database := dbtest.NewDB(t)
-	setup, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret})
+	setup, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret})
 	if err != nil {
 		t.Fatalf("authutil.Setup: %v", err)
 	}

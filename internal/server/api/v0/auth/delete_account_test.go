@@ -23,6 +23,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 	_ "modernc.org/sqlite"
 )
@@ -70,7 +71,7 @@ func newDeleteAccountEngineWithDeps(t *testing.T) (*gin.Engine, *sql.DB, string,
 	}
 	database.Queries = db.New(conn)
 
-	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: deleteAccountUser,
 		AuthKey:  dbtest.AuthKey(deleteAccountPassword), SaltSecret: dbtest.SaltSecret,
 	}); err != nil {

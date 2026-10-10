@@ -11,6 +11,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // --- Unit tests ---
@@ -102,7 +103,7 @@ func TestIsSetupComplete_FreshDB(t *testing.T) {
 func TestSetup_Success(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
-	result, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	result, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("supersecret"), SaltSecret: dbtest.SaltSecret,
 	})
@@ -122,7 +123,7 @@ func TestSetup_Success(t *testing.T) {
 
 func TestSetup_CannotRunTwice(t *testing.T) {
 	database := newTestDB(t)
-	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("supersecret"), SaltSecret: dbtest.SaltSecret,
 	})
@@ -130,7 +131,7 @@ func TestSetup_CannotRunTwice(t *testing.T) {
 		t.Fatalf("First setup failed: %v", err)
 	}
 
-	_, err = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	_, err = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin2",
 		AuthKey:  dbtest.AuthKey("anotherpass"), SaltSecret: dbtest.SaltSecret,
 	})
@@ -141,7 +142,7 @@ func TestSetup_CannotRunTwice(t *testing.T) {
 
 func TestSetup_EmptyUsername(t *testing.T) {
 	database := newTestDB(t)
-	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "",
 		AuthKey:  dbtest.AuthKey("validpassword"), SaltSecret: dbtest.SaltSecret,
 	})
@@ -153,7 +154,7 @@ func TestSetup_EmptyUsername(t *testing.T) {
 func TestLogin_Success(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
-	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
@@ -176,7 +177,7 @@ func TestLogin_Success(t *testing.T) {
 func TestLogin_WrongPassword(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
-	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
@@ -193,7 +194,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 func TestLogin_WrongUsername(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
-	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
@@ -214,7 +215,7 @@ func TestLogin_WrongUsername(t *testing.T) {
 func TestValidateSession_Valid(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
-	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
@@ -240,7 +241,7 @@ func TestValidateSession_Invalid(t *testing.T) {
 func TestLogout_InvalidatesSession(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
-	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
@@ -259,7 +260,7 @@ func TestLogout_InvalidatesSession(t *testing.T) {
 func TestRecover_Success(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
-	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username:    "admin",
 		AuthKey:     dbtest.AuthKey("originalpass"),
 		RecoveryKey: dbtest.AuthKey("admin-phrase"),
@@ -306,7 +307,7 @@ func TestRecover_Success(t *testing.T) {
 
 func TestRecover_WrongPhrase(t *testing.T) {
 	database := newTestDB(t)
-	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username:    "admin",
 		AuthKey:     dbtest.AuthKey("mypassword"),
 		RecoveryKey: dbtest.AuthKey("admin-phrase"),
@@ -351,7 +352,7 @@ func TestRecover_NamedAccount(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
 	ctx := context.Background()
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin",
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin",
 		AuthKey: dbtest.AuthKey("admin-password"), RecoveryKey: dbtest.AuthKey("admin-phrase"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
@@ -388,7 +389,7 @@ func TestRecover_NamedAccount(t *testing.T) {
 func TestRecover_UnknownUserLooksLikeWrongPhrase(t *testing.T) {
 	database := newTestDB(t)
 	ctx := context.Background()
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin",
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin",
 		AuthKey: dbtest.AuthKey("admin-password"), RecoveryKey: dbtest.AuthKey("admin-phrase"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
@@ -416,7 +417,7 @@ func TestRecover_UnknownUserLooksLikeWrongPhrase(t *testing.T) {
 func TestValidateBasicAuth_Success(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
-	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
@@ -433,7 +434,7 @@ func TestValidateBasicAuth_Success(t *testing.T) {
 func TestValidateBasicAuth_WrongPassword(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
-	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
@@ -447,7 +448,7 @@ func TestValidateBasicAuth_WrongPassword(t *testing.T) {
 func TestValidateBasicAuth_WrongUsername(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
-	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})

@@ -9,6 +9,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 func grantRow(t *testing.T, q *db.Queries, userID int64, rel, level string) {
@@ -56,7 +57,7 @@ func TestDeleteUser_ReassignsOwnerRowsToActor(t *testing.T) {
 	database := dbtest.NewDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, database, t.TempDir())
+	setupFounder(t, database, vfs.NewMemVFS("files"))
 	mkStatusUser(t, q, "bob", authutil.StatusActive)
 	adminID, bobID := userID(t, q, "admin"), userID(t, q, "bob")
 
@@ -114,7 +115,7 @@ func TestDeleteUser_SelfServiceHeirIsOldestActiveAdmin(t *testing.T) {
 	database := dbtest.NewDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, database, t.TempDir())
+	setupFounder(t, database, vfs.NewMemVFS("files"))
 	mkUser(t, q, "deputy", true)
 	mkStatusUser(t, q, "bob", authutil.StatusActive)
 	setStatus(t, q, "admin", authutil.StatusActive, authutil.StatusDisabled)
@@ -142,7 +143,7 @@ func TestDeleteUser_LastAdminRules(t *testing.T) {
 		t.Run("with an "+other+" account", func(t *testing.T) {
 			database := dbtest.NewDB(t)
 			q := database.Queries
-			setupFounder(t, database, t.TempDir())
+			setupFounder(t, database, vfs.NewMemVFS("files"))
 			mkStatusUser(t, q, "member", other)
 
 			_, err := authutil.DeleteUser(context.Background(), authutil.DeleteUserParams{Database: database, Username: "admin"})
@@ -159,7 +160,7 @@ func TestDeleteUser_LastAdminRules(t *testing.T) {
 		database := dbtest.NewDB(t)
 		q := database.Queries
 		ctx := context.Background()
-		setupFounder(t, database, t.TempDir())
+		setupFounder(t, database, vfs.NewMemVFS("files"))
 		mkStatusUser(t, q, "asker", authutil.StatusPending)
 
 		result, err := authutil.DeleteUser(ctx, authutil.DeleteUserParams{Database: database, Username: "admin"})
@@ -177,7 +178,7 @@ func TestDeleteUser_LastAdminRules(t *testing.T) {
 	t.Run("with a second active admin", func(t *testing.T) {
 		database := dbtest.NewDB(t)
 		q := database.Queries
-		setupFounder(t, database, t.TempDir())
+		setupFounder(t, database, vfs.NewMemVFS("files"))
 		mkUser(t, q, "deputy", true)
 
 		result, err := authutil.DeleteUser(context.Background(), authutil.DeleteUserParams{Database: database, Username: "admin"})
@@ -196,7 +197,7 @@ func TestDeleteUser_AdminRefusals(t *testing.T) {
 	database := dbtest.NewDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, database, t.TempDir())
+	setupFounder(t, database, vfs.NewMemVFS("files"))
 	mkUser(t, q, "deputy", true)
 	adminID := userID(t, q, "admin")
 

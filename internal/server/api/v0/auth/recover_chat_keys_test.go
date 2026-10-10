@@ -13,6 +13,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // TestRecover_ChatKeys drives the two recovery requests of #2416: fetch the
@@ -21,7 +22,7 @@ import (
 func TestRecover_ChatKeys(t *testing.T) {
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	const phrase = "apple-bread-cloud-delta-eagle-flame"

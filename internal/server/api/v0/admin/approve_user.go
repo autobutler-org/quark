@@ -8,7 +8,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,7 +33,7 @@ func approveUser(c *gin.Context) *serverutil.Response {
 	if database == nil {
 		return serverutil.InternalServerError(errors.New("database unavailable"))
 	}
-	filesDir, err := storageutil.GetFilesDir()
+	files, err := authutil.InternalFiles(deps.VFSRegistry())
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
@@ -42,7 +41,7 @@ func approveUser(c *gin.Context) *serverutil.Response {
 	result, err := authutil.ApproveRequest(c.Request.Context(), authutil.ApproveRequestParams{
 		Database: database,
 		Username: c.Param("username"),
-		FilesDir: filesDir,
+		Files:    files,
 	})
 	if err != nil {
 		return accountErrorResponse(err)

@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	_ "modernc.org/sqlite"
 )
 
@@ -52,7 +53,7 @@ func newDeleteAccountFixture(t *testing.T) deleteAccountFixture {
 
 	database := dbtest.NewDB(t)
 
-	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"),
 		Username: "testuser",
 		AuthKey:  dbtest.AuthKey("TestPassword123!"), SaltSecret: dbtest.SaltSecret,
 	}); err != nil {

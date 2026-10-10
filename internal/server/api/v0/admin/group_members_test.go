@@ -29,7 +29,7 @@ func TestGroupMembers_Endpoints(t *testing.T) {
 		}
 		return strconv.FormatInt(user.ID, 10)
 	}
-	created, err := grouputil.CreateGroup(ctx, grouputil.CreateGroupParams{Database: h.database, FilesDir: h.filesDir, Name: "Family"})
+	created, err := grouputil.CreateGroup(ctx, grouputil.CreateGroupParams{Database: h.database, Files: h.files, Name: "Family"})
 	if err != nil {
 		t.Fatal(err)
 	}

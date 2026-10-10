@@ -13,14 +13,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/sqlutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -97,16 +94,22 @@ func ListGroups(ctx context.Context, params ListGroupsParams) (ListGroupsResult,
 // CreateGroupParams creates a group.
 type CreateGroupParams struct {
 	Database *db.DatabaseSqlc
-	// FilesDir is the internal device's files directory, where the group's
-	// folder is made.
+	// Files is the internal drive's files namespace, where the group's folder
+	// is made.
+	Files vfs.VFS
+	Name  string
+	// FilesDir is a files directory on disk, read only when Files is nil.
+	// Nothing in production sets it: it stays only while
+	// internal/server/api/v0/files/group_folder_integration_test.go, which
+	// #2642 holds, still does, and #2650 removes it.
 	FilesDir string
-	Name     string
 }
 
 // CreateGroupResult is the new group, with no members, and its folder.
 type CreateGroupResult struct {
 	Group Group
-	// FolderPath is the group's folder, groups/<name>, relative to FilesDir.
+	// FolderPath is the group's folder, groups/<name>, relative to the files
+	// root.
 	FolderPath string
 }
 
@@ -118,8 +121,11 @@ func CreateGroup(ctx context.Context, params CreateGroupParams) (CreateGroupResu
 	if err != nil {
 		return CreateGroupResult{}, err
 	}
-	if params.FilesDir == "" {
-		return CreateGroupResult{}, errors.New("files directory not set")
+	// The FilesDir fallback is removed in #2650.
+	if params.Files == nil && params.FilesDir != "" {
+		if params.Files, err = vfs.NewLocalVFS(params.FilesDir, vfs.FilesNamespace("")); err != nil {
+			return CreateGroupResult{}, err
+		}
 	}
 	var result CreateGroupResult
 	madeDir := ""
@@ -132,7 +138,7 @@ func CreateGroup(ctx context.Context, params CreateGroupParams) (CreateGroupResu
 			return err
 		}
 		result.Group = groupFromRow(row)
-		madeDir, err = createFolder(ctx, q, params.FilesDir, name, row.ID)
+		madeDir, err = createFolder(ctx, q, params.Files, name, row.ID)
 		if err != nil {
 			return err
 		}
@@ -140,11 +146,7 @@ func CreateGroup(ctx context.Context, params CreateGroupParams) (CreateGroupResu
 		return nil
 	})
 	if err != nil {
-		if madeDir != "" {
-			// Best-effort, and only a folder this call made; the error that got
-			// here is the one worth reporting.
-			_ = os.Remove(madeDir)
-		}
+		authutil.RemoveMadeFolder(ctx, params.Files, madeDir)
 		return CreateGroupResult{}, err
 	}
 	return result, nil
@@ -153,14 +155,11 @@ func CreateGroup(ctx context.Context, params CreateGroupParams) (CreateGroupResu
 // RenameGroupParams renames a group.
 type RenameGroupParams struct {
 	Database *db.DatabaseSqlc
-	// Registry, Storage and EventBus move the group's folder the way any
-	// other move goes, so its access rows, favorites and album items follow.
+	// Registry and EventBus move the group's folder the way any other move
+	// goes, so its access rows, favorites and album items follow. The folder
+	// is in the registry's internal files namespace.
 	Registry vfs.Registry
-	Storage  *storageutil.StorageService
 	EventBus *eventbus.Bus
-	// FilesDir is the internal device's files directory, where the group's
-	// folder is.
-	FilesDir string
 	GroupID  int64
 	Name     string
 }
@@ -169,7 +168,7 @@ type RenameGroupParams struct {
 type RenameGroupResult struct {
 	Group Group
 	// OldFolderPath and FolderPath are the group's folder before and after,
-	// relative to FilesDir. They are equal when only the group row changed.
+	// relative to the files root. They are equal when only the group row changed.
 	OldFolderPath string
 	FolderPath    string
 }
@@ -183,8 +182,9 @@ func RenameGroup(ctx context.Context, params RenameGroupParams) (RenameGroupResu
 	if err != nil {
 		return RenameGroupResult{}, err
 	}
-	if params.FilesDir == "" {
-		return RenameGroupResult{}, errors.New("files directory not set")
+	files, err := authutil.InternalFiles(params.Registry)
+	if err != nil {
+		return RenameGroupResult{}, err
 	}
 	queries := params.Database.Queries
 	group, err := changeableGroup(ctx, queries, params.GroupID)
@@ -205,7 +205,7 @@ func RenameGroup(ctx context.Context, params RenameGroupParams) (RenameGroupResu
 	if oldRel == newRel {
 		return result, nil
 	}
-	if err := renameFolder(ctx, params, group.Name, name); err != nil {
+	if err := renameFolder(ctx, params, files, group.Name, name); err != nil {
 		// Put the name back so the group and its folder still agree.
 		if _, undoErr := queries.RenameGroup(context.WithoutCancel(ctx), db.RenameGroupParams{Name: group.Name, ID: params.GroupID}); undoErr != nil {
 			slog.Error("groups: could not undo a rename whose folder did not move", "group", group.Name, "err", undoErr)
@@ -306,9 +306,8 @@ func RemoveMember(ctx context.Context, params RemoveMemberParams) (RemoveMemberR
 // RepairGroupFoldersParams is the Quark whose group folders are repaired.
 type RepairGroupFoldersParams struct {
 	Database *db.DatabaseSqlc
-	// FilesDir is the internal device's files directory, where group folders
-	// live.
-	FilesDir string
+	// Files is the internal drive's files namespace, where group folders live.
+	Files vfs.VFS
 }
 
 // RepairGroupFoldersResult names the groups that were given their folder.
@@ -330,8 +329,8 @@ func RepairGroupFolders(ctx context.Context, params RepairGroupFoldersParams) (R
 	if params.Database == nil {
 		return result, errors.New("database not initialized")
 	}
-	if params.FilesDir == "" {
-		return result, errors.New("files directory not set")
+	if params.Files == nil {
+		return result, errors.New("files namespace not set")
 	}
 	groups, err := params.Database.Queries.ListGroupsMissingFolder(ctx)
 	if err != nil {
@@ -344,7 +343,7 @@ func RepairGroupFolders(ctx context.Context, params RepairGroupFoldersParams) (R
 			slog.Warn("no group folder repaired: the name is not a folder name", "group", group.Name)
 			continue
 		}
-		if err := os.MkdirAll(filepath.Join(params.FilesDir, authutil.GroupsDirName, group.Name), 0o755); err != nil {
+		if _, err := authutil.MakeFolder(ctx, params.Files, folderRelPath(group.Name)); err != nil {
 			return result, fmt.Errorf("create the folder of %q: %w", group.Name, err)
 		}
 		if err := grantFolder(ctx, params.Database.Queries, group.Name, group.ID); err != nil {

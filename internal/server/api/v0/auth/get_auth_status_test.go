@@ -20,6 +20,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -32,7 +33,7 @@ func TestGetAuthStatus_ReportsCaller(t *testing.T) {
 	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
-	founder, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret})
+	founder, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret})
 	if err != nil {
 		t.Fatalf("authutil.Setup: %v", err)
 	}

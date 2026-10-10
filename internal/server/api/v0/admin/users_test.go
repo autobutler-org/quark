@@ -32,27 +32,27 @@ type adminHarness struct {
 	engine   *gin.Engine
 	events   <-chan eventbus.Event
 	adminID  int64
-	// filesDir is where the handlers make homes, under this test's own HOME.
-	filesDir string
+	// files is the files namespace the handlers make homes and group folders
+	// in.
+	files vfs.VFS
 }
 
 func newAdminHarness(t *testing.T) adminHarness {
 	t.Helper()
-	// These handlers resolve the files directory from HOME, and both creating
-	// and approving an account make a folder in it (#1908), so every harness
-	// gets a data directory of its own rather than the developer's.
+	// Deleting an account removes its picture and settings from the data
+	// directory, which resolves from HOME, so every harness gets one of its
+	// own rather than the developer's.
 	t.Setenv("HOME", t.TempDir())
-	filesDir, err := storageutil.GetFilesDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Creating and approving an account make a folder (#1908), and so do
+	// creating and renaming a group (#2016), all in the files namespace.
+	files := vfs.NewMemVFS("files")
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
 	if _, err := authutil.Setup(ctx, authutil.SetupParams{
 		Database: database,
 		Username: "admin",
 		AuthKey:  dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret,
-		FilesDir: filesDir,
+		Files: files,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -64,13 +64,8 @@ func newAdminHarness(t *testing.T) adminHarness {
 	events, unsubscribe := bus.Subscribe("test")
 	t.Cleanup(unsubscribe)
 
-	// Renaming a group moves its folder through the files VFS (#2016).
-	local, err := vfs.NewLocalVFS(filesDir, "files")
-	if err != nil {
-		t.Fatal(err)
-	}
 	registry := vfs.NewRegistry()
-	if err := registry.Register(vfs.Namespace{ID: "files"}, local); err != nil {
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, files); err != nil {
 		t.Fatal(err)
 	}
 
@@ -84,7 +79,7 @@ func newAdminHarness(t *testing.T) adminHarness {
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_admin.NewRouter())
-	return adminHarness{database: database, engine: engine, events: events, adminID: admin.ID, filesDir: filesDir}
+	return adminHarness{database: database, engine: engine, events: events, adminID: admin.ID, files: files}
 }
 
 func (h adminHarness) do(method, path string) *httptest.ResponseRecorder {

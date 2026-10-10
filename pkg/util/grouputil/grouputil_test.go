@@ -22,44 +22,45 @@ func everyoneID(t *testing.T, database *db.DatabaseSqlc) int64 {
 	return id
 }
 
-// filesDirs remembers each test database's files directory, so create and
+// filesByDB remembers each test database's files namespace, so create and
 // rename helpers agree on it without threading it through every call.
-var filesDirs = map[*db.DatabaseSqlc]string{}
+var filesByDB = map[*db.DatabaseSqlc]vfs.VFS{}
 
-// filesDirFor is the files directory the groups of database live under.
-func filesDirFor(t *testing.T, database *db.DatabaseSqlc) string {
+// filesFor is the files namespace the groups of database live in.
+func filesFor(t *testing.T, database *db.DatabaseSqlc) vfs.VFS {
 	t.Helper()
-	if dir, ok := filesDirs[database]; ok {
-		return dir
+	if files, ok := filesByDB[database]; ok {
+		return files
 	}
-	dir := t.TempDir()
-	filesDirs[database] = dir
-	t.Cleanup(func() { delete(filesDirs, database) })
-	return dir
+	files := vfs.NewMemVFS("files")
+	useFiles(t, database, files)
+	return files
 }
 
-// renameParams renames a group through a local files VFS over the test's
-// files directory, as the server's files namespace does.
+// useFiles makes files the namespace the groups of database live in.
+func useFiles(t *testing.T, database *db.DatabaseSqlc, files vfs.VFS) {
+	t.Helper()
+	filesByDB[database] = files
+	t.Cleanup(func() { delete(filesByDB, database) })
+}
+
+// renameParams renames a group through a registry whose files namespace is
+// the test's, as the server's is.
 func renameParams(t *testing.T, database *db.DatabaseSqlc, groupID int64, name string) grouputil.RenameGroupParams {
 	t.Helper()
-	dir := filesDirFor(t, database)
-	local, err := vfs.NewLocalVFS(dir, "files")
-	if err != nil {
-		t.Fatal(err)
-	}
 	registry := vfs.NewRegistry()
-	if err := registry.Register(vfs.Namespace{ID: "files"}, local); err != nil {
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, filesFor(t, database)); err != nil {
 		t.Fatal(err)
 	}
 	return grouputil.RenameGroupParams{
 		Database: database, Registry: registry, EventBus: eventbus.New(),
-		FilesDir: dir, GroupID: groupID, Name: name,
+		GroupID: groupID, Name: name,
 	}
 }
 
 func createParams(t *testing.T, database *db.DatabaseSqlc, name string) grouputil.CreateGroupParams {
 	t.Helper()
-	return grouputil.CreateGroupParams{Database: database, FilesDir: filesDirFor(t, database), Name: name}
+	return grouputil.CreateGroupParams{Database: database, Files: filesFor(t, database), Name: name}
 }
 
 func create(t *testing.T, database *db.DatabaseSqlc, name string) grouputil.Group {

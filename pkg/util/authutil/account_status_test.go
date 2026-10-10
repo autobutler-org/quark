@@ -9,6 +9,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // statusKey and statusRecoveryKey are the auth key and recovery key every
@@ -170,7 +171,7 @@ func TestSetup_ValidatesUsername(t *testing.T) {
 	for _, name := range []string{"", "Admin", "../x", "a/b", ".trash", "-dash", "has space", strings.Repeat("a", 33)} {
 		t.Run(name, func(t *testing.T) {
 			database := newTestDB(t)
-			_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: name, AuthKey: dbtest.AuthKey("long-enough"), SaltSecret: dbtest.SaltSecret})
+			_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: name, AuthKey: dbtest.AuthKey("long-enough"), SaltSecret: dbtest.SaltSecret})
 			if !errors.Is(err, authutil.ErrInvalidUsername) {
 				t.Errorf("Setup(%q) = %v, want ErrInvalidUsername", name, err)
 			}
@@ -179,7 +180,7 @@ func TestSetup_ValidatesUsername(t *testing.T) {
 	for _, name := range []string{"admin", "j.doe", "a_b-c", "7", strings.Repeat("a", 32)} {
 		t.Run(name, func(t *testing.T) {
 			database := newTestDB(t)
-			if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: name, AuthKey: dbtest.AuthKey("long-enough"), SaltSecret: dbtest.SaltSecret}); err != nil {
+			if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: name, AuthKey: dbtest.AuthKey("long-enough"), SaltSecret: dbtest.SaltSecret}); err != nil {
 				t.Errorf("Setup(%q): %v", name, err)
 			}
 		})

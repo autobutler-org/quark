@@ -9,6 +9,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // TestLogin_GuardLocksOutAfterFailures: once an address has missed the
@@ -17,7 +18,7 @@ import (
 func TestLogin_GuardLocksOutAfterFailures(t *testing.T) {
 	ctx := context.Background()
 	database := newTestDB(t)
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret}); err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Unix(1_000_000, 0)
@@ -56,7 +57,7 @@ func TestLogin_GuardLocksOutAfterFailures(t *testing.T) {
 func TestLogin_GuardTreatsUnknownUsernamesAlike(t *testing.T) {
 	ctx := context.Background()
 	database := newTestDB(t)
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret}); err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, Files: vfs.NewMemVFS("files"), Username: "admin", AuthKey: dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Unix(1_000_000, 0)

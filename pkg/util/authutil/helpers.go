@@ -19,6 +19,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // inTx runs fn against queries bound to one transaction, committing only if fn
@@ -107,42 +108,29 @@ func grantHome(ctx context.Context, queries *db.Queries, username string, userID
 	return nil
 }
 
-// createHome makes an account's home under filesDir and grants it, on every
-// path that lands an account: setup, an admin's create, and an approval
-// (#1908). The directory and the grant are made together because an account
-// with a home it does not own cannot write to it, which is the same to its
-// owner as having no home at all.
+// createHome makes an account's home in files and grants it, on every path
+// that lands an account: setup, an admin's create, and an approval (#1908).
+// The directory and the grant are made together because an account with a
+// home it does not own cannot write to it, which is the same to its owner as
+// having no home at all.
 //
-// It returns the home's path relative to filesDir and the directory it made,
-// which a caller whose transaction then fails removes. An existing home is
-// adopted, not refused: the users table is what says whether a username is
-// taken, and a folder is not an account. An admin may make users/<name> and
-// fill it before the account exists, and whoever gets that name gets that
-// folder. madeDir is empty for an adopted home, so a failed creation never
-// removes a folder it did not make.
-func createHome(ctx context.Context, queries *db.Queries, filesDir, username string, userID int64) (relPath, madeDir string, err error) {
-	if filesDir == "" {
-		return "", "", errors.New("files directory not set")
-	}
-	// The users parent is shared by every home, so MkdirAll it: it already
-	// existing is not a conflict.
-	if err := os.MkdirAll(filepath.Join(filesDir, UsersDirName), 0o755); err != nil {
-		return "", "", fmt.Errorf("create users folder: %w", err)
-	}
+// It returns the home's path relative to the files root and the directory it
+// made, which a caller whose transaction then fails removes with
+// RemoveMadeFolder. An existing home is adopted, not refused: the users table
+// is what says whether a username is taken, and a folder is not an account. An
+// admin may make users/<name> and fill it before the account exists, and
+// whoever gets that name gets that folder. madeDir is empty for an adopted
+// home, so a failed creation never removes a folder it did not make.
+func createHome(ctx context.Context, queries *db.Queries, files vfs.VFS, username string, userID int64) (relPath, madeDir string, err error) {
 	// The username is validated, so it is one path segment and cannot climb
-	// out of filesDir.
-	home := filepath.Join(filesDir, UsersDirName, username)
-	switch err := os.Mkdir(home, 0o755); {
-	case err == nil:
-		madeDir = home
-	case errors.Is(err, os.ErrExist):
-		// Adopted. Mkdir rather than MkdirAll so a non-directory in the way
-		// still fails below instead of passing as a home.
-		if info, statErr := os.Stat(home); statErr != nil || !info.IsDir() {
-			return "", "", fmt.Errorf("create the home of %q: %s is not a folder", username, homeRelPath(username))
-		}
-	default:
+	// out of the files root.
+	home := homeRelPath(username)
+	made, err := MakeFolder(ctx, files, home)
+	if err != nil {
 		return "", "", fmt.Errorf("create the home of %q: %w", username, err)
+	}
+	if made {
+		madeDir = home
 	}
 	// The grant is on the home alone. users/ gets none: breadcrumb visibility
 	// already shows the path to someone granted beneath it, and it stays
@@ -152,7 +140,7 @@ func createHome(ctx context.Context, queries *db.Queries, filesDir, username str
 		// transaction this runs in is about to roll the grant back.
 		return "", madeDir, err
 	}
-	return homeRelPath(username), madeDir, nil
+	return home, madeDir, nil
 }
 
 // pruneMountPoints removes the empty per-device directories under

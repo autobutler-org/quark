@@ -8,7 +8,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -48,17 +47,10 @@ func renameGroup(c *gin.Context) *serverutil.Response {
 		return serverutil.BadRequest(grouputil.ErrInvalidGroupName)
 	}
 
-	filesDir, err := storageutil.GetFilesDir()
-	if err != nil {
-		return serverutil.InternalServerError(err)
-	}
-
 	result, err := grouputil.RenameGroup(c.Request.Context(), grouputil.RenameGroupParams{
 		Database: database,
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		EventBus: deps.EventBus(),
-		FilesDir: filesDir,
 		GroupID:  groupID,
 		Name:     body.Name,
 	})
