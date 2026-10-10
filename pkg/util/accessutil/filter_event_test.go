@@ -33,6 +33,7 @@ func TestFilterEvent(t *testing.T) {
 		{name: "account changed", access: before, event: eventbus.Event{Kind: eventbus.EventAccountChanged}},
 		{name: "feature flag changed", access: before, event: eventbus.Event{Kind: eventbus.EventFeatureFlagChanged}},
 		{name: "public settings changed", access: stranger, event: eventbus.Event{Kind: eventbus.EventPublicSettingsChanged}},
+		{name: "hostname changed", access: stranger, event: eventbus.Event{Kind: eventbus.EventHostnameChanged, Data: eventbus.HostnameChanged{Hostname: "kitchen"}}},
 		{name: "calendar changed", access: stranger, event: eventbus.Event{Kind: eventbus.EventCalendarChanged, Data: int64(7)}},
 		{name: "resync", access: stranger, event: eventbus.Event{Kind: eventbus.EventResync, Data: eventbus.Resync{Dropped: 3}}},
 		{name: "backup dropped", access: before, event: eventbus.Event{Kind: eventbus.EventBackupProgress}, want: &eventbus.Event{}},

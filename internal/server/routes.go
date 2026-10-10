@@ -17,6 +17,7 @@ import (
 	v0_favorites "github.com/autobutler-org/quark/internal/server/api/v0/favorites"
 	v0_files "github.com/autobutler-org/quark/internal/server/api/v0/files"
 	v0_health "github.com/autobutler-org/quark/internal/server/api/v0/health"
+	v0_hostname "github.com/autobutler-org/quark/internal/server/api/v0/hostname"
 	v0_jobs "github.com/autobutler-org/quark/internal/server/api/v0/jobs"
 	v0_photos "github.com/autobutler-org/quark/internal/server/api/v0/photos"
 	v0_settings "github.com/autobutler-org/quark/internal/server/api/v0/settings"
@@ -88,6 +89,7 @@ func setupRouters(engine *gin.Engine, systemCollector *healthutil.Collector, dep
 	adminGroup := group.Group("", middleware.RequireAdmin(deps))
 	serverutil.RegisterRouterWithGroup(adminGroup, v0_admin.NewRouter())
 	serverutil.RegisterRouterWithGroup(adminGroup, v0_devices.NewAdminRouter())
+	serverutil.RegisterRouterWithGroup(adminGroup, v0_hostname.NewRouter())
 	serverutil.RegisterRouterWithGroup(adminGroup, v0_settings.NewAdminRouter())
 	serverutil.RegisterRouterWithGroup(adminGroup, v0_ssh.NewRouter())
 	serverutil.RegisterRouterWithGroup(adminGroup, v0_storage.NewAdminRouter())

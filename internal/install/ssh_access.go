@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/autobutler-org/quark/pkg/util/hostnameutil"
 	"github.com/autobutler-org/quark/pkg/util/sshutil"
 )
 
@@ -100,23 +101,27 @@ esac
 `
 )
 
-// sudoersContent is the whole of /etc/sudoers.d/quark: the mount rule, and
-// the one entry that lets the service run the SSH helper.
+// sudoersContent is the whole of /etc/sudoers.d/quark: the mount rule, the
+// one entry that lets the service run the SSH helper, and the one for the
+// hostname helper. The "" on the last lets sudo run that helper with no
+// arguments only: the new name goes in on stdin.
 func sudoersContent() string {
 	mountsDir := filepath.Join(serviceDataDir, "data", "mounts")
 	return fmt.Sprintf(
 		"%s ALL=(root) NOPASSWD: /bin/mount * %s/*, /bin/umount %s/*\n"+
-			"%s ALL=(root) NOPASSWD: %s\n",
+			"%s ALL=(root) NOPASSWD: %s\n"+
+			"%s ALL=(root) NOPASSWD: %s \"\"\n",
 		serviceUserName, mountsDir, mountsDir,
 		serviceUserName, sshutil.HelperPath,
+		serviceUserName, hostnameutil.HelperPath,
 	)
 }
 
-// installSSHHelper writes the helper root-owned, in a root-owned directory
+// installRootHelper writes a helper root-owned, in a root-owned directory
 // outside the self-updatable serviceBinDir, so the service can run it through
 // sudo but never change it.
-func installSSHHelper() error {
-	dir := filepath.Dir(sshutil.HelperPath)
+func installRootHelper(path, content string) error {
+	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dir, err)
 	}
@@ -126,7 +131,7 @@ func installSSHHelper() error {
 	if err := os.Chown(dir, 0, 0); err != nil {
 		return fmt.Errorf("failed to set ownership on %s: %w", dir, err)
 	}
-	_, err := writeRootFileIfChanged(sshutil.HelperPath, sshAccessHelperContent, 0o755)
+	_, err := writeRootFileIfChanged(path, content, 0o755)
 	return err
 }
 

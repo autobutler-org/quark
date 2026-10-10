@@ -11,6 +11,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/autobutler-org/quark/pkg/util/hostnameutil"
+	"github.com/autobutler-org/quark/pkg/util/sshutil"
 )
 
 // installSystemdService writes the unit and enables it. restart starts the
@@ -242,8 +245,11 @@ func Install(systemOnly bool) error {
 		if err := ensureLoginShell(); err != nil {
 			return fmt.Errorf("failed to give the service account a login shell: %w", err)
 		}
-		if err := installSSHHelper(); err != nil {
+		if err := installRootHelper(sshutil.HelperPath, sshAccessHelperContent); err != nil {
 			return fmt.Errorf("failed to install the SSH access helper: %w", err)
+		}
+		if err := installRootHelper(hostnameutil.HelperPath, hostnameHelperContent); err != nil {
+			return fmt.Errorf("failed to install the hostname helper: %w", err)
 		}
 		if err := installSSHDropIn(); err != nil {
 			return fmt.Errorf("failed to install the sshd drop-in: %w", err)

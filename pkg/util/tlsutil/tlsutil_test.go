@@ -145,7 +145,7 @@ func TestEnsureSelfSignedCert_RegeneratesExpired(t *testing.T) {
 	}
 	certPath := filepath.Join(certsDir, "server.crt")
 	keyPath := filepath.Join(certsDir, "server.key")
-	writeSoonExpiredCert(t, certPath, keyPath)
+	writeCert(t, certPath, keyPath, 10*24*time.Hour)
 
 	// Capture the key before calling EnsureSelfSignedCert.
 	oldKey, err := os.ReadFile(keyPath)
@@ -167,10 +167,97 @@ func TestEnsureSelfSignedCert_RegeneratesExpired(t *testing.T) {
 	}
 }
 
-// writeSoonExpiredCert creates a self-signed ECDSA P-256 cert that expires in
-// 10 days — inside the 30-day renewal window so EnsureSelfSignedCert must
-// regenerate it.
-func writeSoonExpiredCert(t *testing.T, certPath, keyPath string) {
+// A cert made under an old hostname no longer matches https://<new>.local, so
+// a rename, done from Quark or with hostnamectl, must regenerate it (#2344).
+func TestEnsureSelfSignedCert_RegeneratesWhenHostnameMissingFromSANs(t *testing.T) {
+	hostname, err := os.Hostname()
+	if err != nil || hostname == "" || hostname == "localhost" {
+		t.Skip("no usable hostname on this machine")
+	}
+
+	dir := t.TempDir()
+	certsDir := filepath.Join(dir, "certs")
+	if err := os.MkdirAll(certsDir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Good for most of a year, and naming no host at all.
+	writeCert(t, filepath.Join(certsDir, "server.crt"), filepath.Join(certsDir, "server.key"), 300*24*time.Hour)
+
+	certFile, _, err := tlsutil.EnsureSelfSignedCert(dir)
+	if err != nil {
+		t.Fatalf("EnsureSelfSignedCert error: %v", err)
+	}
+	certPEM, err := os.ReadFile(certFile)
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		t.Fatal("cert PEM block is nil")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("parse cert: %v", err)
+	}
+	short := strings.TrimSuffix(hostname, ".local")
+	if !slices.Contains(cert.DNSNames, short) {
+		t.Errorf("cert DNSNames %v still missing %q: the cert was not regenerated", cert.DNSNames, short)
+	}
+}
+
+// A cert regenerated while the server runs must reach the next handshake, or a
+// rename leaves the old cert up until the service restarts (#2344).
+func TestCertificateGetter_ReloadsAChangedCert(t *testing.T) {
+	dir := t.TempDir()
+	certFile, keyFile, err := tlsutil.EnsureSelfSignedCert(dir)
+	if err != nil {
+		t.Fatalf("EnsureSelfSignedCert: %v", err)
+	}
+	get, err := tlsutil.CertificateGetter(certFile, keyFile)
+	if err != nil {
+		t.Fatalf("CertificateGetter: %v", err)
+	}
+	first, err := get(nil)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if again, _ := get(nil); again != first {
+		t.Error("an unchanged cert was loaded again")
+	}
+
+	// A cert that does not load keeps the last good one serving.
+	if err := os.WriteFile(certFile, []byte("not a cert"), 0o600); err != nil {
+		t.Fatalf("corrupt cert: %v", err)
+	}
+	if kept, err := get(nil); err != nil || kept != first {
+		t.Errorf("get with a corrupt cert = %v, %v; want the last good cert", kept, err)
+	}
+
+	if _, _, err := tlsutil.EnsureSelfSignedCert(dir); err != nil {
+		t.Fatalf("regenerate: %v", err)
+	}
+	// Move the mtime on by hand: both writes can land in one clock tick.
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(certFile, later, later); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	second, err := get(nil)
+	if err != nil {
+		t.Fatalf("get after regenerating: %v", err)
+	}
+	if string(second.Certificate[0]) == string(first.Certificate[0]) {
+		t.Error("still serving the old cert after it was regenerated")
+	}
+
+	if _, err := tlsutil.CertificateGetter(filepath.Join(dir, "missing.crt"), keyFile); err == nil {
+		t.Error("CertificateGetter with no cert on disk returned no error")
+	}
+}
+
+// writeCert creates a self-signed ECDSA P-256 cert with no SANs that expires
+// validFor from now. 10 days is inside the 30-day renewal window, so
+// EnsureSelfSignedCert must regenerate it.
+func writeCert(t *testing.T, certPath, keyPath string, validFor time.Duration) {
 	t.Helper()
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -182,7 +269,7 @@ func writeSoonExpiredCert(t *testing.T, certPath, keyPath string) {
 	tmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
 		NotBefore:             now.Add(-355 * 24 * time.Hour),
-		NotAfter:              now.Add(10 * 24 * time.Hour), // 10 days — inside renewal window
+		NotAfter:              now.Add(validFor),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,

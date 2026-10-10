@@ -576,13 +576,15 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 		// as the minimum version. Go 1.22+ automatically negotiates
 		// X25519MLKEM768 hybrid PQC key exchange in TLS 1.3 sessions, so no
 		// extra configuration is needed for post-quantum hybrid key exchange.
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		// The getter picks up a cert regenerated while the server runs, which
+		// renaming the device does (#2344).
+		getCertificate, err := tlsutil.CertificateGetter(certFile, keyFile)
 		if err != nil {
 			return fmt.Errorf("failed to load TLS key pair: %w", err)
 		}
 		tlsCfg := &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			MinVersion:   tls.VersionTLS13,
+			GetCertificate: getCertificate,
+			MinVersion:     tls.VersionTLS13,
 		}
 
 		addr := fmt.Sprintf(":%s", port)
