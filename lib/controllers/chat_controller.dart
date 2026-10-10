@@ -107,6 +107,13 @@ class ChatPendingSend {
 ///   posts in (#2501). [startConversation] makes a private channel with one
 ///   other account, or opens the one already made (#2497); [loadPeople]
 ///   lists who it can be with.
+/// - [toggleSearch] and [search] search the open channel on the device
+///   (#2429): while a query is set, [messageItems] is only the loaded
+///   messages whose decrypted text contains it, whatever the case, and
+///   [searchMatchCount] counts them. It reads what the timeline already
+///   holds in memory, so nothing is asked of the Quark and nothing is
+///   stored. Changing or leaving the channel, and locking, drop the search
+///   and its query.
 ///
 /// Every collaborator has a real default; tests pass fakes.
 class ChatController extends ChangeNotifier {
@@ -217,6 +224,8 @@ class ChatController extends ChangeNotifier {
   bool _channelsLoaded = false;
   ChatMessagesController? _messages;
   bool _isLoadingOlder = false;
+  bool _isSearching = false;
+  String _searchQuery = '';
   List<ChatMember> _members = const [];
   bool _isLoadingMembers = false;
   Object? _membersError;
@@ -361,6 +370,38 @@ class ChatController extends ChangeNotifier {
   /// Whether older messages may exist.
   bool get hasOlderMessages => _messages?.hasOlder ?? false;
 
+  /// Whether there is anything to search: a channel this account reads is
+  /// open and chat is unlocked.
+  bool get canSearch => _messages != null && !isLocked;
+
+  /// Whether the open channel's search bar is showing (#2429).
+  bool get isSearching => _isSearching;
+
+  /// What is being searched for, as typed; empty when nothing is.
+  String get searchQuery => _searchQuery;
+
+  /// How many loaded messages match [searchQuery]. Null while not searching
+  /// or while the query is blank, when [messageItems] is the whole timeline.
+  int? get searchMatchCount => _searchMatches?.length;
+
+  /// The loaded messages whose decrypted text contains [searchQuery],
+  /// whatever the case, oldest first; null when there is no query. A message
+  /// waiting for its key, one that won't open, a deleted one and a system
+  /// line have no text to match.
+  // ponytail: scans the loaded window on each read; keep an index if a long
+  // channel stutters, and for history that isn't loaded (#2429).
+  List<ChatTimelineMessage>? get _searchMatches {
+    final needle = _searchQuery.trim().toLowerCase();
+    if (!_isSearching || needle.isEmpty) return null;
+    return [
+      for (final entry in _messages?.entries ?? const <ChatTimelineEntry>[])
+        if (entry is ChatTimelineMessage &&
+            entry.state == ChatMessageState.ready &&
+            (entry.text ?? '').toLowerCase().contains(needle))
+          entry,
+    ];
+  }
+
   /// Whether this account reads the open channel but has no grant of its
   /// current key, so it can't send yet. Never for a channel it only manages:
   /// no key is coming.
@@ -429,7 +470,8 @@ class ChatController extends ChangeNotifier {
       _selected == null ? 'Pick a channel to write in it.' : null;
 
   /// The open channel's timeline for `QuarkMessageList`: newest first, sends
-  /// not yet stored at the head.
+  /// not yet stored at the head. While a search query is set, only the
+  /// messages that match it ([searchMatchCount]).
   ///
   /// `ChatMessageItem` has no pending or failed kind, so a send in flight or
   /// failed is drawn as a plain text row; the page puts retry beside the
@@ -439,6 +481,10 @@ class ChatController extends ChangeNotifier {
     final messages = _messages;
     if (channel == null || messages == null) return const [];
     final me = _currentUserId();
+    final matches = _searchMatches;
+    if (matches != null) {
+      return [for (final m in matches.reversed) itemFor(m, nameOf, me: me)];
+    }
     return [
       for (final p in _pending.reversed)
         if (p.channelId == channel.id)
@@ -539,6 +585,23 @@ class ChatController extends ChangeNotifier {
       _loadMembers(),
       if (messages != null && !isLocked) messages.catchUp(),
     ]);
+  }
+
+  /// Opens the open channel's search, or closes it and forgets the query.
+  /// Does nothing without [canSearch].
+  void toggleSearch() {
+    if (!_isSearching && !canSearch) return;
+    _isSearching = !_isSearching;
+    _searchQuery = '';
+    _notify();
+  }
+
+  /// Searches the open channel's loaded messages for [query], on the device:
+  /// [messageItems] becomes the matches. A blank one shows everything again.
+  void search(String query) {
+    if (!_isSearching) return;
+    _searchQuery = query;
+    _notify();
   }
 
   /// Loads the page of messages before the oldest shown, or the first page
@@ -1093,6 +1156,12 @@ class ChatController extends ChangeNotifier {
       ..dispose();
     _messages = null;
     _isLoadingOlder = false;
+    _closeSearch();
+  }
+
+  void _closeSearch() {
+    _isSearching = false;
+    _searchQuery = '';
   }
 
   Future<void> _deliver(ChatPendingSend pending) async {
@@ -1126,6 +1195,7 @@ class ChatController extends ChangeNotifier {
       final messages = _messages;
       if (messages != null) unawaited(messages.open());
     }
+    if (!unlocked) _closeSearch();
     _wasUnlocked = unlocked;
     _notify();
   }

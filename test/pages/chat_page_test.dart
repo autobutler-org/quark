@@ -666,6 +666,64 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // #2429: search filters what this device has already decrypted, and
+    // says that is all it covers.
+    testWidgets('search shows only the loaded messages that match ($label)', (
+      tester,
+    ) async {
+      ChatTimelineMessage said(int id, String text) => ChatTimelineMessage(
+        message: ChatMessage(
+          id: id,
+          channelId: 1,
+          authorId: 8,
+          keyVersion: 1,
+          ciphertext: null,
+          createdAt: DateTime.utc(2026, 9, 25, 10, id),
+        ),
+        state: ChatMessageState.ready,
+        text: text,
+      );
+      final fake = FakeChat()
+        ..entries[1] = [said(11, 'Lunch at noon?'), said(12, 'See you there')];
+      await pumpChat(tester, size, chat: fake);
+      Finder key(String k) => find.byKey(ValueKey(k));
+      expect(key('chat_search_field'), findsNothing);
+
+      await tapKey(tester, 'chat_channel_search');
+      expect(key('message_11'), findsOneWidget);
+      expect(key('message_12'), findsOneWidget);
+      expect(
+        tester.widget<Text>(key('chat_search_status')).data,
+        contains('on this device'),
+      );
+
+      await tester.enterText(key('chat_search_field'), 'lunch');
+      await tester.pumpAndSettle();
+      expect(key('message_11'), findsOneWidget);
+      expect(key('message_12'), findsNothing);
+      expect(
+        tester.widget<Text>(key('chat_search_status')).data,
+        '1 match in the messages loaded on this device.',
+      );
+
+      await tester.enterText(key('chat_search_field'), 'dinner');
+      await tester.pumpAndSettle();
+      expect(key('message_11'), findsNothing);
+      expect(key('message_12'), findsNothing);
+      expect(find.text('No loaded message matches'), findsOneWidget);
+      expect(
+        tester.widget<Text>(key('chat_search_status')).data,
+        'No matches in the messages loaded on this device.',
+      );
+
+      await tapKey(tester, 'chat_search_close');
+      expect(key('chat_search_field'), findsNothing);
+      expect(key('message_11'), findsOneWidget);
+      expect(key('message_12'), findsOneWidget);
+      expect(fake.calls, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('general offers a writer no settings ($label)', (tester) async {
       await pumpChat(tester, size);
 

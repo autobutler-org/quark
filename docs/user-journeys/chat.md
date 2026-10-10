@@ -4,7 +4,8 @@ Covers the chat beta (#2414): opening a channel, sending and receiving
 end-to-end encrypted messages, unlocking chat on web after a reload, waiting
 for a channel key, an admin turning the beta off, and creating, sharing,
 renaming, leaving and deleting channels (#2422), reacting to messages
-(#2426), and a message's menu (#2631).
+(#2426), a message's menu (#2631), and searching a channel on the device
+(#2429).
 
 ---
 
@@ -364,3 +365,39 @@ Both have the channel open.
 - On a computer, dragging across messages selects their text, and the copy shortcut copies the selection. On a phone
   or tablet a long press opens the menu instead, so **Copy text** is how a message is copied.
 - A deleted message, a message waiting for its key, and a system line have no menu.
+
+---
+
+### JN-CHAT-018: Search a channel's messages on this device
+
+**Preconditions:** A channel open (JN-CHAT-001) with text messages in it, some containing "lunch".
+
+**Steps:**
+
+1. Tap **Search messages**, the magnifier in the channel's header.
+2. Type `lunch`.
+3. Tap **Load older messages** under the search field.
+4. Tap **Close search**.
+
+**Expected result:**
+
+- After step 1, a search field opens above the messages with the line "Search runs on this device, over the
+  messages loaded here. The Quark never sees what you search for."
+- After step 2, only the messages containing "lunch", in any letter case, are listed, and the line reads, say,
+  "2 matches in the messages loaded on this device." When nothing matches, the list reads "No loaded message
+  matches".
+- After step 3, the page of messages before the oldest loaded is fetched and searched too, and the count grows if
+  any of them match. The button goes away once the channel's whole history is loaded.
+- After step 4, the field closes and every loaded message is listed again.
+
+**Notes:**
+
+- Chat is end-to-end encrypted, so the Quark can't search it. The search runs on the device, over the messages
+  the channel has already loaded and decrypted; what you type and what it finds never go to the Quark
+  ([`docs/chat-security.md`](../chat-security.md)).
+- Nothing is written to disk. A reload, opening another channel, leaving the channel or signing out leaves
+  nothing behind, and a channel you have left can't be searched.
+- A message waiting for its key (JN-CHAT-005), a deleted message and a system line are never matches.
+- It searches one channel at a time, and only as far back as that channel has loaded. Searching every channel
+  and unloaded history needs an index kept on the device, which isn't built yet.
+- An admin looking at a channel they are not in (JN-CHAT-015) has no messages, so no **Search messages** button.

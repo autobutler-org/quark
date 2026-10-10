@@ -13,6 +13,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/chat/chat_channel_header.dart';
 import 'package:quark/widgets/chat/chat_channel_not_found.dart';
 import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
+import 'package:quark/widgets/chat/chat_search_bar.dart';
 import 'package:quark/widgets/chat/chat_unlock_prompt.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
@@ -57,6 +58,12 @@ import 'package:url_launcher/url_launcher.dart';
 /// without their messages. The author of a message, or a holder of
 /// `delete_messages`, deletes it after confirming. A holder of `add_reactions`
 /// reacts to a message, and taps a reaction of their own to take it back.
+///
+/// The header's search (#2429) opens a bar above the messages and narrows
+/// them to the ones containing what is typed. Chat is end-to-end encrypted,
+/// so it runs on this device over the messages already loaded and decrypted;
+/// the bar says so, counts the matches, and loads older messages to reach
+/// further back. Nothing typed there goes to the Quark.
 class ChatPage extends StatefulWidget {
   /// Creates the page on channel [channelId].
   const ChatPage({required this.channelId, this.controller, super.key});
@@ -389,6 +396,7 @@ class _ChatPageState extends State<ChatPage>
             ? c.channelsError
             : c.messagesError;
         final encryption = c.encryptionStatus;
+        final matches = c.searchMatchCount;
         return QuarkPageScaffold(
           title: 'Chat',
           icon: QuarkIcons.forum_outlined,
@@ -427,6 +435,7 @@ class _ChatPageState extends State<ChatPage>
                           name: channel.name,
                           topic: channel.topic,
                           isPrivate: channel.isPrivate,
+                          onSearch: c.canSearch ? c.toggleSearch : null,
                           onEdit: c.canManageSelected ? _editChannel : null,
                           onMembers: c.canManageMembers ? _openMembers : null,
                           onDelete: c.canManageSelected && !channel.isDefault
@@ -448,12 +457,29 @@ class _ChatPageState extends State<ChatPage>
                   messages: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (c.isSearching)
+                        ChatSearchBar(
+                          matchCount: matches,
+                          hasOlder: c.hasOlderMessages,
+                          isLoadingOlder: c.isLoadingMessages,
+                          onChanged: c.search,
+                          onLoadOlder: c.loadOlder,
+                          onClose: c.toggleSearch,
+                        ),
                       Expanded(
                         child: c.isChannelMissing
                             ? ChatChannelNotFound(
                                 onOpenGeneral: () => _openChannel(
                                   ChatController.defaultChannelSlug,
                                 ),
+                              )
+                            : matches == 0
+                            ? const EmptyStateWidget(
+                                icon: QuarkIcons.search,
+                                headline: 'No loaded message matches',
+                                subtext:
+                                    'Only the messages loaded on this device '
+                                    'are searched.',
                               )
                             : QuarkMessageList(
                                 messages: c.messageItems,
@@ -466,7 +492,9 @@ class _ChatPageState extends State<ChatPage>
                                         messagesError,
                                         'load the channel',
                                       ),
-                                hasMore: c.hasOlderMessages,
+                                // While searching, the search bar offers
+                                // older messages instead.
+                                hasMore: matches == null && c.hasOlderMessages,
                                 onLoadOlder: c.loadOlder,
                                 permissions: channel == null
                                     ? null

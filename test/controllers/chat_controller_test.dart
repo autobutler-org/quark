@@ -949,4 +949,206 @@ void main() {
       chat.controller.dispose();
     });
   });
+
+  group('on-device search (#2429)', () {
+    Future<FakeChat> openGeneral() async {
+      final chat = FakeChat();
+      chat.controller.select('general');
+      await chat.controller.refresh();
+      chat.opened[1]!.fakeEntries = [
+        ChatTimelineSystem(
+          event: event(ChatChannelEvent.keyCreated, {'version': 1}),
+          isVerified: true,
+        ),
+        ChatTimelineMessage(
+          message: message(1),
+          state: ChatMessageState.ready,
+          text: 'Lunch at noon?',
+        ),
+        ChatTimelineMessage(
+          message: message(2, author: 9),
+          state: ChatMessageState.waiting,
+        ),
+        ChatTimelineMessage(
+          message: message(3),
+          state: ChatMessageState.unreadable,
+        ),
+        ChatTimelineMessage(
+          message: message(4),
+          state: ChatMessageState.deleted,
+        ),
+        ChatTimelineMessage(
+          message: message(5),
+          state: ChatMessageState.ready,
+          text: 'Bring the lunch boxes',
+        ),
+        ChatTimelineMessage(
+          message: message(6),
+          state: ChatMessageState.ready,
+          text: 'See you there',
+        ),
+      ];
+      return chat;
+    }
+
+    test('finds a loaded message whatever its case, newest first', () async {
+      final chat = await openGeneral();
+      final c = chat.controller;
+      expect(c.canSearch, isTrue);
+
+      c
+        ..toggleSearch()
+        ..search('  LUNCH ');
+
+      expect(c.isSearching, isTrue);
+      expect(c.searchQuery, '  LUNCH ');
+      expect(c.searchMatchCount, 2);
+      expect(c.messageItems.map((i) => i.id), ['5', '1']);
+      c.dispose();
+    });
+
+    test('searches only text it has decrypted, and no pending send', () async {
+      final chat = await openGeneral();
+      final c = chat.controller;
+      final sending = Completer<void>();
+      chat.opened[1]!.onSend = (_) => sending.future;
+      unawaited(c.send('lunch is pending'));
+      expect(c.messageItems.first.body, 'lunch is pending');
+
+      c
+        ..toggleSearch()
+        // Every row that isn't ready text: the system line's sentence, the
+        // waiting author's name and the unreadable and deleted bodies.
+        ..search('e');
+
+      expect(c.messageItems.map((i) => i.kind).toSet(), {ChatMessageKind.text});
+      expect(c.messageItems.map((i) => i.id), ['6', '5']);
+      sending.complete();
+      await pumpEventQueue();
+      c.dispose();
+    });
+
+    test('a blank query shows the whole timeline and counts nothing', () async {
+      final chat = await openGeneral();
+      final c = chat.controller;
+      final all = c.messageItems.length;
+
+      expect(c.searchMatchCount, isNull);
+      c.toggleSearch();
+      expect(c.searchMatchCount, isNull);
+      expect(c.messageItems, hasLength(all));
+      c.search('   ');
+      expect(c.searchMatchCount, isNull);
+      expect(c.messageItems, hasLength(all));
+
+      c.search('nothing says this');
+      expect(c.searchMatchCount, 0);
+      expect(c.messageItems, isEmpty);
+      c.dispose();
+    });
+
+    test('closing search forgets the query', () async {
+      final chat = await openGeneral();
+      final c = chat.controller
+        ..toggleSearch()
+        ..search('lunch')
+        ..toggleSearch();
+
+      expect(c.isSearching, isFalse);
+      expect(c.searchQuery, isEmpty);
+      expect(c.searchMatchCount, isNull);
+      c.dispose();
+    });
+
+    test('switching channels drops the search and its query', () async {
+      final chat = await openGeneral();
+      final c = chat.controller
+        ..toggleSearch()
+        ..search('lunch')
+        ..select('2');
+
+      expect(c.selectedChannel?.id, 2);
+      expect(c.isSearching, isFalse);
+      expect(c.searchQuery, isEmpty);
+      c.dispose();
+    });
+
+    test('a channel you left is no longer searched', () async {
+      final chat = FakeChat();
+      final c = chat.controller..select('2');
+      await c.refresh();
+      final random = chat.opened[2]!
+        ..fakeEntries = [
+          ChatTimelineMessage(
+            message: message(1),
+            state: ChatMessageState.ready,
+            text: 'the secret plan',
+          ),
+        ];
+      c
+        ..toggleSearch()
+        ..search('secret');
+      expect(c.searchMatchCount, 1);
+
+      expect(await c.leaveChannel(), isTrue);
+
+      expect(random.disposed, isTrue);
+      expect(c.selectedChannel?.id, 1);
+      expect(c.isSearching, isFalse);
+      c
+        ..toggleSearch()
+        ..search('secret');
+      expect(c.searchMatchCount, 0);
+      expect(c.messageItems, isEmpty);
+      c.dispose();
+    });
+
+    test('searching asks the Quark for nothing', () async {
+      final chat = await openGeneral();
+      final c = chat.controller;
+      final calls = [...chat.calls];
+      final memberLoads = chat.memberLoads;
+
+      c
+        ..toggleSearch()
+        ..search('lunch');
+      expect(c.messageItems, hasLength(2));
+      c.toggleSearch();
+      await pumpEventQueue();
+
+      expect(chat.calls, calls);
+      expect(chat.memberLoads, memberLoads);
+      expect(chat.opened[1]!.opens, 1);
+      expect(chat.opened[1]!.sent, isEmpty);
+      c.dispose();
+    });
+
+    test('locking drops the search and its query', () async {
+      final chat = await openGeneral();
+      final c = chat.controller
+        ..toggleSearch()
+        ..search('lunch');
+
+      chat.unlocked = false;
+      chat.keys.notifyListeners();
+
+      expect(c.canSearch, isFalse);
+      expect(c.isSearching, isFalse);
+      expect(c.searchQuery, isEmpty);
+      c.toggleSearch();
+      expect(c.isSearching, isFalse);
+      c.dispose();
+    });
+
+    test('there is nothing to search while locked or without a timeline', () {
+      final locked = FakeChat(unlocked: false);
+      locked.controller.select('general');
+      expect(locked.controller.canSearch, isFalse);
+      locked.controller.dispose();
+
+      final none = FakeChat();
+      expect(none.controller.canSearch, isFalse);
+      none.controller.dispose();
+    });
+  });
 }
