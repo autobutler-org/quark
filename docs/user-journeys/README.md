@@ -40,6 +40,7 @@ Journey IDs are stable — don't renumber when adding new ones.
 | [storage-devices.md](storage-devices.md) | System page, Storage tab: drive management             |
 | [jobs.md](jobs.md)                       | System page, Jobs tab: the job queue                   |
 | [settings.md](settings.md)               | App settings, hosts, updates, remote access            |
+| [notifications.md](notifications.md)     | Notifications (bell, backup reminders, type switches)  |
 | [users.md](users.md)                     | Admin-only Users page (accounts, admin roles)          |
 | [chat.md](chat.md)                       | Chat beta (channels, messages, sharing, admin switch)  |
 

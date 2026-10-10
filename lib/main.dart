@@ -12,6 +12,7 @@ import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/jobs_controller.dart';
+import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
@@ -27,8 +28,8 @@ import 'package:quark/probe_bootstrap.dart';
 /// Runs the app with every uncaught error recorded in the app log on this device's own disk (#1822).
 void main() => AppLog.instance.guard(_run);
 
-/// Loads the saved settings, trusts the local Quark's self-signed certificate, starts the jobs watcher, and runs
-/// the app, holding its first frame until the router has a page to show.
+/// Loads the saved settings, trusts the local Quark's self-signed certificate, starts the jobs and notifications
+/// watchers, and runs the app, holding its first frame until the router has a page to show.
 Future<void> _run() async {
   AppLog.instance.info('App started');
   usePathUrlStrategy();
@@ -47,6 +48,8 @@ Future<void> _run() async {
   installLocalTrustHttpOverrides();
   // Finish announcements and the jobs list outlive every page.
   JobsController.instance.start();
+  // The bell's count is right on whatever page opens first (#2493).
+  NotificationsController.instance.start();
   // Picks the home or remote-access address before the first request goes
   // out, and keeps picking (#1880).
   ConnectionController.instance.start();
@@ -68,7 +71,7 @@ Future<void> _run() async {
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-/// The app's root: the theme, the router, and the job announcements, jobs badge and connection indicator that sit
+/// The app's root: the theme, the router, and the job announcements, jobs badge, notifications bell and connection indicator that sit
 /// above every page.
 class QuarkApp extends StatelessWidget {
   const QuarkApp({super.key});
@@ -110,6 +113,7 @@ class QuarkApp extends StatelessWidget {
             child: AppBarTrailingHost(
               jobs: JobsController.instance,
               connection: ConnectionController.instance,
+              notifications: NotificationsController.instance,
               onNavigate: router.go,
               // Every page's bar, drawer and floating button reads this, so
               // the whole app mirrors from the one setting (#1812).

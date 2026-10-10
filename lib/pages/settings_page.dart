@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:quark/controllers/feature_flags_controller.dart';
+import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/controllers/remote_access_controller.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/router.dart';
@@ -22,6 +23,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/notifications/notification_preferences_card.dart';
 import 'package:quark/widgets/settings/connected_devices_card.dart';
 import 'package:quark/widgets/settings/remote_access_card.dart';
 import 'package:quark/widgets/settings/remote_access_setup_sheet.dart';
@@ -593,6 +595,13 @@ class _SettingsPageState extends State<SettingsPage> {
               onDefaultCalendarViewChanged:
                   settings.isFeatureEnabled(FeatureFlag.calendar)
                   ? settings.setDefaultCalendarView
+                  : null,
+              // Every type today is a backup reminder, which only an admin
+              // receives, so only an admin has anything to switch (#2493).
+              notifications: hasHost && isAdmin && settings.sessionToken != null
+                  ? NotificationPreferencesCard(
+                      controller: NotificationsController.instance,
+                    )
                   : null,
               refreshIntervalSeconds: _refreshIntervalSeconds,
               onRefreshIntervalChanged: _setRefreshInterval,

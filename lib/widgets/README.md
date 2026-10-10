@@ -73,8 +73,9 @@ lib/widgets/
   layout/
     app_bar_trailing_host.dart  provides the QuarkAppBarTrailing scope with a
                                 ConnectionSheetButton fed by
-                                ConnectionController and a JobsBadge fed by
-                                JobsController
+                                ConnectionController, a JobsBadge fed by
+                                JobsController and a NotificationsBell fed by
+                                NotificationsController
     app_drawer.dart             AppDrawer, QuarkDrawer wired to the router
     chrome_app_bar.dart         ChromeAppBar, a drill-down page's AppBar under
                                 QuarkChrome; not coupled, a candidate for the
@@ -90,6 +91,17 @@ lib/widgets/
                                 button that expands the host list
     host_switcher.dart          ActiveHostCard plus the inline HostManager,
                                 shared by the login and setup pages
+  notifications/
+    notification_copy.dart      the title, body and Settings label of each
+                                notification type; the Quark sends no text
+    notification_preferences_card.dart
+                                one switch per notification type, read and
+                                saved through NotificationsController
+    notifications_bell.dart     the top bar's bell: counts
+                                NotificationsController's entries and opens
+                                NotificationsList in a sheet
+    notifications_list.dart     the sheet's rows, each opening its
+                                notification's route; reads the controller
   photos/
     add_to_album_sheet.dart     AddToAlbumSheet host for a photo in an album
                                 view: calls AlbumService, shows snack bars

@@ -36,6 +36,10 @@ void main() {
   late HttpOverrides? priorOverrides;
   final saves = <http.Request>[];
 
+  /// What the Quark holds as the account's own settings; a save replaces it
+  /// whole, as `PUT /settings/me` does.
+  var mySettings = '{}';
+
   Future<void> reset() async {
     while (settings.hosts.isNotEmpty) {
       await settings.removeHost(settings.hosts.length - 1);
@@ -48,6 +52,7 @@ void main() {
     priorOverrides = HttpOverrides.current;
     HttpOverrides.global = UnreachableQuarkHttpOverrides();
     saves.clear();
+    mySettings = '{}';
     await reset();
   });
 
@@ -66,8 +71,15 @@ void main() {
     int saveStatus = 200,
   }) async {
     sharedHttpClientFactory = () => MockClient((request) async {
+      // A save of the user's own color reads their settings first, so it
+      // can send the rest back unchanged (#2493).
+      final isMine = request.url.path == '/api/v0/settings/me';
+      if (request.method == 'GET' && isMine) {
+        return http.Response(mySettings, 200);
+      }
       if (request.method != 'PUT') return http.Response('', 404);
       saves.add(request);
+      if (isMine && saveStatus == 200) mySettings = request.body;
       return http.Response(request.body, saveStatus);
     });
     await settings.addHost(
@@ -204,5 +216,40 @@ void main() {
 
     expect(settings.quarkThemeColor.value, isNull);
     expect(settings.themeColor.value, QuarkThemeColor.lime);
+  });
+
+  // #2493: the switch and the color are saved through the same whole-object
+  // write, so neither may drop the other.
+  testWidgets('a theme color save keeps a notification type turned off', (
+    tester,
+  ) async {
+    const dueToggle = ValueKey('notification_toggle_backup_due');
+    await pumpSettings(tester, isAdmin: true);
+    expect(tester.widget<SwitchListTile>(find.byKey(dueToggle)).value, isTrue);
+
+    await tester.tap(find.byKey(dueToggle));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(jsonDecode(saves.last.body), {
+      'disabledNotifications': ['backup_due'],
+    });
+    expect(tester.widget<SwitchListTile>(find.byKey(dueToggle)).value, isFalse);
+
+    await tester.tap(within(userPicker, 'theme_color_swatch_violet'));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(saves.last.url.path, '/api/v0/settings/me');
+    expect(jsonDecode(saves.last.body), {
+      'themeColor': 'violet',
+      'disabledNotifications': ['backup_due'],
+    });
+  });
+
+  testWidgets('a member has no notification switches', (tester) async {
+    await pumpSettings(tester);
+    expect(find.byType(SwitchListTile), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('notification_toggle_backup_due')),
+      findsNothing,
+    );
+    expect(find.text('Notifications'), findsNothing);
   });
 }
