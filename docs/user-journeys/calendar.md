@@ -146,7 +146,8 @@ directly.
 - In Upcoming the event shows a bell with "15 min before"; once due, "Starts in 15 min" in the warning color.
 - Day, Week and Month show a reminder bar above the view, with **Open** and **Dismiss**.
 
-**Notes:** An all-day event's reminder is at 9 AM, on the day or the day before (#2522 lets you choose the time).
+**Notes:** An all-day event's reminder is on the day or the day before, at 9 AM until you choose another time: once
+one is set, the time button under the choices opens a time picker, and the time is kept per event (#2522).
 
 ---
 

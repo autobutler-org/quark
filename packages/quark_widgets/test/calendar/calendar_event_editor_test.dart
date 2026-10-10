@@ -165,6 +165,84 @@ void main() {
     expect(find.text('1 day before'), findsOneWidget);
   });
 
+  // #2522: an all-day reminder's time of day is picked per event.
+  final allDay = CalendarEventDraft.allDayOn(DateTime(2026, 9, 17));
+
+  testBothViewports('an all-day event with no reminder has no time button', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, _Harness().editor(draft: allDay), size: size);
+    expect(find.byKey(const ValueKey('event_remind_-540')), findsOneWidget);
+    expect(find.byKey(const ValueKey('event_remind_900')), findsOneWidget);
+    expect(find.byKey(const ValueKey('event_remind_time')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testBothViewports('a timed event has no reminder time button', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      _Harness().editor(draft: _draft.copyWith(reminderMinutes: 15)),
+      size: size,
+    );
+    expect(find.byKey(const ValueKey('event_remind_time')), findsNothing);
+  });
+
+  testBothViewports('an all-day reminder shows its saved time of day', (
+    tester,
+    size,
+  ) async {
+    // The day before at 2:30 PM.
+    final h = _Harness();
+    await pumpAt(
+      tester,
+      h.editor(draft: allDay.copyWith(reminderMinutes: 570)),
+      size: size,
+    );
+    expect(find.text('Day before, 2:30 PM'), findsOneWidget);
+    expect(find.text('On the day, 2:30 PM'), findsOneWidget);
+    expect(find.byKey(const ValueKey('event_remind_1440')), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('event_remind_time')),
+        matching: find.text('2:30 PM'),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    // Switching the day keeps the time.
+    final onTheDay = find.byKey(const ValueKey('event_remind_-870'));
+    await tester.ensureVisible(onTheDay);
+    await tester.tap(onTheDay);
+    expect(h.changed?.reminderMinutes, -870);
+  });
+
+  testBothViewports('picking a reminder time keeps its day', (
+    tester,
+    size,
+  ) async {
+    final h = _Harness();
+    await pumpAt(
+      tester,
+      h.editor(draft: allDay.copyWith(reminderMinutes: 900)),
+      size: size,
+    );
+    final time = find.byKey(const ValueKey('event_remind_time'));
+    await tester.ensureVisible(time);
+    await tester.tap(time);
+    await tester.pumpAndSettle();
+    // The picker opens on the saved 9:00 AM; switching to PM makes it 9 PM
+    // the day before.
+    await tester.tap(find.text('PM'));
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(h.changed?.reminderMinutes, 180);
+  });
+
   testBothViewports('says a repeating edit reaches every repeat', (
     tester,
     size,

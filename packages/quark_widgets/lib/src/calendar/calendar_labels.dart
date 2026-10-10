@@ -1,5 +1,6 @@
 import '../models/calendar_repeat.dart';
 import 'calendar_dates.dart';
+import 'calendar_reminders.dart';
 
 /// The English words and times the calendar widgets and their pages show.
 ///
@@ -167,10 +168,8 @@ abstract final class CalendarLabels {
     bool use24Hour = false,
   }) {
     if (allDay) {
-      // Minutes past the midnight the event starts on, and how many dates
-      // before it that falls.
-      final daysBefore = (minutes / (24 * 60)).ceil();
-      final clock = daysBefore * 24 * 60 - minutes;
+      final daysBefore = CalendarReminders.allDayDaysBefore(minutes);
+      final clock = CalendarReminders.allDayMinuteOfDay(minutes);
       final fires = DateTime(2000, 1, 1, clock ~/ 60, clock % 60);
       final at = !use24Hour && fires.minute == 0
           ? hour(fires.hour)
