@@ -59,14 +59,15 @@ void main() {
       'Files',
       'Photos',
       'Calendar',
-      'Trash',
       'Docs',
       'Sheets',
       'Slides',
       'Books',
       'Chat',
-      'System',
       'Vault',
+      'Manage',
+      'Trash',
+      'System',
       'Users',
       'Settings',
     ]) {
@@ -141,6 +142,194 @@ void main() {
 
     expect(tapped, ['users']);
     expect(find.byKey(const ValueKey('drawer_files')), findsNothing);
+  });
+
+  /// #2046: the drawer was one flat list, so the pages a household opens every
+  /// day sat between Trash and System. They lead now, and the pages for
+  /// looking after the Quark follow under a "Manage" label.
+  ///
+  /// The keys of every child the drawer's list was handed, top to bottom. The
+  /// list is lazy and the narrow viewport is shorter than the drawer, so this
+  /// reads the delegate, not the screen.
+  List<String> childKeys(WidgetTester tester) {
+    final list = tester.widget<ListView>(find.byType(ListView));
+    return [
+      for (final child
+          in (list.childrenDelegate as SliverChildListDelegate).children)
+        if (child.key case final ValueKey<String> key) key.value,
+    ];
+  }
+
+  const groupedOrder = [
+    'drawer_files',
+    'drawer_photos',
+    'drawer_calendar',
+    'drawer_docs',
+    'drawer_sheets',
+    'drawer_slides',
+    'drawer_books',
+    'drawer_chat',
+    'drawer_vault',
+    'drawer_group_manage',
+    'drawer_trash',
+    'drawer_system',
+    'drawer_users',
+    'drawer_settings',
+  ];
+  final manageLabel = find.byKey(const ValueKey('drawer_group_manage'));
+
+  testBothViewports('leads with the household pages, then the Manage group', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      drawerWith(QuarkDrawerSection.files, everyCallback([])),
+      size: size,
+    );
+
+    expect(childKeys(tester), groupedOrder);
+    expect(tester.takeException(), isNull);
+  });
+
+  testBothViewports('labels the Manage group only when it has a row', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkDrawer(activeSection: QuarkDrawerSection.files, onTapFiles: () {}),
+      size: size,
+    );
+    expect(childKeys(tester), ['drawer_files']);
+    expect(find.text('Manage'), findsNothing);
+
+    await pumpAt(
+      tester,
+      QuarkDrawer(
+        activeSection: QuarkDrawerSection.settings,
+        onTapSettings: () {},
+      ),
+      size: size,
+    );
+    expect(childKeys(tester), ['drawer_group_manage', 'drawer_settings']);
+    expect(find.text('Manage'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testBothViewports('the Manage label is a heading in line with the rows', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      drawerWith(QuarkDrawerSection.files, everyCallback([])),
+      size: size,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('drawer_trash')),
+      50,
+    );
+
+    final handle = tester.ensureSemantics();
+    expect(
+      tester.getSemantics(find.text('Manage')),
+      matchesSemantics(label: 'Manage', isHeader: true),
+    );
+    handle.dispose();
+    expect(
+      tester.getTopLeft(find.text('Manage')).dx,
+      tester
+          .getTopLeft(
+            find.descendant(
+              of: find.byKey(const ValueKey('drawer_trash')),
+              matching: find.byType(Icon),
+            ),
+          )
+          .dx,
+    );
+  });
+
+  for (final themeColor in [QuarkThemeColor.magenta, QuarkThemeColor.lime]) {
+    for (final brightness in Brightness.values) {
+      testBothViewports(
+        '${themeColor.name} ${brightness.name}: the Manage label is legible',
+        (tester, size) async {
+          await pumpAt(
+            tester,
+            QuarkDrawer(
+              activeSection: QuarkDrawerSection.files,
+              onTapFiles: () {},
+              onTapSettings: () {},
+            ),
+            size: size,
+            brightness: brightness,
+            themeColor: themeColor,
+          );
+
+          final tokens = themeColor.tokensFor(brightness);
+          final color = tester
+              .renderObject<RenderParagraph>(find.text('Manage'))
+              .text
+              .style!
+              .color!;
+          expect(color, tokens.chromeSecondaryForeground);
+          expect(
+            contrastRatio(color, tokens.chrome),
+            greaterThanOrEqualTo(4.5),
+          );
+          expect(
+            tester
+                .widget<Divider>(
+                  find.descendant(
+                    of: manageLabel,
+                    matching: find.byType(Divider),
+                  ),
+                )
+                .color,
+            tokens.chromeBorder,
+          );
+        },
+      );
+    }
+  }
+
+  // #1812: left-handed mode moves the drawer to the other edge. What is in the
+  // drawer reads the way it always does.
+  testBothViewports('left-handed mode leaves the groups as they are', (
+    tester,
+    size,
+  ) async {
+    Future<double> labelStart({required bool leftHanded}) async {
+      await pumpAt(
+        tester,
+        QuarkHandedness(
+          leftHanded: leftHanded,
+          child: drawerWith(QuarkDrawerSection.files, everyCallback([])),
+        ),
+        size: size,
+      );
+      expect(childKeys(tester), groupedOrder);
+      await tester.scrollUntilVisible(manageLabel, 50);
+      expect(tester.takeException(), isNull);
+      return tester.getTopLeft(find.text('Manage')).dx;
+    }
+
+    final rightHanded = await labelStart(leftHanded: false);
+    expect(await labelStart(leftHanded: true), rightHanded);
+  });
+
+  testLargeText('the Manage label is not clipped', (tester, size) async {
+    await pumpAt(
+      tester,
+      drawerWith(QuarkDrawerSection.files, everyCallback([])),
+      size: size,
+    );
+    await tester.scrollUntilVisible(manageLabel, 50);
+
+    expect(find.text('Manage'), findsOneWidget);
+    expectNoClippedText(tester);
+    expect(tester.takeException(), isNull);
   });
 
   for (final (label, brightness) in [

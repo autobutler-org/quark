@@ -26,6 +26,7 @@ Journey IDs are stable — don't renumber when adding new ones.
 | File                                     | Feature Area                                           |
 | ---------------------------------------- | ------------------------------------------------------ |
 | [auth.md](auth.md)                       | Setup, login, logout, recovery                         |
+| [navigation.md](navigation.md)           | Navigation drawer (destinations, groups, hidden rows)  |
 | [file-browser.md](file-browser.md)       | file browser (browse, upload, download, manage) |
 | [photos.md](photos.md)                   | Photos, albums, favorites                              |
 | [calendar.md](calendar.md)               | Calendar (views, events, repeats, reminders)           |

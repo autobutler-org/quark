@@ -143,6 +143,56 @@ void main() {
     expect(find.byKey(const ValueKey('drawer_settings')), findsOneWidget);
   });
 
+  // #2046: the household pages lead and the pages for looking after the
+  // Quark follow under "Manage".
+  double top(WidgetTester tester, String key) =>
+      tester.getTopLeft(find.byKey(ValueKey(key))).dy;
+
+  testWidgets('an admin gets the Manage group below the household pages', (
+    tester,
+  ) async {
+    settings.isAdmin.value = true;
+    await pumpDrawer(tester);
+
+    expect(find.text('Manage'), findsOneWidget);
+    expect(
+      top(tester, 'drawer_group_manage'),
+      greaterThan(top(tester, 'drawer_vault')),
+    );
+    for (final key in [
+      'drawer_trash',
+      'drawer_system',
+      'drawer_users',
+      'drawer_settings',
+    ]) {
+      expect(
+        top(tester, key),
+        greaterThan(top(tester, 'drawer_group_manage')),
+        reason: key,
+      );
+    }
+  });
+
+  testWidgets('a non-admin keeps the Manage group without Users', (
+    tester,
+  ) async {
+    await pumpDrawer(tester);
+
+    expect(find.text('Manage'), findsOneWidget);
+    expect(find.byKey(const ValueKey('drawer_users')), findsNothing);
+    expect(
+      top(tester, 'drawer_group_manage'),
+      greaterThan(top(tester, 'drawer_books')),
+    );
+    for (final key in ['drawer_trash', 'drawer_system', 'drawer_settings']) {
+      expect(
+        top(tester, key),
+        greaterThan(top(tester, 'drawer_group_manage')),
+        reason: key,
+      );
+    }
+  });
+
   testWidgets('follows the admin flag while the drawer is open', (
     tester,
   ) async {
