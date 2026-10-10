@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"path"
 	"strings"
 	"time"
@@ -164,6 +165,14 @@ func SnapshotBackup(
 	job.CompletedAt = &completedAt
 	job.UpdatedAt = completedAt
 	_ = params.Store.Update(ctx, job)
+
+	// Recorded before the event, so a client that asks again on it sees the
+	// new time. The backup itself succeeded, so a failed record is only logged.
+	if params.DataDir != "" {
+		if err := RecordSnapshot(params.DataDir, completedAt); err != nil {
+			log.Printf("snapshot backup: %v", err)
+		}
+	}
 
 	if params.EventBus != nil {
 		params.EventBus.Publish(eventbus.Event{

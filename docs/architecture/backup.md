@@ -1,7 +1,7 @@
 # Backup
 
 `pkg/backup` copies a Quark onto a managed device that holds the `snapshot-backup` role. This page covers what a
-snapshot holds and how the chat tables get into it and back out. How the file copies survive a power cut is in
+snapshot holds, how the chat tables get into it and back out, and how an admin is reminded to take one. How the file copies survive a power cut is in
 [Durability](durability.md).
 
 ## What a snapshot holds
@@ -73,3 +73,37 @@ it with the password or recovery phrase they had when the backup was taken. `Imp
 it could not match in `UnmatchedUsers`.
 
 No handler calls `ImportChat` yet; the restore route and its page are still to come (#2428).
+
+## Backup reminders
+
+An admin is reminded when this Quark has no snapshot backup (`backup_due`) or when the last one is 30 days old
+(`backup_stale`). There is no notifications table and no worker. The reminder is worked out when it is asked for:
+
+```mermaid
+flowchart LR
+    snapshot["SnapshotBackup completes"] -- "RecordSnapshot" --> record[/"last-snapshot-backup<br/>in the data dir"/]
+    snapshot -- "backup_completed" --> client["client"]
+    client -- "GET /api/v0/notifications" --> list["notificationutil.List"]
+    record -- "LastSnapshot" --> list
+    prefs[/"the caller's user-settings file<br/>disabledNotifications"/] --> list
+```
+
+1. When a snapshot backup completes, `SnapshotBackup` writes the completion time to `last-snapshot-backup` in the
+   data directory (`backup.RecordSnapshot`). The job store is in memory and the manifest sits on a drive that may
+   be unplugged, so this file is the only thing that still knows after a restart. A failed backup writes nothing.
+2. `GET /api/v0/notifications` (`v0_notifications`) reads the caller's own settings and calls
+   `notificationutil.List`, which reads the record (`backup.LastSnapshot`). A caller who is not an admin gets an
+   empty list. An admin gets `backup_due` when there is no record, `backup_stale` when the record is at least
+   `notificationutil.BackupStaleAfter` old, and nothing otherwise. A type the caller listed in
+   `disabledNotifications` (`PUT /api/v0/settings/me`) is left out.
+3. No event announces a notification. The list changes when a backup completes, which already publishes
+   `backup_completed`, when the caller saves their own settings, and as time passes, so a client asks again on
+   those.
+
+Because the list is derived, a reminder cannot repeat or pile up, and it is gone as soon as a backup completes.
+That covers the coalescing and rate limiting these two types need. A type that reports a one-time event, such as
+a calendar reminder, will need stored notifications; that belongs to the epic (#1145).
+
+The app does not show these yet. The bell, the list and the toggle for each type are a follow-up to #2493, and
+push delivery is #1150. A Quark whose last backup predates the record reads as never backed up until its next
+snapshot.

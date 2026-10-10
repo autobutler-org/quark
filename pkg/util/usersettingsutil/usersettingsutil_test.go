@@ -4,9 +4,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/autobutler-org/quark/pkg/util/notificationutil"
 	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 )
 
@@ -16,7 +18,7 @@ import (
 func TestSaveLoad_RoundTripPerAccount(t *testing.T) {
 	dataDir := t.TempDir()
 	got, err := usersettingsutil.Load(usersettingsutil.LoadParams{DataDir: dataDir, UserID: 1})
-	if err != nil || got.Settings != (usersettingsutil.Settings{}) {
+	if err != nil || !reflect.DeepEqual(got.Settings, usersettingsutil.Settings{}) {
 		t.Fatalf("Load with no file = %+v, %v; want zero settings", got, err)
 	}
 
@@ -67,6 +69,90 @@ func TestSave_RefusesInvalidThemeColor(t *testing.T) {
 	}
 	if _, err := os.Stat(usersettingsutil.Path(dataDir, 1)); !os.IsNotExist(err) {
 		t.Errorf("a refused save wrote a file (stat err %v)", err)
+	}
+}
+
+// TestDisabledNotifications_RoundTrip checks the notification types an account
+// turned off are stored and read back, that a save without them turns every
+// type back on, and that an account that chose none writes no such field.
+func TestDisabledNotifications_RoundTrip(t *testing.T) {
+	dataDir := t.TempDir()
+	disabled := []notificationutil.Type{notificationutil.TypeBackupStale, notificationutil.TypeBackupDue}
+	if _, err := usersettingsutil.Save(usersettingsutil.SaveParams{
+		DataDir: dataDir, UserID: 1, Settings: usersettingsutil.Settings{ThemeColor: "teal", DisabledNotifications: disabled},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := usersettingsutil.Load(usersettingsutil.LoadParams{DataDir: dataDir, UserID: 1})
+	if err != nil || !reflect.DeepEqual(got.Settings.DisabledNotifications, disabled) || got.Settings.ThemeColor != "teal" {
+		t.Fatalf("Load = %+v, %v; want %v disabled and theme color teal", got, err, disabled)
+	}
+
+	if _, err := usersettingsutil.Save(usersettingsutil.SaveParams{
+		DataDir: dataDir, UserID: 1, Settings: usersettingsutil.Settings{ThemeColor: "teal"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = usersettingsutil.Load(usersettingsutil.LoadParams{DataDir: dataDir, UserID: 1})
+	if err != nil || len(got.Settings.DisabledNotifications) != 0 {
+		t.Errorf("Load after a save without them = %+v, %v; want every type on", got, err)
+	}
+	data, err := os.ReadFile(usersettingsutil.Path(dataDir, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "disabledNotifications") {
+		t.Errorf("settings file carries an empty disabledNotifications: %s", data)
+	}
+}
+
+// TestSave_RefusesInvalidNotificationTypes checks an unknown or repeated
+// notification type is ErrInvalid and writes nothing.
+func TestSave_RefusesInvalidNotificationTypes(t *testing.T) {
+	for name, disabled := range map[string][]notificationutil.Type{
+		"unknown":  {"backup_complete"},
+		"empty":    {""},
+		"repeated": {notificationutil.TypeBackupDue, notificationutil.TypeBackupDue},
+	} {
+		dataDir := t.TempDir()
+		if _, err := usersettingsutil.Save(usersettingsutil.SaveParams{
+			DataDir: dataDir, UserID: 1, Settings: usersettingsutil.Settings{DisabledNotifications: disabled},
+		}); !errors.Is(err, usersettingsutil.ErrInvalid) {
+			t.Errorf("%s: Save = %v, want ErrInvalid", name, err)
+		}
+		if _, err := os.Stat(usersettingsutil.Path(dataDir, 1)); !os.IsNotExist(err) {
+			t.Errorf("%s: a refused save wrote a file (stat err %v)", name, err)
+		}
+	}
+}
+
+// TestDecode_DisabledNotifications checks a body may list known notification
+// types once each, and that anything else is ErrInvalid.
+func TestDecode_DisabledNotifications(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       []notificationutil.Type
+		valid      bool
+	}{
+		{"one type", `{"disabledNotifications":["backup_due"]}`, []notificationutil.Type{notificationutil.TypeBackupDue}, true},
+		{
+			"every type", `{"themeColor":"teal","disabledNotifications":["backup_due","backup_stale"]}`,
+			[]notificationutil.Type{notificationutil.TypeBackupDue, notificationutil.TypeBackupStale}, true,
+		},
+		{"empty list", `{"disabledNotifications":[]}`, []notificationutil.Type{}, true},
+		{"null", `{"disabledNotifications":null}`, nil, true},
+		{"unknown type", `{"disabledNotifications":["backup_complete"]}`, nil, false},
+		{"repeated type", `{"disabledNotifications":["backup_due","backup_due"]}`, nil, false},
+		{"not a list", `{"disabledNotifications":"backup_due"}`, nil, false},
+		{"not strings", `{"disabledNotifications":[1]}`, nil, false},
+	} {
+		got, err := usersettingsutil.Decode(strings.NewReader(tc.body))
+		if tc.valid && (err != nil || !reflect.DeepEqual(got.DisabledNotifications, tc.want)) {
+			t.Errorf("%s: Decode = %+v, %v; want %v disabled", tc.name, got, err, tc.want)
+		}
+		if !tc.valid && !errors.Is(err, usersettingsutil.ErrInvalid) {
+			t.Errorf("%s: Decode = %+v, %v; want ErrInvalid", tc.name, got, err)
+		}
 	}
 }
 

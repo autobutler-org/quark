@@ -58,6 +58,7 @@ The small state files Quark keeps beside the database go through the same helper
 | A trashed item's `.meta.json` sidecar  | `storageutil.TrashFilesImpl`; if it fails, the item goes back      |
 | `certs/server.key`, `certs/server.crt` | `tlsutil`, key first: the cert decides whether to regenerate       |
 | `backup_manifest.json`                 | `backup.WriteManifest`                                             |
+| `last-snapshot-backup`                 | `backup.RecordSnapshot`, when a snapshot backup completes          |
 
 A power cut during one of those writes leaves the previous version whole, never an empty or partial file.
 

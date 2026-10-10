@@ -9,6 +9,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -55,6 +56,7 @@ func startSnapshotBackup(c *gin.Context) *serverutil.Response {
 		Username:           req.Username,
 		Password:           req.Password,
 		RecoveryPassword:   req.RecoveryPassword,
+		DataDir:            storageutil.GetDataDir(),
 	})
 	var inProgress *backup.BackupInProgressError
 	switch {
