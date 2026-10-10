@@ -32,8 +32,9 @@ type sharedStream struct {
 	bob      int64
 }
 
-func newSharedStream(ctx context.Context, t *testing.T) sharedStream {
+func newSharedStream(t *testing.T) sharedStream {
 	t.Helper()
+	ctx := t.Context()
 	t.Setenv("HOME", t.TempDir())
 	if _, err := storageutil.GetFilesDir(); err != nil {
 		t.Fatal(err)
@@ -105,9 +106,9 @@ func readUntil(ctx context.Context, t *testing.T, conn *websocket.Conn, kind eve
 // A user whose share is revoked hears nothing more under it from the
 // access_changed that announces the revocation on (#2764).
 func TestStreamEvents_RevokedShareHearsNothingMore(t *testing.T) {
+	s := newSharedStream(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	s := newSharedStream(ctx, t)
 	conn := s.dial(ctx, t)
 
 	s.bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: "shared"})
@@ -138,9 +139,9 @@ func TestStreamEvents_RevokedShareHearsNothingMore(t *testing.T) {
 // place, and the resync reloads its access the same way: what it can no
 // longer read stays filtered (#2764).
 func TestStreamEvents_ResyncReloadsAccess(t *testing.T) {
+	s := newSharedStream(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	s := newSharedStream(ctx, t)
 	conn := s.dial(ctx, t)
 
 	s.revoke(ctx, t)
@@ -160,9 +161,9 @@ func TestStreamEvents_ResyncReloadsAccess(t *testing.T) {
 // Two hundred sockets of one account hearing one access change go to the
 // database once between them, rather than once each (#2764).
 func TestStreamEvents_OneRefillPerChange(t *testing.T) {
+	s := newSharedStream(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	s := newSharedStream(ctx, t)
 	conns := make([]*websocket.Conn, 200)
 	for i := range conns {
 		conns[i] = s.dial(ctx, t)

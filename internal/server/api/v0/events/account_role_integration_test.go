@@ -26,9 +26,11 @@ import (
 // everything, and a promoted account's at the next access_changed, so it
 // reconnects unfiltered. A stream whose role is unchanged hears both events.
 func TestStreamEvents_ClosesWhenTheAdminRoleChanges(t *testing.T) {
+	database := dbtest.NewDB(t)
+	// The deadline bounds the stream, not the migrations dbtest.NewDB runs:
+	// on a loaded machine those alone outlast it.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	database := dbtest.NewDB(t)
 	principals := map[string]accessutil.Principal{}
 	for _, name := range []string{"boss", "bob", "carol"} {
 		user, err := database.Queries.CreateUser(ctx, db.CreateUserParams{Username: name, PasswordHash: "h", RecoveryPhraseHash: "r"})
@@ -64,7 +66,6 @@ func TestStreamEvents_ClosesWhenTheAdminRoleChanges(t *testing.T) {
 		t.Cleanup(func() { _ = conn.CloseNow() })
 		conns[name] = conn
 	}
-	time.Sleep(200 * time.Millisecond)
 	hears := func(name string, kind eventbus.EventKind) {
 		t.Helper()
 		var evt eventbus.Event

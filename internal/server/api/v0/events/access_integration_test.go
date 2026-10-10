@@ -40,9 +40,11 @@ func TestStreamEvents_FilteredPerSubscriber(t *testing.T) {
 	if _, err := storageutil.GetFilesDir(); err != nil {
 		t.Fatal(err)
 	}
+	database := dbtest.NewDB(t)
+	// The deadline bounds the stream, not the migrations dbtest.NewDB runs:
+	// on a loaded machine those alone outlast it.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	database := dbtest.NewDB(t)
 	users := map[string]int64{}
 	for _, name := range []string{"bob", "carol"} {
 		user, err := database.Queries.CreateUser(ctx, db.CreateUserParams{Username: name, PasswordHash: "h", RecoveryPhraseHash: "r"})
@@ -93,8 +95,8 @@ func TestStreamEvents_FilteredPerSubscriber(t *testing.T) {
 		t.Cleanup(func() { _ = conn.CloseNow() })
 		conns[name] = conn
 	}
-	// Give each handler time to load its access and subscribe.
-	time.Sleep(200 * time.Millisecond)
+	// Each handler subscribes and loads its access before it accepts, so a
+	// dial that has returned is a stream that hears the next publish.
 
 	published := []eventbus.Event{
 		{Kind: eventbus.EventUpload, Path: "shared"},
