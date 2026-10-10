@@ -35,6 +35,7 @@ func (r *router) Routes() []*serverutil.Route {
 		postMessageRoute,
 		listMessagesRoute,
 		deleteMessageRoute,
+		markReadRoute,
 		addReactionRoute,
 		deleteReactionRoute,
 	}
@@ -92,6 +93,11 @@ type signEventBody struct {
 type postMessageBody struct {
 	Ciphertext []byte `json:"ciphertext"`
 	KeyVersion int64  `json:"keyVersion"`
+}
+
+// markReadBody names the newest message the caller has read in a channel.
+type markReadBody struct {
+	MessageID int64 `json:"messageId"`
 }
 
 // reactionBody is a reaction the caller's client encrypted. Ciphertext is

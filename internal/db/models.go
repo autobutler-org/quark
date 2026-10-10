@@ -105,6 +105,12 @@ type ChatReaction struct {
 	CreatedAt  time.Time
 }
 
+type ChatReadMarker struct {
+	UserID            int64
+	ChannelID         int64
+	LastReadMessageID int64
+}
+
 type ChatServer struct {
 	ID        int64
 	Name      string

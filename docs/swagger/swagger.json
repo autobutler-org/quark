@@ -2958,7 +2958,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the channels the caller is a member of, directly, through a group, or through everyone, general first and then by name, each with the caller's effective permissions there: the union of every row that reaches them. A channel on which that set is empty is left out. Admins get only their own channels too, unless they pass all=1: then the channels they are not in follow, in the same order, with an empty set.",
+                "description": "Returns the channels the caller is a member of, directly, through a group, or through everyone, general first and then by name, each with the caller's effective permissions there: the union of every row that reaches them, and unreadCount: the messages after the caller's read marker (PUT /chat/channels/{id}/read) that someone else wrote and nobody deleted, 0 on a channel the caller lacks read_messages on. A channel on which that set is empty is left out. Admins get only their own channels too, unless they pass all=1: then the channels they are not in follow, in the same order, with an empty set.",
                 "produces": [
                     "application/json"
                 ],
@@ -4028,6 +4028,82 @@
                     },
                     "413": {
                         "description": "ciphertext over 16 KiB",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "the caller sent too many of these in a short time; the limit is per account",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/channels/{id}/read": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Moves the caller's read marker in the channel to messageId, the newest message they have read there, and returns where the marker stands with the unread count past it: the messages after it that someone else wrote and nobody deleted. The marker never moves backward: an id at or before it changes nothing and still answers 200 with the marker as it stands. A move publishes chat_read_marker_changed with {channelId, lastReadMessageId, unreadCount} to the caller's own sessions alone, so their other devices clear the count. Needs read_messages; anyone else gets 404, delegated managers and admins included.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Mark a chat channel read up to a message",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The newest message read",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.markReadBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.MarkReadResult"
+                        }
+                    },
+                    "400": {
+                        "description": "the body isn't JSON with a messageId",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, the caller lacks read_messages, or the channel has no message with that id",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -10800,6 +10876,10 @@
                 },
                 "topic": {
                     "type": "string"
+                },
+                "unreadCount": {
+                    "description": "UnreadCount is how many messages after the caller's read marker someone\nelse wrote and nobody deleted (#2424). It is 0 without read_messages,\nso 0 on every channel an admin lists without being in it.",
+                    "type": "integer"
                 }
             }
         },
@@ -11077,6 +11157,20 @@
                 },
                 "rotationNeeded": {
                     "type": "boolean"
+                }
+            }
+        },
+        "chatutil.MarkReadResult": {
+            "type": "object",
+            "properties": {
+                "channelId": {
+                    "type": "integer"
+                },
+                "lastReadMessageId": {
+                    "type": "integer"
+                },
+                "unreadCount": {
+                    "type": "integer"
                 }
             }
         },
@@ -12297,6 +12391,14 @@
                     }
                 },
                 "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v0_chat.markReadBody": {
+            "type": "object",
+            "properties": {
+                "messageId": {
                     "type": "integer"
                 }
             }

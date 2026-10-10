@@ -379,10 +379,12 @@ func TestChatBackupSchema_MatchesLiveTables(t *testing.T) {
 		}
 	}
 
-	// Every live chat table is one the backup knows about.
+	// Every live chat table is one the backup knows about, but for read
+	// markers, which a backup leaves out (see chatBackupTables).
 	assertRows(t, live, `
 		SELECT COUNT(*) FROM sqlite_master
-		WHERE type = 'table' AND (name LIKE 'chat\_%' ESCAPE '\' OR name = 'user_chat_keys')`,
+		WHERE type = 'table' AND name <> 'chat_read_markers'
+		  AND (name LIKE 'chat\_%' ESCAPE '\' OR name = 'user_chat_keys')`,
 		fmt.Sprintf("[%d]", len(chatBackupTables)))
 }
 
