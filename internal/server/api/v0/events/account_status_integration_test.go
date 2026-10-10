@@ -35,9 +35,11 @@ func closedWithin(conn *websocket.Conn, wait time.Duration) bool {
 // next account_changed once its account is turned off, and again once it is
 // deleted, while a stream whose account is still active hears the event.
 func TestStreamEvents_ClosesForInactiveAccount(t *testing.T) {
+	database := dbtest.NewDB(t)
+	// The deadline bounds the stream, not the migrations dbtest.NewDB runs:
+	// on a loaded machine those alone outlast it.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	database := dbtest.NewDB(t)
 	users := map[string]int64{}
 	for _, name := range []string{"bob", "carol"} {
 		user, err := database.Queries.CreateUser(ctx, db.CreateUserParams{Username: name, PasswordHash: "h", RecoveryPhraseHash: "r"})
@@ -69,7 +71,6 @@ func TestStreamEvents_ClosesForInactiveAccount(t *testing.T) {
 		t.Cleanup(func() { _ = conn.CloseNow() })
 		conns[name] = conn
 	}
-	time.Sleep(200 * time.Millisecond)
 
 	if _, err := database.Queries.SetUserStatus(ctx, db.SetUserStatusParams{
 		Username: "bob", FromStatus: authutil.StatusActive, ToStatus: authutil.StatusDisabled,

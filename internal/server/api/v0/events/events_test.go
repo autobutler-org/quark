@@ -75,9 +75,6 @@ func TestStreamEvents_ReceivesPublishedEvent(t *testing.T) {
 	}
 	defer conn.CloseNow()
 
-	// Give the server goroutine time to register the subscriber before publishing.
-	time.Sleep(20 * time.Millisecond)
-
 	// Publish a test event.
 	go bus.Publish(eventbus.Event{
 		Kind: eventbus.EventUpload,
@@ -111,8 +108,6 @@ func TestStreamEvents_MultipleEventTypes(t *testing.T) {
 		t.Fatalf("Dial: %v", err)
 	}
 	defer conn.CloseNow()
-
-	time.Sleep(20 * time.Millisecond)
 
 	events := []eventbus.Event{
 		{Kind: eventbus.EventDelete, Path: "old.txt"},
