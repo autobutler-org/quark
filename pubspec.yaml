@@ -104,7 +104,7 @@ dependencies:
   # is built with --dart-define=PROBE_AGENT=true; see lib/probe_bootstrap*.dart
   # and `make test/probe`. Kept as a regular dependency so lib/ can import it;
   # the dart-define + tree-shaking keep it inactive in normal/release builds.
-  flutter_probe_agent: ^0.19.0
+  flutter_probe_agent: ^0.22.0
   sodium: ^4.1.1+1
   # The in-app PDF viewer (#1184), built on PDFium. Its web WASM ships in the
   # app bundle, so the viewer works with no internet connection.
