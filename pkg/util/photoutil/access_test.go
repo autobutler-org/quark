@@ -72,7 +72,13 @@ func TestListPhotos_VFSCarriesTheSerial(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := storageutil.NewStorageService(usbDetector{mountPoint: mountPoint, serial: serial})
-	fsys := vfs.NewStorageServiceVFS(svc, "files")
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace(""))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: svc}); err != nil {
+		t.Fatal(err)
+	}
 
 	ctx := context.Background()
 	database := dbtest.NewDB(t)
@@ -97,7 +103,7 @@ func TestListPhotos_VFSCarriesTheSerial(t *testing.T) {
 
 	for name, access := range map[string]accessutil.Access{"admin": systemAccess(t), "member": member.Access} {
 		t.Run(name, func(t *testing.T) {
-			page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{Ctx: ctx, FS: fsys, Access: access, Offset: 0, Limit: 10})
+			page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{Ctx: ctx, Registry: registry, Access: access, Offset: 0, Limit: 10})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -149,11 +155,11 @@ func userAccess(t *testing.T, database *db.DatabaseSqlc, paths ...string) access
 // TestListPhotos_FiltersBeforePaging drops unreadable photos before the page is
 // cut, so a page stays full and Total counts only what the caller can see.
 func TestListPhotos_FiltersBeforePaging(t *testing.T) {
-	mem := newPhotoMemVFS(t, "shared/a.jpg", "shared/b.jpg", "private/c.jpg", "private/d.jpg")
+	registry := newPhotoRegistry(t, "shared/a.jpg", "shared/b.jpg", "private/c.jpg", "private/d.jpg")
 	access := userAccess(t, dbtest.NewDB(t), "shared")
 
 	page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
-		Ctx: context.Background(), FS: mem, Access: access, Offset: 0, Limit: 2,
+		Ctx: context.Background(), Registry: registry, Access: access, Offset: 0, Limit: 2,
 	})
 	if err != nil {
 		t.Fatal(err)

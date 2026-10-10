@@ -30,6 +30,7 @@ import (
 //	LocalVFS                yes        yes         yes        yes
 //	DBVFS                   yes        yes          no         no
 //	StorageServiceVFS       yes        yes         yes        yes
+//	  (device-scoped)       yes        yes         yes        yes
 type conformanceTarget struct {
 	name string
 	fs   vfs.VFS
@@ -61,6 +62,7 @@ func conformanceTargets(t *testing.T) []conformanceTarget {
 		newLocalTarget(t),
 		newDBTarget(t),
 		newStorageServiceTarget(t),
+		newDeviceStorageServiceTarget(t),
 	}
 }
 
@@ -148,6 +150,29 @@ func newStorageServiceTarget(t *testing.T) conformanceTarget {
 	return conformanceTarget{
 		name:               "StorageServiceVFS",
 		fs:                 vfs.NewStorageServiceVFS(svc, "files"),
+		root:               "",
+		canonical:          trimSlashes,
+		supportsMimePrefix: true,
+		supportsAfterPath:  true,
+	}
+}
+
+// newDeviceStorageServiceTarget is a StorageServiceVFS scoped to a USB device,
+// the namespace each non-internal device gets (#2639). The internal drive
+// beside it holds a file of its own, which no listing here may show.
+func newDeviceStorageServiceTarget(t *testing.T) conformanceTarget {
+	const serial = "USB-CONFORMANCE"
+	internal := newDeviceMount(t)
+	usb := newDeviceMount(t)
+	seedOnDisk(t, usb.filesDir)
+	if err := os.WriteFile(filepath.Join(internal.filesDir, "internal-only.txt"), []byte("internal"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := storageutil.NewStorageService(newDevicesDetector(internal.device(""), usb.device(serial)))
+	return conformanceTarget{
+		name:               "StorageServiceVFS/device",
+		fs:                 vfs.NewDeviceStorageServiceVFS(svc, serial),
 		root:               "",
 		canonical:          trimSlashes,
 		supportsMimePrefix: true,

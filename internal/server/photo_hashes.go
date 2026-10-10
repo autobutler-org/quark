@@ -7,7 +7,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
-	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // backfillPhotoHashes hashes the library photos that duplicate detection has
@@ -20,16 +19,10 @@ func backfillPhotoHashes(deps deputil.Dependencies) {
 	if dbConn == nil || dbConn.Queries == nil {
 		return
 	}
-	var fsys vfs.VFS
-	if reg := deps.VFSRegistry(); reg != nil {
-		if registered, ok := reg.Get("files"); ok {
-			fsys = registered
-		}
-	}
 	res, err := photoutil.BackfillHashes(photoutil.BackfillHashesParams{
 		Ctx:         context.Background(),
 		Queries:     dbConn.Queries,
-		FS:          fsys,
+		Registry:    deps.VFSRegistry(),
 		Storage:     deps.StorageService(),
 		IOSemaphore: deps.IOSemaphore().For(iosemutil.Decode),
 	})

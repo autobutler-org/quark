@@ -7,7 +7,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/vfs"
 
 	"github.com/gin-gonic/gin"
 )
@@ -46,15 +45,6 @@ func listPhotos(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(err)
 	}
 
-	// VFS path when the registry has the files namespace, walking the managed
-	// devices otherwise.
-	var fsys vfs.VFS
-	if reg := deps.VFSRegistry(); reg != nil {
-		if registered, found := reg.Get("files"); found {
-			fsys = registered
-		}
-	}
-
 	// Capture dates are read from the database; without one, the taken sort
 	// falls back to the date added.
 	var queries *db.Queries
@@ -63,16 +53,16 @@ func listPhotos(c *gin.Context) *serverutil.Response {
 	}
 
 	result, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
-		Ctx:     c.Request.Context(),
-		FS:      fsys,
-		Storage: deps.StorageService(),
-		Serial:  c.Query("serial"),
-		Access:  access,
-		Sort:    photoutil.ParseSort(c.Query("sort")),
-		Order:   photoutil.ParseOrder(c.Query("order")),
-		Queries: queries,
-		Offset:  offset,
-		Limit:   limit,
+		Ctx:      c.Request.Context(),
+		Registry: deps.VFSRegistry(),
+		Storage:  deps.StorageService(),
+		Serial:   c.Query("serial"),
+		Access:   access,
+		Sort:     photoutil.ParseSort(c.Query("sort")),
+		Order:    photoutil.ParseOrder(c.Query("order")),
+		Queries:  queries,
+		Offset:   offset,
+		Limit:    limit,
 	})
 	if err != nil {
 		return serverutil.InternalServerError(err)

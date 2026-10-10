@@ -11,7 +11,6 @@ import (
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
-	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // TestSearchFilesKeepsOnlyReadableMatches runs a name search on every branch it
@@ -31,10 +30,7 @@ func TestSearchFilesKeepsOnlyReadableMatches(t *testing.T) {
 		}
 	}
 	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial})
-	registry := vfs.NewRegistry()
-	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, vfs.NewStorageServiceVFS(svc, filesNamespace)); err != nil {
-		t.Fatal(err)
-	}
+	registry := newDeviceRegistry(t, svc)
 	devices, err := svc.GetManagedDevices()
 	if err != nil {
 		t.Fatal(err)

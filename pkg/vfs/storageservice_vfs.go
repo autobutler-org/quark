@@ -22,9 +22,10 @@ func serialSet(serials []string) map[string]bool {
 	return set
 }
 
-// List returns the contents of the given directory path across all managed
-// devices, deduplicating folders (same logic as the existing files
-// listFilesImpl).
+// List returns the contents of the given directory path on this namespace's
+// device. The internal namespace covers every managed device without a serial,
+// deduplicating folders between them; [ListDevices] is the listing across
+// every device.
 //
 // filter.Recursive walks the whole subtree. It used to be silently ignored:
 // the implementation always delegated to storageutil.StatFilesInDir, a
@@ -81,12 +82,8 @@ func (v *StorageServiceVFS) List(ctx context.Context, path string, filter *ListF
 		if full() {
 			break
 		}
-		serial := ""
-		if device.UsbInfo != nil {
-			serial = device.UsbInfo.GetSerial()
-		}
-		// Apply serial filter.
-		if allowedSerials != nil && !allowedSerials[serial] {
+		serial := rootSerial(device)
+		if serial != v.serial || (allowedSerials != nil && !allowedSerials[serial]) {
 			continue
 		}
 		fullDir, err := storageutil.SafeJoin(device.FilesDir, path)
@@ -173,16 +170,38 @@ func matchesFilter(fi FileInfo, filter *ListFilter) bool {
 // filesDir resolves the base directory for this namespace, preferring the
 // managed device's files directory over the default. StatFile, DownloadFile,
 // and DeleteFiles all resolve this way internally; this exists so the paths
-// derived directly in this file agree with them.
+// derived directly in this file agree with them. Only the internal namespace
+// has a default: a device namespace whose device is gone is [ErrNotFound].
 func (v *StorageServiceVFS) filesDir() (string, error) {
-	device, err := v.svc.FindManagedDeviceBySerial("")
+	device, err := v.svc.FindManagedDeviceBySerial(v.serial)
 	if err != nil {
 		return "", err
 	}
 	if device != nil && device.FilesDir != "" {
 		return device.FilesDir, nil
 	}
+	if v.serial != "" {
+		return "", ErrNotFound
+	}
 	return storageutil.GetFilesDir()
+}
+
+// attached reports ErrNotFound when this is a device namespace and its device
+// is no longer managed. The StorageService resolves an unknown serial to the
+// default files directory, so every single-path operation asks first rather
+// than let a stale namespace reach the internal drive (#2639).
+func (v *StorageServiceVFS) attached() error {
+	if v.serial == "" {
+		return nil
+	}
+	device, err := v.svc.FindManagedDeviceBySerial(v.serial)
+	if err != nil {
+		return err
+	}
+	if device == nil {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // mimeTypeForName returns the MIME type for a file name. Image formats
@@ -201,7 +220,10 @@ func mimeTypeForName(name string) string {
 
 // Stat returns metadata for a single path.
 func (v *StorageServiceVFS) Stat(_ context.Context, path string) (FileInfo, error) {
-	result, err := v.svc.StatFile(storageutil.StatFileParams{FilePath: path})
+	if err := v.attached(); err != nil {
+		return FileInfo{}, err
+	}
+	result, err := v.svc.StatFile(storageutil.StatFileParams{FilePath: path, DeviceSerial: v.serial})
 	if err != nil {
 		return FileInfo{}, ErrNotFound
 	}
@@ -219,7 +241,10 @@ func (v *StorageServiceVFS) Stat(_ context.Context, path string) (FileInfo, erro
 
 // Open returns a reader for the file at the given path.
 func (v *StorageServiceVFS) Open(_ context.Context, path string) (io.ReadCloser, error) {
-	result, err := v.svc.DownloadFile(storageutil.DownloadFileParams{FilePath: path})
+	if err := v.attached(); err != nil {
+		return nil, err
+	}
+	result, err := v.svc.DownloadFile(storageutil.DownloadFileParams{FilePath: path, DeviceSerial: v.serial})
 	if err != nil {
 		return nil, ErrNotFound
 	}
@@ -246,8 +271,8 @@ func (v *StorageServiceVFS) Open(_ context.Context, path string) (io.ReadCloser,
 }
 
 // Write writes a file into the files directory of the managed device that
-// backs this namespace, falling back to the default files directory when no
-// device is present. Resolving the same way Stat and Open do keeps a written
+// backs this namespace. The internal namespace falls back to the default files
+// directory when no device is present; a device namespace does not. Resolving the same way Stat and Open do keeps a written
 // file findable by a subsequent read (#1538).
 //
 // The bytes stream into a temp file beside the destination and are renamed
@@ -296,27 +321,40 @@ func (v *StorageServiceVFS) writePath(path string) (string, error) {
 
 // Delete removes one or more files via the StorageService.
 func (v *StorageServiceVFS) Delete(_ context.Context, path string, _ DeleteOptions) error {
+	if err := v.attached(); err != nil {
+		return err
+	}
 	_, err := v.svc.DeleteFiles(storageutil.DeleteFilesParams{
-		FilePaths: []string{path},
+		FilePaths:    []string{path},
+		DeviceSerial: v.serial,
 	})
 	return err
 }
 
 // MkdirAll creates a directory (and parents) in the vault.
 func (v *StorageServiceVFS) MkdirAll(_ context.Context, path string) error {
+	if err := v.attached(); err != nil {
+		return err
+	}
 	dir, name := filepath.Split(strings.TrimRight(path, "/"))
 	_, err := v.svc.CreateFolder(storageutil.CreateFolderParams{
-		FolderDir:  dir,
-		FolderName: name,
+		FolderDir:    dir,
+		FolderName:   name,
+		DeviceSerial: v.serial,
 	})
 	return err
 }
 
-// Move renames src to dst via the StorageService.
+// Move renames src to dst on this namespace's device via the StorageService.
 func (v *StorageServiceVFS) Move(_ context.Context, src, dst string) error {
+	if err := v.attached(); err != nil {
+		return err
+	}
 	_, err := v.svc.MoveFile(storageutil.MoveFileParams{
-		OldFilePath: src,
-		NewFilePath: dst,
+		OldFilePath:     src,
+		NewFilePath:     dst,
+		OldDeviceSerial: v.serial,
+		NewDeviceSerial: v.serial,
 	})
 	return err
 }

@@ -52,7 +52,8 @@ func ListFiles(params ListFilesParams) (ListFilesResult, error) {
 		return ListFilesResult{}, notFoundf("folder not found: %s", params.RootDir)
 	}
 
-	// Use VFS when available — passes SerialFilter so the adapter handles device scoping.
+	// Use VFS when available — one namespace per device, fanned out over the
+	// ones Serials selects.
 	if params.Registry != nil {
 		files, err := listFilesVFS(params.Ctx, params.Registry, params.RootDir, params.Serials)
 		if err != nil {
@@ -96,11 +97,13 @@ func readable(access accessutil.Access, serial, relPath string) bool {
 
 // listFilesVFS lists files via the VFS registry, optionally scoped to specific device serials.
 func listFilesVFS(ctx context.Context, registry vfs.Registry, rootDir string, serials []string) ([]FileNode, error) {
-	fsys, ok := registry.Get(filesNamespace)
-	if !ok {
+	if _, ok := registry.Get(filesNamespace); !ok {
 		return nil, ErrNoFilesNamespace
 	}
-	infos, err := fsys.List(ctx, rootDir, &vfs.ListFilter{Recursive: false, SerialFilter: serials})
+	infos, err := vfs.ListDevices(vfs.ListDevicesParams{
+		Ctx: ctx, Registry: registry, Path: rootDir,
+		Filter: &vfs.ListFilter{Recursive: false, SerialFilter: serials},
+	})
 	if err != nil {
 		if err == vfs.ErrNotFound {
 			return nil, notFoundf("folder not found: %s", rootDir)
@@ -229,8 +232,11 @@ func ListRecent(params ListRecentParams) (ListRecentResult, error) {
 	var allFiles []FileNode
 
 	// VFS path: use recursive list when registry is available.
-	if fsys := FilesVFS(params.Registry); fsys != nil {
-		infos, err := fsys.List(params.Ctx, "", &vfs.ListFilter{Recursive: true, SerialFilter: params.Serials})
+	if FilesVFS(params.Registry) != nil {
+		infos, err := vfs.ListDevices(vfs.ListDevicesParams{
+			Ctx: params.Ctx, Registry: params.Registry,
+			Filter: &vfs.ListFilter{Recursive: true, SerialFilter: params.Serials},
+		})
 		if err != nil {
 			return ListRecentResult{}, err
 		}
@@ -357,8 +363,11 @@ func walkByType(params ListByTypeParams, selectedDevices []storageutil.ManagedDe
 	allFiles := make([]FileNode, 0)
 
 	// VFS path: recursive list + type filter.
-	if fsys := FilesVFS(params.Registry); fsys != nil {
-		infos, listErr := fsys.List(params.Ctx, "", &vfs.ListFilter{Recursive: true, SerialFilter: params.Serials})
+	if FilesVFS(params.Registry) != nil {
+		infos, listErr := vfs.ListDevices(vfs.ListDevicesParams{
+			Ctx: params.Ctx, Registry: params.Registry,
+			Filter: &vfs.ListFilter{Recursive: true, SerialFilter: params.Serials},
+		})
 		if listErr != nil {
 			return nil, listErr
 		}
@@ -528,11 +537,13 @@ func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 
 // searchFilesVFS uses VFS.List(Recursive: true) as the fallback when no file index is available.
 func searchFilesVFS(params SearchFilesParams) (SearchFilesResult, error) {
-	fsys, ok := params.Registry.Get(filesNamespace)
-	if !ok {
+	if _, ok := params.Registry.Get(filesNamespace); !ok {
 		return SearchFilesResult{}, ErrNoFilesNamespace
 	}
-	all, err := fsys.List(params.Ctx, "", &vfs.ListFilter{Recursive: true, SerialFilter: params.Serials})
+	all, err := vfs.ListDevices(vfs.ListDevicesParams{
+		Ctx: params.Ctx, Registry: params.Registry,
+		Filter: &vfs.ListFilter{Recursive: true, SerialFilter: params.Serials},
+	})
 	if err != nil {
 		return SearchFilesResult{}, err
 	}

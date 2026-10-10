@@ -280,11 +280,10 @@ func ZipVFSDir(ctx context.Context, fsys vfs.VFS, basePath string, root string, 
 	defer zipWriter.Close()
 	buf := make([]byte, zipCopyBuffer)
 
-	// Open resolves on the internal device only, so the listing is held to it
-	// too (the empty serial). Unfiltered, it walked every device: a file only
-	// on a USB drive failed to open and cut the archive short, and a file on
-	// both went in twice with the internal bytes (#2638).
-	entries, err := fsys.List(ctx, basePath, &vfs.ListFilter{Recursive: true, SerialFilter: []string{""}})
+	// fsys is one device's namespace, so Open and the listing agree on the
+	// device. Listing every device put a file only on a USB drive in the
+	// archive and then failed to open it, cutting the archive short (#2638).
+	entries, err := fsys.List(ctx, basePath, &vfs.ListFilter{Recursive: true})
 	if err != nil {
 		return fmt.Errorf("failed to list folder: %w", err)
 	}

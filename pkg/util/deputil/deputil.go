@@ -5,6 +5,7 @@ package deputil
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -171,9 +172,19 @@ func DefaultDependencies() (Dependencies, error) {
 	deps.WithStorageService(svc)                                    // coverage: ignore
 	registry := vfs.NewRegistry()                                   // coverage: ignore
 	_ = registry.Register(vfs.Namespace{                            // coverage: ignore
-		ID:          "files",                            // coverage: ignore
+		ID:          vfs.FilesNamespace(""),             // coverage: ignore
 		Description: "Primary vault file store (files)", // coverage: ignore
-	}, vfs.NewStorageServiceVFS(svc, "files")) // coverage: ignore
+	}, vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace(""))) // coverage: ignore
+	// One namespace per other managed device, now and whenever the device set
+	// changes (#2639).
+	syncDevices := func() { // coverage: ignore
+		_, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: svc}) // coverage: ignore
+		if err != nil {                                                                                      // coverage: ignore
+			log.Printf("[vfs] failed to sync device namespaces: %v", err) // coverage: ignore
+		} // coverage: ignore
+	} // coverage: ignore
+	svc.OnDevicesChanged(syncDevices)                                      // coverage: ignore
+	syncDevices()                                                          // coverage: ignore
 	deps.WithVFSRegistry(registry)                                         // coverage: ignore
 	deps.WithMetadataStore(vfs.NewSQLiteMetadataStore(deps.Database().Db)) // coverage: ignore
 	deps.WithEventBus(eventbus.New())                                      // coverage: ignore

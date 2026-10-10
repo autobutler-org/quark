@@ -121,6 +121,9 @@ type StorageService struct {
 	managed    ttlCache[[]ManagedDevice]
 	roots      ttlCache[[]ManagedDevice]
 	probeCache diskProbeCache
+
+	listenersMu sync.Mutex
+	listeners   []func()
 }
 
 // NewStorageService returns a StorageService backed by the given Detector.
@@ -338,11 +341,28 @@ func (s *StorageService) getDeviceStatusesFresh() ([]*DeviceStatus, error) {
 
 // InvalidateDeviceCache clears the device status cache so the next call
 // to GetDeviceStatuses re-probes all devices from disk. Call this after
-// any mount/unmount operation to prevent stale UI state.
+// any mount/unmount operation to prevent stale UI state. Every function
+// passed to OnDevicesChanged runs afterwards, on the caller's goroutine.
 func (s *StorageService) InvalidateDeviceCache() {
 	s.cache.invalidate()
 	s.managed.invalidate()
 	s.roots.invalidate()
+
+	s.listenersMu.Lock()
+	listeners := slices.Clone(s.listeners)
+	s.listenersMu.Unlock()
+	for _, fn := range listeners {
+		fn()
+	}
+}
+
+// OnDevicesChanged registers fn to run after every InvalidateDeviceCache, the
+// signal that the set of managed devices may have changed. The VFS registry
+// uses it to follow mounts and unmounts (#2639).
+func (s *StorageService) OnDevicesChanged(fn func()) {
+	s.listenersMu.Lock()
+	defer s.listenersMu.Unlock()
+	s.listeners = append(s.listeners, fn)
 }
 
 // FindUsbDeviceBySerial finds a USB device by serial number.

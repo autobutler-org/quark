@@ -47,8 +47,9 @@ type PhotoSummary struct {
 type ListPhotosParams struct {
 	// Ctx bounds the VFS listing.
 	Ctx context.Context
-	// FS lists through the VFS. Nil falls back to walking the managed devices.
-	FS vfs.VFS
+	// Registry lists through the VFS, one namespace per device. Nil falls back
+	// to walking the managed devices.
+	Registry vfs.Registry
 	// Storage enumerates the managed devices for the fallback walk.
 	Storage *storageutil.StorageService
 	// Serial restricts the listing to one device, empty for all of them.
@@ -180,16 +181,20 @@ func sortPhotos(photos []PhotoSummary, sortBy, order string) {
 func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 	var allPhotos []PhotoSummary
 
-	if params.FS != nil {
-		// VFS path: recursive image listing.
+	if params.Registry != nil {
+		// VFS path: recursive image listing across the device namespaces.
 		serialFilter := []string{}
 		if params.Serial != "" {
 			serialFilter = []string{params.Serial}
 		}
-		infos, listErr := params.FS.List(params.Ctx, "", &vfs.ListFilter{
-			Recursive:    true,
-			MimePrefix:   "image/",
-			SerialFilter: serialFilter,
+		infos, listErr := vfs.ListDevices(vfs.ListDevicesParams{
+			Ctx:      params.Ctx,
+			Registry: params.Registry,
+			Filter: &vfs.ListFilter{
+				Recursive:    true,
+				MimePrefix:   "image/",
+				SerialFilter: serialFilter,
+			},
 		})
 		if listErr != nil {
 			return ListPhotosResult{}, listErr

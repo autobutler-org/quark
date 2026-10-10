@@ -37,6 +37,20 @@ type serialOnlyUsbDevice struct {
 
 func (u *serialOnlyUsbDevice) GetSerial() string { return u.serial }
 
+// newDeviceRegistry registers svc's devices the way deputil does: the internal
+// drive as "files" and one namespace per other device.
+func newDeviceRegistry(t testing.TB, svc *storageutil.StorageService) vfs.Registry {
+	t.Helper()
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, vfs.NewStorageServiceVFS(svc, filesNamespace)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: svc}); err != nil {
+		t.Fatal(err)
+	}
+	return registry
+}
+
 // TestVFSListingsCarryTheDevice is the regression for #1867: every listing
 // served through the VFS registry dropped the device name, path and serial.
 func TestVFSListingsCarryTheDevice(t *testing.T) {
@@ -51,10 +65,7 @@ func TestVFSListingsCarryTheDevice(t *testing.T) {
 	}
 
 	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial})
-	registry := vfs.NewRegistry()
-	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, vfs.NewStorageServiceVFS(svc, filesNamespace)); err != nil {
-		t.Fatal(err)
-	}
+	registry := newDeviceRegistry(t, svc)
 	ctx := context.Background()
 
 	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
@@ -329,10 +340,7 @@ func TestSearchResultsCarrySizeAndPath(t *testing.T) {
 	}
 
 	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: "USB-2017"})
-	registry := vfs.NewRegistry()
-	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, vfs.NewStorageServiceVFS(svc, filesNamespace)); err != nil {
-		t.Fatal(err)
-	}
+	registry := newDeviceRegistry(t, svc)
 	ctx := context.Background()
 	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
 	if err != nil {
@@ -393,10 +401,7 @@ func TestListingsCarryModifiedAt(t *testing.T) {
 	}
 
 	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: "USB-1565"})
-	registry := vfs.NewRegistry()
-	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, vfs.NewStorageServiceVFS(svc, filesNamespace)); err != nil {
-		t.Fatal(err)
-	}
+	registry := newDeviceRegistry(t, svc)
 	devices, err := svc.GetManagedDevices()
 	if err != nil {
 		t.Fatal(err)

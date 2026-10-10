@@ -222,15 +222,81 @@ func NewDBVFS(db *sql.DB, namespaceID string) *DBVFS {
 	return &DBVFS{db: db, namespaceID: namespaceID}
 }
 
-// StorageServiceVFS adapts storageutil.StorageService to the VFS interface.
-// It is registered as the "files" namespace and backs the /api/v0/files
-// handlers during the Phase 1 migration, with no behavior change.
+// StorageServiceVFS adapts storageutil.StorageService to the VFS interface
+// for one managed device. The internal drive is the "files" namespace; every
+// other device is registered as its own namespace, named by [FilesNamespace]
+// (#2639). Every operation is scoped to that device: a namespace whose device
+// has gone away answers [ErrNotFound], never the internal drive.
 type StorageServiceVFS struct {
 	svc         *storageutil.StorageService
 	namespaceID string
+	// serial is the USB serial of the device this namespace addresses, empty
+	// for the internal drive.
+	serial string
 }
 
-// NewStorageServiceVFS creates a StorageServiceVFS for the given namespace.
+// NewStorageServiceVFS creates a StorageServiceVFS for the internal drive,
+// registered under namespaceID.
 func NewStorageServiceVFS(svc *storageutil.StorageService, namespaceID string) *StorageServiceVFS {
 	return &StorageServiceVFS{svc: svc, namespaceID: namespaceID}
+}
+
+// NewDeviceStorageServiceVFS creates a StorageServiceVFS for the managed device
+// with the given serial, named [FilesNamespace](serial). The empty serial is
+// the internal drive.
+func NewDeviceStorageServiceVFS(svc *storageutil.StorageService, serial string) *StorageServiceVFS {
+	return &StorageServiceVFS{svc: svc, namespaceID: FilesNamespace(serial), serial: serial}
+}
+
+// FilesNamespace is the ID of the namespace holding a managed device's files:
+// "files" for the internal drive (the empty serial) and "files:<serial>" for
+// any other device. It is the only place that spelling lives.
+func FilesNamespace(serial string) string {
+	if serial == "" {
+		return filesNamespacePrefix
+	}
+	return filesNamespacePrefix + ":" + serial
+}
+
+// SyncDeviceNamespacesParams names the registry to reconcile and the storage
+// service whose managed devices it should hold.
+type SyncDeviceNamespacesParams struct {
+	Registry Registry
+	Storage  *storageutil.StorageService
+}
+
+// SyncDeviceNamespacesResult reports which device namespaces a sync changed.
+type SyncDeviceNamespacesResult struct {
+	Registered   []string
+	Unregistered []string
+}
+
+// SyncDeviceNamespaces makes the registry hold one [StorageServiceVFS]
+// namespace per attached managed device with a serial, registering the
+// devices that appeared and unregistering the ones that went away. The
+// internal drive's "files" namespace is not touched. It runs at startup and
+// again whenever the device set changes.
+func SyncDeviceNamespaces(params SyncDeviceNamespacesParams) (SyncDeviceNamespacesResult, error) {
+	return syncDeviceNamespaces(params)
+}
+
+// ListDevicesParams describes a listing across every managed device.
+type ListDevicesParams struct {
+	Ctx      context.Context
+	Registry Registry
+	Path     string
+	// Filter applies to every device. Its SerialFilter, when non-empty,
+	// restricts the listing to the devices with those serials, "" being the
+	// internal drive.
+	Filter *ListFilter
+}
+
+// ListDevices lists Path on every managed device by fanning out over the
+// device namespaces in the registry: the internal drive's first, then the
+// others in namespace order. Folders present on several devices appear once,
+// as the first device reports them; every file is kept. A serial with no
+// registered namespace contributes nothing. A non-root Path that no device has
+// is [ErrNotFound].
+func ListDevices(params ListDevicesParams) ([]FileInfo, error) {
+	return listDevices(params)
 }
