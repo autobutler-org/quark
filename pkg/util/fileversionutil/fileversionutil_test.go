@@ -12,6 +12,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/trashutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -515,7 +516,7 @@ func TestWatch_KeepsHistoryInTheTrashAndDropsItAfter(t *testing.T) {
 		t.Fatal("trashing the file removed its history")
 	}
 
-	if _, err := f.svc.EmptyTrash(storageutil.EmptyTrashParams{}); err != nil {
+	if _, err := trashutil.Empty(trashutil.EmptyParams{Device: trashutil.Device{Registry: f.registry}}); err != nil {
 		t.Fatal(err)
 	}
 	handle(eventbus.Event{Kind: eventbus.EventTrashChanged})

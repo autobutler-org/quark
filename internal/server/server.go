@@ -39,6 +39,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/tlsutil"
 	"github.com/autobutler-org/quark/pkg/util/transcodeutil"
+	"github.com/autobutler-org/quark/pkg/util/trashutil"
 	"github.com/autobutler-org/quark/pkg/util/updateutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/util/workerutil"
@@ -156,11 +157,14 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	}()
 
 	// Delete trashed items older than storageutil.TrashRetentionDays, once at
-	// startup and then hourly, on every managed device (#1814). The purge
-	// publishes trash_changed for each device it touched.
+	// startup and then hourly, on every device namespace in the registry
+	// (#1814, #2641). The purge publishes trash_changed for each device it
+	// touched.
 	go func() {
 		purge := func() {
-			res, err := deps.StorageService().PurgeExpiredTrash(storageutil.PurgeExpiredTrashParams{
+			res, err := trashutil.PurgeExpired(trashutil.PurgeExpiredParams{
+				Registry: deps.VFSRegistry(),
+				Storage:  deps.StorageService(),
 				EventBus: deps.EventBus(),
 			})
 			if err != nil {

@@ -3,8 +3,11 @@ package v0_trash
 import (
 	"errors"
 
+	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/trashutil"
+	"github.com/gin-gonic/gin"
 )
 
 // errTrashReadOnly is what a caller hears about a trashed item they can see
@@ -26,6 +29,17 @@ func trashError(err error) *serverutil.Response {
 		return serverutil.Conflict(err)
 	}
 	return serverutil.InternalServerError(err)
+}
+
+// trashDevice addresses the trash of the device serial names, through the
+// VFS registry (#2641).
+func trashDevice(c *gin.Context, deps deputil.Dependencies, serial string) trashutil.Device {
+	return trashutil.Device{
+		Ctx:      c.Request.Context(),
+		Registry: deps.VFSRegistry(),
+		Storage:  deps.StorageService(),
+		Serial:   serial,
+	}
 }
 
 // bindTrashItems reads a restore or delete body, which must name at least one item.

@@ -9,6 +9,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/trashutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -43,10 +44,11 @@ func deleteTrash(c *gin.Context) *serverutil.Response {
 	// Deleting for good is for the user who trashed an item, anyone who can
 	// write where it came from, and admins (#1905). Every item is checked
 	// before any is deleted.
+	device := trashDevice(c, deps, req.Serial)
 	for _, item := range req.Items {
-		recorded, err := deps.StorageService().ReadTrashEntry(storageutil.ReadTrashEntryParams{
-			DeviceSerial: req.Serial,
-			TrashName:    item.TrashName,
+		recorded, err := trashutil.ReadEntry(trashutil.ReadEntryParams{
+			Device:    device,
+			TrashName: item.TrashName,
 		})
 		if err != nil {
 			return trashError(err)
@@ -60,10 +62,10 @@ func deleteTrash(c *gin.Context) *serverutil.Response {
 		}
 	}
 
-	result, err := deps.StorageService().DeleteTrash(storageutil.DeleteTrashParams{
-		DeviceSerial: req.Serial,
-		Items:        req.Items,
-		EventBus:     deps.EventBus(),
+	result, err := trashutil.Delete(trashutil.DeleteParams{
+		Device:   device,
+		Items:    req.Items,
+		EventBus: deps.EventBus(),
 	})
 	// Rows go with what was deleted for good, so something created at that
 	// path later starts with none (#1905).

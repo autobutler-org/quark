@@ -11,6 +11,8 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/trashutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // MaxDeleteFiles is the most paths one DeleteFiles call takes. Each path is
@@ -23,7 +25,9 @@ const MaxDeleteFiles = 1000
 // database and event-bus cleanup it leaves behind is dispatched in the
 // background.
 type DeleteFilesParams struct {
-	// Storage owns the files directory and the trash inside it.
+	// Registry holds the device's namespace, whose trash the files go to.
+	Registry vfs.Registry
+	// Storage backs the device's namespace when Registry is nil.
 	Storage *storageutil.StorageService
 	// EventBus is told about every deleted path, and that the trash changed.
 	EventBus *eventbus.Bus
@@ -65,10 +69,9 @@ func ValidateDeleteFiles(params DeleteFilesParams) error {
 }
 
 // DeleteFiles moves files to the trash and starts the cleanup their absence
-// implies. Every device trashes, the internal one included: the "files" VFS
-// namespace is the internal device's files directory, so trashing through the
-// StorageService with the empty serial lands where a VFS delete used to remove
-// files for good (#1814).
+// implies. Every device trashes, the internal one included (#1814), through its
+// namespace's vfs.Trasher: vfs.VFS.Delete is permanent, and a user delete is
+// "move to trash" (#2641).
 func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 	if err := ValidateDeleteFiles(params); err != nil {
 		return DeleteFilesResult{}, err
@@ -77,29 +80,31 @@ func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 	// ── Phase 1: fast filesystem op (returns in < 1 s even for large batches) ─
 
 	// A rename into the trash is a metadata-only op, microseconds on an SD card.
-	trashed, err := params.Storage.TrashFiles(storageutil.TrashFilesParams{
-		RootDir:      params.RootDir,
-		FilePaths:    params.FilePaths,
-		DeviceSerial: params.Serial,
-		TrashedBy:    params.TrashedBy,
+	trashed, err := trashutil.Trash(trashutil.TrashParams{
+		Device: trashutil.Device{
+			Registry: params.Registry,
+			Storage:  params.Storage,
+			Serial:   params.Serial,
+		},
+		RootDir:   params.RootDir,
+		Paths:     params.FilePaths,
+		TrashedBy: params.TrashedBy,
 	})
 	// Access rows follow each item into the trash before this returns, so
 	// nothing created at the old path afterwards inherits them (#1905). That
 	// includes the items a failed batch moved before it stopped.
-	if trashed != nil {
-		for _, item := range trashed.Trashed {
-			if _, rowErr := accessutil.MoveRows(accessutil.MoveRowsParams{
-				Ctx:       context.Background(),
-				Database:  params.Database,
-				EventBus:  params.EventBus,
-				OldSerial: params.Serial,
-				OldPath:   item.OriginalPath,
-				NewSerial: params.Serial,
-				NewPath:   storageutil.TrashPath(item.TrashName, ""),
-			}); rowErr != nil {
-				log.Printf("quark: delete cleanup: move access rows for %q into the trash (serial=%q): %v",
-					item.OriginalPath, params.Serial, rowErr)
-			}
+	for _, item := range trashed.Trashed {
+		if _, rowErr := accessutil.MoveRows(accessutil.MoveRowsParams{
+			Ctx:       context.Background(),
+			Database:  params.Database,
+			EventBus:  params.EventBus,
+			OldSerial: params.Serial,
+			OldPath:   item.OriginalPath,
+			NewSerial: params.Serial,
+			NewPath:   storageutil.TrashPath(item.TrashName, ""),
+		}); rowErr != nil {
+			log.Printf("quark: delete cleanup: move access rows for %q into the trash (serial=%q): %v",
+				item.OriginalPath, params.Serial, rowErr)
 		}
 	}
 	if err != nil {

@@ -55,6 +55,11 @@ func newAccessHarness(t *testing.T, admin bool, extra ...storageutil.Device) acc
 	if err := registry.Register(vfs.Namespace{ID: "files"}, vfs.NewStorageServiceVFS(svc, "files")); err != nil {
 		t.Fatal(err)
 	}
+	// One namespace per extra device, as the server registers them (#2639):
+	// the trash reaches a device only through its namespace (#2641).
+	if _, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: svc}); err != nil {
+		t.Fatal(err)
+	}
 	database := dbtest.NewDB(t)
 	user, err := database.Queries.CreateUser(context.Background(), db.CreateUserParams{
 		Username: "bob", PasswordHash: "h", RecoveryPhraseHash: "r",

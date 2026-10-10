@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/trashutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -41,19 +42,20 @@ func emptyTrash(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(err)
 	}
 
+	device := trashDevice(c, deps, req.Serial)
 	var deleted int
 	var removed []string
 	var emptyErr error
 	if access.Principal().IsAdmin {
-		result, err := deps.StorageService().EmptyTrash(storageutil.EmptyTrashParams{
-			DeviceSerial: req.Serial,
-			EventBus:     deps.EventBus(),
+		result, err := trashutil.Empty(trashutil.EmptyParams{
+			Device:   device,
+			EventBus: deps.EventBus(),
 		})
 		deleted, removed, emptyErr = result.Deleted, result.Removed, err
 	} else {
 		// A non-admin empties only what they could delete one item at a time
 		// (#1905); everyone else's items stay.
-		listed, err := deps.StorageService().ListTrash(storageutil.ListTrashParams{DeviceSerial: req.Serial})
+		listed, err := trashutil.List(trashutil.ListParams{Device: device})
 		if err != nil {
 			return trashError(err)
 		}
@@ -65,10 +67,10 @@ func emptyTrash(c *gin.Context) *serverutil.Response {
 			}
 		}
 		if len(refs) > 0 {
-			result, err := deps.StorageService().DeleteTrash(storageutil.DeleteTrashParams{
-				DeviceSerial: req.Serial,
-				Items:        refs,
-				EventBus:     deps.EventBus(),
+			result, err := trashutil.Delete(trashutil.DeleteParams{
+				Device:   device,
+				Items:    refs,
+				EventBus: deps.EventBus(),
 			})
 			deleted, removed, emptyErr = result.Deleted, result.Removed, err
 		}

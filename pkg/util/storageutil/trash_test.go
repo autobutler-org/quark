@@ -318,17 +318,17 @@ func TestEmptyTrashImpl_DeletesEverything(t *testing.T) {
 	writeFile(t, filesDir, "dir/b.txt", "b")
 	trash(t, filesDir, "", "a.txt", "dir")
 
-	deleted, err := storageutil.EmptyTrashImpl(filesDir)
+	removed, err := storageutil.EmptyTrashImpl(filesDir)
 	require.NoError(t, err)
-	assert.Equal(t, 2, deleted)
+	assert.Len(t, removed, 2)
 
 	entries, err := os.ReadDir(storageutil.TrashRoot(filesDir))
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 
-	deleted, err = storageutil.EmptyTrashImpl(t.TempDir())
+	removed, err = storageutil.EmptyTrashImpl(t.TempDir())
 	require.NoError(t, err)
-	assert.Zero(t, deleted, "a device with no trash yet is already empty")
+	assert.Empty(t, removed, "a device with no trash yet is already empty")
 }
 
 func TestPurgeExpiredTrashImpl_DeletesOldItems(t *testing.T) {
@@ -353,7 +353,7 @@ func TestPurgeExpiredTrashImpl_DeletesOldItems(t *testing.T) {
 
 	purged, err := storageutil.PurgeExpiredTrashImpl(filesDir, time.Now().UTC())
 	require.NoError(t, err)
-	assert.Equal(t, 2, purged)
+	assert.Len(t, purged, 2)
 
 	items := listTrash(t, filesDir)
 	require.Len(t, items, 1)
@@ -386,7 +386,7 @@ func TestListTrashContentsImpl_RootAndSubfolder(t *testing.T) {
 	name := trashAlbum(t, filesDir)
 	expires := listTrash(t, filesDir)[0].ExpiresAt
 
-	root, err := storageutil.ListTrashContentsImpl(storageutil.ListTrashContentsParams{TrashName: name}, filesDir)
+	root, err := storageutil.ListTrashContentsImpl(storageutil.TrashRef{TrashName: name}, filesDir)
 	require.NoError(t, err)
 	assert.Equal(t, "pics/album", root.OriginalPath)
 	assert.Equal(t, expires, root.ExpiresAt)
@@ -399,7 +399,7 @@ func TestListTrashContentsImpl_RootAndSubfolder(t *testing.T) {
 	assert.Equal(t, int64(5), root.Items[1].Size)
 	assert.False(t, root.Items[1].ModifiedAt.IsZero())
 
-	sub, err := storageutil.ListTrashContentsImpl(storageutil.ListTrashContentsParams{TrashName: name, Path: "2024"}, filesDir)
+	sub, err := storageutil.ListTrashContentsImpl(storageutil.TrashRef{TrashName: name, Path: "2024"}, filesDir)
 	require.NoError(t, err)
 	assert.Equal(t, "pics/album/2024", sub.OriginalPath)
 	assert.Equal(t, expires, sub.ExpiresAt, "a nested folder expires with its trashed item")
@@ -435,7 +435,7 @@ func TestListTrashContentsImpl_Rejects(t *testing.T) {
 		{"../secret", "", storageutil.ErrInvalidTrashName},
 	}
 	for _, tc := range cases {
-		_, err := storageutil.ListTrashContentsImpl(storageutil.ListTrashContentsParams{TrashName: tc.name, Path: tc.path}, filesDir)
+		_, err := storageutil.ListTrashContentsImpl(storageutil.TrashRef{TrashName: tc.name, Path: tc.path}, filesDir)
 		assert.ErrorIs(t, err, tc.want, "%s %q", tc.name, tc.path)
 	}
 
@@ -470,7 +470,7 @@ func TestRestoreTrashImpl_NestedItemRecreatesParents(t *testing.T) {
 	items := listTrash(t, filesDir)
 	require.Len(t, items, 1)
 	assert.Equal(t, "pics/album", items[0].OriginalPath)
-	rest, err := storageutil.ListTrashContentsImpl(storageutil.ListTrashContentsParams{TrashName: name, Path: "2024"}, filesDir)
+	rest, err := storageutil.ListTrashContentsImpl(storageutil.TrashRef{TrashName: name, Path: "2024"}, filesDir)
 	require.NoError(t, err)
 	require.Len(t, rest.Items, 1)
 	assert.Equal(t, "2024/two.jpg", rest.Items[0].Path)
@@ -520,7 +520,7 @@ func TestDeleteTrashImpl_NestedItem(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Deleted)
 
-	rest, err := storageutil.ListTrashContentsImpl(storageutil.ListTrashContentsParams{TrashName: name}, filesDir)
+	rest, err := storageutil.ListTrashContentsImpl(storageutil.TrashRef{TrashName: name}, filesDir)
 	require.NoError(t, err)
 	require.Len(t, rest.Items, 1)
 	assert.Equal(t, "cover.jpg", rest.Items[0].Path)

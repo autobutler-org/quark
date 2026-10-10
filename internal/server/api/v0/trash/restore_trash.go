@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/trashutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -44,10 +45,11 @@ func restoreTrash(c *gin.Context) *serverutil.Response {
 	}
 	// Every item is checked before any is restored, the way the restore
 	// checks the batch itself (#1905).
+	device := trashDevice(c, deps, req.Serial)
 	for _, item := range req.Items {
-		recorded, err := deps.StorageService().ReadTrashEntry(storageutil.ReadTrashEntryParams{
-			DeviceSerial: req.Serial,
-			TrashName:    item.TrashName,
+		recorded, err := trashutil.ReadEntry(trashutil.ReadEntryParams{
+			Device:    device,
+			TrashName: item.TrashName,
 		})
 		if err != nil {
 			return trashError(err)
@@ -62,10 +64,10 @@ func restoreTrash(c *gin.Context) *serverutil.Response {
 		}
 	}
 
-	result, err := deps.StorageService().RestoreTrash(storageutil.RestoreTrashParams{
-		DeviceSerial: req.Serial,
-		Items:        req.Items,
-		EventBus:     deps.EventBus(),
+	result, err := trashutil.Restore(trashutil.RestoreParams{
+		Device:   device,
+		Items:    req.Items,
+		EventBus: deps.EventBus(),
 	})
 	// Access rows come back out with each item, including the ones a failed
 	// batch restored before it stopped (#1905).
