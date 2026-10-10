@@ -21,6 +21,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/authutil"
+
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 )
@@ -38,7 +40,8 @@ type config struct {
 	// poll is the app's auto-refresh interval (15 s by default in the app).
 	poll time.Duration
 	// accounts is how many member accounts the clients are spread over. Each
-	// login is a bcrypt verify, so this stays far below the client count.
+	// one's auth key is an Argon2id run here, so this stays far below the
+	// client count.
 	accounts int
 	// uploadersPer100 clients upload one small file into uploadDir every
 	// uploadEvery.
@@ -136,32 +139,64 @@ func (a api) postJSON(path, token string, body any) (int, []byte, error) {
 	return resp.StatusCode, raw, err
 }
 
-// login signs in, waiting out the per-IP login limiter: every account here
-// signs in from loopback.
-func (a api) login(username, password string) (string, error) {
+// awaitLimiter runs call until it is not answered 429, waiting out the per-IP
+// auth limiter: every account here asks from loopback.
+func awaitLimiter(call func() (int, []byte, error)) (int, []byte, error) {
 	backoff := 250 * time.Millisecond
-	for attempt := 0; attempt < 12; attempt++ {
-		status, raw, err := a.postJSON("/api/v0/auth/login", "", map[string]string{"username": username, "password": password})
-		if err != nil {
-			return "", err
+	for attempt := 0; ; attempt++ {
+		status, raw, err := call()
+		if err != nil || status != http.StatusTooManyRequests || attempt == 11 {
+			return status, raw, err
 		}
-		if status == http.StatusTooManyRequests {
-			time.Sleep(backoff)
-			backoff = min(2*backoff, 4*time.Second)
-			continue
-		}
-		if status != http.StatusOK {
-			return "", fmt.Errorf("login %s: %d %s", username, status, raw)
-		}
-		var parsed struct {
-			Token string `json:"token"`
-		}
-		if err := json.Unmarshal(raw, &parsed); err != nil || parsed.Token == "" {
-			return "", fmt.Errorf("login %s: no token in %s", username, raw)
-		}
-		return parsed.Token, nil
+		time.Sleep(backoff)
+		backoff = min(2*backoff, 4*time.Second)
 	}
-	return "", fmt.Errorf("login %s: still rate limited", username)
+}
+
+// authKey is the key the Quark takes in password's place (#2430): the
+// account's salt from GET /auth/salt, and authutil.DeriveKey over the password
+// with it, the derivation quark auth-key runs (#2713).
+func (a api) authKey(username, password string) (string, error) {
+	status, raw, err := awaitLimiter(func() (int, []byte, error) {
+		resp, err := a.http.Get(a.base + "/api/v0/auth/salt?username=" + url.QueryEscape(username))
+		if err != nil {
+			return 0, nil, err
+		}
+		defer resp.Body.Close()
+		raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		return resp.StatusCode, raw, err
+	})
+	if err != nil {
+		return "", err
+	}
+	var answer struct {
+		Salt string `json:"salt"`
+	}
+	if err := json.Unmarshal(raw, &answer); err != nil || status != http.StatusOK {
+		return "", fmt.Errorf("salt for %s: %d %s", username, status, raw)
+	}
+	result, err := authutil.DeriveKey(authutil.DeriveKeyParams{Secret: password, Salt: answer.Salt})
+	return result.Key, err
+}
+
+// login signs in with an auth key.
+func (a api) login(username, authKey string) (string, error) {
+	status, raw, err := awaitLimiter(func() (int, []byte, error) {
+		return a.postJSON("/api/v0/auth/login", "", map[string]string{"username": username, "authKey": authKey})
+	})
+	if err != nil {
+		return "", err
+	}
+	if status != http.StatusOK {
+		return "", fmt.Errorf("login %s: %d %s", username, status, raw)
+	}
+	var parsed struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil || parsed.Token == "" {
+		return "", fmt.Errorf("login %s: no token in %s", username, raw)
+	}
+	return parsed.Token, nil
 }
 
 // ensureAccounts creates the member accounts, or reuses them on a rerun, and
@@ -171,14 +206,18 @@ func ensureAccounts(a api, adminToken string, n int) ([]account, error) {
 	accounts := make([]account, 0, n)
 	for i := 0; i < n; i++ {
 		username := fmt.Sprintf("stress%03d", i)
-		status, raw, err := a.postJSON("/api/v0/admin/users", adminToken, map[string]string{"username": username, "password": password})
+		authKey, err := a.authKey(username, password)
+		if err != nil {
+			return nil, err
+		}
+		status, raw, err := a.postJSON("/api/v0/admin/users", adminToken, map[string]string{"username": username, "authKey": authKey})
 		if err != nil {
 			return nil, err
 		}
 		if status != http.StatusCreated && status != http.StatusConflict {
 			return nil, fmt.Errorf("create %s: %d %s", username, status, raw)
 		}
-		token, err := a.login(username, password)
+		token, err := a.login(username, authKey)
 		if err != nil {
 			return nil, err
 		}

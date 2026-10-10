@@ -5,10 +5,19 @@ BASE_URL="${QUARK_BASE_URL:-http://127.0.0.1:8080}"
 AUTH_USER="${QUARK_USERNAME:-perf}"
 # The Quark takes an auth key, never the password (#2430). The accounts this
 # script sets up sign in with these fixed keys, not ones derived from a password. Against
-# a Quark set up by the app, pass QUARK_ACCESS_TOKEN or the account's derived
-# QUARK_AUTH_KEY; deriving one from a password needs `quark auth-key` (#2713).
-AUTH_KEY="${QUARK_AUTH_KEY:-cGVyZi1hdXRoLWtleS1wZXJmLWF1dGgta2V5LXBlcmY=}"
+# a Quark set up by the app, pass QUARK_ACCESS_TOKEN, the account's
+# QUARK_AUTH_KEY, or QUARK_PASSWORD, which `quark auth-key` turns into the key
+# here (#2713).
+AUTH_KEY="${QUARK_AUTH_KEY:-}"
 ACCESS_TOKEN="${QUARK_ACCESS_TOKEN:-}"
+if [[ -z "$AUTH_KEY" && -z "$ACCESS_TOKEN" && -n "${QUARK_PASSWORD:-}" ]]; then
+  if [[ ! -x ./build/quark ]]; then
+    echo "QUARK_PASSWORD needs ./build/quark to derive the auth key: run 'make build/backend' first, or pass QUARK_AUTH_KEY." >&2
+    exit 1
+  fi
+  AUTH_KEY="$(./build/quark auth-key --host "$BASE_URL" -u "$AUTH_USER" <<< "$QUARK_PASSWORD")"
+fi
+AUTH_KEY="${AUTH_KEY:-cGVyZi1hdXRoLWtleS1wZXJmLWF1dGgta2V5LXBlcmY=}"
 READER_USER="${QUARK_READER_USERNAME:-perf-reader}"
 READER_KEY="${QUARK_READER_AUTH_KEY:-cGVyZi1yZWFkZXIta2V5LXBlcmYtcmVhZGVyLWtleS0=}"
 READER_TOKEN=""
@@ -103,7 +112,7 @@ auth_login_and_get_token() {
 
   if [[ "$login_status" != "200" ]]; then
     echo "quark auth mismatch: login failed for configured credentials (status=$login_status)." >&2
-    echo "set QUARK_ACCESS_TOKEN or QUARK_USERNAME/QUARK_AUTH_KEY correctly for this instance." >&2
+    echo "set QUARK_ACCESS_TOKEN or QUARK_USERNAME with QUARK_AUTH_KEY or QUARK_PASSWORD correctly for this instance." >&2
     return 1
   fi
 
