@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/load"
@@ -40,7 +41,8 @@ func applyMemThreshold(status *HealthStatus, memPercent float64) {
 	}
 }
 
-// applyDiskThreshold alerts when root filesystem use reaches DiskCriticalPercent.
+// applyDiskThreshold alerts when use of the data directory's filesystem
+// reaches DiskCriticalPercent.
 func applyDiskThreshold(status *HealthStatus, diskPercent float64) {
 	if diskPercent >= DiskCriticalPercent {
 		status.Healthy = false
@@ -87,8 +89,10 @@ func (c *Collector) readHost() HealthStatus {
 		slog.Warn("system metrics: mem.VirtualMemory failed", "err", err)
 	}
 
-	// Disk (root)
-	if usage, err := disk.Usage("/"); err == nil {
+	// Disk: the filesystem holding the data directory, the one the Devices
+	// page sizes the internal device from, so the two agree when the data
+	// directory is a mount of its own (#2467).
+	if usage, err := disk.Usage(storageutil.DataFilesystemPath()); err == nil {
 		status.DiskPercent = usage.UsedPercent
 		status.DiskUsedBytes = usage.Used
 		status.DiskTotalBytes = usage.Total

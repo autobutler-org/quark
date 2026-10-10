@@ -116,3 +116,27 @@ func GetMountsDir() (string, error) {
 	}
 	return mountDir, nil
 }
+
+// DataFilesystemPath returns a path that exists on the filesystem holding the
+// data directory. The internal device's capacity is the statfs of this path,
+// and anything else reporting how full Quark's disk is measures it here too,
+// so the figures agree when the data directory is a mount of its own (#2467).
+func DataFilesystemPath() string {
+	return nearestExisting(GetDataDir())
+}
+
+// nearestExisting resolves the symlinks in path, falling back to its closest
+// parent that exists. A data directory not created yet still names the
+// filesystem it will be created on.
+func nearestExisting(path string) string {
+	for {
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			return resolved
+		}
+		parent := filepath.Dir(path)
+		if parent == path {
+			return path
+		}
+		path = parent
+	}
+}

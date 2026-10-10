@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -49,7 +48,7 @@ func bytesFromStatfs(blocks, free, available, blockSize uint64) (total, used, av
 func detectDevices(categorize bool) ([]Device, error) {
 	devices := []Device{}
 
-	rootDevice, err := detectRootDevice(GetDataDir(), categorize)
+	rootDevice, err := detectRootDevice(DataFilesystemPath(), categorize)
 	if err != nil {
 		return devices, err
 	}
@@ -119,22 +118,6 @@ func detectDevices(categorize bool) ([]Device, error) {
 	return devices, nil
 }
 
-// nearestExisting resolves the symlinks in path, falling back to its closest
-// parent that exists. A data directory not created yet still names the
-// filesystem it will be created on.
-func nearestExisting(path string) string {
-	for {
-		if resolved, err := filepath.EvalSymlinks(path); err == nil {
-			return resolved
-		}
-		parent := filepath.Dir(path)
-		if parent == path {
-			return path
-		}
-		path = parent
-	}
-}
-
 // parseProcMountsFor scans /proc/mounts-formatted content from r and returns
 // the device path and filesystem type of the mount holding path: the longest
 // mount point that is path or one of its parents. Of several mounts stacked on
@@ -160,20 +143,20 @@ func parseProcMountsFor(r io.Reader, path string) (devicePath, fsType string, er
 }
 
 // detectRootDevice describes the internal device: the filesystem holding
-// dataDir, which is the root filesystem on the appliance and a mount of its
+// dataPath, an existing path that DataFilesystemPath resolves from the data
+// directory. That is the root filesystem on the appliance and a mount of its
 // own when a volume is mounted over the data directory, as in a container
 // (#2467). The device, filesystem type and sizes all come from that one
 // filesystem. MountPoint stays "/" whichever it is, because that is how
 // GetDataDirForDevice and the managed-device lookups recognize the internal
 // device.
-func detectRootDevice(dataDir string, categorize bool) (*Device, error) {
+func detectRootDevice(dataPath string, categorize bool) (*Device, error) {
 	f, err := os.Open("/proc/mounts")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open /proc/mounts: %w", err)
 	}
 	defer f.Close()
 
-	dataPath := nearestExisting(dataDir)
 	rootSource, rootFsType, err := parseProcMountsFor(f, dataPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read /proc/mounts: %w", err)
