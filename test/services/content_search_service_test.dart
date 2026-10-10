@@ -146,6 +146,15 @@ void main() {
       expect(requested, ['budget', 'budget']);
     });
 
+    // #3087: a reconnect arrives as a resync.
+    test('a resync clears the memo', () async {
+      await ContentSearchService.search('budget');
+      events.add(const FileEvent(kind: 'resync', path: ''));
+      await pumpEventQueue();
+      await ContentSearchService.search('budget');
+      expect(requested, ['budget', 'budget']);
+    });
+
     test('a search in flight when the memo clears is not remembered', () async {
       gate = Completer<void>();
       final stale = ContentSearchService.search('budget');
