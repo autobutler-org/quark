@@ -950,6 +950,181 @@ void main() {
     });
   });
 
+  group('unread counts and read markers (#2424)', () {
+    ChatTimelineMessage entry(int id, {int author = 8}) => ChatTimelineMessage(
+      message: message(id, author: author),
+      state: ChatMessageState.ready,
+      text: 'm$id',
+    );
+
+    Future<FakeChat> open({int generalUnread = 2}) async {
+      final chat = FakeChat(
+        channels: [
+          ChatChannel(
+            id: 1,
+            name: 'general',
+            isDefault: true,
+            permissions: memberSet,
+            unreadCount: generalUnread,
+          ),
+          ChatChannel(
+            id: 2,
+            name: 'random',
+            permissions: ownerSet,
+            unreadCount: 5,
+          ),
+        ],
+      );
+      chat.entries[1] = [entry(11), entry(12)];
+      chat.entries[2] = [entry(30)];
+      chat.controller.select('general');
+      await chat.controller.refresh();
+      return chat;
+    }
+
+    int unreadOf(FakeChat chat, String id) =>
+        chat.controller.channelItems.firstWhere((c) => c.id == id).unreadCount;
+
+    test('each channel item carries its unread count', () async {
+      final chat = await open();
+
+      expect(unreadOf(chat, '1'), 2);
+      expect(unreadOf(chat, '2'), 5);
+      expect(chat.marked, isEmpty, reason: 'nothing is in view yet');
+      chat.controller.dispose();
+    });
+
+    test('viewing the bottom sends the marker once and clears it', () async {
+      final chat = await open();
+      var notified = 0;
+      chat.controller.addListener(() => notified++);
+
+      chat.controller.setAtBottom(true);
+      chat.controller.setAtBottom(true);
+      await pumpEventQueue();
+
+      expect(chat.marked, ['1 12']);
+      expect(unreadOf(chat, '1'), 0);
+      expect(unreadOf(chat, '2'), 5);
+      expect(notified, greaterThan(0));
+
+      // Scrolling away and back to the same newest message sends nothing.
+      chat.controller.setAtBottom(false);
+      chat.controller.setAtBottom(true);
+      await pumpEventQueue();
+      expect(chat.marked, ['1 12']);
+      chat.controller.dispose();
+    });
+
+    test('a message arriving at the bottom moves the marker; one arriving '
+        'while scrolled up waits', () async {
+      final chat = await open();
+      chat.controller.setAtBottom(true);
+      await pumpEventQueue();
+
+      chat.opened[1]!.setEntries([entry(11), entry(12), entry(13)]);
+      await pumpEventQueue();
+      expect(chat.marked, ['1 12', '1 13']);
+
+      chat.controller.setAtBottom(false);
+      chat.opened[1]!.setEntries([entry(11), entry(12), entry(13), entry(14)]);
+      await pumpEventQueue();
+      expect(chat.marked, ['1 12', '1 13']);
+
+      chat.controller.setAtBottom(true);
+      await pumpEventQueue();
+      expect(chat.marked, ['1 12', '1 13', '1 14']);
+      chat.controller.dispose();
+    });
+
+    test('the marker never moves backward from this client', () async {
+      final chat = await open();
+      chat.controller.setAtBottom(true);
+      await pumpEventQueue();
+
+      // The newest message drops out of the loaded window.
+      chat.opened[1]!.setEntries([entry(11)]);
+      await pumpEventQueue();
+
+      expect(chat.marked, ['1 12']);
+      chat.controller.dispose();
+    });
+
+    test('another channel starts unmarked until its list reports', () async {
+      final chat = await open();
+      chat.controller.setAtBottom(true);
+      await pumpEventQueue();
+
+      chat.controller.select('2');
+      await pumpEventQueue();
+      expect(chat.marked, ['1 12']);
+
+      chat.controller.setAtBottom(true);
+      await pumpEventQueue();
+      expect(chat.marked, ['1 12', '2 30']);
+      expect(unreadOf(chat, '2'), 0);
+      chat.controller.dispose();
+    });
+
+    test('nothing is marked while locked or searching', () async {
+      final locked = FakeChat(unlocked: false);
+      locked.entries[1] = [entry(11)];
+      locked.controller.select('general');
+      await locked.controller.refresh();
+      locked.controller.setAtBottom(true);
+      await pumpEventQueue();
+      expect(locked.marked, isEmpty);
+      locked.controller.dispose();
+
+      final chat = await open();
+      chat.controller
+        ..toggleSearch()
+        ..search('m11')
+        ..setAtBottom(true);
+      await pumpEventQueue();
+      expect(chat.marked, isEmpty);
+      chat.controller.dispose();
+    });
+
+    test('chat_read_marker_changed from another session clears the '
+        'count', () async {
+      final chat = await open();
+
+      chat.events.add(
+        const FileEvent(
+          kind: 'chat_read_marker_changed',
+          path: '',
+          data: {'channelId': 2, 'lastReadMessageId': 30, 'unreadCount': 0},
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(unreadOf(chat, '2'), 0);
+      expect(unreadOf(chat, '1'), 2);
+      chat.controller.dispose();
+    });
+
+    test('a message from someone else in another channel adds one', () async {
+      final chat = await open();
+
+      chat.events.add(
+        const FileEvent(
+          kind: 'chat_message_created',
+          path: '',
+          data: {
+            'channelId': 2,
+            'messageId': 31,
+            'message': {'id': 31, 'channelId': 2, 'authorId': 8},
+          },
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(unreadOf(chat, '2'), 6);
+      chat.controller.dispose();
+    });
+  });
+
   group('on-device search (#2429)', () {
     Future<FakeChat> openGeneral() async {
       final chat = FakeChat();

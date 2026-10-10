@@ -670,4 +670,64 @@ void main() {
   }
 }
 
-void _ignore(int _) {}
+void _ignore(int _) {
+  // #2424: the Chat row says when a channel has unread messages.
+  testBothViewports('marks the Chat row when chat has unread messages', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkDrawer(
+        activeSection: QuarkDrawerSection.files,
+        onTapFiles: () {},
+        onTapChat: () {},
+        hasUnreadChat: true,
+      ),
+      size: size,
+    );
+
+    final dot = find.descendant(
+      of: find.byKey(const ValueKey('drawer_chat')),
+      matching: find.byKey(const ValueKey('drawer_chat_unread')),
+    );
+    expect(dot, findsOneWidget);
+    // Not color alone: a screen reader hears it, and the beta badge stays.
+    expect(find.bySemanticsLabel(RegExp('Unread messages')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('drawer_chat')),
+        matching: find.byType(QuarkBetaBadge),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.getSize(dot), const Size.square(8));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('draws no unread dot by default', (tester) async {
+    await pumpAt(
+      tester,
+      QuarkDrawer(activeSection: QuarkDrawerSection.files, onTapChat: () {}),
+      size: narrowViewport,
+    );
+
+    expect(find.byKey(const ValueKey('drawer_chat')), findsOneWidget);
+    expect(find.byKey(const ValueKey('drawer_chat_unread')), findsNothing);
+  });
+
+  testWidgets('draws no unread dot without a Chat row', (tester) async {
+    await pumpAt(
+      tester,
+      QuarkDrawer(
+        activeSection: QuarkDrawerSection.files,
+        onTapFiles: () {},
+        hasUnreadChat: true,
+      ),
+      size: narrowViewport,
+    );
+
+    expect(find.byKey(const ValueKey('drawer_chat')), findsNothing);
+    expect(find.byKey(const ValueKey('drawer_chat_unread')), findsNothing);
+  });
+}

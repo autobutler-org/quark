@@ -8,7 +8,9 @@ import '../theme/quark_tokens.dart';
 import 'quark_channel_list/chat_channel_tile.dart';
 
 /// A chat server's channels under the server's name, the open one
-/// highlighted and the private ones marked with a lock. [otherChannels], the
+/// highlighted, the private ones marked with a lock, and each one with a
+/// [ChatChannelItem.unreadCount] above zero in bold with the count in a pill
+/// at its end (`99+` above 99). [otherChannels], the
 /// ones an admin manages without being in them, follow under their own
 /// heading.
 ///
@@ -18,8 +20,9 @@ import 'quark_channel_list/chat_channel_tile.dart';
 /// parent and scrolls on its own, so it sits in a pane or a drawer.
 ///
 /// Key prefixes: `channel_list_header` on the server name,
-/// `channel_list_other_header` on the other channels' heading, and
-/// `channel_tile_<id>` on each channel.
+/// `channel_list_other_header` on the other channels' heading,
+/// `channel_tile_<id>` on each channel, and `channel_unread_<id>` on a
+/// channel's unread count.
 ///
 /// ```dart
 /// QuarkChannelList(

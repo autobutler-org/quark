@@ -1270,4 +1270,105 @@ void main() {
 
     expect(find.byKey(const ValueKey('message_help_u')), findsNothing);
   });
+
+  // #2424: the caller marks a channel read only while its newest message is
+  // in view, so the list says when it is.
+  testBothViewports('reports a short list as at the bottom after layout', (
+    tester,
+    size,
+  ) async {
+    final reports = <bool>[];
+    await pumpAt(
+      tester,
+      QuarkMessageList(
+        messages: [msg('m1', day1)],
+        onAtBottomChanged: reports.add,
+      ),
+      size: size,
+    );
+
+    // No scroll happened: this is the first layout's metrics alone.
+    expect(reports, isNotEmpty);
+    expect(reports, everyElement(isTrue));
+  });
+
+  testBothViewports('reports leaving the bottom and coming back', (
+    tester,
+    size,
+  ) async {
+    final reports = <bool>[];
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await pumpAt(
+      tester,
+      QuarkMessageList(
+        messages: [
+          for (var i = 200; i > 0; i--)
+            msg('m$i', day1.add(Duration(minutes: i)), body: 'message $i'),
+        ],
+        controller: controller,
+        onAtBottomChanged: reports.add,
+      ),
+      size: size,
+    );
+    expect(reports.last, isTrue);
+
+    controller.jumpTo(600);
+    await tester.pump();
+    expect(reports.last, isFalse);
+
+    controller.jumpTo(0);
+    await tester.pump();
+    expect(reports.last, isTrue);
+  });
+
+  testBothViewports('reports the bottom when a message arrives', (
+    tester,
+    size,
+  ) async {
+    final reports = <bool>[];
+    Widget list(int count) => QuarkMessageList(
+      messages: [
+        for (var i = count; i > 0; i--)
+          msg('m$i', day1.add(Duration(minutes: i)), body: 'message $i'),
+      ],
+      onAtBottomChanged: reports.add,
+    );
+    await pumpAt(tester, list(200), size: size);
+    reports.clear();
+
+    // A new message with no scroll: only the content size changed.
+    await pumpAt(tester, list(201), size: size);
+    expect(reports, isNotEmpty);
+    expect(reports.last, isTrue);
+  });
+
+  testBothViewports('reports nothing where there is no list', (
+    tester,
+    size,
+  ) async {
+    final reports = <bool>[];
+    for (final list in [
+      QuarkMessageList(messages: const [], onAtBottomChanged: reports.add),
+      QuarkMessageList(
+        messages: const [],
+        isLoading: true,
+        onAtBottomChanged: reports.add,
+      ),
+      QuarkMessageList(
+        messages: const [],
+        error: "Couldn't load messages.",
+        onAtBottomChanged: reports.add,
+      ),
+      QuarkMessageList(
+        messages: messages,
+        permissions: const {ChatPermission.manageMembers},
+        onAtBottomChanged: reports.add,
+      ),
+    ]) {
+      await pumpAt(tester, list, size: size);
+    }
+
+    expect(reports, isEmpty);
+  });
 }

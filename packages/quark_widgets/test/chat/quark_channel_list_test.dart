@@ -244,4 +244,97 @@ void main() {
     expect(find.text('Custom'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  // #2424: a channel with messages the account has not read says so.
+  testBothViewports('shows an unread channel in bold with its count', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      const QuarkChannelList(
+        serverName: 'Home',
+        channels: [
+          ChatChannelItem(id: 'general', name: 'general', unreadCount: 3),
+          ChatChannelItem(id: 'one', name: 'one', unreadCount: 1),
+          ChatChannelItem(id: 'books', name: 'books'),
+        ],
+      ),
+      size: size,
+    );
+
+    final pill = find.byKey(const ValueKey('channel_unread_general'));
+    expect(find.descendant(of: pill, matching: find.text('3')), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text('general')).style?.fontWeight,
+      FontWeight.w700,
+    );
+    expect(find.byTooltip('3 unread messages'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('3 unread messages')), findsOneWidget);
+    expect(find.byTooltip('1 unread message'), findsOneWidget);
+
+    // Read: no pill, and the name exactly as it was drawn before.
+    expect(find.byKey(const ValueKey('channel_unread_books')), findsNothing);
+    expect(tester.widget<Text>(find.text('books')).style, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testBothViewports('caps the unread count at 99+', (tester, size) async {
+    await pumpAt(
+      tester,
+      const QuarkChannelList(
+        serverName: 'Home',
+        channels: [
+          ChatChannelItem(id: 'a', name: 'a', unreadCount: 99),
+          ChatChannelItem(id: 'b', name: 'b', unreadCount: 100),
+        ],
+      ),
+      size: size,
+    );
+
+    expect(find.text('99'), findsOneWidget);
+    expect(find.text('99+'), findsOneWidget);
+    expect(find.byTooltip('100 unread messages'), findsOneWidget);
+  });
+
+  testBothViewports('fits a long name with an unread count and a lock', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkChannelList(
+        serverName: 'Home',
+        channels: [
+          ChatChannelItem(
+            id: 'long',
+            name: 'a${'n' * 200}',
+            isPrivate: true,
+            unreadCount: 1234,
+          ),
+        ],
+      ),
+      size: size,
+    );
+
+    final tile = find.byKey(const ValueKey('channel_tile_long'));
+    final pill = find.byKey(const ValueKey('channel_unread_long'));
+    final lock = find.descendant(
+      of: tile,
+      matching: find.byIcon(QuarkIcons.lock_outline),
+    );
+    expect(find.text('99+'), findsOneWidget);
+    expect(lock, findsOneWidget);
+    // Both sit inside the row, the pill before the lock.
+    expect(
+      tester.getRect(pill).right,
+      lessThanOrEqualTo(tester.getRect(lock).left),
+    );
+    expect(
+      tester.getRect(lock).right,
+      lessThanOrEqualTo(tester.getRect(tile).right),
+    );
+    expectNoClippedText(tester);
+    expect(tester.takeException(), isNull);
+  });
 }

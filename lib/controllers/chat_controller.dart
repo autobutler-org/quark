@@ -5,6 +5,7 @@ import 'package:quark/controllers/chat_channel_keys_controller.dart';
 import 'package:quark/controllers/chat_channel_share_target.dart';
 import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/controllers/chat_messages_controller.dart';
+import 'package:quark/controllers/chat_unread_controller.dart';
 import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
@@ -114,6 +115,11 @@ class ChatPendingSend {
 ///   holds in memory, so nothing is asked of the Quark and nothing is
 ///   stored. Changing or leaving the channel, and locking, drop the search
 ///   and its query.
+/// - Each of [channelItems] carries its unread count, kept by the
+///   [ChatUnreadController] every page shares (#2424). The page reports
+///   whether the newest message is in view with [setAtBottom]; while it is,
+///   the open channel's read marker follows the newest message loaded. Not
+///   while locked or searching, when the newest message isn't what is shown.
 ///
 /// Every collaborator has a real default; tests pass fakes.
 class ChatController extends ChangeNotifier {
@@ -142,6 +148,7 @@ class ChatController extends ChangeNotifier {
     int? Function()? currentUserId,
     Stream<FileEvent>? events,
     DateTime Function()? now,
+    ChatUnreadController? unread,
   }) : _listChannels = listChannels,
        _listMembers = listMembers,
        _listAllChannels = listAllChannels,
@@ -173,9 +180,11 @@ class ChatController extends ChangeNotifier {
            ]),
        _currentUserId =
            currentUserId ?? (() => AppSettings.instance.userId.value),
-       _now = now ?? DateTime.now {
+       _now = now ?? DateTime.now,
+       _unread = unread ?? ChatUnreadController.instance {
     _wasUnlocked = _isUnlocked();
     _keyChanges.addListener(_onKeysChanged);
+    _unread.addListener(_notify);
     _events = (events ?? EventsService.instance.events).listen(_onEvent);
   }
 
@@ -213,6 +222,7 @@ class ChatController extends ChangeNotifier {
   final Listenable _keyChanges;
   final int? Function() _currentUserId;
   final DateTime Function() _now;
+  final ChatUnreadController _unread;
   late final StreamSubscription<FileEvent> _events;
 
   String? _requested;
@@ -224,6 +234,7 @@ class ChatController extends ChangeNotifier {
   bool _channelsLoaded = false;
   ChatMessagesController? _messages;
   bool _isLoadingOlder = false;
+  bool _isAtBottom = false;
   bool _isSearching = false;
   String _searchQuery = '';
   List<ChatMember> _members = const [];
@@ -510,6 +521,7 @@ class ChatController extends ChangeNotifier {
           name: c.name,
           isPrivate: c.isPrivate,
           permissions: c.permissions,
+          unreadCount: _unread.countOf(c.id),
         ),
   ];
 
@@ -585,6 +597,17 @@ class ChatController extends ChangeNotifier {
       _loadMembers(),
       if (messages != null && !isLocked) messages.catchUp(),
     ]);
+  }
+
+  /// Records whether the open channel's newest message is in view, as the
+  /// message list reports it, and moves the read marker to it when it is.
+  /// The list repeats itself; a repeat does nothing.
+  // ponytail: a list at the bottom counts as read even while the app is in
+  // the background; gate on the app lifecycle if that proves wrong.
+  void setAtBottom(bool isAtBottom) {
+    if (isAtBottom == _isAtBottom) return;
+    _isAtBottom = isAtBottom;
+    _markRead();
   }
 
   /// Opens the open channel's search, or closes it and forgets the query.
@@ -1014,6 +1037,7 @@ class ChatController extends ChangeNotifier {
     _disposed = true;
     _events.cancel();
     _keyChanges.removeListener(_onKeysChanged);
+    _unread.removeListener(_notify);
     _closeMessages();
     super.dispose();
   }
@@ -1073,6 +1097,7 @@ class ChatController extends ChangeNotifier {
       final channels = await (_isAdmin() ? _listAllChannels : _listChannels)();
       if (_disposed) return;
       _channels = channels;
+      _unread.setChannels(channels);
       _channelsLoaded = true;
       _channelsError = null;
       _applySelection();
@@ -1145,23 +1170,46 @@ class ChatController extends ChangeNotifier {
   void _openMessages(ChatChannel channel) {
     _closeMessages();
     if (!channel.canRead) return;
-    final messages = _messagesFor(channel.id)..addListener(_notify);
+    final messages = _messagesFor(channel.id)..addListener(_onMessagesChanged);
     _messages = messages;
     if (!isLocked) unawaited(messages.open());
   }
 
   void _closeMessages() {
     _messages
-      ?..removeListener(_notify)
+      ?..removeListener(_onMessagesChanged)
       ..dispose();
     _messages = null;
     _isLoadingOlder = false;
+    // The next channel's list says where it sits once it is laid out.
+    _isAtBottom = false;
     _closeSearch();
   }
 
   void _closeSearch() {
     _isSearching = false;
     _searchQuery = '';
+  }
+
+  void _onMessagesChanged() {
+    _markRead();
+    _notify();
+  }
+
+  /// Moves the open channel's read marker to its newest loaded message while
+  /// that message is the one in view. [ChatUnreadController] sends each
+  /// marker once.
+  void _markRead() {
+    final messages = _messages;
+    final newest = messages?.newestMessageId;
+    if (!_isAtBottom ||
+        messages == null ||
+        newest == null ||
+        isLocked ||
+        _searchMatches != null) {
+      return;
+    }
+    unawaited(_unread.markRead(messages.channelId, newest));
   }
 
   Future<void> _deliver(ChatPendingSend pending) async {

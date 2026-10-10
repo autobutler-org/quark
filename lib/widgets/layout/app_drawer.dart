@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/controllers/chat_unread_controller.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -24,21 +27,43 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Chat, Calendar and Slides are offered while an admin has their beta on, following
 /// [AppSettings.featureFlags]; the router asks the Quark again before it opens
-/// the page.
+/// the page. While chat is on, its row carries a dot when any channel holds
+/// an unread message (#2424): the drawer reads the counts as it opens and
+/// [ChatUnreadController] keeps them current.
 ///
 /// The header names the active Quark (#2033) and, with more than one saved,
 /// switches between them (#2230). Switching goes through login: the router's
 /// gate forwards a Quark you are signed in to on to Files, and one you are
 /// not to its sign-in or setup page.
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends StatefulWidget {
   /// Creates the drawer for the page [activeSection] names.
-  const AppDrawer({required this.activeSection, super.key});
+  const AppDrawer({required this.activeSection, this.unread, super.key});
 
   /// The page the drawer is opened from.
   final QuarkDrawerSection activeSection;
 
+  /// The unread counts to show instead of the app's; tests pass one.
+  final ChatUnreadController? unread;
+
+  @override
+  State<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends State<AppDrawer> {
+  late final ChatUnreadController _unread =
+      widget.unread ?? ChatUnreadController.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    if (AppSettings.instance.isFeatureEnabled(FeatureFlag.chat)) {
+      unawaited(_unread.refresh());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final activeSection = widget.activeSection;
     VoidCallback goTo(QuarkDrawerSection section, String route) =>
         section == activeSection
         ? () => Navigator.of(context).pop()
@@ -60,6 +85,7 @@ class AppDrawer extends StatelessWidget {
         settings.isAdmin,
         settings.featureFlags,
         settings.activeHostNotifier,
+        _unread,
       ]),
       builder: (context, _) => QuarkDrawer(
         activeSection: activeSection,
@@ -87,6 +113,7 @@ class AppDrawer extends StatelessWidget {
         onTapChat: settings.isFeatureEnabled(FeatureFlag.chat)
             ? goTo(QuarkDrawerSection.chat, AppRoutes.chat)
             : null,
+        hasUnreadChat: _unread.hasUnread,
         onTapSystem: goTo(QuarkDrawerSection.system, AppRoutes.system),
         onTapVault: settings.isAdmin.value
             ? goTo(QuarkDrawerSection.vault, AppRoutes.vault)

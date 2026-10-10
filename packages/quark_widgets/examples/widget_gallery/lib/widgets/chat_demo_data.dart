@@ -1,9 +1,15 @@
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The fake channels the chat entries share: two open, one private.
+/// The fake channels the chat entries share: two open, one private with
+/// unread messages.
 const List<ChatChannelItem> galleryChatChannels = [
   ChatChannelItem(id: 'general', name: 'general'),
-  ChatChannelItem(id: 'family', name: 'family', isPrivate: true),
+  ChatChannelItem(
+    id: 'family',
+    name: 'family',
+    isPrivate: true,
+    unreadCount: 3,
+  ),
   ChatChannelItem(id: 'book-club', name: 'book-club'),
 ];
 
