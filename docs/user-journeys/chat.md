@@ -401,3 +401,36 @@ Both have the channel open.
 - It searches one channel at a time, and only as far back as that channel has loaded. Searching every channel
   and unloaded history needs an index kept on the device, which isn't built yet.
 - An admin looking at a channel they are not in (JN-CHAT-015) has no messages, so no **Search messages** button.
+
+---
+
+### JN-CHAT-019: See what is unread and clear it by reading
+
+**Preconditions:** Two accounts, `bob` and `carol`, are **Member**s of a channel, say `family`. `bob` is signed in
+on two devices or browsers, one with `general` open and one on **Files**.
+
+**Steps:**
+
+1. As `carol`, send two messages in `family`.
+2. As `bob`, on the device showing **Files**, open the drawer.
+3. As `bob`, on the device showing `general`, look at the channel list, then open `family`.
+4. As `bob`, on the first device, open the drawer again.
+
+**Expected result:**
+
+- After step 2, the drawer's **Chat** row carries a dot.
+- After step 3, `family` is listed in bold with a "2" beside it. Once it is open and showing its newest message,
+  the name goes back to normal and the count goes away.
+- After step 4, the dot is gone: reading the channel on one device clears it on the others without a reload.
+
+**Notes:**
+
+- A channel is read once its newest message is in view. Scrolled up into its history, new messages keep
+  counting until you return to the bottom.
+- Only other people's messages count, and a deleted one stops counting. A count over 99 reads "99+".
+- A channel never opened counts its whole history.
+- The Quark stores how far each account has read in each channel, as a message id; it learns nothing about what
+  a message says ([`docs/chat-security.md`](../chat-security.md)).
+- Nothing is marked read while chat is locked (JN-CHAT-004) or while a search is filtering the channel
+  (JN-CHAT-018).
+- Mentions are not built, so there is no separate badge for a message that names you.

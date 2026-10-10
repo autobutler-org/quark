@@ -59,6 +59,8 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
               onDelete: (id) => widget.log('QuarkMessageList.onDelete($id)'),
               onOpenLink: (uri) =>
                   widget.log('QuarkMessageList.onOpenLink($uri)'),
+              onAtBottomChanged: (atBottom) =>
+                  widget.log('QuarkMessageList.onAtBottomChanged($atBottom)'),
             ),
           ),
           QuarkMessageComposer(

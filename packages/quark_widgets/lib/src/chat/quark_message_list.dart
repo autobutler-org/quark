@@ -31,6 +31,11 @@ import 'quark_message_list/chat_system_line.dart';
 /// [loadOlderExtent] of the top. It can fire more than once before the caller
 /// sets [isLoading], so the caller ignores a request while one is out.
 ///
+/// [onAtBottomChanged] says whether the newest message is in view, which is
+/// what a caller needs to know to count a channel as read. It is not
+/// deduplicated, so it fires again with the same value as the list scrolls
+/// or its content changes, and the caller ignores the repeats.
+///
 /// Nothing here animates: new messages appear at the bottom in place. A
 /// caller that scrolls to the newest message with [controller] checks
 /// reduced motion itself and jumps rather than animates when it is on.
@@ -99,6 +104,7 @@ import 'quark_message_list/chat_system_line.dart';
 ///   onDelete: controller.deleteMessage,
 ///   onReact: controller.toggleReaction,
 ///   onOpenLink: (uri) => launchUrl(uri),
+///   onAtBottomChanged: controller.setAtBottom,
 ///   avatarBuilder: (context, userId) => AppAvatar(userId: userId),
 /// );
 /// ```
@@ -117,6 +123,7 @@ class QuarkMessageList extends StatelessWidget {
     this.onReact,
     this.onOpenLink,
     this.onEncryptionHelp,
+    this.onAtBottomChanged,
     this.avatarBuilder,
     this.controller,
     super.key,
@@ -130,6 +137,10 @@ class QuarkMessageList extends StatelessWidget {
 
   /// How near the top, in pixels, scrolling asks for older messages.
   static const double loadOlderExtent = 400;
+
+  /// How far from the bottom, in pixels, still counts as at the bottom for
+  /// [onAtBottomChanged].
+  static const double atBottomTolerance = 1;
 
   /// The diameter of each group's avatar.
   static const double avatarSize = 32;
@@ -185,6 +196,14 @@ class QuarkMessageList extends StatelessWidget {
   /// Called when an encryption or unverified system line's "(?)" is tapped,
   /// for the caller to explain. Null draws no "(?)".
   final VoidCallback? onEncryptionHelp;
+
+  /// Called with whether the newest message is in view: the list sits within
+  /// [atBottomTolerance] of its bottom, which a list too short to scroll
+  /// always does. Fires after the first layout, on every scroll, and when
+  /// the content or the viewport changes size, so it repeats the same value
+  /// and the caller ignores repeats. Never fires while there is no list:
+  /// loading, the error, the empty channel and [notMemberText].
+  final ValueChanged<bool>? onAtBottomChanged;
 
   /// Builds the avatar for an author's id, [avatarSize] across. Null draws
   /// a [QuarkAvatar] with the author's initials.
@@ -268,8 +287,18 @@ class QuarkMessageList extends StatelessWidget {
       TargetPlatform.fuchsia => false,
     };
 
+    // Reversed, so the bottom is the start: nothing before it means the
+    // newest message is in view. Depth zero is the list itself, not a
+    // scrollable inside a message.
+    void reportAtBottom(int depth, ScrollMetrics metrics) {
+      if (depth == 0) {
+        onAtBottomChanged?.call(metrics.extentBefore <= atBottomTolerance);
+      }
+    }
+
     final list = NotificationListener<ScrollNotification>(
       onNotification: (notification) {
+        reportAtBottom(notification.depth, notification.metrics);
         if (hasMore &&
             !isLoading &&
             error == null &&
@@ -279,68 +308,77 @@ class QuarkMessageList extends StatelessWidget {
         }
         return false;
       },
-      child: ListView.builder(
-        controller: controller,
-        reverse: true,
-        padding: EdgeInsets.symmetric(vertical: tokens.spacingSm),
-        itemCount: messages.length + 1,
-        itemBuilder: (context, index) {
-          if (index == messages.length) {
-            return ChatLoadOlderRow(
-              isLoading: isLoading,
-              hasMore: hasMore,
-              error: error,
-              onLoadOlder: onLoadOlder,
-            );
-          }
-          final message = messages[index];
-          final older = index + 1 < messages.length
-              ? messages[index + 1]
-              : null;
-          final startsDay =
-              older == null || !isSameDay(message.sentAt, older.sentAt);
-
-          return Column(
-            key: ValueKey('message_${message.id}'),
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (startsDay) ChatDaySeparator(date: message.sentAt),
-              if (message.kind == ChatMessageKind.system)
-                ChatSystemLine(message: message, onHelp: onEncryptionHelp)
-              else
-                ChatMessageRow(
-                  message: message,
-                  avatarSize: avatarSize,
-                  longPressOpensMenu: !selectable,
-                  onCopy: onCopy == null || message.kind != ChatMessageKind.text
-                      ? null
-                      : () => onCopy(message.id),
-                  onDelete:
-                      onDelete == null ||
-                          message.kind != ChatMessageKind.text ||
-                          !(deletesAny || message.authorId == currentUserId)
-                      ? null
-                      : () => onDelete(message.id),
-                  onReact: onReact == null
-                      ? null
-                      : (emoji) => onReact(message.id, emoji),
-                  onOpenLink: onOpenLink,
-                  avatar: !startsGroup(message, older)
-                      ? null
-                      : avatarBuilder != null
-                      ? SizedBox.square(
-                          dimension: avatarSize,
-                          child: avatarBuilder(context, message.authorId),
-                        )
-                      : QuarkAvatar(
-                          id: message.authorId,
-                          name: message.authorName,
-                          size: avatarSize,
-                        ),
-                ),
-            ],
-          );
+      // Scroll metrics change without a scroll on the first layout, when
+      // the list is too short to scroll, and when a message arrives.
+      child: NotificationListener<ScrollMetricsNotification>(
+        onNotification: (notification) {
+          reportAtBottom(notification.depth, notification.metrics);
+          return false;
         },
+        child: ListView.builder(
+          controller: controller,
+          reverse: true,
+          padding: EdgeInsets.symmetric(vertical: tokens.spacingSm),
+          itemCount: messages.length + 1,
+          itemBuilder: (context, index) {
+            if (index == messages.length) {
+              return ChatLoadOlderRow(
+                isLoading: isLoading,
+                hasMore: hasMore,
+                error: error,
+                onLoadOlder: onLoadOlder,
+              );
+            }
+            final message = messages[index];
+            final older = index + 1 < messages.length
+                ? messages[index + 1]
+                : null;
+            final startsDay =
+                older == null || !isSameDay(message.sentAt, older.sentAt);
+
+            return Column(
+              key: ValueKey('message_${message.id}'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (startsDay) ChatDaySeparator(date: message.sentAt),
+                if (message.kind == ChatMessageKind.system)
+                  ChatSystemLine(message: message, onHelp: onEncryptionHelp)
+                else
+                  ChatMessageRow(
+                    message: message,
+                    avatarSize: avatarSize,
+                    longPressOpensMenu: !selectable,
+                    onCopy:
+                        onCopy == null || message.kind != ChatMessageKind.text
+                        ? null
+                        : () => onCopy(message.id),
+                    onDelete:
+                        onDelete == null ||
+                            message.kind != ChatMessageKind.text ||
+                            !(deletesAny || message.authorId == currentUserId)
+                        ? null
+                        : () => onDelete(message.id),
+                    onReact: onReact == null
+                        ? null
+                        : (emoji) => onReact(message.id, emoji),
+                    onOpenLink: onOpenLink,
+                    avatar: !startsGroup(message, older)
+                        ? null
+                        : avatarBuilder != null
+                        ? SizedBox.square(
+                            dimension: avatarSize,
+                            child: avatarBuilder(context, message.authorId),
+                          )
+                        : QuarkAvatar(
+                            id: message.authorId,
+                            name: message.authorName,
+                            size: avatarSize,
+                          ),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
     // An empty selection toolbar: a right-click belongs to the message's

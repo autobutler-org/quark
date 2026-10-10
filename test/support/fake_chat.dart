@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/controllers/chat_channel_keys_controller.dart';
 import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/controllers/chat_messages_controller.dart';
+import 'package:quark/controllers/chat_unread_controller.dart';
 import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
@@ -47,6 +48,18 @@ class FakeChatMessages extends ChatMessagesController {
 
   @override
   List<ChatTimelineEntry> get entries => fakeEntries;
+
+  @override
+  int? get newestMessageId => fakeEntries
+      .whereType<ChatTimelineMessage>()
+      .map((m) => m.message.id)
+      .fold<int?>(null, (max, id) => max == null || id > max ? id : max);
+
+  /// Replaces [fakeEntries] and notifies, as a message arriving does.
+  void setEntries(List<ChatTimelineEntry> entries) {
+    fakeEntries = entries;
+    notifyListeners();
+  }
 
   @override
   Future<void> open() async => opens++;
@@ -198,8 +211,27 @@ class FakeChat {
       currentUserId: () => 7,
       events: events.stream,
       now: () => DateTime(2026, 9, 25, 12),
+      unread: unread,
     );
   }
+
+  /// Every `channelId messageId` the read marker was moved to.
+  final List<String> marked = [];
+
+  /// The unread counts the controller reads, fed by the same [events].
+  late final ChatUnreadController unread = ChatUnreadController(
+    listChannels: () async => channels,
+    markRead: (channelId, messageId) async {
+      marked.add('$channelId $messageId');
+      return ChatReadMarker(
+        channelId: channelId,
+        lastReadMessageId: messageId,
+        unreadCount: 0,
+      );
+    },
+    currentUserId: () => 7,
+    events: events.stream,
+  );
 
   /// The timeline each channel's fake starts with.
   final Map<int, List<ChatTimelineEntry>> entries = {};

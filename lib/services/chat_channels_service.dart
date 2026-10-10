@@ -15,8 +15,9 @@ typedef ChatMembersChange = ({
   ChatChannelEvent? event,
 });
 
-/// The chat channel routes (#2421, #2422): listing, creating, renaming and
-/// deleting channels, and reading and changing who is in one.
+/// The chat channel routes (#2421, #2422, #2424): listing, creating, renaming
+/// and deleting channels, reading and changing who is in one, and moving the
+/// signed-in account's read marker.
 ///
 /// A refusal the Quark words itself, such as "this would leave no one who
 /// can manage the channel", reaches the user as written. A name already taken is
@@ -113,6 +114,19 @@ class ChatChannelsService with AuthenticatedService {
     );
     _check(response, 'remove a member of channel $channelId');
     return _members(response);
+  }
+
+  /// Moves the signed-in account's read marker in channel [channelId] up to
+  /// message [messageId]. The Quark never moves it backward: an id at or
+  /// before the marker answers with the marker as it stands.
+  static Future<ChatReadMarker> markRead(int channelId, int messageId) async {
+    final response = await instance.authenticatedPut(
+      _uri('/$channelId/read'),
+      headers: _jsonHeaders,
+      body: jsonEncode({'messageId': messageId}),
+    );
+    _check(response, 'mark chat channel $channelId read');
+    return ChatReadMarker.fromJson(_json(response));
   }
 
   static Future<List<ChatChannel>> _list({required bool all}) async {

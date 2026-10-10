@@ -9,6 +9,7 @@ import '../theme/quark_tokens.dart';
 import 'quark_chrome.dart';
 import 'quark_drawer/quark_drawer_group_label.dart';
 import 'quark_drawer/quark_drawer_header.dart';
+import 'quark_drawer/quark_drawer_unread_dot.dart';
 
 /// The top-level destinations in [QuarkDrawer], one per main page.
 enum QuarkDrawerSection {
@@ -95,8 +96,13 @@ const _manageSections = {
 /// A section still in beta, Calendar, Slides and Chat for now, carries a
 /// [QuarkBetaBadge] beside its label.
 ///
+/// With [hasUnreadChat], the Chat row ends its label in a small dot that a
+/// screen reader reads as "Unread messages". Whether anything is unread is
+/// the caller's to know; a hidden Chat row shows no dot.
+///
 /// Key prefixes: `drawer_<section>` on each row, for example `drawer_photos`
-/// and `drawer_users`; `drawer_group_manage` on the "Manage" label;
+/// and `drawer_users`; `drawer_chat_unread` on the Chat row's unread dot;
+/// `drawer_group_manage` on the "Manage" label;
 /// `drawer_host` on the header when it names a Quark;
 /// `drawer_host_header` on the button that opens the switcher, and
 /// `drawer_host_<index>` on each Quark in it.
@@ -130,6 +136,7 @@ class QuarkDrawer extends StatelessWidget {
     this.onTapSlides,
     this.onTapBooks,
     this.onTapChat,
+    this.hasUnreadChat = false,
     this.onTapSystem,
     this.onTapVault,
     this.onTapUsers,
@@ -181,6 +188,10 @@ class QuarkDrawer extends StatelessWidget {
   /// Called when the Chat row is tapped. Null hides the row, as when an admin
   /// has turned the chat beta off.
   final FutureOr<void> Function()? onTapChat;
+
+  /// Whether a chat channel has messages this account has not read. Draws a
+  /// dot on the Chat row; without the row it draws nothing.
+  final bool hasUnreadChat;
 
   /// Called when the System row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapSystem;
@@ -296,12 +307,24 @@ class QuarkDrawer extends StatelessWidget {
                   ListTile(
                     key: ValueKey('drawer_${section.name}'),
                     leading: Icon(icon),
-                    title: _betaSections.contains(section)
+                    title:
+                        _betaSections.contains(section) ||
+                            (section == QuarkDrawerSection.chat &&
+                                hasUnreadChat)
                         ? Row(
                             children: [
                               Flexible(child: Text(label)),
-                              SizedBox(width: tokens.spacingSm),
-                              const QuarkBetaBadge(),
+                              if (_betaSections.contains(section)) ...[
+                                SizedBox(width: tokens.spacingSm),
+                                const QuarkBetaBadge(),
+                              ],
+                              if (section == QuarkDrawerSection.chat &&
+                                  hasUnreadChat) ...[
+                                SizedBox(width: tokens.spacingSm),
+                                const QuarkDrawerUnreadDot(
+                                  key: ValueKey('drawer_chat_unread'),
+                                ),
+                              ],
                             ],
                           )
                         : Text(label),

@@ -145,6 +145,10 @@ class ChatMessagesController extends ChangeNotifier {
   bool get isWaitingForKey =>
       _keys.keyFor(channelId, _keys.currentVersion(channelId)) == null;
 
+  /// The id of the newest message loaded, deleted ones included; null with
+  /// none. What a read marker moves to (#2424).
+  int? get newestMessageId => _messages.lastKey();
+
   /// The timeline, oldest first: messages and system events merged by time,
   /// a system event first when both share a second. Events older than the
   /// loaded history are left out until [loadOlder] reaches them.

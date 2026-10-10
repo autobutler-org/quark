@@ -65,6 +65,61 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // #2424: an unread channel is bold with its count; the one on screen,
+    // sitting at its newest message, is marked read and loses its count.
+    testWidgets('marks the open channel read and counts the rest ($label)', (
+      tester,
+    ) async {
+      final chat = FakeChat(
+        channels: [
+          const ChatChannel(
+            id: 1,
+            name: 'general',
+            isDefault: true,
+            permissions: memberSet,
+            unreadCount: 2,
+          ),
+          ChatChannel(
+            id: 2,
+            name: 'random',
+            permissions: ownerSet,
+            unreadCount: 5,
+          ),
+        ],
+      );
+      chat.entries[1] = [
+        for (final id in [11, 12])
+          ChatTimelineMessage(
+            message: ChatMessage(
+              id: id,
+              channelId: 1,
+              authorId: 8,
+              keyVersion: 1,
+              ciphertext: null,
+              createdAt: DateTime.utc(2026, 9, 25, 10, id),
+            ),
+            state: ChatMessageState.ready,
+            text: 'message $id',
+          ),
+      ];
+      await pumpChat(tester, size, chat: chat);
+      if (find.byKey(const ValueKey('channel_tile_2')).evaluate().isEmpty) {
+        chat.controller.toggleChannelList();
+        await tester.pumpAndSettle();
+      }
+
+      expect(chat.marked, ['1 12']);
+      expect(find.byKey(const ValueKey('channel_unread_1')), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('channel_unread_2')),
+          matching: find.text('5'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     // #2788: the body pins the composer to the bottom edge, so the page has
     // to keep it off the home indicator and the rounded display corners.
     testWidgets('the composer clears the bottom screen edge ($label)', (

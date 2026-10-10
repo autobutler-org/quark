@@ -496,6 +496,7 @@ class _ChatPageState extends State<ChatPage>
                                 // older messages instead.
                                 hasMore: matches == null && c.hasOlderMessages,
                                 onLoadOlder: c.loadOlder,
+                                onAtBottomChanged: c.setAtBottom,
                                 permissions: channel == null
                                     ? null
                                     : c.selectedPermissions,
