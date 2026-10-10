@@ -21,6 +21,11 @@ class PhotoGridConfig {
   /// come down.
   static const double minTileWidth = 80;
 
+  /// The most Quark photos `PhotosListCache` keeps between visits to the
+  /// Photos page (#1778): one page. A refresh shows the first page again, so
+  /// anything past it would be on screen only until that refresh landed.
+  static const int maxCachedPhotos = 50;
+
   /// The column bounds at [availableWidth]: the scale limits, further clamped
   /// so a tile never has to shrink below [minTileWidth].
   static ({int min, int max}) columnBounds(double availableWidth) {
