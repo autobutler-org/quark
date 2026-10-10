@@ -1,0 +1,31 @@
+# Local development only: the PostgreSQL instance `make serve/postgres` starts and
+# DB_BACKEND=postgres points at. See docs/architecture/postgres-dev.md.
+#
+# The credentials are throwaway and the port is bound to loopback. Nothing here is for
+# production: docs/container.md covers running Quark itself in a container.
+#
+# The name is fixed so the network (quark_default) and the volume (quark_postgres) are
+# called the same from every checkout and worktree; the Makefile relies on both.
+name: quark
+
+services:
+  postgres:
+    # Pinned to a major so Renovate moves it. pg_trgm ships in this image; the schema
+    # enables it in its first migration, so there is no init script to keep in step.
+    image: postgres:17
+    environment:
+      POSTGRES_USER: quark
+      POSTGRES_PASSWORD: quark
+      POSTGRES_DB: quark
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quark -d quark"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+volumes:
+  postgres:

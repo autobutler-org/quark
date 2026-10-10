@@ -103,6 +103,18 @@ Quark uses SQLite with golang-migrate for schema migrations and sqlc for query g
 
 Don't edit the generated files by hand — they'll be overwritten by `make generate`.
 
+### PostgreSQL
+
+SQLite is the default and needs nothing. To run against PostgreSQL instead, with Docker installed:
+
+```bash
+make serve/postgres                      # start the development database
+make serve/backend DB_BACKEND=postgres   # or watch/backend, test/unit/backend, ...
+```
+
+[PostgreSQL for local development](architecture/postgres-dev.md) has the rest: the `DB_BACKEND` switch,
+resetting the database, `psql`, and running both backends side by side.
+
 ## Project structure
 
 ```text
@@ -158,6 +170,8 @@ Run `make help` to see everything. The most common ones:
 | `make test/unit/frontend`       | Flutter unit tests                    |
 | `make test/integration/backend` | Go integration tests                  |
 | `make tidy`                     | Tidy Go + Flutter dependencies        |
+| `make serve/postgres`           | Start the development PostgreSQL      |
+| `make clean/postgres`           | Stop it (`clean/postgres/data` resets) |
 
 ## Notes
 

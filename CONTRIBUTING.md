@@ -23,6 +23,12 @@ Clear and concise. Under 80 characters for the subject line. If you need more co
 
 Run `make check` before you push. If the linter is unhappy, fix it first.
 
+## Running it locally
+
+[Dev onboarding](docs/dev-onboarding.md) gets the backend and the app running. SQLite is the default database;
+[PostgreSQL for local development](docs/architecture/postgres-dev.md) covers running against PostgreSQL with
+`make serve/postgres` and `DB_BACKEND=postgres`.
+
 ## Found a bug or have an idea?
 
 [Open an issue](https://github.com/autobutler-org/quark/issues/new). We read them.
