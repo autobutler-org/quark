@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:quark/controllers/albums_cache.dart';
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/models/photo_sort.dart';
 import 'package:quark/services/app_settings.dart';
@@ -8,6 +9,8 @@ import 'package:quark/utils/error_text.dart';
 
 /// Calls `/api/v0/albums`: listing, creating, renaming, moving and deleting photo albums, and adding photos to
 /// them or removing them.
+///
+/// Every change that goes through drops what it made wrong in [AlbumsCache], so no caller has to (#1779).
 class AlbumService with AuthenticatedService {
   static final AlbumService _instance = AlbumService._();
   AlbumService._();
@@ -44,6 +47,7 @@ class AlbumService with AuthenticatedService {
     if (response.statusCode != 201) {
       throw ApiException(response.statusCode, 'Failed to create album');
     }
+    AlbumsCache.instance.dropAlbums();
     return PhotoAlbum.fromJson(
       json.decode(response.body) as Map<String, dynamic>,
     );
@@ -62,6 +66,7 @@ class AlbumService with AuthenticatedService {
     if (response.statusCode != 200) {
       throw ApiException(response.statusCode, 'Failed to rename album');
     }
+    AlbumsCache.instance.dropAlbums();
     return PhotoAlbum.fromJson(
       json.decode(response.body) as Map<String, dynamic>,
     );
@@ -76,6 +81,7 @@ class AlbumService with AuthenticatedService {
     if (response.statusCode != 200) {
       throw ApiException(response.statusCode, 'Failed to move album');
     }
+    AlbumsCache.instance.dropAlbums();
     return PhotoAlbum.fromJson(
       json.decode(response.body) as Map<String, dynamic>,
     );
@@ -86,6 +92,9 @@ class AlbumService with AuthenticatedService {
     if (response.statusCode != 204) {
       throw ApiException(response.statusCode, 'Failed to delete album');
     }
+    AlbumsCache.instance
+      ..dropAlbums()
+      ..dropItems(id);
   }
 
   static Future<List<PhotoAlbumItem>> listAlbumItems(
@@ -120,6 +129,7 @@ class AlbumService with AuthenticatedService {
     if (response.statusCode != 201) {
       throw ApiException(response.statusCode, 'Failed to add photo to album');
     }
+    AlbumsCache.instance.dropItems(albumId);
     return PhotoAlbumItem.fromJson(
       json.decode(response.body) as Map<String, dynamic>,
     );
@@ -141,5 +151,6 @@ class AlbumService with AuthenticatedService {
         'Failed to remove photo from album',
       );
     }
+    AlbumsCache.instance.dropItems(albumId);
   }
 }
