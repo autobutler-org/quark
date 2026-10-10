@@ -4,41 +4,65 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
+	"path"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
-// CopyPhotoVFS duplicates relPath within the VFS, returning the new relative
-// path. The copy lands beside the original as "<name>_copy<ext>", numbered when
-// that name is taken. A missing source comes back as [vfs.ErrNotFound].
-func CopyPhotoVFS(ctx context.Context, fsys vfs.VFS, relPath string) (string, error) {
-	// Verify source exists.
-	if _, err := fsys.Stat(ctx, relPath); err != nil {
-		return "", err
+// maxCopyNames bounds how many "_copy_<n>" names [CopyPhoto] tries before it
+// gives up on finding a free one.
+const maxCopyNames = 100
+
+// CopyPhotoParams names the photo to duplicate.
+type CopyPhotoParams struct {
+	Ctx context.Context
+	// Registry holds one namespace per device; the copy is made in Serial's.
+	Registry vfs.Registry
+	// EventBus hears about the new file. Nil publishes nothing.
+	EventBus *eventbus.Bus
+	// Serial is the device the photo is on, empty for the internal drive.
+	Serial string
+	// RelPath is the photo's path on that device.
+	RelPath string
+}
+
+// CopyPhotoResult is where the copy landed.
+type CopyPhotoResult struct {
+	// RelPath is the copy's path, beside the original, with no leading slash.
+	RelPath string
+}
+
+// CopyPhoto duplicates a photo beside the original as "<name>_copy<ext>",
+// numbered when that name is taken, through its device's namespace. A copy
+// never replaces a file: each name is claimed by the write itself, so two
+// copies at once land under two names. A missing photo, or a device with no
+// namespace, is [vfs.ErrNotFound].
+func CopyPhoto(params CopyPhotoParams) (CopyPhotoResult, error) {
+	fsys, err := DeviceFS(params.Registry, params.Serial)
+	if err != nil {
+		return CopyPhotoResult{}, err
 	}
-
-	ext := filepath.Ext(relPath)
-	stem := relPath[:len(relPath)-len(ext)]
-	destPath := stem + "_copy" + ext
-
-	// Find a non-conflicting destination name.
-	for i := 2; i <= 100; i++ {
-		if _, err := fsys.Stat(ctx, destPath); errors.Is(err, vfs.ErrNotFound) {
+	src := accessutil.Canonical(params.RelPath)
+	ext := path.Ext(src)
+	stem := src[:len(src)-len(ext)]
+	dest := stem + "_copy" + ext
+	for i := 2; ; i++ {
+		err := fsys.Copy(params.Ctx, src, dest, vfs.CopyOptions{IfNoneMatch: "*"})
+		if err == nil {
 			break
 		}
-		destPath = fmt.Sprintf("%s_copy_%d%s", stem, i, ext)
+		if !errors.Is(err, vfs.ErrConflict) {
+			return CopyPhotoResult{}, err
+		}
+		if i > maxCopyNames {
+			return CopyPhotoResult{}, fmt.Errorf("no free name for a copy of %s: %w", params.RelPath, err)
+		}
+		dest = fmt.Sprintf("%s_copy_%d%s", stem, i, ext)
 	}
-
-	// Copy: open source, write destination.
-	rc, err := fsys.Open(ctx, relPath)
-	if err != nil {
-		return "", err
+	if params.EventBus != nil {
+		params.EventBus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: dest, DeviceSerial: params.Serial})
 	}
-	defer rc.Close()
-
-	if err := fsys.Write(ctx, destPath, rc, vfs.WriteOptions{IfNoneMatch: "*"}); err != nil {
-		return "", err
-	}
-	return destPath, nil
+	return CopyPhotoResult{RelPath: dest}, nil
 }

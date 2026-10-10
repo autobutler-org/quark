@@ -88,7 +88,7 @@ func TestBackfillHashes(t *testing.T) {
 	})
 
 	params := photoutil.BackfillHashesParams{
-		Ctx: ctx, Queries: database.Queries, Storage: svc, IOSemaphore: iosemutil.NewWithConcurrency(1),
+		Ctx: ctx, Queries: database.Queries, Registry: deviceRegistry(t, svc), IOSemaphore: iosemutil.NewWithConcurrency(1),
 	}
 	res, err := photoutil.BackfillHashes(params)
 	if err != nil {
@@ -147,7 +147,7 @@ func TestBackfillHashesKeepsADHashItCannotDecode(t *testing.T) {
 
 	if _, err := photoutil.BackfillHashes(photoutil.BackfillHashesParams{
 		Ctx: context.Background(), Queries: database.Queries,
-		Storage: storageutil.NewStorageService(usbDetector{mountPoint: mountPoint, serial: serial}),
+		Registry: deviceRegistry(t, storageutil.NewStorageService(usbDetector{mountPoint: mountPoint, serial: serial})),
 	}); err != nil {
 		t.Fatal(err)
 	}

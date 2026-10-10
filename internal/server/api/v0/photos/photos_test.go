@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	v0_photos "github.com/autobutler-org/quark/internal/server/api/v0/photos"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -164,5 +165,61 @@ func TestCopyPhoto_InvalidJSON(t *testing.T) {
 	w := doPhotosReq(engine, http.MethodPost, "/api/v0/photos/copy", []byte("not-json"))
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for invalid JSON, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestDevicePhoto_ReadAndCopiedOnItsDevice: a photo on a USB drive used to be
+// copied by the storage service and described from the internal drive's file
+// at the same path (#2645). Both now go through the drive's own namespace.
+func TestDevicePhoto_ReadAndCopiedOnItsDevice(t *testing.T) {
+	const serial = "USB-1"
+	ctx := context.Background()
+	reg := vfs.NewRegistry()
+	internal := vfs.NewMemVFS(vfs.FilesNamespace(""))
+	usb := vfs.NewMemVFS(vfs.FilesNamespace(serial))
+	for id, ns := range map[string]*vfs.MemVFS{vfs.FilesNamespace(""): internal, vfs.FilesNamespace(serial): usb} {
+		if err := reg.Register(vfs.Namespace{ID: id}, ns); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = internal.Write(ctx, "a.jpg", strings.NewReader("internal"), vfs.WriteOptions{})
+	_ = usb.Write(ctx, "a.jpg", strings.NewReader("usb photo"), vfs.WriteOptions{})
+	_ = usb.Write(ctx, "a.mov", strings.NewReader("live"), vfs.WriteOptions{})
+	deps := deputil.NewDependencies().WithVFSRegistry(reg).WithDatabase(dbtest.NewDB(t))
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", accessutil.System)
+		c.Next()
+	})
+	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_photos.NewRouter())
+
+	body, _ := json.Marshal(map[string]string{"relPath": "a.jpg", "serial": serial})
+	w := doPhotosReq(engine, http.MethodPost, "/api/v0/photos/copy", body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("copy returned %d: %s", w.Code, w.Body.String())
+	}
+	if _, err := usb.Stat(ctx, "a_copy.jpg"); err != nil {
+		t.Errorf("copy not on the usb drive: %v", err)
+	}
+	if _, err := internal.Stat(ctx, "a_copy.jpg"); err == nil {
+		t.Error("copy landed on the internal drive")
+	}
+
+	w = doPhotosReq(engine, http.MethodGet, "/api/v0/photos/metadata?serial="+serial+"&relPath=a.jpg", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("metadata returned %d: %s", w.Code, w.Body.String())
+	}
+	var meta v0_photos.PhotoMetadataJSON
+	if err := json.Unmarshal(w.Body.Bytes(), &meta); err != nil {
+		t.Fatal(err)
+	}
+	if meta.FileSize != int64(len("usb photo")) || meta.LivePhotoVideoPath != "a.mov" {
+		t.Errorf("metadata = size %d, live %q; want the usb drive's photo", meta.FileSize, meta.LivePhotoVideoPath)
+	}
+
+	w = doPhotosReq(engine, http.MethodGet, "/api/v0/photos/metadata?serial=UNPLUGGED&relPath=a.jpg", nil)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("metadata on an unplugged drive returned %d, want 404", w.Code)
 	}
 }

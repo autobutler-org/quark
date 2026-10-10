@@ -17,6 +17,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // sourceJPEG returns the bytes of a small solid-color JPEG to thumbnail.
@@ -146,17 +147,14 @@ func TestGenerateFromReaderStoresPhotoHashes(t *testing.T) {
 // cropped thumbnail of whichever tier rendered last.
 func TestGenerateStoresTheSameHashesAtEveryTier(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	source := filepath.Join(t.TempDir(), "a.jpg")
-	if err := os.WriteFile(source, sourceJPEG(t), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	fsys := memFS(t, map[string][]byte{"a.jpg": sourceJPEG(t)})
 	database := dbtest.NewDB(t)
 	var first db.ListNearDuplicatesRow
 	for i, size := range []Size{SizeSm, SizeMd, SizeLg} {
 		w, h := Dimensions(size)
 		if _, err := Generate(GenerateParams{
-			Ctx: context.Background(), Queries: database.Queries, RelPath: "a.jpg",
-			SourcePath: source, Ext: ".jpg", Width: w, Height: h,
+			Ctx: context.Background(), Queries: database.Queries, FS: fsys, RelPath: "a.jpg",
+			Ext: ".jpg", Width: w, Height: h,
 			CachedPath: filepath.Join(t.TempDir(), string(size)),
 		}); err != nil {
 			t.Fatalf("Generate %s: %v", size, err)
@@ -169,6 +167,55 @@ func TestGenerateStoresTheSameHashesAtEveryTier(t *testing.T) {
 			first = row
 		} else if row.Dhash != first.Dhash || row.ContentHash != first.ContentHash {
 			t.Errorf("%s: hashes %+v differ from the sm tier's %+v", size, row, first)
+		}
+	}
+}
+
+// memFS is a MemVFS holding files.
+func memFS(t *testing.T, files map[string][]byte) vfs.VFS {
+	t.Helper()
+	fsys := vfs.NewMemVFS(vfs.FilesNamespace(""))
+	for p, data := range files {
+		if err := fsys.Write(context.Background(), p, bytes.NewReader(data), vfs.WriteOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return fsys
+}
+
+// TestGenerateReadsThroughTheNamespace: Generate used to take a disk path, so
+// only a file the caller had resolved to the host could get a thumbnail. An
+// image now renders from any namespace, and a RAW or video with no host path
+// behind it is not found rather than read off the internal drive.
+func TestGenerateReadsThroughTheNamespace(t *testing.T) {
+	fsys := memFS(t, map[string][]byte{"a.jpg": sourceJPEG(t), "b.cr2": []byte("raw"), "c.mp4": []byte("video")})
+	database := dbtest.NewDB(t)
+	cached := filepath.Join(t.TempDir(), "entry")
+	if _, err := Generate(GenerateParams{
+		Ctx: context.Background(), Queries: database.Queries, FS: fsys, Serial: "USB-1", RelPath: "a.jpg",
+		Ext: ".jpg", Width: 16, Height: 16, CachedPath: cached,
+	}); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if f, err := os.Open(cached); err != nil {
+		t.Fatalf("no cache entry: %v", err)
+	} else {
+		f.Close()
+	}
+	if row := photoRow(t, database.Queries); row.DeviceSerial != "USB-1" || !row.Dhash.Valid || !row.ContentHash.Valid {
+		t.Errorf("row = %+v, want both hashes on USB-1", row)
+	}
+
+	for _, tc := range []struct {
+		relPath string
+		isVideo bool
+	}{{"b.cr2", false}, {"c.mp4", true}, {"gone.jpg", false}} {
+		_, err := Generate(GenerateParams{
+			Ctx: context.Background(), FS: fsys, RelPath: tc.relPath, IsVideo: tc.isVideo,
+			Width: 16, Height: 16, CachedPath: filepath.Join(t.TempDir(), "entry"),
+		})
+		if !errors.Is(err, vfs.ErrNotFound) {
+			t.Errorf("%s: err = %v, want vfs.ErrNotFound", tc.relPath, err)
 		}
 	}
 }

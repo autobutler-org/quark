@@ -61,34 +61,6 @@ func TestFilterPhotoFiles(t *testing.T) {
 	}
 }
 
-func TestFindAllPhotosRecursively(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	createTestImage(t, filepath.Join(tmpDir, "photo1.png"), 50, 50)
-	createTestImage(t, filepath.Join(tmpDir, "photo2.jpg"), 50, 50)
-
-	subDir := filepath.Join(tmpDir, "subdir")
-	os.Mkdir(subDir, 0755)
-	createTestImage(t, filepath.Join(subDir, "photo3.png"), 50, 50)
-
-	os.WriteFile(filepath.Join(tmpDir, "readme.txt"), []byte("text"), 0644)
-
-	// Photos in an old hidden trash, not yet moved out, are not part of the
-	// library.
-	trashDir := filepath.Join(tmpDir, ".trash")
-	os.Mkdir(trashDir, 0755)
-	createTestImage(t, filepath.Join(trashDir, "20240101T000000Z_abcd_gone.png"), 50, 50)
-
-	photos, err := FindAllPhotosRecursively(tmpDir)
-	if err != nil {
-		t.Fatalf("FindAllPhotosRecursively failed: %v", err)
-	}
-
-	if len(photos) != 3 {
-		t.Errorf("Expected 3 photos, got %d", len(photos))
-	}
-}
-
 func TestImageToThumbnail(t *testing.T) {
 	tmpDir := t.TempDir()
 	imagePath := filepath.Join(tmpDir, "test.png")
@@ -309,26 +281,6 @@ func TestFilterPhotoFiles_MixedFiles(t *testing.T) {
 
 	if len(photos) != 1 {
 		t.Errorf("Expected 1 photo file, got %d", len(photos))
-	}
-}
-
-func TestFindAllPhotosRecursively_EmptyDirectory(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	photos, err := FindAllPhotosRecursively(tmpDir)
-	if err != nil {
-		t.Fatalf("FindAllPhotosRecursively failed: %v", err)
-	}
-
-	if len(photos) != 0 {
-		t.Errorf("Expected 0 photos in empty directory, got %d", len(photos))
-	}
-}
-
-func TestFindAllPhotosRecursively_NonExistentDirectory(t *testing.T) {
-	_, err := FindAllPhotosRecursively("/nonexistent/path/that/does/not/exist")
-	if err == nil {
-		t.Error("Expected error for non-existent directory")
 	}
 }
 

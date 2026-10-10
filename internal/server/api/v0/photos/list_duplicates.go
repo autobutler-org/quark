@@ -36,7 +36,7 @@ func listDuplicates(c *gin.Context) *serverutil.Response {
 		Queries:   deps.Database().Queries,
 		Threshold: photoutil.ParseDuplicateThreshold(c.Query("threshold")),
 		Access:    access,
-		Exists:    deps.StorageService().FileExists(),
+		Exists:    photoutil.ExistsIn(c.Request.Context(), deps.VFSRegistry()),
 	})
 	if err != nil {
 		return serverutil.InternalServerError(err)

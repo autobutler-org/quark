@@ -112,10 +112,15 @@ func TestClientThumbnailOlderThanItsFileIsStale(t *testing.T) {
 }
 
 func TestStoreClientThumbnailRecordsHashesForPhotos(t *testing.T) {
-	source, _ := writeSource(t, "photo.heic")
+	sourcePath, _ := writeSource(t, "photo.heic")
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
 	database := dbtest.NewDB(t)
 	if err := store(t, StoreClientThumbnailParams{
-		Queries: database.Queries, RelPath: "/photo.heic", SourcePath: source,
+		Queries: database.Queries, RelPath: "/photo.heic", Source: source,
 		Reader: bytes.NewReader(clientJPEG(t, 300, 400)),
 	}); err != nil {
 		t.Fatal(err)

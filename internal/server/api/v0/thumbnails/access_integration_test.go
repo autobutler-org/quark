@@ -42,10 +42,9 @@ type thumbnailHarness struct {
 	principal *accessutil.Principal
 }
 
-// newThumbnailHarness builds the engine. withVFS registers the files namespace,
-// which sends plain images down the VFS branch; without it every request takes
-// the StorageService branch.
-func newThumbnailHarness(t *testing.T, withVFS bool) thumbnailHarness {
+// newThumbnailHarness builds the engine over the internal drive's namespace,
+// the storage service's, as the server registers it.
+func newThumbnailHarness(t *testing.T) thumbnailHarness {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	filesDir, err := storageutil.GetFilesDir()
@@ -60,14 +59,11 @@ func newThumbnailHarness(t *testing.T, withVFS bool) thumbnailHarness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	deps := deputil.NewDependencies().WithStorageService(svc).WithDatabase(database)
-	if withVFS {
-		registry := vfs.NewRegistry()
-		if err := registry.Register(vfs.Namespace{ID: "files"}, vfs.NewStorageServiceVFS(svc, "files")); err != nil {
-			t.Fatal(err)
-		}
-		deps = deps.WithVFSRegistry(registry)
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace(""))); err != nil {
+		t.Fatal(err)
 	}
+	deps := deputil.NewDependencies().WithStorageService(svc).WithDatabase(database).WithVFSRegistry(registry)
 	system := accessutil.System
 	principal := &system
 
@@ -118,57 +114,47 @@ func writeJPEG(t *testing.T, filesDir, rel string) {
 	}
 }
 
-// TestThumbnailAccess covers both serving branches: a non-admin gets a thumbnail
-// only for an image they can read, a thumbnail an admin already cached is not
-// served to someone who cannot read its source, and an unknown serial no longer
-// falls back to the internal drive for them.
+// TestThumbnailAccess: a non-admin gets a thumbnail only for an image they
+// can read, a thumbnail an admin already cached is not served to someone who
+// cannot read its source, and an unknown serial does not fall back to the
+// internal drive for them.
 func TestThumbnailAccess(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		withVFS bool
-	}{
-		{"vfs", true},
-		{"storage service", false},
+	h := newThumbnailHarness(t)
+	writeJPEG(t, h.filesDir, "shared/a.jpg")
+	writeJPEG(t, h.filesDir, "private/b.jpg")
+
+	// The admin warms the cache for both and writes no rows doing so.
+	for _, p := range []string{"/api/v0/thumbnails/shared/a.jpg", "/api/v0/thumbnails/private/b.jpg"} {
+		if code := h.get(p); code != http.StatusOK {
+			t.Fatalf("admin GET %s = %d, want 200", p, code)
+		}
+	}
+	var rows int
+	if err := h.database.Db.QueryRow(`SELECT COUNT(*) FROM path_access`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 0 {
+		t.Errorf("admin thumbnails wrote %d access rows, want 0", rows)
+	}
+
+	h.asUser()
+	if code := h.get("/api/v0/thumbnails/shared/a.jpg"); code != http.StatusNotFound {
+		t.Errorf("cached thumbnail with no rows = %d, want 404", code)
+	}
+	h.grantRead(t, "shared")
+	for path, want := range map[string]int{
+		"/api/v0/thumbnails/shared/a.jpg":             http.StatusOK,
+		"/api/v0/thumbnails/private/b.jpg":            http.StatusNotFound,
+		"/api/v0/thumbnails/shared/a.jpg?serial=nope": http.StatusNotFound,
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			h := newThumbnailHarness(t, tc.withVFS)
-			writeJPEG(t, h.filesDir, "shared/a.jpg")
-			writeJPEG(t, h.filesDir, "private/b.jpg")
+		if code := h.get(path); code != want {
+			t.Errorf("user GET %s = %d, want %d", path, code, want)
+		}
+	}
 
-			// The admin warms the cache for both and writes no rows doing so.
-			for _, p := range []string{"/api/v0/thumbnails/shared/a.jpg", "/api/v0/thumbnails/private/b.jpg"} {
-				if code := h.get(p); code != http.StatusOK {
-					t.Fatalf("admin GET %s = %d, want 200", p, code)
-				}
-			}
-			var rows int
-			if err := h.database.Db.QueryRow(`SELECT COUNT(*) FROM path_access`).Scan(&rows); err != nil {
-				t.Fatal(err)
-			}
-			if rows != 0 {
-				t.Errorf("admin thumbnails wrote %d access rows, want 0", rows)
-			}
-
-			h.asUser()
-			if code := h.get("/api/v0/thumbnails/shared/a.jpg"); code != http.StatusNotFound {
-				t.Errorf("cached thumbnail with no rows = %d, want 404", code)
-			}
-			h.grantRead(t, "shared")
-			for path, want := range map[string]int{
-				"/api/v0/thumbnails/shared/a.jpg":             http.StatusOK,
-				"/api/v0/thumbnails/private/b.jpg":            http.StatusNotFound,
-				"/api/v0/thumbnails/shared/a.jpg?serial=nope": http.StatusNotFound,
-			} {
-				if code := h.get(path); code != want {
-					t.Errorf("user GET %s = %d, want %d", path, code, want)
-				}
-			}
-
-			h.asAdmin()
-			if code := h.get("/api/v0/thumbnails/private/b.jpg"); code != http.StatusOK {
-				t.Errorf("admin GET private/b.jpg after the user = %d, want 200", code)
-			}
-		})
+	h.asAdmin()
+	if code := h.get("/api/v0/thumbnails/private/b.jpg"); code != http.StatusOK {
+		t.Errorf("admin GET private/b.jpg after the user = %d, want 200", code)
 	}
 }
 
@@ -176,7 +162,7 @@ func TestThumbnailAccess(t *testing.T) {
 // archive is checked against the archive: the check runs before the archive
 // branch, so a non-admin gets 404 until the archive is shared with them.
 func TestThumbnailAccess_ArchiveEntry(t *testing.T) {
-	h := newThumbnailHarness(t, false)
+	h := newThumbnailHarness(t)
 	writeZipWithPNG(t, h.filesDir)
 	const entry = "/api/v0/thumbnails/photos.zip/pics/red.png"
 
@@ -195,18 +181,16 @@ func TestThumbnailAccess_ArchiveEntry(t *testing.T) {
 
 // TestThumbnail_TrashedImage checks the Trash page's thumbnails, which ask for
 // the trashed item's TrashPath, still come from wherever the trash sits on
-// disk (#2173), down both serving branches.
+// disk (#2173), read through the namespace's trash path (#2645).
 func TestThumbnail_TrashedImage(t *testing.T) {
-	for _, withVFS := range []bool{true, false} {
-		h := newThumbnailHarness(t, withVFS)
-		writeJPEG(t, h.filesDir, "a.jpg")
-		result, err := storageutil.TrashFilesImpl(storageutil.TrashFilesParams{FilePaths: []string{"a.jpg"}}, h.filesDir)
-		if err != nil || len(result.Trashed) != 1 {
-			t.Fatalf("trashing a.jpg: %v, %+v", err, result)
-		}
-		p := "/api/v0/thumbnails/" + storageutil.TrashPath(result.Trashed[0].TrashName, "")
-		if code := h.get(p); code != http.StatusOK {
-			t.Errorf("withVFS=%v: GET %s = %d, want 200", withVFS, p, code)
-		}
+	h := newThumbnailHarness(t)
+	writeJPEG(t, h.filesDir, "a.jpg")
+	result, err := storageutil.TrashFilesImpl(storageutil.TrashFilesParams{FilePaths: []string{"a.jpg"}}, h.filesDir)
+	if err != nil || len(result.Trashed) != 1 {
+		t.Fatalf("trashing a.jpg: %v, %+v", err, result)
+	}
+	p := "/api/v0/thumbnails/" + storageutil.TrashPath(result.Trashed[0].TrashName, "")
+	if code := h.get(p); code != http.StatusOK {
+		t.Errorf("GET %s = %d, want 200", p, code)
 	}
 }

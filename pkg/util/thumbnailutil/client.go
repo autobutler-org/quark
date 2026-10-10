@@ -97,18 +97,9 @@ func StoreClientThumbnail(params StoreClientThumbnailParams) (StoreClientThumbna
 		if err != nil {
 			return StoreClientThumbnailResult{}, fmt.Errorf("%w: %w", ErrInvalidThumbnail, err)
 		}
-		source := params.Source
-		if source == nil && params.SourcePath != "" {
-			f, err := os.Open(params.SourcePath)
-			if err != nil {
-				return StoreClientThumbnailResult{}, fmt.Errorf("open photo to hash it: %w", err)
-			}
-			defer f.Close()
-			source = f
-		}
 		if _, err := photoutil.StorePhotoHashes(photoutil.StorePhotoHashesParams{
 			Ctx: context.Background(), Queries: params.Queries,
-			Serial: params.Serial, RelPath: params.RelPath, DHash: dhash, Source: source,
+			Serial: params.Serial, RelPath: params.RelPath, DHash: dhash, Source: params.Source,
 		}); err != nil {
 			return StoreClientThumbnailResult{}, err
 		}
@@ -182,13 +173,20 @@ func StoreClientThumbnails(params StoreClientThumbnailsParams) (StoreClientThumb
 	if fileType != storageutil.FileTypeImage && fileType != storageutil.FileTypeVideo {
 		return StoreClientThumbnailsResult{}, ErrNotMedia
 	}
-	resolved, err := params.Storage.ResolvePath(storageutil.ResolvePathParams{RelPath: params.RelPath, Serial: params.Serial})
+	ctx := context.Background()
+	fsys, err := photoutil.DeviceFS(params.Registry, params.Serial)
 	if err != nil {
 		return StoreClientThumbnailsResult{}, fmt.Errorf("%w: %w", ErrSourceNotFound, err)
 	}
-	if info, err := os.Stat(resolved.FullPath); err != nil || info.IsDir() {
+	if info, err := fsys.Stat(ctx, params.RelPath); err != nil || info.IsDir {
 		return StoreClientThumbnailsResult{}, ErrSourceNotFound
 	}
+	// The photo is read for its content hash.
+	source, err := fsys.Open(ctx, params.RelPath)
+	if err != nil {
+		return StoreClientThumbnailsResult{}, fmt.Errorf("open photo to hash it: %w", err)
+	}
+	defer source.Close()
 
 	for {
 		part, err := params.Reader.NextPart()
@@ -203,12 +201,12 @@ func StoreClientThumbnails(params StoreClientThumbnailsParams) (StoreClientThumb
 			continue
 		}
 		_, err = StoreClientThumbnail(StoreClientThumbnailParams{
-			Queries:    params.Queries,
-			Serial:     params.Serial,
-			RelPath:    params.RelPath,
-			SourcePath: resolved.FullPath,
-			Reader:     part,
-			IsVideo:    fileType == storageutil.FileTypeVideo,
+			Queries: params.Queries,
+			Serial:  params.Serial,
+			RelPath: params.RelPath,
+			Source:  source,
+			Reader:  part,
+			IsVideo: fileType == storageutil.FileTypeVideo,
 		})
 		part.Close()
 		return StoreClientThumbnailsResult{}, err

@@ -10,7 +10,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
@@ -54,41 +53,24 @@ func copyPhoto(c *gin.Context) *serverutil.Response {
 		return serverutil.Forbidden(errReadOnly)
 	}
 
-	// VFS path: no-serial copies go through VFS.Open + VFS.Write.
-	if req.Serial == "" {
-		if reg := deps.VFSRegistry(); reg != nil {
-			if fsys, ok := reg.Get("files"); ok {
-				newRelPath, err := photoutil.CopyPhotoVFS(c.Request.Context(), fsys, req.RelPath)
-				if err != nil {
-					if errors.Is(err, vfs.ErrNotFound) {
-						return serverutil.NotFound(fmt.Errorf("photo not found: %s", req.RelPath))
-					}
-					return serverutil.InternalServerError(err)
-				}
-				grantOwner(c, deps, access, req.Serial, newRelPath)
-				return serverutil.Ok().
-					WithContentType(serverutil.ContentTypeJSON).
-					WithData(copyPhotoResponse{RelPath: newRelPath})
-			}
-		}
-	}
-
-	// Fallback: StorageService.CopyFile for serial-scoped or non-VFS case.
-	result, err := deps.StorageService().CopyFile(storageutil.CopyFileParams{
-		RelPath:      req.RelPath,
-		DeviceSerial: req.Serial,
+	result, err := photoutil.CopyPhoto(photoutil.CopyPhotoParams{
+		Ctx:      c.Request.Context(),
+		Registry: deps.VFSRegistry(),
+		EventBus: deps.EventBus(),
+		Serial:   req.Serial,
+		RelPath:  req.RelPath,
 	})
+	if errors.Is(err, vfs.ErrNotFound) {
+		return serverutil.NotFound(fmt.Errorf("photo not found: %s", req.RelPath))
+	}
 	if err != nil {
-		if errors.Is(err, storageutil.ErrPathNotFound) {
-			return serverutil.NotFound(fmt.Errorf("photo not found: %s", req.RelPath))
-		}
 		return serverutil.InternalServerError(err)
 	}
-	grantOwner(c, deps, access, req.Serial, result.NewRelPath)
+	grantOwner(c, deps, access, req.Serial, result.RelPath)
 
 	return serverutil.Ok().
 		WithContentType(serverutil.ContentTypeJSON).
-		WithData(copyPhotoResponse{RelPath: result.NewRelPath})
+		WithData(copyPhotoResponse{RelPath: result.RelPath})
 }
 
 var copyPhotoRoute = serverutil.ApiRoute("POST", "/photos/copy", copyPhoto)

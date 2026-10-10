@@ -131,7 +131,7 @@ func TestBackfillHashes_DatesHashedPhotosWithoutRehashing(t *testing.T) {
 
 	params := photoutil.BackfillHashesParams{
 		Ctx: context.Background(), Queries: database.Queries,
-		Storage: storageutil.NewStorageService(usbDetector{mountPoint: mountPoint, serial: serial}),
+		Registry: deviceRegistry(t, storageutil.NewStorageService(usbDetector{mountPoint: mountPoint, serial: serial})),
 	}
 	res, err := photoutil.BackfillHashes(params)
 	if err != nil {

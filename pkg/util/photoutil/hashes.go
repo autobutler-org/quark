@@ -116,14 +116,35 @@ func DHashFile(filePath string) (string, error) {
 	return uprightDHash(img, orientation), nil
 }
 
+// DHashSource returns the perceptual hash of relPath on fsys, the same value
+// [GenerateThumbnail] reports for it. An image is decoded from source, which
+// is relPath already open; a camera RAW goes to its converter by host path,
+// the one thing the converter can take.
+func DHashSource(ctx context.Context, fsys vfs.VFS, relPath string, source io.ReadSeeker) (string, error) {
+	if IsRawFile(relPath) {
+		hostPath, err := HostPath(ctx, fsys, relPath)
+		if err != nil {
+			return "", err
+		}
+		return DHashFile(hostPath)
+	}
+	if _, err := source.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("rewind photo: %w", err)
+	}
+	img, _, err := DecodeImage(source)
+	if err != nil {
+		return "", err
+	}
+	return uprightDHash(img, sourceOrientation(source, ImageFormatFromPath(relPath))), nil
+}
+
 // BackfillHashesParams points the backfill at the photo library.
 type BackfillHashesParams struct {
 	Ctx     context.Context
 	Queries *db.Queries
-	// Registry and Storage enumerate the library the way [ListPhotos] does.
-	// Storage also resolves each photo to the file that is read.
+	// Registry enumerates the library the way [ListPhotos] does, and each
+	// photo is read through its device's namespace in it.
 	Registry vfs.Registry
-	Storage  *storageutil.StorageService
 	// IOSemaphore, when set, is held while each photo is read. Photos are
 	// read one at a time, so the pass takes at most one slot from requests.
 	IOSemaphore *iosemutil.Semaphore
@@ -160,7 +181,7 @@ func BackfillHashes(params BackfillHashesParams) (BackfillHashesResult, error) {
 		return BackfillHashesResult{}, err
 	}
 	library, err := ListPhotos(ListPhotosParams{
-		Ctx: params.Ctx, Registry: params.Registry, Storage: params.Storage,
+		Ctx: params.Ctx, Registry: params.Registry,
 		Access: system.Access, Limit: math.MaxInt,
 	})
 	if err != nil {
@@ -216,12 +237,16 @@ func backfillPhoto(params BackfillHashesParams, photo DuplicatePhoto, dhash stri
 		return err
 	}
 	defer release()
-	f, resolved, err := openBackfillPhoto(params, photo)
+	fsys, err := DeviceFS(params.Registry, photo.DeviceSerial)
+	if err != nil {
+		return err
+	}
+	f, err := fsys.Open(params.Ctx, photo.RelPath)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	if decoded, err := DHashFile(resolved.FullPath); err == nil {
+	if decoded, err := DHashSource(params.Ctx, fsys, photo.RelPath, f); err == nil {
 		dhash = decoded
 	}
 	_, err = StorePhotoHashes(StorePhotoHashesParams{
@@ -240,7 +265,11 @@ func backfillTakenAt(params BackfillHashesParams, photo DuplicatePhoto) error {
 		return err
 	}
 	defer release()
-	f, _, err := openBackfillPhoto(params, photo)
+	fsys, err := DeviceFS(params.Registry, photo.DeviceSerial)
+	if err != nil {
+		return err
+	}
+	f, err := fsys.Open(params.Ctx, photo.RelPath)
 	if err != nil {
 		return err
 	}
@@ -268,18 +297,6 @@ func acquireBackfillSlot(params BackfillHashesParams) (func(), error) {
 		}
 	}
 	return sem.Release, nil
-}
-
-// openBackfillPhoto opens the file a library photo is stored in.
-func openBackfillPhoto(params BackfillHashesParams, photo DuplicatePhoto) (*os.File, storageutil.ResolvePathResult, error) {
-	resolved, err := params.Storage.ResolvePath(storageutil.ResolvePathParams{
-		RelPath: photo.RelPath, Serial: photo.DeviceSerial,
-	})
-	if err != nil {
-		return nil, resolved, err
-	}
-	f, err := os.Open(resolved.FullPath)
-	return f, resolved, err
 }
 
 // decodeImageFile decodes an image file and reads the EXIF orientation that

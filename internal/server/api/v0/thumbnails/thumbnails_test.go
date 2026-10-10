@@ -13,6 +13,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -39,8 +40,12 @@ func TestGetThumbnail_PathEscapingFilesDir(t *testing.T) {
 		}
 	}
 
-	deps := deputil.NewDependencies().
-		WithStorageService(storageutil.NewStorageService(noDevices{}))
+	svc := storageutil.NewStorageService(noDevices{})
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace(""))); err != nil {
+		t.Fatal(err)
+	}
+	deps := deputil.NewDependencies().WithStorageService(svc).WithVFSRegistry(registry)
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(gin.Recovery())

@@ -57,6 +57,20 @@ type serialOnlyUsbDevice struct {
 
 func (u serialOnlyUsbDevice) GetSerial() string { return u.serial }
 
+// deviceRegistry is a registry holding a namespace for every device svc
+// manages, the way the server builds one.
+func deviceRegistry(t *testing.T, svc *storageutil.StorageService) vfs.Registry {
+	t.Helper()
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace(""))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: svc}); err != nil {
+		t.Fatal(err)
+	}
+	return registry
+}
+
 // TestListPhotos_VFSCarriesTheSerial checks a photo listed through the VFS
 // reports the drive it is on. Without the serial, thumbnails, metadata,
 // favorites, albums and video actions for a USB photo resolve against the

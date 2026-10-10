@@ -23,7 +23,6 @@ func backfillPhotoHashes(deps deputil.Dependencies) {
 		Ctx:         context.Background(),
 		Queries:     dbConn.Queries,
 		Registry:    deps.VFSRegistry(),
-		Storage:     deps.StorageService(),
 		IOSemaphore: deps.IOSemaphore().For(iosemutil.Decode),
 	})
 	if err != nil {
