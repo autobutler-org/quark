@@ -5144,18 +5144,18 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Extracts a zip file into a subdirectory named after the archive (without its extension) in the same directory. Needs read access on the archive and write access on its directory; the caller owns what is extracted.",
+                "description": "Extracts a zip, tar, tar.gz, tgz, rar or 7z archive into a new folder beside it named after the archive without its extension, numbered when that name is taken; a bare .gz decompresses to a new file beside it. Nothing appears under the new name until the extraction is complete. Needs read access on the archive and write access on its directory; the caller owns what is extracted.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "files"
                 ],
-                "summary": "Extract a zip archive in place",
+                "summary": "Extract an archive in place",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Path to the zip file to extract",
+                        "description": "Path to the archive to extract",
                         "name": "filePath",
                         "in": "query",
                         "required": true

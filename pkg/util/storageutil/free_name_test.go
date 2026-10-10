@@ -60,15 +60,3 @@ func TestCreateFree_NeverOpensATakenName(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "keep", string(data))
 }
-
-func TestMkdirFree_NumbersATakenName(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(dir, "foo"), 0o755))
-
-	got, err := mkdirFree(filepath.Join(dir, "foo"))
-	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(dir, "foo_(1)"), got)
-	info, err := os.Stat(got)
-	require.NoError(t, err)
-	assert.True(t, info.IsDir())
-}

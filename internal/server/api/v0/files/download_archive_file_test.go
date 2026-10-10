@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"golang.org/x/image/bmp"
 )
 
@@ -47,17 +46,13 @@ func writeZipWithBMP(t *testing.T, dir string) []byte {
 
 // TestDownloadArchiveFile_FormatJPEG covers #1851: a BMP inside a zip comes
 // back as a JPEG when the client asks for one, and as its original bytes when
-// it does not. Both the VFS read and the StorageService read are exercised.
+// it does not, on the internal drive and on a device alike (#2644).
 func TestDownloadArchiveFile_FormatJPEG(t *testing.T) {
-	engines := map[string]func(*testing.T) (*gin.Engine, string){
-		"vfs":     newVFSTestEngine,
-		"storage": newTestEngine,
-	}
-	for name, newEngine := range engines {
-		t.Run(name, func(t *testing.T) {
-			engine, dir := newEngine(t)
+	for _, target := range uploadTargets {
+		t.Run(target.name, func(t *testing.T) {
+			engine, dir := target.engine(t)
 			original := writeZipWithBMP(t, dir)
-			const base = "/api/v0/files/download-archive-file?filePath=photos.zip&entryPath=pics/red.bmp"
+			base := target.on("/api/v0/files/download-archive-file?filePath=photos.zip&entryPath=pics/red.bmp")
 
 			w := doRequest(engine, http.MethodGet, base+"&format=jpeg", nil, "")
 			if w.Code != http.StatusOK {
@@ -81,5 +76,28 @@ func TestDownloadArchiveFile_FormatJPEG(t *testing.T) {
 				t.Error("no format: body differs from the archived BMP")
 			}
 		})
+	}
+}
+
+// An entry inside an archive on a device is read from that device: the
+// internal drive's archive of the same name is not consulted, and a drive that
+// is not attached is a 404 rather than the internal drive (#2644).
+func TestDownloadArchiveFile_ReadsTheNamedDevice(t *testing.T) {
+	h := newDeviceUploadHarness(t)
+	writeArchive(t, h.usbDir, "bundle.tar.gz", tarGzWith(t, map[string]string{"docs/a.txt": "on the device"}))
+	writeArchive(t, h.internalDir, "bundle.tar.gz", tarGzWith(t, map[string]string{"docs/a.txt": "internal"}))
+
+	const url = "/api/v0/files/download-archive-file?filePath=bundle.tar.gz&entryPath=docs/a.txt"
+	w := doRequest(h.engine, http.MethodGet, url+"&serial="+testUsbSerial, nil, "")
+	if w.Code != http.StatusOK || w.Body.String() != "on the device" {
+		t.Errorf("device entry = %d %q, want 200 %q", w.Code, w.Body.String(), "on the device")
+	}
+	for _, missing := range []string{
+		url + "&serial=NOPE",
+		"/api/v0/files/download-archive-file?filePath=bundle.tar.gz&entryPath=docs/nope.txt&serial=" + testUsbSerial,
+	} {
+		if w := doRequest(h.engine, http.MethodGet, missing, nil, ""); w.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", missing, w.Code)
+		}
 	}
 }

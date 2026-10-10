@@ -468,31 +468,21 @@ func TestArchiveListingsCarryModifiedAt(t *testing.T) {
 	}
 
 	const serial = "USB-1565"
-	mountPoint := t.TempDir()
-	filesDir := filepath.Join(mountPoint, "quark", "data", "files")
-	if err := os.MkdirAll(filesDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(filesDir, "bundle.zip"), buf.Bytes(), 0644); err != nil {
-		t.Fatal(err)
-	}
 	ctx := context.Background()
-	mem := vfs.NewMemVFS(vfs.FilesNamespace(""))
-	if err := mem.Write(ctx, "bundle.zip", bytes.NewReader(buf.Bytes()), vfs.WriteOptions{}); err != nil {
-		t.Fatal(err)
-	}
 	registry := vfs.NewRegistry()
-	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, mem); err != nil {
-		t.Fatal(err)
+	for _, id := range []string{vfs.FilesNamespace(""), vfs.FilesNamespace(serial)} {
+		mem := vfs.NewMemVFS(id)
+		if err := mem.Write(ctx, "bundle.zip", bytes.NewReader(buf.Bytes()), vfs.WriteOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		if err := registry.Register(vfs.Namespace{ID: id}, mem); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	cases := map[string]ListArchiveParams{
-		"through the VFS": {Ctx: ctx, Registry: registry, FilePath: "bundle.zip"},
-		"on the device": {
-			Storage:  storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial}),
-			FilePath: "bundle.zip",
-			Serial:   serial,
-		},
+		"on the internal drive": {Ctx: ctx, Registry: registry, FilePath: "bundle.zip"},
+		"on the device":         {Ctx: ctx, Registry: registry, FilePath: "bundle.zip", Serial: serial},
 	}
 	for name, params := range cases {
 		listed, err := ListArchive(params)

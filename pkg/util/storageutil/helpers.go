@@ -107,12 +107,6 @@ func createFree(target string) (*os.File, error) {
 	return f, err
 }
 
-// mkdirFree is createFree for a directory: it makes target, or the first
-// numbered name beside it that is free, and returns the path it made.
-func mkdirFree(target string) (string, error) {
-	return takeFreeName(target, func(p string) error { return os.Mkdir(p, 0o755) })
-}
-
 // takeFreeName calls create with target and then each numbered name beside it
 // until one does not already exist, and returns the path create last tried.
 func takeFreeName(target string, create func(p string) error) (string, error) {
