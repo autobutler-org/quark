@@ -317,6 +317,15 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     _applyIncomingRoutePath(widget.initialPath);
     super
         .initState(); // AutoRefreshMixin.initState handles timer + initial load
+    // A cold launch may still be reading the last listing off disk; show it
+    // once it is in, unless the Quark has answered first (#1781).
+    unawaited(
+      FileBrowserCache.instance.hydrate().then((_) {
+        if (!mounted || _cachedFiles != null) return;
+        final kept = FileBrowserCache.instance.get(_currentPath);
+        if (kept != null) setState(() => _cachedFiles = kept);
+      }),
+    );
     _fileBrowserScrollController.addListener(_onScroll);
     AppSettings.instance.isAdmin.addListener(_onAdminFlagChanged);
     AppSettings.instance.activeHostNotifier.addListener(_onActiveHostChanged);

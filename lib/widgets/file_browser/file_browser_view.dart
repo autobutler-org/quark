@@ -1,5 +1,6 @@
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/file_node.dart';
+import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_browser_list_tile.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_grid_preview.dart';
@@ -89,6 +90,12 @@ class FileBrowserView extends StatefulWidget {
   final Set<FileListColumn> columns;
 
   final Future<List<FileNode>> filesFuture;
+
+  /// The listing the caller already holds for this folder — the last one
+  /// fetched, or one read off disk at a cold launch (#1781) — or null when it
+  /// holds none. Shown until [filesFuture] answers, whenever it arrives, and
+  /// kept on screen when [filesFuture] fails because the Quark could not be
+  /// reached. An error the Quark answered with still replaces it.
   final List<FileNode>? initialData;
 
   /// What the Files page offers on a file or folder.
@@ -148,10 +155,10 @@ class FileBrowserView extends StatefulWidget {
   /// for files (no move/rename/delete).
   final bool inArchive;
 
-  /// When true, show a spinner unconditionally — used during the initial page
-  /// load before any data has been fetched. Without this, the pre-resolved
-  /// empty default future would immediately show "No files yet" instead of
-  /// a spinner.
+  /// When true, show a spinner unless [initialData] has a listing to show —
+  /// used during the initial page load before any data has been fetched.
+  /// Without this, the pre-resolved empty default future would immediately
+  /// show "No files yet" instead of a spinner.
   final bool isInitialLoad;
   final Widget Function(BuildContext context, Object error)? errorBuilder;
   final WidgetBuilder? loadingBuilder;
@@ -253,16 +260,23 @@ class _FileBrowserViewState extends State<FileBrowserView> {
       future: widget.filesFuture,
       initialData: widget.initialData,
       builder: (context, snapshot) {
-        if (widget.isInitialLoad ||
-            (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData)) {
+        // Read here rather than left to the FutureBuilder, which takes its
+        // initialData once: a listing read off disk can arrive a frame late.
+        final kept = widget.initialData;
+        if (kept == null &&
+            (widget.isInitialLoad ||
+                (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData))) {
           if (widget.loadingBuilder != null) {
             return widget.loadingBuilder!(context);
           }
           return const Center(child: QuarkLoader());
         }
 
-        if (snapshot.hasError) {
+        // A Quark that never answered leaves what was last seen on screen;
+        // one that answered with an error has said the listing is wrong.
+        if (snapshot.hasError &&
+            (kept == null || !isQuarkUnreachableError(snapshot.error!))) {
           final error = snapshot.error!;
           if (widget.errorBuilder != null) {
             return widget.errorBuilder!(context, error);
@@ -275,7 +289,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
           );
         }
 
-        final raw = snapshot.data ?? const <FileNode>[];
+        final raw = snapshot.data ?? kept ?? const <FileNode>[];
         if (raw.isEmpty) {
           if (widget.emptyBuilder != null) {
             return widget.emptyBuilder!(context);

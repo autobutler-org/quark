@@ -40,6 +40,21 @@ class FileNode {
       name.toLowerCase().contains(query) ||
       dirPath.toLowerCase().contains(query);
 
+  /// The node under the keys [FileNode.fromJson] reads, for the listing
+  /// snapshot kept on disk (#1781).
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'size': size,
+    'compressedSize': compressedSize,
+    'isDir': isDir,
+    'deviceName': deviceName,
+    'devicePath': devicePath,
+    'deviceSerial': deviceSerial,
+    'dirPath': dirPath,
+    'fileType': fileType,
+    'modifiedAt': ?modifiedAt?.toIso8601String(),
+  };
+
   factory FileNode.fromJson(Map<String, dynamic> json) {
     int parseSize(Object? value) {
       if (value is int) {

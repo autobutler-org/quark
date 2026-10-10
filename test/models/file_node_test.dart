@@ -213,4 +213,56 @@ void main() {
       expect(doc.matchesSearch('data'), isFalse);
     });
   });
+
+  // The listing snapshot on disk is written with toJson and read back with
+  // fromJson (#1781).
+  group('FileNode.toJson', () {
+    test('round-trips every field through fromJson', () {
+      final node = FileNode(
+        name: 'clip.mp4',
+        size: 2048,
+        compressedSize: 512,
+        isDir: false,
+        deviceName: 'USB Drive',
+        devicePath: '/dev/sda1',
+        deviceSerial: 'ABC123',
+        dirPath: 'videos/clip.mp4',
+        fileType: 'video',
+        modifiedAt: DateTime.utc(2026, 3, 4, 5, 6, 7),
+      );
+
+      final json = node.toJson();
+      final back = FileNode.fromJson(json);
+
+      expect(back.toJson(), json);
+      expect(back.name, 'clip.mp4');
+      expect(back.size, 2048);
+      expect(back.compressedSize, 512);
+      expect(back.isDir, isFalse);
+      expect(back.deviceName, 'USB Drive');
+      expect(back.devicePath, '/dev/sda1');
+      expect(back.deviceSerial, 'ABC123');
+      expect(back.dirPath, 'videos/clip.mp4');
+      expect(back.fileType, 'video');
+      expect(back.modifiedAt, DateTime.utc(2026, 3, 4, 5, 6, 7));
+    });
+
+    test('leaves modifiedAt out when the Quark never gave one', () {
+      const node = FileNode(
+        name: 'photos',
+        size: 0,
+        isDir: true,
+        deviceName: 'Data',
+        devicePath: '/quark/data',
+        deviceSerial: '',
+        dirPath: 'photos',
+      );
+
+      final json = node.toJson();
+
+      expect(json.containsKey('modifiedAt'), isFalse);
+      expect(FileNode.fromJson(json).modifiedAt, isNull);
+      expect(FileNode.fromJson(json).isDir, isTrue);
+    });
+  });
 }
