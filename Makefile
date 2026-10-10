@@ -1106,7 +1106,7 @@ test/unit/backend: internal/server/public/stub.txt ## Run unit tests for backend
 #   FLUTTER_TEST_CONCURRENCY test files per suite run in parallel (default 2; set it
 #                            empty, FLUTTER_TEST_CONCURRENCY=, for the runner's own
 #                            default of one per core).
-# TOTAL_SHARDS and SHARD_INDEX (0-based) split the app suite only.
+# TOTAL_SHARDS and SHARD_INDEX (0-based) split the app suite only, by file.
 FRONTEND_SUITE_JOBS ?= 1
 FLUTTER_TEST_CONCURRENCY ?= 2
 TOTAL_SHARDS ?=
@@ -1124,9 +1124,16 @@ test/unit/frontend: generate/frontend ## Run unit tests for frontend (optional F
 .PHONY: test/unit/frontend/app
 test/unit/frontend/app: ## Run the app's unit tests (optional TOTAL_SHARDS=<n> SHARD_INDEX=<i>)
 	echo "Testing Quark frontend..."
+	# A shard is a slice of the test files. `flutter test --total-shards` slices the
+	# tests inside each file, so every shard still compiled and loaded all of them (#3075).
+	$(if $(TOTAL_SHARDS),shard_files="$$(./scripts/frontend-test-shard.bash "$(TOTAL_SHARDS)" "$(SHARD_INDEX)")")
 	flutter test \
 		$(if $(FLUTTER_TEST_CONCURRENCY),--concurrency=$(FLUTTER_TEST_CONCURRENCY)) \
-		$(if $(TOTAL_SHARDS),--total-shards=$(TOTAL_SHARDS) --shard-index=$(SHARD_INDEX))
+		$${shard_files:-}
+
+.PHONY: check/frontend/test-shards
+check/frontend/test-shards: ## Check CI's app test shards cover every test file exactly once
+	./scripts/frontend-test-shard.bash check
 
 .PHONY: test/unit/frontend/packages
 test/unit/frontend/packages: $(FRONTEND_PACKAGE_TESTS) ## Run unit tests for every package under packages/
@@ -1282,7 +1289,7 @@ check: check/backend check/frontend check/spelling ## Check code
 check/backend: generate/backend check/format/go check/lint/go check/lint/sqlc check/migrations ## Check backend code
 
 .PHONY: check/frontend
-check/frontend: check/format/flutter check/lint/flutter ## Check frontend code
+check/frontend: check/format/flutter check/lint/flutter check/frontend/test-shards ## Check frontend code
 
 .PHONY: check/spelling
 check/spelling: node_modules ## Check spelling in code and docs

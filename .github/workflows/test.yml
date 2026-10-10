@@ -158,6 +158,11 @@ jobs:
       - name: Generate
         run: |
           make generate/frontend
+      # A leg dropped from the matrix above would leave its slice of the suite unrun
+      # with every other leg green (#3075).
+      - name: Check the app shards cover the suite
+        run: |
+          make check/frontend/test-shards
       - name: Run unit tests
         run: |
           make ${{ matrix.suite }}
