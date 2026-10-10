@@ -172,8 +172,9 @@ class _StorageTabState extends State<StorageTab>
         ],
       ),
     );
-    usernameCtrl.dispose();
-    passwordCtrl.dispose();
+    // Not disposed here: the dialog is still animating out, and its fields
+    // would rebuild with a disposed controller (#3102). Neither controller
+    // has a listener or a resource, so the garbage collector takes them.
     return result;
   }
 
@@ -222,10 +223,7 @@ class _StorageTabState extends State<StorageTab>
         ],
       ),
     );
-    if (includeVault != true || !mounted) {
-      recoveryCtrl.dispose();
-      return;
-    }
+    if (includeVault != true || !mounted) return;
 
     try {
       final jobId = await StorageService.startSnapshotBackup(
@@ -236,12 +234,10 @@ class _StorageTabState extends State<StorageTab>
             ? recoveryCtrl.text
             : null,
       );
-      recoveryCtrl.dispose();
       if (!mounted) return;
       setState(() => _activeBackupJobId = jobId);
       _startPolling();
     } catch (e) {
-      recoveryCtrl.dispose();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(Errors.message(e, 'start the backup'))),
