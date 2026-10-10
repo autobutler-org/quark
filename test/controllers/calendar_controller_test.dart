@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/calendar_controller.dart';
@@ -245,6 +247,150 @@ void main() {
     await c.refresh();
     expect(c.eventById(14)?.title, 'Event 14');
     expect(c.eventById(1), isNull);
+  });
+
+  group('reschedule (#2526)', () {
+    late _Server server;
+    // One per save the controller has started; completing it lets the save
+    // through, and failing it fails the save.
+    late List<Completer<void>> gates;
+
+    CalendarController held() => CalendarController(
+      listEvents: server.list,
+      saveEvent: (draft, {id}) async {
+        final gate = Completer<void>();
+        gates.add(gate);
+        server.saved.add((draft, id));
+        await gate.future;
+        final saved = server.events
+            .firstWhere((e) => e.id == id)
+            .movedTo(draft.start, draft.end);
+        server.events = [for (final e in server.events) e.id == id ? saved : e];
+        return saved;
+      },
+      deleteEvent: server.delete,
+      canListPeople: () => false,
+      clock: () => _now,
+    );
+
+    CalendarEventItem shown(CalendarController calendar, int id) =>
+        calendar.occurrences.singleWhere((o) => o.eventId == id);
+
+    setUp(() {
+      server = _Server([vet, soccer]);
+      gates = [];
+    });
+
+    test("shows the move at once and saves it under the event's id", () async {
+      final calendar = held();
+      await calendar.refresh();
+      final start = DateTime(2026, 9, 30, 9);
+      final end = DateTime(2026, 9, 30, 9, 45);
+
+      final moving = calendar.reschedule(shown(calendar, 14), start, end);
+      expect(shown(calendar, 14).start, start);
+      expect(shown(calendar, 14).end, end);
+
+      await pumpEventQueue();
+      final (draft, id) = server.saved.single;
+      expect(id, 14);
+      expect(draft.start, start);
+      expect(draft.end, end);
+      expect(draft.title, 'Event 14');
+      expect(draft.reminderMinutes, 30);
+
+      gates.single.complete();
+      await moving;
+      expect(shown(calendar, 14).start, start);
+      expect(calendar.anchor, DateTime(2026, 9, 29));
+    });
+
+    test('moves a repeating event as a whole series', () async {
+      final calendar = held();
+      await calendar.refresh();
+      // This week's practice, the fifth of the series.
+      final practice = shown(calendar, 7);
+      expect(practice.start, DateTime(2026, 10, 1, 17, 30));
+
+      final moving = calendar.reschedule(
+        practice,
+        DateTime(2026, 10, 2, 18),
+        DateTime(2026, 10, 2, 19),
+      );
+      expect(shown(calendar, 7).start, DateTime(2026, 10, 2, 18));
+      await pumpEventQueue();
+      gates.single.complete();
+      await moving;
+
+      // The series' first date moved a day and half an hour too, and it is
+      // half an hour shorter.
+      final (draft, id) = server.saved.single;
+      expect(id, 7);
+      expect(draft.start, DateTime(2026, 9, 4, 18));
+      expect(draft.end, DateTime(2026, 9, 4, 19));
+      expect(draft.repeat, CalendarRepeat.weekly);
+      expect(shown(calendar, 7).end, DateTime(2026, 10, 2, 19));
+    });
+
+    test('a failed save rethrows and puts the event back', () async {
+      final calendar = held();
+      await calendar.refresh();
+      final failure = const ApiException(500, 'save calendar event');
+
+      final moving = calendar.reschedule(
+        shown(calendar, 14),
+        DateTime(2026, 9, 29, 10),
+        DateTime(2026, 9, 29, 10, 45),
+      );
+      expect(shown(calendar, 14).start, DateTime(2026, 9, 29, 10));
+      await pumpEventQueue();
+      gates.single.completeError(failure);
+
+      await expectLater(moving, throwsA(failure));
+      expect(shown(calendar, 14).start, DateTime(2026, 9, 29, 16));
+    });
+
+    test('two quick moves of one event compound and save in order', () async {
+      final calendar = held();
+      await calendar.refresh();
+      DateTime at(int minute) => DateTime(2026, 9, 29, 16, minute);
+
+      final first = calendar.reschedule(shown(calendar, 14), at(15), at(60));
+      // The second press sees the event where the first put it.
+      expect(shown(calendar, 14).start, at(15));
+      final second = calendar.reschedule(shown(calendar, 14), at(30), at(75));
+      expect(shown(calendar, 14).start, at(30));
+
+      // The second save waits for the first.
+      await pumpEventQueue();
+      expect([for (final (draft, _) in server.saved) draft.start], [at(15)]);
+      gates[0].complete();
+      await first;
+      expect(shown(calendar, 14).start, at(30));
+
+      await pumpEventQueue();
+      expect(
+        [for (final (draft, _) in server.saved) draft.start],
+        [at(15), at(30)],
+      );
+      gates[1].complete();
+      await second;
+      expect(shown(calendar, 14).start, at(30));
+      expect(shown(calendar, 14).end, at(75));
+    });
+
+    test('an event that is gone moves nothing', () async {
+      final calendar = held();
+      await calendar.refresh();
+      final gone = CalendarEventItem(
+        eventId: 404,
+        title: 'Gone',
+        start: _now,
+        end: _now.add(const Duration(hours: 1)),
+      );
+      await calendar.reschedule(gone, _now, _now);
+      expect(server.saved, isEmpty);
+    });
   });
 
   group('person filter (#2544)', () {

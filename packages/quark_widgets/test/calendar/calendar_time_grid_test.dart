@@ -1,10 +1,13 @@
 import 'dart:ui' show SemanticsAction;
 
-import 'package:flutter/gestures.dart' show PointerDeviceKind;
+import 'package:flutter/gestures.dart'
+    show PointerDeviceKind, kLongPressTimeout;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:quark_widgets/src/calendar/calendar_time_grid/time_grid_event_mover.dart';
 import 'package:quark_widgets/src/calendar/calendar_time_grid/time_grid_hour_gutter.dart';
 import 'package:quark_widgets/src/calendar/calendar_time_grid/time_grid_layout.dart';
 
@@ -55,6 +58,8 @@ Widget _grid({
   DateTime? now,
   ValueChanged<DateTime>? onSlotTap,
   ValueChanged<CalendarEventItem>? onEventTap,
+  void Function(CalendarEventItem item, DateTime start, DateTime end)?
+  onEventReschedule,
   ValueChanged<DateTime>? onDayTap,
   VoidCallback? onAddEvent,
   bool isLoading = false,
@@ -66,6 +71,7 @@ Widget _grid({
   events: events ?? [_call, _lunch, _vet, _garden],
   onSlotTap: onSlotTap,
   onEventTap: onEventTap,
+  onEventReschedule: onEventReschedule,
   onDayTap: onDayTap,
   onAddEvent: onAddEvent,
   isLoading: isLoading,
@@ -670,6 +676,289 @@ void main() {
       await tester.pump();
       expect(tapped, DateTime(2026, 9, 29, 13));
       expect(ghosts(), 0);
+    });
+  });
+
+  group('move and resize (#2526)', () {
+    final week = CalendarDates.weekOf(_today);
+    final vet = find.byKey(const ValueKey('calendar_event_3_2026-09-29'));
+    final preview = find.byKey(const ValueKey('calendar_drag_preview'));
+    DateTime at(int day, int hour, [int minute = 0]) =>
+        DateTime(2026, 9, day, hour, minute);
+
+    /// A grid of [days] holding [_vet] alone, whose moves land in the list
+    /// it returns.
+    Future<List<(CalendarEventItem, DateTime, DateTime)>> pumpVet(
+      WidgetTester tester,
+      List<DateTime> days,
+      Size size,
+    ) async {
+      final moves = <(CalendarEventItem, DateTime, DateTime)>[];
+      await pumpAt(
+        tester,
+        _grid(
+          days: days,
+          events: [_vet],
+          onEventTap: (_) {},
+          onEventReschedule: (item, start, end) =>
+              moves.add((item, start, end)),
+        ),
+        size: size,
+      );
+      return moves;
+    }
+
+    /// Presses [key] with Alt held, and Shift too with [shift].
+    Future<void> altArrow(
+      WidgetTester tester,
+      LogicalKeyboardKey key, {
+      bool shift = false,
+    }) async {
+      final held = [
+        LogicalKeyboardKey.altLeft,
+        if (shift) LogicalKeyboardKey.shiftLeft,
+      ];
+      for (final modifier in held) {
+        await tester.sendKeyDownEvent(modifier);
+      }
+      await tester.sendKeyEvent(key);
+      for (final modifier in held.reversed) {
+        await tester.sendKeyUpEvent(modifier);
+      }
+      await tester.pump();
+    }
+
+    group('TimeGridEventMover.shift', () {
+      test('moves the start and the end by the same minutes', () {
+        final moved = TimeGridEventMover.shift(_vet, week, minutes: -30);
+        expect(moved.start, at(29, 15, 30));
+        expect(moved.end, at(29, 16, 15));
+        expect(moved.title, 'Vet');
+      });
+
+      test('keeps the start on a date on show', () {
+        // Tuesday is the third of the week's seven dates.
+        expect(
+          TimeGridEventMover.shift(_vet, week, dayShift: 9).start,
+          DateTime(2026, 10, 3, 16),
+        );
+        expect(
+          TimeGridEventMover.shift(_vet, week, dayShift: -9).start,
+          at(27, 16),
+        );
+        expect(
+          TimeGridEventMover.shift(_vet, [_today], dayShift: 1).start,
+          at(29, 16),
+        );
+        // An event that started before the span stays on its date.
+        expect(
+          TimeGridEventMover.shift(_vet, [at(30, 0)], dayShift: 1).start,
+          at(29, 16),
+        );
+      });
+
+      test('keeps the start on its own date', () {
+        final up = TimeGridEventMover.shift(_vet, week, minutes: -24 * 60);
+        expect(up.start, at(29, 0));
+        expect(up.end, at(29, 0, 45));
+        final down = TimeGridEventMover.shift(_vet, week, minutes: 24 * 60);
+        expect(down.start, at(29, 23, 45));
+        expect(down.end, at(30, 0, 30));
+      });
+
+      test('a resize moves the end alone and never reaches the start', () {
+        final longer = TimeGridEventMover.shift(
+          _vet,
+          week,
+          minutes: 30,
+          resize: true,
+        );
+        expect(longer.start, at(29, 16));
+        expect(longer.end, at(29, 17, 15));
+        final shortest = TimeGridEventMover.shift(
+          _vet,
+          week,
+          minutes: -600,
+          resize: true,
+        );
+        expect(shortest.start, at(29, 16));
+        expect(shortest.end, at(29, 16, 15));
+        // Five minutes cannot lose a step.
+        expect(
+          TimeGridEventMover.shift(_blip, week, minutes: -15, resize: true),
+          _blip,
+        );
+      });
+    });
+
+    testBothViewports('a held event drags to a new time in 15-minute steps', (
+      tester,
+      size,
+    ) async {
+      final moves = await pumpVet(tester, [_today], size);
+      final hour = size == narrowViewport ? 64.0 : 56.0;
+      final gesture = await tester.startGesture(
+        tester.getTopLeft(vet) + const Offset(20, 8),
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      // Just over half an hour, which is two steps.
+      await gesture.moveBy(Offset(0, hour * 0.56));
+      await tester.pump();
+      expect(preview, findsOneWidget);
+      expect(moves, isEmpty);
+
+      await gesture.up();
+      await tester.pump();
+      expect(preview, findsNothing);
+      expect(moves, [(_vet, at(29, 16, 30), at(29, 17, 15))]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets("a hold on an event's bottom edge drags its end alone", (
+      tester,
+    ) async {
+      final moves = await pumpVet(tester, [_today], narrowViewport);
+      final gesture = await tester.startGesture(
+        tester.getBottomLeft(vet) + const Offset(20, -6),
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      await gesture.moveBy(const Offset(0, 32));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      expect(moves, [(_vet, at(29, 16), at(29, 17, 15))]);
+    });
+
+    testWidgets('a swipe over an event scrolls and moves nothing', (
+      tester,
+    ) async {
+      final moves = await pumpVet(tester, [_today], narrowViewport);
+      final before = tester.getTopLeft(vet).dy;
+      await tester.drag(vet, const Offset(0, -80));
+      await tester.pump();
+      expect(tester.getTopLeft(vet).dy, lessThan(before));
+      expect(moves, isEmpty);
+    });
+
+    testWidgets('a held event let go where it was moves nothing', (
+      tester,
+    ) async {
+      final moves = await pumpVet(tester, [_today], narrowViewport);
+      final gesture = await tester.startGesture(tester.getCenter(vet));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      await gesture.moveBy(const Offset(0, 4));
+      await gesture.up();
+      await tester.pump();
+      expect(moves, isEmpty);
+      expect(preview, findsNothing);
+    });
+
+    testWidgets('a mouse drags an event to another day and time at once', (
+      tester,
+    ) async {
+      final moves = await pumpVet(tester, week, wideViewport);
+      final column = tester.getSize(
+        find.byKey(const ValueKey('calendar_slot_2026-09-29_16')),
+      );
+      final gesture = await tester.startGesture(
+        tester.getTopLeft(vet) + const Offset(20, 8),
+        kind: PointerDeviceKind.mouse,
+      );
+      // In two moves, as a hand makes many: the move that starts a drag
+      // reports only the way that won it.
+      await gesture.moveBy(Offset(column.width / 2, 14));
+      await gesture.moveBy(Offset(column.width / 2, 14));
+      await tester.pump();
+      expect(
+        tester.getTopLeft(preview).dx,
+        greaterThan(tester.getTopRight(vet).dx),
+      );
+      await gesture.up();
+      await tester.pump();
+      expect(moves, [(_vet, at(30, 16, 30), at(30, 17, 15))]);
+    }, variant: TargetPlatformVariant.desktop());
+
+    testWidgets("a mouse drags an event's bottom edge to resize it", (
+      tester,
+    ) async {
+      final moves = await pumpVet(tester, week, wideViewport);
+      final gesture = await tester.startGesture(
+        tester.getBottomLeft(vet) + const Offset(20, -3),
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.moveBy(const Offset(0, -28));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      expect(moves, [(_vet, at(29, 16), at(29, 16, 15))]);
+    }, variant: TargetPlatformVariant.desktop());
+
+    testBothViewports('Alt and an arrow move the focused event, and with '
+        'Shift its end', (tester, size) async {
+      final moves = await pumpVet(tester, [_today], size);
+      Focus.of(tester.element(find.text('Vet'))).requestFocus();
+      await tester.pump();
+
+      await altArrow(tester, LogicalKeyboardKey.arrowDown);
+      await altArrow(tester, LogicalKeyboardKey.arrowUp);
+      await altArrow(tester, LogicalKeyboardKey.arrowDown, shift: true);
+      await altArrow(tester, LogicalKeyboardKey.arrowUp, shift: true);
+      // A Day has no other date to move to.
+      await altArrow(tester, LogicalKeyboardKey.arrowRight);
+      expect(moves, [
+        (_vet, at(29, 16, 15), at(29, 17)),
+        (_vet, at(29, 15, 45), at(29, 16, 30)),
+        (_vet, at(29, 16), at(29, 17)),
+        (_vet, at(29, 16), at(29, 16, 30)),
+      ]);
+    });
+
+    testWidgets('the focus follows an event the keys move to another day', (
+      tester,
+    ) async {
+      var events = [_vet];
+      await pumpAt(
+        tester,
+        StatefulBuilder(
+          builder: (context, setState) => _grid(
+            days: week,
+            events: events,
+            onEventTap: (_) {},
+            onEventReschedule: (item, start, end) =>
+                setState(() => events = [item.rescheduled(start, end)]),
+          ),
+        ),
+        size: wideViewport,
+      );
+      Focus.of(tester.element(find.text('Vet'))).requestFocus();
+      await tester.pump();
+
+      await altArrow(tester, LogicalKeyboardKey.arrowRight);
+      await altArrow(tester, LogicalKeyboardKey.arrowRight);
+      await altArrow(tester, LogicalKeyboardKey.arrowLeft);
+      await altArrow(tester, LogicalKeyboardKey.arrowDown);
+      expect(events.single.start, at(30, 16, 15));
+      expect(
+        find.byKey(const ValueKey('calendar_event_3_2026-09-30')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('without a handler an event stays where it is', (tester) async {
+      await pumpAt(
+        tester,
+        _grid(days: [_today], events: [_vet], onEventTap: (_) {}),
+        size: narrowViewport,
+      );
+      expect(find.byType(TimeGridEventMover), findsNothing);
+      final gesture = await tester.startGesture(tester.getCenter(vet));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      await gesture.moveBy(const Offset(0, 64));
+      await tester.pump();
+      expect(preview, findsNothing);
+      await gesture.up();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
     });
   });
 }

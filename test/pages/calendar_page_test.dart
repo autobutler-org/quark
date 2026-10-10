@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,7 @@ import 'package:quark/pages/calendar_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The Calendar page (#1148, #2519): its views at their own URLs, Week by
@@ -21,6 +23,9 @@ void main() {
   final requests = <http.Request>[];
   final today = CalendarDates.dateOnly(DateTime.now());
   final todayKey = CalendarDates.key(today);
+
+  /// What the Quark answers a save over an existing event with.
+  var updateStatus = 200;
 
   /// Today at [hour], in UTC as the Quark sends it.
   String todayAt(int hour) => DateTime(
@@ -61,6 +66,7 @@ void main() {
 
   setUp(() async {
     requests.clear();
+    updateStatus = 200;
     resetSharedHttpClient();
     sharedHttpClientFactory = () => MockClient((request) async {
       requests.add(request);
@@ -72,6 +78,12 @@ void main() {
             {'id': 3, 'username': 'newbie', 'status': 'pending'},
           ]),
           200,
+        );
+      }
+      if (request.url.path == '/api/v0/calendar/events/1') {
+        return http.Response(
+          jsonEncode(event(1, 'Plumber visit', 9)),
+          updateStatus,
         );
       }
       if (request.url.path == '/api/v0/calendar/events') {
@@ -336,6 +348,104 @@ void main() {
       expect(find.byKey(const ValueKey('event_delete')), findsOneWidget);
     });
   }
+
+  group('dragging an event (#2526)', () {
+    final plumber = find.byKey(ValueKey('calendar_event_1_$todayKey'));
+    // Toward the middle of the week, so the day beside today is on show
+    // whatever day the test runs.
+    final way = CalendarDates.isSameDay(today, CalendarDates.weekOf(today).last)
+        ? -1
+        : 1;
+
+    /// Drags the plumber's visit one day [way] with a mouse.
+    Future<void> dragADay(WidgetTester tester) async {
+      final column = tester.getSize(
+        find.byKey(ValueKey('calendar_slot_${todayKey}_9')),
+      );
+      final mouse = await tester.startGesture(
+        tester.getTopLeft(plumber) + const Offset(20, 8),
+        kind: PointerDeviceKind.mouse,
+      );
+      for (var i = 0; i < 4; i++) {
+        await mouse.moveBy(Offset(way * column.width / 4, 0));
+        await tester.pump();
+      }
+      await mouse.up();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('sideways in Week saves it a day on, and the week stays', (
+      tester,
+    ) async {
+      final r = await pumpCalendar(
+        tester,
+        AppRoutes.calendarView(CalendarView.week),
+        const Size(1280, 800),
+      );
+      await dragADay(tester);
+
+      final save = requests.singleWhere((r) => r.method == 'PUT');
+      final body = jsonDecode(save.body) as Map<String, dynamic>;
+      DateTime beside(int hour) =>
+          DateTime(today.year, today.month, today.day + way, hour);
+      expect(body['start'], beside(9).toUtc().toIso8601String());
+      expect(body['end'], beside(10).toUtc().toIso8601String());
+      expect(body['title'], 'Plumber visit');
+      // The swipe that steps a week did not take the drag.
+      expect(at(r), '/calendar/week');
+      expect(tester.takeException(), isNull);
+    }, variant: TargetPlatformVariant.desktop());
+
+    testWidgets('a move the Quark refuses says so and goes back', (
+      tester,
+    ) async {
+      updateStatus = 500;
+      await pumpCalendar(
+        tester,
+        AppRoutes.calendarView(CalendarView.week),
+        const Size(1280, 800),
+      );
+      await dragADay(tester);
+
+      expect(
+        find.text(
+          Errors.message(const ApiException(500, ''), 'move the event'),
+        ),
+        findsOneWidget,
+      );
+      expect(plumber, findsOneWidget);
+    }, variant: TargetPlatformVariant.desktop());
+
+    testWidgets('narrow: a held event drags to a later time', (tester) async {
+      await pumpCalendar(
+        tester,
+        AppRoutes.calendarView(CalendarView.day, date: today),
+        const Size(360, 640),
+      );
+      final finger = await tester.startGesture(
+        tester.getTopLeft(plumber) + const Offset(20, 8),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await finger.moveBy(const Offset(0, 32));
+      await tester.pump();
+      await finger.up();
+      await tester.pumpAndSettle();
+
+      final save = requests.singleWhere((r) => r.method == 'PUT');
+      final body = jsonDecode(save.body) as Map<String, dynamic>;
+      expect(
+        body['start'],
+        DateTime(
+          today.year,
+          today.month,
+          today.day,
+          9,
+          30,
+        ).toUtc().toIso8601String(),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
 
   testWidgets('wide: switching views keeps the date', (tester) async {
     final r = await pumpCalendar(

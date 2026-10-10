@@ -22,6 +22,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// [onAddEvent], but not while [isLoading], when an empty span only means the
 /// new one has not arrived yet (#2538).
 ///
+/// With [onEventReschedule], Day and Week let an event be dragged, or moved
+/// with Alt and the arrows, to a new time or length (#2526).
+///
 /// Key prefixes: `calendar_retry` on the first load's retry button,
 /// `calendar_error_retry` on a later failed load's, `calendar_upcoming_retry`
 /// on Upcoming's, and the keys of the package widget on show.
@@ -46,6 +49,7 @@ class CalendarBody extends StatelessWidget {
     required this.onCreateAt,
     required this.onEventTap,
     required this.onAddEvent,
+    this.onEventReschedule,
     this.dueReminder,
     this.onDismissReminder,
     this.error,
@@ -100,6 +104,11 @@ class CalendarBody extends StatelessWidget {
   /// Creates an event from an empty Month, Day or Upcoming.
   final VoidCallback onAddEvent;
 
+  /// Moves an occurrence to a new start and end: a drag or a key press on
+  /// Day or Week. Null leaves events where they are.
+  final void Function(CalendarEventItem item, DateTime start, DateTime end)?
+  onEventReschedule;
+
   /// Hides [dueReminder].
   final ValueChanged<CalendarEventItem>? onDismissReminder;
 
@@ -148,6 +157,7 @@ class CalendarBody extends StatelessWidget {
         isLoading: isLoading,
         onSlotTap: onCreateAt,
         onEventTap: onEventTap,
+        onEventReschedule: onEventReschedule,
         onDayTap: onDayTap,
         onAddEvent: onAddEvent,
       ),

@@ -8,6 +8,7 @@ import '../calendar_dates.dart';
 import '../calendar_event_chip.dart';
 import '../calendar_labels.dart';
 import 'time_grid_event_block.dart';
+import 'time_grid_event_mover.dart';
 import 'time_grid_layout.dart';
 import 'time_grid_slot.dart';
 
@@ -22,9 +23,15 @@ import 'time_grid_slot.dart';
 /// over the whole group calls [onCrowdTap], for the caller to open the day,
 /// where the lanes are wide enough (#2939).
 ///
+/// With [onEventReschedule] each block can be dragged or moved from the
+/// keyboard: see `TimeGridEventMover`. A crowded group's blocks cannot,
+/// because the Day view is where each has room. The column draws [preview],
+/// a drag in flight anywhere on the grid, where it falls on [day].
+///
 /// Key prefixes: its slots' `calendar_slot_` keys, its blocks'
-/// `calendar_event_` keys, and `calendar_crowd_<yyyy-mm-dd>_<minute>` on a
-/// crowded group's target, by the minute of the day it starts.
+/// `calendar_event_` keys, `calendar_crowd_<yyyy-mm-dd>_<minute>` on a
+/// crowded group's target, by the minute of the day it starts, and
+/// `calendar_drag_preview` on [preview].
 class TimeGridColumn extends StatelessWidget {
   /// Creates the column for [day].
   const TimeGridColumn({
@@ -35,9 +42,14 @@ class TimeGridColumn extends StatelessWidget {
     this.snug = false,
     this.now,
     this.leftEdge = false,
+    this.days = const [],
+    this.preview,
+    this.focusKey,
     this.onSlotTap,
     this.onEventTap,
     this.onCrowdTap,
+    this.onPreview,
+    this.onEventReschedule,
     super.key,
   });
 
@@ -63,6 +75,17 @@ class TimeGridColumn extends StatelessWidget {
   /// Whether to draw a hairline down the left edge, between two days.
   final bool leftEdge;
 
+  /// Every date the grid shows, in order: as far as a move can carry an event.
+  final List<DateTime> days;
+
+  /// An event as a drag in flight would leave it, drawn over the column where
+  /// it falls on [day]. Null draws none.
+  final CalendarEventItem? preview;
+
+  /// The `CalendarEventItem.key` of the block that takes the focus when it
+  /// first shows: the one a key press just moved here from another column.
+  final String? focusKey;
+
   /// Called with the hour whose empty slot was tapped.
   final ValueChanged<DateTime>? onSlotTap;
 
@@ -73,18 +96,32 @@ class TimeGridColumn extends StatelessWidget {
   /// Null leaves each block its own tap, however narrow.
   final VoidCallback? onCrowdTap;
 
+  /// Called with an event as the drag in flight on it would leave it, and
+  /// with null when that drag ends.
+  final ValueChanged<CalendarEventItem?>? onPreview;
+
+  /// Called with an event and the copy of it a drag or a key press moved.
+  /// `fromKeyboard` says which. Null leaves the blocks where they are.
+  final void Function(
+    CalendarEventItem item,
+    CalendarEventItem moved, {
+    required bool fromKeyboard,
+  })?
+  onEventReschedule;
+
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final touch = wantsTouchTargets(context);
     final minuteHeight = hourHeight / 60;
-    final placements = layoutDay(
-      day,
-      events,
-      minimumMinutes: touch
-          ? ((kMinInteractiveDimension + blockGap) / minuteHeight).ceil()
-          : minimumBlockMinutes,
-    );
+    final minimumMinutes = touch
+        ? ((kMinInteractiveDimension + blockGap) / minuteHeight).ceil()
+        : minimumBlockMinutes;
+    final placements = layoutDay(day, events, minimumMinutes: minimumMinutes);
+    final preview = this.preview;
+    final onEventReschedule = this.onEventReschedule;
+    double blockHeight(TimeGridPlacement p) =>
+        (p.endMinute - p.startMinute) * minuteHeight - blockGap;
     final current = now;
     final showNow = current != null && CalendarDates.isSameDay(current, day);
     final onCrowdTap = touch ? this.onCrowdTap : null;
@@ -120,6 +157,18 @@ class TimeGridColumn extends StatelessWidget {
               }
             }
           }
+          final blocks = [
+            for (final placement in placements)
+              TimeGridEventBlock(
+                item: placement.item,
+                height: blockHeight(placement),
+                narrow: narrow,
+                autofocus: placement.item.key == focusKey,
+                onTap: onEventTap == null || crowds.containsKey(placement.group)
+                    ? null
+                    : () => onEventTap!(placement.item),
+              ),
+          ];
           return Stack(
             children: [
               Column(
@@ -137,30 +186,56 @@ class TimeGridColumn extends StatelessWidget {
                     ),
                 ],
               ),
-              for (final placement in placements)
+              for (final (index, placement) in placements.indexed)
                 Positioned(
+                  // Keyed, so a block keeps its focus when a move from the
+                  // keyboard changes the order of the day.
+                  key: ValueKey(placement.item.key),
                   top: placement.startMinute * minuteHeight + 1,
-                  height:
-                      (placement.endMinute - placement.startMinute) *
-                          minuteHeight -
-                      blockGap,
+                  height: blockHeight(placement),
                   left: left + width * placement.lane / placement.lanes,
                   width:
                       width / placement.lanes - (placement.lanes > 1 ? 2 : 0),
-                  child: TimeGridEventBlock(
-                    item: placement.item,
-                    height:
-                        (placement.endMinute - placement.startMinute) *
-                            minuteHeight -
-                        blockGap,
-                    narrow: narrow,
-                    onTap:
-                        onEventTap == null ||
-                            crowds.containsKey(placement.group)
-                        ? null
-                        : () => onEventTap!(placement.item),
-                  ),
+                  child:
+                      onEventReschedule == null ||
+                          crowds.containsKey(placement.group)
+                      ? blocks[index]
+                      : TimeGridEventMover(
+                          item: placement.item,
+                          days: days,
+                          height: blockHeight(placement),
+                          hourHeight: hourHeight,
+                          columnWidth: constraints.maxWidth,
+                          onPreview: (preview) => onPreview?.call(preview),
+                          onReschedule: (moved, {required fromKeyboard}) =>
+                              onEventReschedule(
+                                placement.item,
+                                moved,
+                                fromKeyboard: fromKeyboard,
+                              ),
+                          child: blocks[index],
+                        ),
                 ),
+              if (preview != null)
+                for (final placement in layoutDay(day, [
+                  preview,
+                ], minimumMinutes: minimumMinutes))
+                  Positioned(
+                    top: placement.startMinute * minuteHeight + 1,
+                    height: blockHeight(placement),
+                    left: left,
+                    width: width,
+                    child: IgnorePointer(
+                      child: ExcludeSemantics(
+                        child: TimeGridEventBlock(
+                          item: placement.item,
+                          height: blockHeight(placement),
+                          narrow: narrow,
+                          preview: true,
+                        ),
+                      ),
+                    ),
+                  ),
               for (final (start, end, count) in crowds.values)
                 Positioned(
                   top: start * minuteHeight + 1,

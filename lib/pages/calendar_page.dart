@@ -134,6 +134,23 @@ class _CalendarPageState extends State<CalendarPage>
     );
   }
 
+  /// Moves [item] to [start] and [end], a drag or a key press on the
+  /// timeline, and says so when the Quark would not save it.
+  Future<void> _reschedule(
+    CalendarEventItem item,
+    DateTime start,
+    DateTime end,
+  ) async {
+    try {
+      await _calendar.reschedule(item, start, end);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(Errors.message(e, 'move the event'))),
+      );
+    }
+  }
+
   Future<void> _create(CalendarEventDraft draft) =>
       showCalendarEventEditor(context, calendar: _calendar, draft: draft);
 
@@ -203,6 +220,7 @@ class _CalendarPageState extends State<CalendarPage>
                       _create(CalendarEventDraft.allDayOn(day)),
                   onCreateAt: (start) => _create(CalendarEventDraft.at(start)),
                   onEventTap: _edit,
+                  onEventReschedule: _reschedule,
                   onAddEvent: () => _create(_newDraft()),
                   onDismissReminder: _calendar.dismissReminder,
                 ),

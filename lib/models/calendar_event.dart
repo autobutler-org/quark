@@ -98,6 +98,26 @@ class CalendarEvent {
     null => null,
   };
 
+  /// This timed event with its first occurrence moved to run from [start] to
+  /// [end] on the local clock, everything else kept: what the calendar shows
+  /// while a drag's save is on its way.
+  CalendarEvent movedTo(DateTime start, DateTime end) => CalendarEvent(
+    id: id,
+    title: title,
+    notes: notes,
+    location: location,
+    start: start.toUtc(),
+    end: end.toUtc(),
+    allDay: allDay,
+    timeZone: timeZone,
+    repeat: repeat,
+    repeatUntil: repeatUntil,
+    reminderMinutes: reminderMinutes,
+    colorIndex: colorIndex,
+    owner: owner,
+    mine: mine,
+  );
+
   /// The event as the editor opens it.
   CalendarEventDraft toDraft() => CalendarEventDraft(
     title: title,

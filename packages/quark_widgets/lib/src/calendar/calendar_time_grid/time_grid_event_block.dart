@@ -13,13 +13,19 @@ import '../calendar_labels.dart';
 /// (a week column on a phone) has room for its title alone. The accessible
 /// label always carries the title, the times, and the location.
 ///
-/// Key prefixes: `calendar_event_<item.key>` on the block.
+/// A [preview] block is the one a drag in flight draws where the event would
+/// land: lifted off the timeline, and keyed apart from the event itself.
+///
+/// Key prefixes: `calendar_event_<item.key>` on the block, or
+/// `calendar_drag_preview` on a [preview].
 class TimeGridEventBlock extends StatelessWidget {
   /// Creates the block for [item], [height] pixels tall.
   const TimeGridEventBlock({
     required this.item,
     required this.height,
     this.narrow = false,
+    this.autofocus = false,
+    this.preview = false,
     this.onTap,
     super.key,
   });
@@ -32,6 +38,14 @@ class TimeGridEventBlock extends StatelessWidget {
 
   /// Whether the block is too narrow for anything but its title.
   final bool narrow;
+
+  /// Whether the block takes the focus when it first shows, if nothing else
+  /// has it: how a block moved from the keyboard keeps the focus when the
+  /// move lands it in another column.
+  final bool autofocus;
+
+  /// Whether this is a drag's preview rather than the event itself.
+  final bool preview;
 
   /// Called when the block is tapped.
   final VoidCallback? onTap;
@@ -82,8 +96,12 @@ class TimeGridEventBlock extends StatelessWidget {
           side: BorderSide(color: color.withValues(alpha: 0.5)),
         ),
         clipBehavior: Clip.antiAlias,
+        elevation: preview ? 4 : 0,
         child: InkWell(
-          key: ValueKey('calendar_event_${item.key}'),
+          key: ValueKey(
+            preview ? 'calendar_drag_preview' : 'calendar_event_${item.key}',
+          ),
+          autofocus: autofocus,
           onTap: onTap,
           child: Padding(
             padding: EdgeInsets.symmetric(

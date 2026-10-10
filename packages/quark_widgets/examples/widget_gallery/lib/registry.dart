@@ -2597,6 +2597,8 @@ final List<GalleryEntry> registry = [
               events: galleryEvents,
               onSlotTap: (start) => log('onSlotTap $start'),
               onEventTap: (item) => log('onEventTap ${item.key}'),
+              onEventReschedule: (item, start, end) =>
+                  log('onEventReschedule ${item.key} $start $end'),
               onDayTap: (day) => log('onDayTap ${CalendarDates.key(day)}'),
             ),
           ),
