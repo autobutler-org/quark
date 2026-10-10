@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -170,4 +171,29 @@ func TestGenerateStoresTheSameHashesAtEveryTier(t *testing.T) {
 			t.Errorf("%s: hashes %+v differ from the sm tier's %+v", size, row, first)
 		}
 	}
+}
+
+// An archive entry cannot seek, so it is held in memory — but only up to the
+// cap. A larger one is refused, not truncated into a half-decoded image.
+func TestBufferSourceRefusesASourceOverTheCap(t *testing.T) {
+	rs, err := BufferSource(bytes.NewReader(sourceJPEG(t)))
+	if err != nil {
+		t.Fatalf("BufferSource: %v", err)
+	}
+	if _, err := rs.Seek(0, 0); err != nil {
+		t.Fatalf("buffered source must seek: %v", err)
+	}
+
+	over := io.LimitReader(zeroReader{}, MaxBufferedSourceBytes+1)
+	if _, err := BufferSource(over); !errors.Is(err, ErrUnsupportedSource) {
+		t.Fatalf("BufferSource over the cap: got %v, want ErrUnsupportedSource", err)
+	}
+}
+
+// zeroReader is an endless source of zero bytes.
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) {
+	clear(p)
+	return len(p), nil
 }

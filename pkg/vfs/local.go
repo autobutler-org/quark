@@ -159,7 +159,7 @@ func (v *LocalVFS) List(ctx context.Context, path string, filter *ListFilter) ([
 		return nil
 	}
 
-	if err := collect(absPath, ""); err != nil && !errors.Is(err, errListBudgetSpent) {
+	if err := collect(absPath, cleanPath(path)); err != nil && !errors.Is(err, errListBudgetSpent) {
 		return nil, err
 	}
 
@@ -174,28 +174,18 @@ func (v *LocalVFS) Stat(ctx context.Context, path string) (FileInfo, error) {
 	}
 	fi, err := os.Stat(absPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return FileInfo{}, ErrNotFound
-		}
-		return FileInfo{}, err
+		return FileInfo{}, hostErr(err)
 	}
-	return v.infoFromStat(path, absPath, fi)
+	return v.infoFromStat(cleanPath(path), absPath, fi)
 }
 
 // Open opens the file at the given path for reading.
-func (v *LocalVFS) Open(ctx context.Context, path string) (io.ReadCloser, error) {
+func (v *LocalVFS) Open(ctx context.Context, path string) (File, error) {
 	absPath, err := v.abs(path)
 	if err != nil {
 		return nil, err
 	}
-	f, err := os.Open(absPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, ErrNotFound
-		}
-		return nil, err
-	}
-	return f, nil
+	return hostOpen(absPath)
 }
 
 // Write writes the content of r to the given path.
@@ -205,15 +195,7 @@ func (v *LocalVFS) Write(ctx context.Context, path string, r io.Reader, opts Wri
 	if err != nil {
 		return err
 	}
-
-	// Honor IfNoneMatch: "*" — fail if file already exists
-	if opts.IfNoneMatch == "*" {
-		if _, err := os.Stat(absPath); err == nil {
-			return ErrConflict
-		}
-	}
-
-	return storageutil.WriteFileAtomic(absPath, r)
+	return hostWrite(absPath, r, opts)
 }
 
 // MoveFileIn places the host file at srcAbs at path, renaming it rather than
@@ -228,43 +210,17 @@ func (v *LocalVFS) MoveFileIn(ctx context.Context, srcAbs string, path string, o
 	})
 }
 
-// Delete removes the file or directory at the given path.
+// Delete removes the file or directory at the given path. The root is
+// [ErrPermissionDenied].
 func (v *LocalVFS) Delete(ctx context.Context, path string, opts DeleteOptions) error {
+	if cleanPath(path) == "" {
+		return ErrPermissionDenied
+	}
 	absPath, err := v.abs(path)
 	if err != nil {
 		return err
 	}
-
-	fi, err := os.Stat(absPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return ErrNotFound
-		}
-		return err
-	}
-
-	if fi.IsDir() {
-		if opts.Recursive {
-			return os.RemoveAll(absPath)
-		}
-		// Check if directory is empty
-		entries, err := os.ReadDir(absPath)
-		if err != nil {
-			return err
-		}
-		if len(entries) > 0 {
-			return ErrNotEmpty
-		}
-		return os.Remove(absPath)
-	}
-
-	if err := os.Remove(absPath); err != nil {
-		if os.IsNotExist(err) {
-			return ErrNotFound
-		}
-		return err
-	}
-	return nil
+	return hostDelete(absPath, opts)
 }
 
 // MkdirAll creates the directory at the given path, including all parents.
@@ -294,6 +250,16 @@ func (v *LocalVFS) Move(_ context.Context, src, dst string) error {
 		return err
 	}
 	return os.Rename(srcAbs, dstAbs)
+}
+
+// Copy copies the file at src to dst through Write. See [VFS.Copy].
+func (v *LocalVFS) Copy(ctx context.Context, src, dst string, opts CopyOptions) error {
+	return copyFile(ctx, v, src, v, dst, opts)
+}
+
+// HostPath returns the host path of path under the root. See [HostPather].
+func (v *LocalVFS) HostPath(_ context.Context, path string) (string, error) {
+	return v.abs(path)
 }
 
 // Watch is not supported by LocalVFS and always returns ErrWatchNotSupported.

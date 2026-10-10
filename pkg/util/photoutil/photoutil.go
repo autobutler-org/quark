@@ -5,7 +5,6 @@
 package photoutil
 
 import (
-	"bytes"
 	"fmt"
 	"image"
 	// Registers the GIF decoder with image.Decode.
@@ -163,22 +162,16 @@ func ApplyRotation(img image.Image, quarters int64) image.Image {
 	return applyExifOrientation(img, [4]int{1, 6, 3, 8}[((quarters%4)+4)%4])
 }
 
-// GenerateThumbnailFromReader creates a thumbnail from an io.Reader.
+// GenerateThumbnailFromReader creates a thumbnail from a seekable source: EXIF
+// is read back after the decode has consumed it. A vfs.File seeks, so a
+// library photo is never buffered; holding the whole image to get a seek put
+// a multi-hundred-megabyte TIFF on the heap per request (#1723).
 // ext is the lowercase file extension (e.g. ".jpg") used for format detection.
 // RAW and video files are not supported — callers must use GenerateThumbnail for those.
-func GenerateThumbnailFromReader(r io.Reader, ext string, width, height uint) (*GenerateThumbnailResult, error) {
+func GenerateThumbnailFromReader(rs io.ReadSeeker, ext string, width, height uint) (*GenerateThumbnailResult, error) {
 	fileType := storageutil.DetermineFileTypeFromPath("file" + ext)
 	if fileType != storageutil.FileTypeImage {
 		return nil, fmt.Errorf("GenerateThumbnailFromReader: unsupported file type for extension %q", ext)
-	}
-
-	// EXIF is read after the decode has consumed the stream, so this needs to
-	// seek back. It used to buffer the whole image to get that, which put a
-	// multi-hundred-megabyte TIFF or RAW on the heap once per concurrent
-	// request (#1723).
-	rs, err := AsReadSeeker(r)
-	if err != nil {
-		return nil, fmt.Errorf("GenerateThumbnailFromReader: read: %w", err)
 	}
 
 	img, format, err := DecodeImage(rs)
@@ -230,23 +223,4 @@ func GenerateThumbnail(params GenerateThumbnailParams) (*GenerateThumbnailResult
 		Format:    format,
 		DHash:     uprightDHash(img, orientation),
 	}, nil
-}
-
-// AsReadSeeker returns r as an io.ReadSeeker for the decoders that have to
-// re-read a stream (image decode, then EXIF off the same bytes).
-//
-// A source that already seeks is used in place — vfs.VFS.Open hands back an
-// *os.File for both the local and storage-service namespaces, so in production
-// this is the branch taken and nothing is buffered. Only a stream-only source
-// falls back to holding the whole thing in memory, which is what every caller
-// used to do unconditionally (#1723).
-func AsReadSeeker(r io.Reader) (io.ReadSeeker, error) {
-	if rs, ok := r.(io.ReadSeeker); ok {
-		return rs, nil
-	}
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-	return bytes.NewReader(data), nil
 }

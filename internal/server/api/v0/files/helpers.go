@@ -3,7 +3,6 @@ package v0_files
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"log/slog"
 	"mime"
@@ -242,16 +241,9 @@ func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, ac
 	c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))
 	c.Header("Content-Type", opened.ContentType)
 
-	// If the underlying VFS returns an io.ReadSeeker (e.g. *os.File from LocalVFS
-	// or StorageServiceVFS), use http.ServeContent so the response honours HTTP
-	// range requests (RFC 7233) — required for video seeking and resumable
-	// downloads. Falls back to sequential streaming via DataFromReader otherwise.
-	if rs, ok := r.(io.ReadSeeker); ok {
-		http.ServeContent(c.Writer, c.Request, opened.Info.Name, opened.Info.ModTime, rs)
-		return nil
-	}
-
-	c.DataFromReader(http.StatusOK, opened.Info.Size, opened.ContentType, r, nil)
+	// A vfs.File seeks, so http.ServeContent honors HTTP range requests
+	// (RFC 7233) — required for video seeking and resumable downloads.
+	http.ServeContent(c.Writer, c.Request, opened.Info.Name, opened.Info.ModTime, r)
 	return nil
 }
 

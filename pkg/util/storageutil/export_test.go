@@ -2,6 +2,7 @@ package storageutil
 
 import (
 	"os"
+	"syscall"
 	"testing"
 )
 
@@ -22,4 +23,13 @@ func FailAtomicSyncForTesting(t *testing.T, err error) {
 	saved := syncFile
 	t.Cleanup(func() { syncFile = saved })
 	syncFile = func(*os.File) error { return err }
+}
+
+// NoHardLinksForTesting makes every hard link fail with EPERM for one test,
+// the way exFAT refuses one. The test must not run in parallel.
+func NoHardLinksForTesting(t *testing.T) {
+	t.Helper()
+	saved := linkFile
+	t.Cleanup(func() { linkFile = saved })
+	linkFile = func(string, string) error { return &os.LinkError{Op: "link", Err: syscall.EPERM} }
 }

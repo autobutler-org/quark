@@ -28,11 +28,11 @@ func TestDBVFS_MkdirAllAndList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List /: %v", err)
 	}
-	if len(entries) != 1 || entries[0].Path != "/albums/" {
-		t.Fatalf("expected [/albums/], got %v", entries)
+	if len(entries) != 1 || entries[0].Path != "albums" {
+		t.Fatalf("expected [albums], got %v", entries)
 	}
 	if !entries[0].IsDir {
-		t.Fatalf("expected /albums/ to be a dir")
+		t.Fatalf("expected albums to be a dir")
 	}
 
 	// List /albums/ — should see /albums/summer-2024/.
@@ -40,8 +40,8 @@ func TestDBVFS_MkdirAllAndList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List /albums/: %v", err)
 	}
-	if len(entries) != 1 || entries[0].Path != "/albums/summer-2024/" {
-		t.Fatalf("expected [/albums/summer-2024/], got %v", entries)
+	if len(entries) != 1 || entries[0].Path != "albums/summer-2024" {
+		t.Fatalf("expected [albums/summer-2024], got %v", entries)
 	}
 }
 
@@ -125,8 +125,8 @@ func TestDBVFS_OpenDirectory(t *testing.T) {
 	}
 
 	_, err := v.Open(ctx, "/albums/")
-	if err != vfs.ErrNotFound {
-		t.Fatalf("expected ErrNotFound opening dir, got %v", err)
+	if err != vfs.ErrIsDirectory {
+		t.Fatalf("expected ErrIsDirectory opening dir, got %v", err)
 	}
 }
 
@@ -204,7 +204,7 @@ func TestDBVFS_DeleteRecursive(t *testing.T) {
 		t.Fatalf("List: %v", err)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Path, "/albums/") || e.Path == "/albums/" {
+		if strings.HasPrefix(e.Path, "albums/") || e.Path == "albums" {
 			t.Fatalf("entry %q should have been deleted", e.Path)
 		}
 	}

@@ -1,11 +1,14 @@
 package vfs
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
@@ -68,4 +71,94 @@ func moveFileIn(srcAbs string, dstAbs string, opts WriteOptions, write func(io.R
 	}
 	_ = os.Remove(srcAbs)
 	return nil
+}
+
+// copyFile is the body of every [VFS.Copy] and of [CopyBetween]: it streams
+// the source into dst's Write, the atomic write path, so a reader of dst sees
+// either nothing or the whole copy.
+func copyFile(ctx context.Context, src VFS, srcPath string, dst VFS, dstPath string, opts CopyOptions) error {
+	info, err := src.Stat(ctx, srcPath)
+	if err != nil {
+		return err
+	}
+	if info.IsDir {
+		return ErrIsDirectory
+	}
+	f, err := src.Open(ctx, srcPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	return dst.Write(ctx, dstPath, f, WriteOptions{ContentType: info.MimeType, IfNoneMatch: opts.IfNoneMatch})
+}
+
+// hostErr maps an error from the host filesystem onto the VFS contract, which
+// every host-backed namespace shares (#2640): only a path that does not exist
+// is [ErrNotFound], and a permission failure is [ErrPermissionDenied] rather
+// than reading as a missing file. Anything else passes through.
+func hostErr(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, fs.ErrNotExist), errors.Is(err, syscall.ENOTDIR):
+		return ErrNotFound
+	case errors.Is(err, fs.ErrPermission):
+		return fmt.Errorf("%w: %w", ErrPermissionDenied, err)
+	}
+	return err
+}
+
+// hostOpen opens the host file at absPath for [VFS.Open]. A directory is
+// [ErrIsDirectory].
+func hostOpen(absPath string) (File, error) {
+	f, err := os.Open(absPath)
+	if err != nil {
+		return nil, hostErr(err)
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, hostErr(err)
+	}
+	if fi.IsDir() {
+		_ = f.Close()
+		return nil, ErrIsDirectory
+	}
+	return f, nil
+}
+
+// hostWrite streams r to the host file at absPath for [VFS.Write]. With
+// IfNoneMatch "*" a taken name is [ErrConflict]. A name already taken is
+// refused before r is read, so a caller can retry another name with the same
+// reader; the refusal that counts happens in the same step that commits the
+// file, so two writers racing for one name cannot both win.
+func hostWrite(absPath string, r io.Reader, opts WriteOptions) error {
+	if opts.IfNoneMatch != "*" {
+		return hostErr(storageutil.WriteFileAtomic(absPath, r))
+	}
+	if _, err := os.Lstat(absPath); err == nil {
+		return ErrConflict
+	}
+	err := storageutil.WriteFileAtomicExclusive(absPath, r)
+	if errors.Is(err, fs.ErrExist) {
+		return ErrConflict
+	}
+	return hostErr(err)
+}
+
+// hostDelete removes the host file or directory at absPath for [VFS.Delete].
+// A directory with entries is [ErrNotEmpty] unless opts.Recursive is set.
+func hostDelete(absPath string, opts DeleteOptions) error {
+	fi, err := os.Lstat(absPath)
+	if err != nil {
+		return hostErr(err)
+	}
+	if fi.IsDir() && opts.Recursive {
+		return hostErr(os.RemoveAll(absPath))
+	}
+	err = os.Remove(absPath)
+	if errors.Is(err, syscall.ENOTEMPTY) || errors.Is(err, syscall.EEXIST) {
+		return ErrNotEmpty
+	}
+	return hostErr(err)
 }

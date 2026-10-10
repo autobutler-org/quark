@@ -2,6 +2,7 @@ package vfs_test
 
 import (
 	"context"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -37,9 +38,8 @@ type conformanceTarget struct {
 	// root is the path to pass to List for the top of the fixture tree.
 	root string
 	// canonical maps a returned FileInfo.Path to a slash-separated path
-	// relative to root, so implementations with different path conventions
-	// (DBVFS uses leading slashes and trailing slashes on directories) can be
-	// compared against one shared set of expectations.
+	// relative to root. Every implementation already returns that form,
+	// which TestVFSConformance_PathForm holds them to.
 	canonical func(string) string
 
 	supportsMimePrefix bool
@@ -114,11 +114,11 @@ func newLocalTarget(t *testing.T) conformanceTarget {
 
 func newDBTarget(t *testing.T) conformanceTarget {
 	v := vfs.NewDBVFS(newTestDB(t), "db")
-	seedWrites(t, v, "/")
+	seedWrites(t, v, "")
 	return conformanceTarget{
 		name:      "DBVFS",
 		fs:        v,
-		root:      "/",
+		root:      "",
 		canonical: trimSlashes,
 		// DBVFS reads only Recursive and MaxResults off ListFilter today.
 		supportsMimePrefix: false,
@@ -316,6 +316,86 @@ func TestVFSConformance_AfterPathSkipsEarlierEntries(t *testing.T) {
 				if e.Path <= cursor {
 					t.Errorf("AfterPath=%q returned %q, which is not after the cursor", cursor, e.Path)
 				}
+			}
+		})
+	}
+}
+
+// Open hands back a vfs.File in every implementation: it seeks and reads at an
+// offset, so no caller has to type-assert the reader or buffer a stream to get
+// random access (#2640).
+func TestVFSConformance_OpenSeeksAndReadsAt(t *testing.T) {
+	for _, target := range conformanceTargets(t) {
+		t.Run(target.name, func(t *testing.T) {
+			f, err := target.fs.Open(context.Background(), target.root+"sub/deep.txt")
+			if err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			defer f.Close()
+
+			const content = "content of sub/deep.txt"
+			size, err := f.Seek(0, io.SeekEnd)
+			if err != nil {
+				t.Fatalf("Seek end: %v", err)
+			}
+			if size != int64(len(content)) {
+				t.Errorf("size from Seek: got %d, want %d", size, len(content))
+			}
+
+			at := make([]byte, 3)
+			if _, err := f.ReadAt(at, 11); err != nil {
+				t.Fatalf("ReadAt: %v", err)
+			}
+			if string(at) != "sub" {
+				t.Errorf("ReadAt(11): got %q, want %q", at, "sub")
+			}
+
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
+				t.Fatalf("Seek start: %v", err)
+			}
+			all, err := io.ReadAll(f)
+			if err != nil {
+				t.Fatalf("ReadAll: %v", err)
+			}
+			if string(all) != content {
+				t.Errorf("read after seek: got %q, want %q", all, content)
+			}
+		})
+	}
+}
+
+// Every implementation speaks one path form (#2640): relative, slash-separated,
+// with no leading or trailing slash — accessutil.Canonical's form. An input
+// with a leading slash names the same file.
+func TestVFSConformance_PathForm(t *testing.T) {
+	for _, target := range conformanceTargets(t) {
+		t.Run(target.name, func(t *testing.T) {
+			ctx := context.Background()
+			entries, err := target.fs.List(ctx, "", &vfs.ListFilter{Recursive: true})
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			want := map[string]bool{"top.txt": true, "top.png": true, "sub": true, "sub/deep.txt": true, "sub/nested": true, "sub/nested/deeper.txt": true}
+			for _, e := range entries {
+				if !want[e.Path] {
+					t.Errorf("List returned path %q, not in the canonical form", e.Path)
+				}
+			}
+			for _, in := range []string{"sub/deep.txt", "/sub/deep.txt"} {
+				info, err := target.fs.Stat(ctx, in)
+				if err != nil {
+					t.Fatalf("Stat %q: %v", in, err)
+				}
+				if info.Path != "sub/deep.txt" {
+					t.Errorf("Stat(%q).Path = %q, want %q", in, info.Path, "sub/deep.txt")
+				}
+			}
+			info, err := target.fs.Stat(ctx, "sub/")
+			if err != nil {
+				t.Fatalf("Stat dir with trailing slash: %v", err)
+			}
+			if info.Path != "sub" || !info.IsDir {
+				t.Errorf("Stat(%q) = {Path: %q, IsDir: %v}, want {sub, true}", "sub/", info.Path, info.IsDir)
 			}
 		})
 	}

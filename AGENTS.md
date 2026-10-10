@@ -185,8 +185,8 @@ and unbounded. A 4 GiB archive must cost megabytes of heap, not gigabytes.
   writing.
 - Need random access (zip readers, image decoding, HTTP range requests)? Take
   the `io.ReaderAt` / `io.ReadSeeker` the source already offers and size it from
-  `Stat`. Do not buffer a stream to make it seekable. `vfs.VFS.Open` returns an
-  `*os.File` for the local and storage-service namespaces, so both satisfy this.
+  `Stat`. Do not buffer a stream to make it seekable. `vfs.VFS.Open` returns a
+  `vfs.File`, which seeks and reads at an offset in every namespace.
 - Ownership travels with the reader: if a returned reader streams out of a file,
   the returned `Close` has to close that file.
 - Bound what genuinely cannot be streamed. Wrap it in `io.LimitReader` and

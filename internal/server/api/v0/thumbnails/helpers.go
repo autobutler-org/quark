@@ -3,7 +3,6 @@ package v0_thumbnails
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -82,13 +81,20 @@ func getArchiveThumbnail(
 		}
 		defer entry.Reader.Close()
 
-		// The declared size turns away an honest oversized entry; the
-		// LimitReader truncates a lying header, which then fails to decode.
+		// The declared size turns away an honest oversized entry; BufferSource
+		// refuses one whose header lied.
 		if entry.Size > thumbnailutil.MaxBufferedSourceBytes {
 			return serverutil.NotFound(fmt.Errorf("archive entry too large for a thumbnail: %s", filePath))
 		}
+		source, bufErr := thumbnailutil.BufferSource(entry.Reader)
+		if errors.Is(bufErr, thumbnailutil.ErrUnsupportedSource) {
+			return serverutil.NotFound(bufErr)
+		}
+		if bufErr != nil {
+			return serverutil.InternalServerError(bufErr)
+		}
 		generated, genErr := thumbnailutil.GenerateFromReader(thumbnailutil.GenerateFromReaderParams{
-			Reader:           io.LimitReader(entry.Reader, thumbnailutil.MaxBufferedSourceBytes),
+			Reader:           source,
 			Ext:              ext,
 			Width:            prepared.Width,
 			Height:           prepared.Height,

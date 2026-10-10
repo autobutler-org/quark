@@ -121,12 +121,17 @@ classDiagram
         <<interface>>
         List(ctx, path, filter) []FileInfo
         Stat(ctx, path) FileInfo
-        Open(ctx, path) io.ReadCloser
+        Open(ctx, path) File
         Write(ctx, path, io.Reader, opts)
         Delete(ctx, path, opts)
         MkdirAll(ctx, path)
         Move(ctx, src, dst)
+        Copy(ctx, src, dst, opts)
         Watch(ctx, path) chan WatchEvent
+    }
+    class HostPather {
+        <<interface>>
+        HostPath(ctx, path) string
     }
     class FileMover {
         <<interface>>
@@ -144,14 +149,27 @@ classDiagram
     VFS <|.. MemVFS : tests
     VFS <|.. DBVFS : vfs_db_entries
     VFS <|.. StorageServiceVFS : managed devices
+    HostPather <|.. LocalVFS
+    HostPather <|.. StorageServiceVFS
     FileMover <|.. LocalVFS
     FileMover <|.. StorageServiceVFS
     Registry o-- VFS
     MetadataStore <|.. SQLiteMetadataStore : vfs_metadata
 ```
 
-`Open` returns an `*os.File` for disk-backed namespaces, so callers needing random access (range requests, zip
-listing, image decoding) type-assert to `io.ReaderAt` / `io.ReadSeeker` instead of buffering.
+Every implementation keeps one contract, which `pkg/vfs/conformance_test.go` holds them to:
+
+- `Open` returns a `vfs.File` — a reader that also seeks and reads at an offset — so range requests, zip listing
+  and image decoding take it directly. The disk-backed namespaces hand back an `*os.File`.
+- Paths are relative and slash-separated, with no leading or trailing slash: `accessutil.Canonical`'s form.
+- `Stat` and `Open` return `ErrNotFound` only for a path that does not exist; a permission failure is
+  `ErrPermissionDenied`, and `Open` on a directory is `ErrIsDirectory`.
+- `Write` with `IfNoneMatch: "*"` refuses a taken name with `ErrConflict`, atomically, so two racing writers
+  cannot both win. `Copy` within a namespace and `vfs.CopyBetween` across two stream through that same write
+  path, so a copy is never visible half-written.
+- `Delete` of a non-empty directory without `Recursive` is `ErrNotEmpty`.
+- `HostPather` gives a host-backed namespace's path to an external process (dcraw, exiftool, ffmpeg) or to
+  symlink resolution. It is never a way around `Open`.
 
 ## The vault
 
