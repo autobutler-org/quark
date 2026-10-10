@@ -17,15 +17,20 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/local_trust_overrides_stub.dart'
     if (dart.library.io) 'package:quark/services/local_trust_overrides_io.dart';
+import 'package:quark/utils/app_log.dart';
 import 'package:quark/utils/first_frame_gate.dart';
 import 'package:quark/widgets/jobs/job_finish_announcer.dart';
 import 'package:quark/widgets/layout/app_bar_trailing_host.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/probe_bootstrap.dart';
 
+/// Runs the app with every uncaught error recorded in the app log on this device's own disk (#1822).
+void main() => AppLog.instance.guard(_run);
+
 /// Loads the saved settings, trusts the local Quark's self-signed certificate, starts the jobs watcher, and runs
 /// the app, holding its first frame until the router has a page to show.
-Future<void> main() async {
+Future<void> _run() async {
+  AppLog.instance.info('App started');
   usePathUrlStrategy();
   final binding = WidgetsFlutterBinding.ensureInitialized();
   // Flutter web builds the semantics tree only after someone finds its hidden
