@@ -9,6 +9,10 @@
 // occurrences. A series repeats forever unless it has a RepeatUntil date
 // (#2524), and ListEvents leaves out a series that ended before the range.
 //
+// With no app open, ExpandEvent turns a series into occurrences in the
+// event's own time zone, and ListReminders finds the reminders that fall due
+// in a span of time (#2525): what a push worker asks.
+//
 // An event belongs to the account that created it (#2544), which lets the
 // calendar be narrowed to one person. It is not privacy: every account still
 // sees and edits every event.
@@ -72,8 +76,8 @@ type EventInput struct {
 	End      time.Time
 	AllDay   bool
 	// TimeZone is the IANA zone the event was made in, when the client knows
-	// it, and empty when it does not; any other name is rejected. It is
-	// recorded for server-side reminders later (#2525) and not used yet.
+	// it, and empty when it does not; any other name is rejected. ExpandEvent
+	// steps a series' occurrences in it.
 	TimeZone string
 	// Repeat is RepeatNone when empty.
 	Repeat Repeat
@@ -188,41 +192,11 @@ type ListEventsResult struct {
 // a series the app expands in local time is not missed either; the app
 // narrows it again.
 func ListEvents(ctx context.Context, params ListEventsParams) (ListEventsResult, error) {
-	if !params.To.After(params.From) {
-		return ListEventsResult{}, invalid("the range must end after it starts")
-	}
-	if params.To.Sub(params.From) > MaxListRange {
-		return ListEventsResult{}, invalid("the range can span at most 400 days")
-	}
-	calendar, err := params.Queries.GetDefaultCalendar(ctx)
-	if err != nil {
+	if err := checkRange(params.From, params.To); err != nil {
 		return ListEventsResult{}, err
 	}
-	from, to := params.From.Add(-24*time.Hour), params.To.Add(24*time.Hour)
-	rows, err := params.Queries.ListCalendarEventsInRange(ctx, db.ListCalendarEventsInRangeParams{
-		CalendarID: calendar.ID,
-		RangeStart: formatTime(from),
-		RangeEnd:   formatTime(to),
-		// Only a series that occursIn would refuse is left out here: an
-		// occurrence may start a day or two past its end date and last up to
-		// a month.
-		EndedBefore: formatTime(from.Add(-untilSlack - longestOccurrence)),
-	})
-	if err != nil {
-		return ListEventsResult{}, err
-	}
-	events := make([]Event, 0, len(rows))
-	for _, row := range rows {
-		event, err := fromRow(row.CalendarEvent, row.OwnerName)
-		if err != nil {
-			return ListEventsResult{}, err
-		}
-		if !occursIn(event, from, to) {
-			continue
-		}
-		events = append(events, event)
-	}
-	return ListEventsResult{Events: events}, nil
+	events, err := listEvents(ctx, params.Queries, params.From, params.To)
+	return ListEventsResult{Events: events}, err
 }
 
 // UpdateEventParams replaces an event's fields. For a repeating event that is

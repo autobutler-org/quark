@@ -1,6 +1,7 @@
 package calendarutil
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -105,6 +106,50 @@ func validate(input EventInput) (EventInput, error) {
 		}
 	}
 	return input, nil
+}
+
+// checkRange holds [from, to) to the rules every listing shares.
+func checkRange(from, to time.Time) error {
+	if !to.After(from) {
+		return invalid("the range must end after it starts")
+	}
+	if to.Sub(from) > MaxListRange {
+		return invalid("the range can span at most 400 days")
+	}
+	return nil
+}
+
+// listEvents is ListEvents without the range rules, which ListReminders has
+// already applied to a narrower range than the one it reads.
+func listEvents(ctx context.Context, queries *db.Queries, from, to time.Time) ([]Event, error) {
+	calendar, err := queries.GetDefaultCalendar(ctx)
+	if err != nil {
+		return nil, err
+	}
+	from, to = from.Add(-24*time.Hour), to.Add(24*time.Hour)
+	rows, err := queries.ListCalendarEventsInRange(ctx, db.ListCalendarEventsInRangeParams{
+		CalendarID: calendar.ID,
+		RangeStart: formatTime(from),
+		RangeEnd:   formatTime(to),
+		// Only a series that occursIn would refuse is left out here: an
+		// occurrence may start a day or two past its end date and last up to
+		// a month.
+		EndedBefore: formatTime(from.Add(-untilSlack - longestOccurrence)),
+	})
+	if err != nil {
+		return nil, err
+	}
+	events := make([]Event, 0, len(rows))
+	for _, row := range rows {
+		event, err := fromRow(row.CalendarEvent, row.OwnerName)
+		if err != nil {
+			return nil, err
+		}
+		if occursIn(event, from, to) {
+			events = append(events, event)
+		}
+	}
+	return events, nil
 }
 
 // isIANAZone reports whether name is a zone in the IANA database. "Local" is
