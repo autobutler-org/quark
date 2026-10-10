@@ -22,9 +22,6 @@ func TestNewDependencies(t *testing.T) {
 
 	// These replaced package-level globals, or joined them, so every graph
 	// must have them ready without a With* call (#1674).
-	if deps.BackupJobStore() == nil {
-		t.Error("Expected BackupJobStore() to be ready")
-	}
 	if deps.AuthRateLimiter() == nil {
 		t.Error("Expected AuthRateLimiter() to be ready")
 	}

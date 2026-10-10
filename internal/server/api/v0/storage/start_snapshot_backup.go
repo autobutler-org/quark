@@ -7,15 +7,13 @@ import (
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
-	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/gin-gonic/gin"
 )
 
 // startSnapshotBackup godoc
 // @Summary Start a snapshot backup to a device
-// @Description Aggregates all files from all managed devices onto the target snapshot-backup device
+// @Description Queues a job that aggregates all files from all managed devices onto the target snapshot-backup device. Answers 409 while the target already has a pending or running backup, whichever instance started it. jobId is what the status route takes.
 // @Tags storage
 // @Accept json
 // @Produce json
@@ -43,20 +41,18 @@ func startSnapshotBackup(c *gin.Context) *serverutil.Response {
 		return serverutil.BadRequest(fmt.Errorf("invalid request body: %w", err))
 	}
 
+	// The account the job is recorded under. Absent means 0, a system job.
+	userID, _ := ctxutil.Get[int64](c, "userID")
 	result, err := backup.StartSnapshotBackup(backup.StartSnapshotBackupParams{
 		Ctx:                c.Request.Context(),
 		Queries:            deps.Database().Queries,
-		Database:           deps.Database().Db,
-		Storage:            deps.StorageService(),
 		Registry:           deps.VFSRegistry(),
-		Store:              deps.BackupJobStore(),
-		EventBus:           deps.EventBus(),
-		IOSemaphore:        deps.IOSemaphore().For(iosemutil.Copy),
+		Queue:              deps.JobQueue(),
+		UserID:             userID,
 		TargetDeviceSerial: req.TargetDeviceSerial,
 		Username:           req.Username,
 		Password:           req.Password,
 		RecoveryPassword:   req.RecoveryPassword,
-		DataDir:            storageutil.GetDataDir(),
 	})
 	var inProgress *backup.BackupInProgressError
 	switch {

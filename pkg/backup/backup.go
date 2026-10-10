@@ -70,22 +70,6 @@ type BackupProgressData struct {
 	CurrentFile string  `json:"currentFile,omitempty"`
 }
 
-type BackupJobStore interface {
-	Create(ctx context.Context, job *BackupJob) error
-	Get(ctx context.Context, jobID string) (*BackupJob, error)
-	Update(ctx context.Context, job *BackupJob) error
-	List(ctx context.Context) ([]*BackupJob, error)
-}
-
-type InMemoryBackupJobStore struct {
-	mu   sync.RWMutex
-	jobs map[string]*BackupJob
-}
-
-func NewInMemoryBackupJobStore() *InMemoryBackupJobStore {
-	return &InMemoryBackupJobStore{jobs: make(map[string]*BackupJob)}
-}
-
 type Manifest struct {
 	CreatedAt  time.Time               `json:"createdAt"`
 	TotalFiles int                     `json:"totalFiles"`
@@ -132,9 +116,13 @@ type ChatImportResult struct {
 type SnapshotBackupParams struct {
 	TargetDeviceSerial string
 	Job                *BackupJob
-	Store              BackupJobStore
-	EventBus           *eventbus.Bus
-	Vault              *VaultExportParams
+	// Save is called with Job each time its status or progress changes. Nil
+	// saves nothing.
+	Save     func(job *BackupJob)
+	EventBus *eventbus.Bus
+	// VaultExport names the vault export staged on the target, which the
+	// snapshot puts in place. Empty means the request asked for none.
+	VaultExport string
 	// ChatDB is the live database whose chat tables are exported beside the
 	// files. Nil skips the chat export.
 	ChatDB      *sql.DB

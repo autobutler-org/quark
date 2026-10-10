@@ -19,7 +19,7 @@ SET
 WHERE
     id = ?
     AND status IN ('pending', 'running')
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
 `
 
 func (q *Queries) CancelJob(ctx context.Context, id int64) (Job, error) {
@@ -39,6 +39,7 @@ func (q *Queries) CancelJob(ctx context.Context, id int64) (Job, error) {
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.UserID,
+		&i.Detail,
 	)
 	return i, err
 }
@@ -52,7 +53,7 @@ SET
 WHERE
     id = ?
     AND status = 'pending'
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
 `
 
 // The status guard makes a job canceled since it was picked match no row.
@@ -73,6 +74,7 @@ func (q *Queries) ClaimJob(ctx context.Context, id int64) (Job, error) {
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.UserID,
+		&i.Detail,
 	)
 	return i, err
 }
@@ -82,7 +84,7 @@ INSERT INTO
     jobs (kind, name, params, lane, user_id)
 VALUES
     (?, ?, ?, ?, ?)
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
 `
 
 type CreateJobParams struct {
@@ -116,6 +118,7 @@ func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, erro
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.UserID,
+		&i.Detail,
 	)
 	return i, err
 }
@@ -130,7 +133,7 @@ SET
 WHERE
     id = ?
     AND status = 'running'
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
 `
 
 type FinishJobParams struct {
@@ -164,13 +167,51 @@ func (q *Queries) FinishJob(ctx context.Context, arg FinishJobParams) (Job, erro
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.UserID,
+		&i.Detail,
+	)
+	return i, err
+}
+
+const getActiveBackupJob = `-- name: GetActiveBackupJob :one
+SELECT
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
+FROM
+    jobs
+WHERE
+    kind = 'snapshot-backup'
+    AND status IN ('pending', 'running')
+    AND json_extract(params, '$.targetDeviceSerial') = CAST(?1 AS TEXT)
+LIMIT
+    1
+`
+
+// The backup holding a target device's lock (#3084): idx_jobs_backup_target
+// allows one pending or running snapshot backup per target.
+func (q *Queries) GetActiveBackupJob(ctx context.Context, targetDeviceSerial string) (Job, error) {
+	row := q.db.QueryRowContext(ctx, getActiveBackupJob, targetDeviceSerial)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Name,
+		&i.Status,
+		&i.Params,
+		&i.Progress,
+		&i.Lane,
+		&i.Attempts,
+		&i.Error,
+		&i.CreatedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.UserID,
+		&i.Detail,
 	)
 	return i, err
 }
 
 const getJob = `-- name: GetJob :one
 SELECT
-    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
 FROM
     jobs
 WHERE
@@ -196,6 +237,7 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.UserID,
+		&i.Detail,
 	)
 	return i, err
 }
@@ -218,7 +260,7 @@ func (q *Queries) InterruptRunningJobs(ctx context.Context, reason string) error
 
 const listJobs = `-- name: ListJobs :many
 SELECT
-    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
 FROM
     jobs
 WHERE
@@ -260,6 +302,7 @@ func (q *Queries) ListJobs(ctx context.Context, kinds []string) ([]Job, error) {
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.UserID,
+			&i.Detail,
 		); err != nil {
 			return nil, err
 		}
@@ -319,7 +362,7 @@ func (q *Queries) ListPendingJobs(ctx context.Context) ([]ListPendingJobsRow, er
 
 const listUserJobs = `-- name: ListUserJobs :many
 SELECT
-    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
 FROM
     jobs
 WHERE
@@ -370,6 +413,7 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]J
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.UserID,
+			&i.Detail,
 		); err != nil {
 			return nil, err
 		}
@@ -436,7 +480,7 @@ SET
 WHERE
     id = ?
     AND status = 'failed'
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
 `
 
 type RetryJobParams struct {
@@ -464,8 +508,29 @@ func (q *Queries) RetryJob(ctx context.Context, arg RetryJobParams) (Job, error)
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.UserID,
+		&i.Detail,
 	)
 	return i, err
+}
+
+const updateJobDetail = `-- name: UpdateJobDetail :exec
+UPDATE jobs
+SET
+    detail = ?
+WHERE
+    id = ?
+    AND status = 'running'
+`
+
+type UpdateJobDetailParams struct {
+	Detail string
+	ID     int64
+}
+
+// The status guard keeps a job finished or canceled since from being touched.
+func (q *Queries) UpdateJobDetail(ctx context.Context, arg UpdateJobDetailParams) error {
+	_, err := q.db.ExecContext(ctx, updateJobDetail, arg.Detail, arg.ID)
+	return err
 }
 
 const updateJobProgress = `-- name: UpdateJobProgress :execrows

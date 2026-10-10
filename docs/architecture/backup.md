@@ -89,8 +89,8 @@ flowchart LR
 ```
 
 1. When a snapshot backup completes, `SnapshotBackup` writes the completion time to `last-snapshot-backup` in the
-   data directory (`backup.RecordSnapshot`). The job store is in memory and the manifest sits on a drive that may
-   be unplugged, so this file is the only thing that still knows after a restart. A failed backup writes nothing.
+   data directory (`backup.RecordSnapshot`). The job's row is pruned with the rest of the job history and the
+   manifest sits on a drive that may be unplugged, so this file is what still knows. A failed backup writes nothing.
 2. `GET /api/v0/notifications` (`v0_notifications`) reads the caller's own settings and calls
    `notificationutil.List`, which reads the record (`backup.LastSnapshot`). A caller who is not an admin gets an
    empty list. An admin gets `backup_due` when there is no record, `backup_stale` when the record is at least

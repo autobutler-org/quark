@@ -21,6 +21,9 @@ const (
 // userIDKey is the context key WithUserID stores the job's account under.
 type userIDKey struct{}
 
+// jobIDKey is the context key WithJobID stores the running job's id under.
+type jobIDKey struct{}
+
 // laneKey names a lane. Lanes belong to a kind: one kind's "copy" is not
 // another's.
 type laneKey struct {

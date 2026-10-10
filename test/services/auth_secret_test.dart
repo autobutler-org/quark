@@ -108,7 +108,7 @@ class _FakeQuark {
           201,
         );
       case '/api/v0/storage/devices/snapshot-backup':
-        return http.Response('{"data":{"jobId":"job-1"}}', 200);
+        return http.Response('{"jobId":"1"}', 202);
       default:
         return http.Response('{}', 200);
     }

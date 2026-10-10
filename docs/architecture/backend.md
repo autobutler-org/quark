@@ -59,7 +59,7 @@ through `pkg/vfs` (see [Data](data.md#virtual-filesystem)).
 ## Dependency graph
 
 `deputil.Dependencies` is the single object every layer receives. `NewDependencies()` builds an empty graph with
-the always-present pieces (rate limiters, upload session store, backup job store); `DefaultDependencies()`
+the always-present pieces (rate limiters, upload session store); `DefaultDependencies()`
 connects the real ones. Tests start from the empty graph and chain `With…` builders to inject fakes.
 
 ```mermaid
@@ -81,7 +81,6 @@ classDiagram
         AuthRateLimiter() Limiter
         VaultRateLimiter() Limiter
         IOSemaphore() Semaphore
-        BackupJobStore() BackupJobStore
     }
     Dependencies --> DatabaseSqlc : quark.db
     Dependencies --> DatabaseRaw : quark.health.db

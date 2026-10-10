@@ -12,9 +12,9 @@ import (
 )
 
 // lastSnapshotFilename is the file in the Quark's data directory that holds
-// when the last snapshot backup completed, as one RFC 3339 time. The job store
-// is in memory and the manifest lives on a drive that may be unplugged, so
-// neither can answer that after a restart.
+// when the last snapshot backup completed, as one RFC 3339 time. The job's row
+// is pruned with the rest of the job history and the manifest lives on a
+// drive that may be unplugged, so neither can be relied on to answer that.
 const lastSnapshotFilename = "last-snapshot-backup"
 
 // RecordSnapshot records that a snapshot backup completed at the given time.

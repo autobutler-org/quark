@@ -6,17 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
-	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
-	"github.com/autobutler-org/quark/pkg/util/iosemutil"
+	"github.com/autobutler-org/quark/pkg/util/jobutil"
+	"github.com/autobutler-org/quark/pkg/util/sqlutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/vaultcrypto"
 	"github.com/autobutler-org/quark/pkg/vfs"
-
-	"github.com/google/uuid"
 )
 
 // The failures a caller of [StartSnapshotBackup] can fix. Anything else it
@@ -50,25 +49,18 @@ func (e *BackupInProgressError) Error() string {
 // vault half is opt-in: leave RecoveryPassword empty and no credentials are
 // asked for and no vault export is written.
 type StartSnapshotBackupParams struct {
-	// Ctx bounds the checks made before the job is created. The backup itself
-	// deliberately does not use it: it outlives the request.
+	// Ctx bounds the checks made, and the vault export built, before the job
+	// is queued. The backup itself runs on the job queue and outlives it.
 	Ctx context.Context
-	// Queries reads the device roles and the vault config.
+	// Queries reads the device roles, the vault, and the job holding the
+	// target's lock.
 	Queries *db.Queries
-	// Database is the live database, whose chat tables the snapshot exports.
-	// Nil skips the chat export.
-	Database *sql.DB
-	// Storage lists the managed devices to copy from.
-	Storage *storageutil.StorageService
-	// Registry holds every attached device's files namespace, the target's
-	// and the sources'.
+	// Registry holds the target device's files namespace.
 	Registry vfs.Registry
-	// Store holds the job while it runs.
-	Store BackupJobStore
-	// EventBus carries progress to anyone watching.
-	EventBus *eventbus.Bus
-	// IOSemaphore throttles file copies to yield to interactive requests.
-	IOSemaphore *iosemutil.Semaphore
+	// Queue runs the backup. Its Handler for [Kind] comes from [NewHandler].
+	Queue *jobutil.Queue
+	// UserID is the account starting the backup. 0 records none.
+	UserID int64
 	// TargetDeviceSerial is the device to back up onto. It must already hold
 	// the snapshot-backup role.
 	TargetDeviceSerial string
@@ -78,19 +70,22 @@ type StartSnapshotBackupParams struct {
 	Password string
 	// RecoveryPassword encrypts the exported vault. Empty skips the export.
 	RecoveryPassword string
-	// DataDir is the Quark's data directory (storageutil.GetDataDir), where a
-	// completed snapshot is recorded. Empty records nothing.
-	DataDir string
 }
 
-// StartSnapshotBackupResult reports the job that was started. The backup is
-// still running when this returns; poll the store for its progress.
+// StartSnapshotBackupResult reports the job that was queued. The backup is
+// still running when this returns; [GetSnapshotBackupStatus] reads its
+// progress.
 type StartSnapshotBackupResult struct {
 	JobID string
 }
 
-// StartSnapshotBackup validates the request, creates the job, and runs the
-// backup in the background.
+// StartSnapshotBackup validates the request and queues the backup as a job.
+// One pending or running backup per target is all the jobs table allows, on
+// every instance at once, so a second start returns a [BackupInProgressError].
+//
+// A vault export is built here, under a temp name on the target, and the job
+// only moves it into place: the password and the vault key never leave the
+// request, and whichever instance runs the job needs neither.
 func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupResult, error) {
 	ctx := params.Ctx
 
@@ -99,15 +94,10 @@ func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupR
 		return StartSnapshotBackupResult{}, ErrTargetRoleRequired
 	}
 
-	// Check no backup is already running for this target.
-	jobs, _ := params.Store.List(ctx)
-	for _, j := range jobs {
-		if j.TargetDeviceSerial == params.TargetDeviceSerial &&
-			(j.Status == BackupStatusPending ||
-				j.Status == BackupStatusScanning ||
-				j.Status == BackupStatusCopying) {
-			return StartSnapshotBackupResult{}, &BackupInProgressError{JobID: j.ID}
-		}
+	// The index is the lock. This only spares a request that is going to lose
+	// to it the work of a vault export.
+	if inProgress := activeBackup(ctx, params.Queries, params.TargetDeviceSerial); inProgress != nil {
+		return StartSnapshotBackupResult{}, inProgress
 	}
 
 	// Find the target device's namespace. The internal drive cannot be one.
@@ -119,47 +109,61 @@ func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupR
 		return StartSnapshotBackupResult{}, ErrTargetNotManaged
 	}
 
-	// Gather all source devices (everything that isn't the target).
-	sources, err := gatherSourceDevices(params.Storage, params.Registry, params.TargetDeviceSerial)
-	if err != nil {
-		return StartSnapshotBackupResult{}, fmt.Errorf("failed to gather sources: %w", err)
-	}
-
-	// If a recovery password is provided, validate credentials and prepare vault export.
-	vaultParams, err := prepareVaultExport(params)
+	staged, err := stageVaultExportTo(params, target)
 	if err != nil {
 		return StartSnapshotBackupResult{}, err
 	}
 
-	job := &BackupJob{
-		ID:                 uuid.New().String(),
-		Status:             BackupStatusPending,
-		TargetDeviceSerial: params.TargetDeviceSerial,
-	}
-	if err := params.Store.Create(ctx, job); err != nil {
+	queued, err := params.Queue.Enqueue(ctx, jobutil.EnqueueParams{
+		Kind:   Kind,
+		Name:   "Snapshot backup",
+		Params: JobParams{TargetDeviceSerial: params.TargetDeviceSerial, VaultExport: staged},
+		UserID: params.UserID,
+	})
+	if err != nil {
+		if staged != "" {
+			discardVaultExport(ctx, staged, target)
+		}
+		if sqlutil.IsUniqueConstraintErr(err) {
+			if inProgress := activeBackup(ctx, params.Queries, params.TargetDeviceSerial); inProgress != nil {
+				return StartSnapshotBackupResult{}, inProgress
+			}
+		}
 		return StartSnapshotBackupResult{}, fmt.Errorf("failed to create job: %w", err)
 	}
 
-	snapshotParams := SnapshotBackupParams{
-		TargetDeviceSerial: params.TargetDeviceSerial,
-		Job:                job,
-		Store:              params.Store,
-		EventBus:           params.EventBus,
-		Vault:              vaultParams,
-		ChatDB:             params.Database,
-		IOSemaphore:        params.IOSemaphore,
-		DataDir:            params.DataDir,
-	}
-	go func() {
-		if vaultParams != nil {
-			defer vaultcrypto.ZeroKey(vaultParams.LiveKey)
-		}
-		if err := SnapshotBackup(context.Background(), snapshotParams, sources, target); err != nil {
-			log.Printf("snapshot backup failed: %v", err)
-		}
-	}()
+	return StartSnapshotBackupResult{JobID: strconv.FormatInt(queued.Job.ID, 10)}, nil
+}
 
-	return StartSnapshotBackupResult{JobID: job.ID}, nil
+// activeBackup is the error naming the pending or running backup for a target,
+// or nil when it has none.
+func activeBackup(ctx context.Context, queries *db.Queries, targetSerial string) *BackupInProgressError {
+	row, err := queries.GetActiveBackupJob(ctx, targetSerial)
+	if err != nil {
+		return nil
+	}
+	return &BackupInProgressError{JobID: strconv.FormatInt(row.ID, 10)}
+}
+
+// stageVaultExportTo builds the vault export the request asked for on the
+// target and returns its temp name, or "" when it asked for none.
+func stageVaultExportTo(params StartSnapshotBackupParams, target vfs.VFS) (string, error) {
+	vaultParams, err := prepareVaultExport(params)
+	if err != nil || vaultParams == nil {
+		return "", err
+	}
+	defer vaultcrypto.ZeroKey(vaultParams.LiveKey)
+
+	dir, err := hostDir(params.Ctx, target)
+	if err != nil {
+		return "", err
+	}
+	removeStaleStagedVaults(dir)
+	staged, err := stageVaultExport(params.Ctx, vaultParams.Queries, vaultParams.LiveKey, vaultParams.RecoveryPassword, dir)
+	if err != nil {
+		return "", fmt.Errorf("vault export: %w", err)
+	}
+	return staged, nil
 }
 
 // prepareVaultExport derives the live vault key the export will be re-encrypted

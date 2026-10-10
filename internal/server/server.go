@@ -74,6 +74,17 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 			EventBus: deps.EventBus(),
 		}),
 	})
+	jobs.Register(jobutil.RegisterParams{
+		Kind: backup.Kind,
+		Handler: backup.NewHandler(backup.NewHandlerParams{
+			Database:    deps.Database(),
+			Storage:     deps.StorageService(),
+			Registry:    deps.VFSRegistry(),
+			EventBus:    deps.EventBus(),
+			IOSemaphore: deps.IOSemaphore().For(iosemutil.Copy),
+			DataDir:     storageutil.GetDataDir(),
+		}),
+	})
 	jobsCtx, cancelJobs := context.WithCancel(context.Background())
 	jobsDone := make(chan struct{})
 	go func() {
