@@ -50,33 +50,31 @@ const (
 // filesystem at dir. It writes and reads a temporary file; the temp file is
 // always removed before returning.
 //
+// Each read is timed on a file whose pages were just dropped from the page
+// cache, so it is the device that answers and not memory (#2467).
+//
 // The probe is intentionally lightweight — it uses a 4 MB file for sequential
 // reads and 10 × 4 KB reads for random latency. Suitable for calling at startup
 // per device without perceptible delay.
 func ProbeDisk(dir string) DiskProbeResult {
 	result := DiskProbeResult{SpeedClass: DiskSpeedUnknown}
 
-	// Write a temporary file with random data (avoids OS compressing/caching it).
 	tmpPath := filepath.Join(dir, ".quark-probe-tmp")
-	data := make([]byte, probeSizeBytes)
-	for i := range data {
-		data[i] = byte(i & 0xff)
-	}
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+	defer os.Remove(tmpPath)
+	if err := writeProbeFile(tmpPath); err != nil {
 		return result
 	}
-	defer os.Remove(tmpPath)
 
 	// --- Sequential read ---
-	seqStart := time.Now()
 	buf := make([]byte, probeSizeBytes)
-	f, err := os.Open(tmpPath)
+	f, err := openProbeFile(tmpPath)
 	if err != nil {
 		return result
 	}
+	seqStart := time.Now()
 	_, err = readFull(f, buf)
-	f.Close()
 	seqElapsed := time.Since(seqStart)
+	f.Close()
 	if err != nil || seqElapsed == 0 {
 		return result
 	}
@@ -89,7 +87,9 @@ func ProbeDisk(dir string) DiskProbeResult {
 	var totalLatency time.Duration
 	for i := 0; i < randReadCount; i++ {
 		offset := rand.Int64N(maxOffset)
-		f, err := os.Open(tmpPath)
+		// Reopened each time: the read before this one, and what the kernel
+		// read ahead of it, put pages back in the cache.
+		f, err := openProbeFile(tmpPath)
 		if err != nil {
 			break
 		}
@@ -133,4 +133,37 @@ func readFull(f *os.File, buf []byte) (int, error) {
 		}
 	}
 	return total, nil
+}
+
+// writeProbeFile writes the probe's test file and flushes it to the device.
+// Only pages that are already on the device can be dropped from the cache.
+func writeProbeFile(path string) error {
+	data := make([]byte, probeSizeBytes)
+	for i := range data {
+		data[i] = byte(i & 0xff)
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// openProbeFile opens the probe's test file with none of it in the page
+// cache, so the next read has to go to the device.
+func openProbeFile(path string) (*os.File, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	evictFromPageCache(f)
+	return f, nil
 }
