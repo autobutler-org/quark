@@ -192,22 +192,20 @@ class _DocsPageState extends State<DocsPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: QuarkAppBar(
-        label: 'Docs',
-        icon: QuarkIcons.description_outlined,
-        onRefresh: manualRefresh,
-        isRefreshing: isRefreshing,
-        actions: [
-          QuarkBarChip(
-            key: const ValueKey('docs_new'),
-            icon: QuarkIcons.add_rounded,
-            label: 'New document',
-            onPressed: _createNewDoc,
-          ),
-          const AppThemeToggle(),
-        ],
-      ),
+    return QuarkPageScaffold(
+      title: 'Docs',
+      icon: QuarkIcons.description_outlined,
+      onRefresh: manualRefresh,
+      isRefreshing: isRefreshing,
+      actions: [
+        QuarkBarChip(
+          key: const ValueKey('docs_new'),
+          icon: QuarkIcons.add_rounded,
+          label: 'New document',
+          onPressed: _createNewDoc,
+        ),
+        const AppThemeToggle(),
+      ],
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.docs),
       body: Column(
         children: [

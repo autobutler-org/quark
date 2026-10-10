@@ -133,7 +133,10 @@ class _SlidesPageState extends State<SlidesPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return QuarkPageScaffold(
+      title: 'Slides',
+      icon: QuarkIcons.slideshow_outlined,
+      // Its own bar, for the import row under it.
       appBar: QuarkAppBar(
         label: 'Slides',
         icon: QuarkIcons.slideshow_outlined,

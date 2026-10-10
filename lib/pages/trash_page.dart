@@ -204,6 +204,10 @@ class _TrashPageState extends State<TrashPage>
       builder: (context, _) {
         final retentionDays = _controller.retentionDays;
         final location = _controller.location;
+        // Not a QuarkPageScaffold: selecting drops the bar altogether, so the
+        // page picks the drawer's edge itself (#1812).
+        final leftHanded = QuarkHandedness.isLeftHanded(context);
+        const drawer = AppDrawer(activeSection: QuarkDrawerSection.trash);
         return Scaffold(
           appBar: _controller.selectionMode
               ? null
@@ -239,7 +243,8 @@ class _TrashPageState extends State<TrashPage>
                   onRefresh: manualRefresh,
                   isRefreshing: isRefreshing,
                 ),
-          drawer: const AppDrawer(activeSection: QuarkDrawerSection.trash),
+          drawer: leftHanded ? null : drawer,
+          endDrawer: leftHanded ? drawer : null,
           body: Column(
             children: [
               if (_controller.selectionMode)

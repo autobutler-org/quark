@@ -7,7 +7,7 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 
 | Tab | URL | Holds |
 | --- | --- | --- |
-| **General** | `/settings/general` | Backend hosts, theme, theme color, auto-refresh interval, demo mode, a link to the drives |
+| **General** | `/settings/general` | Backend hosts, theme, left-handed mode, theme color, auto-refresh interval, demo mode, a link to the drives |
 | **Account** | `/settings/account` | Sign out, your sessions, then an **Account and data** row at the bottom that leads to Delete account and (admins) Reset this Quark |
 | **Network** | `/settings/network` | Remote access, connected devices, SSH access (admins) |
 | **Updates** | `/settings/updates` | The Quark's version, updates and automatic updates (admins), Repair installation (admins) |
@@ -617,3 +617,32 @@ The Quark has at least one feature in beta, such as Chat.
   status (#2904).
 - Step 2 closes the sheet and opens `/settings/network`.
 - Nothing in the sheet names Tailscale, an address, or a raw error.
+
+---
+
+### JN-ST-033: Turn on left-handed mode
+
+**Preconditions:** User is logged in, on a phone or a narrow window.
+
+**Steps:**
+
+1. Navigate to `/settings/general` and turn on **Left-handed mode**, below **Theme**.
+2. Tap the brand button, now at the right end of the app bar.
+3. Open Files, then the Vault with the vault unlocked.
+4. Turn **Left-handed mode** off again.
+
+**Expected result:**
+
+- Step 1 mirrors the app bar at once, on Settings and on every other drawer page: the brand button sits against the
+  right edge with the refresh button inside it, and the page's actions run in from the left (#1812).
+- Step 2 slides the drawer in from the right edge. A swipe in from that edge opens it too.
+- The floating **Create** button on Files and **New entry** button on the Vault sit at the bottom left.
+- Only the controls change sides. Text, lists and the inside of each button read the way they always do.
+- Step 4 puts everything back.
+- Setting is persisted across app restarts. It is per device, like the theme (JN-ST-006).
+
+**Notes:**
+
+- Off by default.
+- Drill-down pages (editors, viewers) keep their back button on the left, and overlays inside a page, such as the
+  controls on a photo, do not move yet.

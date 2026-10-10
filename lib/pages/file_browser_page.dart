@@ -2128,8 +2128,13 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         : _currentPath;
     final disableNavigation =
         _handlingPendingFile && isLikelyFilePath(_currentPath);
+    // Not a QuarkPageScaffold: selecting drops the bar altogether, so the
+    // page picks the edge for its drawer and its create button itself (#1812).
+    final leftHanded = QuarkHandedness.isLeftHanded(context);
+    const drawer = AppDrawer(activeSection: QuarkDrawerSection.files);
     return Scaffold(
-      drawer: const AppDrawer(activeSection: QuarkDrawerSection.files),
+      drawer: leftHanded ? null : drawer,
+      endDrawer: leftHanded ? drawer : null,
       // Selection swaps the bar for FileSelectionBar in the body, as the
       // trash does.
       appBar: _selectionMode
@@ -2433,7 +2438,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                         // sits above the footer rather than over the whole page.
                         if (MediaQuery.of(context).size.width < 860)
                           Positioned(
-                            right: 16,
+                            left: leftHanded ? 16 : null,
+                            right: leftHanded ? null : 16,
                             bottom: 16,
                             child: FileBrowserCreateFab(
                               visible: _fabVisible,

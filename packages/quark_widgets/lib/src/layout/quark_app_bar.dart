@@ -6,6 +6,7 @@ import 'quark_app_bar_trailing.dart';
 import 'quark_bar_icon_button.dart';
 import 'quark_brand_button.dart';
 import 'quark_chrome.dart';
+import 'quark_handedness.dart';
 import 'refresh_icon_button.dart';
 
 /// The app bar every main page wears: a [QuarkBrandButton] on the left that
@@ -27,6 +28,12 @@ import 'refresh_icon_button.dart';
 ///
 /// App-wide controls, such as a running-jobs badge, come from a
 /// [QuarkAppBarTrailing] scope and follow [actions].
+///
+/// Under a left-handed [QuarkHandedness] scope the bar is mirrored (#1812):
+/// the brand button sits against the right edge with the refresh inside it,
+/// and the actions run in from the left. Only the order of the slots flips.
+/// What is in a slot, the brand's badge and label or a page's [middle], reads
+/// the way it always does.
 ///
 /// [middle] fills the space between the leading slot and the actions, for a
 /// page whose bar holds more than buttons (Files' navigation and inline
@@ -97,8 +104,23 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
     // The bar is chrome: its own hairline, and everything placed in it.
     final tokens = QuarkTokens.of(context).onChrome;
     final refresh = onRefresh;
-    final trailing = [...actions, ...QuarkAppBarTrailing.of(context)];
+    // Left-handed, the bar's rows run the other way, which is the whole
+    // mirror. Each slot then puts back the direction the page is read in, so
+    // nothing inside a button or a page's middle is laid out backwards.
+    final reading = Directionality.of(context);
+    final mirrored = reading == TextDirection.ltr
+        ? TextDirection.rtl
+        : TextDirection.ltr;
+    final leftHanded = QuarkHandedness.isLeftHanded(context);
+    Widget slot(Widget child) => leftHanded
+        ? Directionality(textDirection: reading, child: child)
+        : child;
+    final trailing = [
+      for (final action in [...actions, ...QuarkAppBarTrailing.of(context)])
+        slot(action),
+    ];
     final middle = this.middle;
+    final bottom = this.bottom;
     final slotWidth =
         QuarkBrandButton.preferredWidth +
         (refresh == null ? 0 : QuarkBarIconButton.tapTargetSize);
@@ -110,54 +132,74 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
         // Flexible, so a page name longer than the slot is clipped by the
         // brand button rather than overflowing the bar.
         Flexible(
-          child: QuarkBrandButton(
-            label: label,
-            icon: icon,
-            onTap: () => Scaffold.of(ctx).openDrawer(),
+          child: slot(
+            QuarkBrandButton(
+              label: label,
+              icon: icon,
+              // Whichever edge the page hung its drawer on.
+              onTap: () {
+                final scaffold = Scaffold.of(ctx);
+                scaffold.hasEndDrawer
+                    ? scaffold.openEndDrawer()
+                    : scaffold.openDrawer();
+              },
+            ),
           ),
         ),
         if (refresh != null)
-          RefreshIconButton(isRefreshing: isRefreshing, onPressed: refresh),
+          slot(
+            RefreshIconButton(isRefreshing: isRefreshing, onPressed: refresh),
+          ),
       ],
     );
     return QuarkChrome(
-      child: AppBar(
-        shape: Border(bottom: BorderSide(color: tokens.border)),
-        automaticallyImplyLeading: false,
-        // Without a middle, the brand and refresh hold a fixed leading slot, so
-        // the brand stays whole however many actions a page has.
-        leadingWidth: middle == null ? tokens.spacingSm + slotWidth : null,
-        leading: middle == null
-            ? Builder(
-                builder: (ctx) => Padding(
-                  padding: EdgeInsets.only(left: tokens.spacingSm),
-                  child: brandAndRefresh(ctx),
-                ),
-              )
-            : null,
-        // With one, they share a row with it and take only the width the label
-        // needs, which is what leaves Files room for its navigation and search
-        // on a phone.
-        title: middle == null
-            ? null
-            : Builder(
-                builder: (ctx) => Row(
-                  spacing: tokens.spacingSm,
-                  children: [
-                    ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: slotWidth),
-                      child: brandAndRefresh(ctx),
+      child: Directionality(
+        textDirection: leftHanded ? mirrored : reading,
+        child: AppBar(
+          shape: Border(bottom: BorderSide(color: tokens.border)),
+          automaticallyImplyLeading: false,
+          // Without a middle, the brand and refresh hold a fixed leading slot,
+          // so the brand stays whole however many actions a page has.
+          leadingWidth: middle == null ? tokens.spacingSm + slotWidth : null,
+          leading: middle == null
+              ? Builder(
+                  builder: (ctx) => Padding(
+                    padding: EdgeInsetsDirectional.only(
+                      start: tokens.spacingSm,
                     ),
-                    Expanded(child: middle),
-                  ],
+                    child: brandAndRefresh(ctx),
+                  ),
+                )
+              : null,
+          // With one, they share a row with it and take only the width the
+          // label needs, which is what leaves Files room for its navigation
+          // and search on a phone.
+          title: middle == null
+              ? null
+              : Builder(
+                  builder: (ctx) => Row(
+                    spacing: tokens.spacingSm,
+                    children: [
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: slotWidth),
+                        child: brandAndRefresh(ctx),
+                      ),
+                      Expanded(child: slot(middle)),
+                    ],
+                  ),
                 ),
-              ),
-        titleSpacing: tokens.spacingSm,
-        centerTitle: false,
-        actions: trailing.isEmpty
-            ? null
-            : [Row(mainAxisSize: MainAxisSize.min, children: trailing)],
-        bottom: bottom,
+          titleSpacing: tokens.spacingSm,
+          centerTitle: false,
+          actions: trailing.isEmpty
+              ? null
+              : [Row(mainAxisSize: MainAxisSize.min, children: trailing)],
+          bottom: bottom == null
+              ? null
+              : PreferredSize(
+                  preferredSize: bottom.preferredSize,
+                  child: slot(bottom),
+                ),
+        ),
       ),
     );
   }

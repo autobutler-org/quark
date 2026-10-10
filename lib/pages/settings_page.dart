@@ -225,9 +225,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   /// Everything the theme controls show: the mode the app bar toggle also
-  /// changes (#2053), and the theme color pickers' state (#2740).
+  /// changes (#2053), and the theme color pickers' state (#2740). The
+  /// left-handed switch (#1812) rides along.
   final Listenable _themeColors = Listenable.merge([
     AppSettings.instance.themeMode,
+    AppSettings.instance.leftHanded,
     AppSettings.instance.themeColor,
     AppSettings.instance.quarkThemeColor,
     AppSettings.instance.userThemeColor,
@@ -545,12 +547,10 @@ class _SettingsPageState extends State<SettingsPage> {
     final banner = _disconnected
         ? QuarkDisconnectedBanner(onRetry: _load)
         : null;
-    return Scaffold(
-      appBar: QuarkAppBar(
-        label: 'Settings',
-        icon: QuarkIcons.settings_outlined,
-        actions: const [AppThemeToggle()],
-      ),
+    return QuarkPageScaffold(
+      title: 'Settings',
+      icon: QuarkIcons.settings_outlined,
+      actions: const [AppThemeToggle()],
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.settings),
       body: QuarkTabView(
         // Features is the last tab, so while it is hidden a link to it shows
@@ -570,6 +570,8 @@ class _SettingsPageState extends State<SettingsPage> {
               onThemeChanged: settings.setThemeMode,
               highContrast: _highContrast,
               onHighContrastChanged: _setHighContrast,
+              leftHanded: settings.leftHanded.value,
+              onLeftHandedChanged: settings.setLeftHanded,
               themeColor: settings.themeColor.value,
               followsQuarkThemeColor:
                   (settings.userThemeColor.value ?? '').isEmpty,

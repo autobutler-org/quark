@@ -183,22 +183,20 @@ class _SheetsPageState extends State<SheetsPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: QuarkAppBar(
-        label: 'Sheets',
-        icon: QuarkIcons.table_chart_outlined,
-        onRefresh: manualRefresh,
-        isRefreshing: isRefreshing,
-        actions: [
-          QuarkBarChip(
-            key: const ValueKey('sheets_new'),
-            icon: QuarkIcons.add_rounded,
-            label: 'New spreadsheet',
-            onPressed: _createNewSheet,
-          ),
-          const AppThemeToggle(),
-        ],
-      ),
+    return QuarkPageScaffold(
+      title: 'Sheets',
+      icon: QuarkIcons.table_chart_outlined,
+      onRefresh: manualRefresh,
+      isRefreshing: isRefreshing,
+      actions: [
+        QuarkBarChip(
+          key: const ValueKey('sheets_new'),
+          icon: QuarkIcons.add_rounded,
+          label: 'New spreadsheet',
+          onPressed: _createNewSheet,
+        ),
+        const AppThemeToggle(),
+      ],
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.sheets),
       body: Column(
         children: [
