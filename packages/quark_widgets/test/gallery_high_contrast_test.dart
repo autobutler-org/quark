@@ -8,6 +8,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../examples/widget_gallery/lib/main.dart';
 // ignore: avoid_relative_lib_imports
 import '../examples/widget_gallery/lib/token_fields.dart';
+// ignore: avoid_relative_lib_imports
+import '../examples/widget_gallery/lib/widgets/gallery_theme_panel.dart';
 import 'support/pump.dart';
 
 /// The gallery's high-contrast option swaps in the high-contrast token sets and
@@ -55,6 +57,28 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tokensOf(tester), QuarkTokens.highContrastDark);
+  });
+
+  /// #3071: picking a theme color used to turn high contrast off.
+  testWidgets('high contrast follows the selected theme color', (tester) async {
+    await pumpGallery(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('gallery_high_contrast_switch')),
+    );
+    await tester.pumpAndSettle();
+
+    final panel = tester.widget<GalleryThemePanel>(
+      find.byType(GalleryThemePanel),
+    );
+    panel.onThemeColorChanged(QuarkThemeColor.violet);
+    await tester.pumpAndSettle();
+
+    final violet = QuarkThemeColor.violet.tokensFor(
+      Brightness.dark,
+      highContrast: true,
+    );
+    expect(tokensOf(tester), violet);
+    expect(violet.primary, isNot(QuarkTokens.highContrastDark.primary));
   });
 
   test('focusRingWidth is an editable number token', () {

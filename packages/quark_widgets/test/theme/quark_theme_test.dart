@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/pump.dart';
+
 void main() {
   group('QuarkTheme.from', () {
     for (final (name, tokens, brightness) in [
@@ -263,15 +265,15 @@ void main() {
   /// #2601: the high-contrast pair, for the platform's contrast setting and
   /// the Settings switch.
   group('high contrast', () {
-    test('highContrastDark() and highContrastLight() wear their tokens', () {
+    test('classic high contrast wears the shipped high-contrast tokens', () {
       for (final (theme, tokens, brightness) in [
         (
-          QuarkTheme.highContrastDark(),
+          QuarkTheme.highContrastDark(themeColor: QuarkThemeColor.classic),
           QuarkTokens.highContrastDark,
           Brightness.dark,
         ),
         (
-          QuarkTheme.highContrastLight(),
+          QuarkTheme.highContrastLight(themeColor: QuarkThemeColor.classic),
           QuarkTokens.highContrastLight,
           Brightness.light,
         ),
@@ -280,6 +282,38 @@ void main() {
         expect(theme.extension<QuarkTokens>(), tokens);
         expect(theme.colorScheme.primary, tokens.primary);
         expect(theme.scaffoldBackgroundColor, tokens.background);
+      }
+    });
+
+    /// #3071: high contrast used to discard the theme color.
+    test('a theme color reaches the accent the theme draws with', () {
+      for (final themeColor in QuarkThemeColor.presets) {
+        for (final (theme, brightness) in [
+          (
+            QuarkTheme.highContrastDark(themeColor: themeColor),
+            Brightness.dark,
+          ),
+          (
+            QuarkTheme.highContrastLight(themeColor: themeColor),
+            Brightness.light,
+          ),
+        ]) {
+          final tokens = themeColor.tokensFor(brightness, highContrast: true);
+          expect(theme.brightness, brightness);
+          expect(theme.extension<QuarkTokens>(), tokens);
+          expect(theme.colorScheme.primary, tokens.primary);
+          final focused =
+              theme.inputDecorationTheme.focusedBorder! as OutlineInputBorder;
+          expect(focused.borderSide.color, tokens.primary);
+          expect(
+            theme.filledButtonTheme.style!.backgroundColor!.resolve({}),
+            tokens.primary,
+          );
+          expect(
+            theme.switchTheme.trackColor!.resolve({WidgetState.selected}),
+            tokens.primary,
+          );
+        }
       }
     });
 
@@ -298,31 +332,49 @@ void main() {
       }
     });
 
-    testWidgets('the platform setting picks the high-contrast theme', (
-      tester,
-    ) async {
-      tester.platformDispatcher.accessibilityFeaturesTestValue =
-          const FakeAccessibilityFeatures(highContrast: true);
-      addTearDown(
-        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
-      );
-      late QuarkTokens seen;
+    for (final size in [narrowViewport, wideViewport]) {
+      testWidgets(
+        'the platform setting picks the themed high-contrast theme at $size',
+        (tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+          tester.platformDispatcher.accessibilityFeaturesTestValue =
+              const FakeAccessibilityFeatures(highContrast: true);
+          addTearDown(
+            tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+          );
+          late QuarkTokens seen;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
-          highContrastTheme: QuarkTheme.highContrastLight(),
-          themeMode: ThemeMode.light,
-          home: Builder(
-            builder: (context) {
-              seen = QuarkTokens.of(context);
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
-      );
+          for (final themeColor in [
+            QuarkThemeColor.classic,
+            QuarkThemeColor.violet,
+          ]) {
+            await tester.pumpWidget(
+              MaterialApp(
+                theme: QuarkTheme.light(themeColor: themeColor),
+                highContrastTheme: QuarkTheme.highContrastLight(
+                  themeColor: themeColor,
+                ),
+                themeMode: ThemeMode.light,
+                home: Builder(
+                  builder: (context) {
+                    seen = QuarkTokens.of(context);
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
 
-      expect(seen, QuarkTokens.highContrastLight);
-    });
+            expect(
+              seen,
+              themeColor.tokensFor(Brightness.light, highContrast: true),
+            );
+          }
+          expect(seen.primary, isNot(QuarkTokens.highContrastLight.primary));
+        },
+      );
+    }
   });
 }

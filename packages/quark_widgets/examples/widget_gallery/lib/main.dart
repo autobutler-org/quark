@@ -54,14 +54,10 @@ class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
   }
 
   /// The untouched token set for the current brightness, theme color and
-  /// contrast. High contrast takes no theme color, the way
+  /// contrast. High contrast keeps the theme color in its accent, the way
   /// [QuarkTheme.highContrastLight] and [QuarkTheme.highContrastDark] do.
-  QuarkTokens _baseTokens() {
-    if (!_highContrast) return _themeColor.tokensFor(_brightness);
-    return _brightness == Brightness.dark
-        ? QuarkTokens.highContrastDark
-        : QuarkTokens.highContrastLight;
-  }
+  QuarkTokens _baseTokens() =>
+      _themeColor.tokensFor(_brightness, highContrast: _highContrast);
 
   void _toggleHighContrast() {
     setState(() {
@@ -75,7 +71,6 @@ class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
   void _setThemeColor(QuarkThemeColor themeColor) {
     setState(() {
       _themeColor = themeColor;
-      _highContrast = false;
       _tokens = _baseTokens();
     });
   }

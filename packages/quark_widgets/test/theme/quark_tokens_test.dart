@@ -161,11 +161,27 @@ void main() {
     });
   });
 
-  /// #2601: the high-contrast sets aim for WCAG AAA.
+  /// #2601: the high-contrast sets aim for WCAG AAA. #3071: so does the set
+  /// every preset theme color yields, `classic` being the shipped pair.
   group('high-contrast tokens', () {
+    test('classic yields the shipped sets', () {
+      expect(
+        QuarkThemeColor.classic.tokensFor(Brightness.dark, highContrast: true),
+        QuarkTokens.highContrastDark,
+      );
+      expect(
+        QuarkThemeColor.classic.tokensFor(Brightness.light, highContrast: true),
+        QuarkTokens.highContrastLight,
+      );
+    });
+
     for (final (name, tokens) in [
-      ('dark', QuarkTokens.highContrastDark),
-      ('light', QuarkTokens.highContrastLight),
+      for (final themeColor in QuarkThemeColor.presets)
+        for (final brightness in Brightness.values)
+          (
+            '${themeColor.storageValue} ${brightness.name}',
+            themeColor.tokensFor(brightness, highContrast: true),
+          ),
     ]) {
       final surfaces = {
         'background': tokens.background,
