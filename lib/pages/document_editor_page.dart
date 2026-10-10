@@ -154,20 +154,22 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   /// [AppBar] implies a back button only when the navigator can pop. The
   /// docs list, a search hit and the file browser all open a doc at its own
   /// URL (#2078), so nothing is underneath it and this is the button every
-  /// entry point gets. It lands in the folder that holds the doc, not the
-  /// home folder (#1749).
-  Widget? _backButton() => Navigator.of(context).canPop()
-      ? null
-      : BackButton(onPressed: _leaveForContainingFolder);
+  /// entry point gets.
+  Widget? _backButton() =>
+      Navigator.of(context).canPop() ? null : BackButton(onPressed: _leave);
 
-  /// Closes a doc that has no history behind it, landing in the folder that
-  /// holds it rather than the home folder.
-  Future<void> _leaveForContainingFolder() async {
+  /// Closes a doc that has no history behind it, landing on the page it was
+  /// opened from (#2403). A doc reached by a link has none, and lands in the
+  /// folder that holds it rather than the home folder (#1749).
+  Future<void> _leave() async {
     if (_dirty && !await _confirmDiscard(context)) {
       return;
     }
     if (!mounted) return;
-    context.go(AppRoutes.containingFolder(widget.filePath));
+    context.go(
+      AppRoutes.editorOrigin(context) ??
+          AppRoutes.containingFolder(widget.filePath),
+    );
   }
 
   Future<void> _loadPrefs() async {
@@ -469,6 +471,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
         AppRoutes.docFile(
           renamed,
           serial: widget.deviceSerial.isEmpty ? null : widget.deviceSerial,
+          from: AppRoutes.editorOrigin(context),
         ),
       );
     } finally {
@@ -543,12 +546,12 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     final canPop = Navigator.of(context).canPop();
     return PopScope(
       // With nothing underneath, a system back would close the app; it
-      // leaves for the containing folder, as the app bar's back button does.
+      // leaves as the app bar's back button does.
       canPop: !_dirty && canPop,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
         if (!canPop) {
-          await _leaveForContainingFolder();
+          await _leave();
           return;
         }
         final leave = await _confirmDiscard(context);

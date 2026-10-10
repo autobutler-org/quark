@@ -9,6 +9,7 @@ import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/sheets_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/widgets/content_result_tile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// #2081: a sheet opened from the Sheets list was pushed, and a push does not
@@ -22,6 +23,14 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     resetSharedHttpClient();
     sharedHttpClientFactory = () => MockClient((request) async {
+      if (request.url.path == '/api/v0/files/search/content') {
+        return http.Response(
+          jsonEncode([
+            {'serial': '', 'relPath': 'notes/plan.qsheet', 'snippet': 'q3'},
+          ]),
+          200,
+        );
+      }
       if (request.url.path != '/api/v0/files/by-type') {
         return http.Response('[]', 200);
       }
@@ -81,7 +90,8 @@ void main() {
     await tester.tap(find.text('budget'));
     await tester.pumpAndSettle();
 
-    expect(location(router), AppRoutes.sheetFile('reports/budget.qsheet'));
+    // The list it was opened from rides along, so back returns there (#2403).
+    expect(location(router), '/sheets/reports/budget.qsheet?from=/sheets');
     expect(find.text('sheet editor reports/budget.qsheet'), findsOneWidget);
   });
 
@@ -93,7 +103,24 @@ void main() {
     await tester.tap(find.text('budget'));
     await tester.pumpAndSettle();
 
-    expect(location(router), AppRoutes.docFile('reports/budget.qdoc'));
+    expect(location(router), '/docs/reports/budget.qdoc?from=/docs');
     expect(find.text('doc editor reports/budget.qdoc'), findsOneWidget);
+  });
+
+  // A hit's extension picks its editor (#2259), so the editor cannot tell
+  // which list the search was on; the URL has to (#2403).
+  testWidgets('a search hit opens saying which list it was found on', (
+    tester,
+  ) async {
+    final router = await pumpList(tester, AppRoutes.docs);
+
+    await tester.enterText(find.byType(TextField), 'plan');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(ContentResultTile));
+    await tester.pumpAndSettle();
+
+    expect(location(router), '/sheets/notes/plan.qsheet?from=/docs');
+    expect(find.text('sheet editor notes/plan.qsheet'), findsOneWidget);
   });
 }

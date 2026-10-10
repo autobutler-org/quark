@@ -94,6 +94,32 @@ void main() {
         '/slides/talks/q1.qslide?serial=s+1&slide=3',
       );
     });
+
+    test('an editor URL carries where it was opened from (#2403)', () {
+      expect(
+        AppRoutes.docFile('a/q1.qdoc', from: AppRoutes.docs),
+        '/docs/a/q1.qdoc?from=/docs',
+      );
+      expect(
+        AppRoutes.sheetFile('a/b.qsheet', serial: 's1', from: '/files/my docs'),
+        '/sheets/a/b.qsheet?serial=s1&from=/files/my+docs',
+      );
+      expect(
+        AppRoutes.slideFile('a/deck.qslide', slide: 2, from: AppRoutes.files),
+        '/slides/a/deck.qslide?slide=2&from=/files',
+      );
+      expect(
+        AppRoutes.slidePresent('a/deck.qslide', from: AppRoutes.slides),
+        '/slides/a/deck.qslide/present?from=/slides',
+      );
+    });
+
+    test('an origin with a query of its own survives the trip', () {
+      const origin = '/files/my docs?serial=s 1&sort=name#top';
+      final url = Uri.parse(AppRoutes.docFile('a/q1.qdoc', from: origin));
+      expect(url.queryParameters, {AppRoutes.editorFromParam: origin});
+      expect(url.fragment, isEmpty);
+    });
   });
 
   group('AppRoutes.canonicalRoute', () {

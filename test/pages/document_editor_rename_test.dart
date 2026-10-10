@@ -65,12 +65,15 @@ void main() {
   String location(GoRouter router) =>
       router.routeInformationProvider.value.uri.toString();
 
-  Future<GoRouter> pumpRoutedEditor(WidgetTester tester) async {
+  Future<GoRouter> pumpRoutedEditor(
+    WidgetTester tester, {
+    String location = '/docs/reports/budget.qdoc',
+  }) async {
     tester.view.physicalSize = const Size(1280, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final router = GoRouter(
-      initialLocation: AppRoutes.docFile('reports/budget.qdoc'),
+      initialLocation: location,
       routes: [
         GoRoute(
           path: '${AppRoutes.docs}/:path(.*)',
@@ -131,6 +134,29 @@ void main() {
     expect(location(router), AppRoutes.docFile('reports/forecast.qdoc'));
     expect(find.text('forecast'), findsOneWidget);
     expect(find.text('budget'), findsNothing);
+  });
+
+  testWidgets('renaming keeps the page the doc was opened from (#2403)', (
+    tester,
+  ) async {
+    final router = await pumpRoutedEditor(
+      tester,
+      location: '/docs/reports/budget.qdoc?from=/docs',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('doc_rename_title')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'forecast',
+    );
+    await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+    await tester.pumpAndSettle();
+
+    expect(location(router), '/docs/reports/forecast.qdoc?from=/docs');
   });
 
   testWidgets('a failed save does not rename', (tester) async {

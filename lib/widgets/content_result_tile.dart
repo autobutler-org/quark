@@ -24,17 +24,18 @@ class ContentResultTile extends StatelessWidget {
     super.key,
   });
 
-  /// The editor URL [result] opens at, picked by its extension.
-  static String routeFor(ContentSearchResult result) {
+  /// The editor URL [result] opens at, picked by its extension. [from] is the
+  /// list showing the hit, which is where closing the editor returns (#2403).
+  static String routeFor(ContentSearchResult result, {String? from}) {
     final path = result.relPath;
     final serial = result.deviceSerial;
     if (DocSheetTile.isSheet(path)) {
-      return AppRoutes.sheetFile(path, serial: serial);
+      return AppRoutes.sheetFile(path, serial: serial, from: from);
     }
     if (DocSheetTile.isSlides(path)) {
-      return AppRoutes.slideFile(path, serial: serial);
+      return AppRoutes.slideFile(path, serial: serial, from: from);
     }
-    return AppRoutes.docFile(path, serial: serial);
+    return AppRoutes.docFile(path, serial: serial, from: from);
   }
 
   @override
@@ -44,7 +45,9 @@ class ContentResultTile extends StatelessWidget {
       deviceName: deviceName,
       showDevice: showDevice,
       snippet: result.plainSnippet,
-      onTap: () => context.go(routeFor(result)),
+      onTap: () => context.go(
+        routeFor(result, from: GoRouterState.of(context).matchedLocation),
+      ),
     );
   }
 }

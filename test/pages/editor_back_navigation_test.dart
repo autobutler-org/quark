@@ -70,6 +70,10 @@ void main() {
               DocumentEditorPage(filePath: state.pathParameters['path'] ?? ''),
         ),
         GoRoute(
+          path: AppRoutes.sheets,
+          builder: (_, _) => const Scaffold(body: Text('sheets list')),
+        ),
+        GoRoute(
           path: '${AppRoutes.sheets}/:path(.*)',
           builder: (_, state) => SpreadsheetEditorPage(
             filePath: state.pathParameters['path'] ?? '',
@@ -132,6 +136,82 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(handled, isTrue, reason: 'the app must not close');
+        expect(
+          router.routeInformationProvider.value.uri.toString(),
+          '/files/reports/2024',
+        );
+      });
+    }
+  });
+
+  // #2403: the Docs and Sheets lists open an editor with `go`, so nothing is
+  // underneath it to pop back to, and its way out answered with the containing
+  // folder whoever had opened it. The URL now says where it was opened from.
+  group('back from an editor returns to the page that opened it', () {
+    for (final entry in const {
+      'doc opened from Docs': (
+        '/docs/reports/2024/q1.qdoc?from=/docs',
+        '/docs',
+        'docs list',
+      ),
+      'sheet opened from Sheets': (
+        '/sheets/reports/2024/budget.qsheet?from=/sheets',
+        '/sheets',
+        'sheets list',
+      ),
+      'sheet found by a search on Docs': (
+        '/sheets/reports/2024/budget.qsheet?from=/docs',
+        '/docs',
+        'docs list',
+      ),
+      'doc opened from a folder it is not in': (
+        '/docs/reports/2024/q1.qdoc?from=/files/shared',
+        '/files/shared',
+        'folder:shared',
+      ),
+    }.entries) {
+      final (opened, origin, page) = entry.value;
+
+      testWidgets('${entry.key}, by the back button', (tester) async {
+        final router = await pumpEditors(tester, initialLocation: opened);
+
+        await tester.tap(find.byType(BackButton));
+        await tester.pumpAndSettle();
+
+        expect(router.routeInformationProvider.value.uri.toString(), origin);
+        expect(find.text(page), findsOneWidget);
+      });
+
+      testWidgets('${entry.key}, by a system back', (tester) async {
+        final router = await pumpEditors(tester, initialLocation: opened);
+
+        final handled = await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+
+        expect(handled, isTrue, reason: 'the app must not close');
+        expect(router.routeInformationProvider.value.uri.toString(), origin);
+      });
+    }
+
+    // The origin arrives in a URL anyone can write, so only a path inside the
+    // app counts; anything else is the deep link it looks like.
+    for (final from in const [
+      'https://example.com/',
+      '//example.com/docs',
+      'docs',
+      '',
+    ]) {
+      testWidgets('an origin of "$from" is ignored', (tester) async {
+        final router = await pumpEditors(
+          tester,
+          initialLocation:
+              '/docs/reports/2024/q1.qdoc'
+              '?from=${Uri.encodeQueryComponent(from)}',
+        );
+
+        await tester.tap(find.byType(BackButton));
+        await tester.pumpAndSettle();
+
         expect(
           router.routeInformationProvider.value.uri.toString(),
           '/files/reports/2024',

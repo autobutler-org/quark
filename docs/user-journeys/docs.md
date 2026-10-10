@@ -31,7 +31,9 @@ Covers the Docs page (`/docs`) and the document editor for `.qdoc` files.
 **Expected result:**
 
 - Document editor opens (`DocumentEditorPage`) with the file contents rendered.
-- URL updates to `/docs/<path-to-file>`.
+- URL updates to `/docs/<path-to-file>?from=/docs`.
+- The editor's back arrow, or a system back, returns to the Docs list. A document opened from Files returns to its
+  folder, as a deep link does (#2403).
 
 ---
 
