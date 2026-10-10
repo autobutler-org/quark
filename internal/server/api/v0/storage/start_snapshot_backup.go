@@ -46,6 +46,7 @@ func startSnapshotBackup(c *gin.Context) *serverutil.Response {
 		Ctx:                c.Request.Context(),
 		Queries:            deps.Database().Queries,
 		Storage:            deps.StorageService(),
+		Registry:           deps.VFSRegistry(),
 		Store:              deps.BackupJobStore(),
 		EventBus:           deps.EventBus(),
 		IOSemaphore:        deps.IOSemaphore().For(iosemutil.Copy),

@@ -9,18 +9,41 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
+
+const targetSerial = "target-drive"
+
+// localNamespaces registers a disk-backed files namespace for each serial,
+// keyed to its directory.
+func localNamespaces(t *testing.T, dirs map[string]string) vfs.Registry {
+	t.Helper()
+	reg := vfs.NewRegistry()
+	for serial, dir := range dirs {
+		fsys, err := vfs.NewLocalVFS(dir, vfs.FilesNamespace(serial))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := reg.Register(vfs.Namespace{ID: vfs.FilesNamespace(serial)}, fsys); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return reg
+}
+
+// newSyncWorker returns a worker mirroring registry's internal drive onto
+// the drive with serial.
+func newSyncWorker(registry vfs.Registry, serial string) *SyncWorker {
+	w := NewSyncWorker(SyncWorkerParams{Bus: eventbus.New(), Registry: registry})
+	w.targetSerial = func(context.Context) (string, bool, error) { return serial, serial != "", nil }
+	return w
+}
 
 func newTestSyncWorker(t *testing.T) (*SyncWorker, string, string) {
 	t.Helper()
 	srcDir := t.TempDir()
 	dstDir := t.TempDir()
-	bus := eventbus.New()
-
-	w := NewSyncWorker(SyncWorkerParams{Bus: bus})
-	w.resolveTarget = func(ctx context.Context) (string, error) { return dstDir, nil }
-	w.resolveInternalDir = func() (string, error) { return srcDir, nil }
-
+	w := newSyncWorker(localNamespaces(t, map[string]string{"": srcDir, targetSerial: dstDir}), targetSerial)
 	return w, srcDir, dstDir
 }
 
@@ -181,13 +204,8 @@ func TestSyncWorker_HandleEvent_Move(t *testing.T) {
 }
 
 func TestSyncWorker_StartStop(t *testing.T) {
-	bus := eventbus.New()
-	w := NewSyncWorker(SyncWorkerParams{Bus: bus})
-
-	srcDir := t.TempDir()
-	dstDir := t.TempDir()
-	w.resolveTarget = func(ctx context.Context) (string, error) { return dstDir, nil }
-	w.resolveInternalDir = func() (string, error) { return srcDir, nil }
+	w, srcDir, dstDir := newTestSyncWorker(t)
+	bus := w.bus
 
 	writeTestFile(t, srcDir, "live.txt", "live-data")
 
@@ -217,10 +235,7 @@ func TestSyncWorker_StartStop(t *testing.T) {
 }
 
 func TestSyncWorker_NoTarget_NoError(t *testing.T) {
-	bus := eventbus.New()
-	w := NewSyncWorker(SyncWorkerParams{Bus: bus})
-	w.resolveTarget = func(ctx context.Context) (string, error) { return "", nil }
-	w.resolveInternalDir = func() (string, error) { return t.TempDir(), nil }
+	w := newSyncWorker(localNamespaces(t, map[string]string{"": t.TempDir()}), "")
 
 	w.handleEvent(context.Background(), eventbus.Event{
 		Kind: eventbus.EventUpload,
@@ -247,31 +262,6 @@ func TestSyncWorker_SyncPath_FailedCopy_QueuesRetry(t *testing.T) {
 
 	if w.QueueLength() != 1 {
 		t.Errorf("expected retry queued, got queue length %d", w.QueueLength())
-	}
-}
-
-func TestCopyFile(t *testing.T) {
-	dir := t.TempDir()
-	src := filepath.Join(dir, "src.bin")
-	dst := filepath.Join(dir, "dst.bin")
-
-	os.WriteFile(src, []byte("binary-content"), 0644)
-
-	if err := copyFile(t.Context(), src, dst, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	data, _ := os.ReadFile(dst)
-	if string(data) != "binary-content" {
-		t.Errorf("expected 'binary-content', got %q", string(data))
-	}
-}
-
-func TestCopyFile_MissingSource(t *testing.T) {
-	dir := t.TempDir()
-	err := copyFile(t.Context(), filepath.Join(dir, "nope"), filepath.Join(dir, "dst"), nil)
-	if err == nil {
-		t.Error("expected error for missing source")
 	}
 }
 

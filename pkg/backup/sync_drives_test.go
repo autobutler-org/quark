@@ -1,7 +1,6 @@
 package backup
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,11 +23,10 @@ const otherSerial = "other-drive"
 func newDrivesWorker(t *testing.T) (*SyncWorker, *eventbus.Bus, drives) {
 	t.Helper()
 	d := drives{internal: t.TempDir(), target: t.TempDir(), other: t.TempDir()}
-	bus := eventbus.New()
-	w := NewSyncWorker(SyncWorkerParams{Bus: bus})
-	w.resolveTarget = func(context.Context) (string, error) { return d.target, nil }
-	w.resolveInternalDir = func() (string, error) { return d.internal, nil }
-	return w, bus, d
+	w := newSyncWorker(localNamespaces(t, map[string]string{
+		"": d.internal, targetSerial: d.target, otherSerial: d.other,
+	}), targetSerial)
+	return w, w.bus, d
 }
 
 // runEvents publishes events to a started worker and returns once the worker has

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 func makeSource(t *testing.T, name, serial string, files map[string]string) SourceDevice {
@@ -19,18 +19,19 @@ func makeSource(t *testing.T, name, serial string, files map[string]string) Sour
 		os.MkdirAll(filepath.Dir(full), 0755)
 		os.WriteFile(full, []byte(content), 0644)
 	}
-	return SourceDevice{Name: name, Serial: serial, FilesDir: dir}
+	return SourceDevice{Name: name, Serial: serial, Files: localFS(t, dir)}
 }
 
-func makeTarget(t *testing.T) *storageutil.ManagedDevice {
+// localTarget is a disk-backed target namespace and the directory under it.
+type localTarget struct {
+	vfs.VFS
+	FilesDir string
+}
+
+func makeTarget(t *testing.T) localTarget {
 	t.Helper()
 	dir := t.TempDir()
-	files := filepath.Join(dir, "files")
-	os.MkdirAll(files, 0755)
-	return &storageutil.ManagedDevice{
-		DataDir:  dir,
-		FilesDir: files,
-	}
+	return localTarget{VFS: localFS(t, dir), FilesDir: dir}
 }
 
 func newJob(targetSerial string) *BackupJob {
@@ -60,7 +61,7 @@ func TestSnapshotBackup_MultiSource(t *testing.T) {
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
 		Store:              store,
-	}, []SourceDevice{src1, src2}, target)
+	}, []SourceDevice{src1, src2}, target.VFS)
 	if err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestSnapshotBackup_InternalDevice(t *testing.T) {
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
 		Store:              store,
-	}, []SourceDevice{src}, target)
+	}, []SourceDevice{src}, target.VFS)
 	if err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
 	}
@@ -114,8 +115,8 @@ func TestSnapshotBackup_SmartSkip(t *testing.T) {
 	destFile := filepath.Join(destDir, "file.txt")
 	os.WriteFile(destFile, []byte("content"), 0644)
 	// Set mtime to match source.
-	srcInfo, _ := os.Stat(filepath.Join(src.FilesDir, "file.txt"))
-	os.Chtimes(destFile, srcInfo.ModTime(), srcInfo.ModTime())
+	srcInfo, _ := src.Files.Stat(t.Context(), "file.txt")
+	os.Chtimes(destFile, srcInfo.ModTime, srcInfo.ModTime)
 
 	store := NewInMemoryBackupJobStore()
 	job := newJob("TARGET")
@@ -125,7 +126,7 @@ func TestSnapshotBackup_SmartSkip(t *testing.T) {
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
 		Store:              store,
-	}, []SourceDevice{src}, target)
+	}, []SourceDevice{src}, target.VFS)
 	if err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
 	}
@@ -157,7 +158,7 @@ func TestSnapshotBackup_OverwriteStale(t *testing.T) {
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
 		Store:              store,
-	}, []SourceDevice{src}, target)
+	}, []SourceDevice{src}, target.VFS)
 	if err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
 	}
@@ -179,7 +180,7 @@ func TestSnapshotBackup_EmptySource(t *testing.T) {
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
 		Store:              store,
-	}, []SourceDevice{src}, target)
+	}, []SourceDevice{src}, target.VFS)
 	if err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
 	}
@@ -210,7 +211,7 @@ func TestSnapshotBackup_Cancellation(t *testing.T) {
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
 		Store:              store,
-	}, []SourceDevice{src}, target)
+	}, []SourceDevice{src}, target.VFS)
 
 	if err == nil {
 		t.Error("expected error from cancelled context")
@@ -238,7 +239,7 @@ func TestSnapshotBackup_EventBusPublish(t *testing.T) {
 		Job:                job,
 		Store:              store,
 		EventBus:           bus,
-	}, []SourceDevice{src}, target)
+	}, []SourceDevice{src}, target.VFS)
 	if err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
 	}

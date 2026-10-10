@@ -2,16 +2,16 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
-	"io/fs"
 	"log"
-	"os"
-	"path/filepath"
+	"path"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 func (w *SyncWorker) Start() {
@@ -82,86 +82,104 @@ func (w *SyncWorker) handleEvent(ctx context.Context, evt eventbus.Event) {
 	}
 }
 
-func (w *SyncWorker) defaultResolveTarget(ctx context.Context) (string, error) {
+// defaultTargetSerial returns the serial of the default-storage drive, and
+// false when no drive holds the role or the internal drive does.
+func (w *SyncWorker) defaultTargetSerial(ctx context.Context) (string, bool, error) {
 	roles, err := w.queries.GetAllDeviceRoles(ctx)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-
 	for _, r := range roles {
 		if r.Role == "default-storage" {
-			dev, err := w.storage.FindManagedDeviceBySerial(r.DeviceSerial)
-			if err != nil {
-				return "", err
-			}
-			if dev == nil {
-				return "", nil
-			}
-			return dev.FilesDir, nil
+			return r.DeviceSerial, r.DeviceSerial != "", nil
 		}
 	}
-	return "", nil
+	return "", false, nil
 }
 
-func (w *SyncWorker) defaultResolveInternalDir() (string, error) {
-	return storageutil.GetFilesDir()
+// namespaces returns the internal drive's namespace and the default-storage
+// drive's, the two live sync copies between. ok is false when there is
+// nothing to mirror onto: no drive holds the role, or it is not attached.
+func (w *SyncWorker) namespaces(ctx context.Context) (src, dst vfs.VFS, ok bool) {
+	serial, found, err := w.targetSerial(ctx)
+	if err != nil || !found {
+		return nil, nil, false
+	}
+	dst, err = fileutil.FilesVFS(w.registry, serial)
+	if err != nil {
+		return nil, nil, false
+	}
+	src, err = fileutil.FilesVFS(w.registry, "")
+	if err != nil {
+		return nil, nil, false
+	}
+	return src, dst, true
 }
 
+// syncPath mirrors relPath onto the target. A folder is created there along
+// with the files directly in it that the target lacks or holds an older copy
+// of: an upload event names the folder it landed in, not the file (#2649).
 func (w *SyncWorker) syncPath(ctx context.Context, relPath string) {
-	targetDir, err := w.resolveTarget(ctx)
-	if err != nil || targetDir == "" {
+	src, dst, ok := w.namespaces(ctx)
+	if !ok {
 		return
 	}
-
-	srcDir, err := w.resolveInternalDir()
+	info, err := src.Stat(ctx, relPath)
 	if err != nil {
 		return
 	}
-
-	srcPath := filepath.Join(srcDir, relPath)
-	dstPath := filepath.Join(targetDir, relPath)
-
-	info, err := os.Stat(srcPath)
-	if err != nil {
+	w.mirror(ctx, src, dst, info)
+	if !info.IsDir {
 		return
 	}
+	entries, err := src.List(ctx, relPath, nil)
+	if err != nil {
+		log.Printf("sync: list %s: %v", relPath, err)
+		return
+	}
+	for _, fi := range entries {
+		if storageutil.IsInternalName(fi.Name) {
+			continue
+		}
+		w.mirror(ctx, src, dst, fi)
+	}
+}
 
-	if info.IsDir() {
-		if err := os.MkdirAll(dstPath, 0755); err != nil {
-			log.Printf("sync: mkdir %s: %v", relPath, err)
+// mirror copies one entry of the internal drive onto the target: a folder is
+// created, and a file is copied unless the target's copy is up to date. A
+// failed copy is queued for a retry.
+func (w *SyncWorker) mirror(ctx context.Context, src, dst vfs.VFS, fi vfs.FileInfo) {
+	if fi.IsDir {
+		if err := dst.MkdirAll(ctx, fi.Path); err != nil {
+			log.Printf("sync: mkdir %s: %v", fi.Path, err)
 		}
 		return
 	}
-
-	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
-		log.Printf("sync: mkdir parent %s: %v", relPath, err)
+	if upToDate(ctx, fi, dst) {
 		return
 	}
-
-	if err := copyFile(ctx, srcPath, dstPath, w.ioSem); err != nil {
-		log.Printf("sync: copy %s: %v", relPath, err)
-		w.queueRetry(eventbus.Event{Kind: eventbus.EventUpload, Path: relPath})
+	if err := copyFile(ctx, src, dst, fi.Path, w.ioSem); err != nil {
+		log.Printf("sync: copy %s: %v", fi.Path, err)
+		w.queueRetry(eventbus.Event{Kind: eventbus.EventUpload, Path: fi.Path})
 	}
 }
 
 func (w *SyncWorker) movePath(ctx context.Context, oldPath, newPath string) {
-	targetDir, err := w.resolveTarget(ctx)
-	if err != nil || targetDir == "" {
+	_, dst, ok := w.namespaces(ctx)
+	if !ok {
 		return
 	}
-
-	oldDst := filepath.Join(targetDir, oldPath)
-	newDst := filepath.Join(targetDir, newPath)
-
-	// os.Rename replaces an existing file, and what sits at the new name on
-	// the target may be a file the mirror never wrote.
-	if _, err := os.Lstat(newDst); !os.IsNotExist(err) {
+	// A move replaces an existing file, and what sits at the new name on the
+	// target may be a file the mirror never wrote.
+	if _, err := dst.Stat(ctx, newPath); !errors.Is(err, vfs.ErrNotFound) {
 		log.Printf("sync: move %s → %s: destination exists on target, leaving both", oldPath, newPath)
 		return
 	}
-	// A failure here surfaces as the rename error just below.
-	_ = os.MkdirAll(filepath.Dir(newDst), 0755)
-	if err := os.Rename(oldDst, newDst); err != nil {
+	if dir := path.Dir(newPath); dir != "." {
+		// A failure here surfaces as the move error just below.
+		_ = dst.MkdirAll(ctx, dir)
+	}
+	if err := dst.Move(ctx, oldPath, newPath); err != nil {
 		log.Printf("sync: move %s → %s: %v", oldPath, newPath, err)
 	}
 }
@@ -172,57 +190,27 @@ func (w *SyncWorker) movePath(ctx context.Context, oldPath, newPath string) {
 // nothing: a file only the target holds may be a missed delete or may have
 // been written to the device directly, and the two look the same from here.
 func (w *SyncWorker) reconcile(ctx context.Context) {
-	targetDir, err := w.resolveTarget(ctx)
-	if err != nil || targetDir == "" {
+	src, dst, ok := w.namespaces(ctx)
+	if !ok {
 		return
 	}
-	srcDir, err := w.resolveInternalDir()
-	if err != nil {
-		return
-	}
-	walkErr := filepath.WalkDir(srcDir, func(srcPath string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		relPath, err := filepath.Rel(srcDir, srcPath)
-		if err != nil || relPath == "." {
-			return nil
-		}
-		dstPath := filepath.Join(targetDir, relPath)
-		if d.IsDir() {
-			if err := os.MkdirAll(dstPath, 0755); err != nil {
-				log.Printf("sync: reconcile mkdir %s: %v", relPath, err)
-			}
-			return nil
-		}
-		if !d.Type().IsRegular() || upToDate(srcPath, dstPath) {
-			return nil
-		}
-		if err := copyFile(ctx, srcPath, dstPath, w.ioSem); err != nil {
-			log.Printf("sync: reconcile copy %s: %v", relPath, err)
-			w.queueRetry(eventbus.Event{Kind: eventbus.EventUpload, Path: filepath.ToSlash(relPath)})
-		}
+	err := vfs.Walk(ctx, src, "", func(fi vfs.FileInfo) error {
+		w.mirror(ctx, src, dst, fi)
 		return nil
 	})
-	if walkErr != nil {
-		log.Printf("sync: reconcile: %v", walkErr)
+	if err != nil {
+		log.Printf("sync: reconcile: %v", err)
 	}
 }
 
-// upToDate reports whether dst is the same size as src and no older.
-func upToDate(src, dst string) bool {
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		return true
-	}
-	dstInfo, err := os.Stat(dst)
-	if err != nil {
+// upToDate reports whether dst holds a copy of src that is the same size and
+// no older.
+func upToDate(ctx context.Context, src vfs.FileInfo, dst vfs.VFS) bool {
+	dstInfo, err := dst.Stat(ctx, src.Path)
+	if err != nil || dstInfo.IsDir {
 		return false
 	}
-	return srcInfo.Size() == dstInfo.Size() && !srcInfo.ModTime().After(dstInfo.ModTime())
+	return src.Size == dstInfo.Size && !src.ModTime.After(dstInfo.ModTime)
 }
 
 func (w *SyncWorker) queueRetry(evt eventbus.Event) {
@@ -247,29 +235,16 @@ func (w *SyncWorker) DrainPending(ctx context.Context) int {
 	return synced
 }
 
-func copyFile(ctx context.Context, src, dst string, sem *iosemutil.Semaphore) error {
+// copyFile copies relPath from src to the same path on dst. The copy goes
+// through [vfs.CopyBetween], so the target never holds a half-written file
+// under its real name.
+func copyFile(ctx context.Context, src, dst vfs.VFS, relPath string, sem *iosemutil.Semaphore) error {
 	// Acquire IO semaphore before reading/writing to yield to interactive requests.
 	if sem != nil {
 		if !sem.AcquireDefault(ctx) {
-			return fmt.Errorf("sync: IO semaphore timeout for %s", src)
+			return fmt.Errorf("sync: IO semaphore timeout for %s", relPath)
 		}
 		defer sem.Release()
 	}
-
-	in, err := os.Open(src)
-	if err != nil {
-		return fmt.Errorf("open source: %w", err)
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return fmt.Errorf("create dest: %w", err)
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, in); err != nil {
-		return fmt.Errorf("copy: %w", err)
-	}
-	return out.Close()
+	return vfs.CopyBetween(ctx, src, relPath, dst, relPath, vfs.CopyOptions{})
 }
