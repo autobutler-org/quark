@@ -450,3 +450,37 @@ added outside Quark shows up once its thumbnail loads or after the next restart.
 - Confirming moves the marked copies to the trash and reloads the groups. A copy that could not be deleted is named
   in a snack bar by count.
 - A photo appears in one group at most, and a photo that was deleted, moved or trashed stops appearing.
+
+---
+
+### JN-PH-023: Search photos by file name
+
+**Preconditions:** Photos are visible in the grid (JN-PH-001), an album (JN-PH-012), or a category tab.
+
+**Steps:**
+
+1. Tap **Search** (the magnifying glass) in the app bar. A search field opens under the bar, ready to type in.
+2. Type part of a file name.
+3. Tap the **✕** at the end of the field, or press Escape, to leave the search.
+
+**Expected result:**
+
+- The grid narrows as you type to the photos whose file name contains the text, ignoring case. What is already
+  loaded narrows at once; a moment after typing pauses, the Quark's file search answers for the whole library, so
+  a photo on a page not scrolled to yet is found too.
+- The search applies to whatever the grid shows: All photos, a category tab, or the album that is open. An album
+  and the Mobile tab are filtered on the device, since everything in them is already loaded.
+- The matches keep the chosen sort order (JN-PH-018). Under **Taken** they go by the file's modified time, since
+  the file search does not report capture dates.
+- When nothing matches, the grid reads **No photos match "…"**. When the Quark cannot be asked, it says the search
+  could not be done instead of claiming nothing matches.
+- Leaving the search brings the whole grid back.
+
+**Notes:**
+
+- Only file names are searched. Searching by capture date, camera or other metadata is deferred: it needs the
+  Quark's photo listing to take a search term, which it does not yet (#2059).
+- The Quark's file search returns at most 500 files of every kind before photos are picked out, so a term that
+  matches more files than that can miss photos. A narrower term finds them.
+- A device photo is matched by its title, which iOS does not always report.
+- Demo mode searches the sample library on the device.

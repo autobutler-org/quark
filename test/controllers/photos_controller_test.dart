@@ -11,6 +11,7 @@ import 'package:quark/controllers/albums_cache.dart';
 import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/controllers/photos_controller.dart';
 import 'package:quark/controllers/photos_list_cache.dart';
+import 'package:quark/models/file_node.dart';
 import 'package:quark/models/paginated_photos_response.dart' as wire;
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/models/photo_sort.dart';
@@ -140,6 +141,9 @@ class _FakeQuark {
   final Set<String> failingAdds = {};
   final List<String> calls = [];
 
+  /// What a search throws instead of answering, when set (#2059).
+  Object? searchError;
+
   /// Where the next upload says its files landed.
   List<String> landedPaths = const [];
 
@@ -154,6 +158,29 @@ class _FakeQuark {
     listCache: listCache,
     albumsCache: albumsCache,
     activeHost: () => host,
+    searchDelay: Duration.zero,
+    // Every photo the Quark holds whose name matches, loaded or not, and a
+    // file that is no photo, the way the files search answers (#2059).
+    searchFiles: (query, {serials}) async {
+      calls.add('search($query)');
+      final error = searchError;
+      if (error != null) throw error;
+      FileNode file(String path, int mtime) => FileNode(
+        name: path.split('/').last,
+        size: 1,
+        isDir: false,
+        deviceName: '',
+        devicePath: '',
+        deviceSerial: 'sd1',
+        dirPath: path,
+        modifiedAt: DateTime.fromMillisecondsSinceEpoch(mtime * 1000),
+      );
+      return [
+        for (var i = 0; i < total; i++)
+          if ('$i.jpg'.contains(query)) file('camera/$i.jpg', mtimeOf(i)),
+        file('docs/notes-$query.txt', 0),
+      ];
+    },
     getPhotos:
         ({
           int offset = 0,
@@ -1882,6 +1909,206 @@ void main() {
       expect(controller.assetFor('sd1:camera/0.jpg'), isNull);
       expect(controller.thumbnailUrl('asset:dev1'), isNull);
       expect(controller.assetFor('asset:dev1')?.id, 'dev1');
+    });
+  });
+
+  group('search (#2059)', () {
+    List<String> names(PhotosController controller) => [
+      for (final photo in controller.photos) photo.name,
+    ];
+
+    test('finds photos by name past the loaded page', () async {
+      final quark = _FakeQuark(total: 120);
+      final controller = quark.controller()
+        ..selectCategory(PhotoCategory.quark);
+      await controller.refresh();
+
+      controller.setSearchQuery(' 11 ');
+      // What is loaded narrows at once, while the Quark is asked.
+      expect(controller.searchQuery, '11');
+      expect(names(controller), ['11.jpg']);
+      expect(controller.isSearching, isTrue);
+
+      await pumpEventQueue();
+      expect(controller.isSearching, isFalse);
+      expect(controller.searchError, isNull);
+      expect(names(controller), hasLength(11));
+      expect(names(controller), containsAll(['11.jpg', '110.jpg', '119.jpg']));
+      expect(names(controller), isNot(contains('notes-11.txt')));
+      // Every match arrived in one answer, so there is no next page.
+      expect(controller.hasMore, isFalse);
+      expect(
+        controller.thumbnailUrl('sd1:camera/119.jpg'),
+        Uri.parse('https://quark.local/thumb/sd1/camera/119.jpg'),
+      );
+    });
+
+    test('clearing the query brings the library back', () async {
+      final quark = _FakeQuark(total: 120);
+      final controller = quark.controller()
+        ..selectCategory(PhotoCategory.quark);
+      await controller.refresh();
+      controller.setSearchQuery('11');
+      await pumpEventQueue();
+
+      controller.setSearchQuery('');
+
+      expect(controller.isSearching, isFalse);
+      expect(controller.photos, hasLength(PhotosController.pageSize));
+      expect(controller.hasMore, isTrue);
+    });
+
+    test('asks the Quark once for a burst of typing', () async {
+      final quark = _FakeQuark(total: 120);
+      final controller = quark.controller();
+      await controller.refresh();
+
+      controller
+        ..setSearchQuery('1')
+        ..setSearchQuery('11')
+        ..setSearchQuery('119');
+      await pumpEventQueue();
+
+      expect(quark.calls.where((call) => call.startsWith('search(')), [
+        'search(119)',
+      ]);
+    });
+
+    test('orders the matches by the chosen sort', () async {
+      final quark = _FakeQuark(total: 120)..mtimeOf = (i) => 1000 - i;
+      final controller = quark.controller()
+        ..selectCategory(PhotoCategory.quark);
+      await controller.setSort(PhotoSortField.added, PhotoSortOrder.asc);
+
+      controller.setSearchQuery('11');
+      await pumpEventQueue();
+      expect(names(controller).first, '119.jpg');
+
+      await controller.setSort(PhotoSortField.name, PhotoSortOrder.asc);
+      expect(names(controller).take(3), ['11.jpg', '110.jpg', '111.jpg']);
+    });
+
+    test('narrows favorites and device photos too', () async {
+      final quark = _FakeQuark(total: 120)
+        ..favorites = {'sd1:camera/119.jpg', 'sd1:camera/2.jpg'};
+      final controller = quark.controller();
+      await controller.refresh();
+
+      controller.setSearchQuery('11');
+      await pumpEventQueue();
+
+      controller.selectCategory(PhotoCategory.favorites);
+      expect(names(controller), ['119.jpg']);
+      controller.selectCategory(PhotoCategory.mobile);
+      expect(controller.photos, isEmpty);
+    });
+
+    test('filters the album that is showing', () async {
+      final quark = _FakeQuark()
+        ..albumFiles = {
+          1: ['camera/1.jpg', 'trips/Beach.JPG'],
+        };
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+
+      controller.setSearchQuery('beach');
+      await pumpEventQueue();
+
+      expect(names(controller), ['Beach.JPG']);
+    });
+
+    test(
+      'a failed library search leaves an album and the device alone',
+      () async {
+        final quark = _FakeQuark()
+          ..searchError = const ApiException(500)
+          ..albumFiles = {
+            1: ['camera/1.jpg'],
+          };
+        final controller = quark.controller();
+        await controller.refresh();
+
+        controller.setSearchQuery('zz');
+        controller.selectCategory(PhotoCategory.mobile);
+        // Nothing here waits on the Quark, so nothing spins or fails.
+        expect(controller.isSearching, isFalse);
+        await pumpEventQueue();
+        expect(controller.searchError, isNull);
+
+        controller.selectCategory(PhotoCategory.all);
+        expect(controller.searchError, isA<ApiException>());
+        await controller.showAlbum(1);
+        expect(controller.searchError, isNull);
+      },
+    );
+
+    test('reports a search the Quark could not answer', () async {
+      final quark = _FakeQuark(total: 120)
+        ..searchError = const ApiException(500);
+      final controller = quark.controller();
+      await controller.refresh();
+
+      controller.setSearchQuery('11');
+      await pumpEventQueue();
+
+      expect(controller.isSearching, isFalse);
+      expect(controller.searchError, isA<ApiException>());
+      controller.setSearchQuery('');
+      expect(controller.searchError, isNull);
+    });
+
+    test(
+      'a refresh searches again and keeps the matches if it fails',
+      () async {
+        final quark = _FakeQuark(total: 120);
+        final controller = quark.controller()
+          ..selectCategory(PhotoCategory.quark);
+        await controller.refresh();
+        controller.setSearchQuery('11');
+        await pumpEventQueue();
+
+        quark.total = 111;
+        await controller.refresh();
+        expect(names(controller), hasLength(2));
+
+        quark.searchError = const ApiException(500);
+        await controller.refresh();
+        expect(names(controller), hasLength(2));
+        expect(controller.searchError, isNull);
+      },
+    );
+
+    test('filters what is loaded when there is no Quark search', () async {
+      final quark = _FakeQuark(total: 120);
+      final controller = PhotosController(
+        isWeb: true,
+        listCache: quark.listCache,
+        albumsCache: quark.albumsCache,
+        activeHost: () => quark.host,
+        getPhotos:
+            ({
+              int offset = 0,
+              int limit = 50,
+              String? serial,
+              PhotoSortField sort = PhotoSortField.added,
+              PhotoSortOrder order = PhotoSortOrder.desc,
+            }) async => wire.PaginatedPhotosResponse(
+              photos: [for (var i = 0; i < 3; i++) _wirePhoto(i)],
+              total: 3,
+              offset: 0,
+              limit: 50,
+            ),
+        listFavoriteKeys: () async => {},
+        listAlbums: ({bool tree = false}) async => [],
+        searchFiles: null,
+      );
+      await controller.refresh();
+
+      controller.setSearchQuery('2');
+
+      expect(controller.isSearching, isFalse);
+      expect(names(controller), ['2.jpg']);
     });
   });
 }
