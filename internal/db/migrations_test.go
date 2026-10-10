@@ -797,3 +797,57 @@ INSERT INTO calendar_events (id, calendar_id, title, starts_at, ends_at, repeat,
 		t.Fatalf("migrate up again: %v", err)
 	}
 }
+
+// backupJobsVersion is 030_backup_jobs, which makes a snapshot backup a job
+// with one pending or running backup per target (#3084).
+const backupJobsVersion = 30
+
+// TestBackupJobsMigration checks jobs from before 030 survive it both ways,
+// and that the per-target lock holds only while a backup is unfinished.
+func TestBackupJobsMigration(t *testing.T) {
+	conn, m := migrateTo(t, backupJobsVersion-1)
+	if _, err := conn.Exec(`INSERT INTO jobs (id, kind, name, params) VALUES (1, 'video-transcode', 'Convert', '{"serial":"S1"}')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(backupJobsVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", backupJobsVersion, err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE id = 1 AND detail = '{}'`); n != 1 {
+		t.Error("the job from before 030 has no empty detail")
+	}
+	const backup = `INSERT INTO jobs (kind, name, params, status) VALUES ('snapshot-backup', 'Snapshot backup', ?, ?)`
+	for _, row := range []struct {
+		target, status string
+		refused        bool
+	}{
+		{"USB-1", "pending", false},
+		{"USB-1", "running", true},
+		{"USB-1", "pending", true},
+		{"USB-2", "pending", false},
+		{"USB-1", "completed", false},
+		{"USB-1", "failed", false},
+	} {
+		_, err := conn.Exec(backup, `{"targetDeviceSerial":"`+row.target+`"}`, row.status)
+		if refused := err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed"); refused != row.refused {
+			t.Errorf("a %s backup onto %s = %v, want refused %v", row.status, row.target, err, row.refused)
+		}
+	}
+	// Another kind's jobs are not the lock's business.
+	if _, err := conn.Exec(`INSERT INTO jobs (kind, name, params) VALUES ('video-transcode', 'Convert', '{"targetDeviceSerial":"USB-1"}')`); err != nil {
+		t.Errorf("a job of another kind was held to the backup lock: %v", err)
+	}
+
+	if err := m.Migrate(backupJobsVersion - 1); err != nil {
+		t.Fatalf("migrate down: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE id = 1 AND params = '{"serial":"S1"}'`); n != 1 {
+		t.Error("the down migration lost a job")
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = 'detail'`); n != 0 {
+		t.Error("detail still present after the down migration")
+	}
+	if err := m.Migrate(backupJobsVersion); err != nil {
+		t.Fatalf("migrate up again: %v", err)
+	}
+}

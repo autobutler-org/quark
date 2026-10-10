@@ -1,8 +1,9 @@
 package v0_storage
 
 import (
-	"fmt"
+	"errors"
 
+	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -11,26 +12,32 @@ import (
 
 // getSnapshotBackupStatus godoc
 // @Summary Get snapshot backup job status
-// @Description Returns the current status of a snapshot backup job
+// @Description Returns the current status of a snapshot backup job, read from its row in the jobs table, so any instance answers and a backup cut off by a restart reads as FAILED. 404 means the id is not a backup job's.
 // @Tags storage
 // @Produce json
 // @Param jobId path string true "Job ID"
-// @Success 200 {object} object
+// @Success 200 {object} backup.BackupJob
 // @Failure 404 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /storage/devices/snapshot-backup/status/{jobId} [get]
 func getSnapshotBackupStatus(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
-	if !ok {
+	if !ok || deps.Database() == nil {
 		return serverutil.InternalServerError(nil)
 	}
 
-	jobID := c.Param("jobId")
-	job, err := deps.BackupJobStore().Get(c.Request.Context(), jobID)
-	if err != nil {
-		return serverutil.NotFound(fmt.Errorf("job not found: %w", err))
+	result, err := backup.GetSnapshotBackupStatus(backup.GetSnapshotBackupStatusParams{
+		Ctx:     c.Request.Context(),
+		Queries: deps.Database().Queries,
+		JobID:   c.Param("jobId"),
+	})
+	if errors.Is(err, backup.ErrBackupJobNotFound) {
+		return serverutil.NotFound(err)
 	}
-	return serverutil.Ok().WithData(job)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	return serverutil.Ok().WithData(result.Job)
 }
 
 var getSnapshotBackupStatusRoute = serverutil.ApiRoute(

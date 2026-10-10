@@ -194,7 +194,7 @@ func (q *Queue) execute(ctx context.Context, row db.Job, report func(float64)) e
 	if !ok {
 		return q.unknownKind(row.Kind)
 	}
-	return handler.Run(WithUserID(ctx, row.UserID.Int64), json.RawMessage(row.Params), report)
+	return handler.Run(WithJobID(WithUserID(ctx, row.UserID.Int64), row.ID), json.RawMessage(row.Params), report)
 }
 
 // reporter returns the progress callback handed to a Handler and a func

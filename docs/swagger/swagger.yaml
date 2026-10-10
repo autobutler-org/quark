@@ -115,6 +115,70 @@ definitions:
           debounced, so it can trail the newest request.
         type: string
     type: object
+  backup.BackupJob:
+    properties:
+      bytesCopied:
+        type: integer
+      completedAt:
+        type: string
+      createdAt:
+        type: string
+      errorMsg:
+        type: string
+      filesCopied:
+        type: integer
+      filesSkipped:
+        type: integer
+      id:
+        type: string
+      progress:
+        type: number
+      sourceDevices:
+        items:
+          $ref: '#/definitions/backup.SourceDeviceProgress'
+        type: array
+      status:
+        $ref: '#/definitions/backup.BackupJobStatus'
+      targetDeviceSerial:
+        type: string
+      totalBytes:
+        type: integer
+      totalFiles:
+        type: integer
+      updatedAt:
+        type: string
+    type: object
+  backup.BackupJobStatus:
+    enum:
+    - PENDING
+    - SCANNING
+    - COPYING
+    - COMPLETED
+    - FAILED
+    type: string
+    x-enum-varnames:
+    - BackupStatusPending
+    - BackupStatusScanning
+    - BackupStatusCopying
+    - BackupStatusCompleted
+    - BackupStatusFailed
+  backup.SourceDeviceProgress:
+    properties:
+      bytesCopied:
+        type: integer
+      bytesTotal:
+        type: integer
+      deviceName:
+        type: string
+      deviceSerial:
+        type: string
+      filesCopied:
+        type: integer
+      filesSkipped:
+        type: integer
+      filesTotal:
+        type: integer
+    type: object
   chatutil.Channel:
     properties:
       createdAt:
@@ -8095,8 +8159,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Aggregates all files from all managed devices onto the target snapshot-backup
-        device
+      description: Queues a job that aggregates all files from all managed devices
+        onto the target snapshot-backup device. Answers 409 while the target already
+        has a pending or running backup, whichever instance started it. jobId is what
+        the status route takes.
       parameters:
       - description: '{targetDeviceSerial: string}'
         in: body
@@ -8135,7 +8201,9 @@ paths:
       - storage
   /storage/devices/snapshot-backup/status/{jobId}:
     get:
-      description: Returns the current status of a snapshot backup job
+      description: Returns the current status of a snapshot backup job, read from
+        its row in the jobs table, so any instance answers and a backup cut off by
+        a restart reads as FAILED. 404 means the id is not a backup job's.
       parameters:
       - description: Job ID
         in: path
@@ -8148,7 +8216,7 @@ paths:
         "200":
           description: OK
           schema:
-            type: object
+            $ref: '#/definitions/backup.BackupJob'
         "404":
           description: Not Found
           schema:

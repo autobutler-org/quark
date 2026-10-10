@@ -53,14 +53,11 @@ func TestSnapshotBackup_MultiSource(t *testing.T) {
 		"photos/b.jpg": "photo-b",
 	})
 	target := makeTarget(t)
-	store := NewInMemoryBackupJobStore()
 	job := newJob("TARGET")
-	store.Create(context.Background(), job)
 
 	err := SnapshotBackup(context.Background(), SnapshotBackupParams{
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
-		Store:              store,
 	}, []SourceDevice{src1, src2}, target.VFS)
 	if err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
@@ -87,14 +84,11 @@ func TestSnapshotBackup_InternalDevice(t *testing.T) {
 		"data.txt": "internal-data",
 	})
 	target := makeTarget(t)
-	store := NewInMemoryBackupJobStore()
 	job := newJob("TARGET")
-	store.Create(context.Background(), job)
 
 	err := SnapshotBackup(context.Background(), SnapshotBackupParams{
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
-		Store:              store,
 	}, []SourceDevice{src}, target.VFS)
 	if err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
@@ -118,14 +112,11 @@ func TestSnapshotBackup_SmartSkip(t *testing.T) {
 	srcInfo, _ := src.Files.Stat(t.Context(), "file.txt")
 	os.Chtimes(destFile, srcInfo.ModTime, srcInfo.ModTime)
 
-	store := NewInMemoryBackupJobStore()
 	job := newJob("TARGET")
-	store.Create(context.Background(), job)
 
 	err := SnapshotBackup(context.Background(), SnapshotBackupParams{
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
-		Store:              store,
 	}, []SourceDevice{src}, target.VFS)
 	if err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
@@ -150,14 +141,11 @@ func TestSnapshotBackup_OverwriteStale(t *testing.T) {
 	os.MkdirAll(destDir, 0755)
 	os.WriteFile(filepath.Join(destDir, "file.txt"), []byte("old"), 0644)
 
-	store := NewInMemoryBackupJobStore()
 	job := newJob("TARGET")
-	store.Create(context.Background(), job)
 
 	err := SnapshotBackup(context.Background(), SnapshotBackupParams{
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
-		Store:              store,
 	}, []SourceDevice{src}, target.VFS)
 	if err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
@@ -172,14 +160,11 @@ func TestSnapshotBackup_OverwriteStale(t *testing.T) {
 func TestSnapshotBackup_EmptySource(t *testing.T) {
 	src := makeSource(t, "Empty", "SER1", map[string]string{})
 	target := makeTarget(t)
-	store := NewInMemoryBackupJobStore()
 	job := newJob("TARGET")
-	store.Create(context.Background(), job)
 
 	err := SnapshotBackup(context.Background(), SnapshotBackupParams{
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
-		Store:              store,
 	}, []SourceDevice{src}, target.VFS)
 	if err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
@@ -200,9 +185,7 @@ func TestSnapshotBackup_Cancellation(t *testing.T) {
 		"c.txt": "c",
 	})
 	target := makeTarget(t)
-	store := NewInMemoryBackupJobStore()
 	job := newJob("TARGET")
-	store.Create(context.Background(), job)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately.
@@ -210,7 +193,6 @@ func TestSnapshotBackup_Cancellation(t *testing.T) {
 	err := SnapshotBackup(ctx, SnapshotBackupParams{
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
-		Store:              store,
 	}, []SourceDevice{src}, target.VFS)
 
 	if err == nil {
@@ -226,9 +208,7 @@ func TestSnapshotBackup_EventBusPublish(t *testing.T) {
 		"file.txt": "data",
 	})
 	target := makeTarget(t)
-	store := NewInMemoryBackupJobStore()
 	job := newJob("TARGET")
-	store.Create(context.Background(), job)
 
 	bus := eventbus.New()
 	ch, unsub := bus.Subscribe("test")
@@ -237,7 +217,6 @@ func TestSnapshotBackup_EventBusPublish(t *testing.T) {
 	err := SnapshotBackup(context.Background(), SnapshotBackupParams{
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
-		Store:              store,
 		EventBus:           bus,
 	}, []SourceDevice{src}, target.VFS)
 	if err != nil {

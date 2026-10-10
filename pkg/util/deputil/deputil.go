@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/autobutler-org/quark/internal/db"
-	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
@@ -50,7 +49,6 @@ type Dependencies interface {
 	// response, such as the connected-device record. Wait on it before
 	// closing the database (#2772).
 	Background() *sync.WaitGroup
-	BackupJobStore() backup.BackupJobStore
 	// ByTypeCache keeps the /files/by-type walk between requests until the
 	// file tree changes (#1780). Nil caches nothing.
 	ByTypeCache() *fileutil.ByTypeCache
@@ -117,12 +115,11 @@ func NewDependencies() Dependencies {
 	// no goroutine, no directory. StartSweeper, called once from server
 	// startup, is what gives it a heartbeat (#1629).
 	//
-	// The backup job store and the rate limiters are built here for the
-	// same reason: they used to be package-level globals in the handler and
-	// middleware packages, so every graph — tests included — needs a non-nil
-	// one, and the server's single graph keeps them alive process-wide (#1674).
+	// The rate limiters are built here for the same reason: they used to be
+	// package-level globals in the middleware packages, so every graph — tests
+	// included — needs a non-nil one, and the server's single graph keeps them
+	// alive process-wide (#1674).
 	return &dependencies{
-		backupJobStore: backup.NewInMemoryBackupJobStore(),
 		uploadSessions: uploadutil.NewSessionStore(uploadutil.NewSessionStoreParams{}),
 		// downloadTokens is built here for the same reason: a map and nothing
 		// else, swept lazily on each issue (#2226).

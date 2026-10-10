@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
@@ -38,18 +39,16 @@ var chatBackupTables = []string{
 // Quark cannot open, and the rest is public keys, so the copy is as private as
 // the database it came from.
 //
-// The file is built under a temp name and renamed into place, so a failed
-// export leaves the previous backup whole.
+// The file is built under a temp name of its own and renamed into place, so a
+// failed export leaves the previous backup whole and two exports never share a
+// temp (#3084).
 func ExportChat(ctx context.Context, liveDB *sql.DB, targetDir string) (string, error) {
 	dbPath := filepath.Join(targetDir, backupChatFilename)
-	tmpPath := filepath.Join(targetDir, storageutil.WriteTempPrefix+backupChatFilename)
+	tmpPath := filepath.Join(targetDir, storageutil.WriteTempPrefix+rand.Text()+"-"+backupChatFilename)
 
-	// A crash mid-export leaves the temp and maybe its rollback journal, which
-	// SQLite would replay into the new file.
-	os.Remove(tmpPath)
-	os.Remove(tmpPath + "-journal")
 	// A no-op once the rename has happened; cleans up after any failure before it.
 	defer os.Remove(tmpPath)
+	defer os.Remove(tmpPath + "-journal")
 
 	if err := createChatBackupFile(tmpPath); err != nil {
 		return "", fmt.Errorf("create chat backup schema: %w", err)

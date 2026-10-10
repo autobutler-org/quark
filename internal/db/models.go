@@ -180,6 +180,7 @@ type Job struct {
 	StartedAt  sql.NullTime
 	FinishedAt sql.NullTime
 	UserID     sql.NullInt64
+	Detail     string
 }
 
 type PathAccess struct {

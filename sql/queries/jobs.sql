@@ -147,3 +147,26 @@ WHERE
                 sqlc.arg(keep)
         )
     );
+
+-- The backup holding a target device's lock (#3084): idx_jobs_backup_target
+-- allows one pending or running snapshot backup per target.
+-- name: GetActiveBackupJob :one
+SELECT
+    *
+FROM
+    jobs
+WHERE
+    kind = 'snapshot-backup'
+    AND status IN ('pending', 'running')
+    AND json_extract(params, '$.targetDeviceSerial') = CAST(sqlc.arg(target_device_serial) AS TEXT)
+LIMIT
+    1;
+
+-- The status guard keeps a job finished or canceled since from being touched.
+-- name: UpdateJobDetail :exec
+UPDATE jobs
+SET
+    detail = ?
+WHERE
+    id = ?
+    AND status = 'running';

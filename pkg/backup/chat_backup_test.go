@@ -486,14 +486,11 @@ func TestSnapshotBackup_ExportsChat(t *testing.T) {
 	seedChat(t, database.Db)
 	src := makeSource(t, "Drive A", "SERIAL-A", map[string]string{"a.txt": "a"})
 	target := makeTarget(t)
-	store := NewInMemoryBackupJobStore()
 	job := newJob("TARGET")
-	store.Create(context.Background(), job)
 
 	err := SnapshotBackup(context.Background(), SnapshotBackupParams{
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
-		Store:              store,
 		ChatDB:             database.Db,
 	}, []SourceDevice{src}, target.VFS)
 	if err != nil {

@@ -25,8 +25,7 @@ func SnapshotBackup(
 
 	job.Status = BackupStatusScanning
 	job.UpdatedAt = now
-	// Best-effort progress persistence; a failed write must not abort the backup.
-	_ = params.Store.Update(ctx, job)
+	params.save()
 
 	if params.EventBus != nil {
 		params.EventBus.Publish(eventbus.Event{
@@ -44,7 +43,7 @@ func SnapshotBackup(
 		}
 		files, bytes, err := scanTree(ctx, src.Files)
 		if err != nil {
-			return failJob(ctx, params, fmt.Errorf("scan %s: %w", src.Name, err))
+			return failJob(params, fmt.Errorf("scan %s: %w", src.Name, err))
 		}
 		sdp.FilesTotal = files
 		sdp.BytesTotal = bytes
@@ -53,12 +52,12 @@ func SnapshotBackup(
 		job.SourceDevices[i] = sdp
 	}
 	job.UpdatedAt = time.Now()
-	_ = params.Store.Update(ctx, job)
+	params.save()
 
 	// Phase 2: copy files from each source to the target.
 	job.Status = BackupStatusCopying
 	job.UpdatedAt = time.Now()
-	_ = params.Store.Update(ctx, job)
+	params.save()
 
 	lastPublish := time.Time{}
 	for i, src := range sources {
@@ -107,7 +106,7 @@ func SnapshotBackup(
 				job.Progress = float64(job.FilesCopied+job.FilesSkipped) / float64(job.TotalFiles)
 			}
 			job.UpdatedAt = time.Now()
-			_ = params.Store.Update(ctx, job)
+			params.save()
 
 			// Throttle WebSocket events to ~2/sec.
 			if params.EventBus != nil && time.Since(lastPublish) > 500*time.Millisecond {
@@ -130,14 +129,15 @@ func SnapshotBackup(
 		})
 
 		if err != nil {
-			return failJob(ctx, params, fmt.Errorf("backup %s: %w", src.Name, err))
+			return failJob(params, fmt.Errorf("backup %s: %w", src.Name, err))
 		}
 	}
 
-	// Phase 3: vault export (if requested).
-	if params.Vault != nil {
-		if err := exportVaultTo(ctx, params.Vault, target); err != nil {
-			return failJob(ctx, params, fmt.Errorf("vault export: %w", err))
+	// Phase 3: vault export (if requested). The request that started the
+	// backup built it, so no vault secret outlives that request (#3084).
+	if params.VaultExport != "" {
+		if err := commitVaultExportTo(ctx, params.VaultExport, target); err != nil {
+			return failJob(params, fmt.Errorf("vault export: %w", err))
 		}
 	}
 
@@ -145,17 +145,17 @@ func SnapshotBackup(
 	// Quark with a database carries one.
 	if params.ChatDB != nil {
 		if err := exportChatTo(ctx, params.ChatDB, target); err != nil {
-			return failJob(ctx, params, fmt.Errorf("chat export: %w", err))
+			return failJob(params, fmt.Errorf("chat export: %w", err))
 		}
 	}
 
 	// Phase 5: generate integrity manifest.
 	manifest, err := GenerateManifest(ctx, target)
 	if err != nil {
-		return failJob(ctx, params, fmt.Errorf("generate manifest: %w", err))
+		return failJob(params, fmt.Errorf("generate manifest: %w", err))
 	}
 	if err := WriteManifest(ctx, manifest, target); err != nil {
-		return failJob(ctx, params, fmt.Errorf("write manifest: %w", err))
+		return failJob(params, fmt.Errorf("write manifest: %w", err))
 	}
 
 	// Phase 6: complete.
@@ -164,7 +164,7 @@ func SnapshotBackup(
 	job.Progress = 1.0
 	job.CompletedAt = &completedAt
 	job.UpdatedAt = completedAt
-	_ = params.Store.Update(ctx, job)
+	params.save()
 
 	// Recorded before the event, so a client that asks again on it sees the
 	// new time. The backup itself succeeded, so a failed record is only logged.
@@ -191,14 +191,19 @@ func SnapshotBackup(
 	return nil
 }
 
-func failJob(ctx context.Context, params SnapshotBackupParams, err error) error {
+func (p SnapshotBackupParams) save() {
+	if p.Save != nil {
+		p.Save(p.Job)
+	}
+}
+
+func failJob(params SnapshotBackupParams, err error) error {
 	now := time.Now()
 	params.Job.Status = BackupStatusFailed
 	params.Job.ErrorMsg = err.Error()
 	params.Job.CompletedAt = &now
 	params.Job.UpdatedAt = now
-	// Best-effort: the returned error is already being reported to the caller.
-	_ = params.Store.Update(ctx, params.Job)
+	params.save()
 
 	if params.EventBus != nil {
 		params.EventBus.Publish(eventbus.Event{
@@ -221,14 +226,20 @@ func scanTree(ctx context.Context, fsys vfs.VFS) (files int, bytes int64, err er
 	return
 }
 
-// exportVaultTo writes the vault export onto the target.
-func exportVaultTo(ctx context.Context, vault *VaultExportParams, target vfs.VFS) error {
+// commitVaultExportTo puts the vault export staged on the target in place.
+func commitVaultExportTo(ctx context.Context, staged string, target vfs.VFS) error {
 	dir, err := hostDir(ctx, target)
 	if err != nil {
 		return err
 	}
-	_, err = ExportVault(ctx, vault.Queries, vault.LiveKey, vault.RecoveryPassword, dir)
-	return err
+	return commitStagedVault(dir, staged)
+}
+
+// discardVaultExport removes a staged vault export nothing committed.
+func discardVaultExport(ctx context.Context, staged string, target vfs.VFS) {
+	if dir, err := hostDir(ctx, target); err == nil {
+		removeStagedVault(dir, staged)
+	}
 }
 
 // exportChatTo writes the chat export onto the target.

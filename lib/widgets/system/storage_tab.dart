@@ -284,6 +284,19 @@ class _StorageTabState extends State<StorageTab>
       }
     } catch (e) {
       debugPrint('[storage_tab.dart] Poll error: $e');
+      // The job is a row every instance of the Quark reads, so a 404 means
+      // it is gone for good and another poll will not find it. Anything else
+      // may be one instance's bad moment: keep polling.
+      if (e is! ApiException || e.statusCode != 404 || !mounted) return;
+      _pollTimer?.cancel();
+      _pollTimer = null;
+      setState(() {
+        _activeBackupJobId = null;
+        _backupStatus = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(Errors.message(e, 'check the backup'))),
+      );
     }
   }
 

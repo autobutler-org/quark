@@ -271,7 +271,7 @@ class StorageService with AuthenticatedService {
       );
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return (data['data'] as Map<String, dynamic>)['jobId'] as String;
+    return data['jobId'] as String;
   }
 
   static Future<BackupJobStatus> getSnapshotBackupStatus(String jobId) async {
@@ -283,7 +283,7 @@ class StorageService with AuthenticatedService {
       throw ApiException(response.statusCode, 'Failed to get backup status');
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return BackupJobStatus.fromJson(data['data'] as Map<String, dynamic>);
+    return BackupJobStatus.fromJson(data);
   }
 
   static Future<VerifyResult> verifySnapshotBackup({
@@ -303,7 +303,7 @@ class StorageService with AuthenticatedService {
       throwApiError(response.statusCode, data?['error'], 'Verify failed');
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return VerifyResult.fromJson(data['data'] as Map<String, dynamic>);
+    return VerifyResult.fromJson(data);
   }
 }
 

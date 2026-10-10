@@ -8075,7 +8075,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Aggregates all files from all managed devices onto the target snapshot-backup device",
+                "description": "Queues a job that aggregates all files from all managed devices onto the target snapshot-backup device. Answers 409 while the target already has a pending or running backup, whichever instance started it. jobId is what the status route takes.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8138,7 +8138,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the current status of a snapshot backup job",
+                "description": "Returns the current status of a snapshot backup job, read from its row in the jobs table, so any instance answers and a backup cut off by a restart reads as FAILED. 404 means the id is not a backup job's.",
                 "produces": [
                     "application/json"
                 ],
@@ -8159,7 +8159,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/backup.BackupJob"
                         }
                     },
                     "404": {
@@ -10831,6 +10831,99 @@ const docTemplate = `{
                 "lastUsedAt": {
                     "description": "LastUsedAt is when the session last renewed itself; renewal is\ndebounced, so it can trail the newest request.",
                     "type": "string"
+                }
+            }
+        },
+        "backup.BackupJob": {
+            "type": "object",
+            "properties": {
+                "bytesCopied": {
+                    "type": "integer"
+                },
+                "completedAt": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "errorMsg": {
+                    "type": "string"
+                },
+                "filesCopied": {
+                    "type": "integer"
+                },
+                "filesSkipped": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "number"
+                },
+                "sourceDevices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/backup.SourceDeviceProgress"
+                    }
+                },
+                "status": {
+                    "$ref": "#/definitions/backup.BackupJobStatus"
+                },
+                "targetDeviceSerial": {
+                    "type": "string"
+                },
+                "totalBytes": {
+                    "type": "integer"
+                },
+                "totalFiles": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "backup.BackupJobStatus": {
+            "type": "string",
+            "enum": [
+                "PENDING",
+                "SCANNING",
+                "COPYING",
+                "COMPLETED",
+                "FAILED"
+            ],
+            "x-enum-varnames": [
+                "BackupStatusPending",
+                "BackupStatusScanning",
+                "BackupStatusCopying",
+                "BackupStatusCompleted",
+                "BackupStatusFailed"
+            ]
+        },
+        "backup.SourceDeviceProgress": {
+            "type": "object",
+            "properties": {
+                "bytesCopied": {
+                    "type": "integer"
+                },
+                "bytesTotal": {
+                    "type": "integer"
+                },
+                "deviceName": {
+                    "type": "string"
+                },
+                "deviceSerial": {
+                    "type": "string"
+                },
+                "filesCopied": {
+                    "type": "integer"
+                },
+                "filesSkipped": {
+                    "type": "integer"
+                },
+                "filesTotal": {
+                    "type": "integer"
                 }
             }
         },

@@ -188,16 +188,11 @@ func TestSnapshotBackup_BetweenMemNamespaces(t *testing.T) {
 	internal := memWith(t, "", map[string]string{"photos/a.jpg": "photo-a"})
 	usb := memWith(t, "USB-1", map[string]string{"docs/b.txt": "doc-b"})
 	target := vfs.NewMemVFS(vfs.FilesNamespace("BACKUP"))
-	store := NewInMemoryBackupJobStore()
 	job := newJob("BACKUP")
-	if err := store.Create(t.Context(), job); err != nil {
-		t.Fatal(err)
-	}
 
 	err := SnapshotBackup(t.Context(), SnapshotBackupParams{
 		TargetDeviceSerial: "BACKUP",
 		Job:                job,
-		Store:              store,
 	}, []SourceDevice{
 		{Name: "Internal", Files: internal},
 		{Name: "Stick", Serial: "USB-1", Files: usb},
@@ -231,16 +226,11 @@ func TestSnapshotBackup_BetweenMemNamespaces(t *testing.T) {
 func TestSnapshotBackup_InterruptedCopyLeavesNoPartialFile(t *testing.T) {
 	src := brokenVFS{memWith(t, "USB-1", map[string]string{"big.bin": "0123456789"})}
 	target := makeTarget(t)
-	store := NewInMemoryBackupJobStore()
 	job := newJob("BACKUP")
-	if err := store.Create(t.Context(), job); err != nil {
-		t.Fatal(err)
-	}
 
 	err := SnapshotBackup(t.Context(), SnapshotBackupParams{
 		TargetDeviceSerial: "BACKUP",
 		Job:                job,
-		Store:              store,
 	}, []SourceDevice{{Name: "Stick", Serial: "USB-1", Files: src}}, target.VFS)
 	if err == nil {
 		t.Fatal("SnapshotBackup succeeded copying from a failing drive")
@@ -284,7 +274,6 @@ func TestStartSnapshotBackup_UnattachedTargetIsNotManaged(t *testing.T) {
 		Ctx:                ctx,
 		Queries:            queries,
 		Registry:           memNamespaces(t, map[string]vfs.VFS{"": vfs.NewMemVFS(vfs.FilesNamespace(""))}),
-		Store:              NewInMemoryBackupJobStore(),
 		TargetDeviceSerial: serial,
 	})
 	if !errors.Is(err, ErrTargetNotManaged) {

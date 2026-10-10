@@ -195,6 +195,31 @@ func TestJobRunsAsTheAccountThatQueuedIt(t *testing.T) {
 	}
 }
 
+func TestHandlerSeesItsJobID(t *testing.T) {
+	h := newHarness(t)
+	seen := make(chan int64, 1)
+	h.queue.Register(RegisterParams{Kind: "identified", Handler: Handler{
+		Run: func(ctx context.Context, _ json.RawMessage, _ func(float64)) error {
+			seen <- JobID(ctx)
+			return nil
+		},
+	}})
+	h.run(t)
+
+	res, err := h.queue.Enqueue(context.Background(), EnqueueParams{Kind: "identified", Name: "job"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-seen:
+		if got != res.Job.ID {
+			t.Errorf("JobID(ctx) in the handler = %d, want %d", got, res.Job.ID)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("the job did not run")
+	}
+}
+
 func TestJobSource(t *testing.T) {
 	for params, want := range map[string][2]string{
 		`{"serial":"USB 1","relPath":"videos/a.mkv","format":"mov"}`: {"USB 1", "videos/a.mkv"},

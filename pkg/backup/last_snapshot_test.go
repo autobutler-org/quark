@@ -50,15 +50,12 @@ func TestRecordSnapshot_RoundTrip(t *testing.T) {
 func TestSnapshotBackup_RecordsCompletion(t *testing.T) {
 	src := makeSource(t, "Drive", "SER1", map[string]string{"file.txt": "data"})
 	target := makeTarget(t)
-	store := NewInMemoryBackupJobStore()
 	job := newJob("TARGET")
-	store.Create(context.Background(), job)
 	dataDir := t.TempDir()
 
 	if err := SnapshotBackup(context.Background(), SnapshotBackupParams{
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
-		Store:              store,
 		DataDir:            dataDir,
 	}, []SourceDevice{src}, target); err != nil {
 		t.Fatalf("SnapshotBackup failed: %v", err)
@@ -77,9 +74,7 @@ func TestSnapshotBackup_RecordsCompletion(t *testing.T) {
 func TestSnapshotBackup_FailedBackupRecordsNothing(t *testing.T) {
 	src := makeSource(t, "Drive", "SER1", map[string]string{"file.txt": "data"})
 	target := makeTarget(t)
-	store := NewInMemoryBackupJobStore()
 	job := newJob("TARGET")
-	store.Create(context.Background(), job)
 	dataDir := t.TempDir()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -87,7 +82,6 @@ func TestSnapshotBackup_FailedBackupRecordsNothing(t *testing.T) {
 	if err := SnapshotBackup(ctx, SnapshotBackupParams{
 		TargetDeviceSerial: "TARGET",
 		Job:                job,
-		Store:              store,
 		DataDir:            dataDir,
 	}, []SourceDevice{src}, target); err == nil {
 		t.Fatal("SnapshotBackup succeeded with a canceled context")

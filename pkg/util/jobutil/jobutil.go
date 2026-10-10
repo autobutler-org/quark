@@ -104,6 +104,18 @@ func UserID(ctx context.Context) int64 {
 	return userID
 }
 
+// WithJobID returns ctx carrying the id of the job a Handler is running. The
+// queue sets it before calling a Handler.
+func WithJobID(ctx context.Context, id int64) context.Context {
+	return context.WithValue(ctx, jobIDKey{}, id)
+}
+
+// JobID is the id of the job a Handler is running, or 0 outside one.
+func JobID(ctx context.Context) int64 {
+	id, _ := ctx.Value(jobIDKey{}).(int64)
+	return id
+}
+
 // HandlerFunc does a job's work. params is the JSON the job was enqueued with.
 // It reports progress as a fraction in [0, 1] through report, which must not be
 // called after it returns, and it must stop and clean up after itself when ctx
