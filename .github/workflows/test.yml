@@ -127,6 +127,10 @@ jobs:
     # A leg takes about six minutes; a stuck `flutter test` would otherwise
     # hold the runner for the six-hour default (#2768).
     timeout-minutes: 20
+    # The runner has the RAM a laptop lacks; see FRONTEND_SUITE_JOBS in the Makefile.
+    env:
+      FRONTEND_SUITE_JOBS: 6
+      FLUTTER_TEST_CONCURRENCY: ""
     name: test-frontend (${{ matrix.name }})
     strategy:
       fail-fast: false
