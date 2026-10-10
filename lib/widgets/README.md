@@ -31,6 +31,10 @@ lib/widgets/
     show_calendar_event_editor.dart
                                 opens that form as a sheet or a dialog
   chat/
+    chat_search_bar.dart        the search field above the open channel's
+                                messages (#2429); data in, callbacks out, but
+                                app-side because only ChatPage uses it and its
+                                copy is chat's on-device-search wording
     chat_unlock_prompt.dart     the password prompt in place of chat while it
                                 is locked (web after a reload)
     chat_failed_send_bar.dart   Retry and Discard for a message that didn't
@@ -40,7 +44,10 @@ lib/widgets/
     chat_channel_not_found.dart a link to a channel the account can't open,
                                 in place of the messages; reads Errors
   file_browser/
-    file_browser_view.dart      lists files, calls FilesService
+    file_browser_view.dart      lists files, calls FilesService; keeps the
+                                caller's snapshot listing (#1781) on screen
+                                until the future answers or the Quark is
+                                unreachable, via connection_error utils
     file_top_bar.dart           Files' QuarkAppBar: holds the inline search
                                 state and takes the app's StorageDevice
     file_top_bar/               its parts, on the package bar buttons
@@ -55,6 +62,11 @@ lib/widgets/
     new_file_dialog.dart        one-line wrapper that pops NewFileDialog
     upload_conflict_prompt.dart pops UploadConflictDialog and holds the
                                 "do the same for the rest" tick while it is open
+  hosts/
+    emulator_loopback_hint.dart the line under an Add Quark address field
+                                suggesting 10.0.2.2 for localhost; reads
+                                AppSettings.normalizeHostAddress and
+                                utils/emulator_loopback
   jobs/
     job_finish_announcer.dart   shows a snack bar for every job JobsController
                                 announces finished, and navigates its action
@@ -97,6 +109,14 @@ lib/widgets/
                                 behind a confirmation
     ssh_access_section.dart     hosts SshAccessPanel around SshAccessController,
                                 with its confirmation, key and password dialogs
+  docs/
+    docs_body.dart              the Docs list and content search results:
+    docs_search_bar.dart        reads AppSettings, pushes editor routes, and
+                                uses ContentSearchService; the bar is its
+                                filter field
+  sheets/
+    sheets_body.dart            the same for Sheets
+    sheets_search_bar.dart
   pdf_viewer/
     browser_pdf_view.dart       the browser's own PDF viewer in an iframe, and
                                 whether the browser has one; web-only behind a
@@ -217,7 +237,7 @@ the package `UploadTargetPicker`. Selecting wears the package
 `FileSelectionBar`, the same bar Files and the trash use.
 
 Settings is split into tabs (#2350), one widget each under `settings/`:
-`settings_general_tab.dart`, `settings_account_tab.dart`,
+`settings_general_tab.dart` (which also carries the left-handed switch, #1812), `settings_account_tab.dart`,
 `settings_network_tab.dart`, `settings_updates_tab.dart`,
 `settings_about_tab.dart` and the admin-only `settings_features_tab.dart`
 (#2542), which lists the package `FeatureFlagTile` over the app's
