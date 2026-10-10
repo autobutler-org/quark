@@ -1,17 +1,107 @@
 package storageutil
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
-func TestParseProcMountsRoot_Found(t *testing.T) {
+// The /proc/mounts of the container in #2467: quark's data sits on an Azure
+// Files share mounted at /var/lib/quark, not on the overlay root.
+const separateDataMounts = `overlay / overlay rw,relatime 0 0
+proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
+//storage.example.net/quark /var/lib/quark cifs rw,relatime,vers=3.0,cache=strict 0 0
+tmpfs /var/lib/quark-old tmpfs rw 0 0
+`
+
+// #2467: the internal device described the root mount even when the data
+// directory was a mount of its own.
+func TestParseProcMountsFor_PicksTheMountHoldingThePath(t *testing.T) {
+	cases := []struct {
+		name       string
+		path       string
+		wantDevice string
+		wantFsType string
+	}{
+		{"under a separate mount", "/var/lib/quark/data", "//storage.example.net/quark", "cifs"},
+		{"the mount point itself", "/var/lib/quark", "//storage.example.net/quark", "cifs"},
+		{"a sibling that only shares a name prefix", "/var/lib/quark-old/data", "tmpfs", "tmpfs"},
+		{"nothing nearer than root", "/home/me/quark/data", "overlay", "overlay"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			devicePath, fsType, err := parseProcMountsFor(strings.NewReader(separateDataMounts), tc.path)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if devicePath != tc.wantDevice || fsType != tc.wantFsType {
+				t.Errorf("parseProcMountsFor(%q) = %q, %q; want %q, %q",
+					tc.path, devicePath, fsType, tc.wantDevice, tc.wantFsType)
+			}
+		})
+	}
+}
+
+// #2467 end to end, on a filesystem this machine really has apart from root:
+// the capacity and filesystem come from where the data directory lives, and
+// the device keeps the "/" identity the managed-device lookups key on.
+func TestDetectRootDevice_ReportsTheDataDirFilesystem(t *testing.T) {
+	const shm = "/dev/shm"
+	var rootStat, shmStat syscall.Stat_t
+	if syscall.Stat("/", &rootStat) != nil || syscall.Stat(shm, &shmStat) != nil || rootStat.Dev == shmStat.Dev {
+		t.Skip("no /dev/shm mounted apart from /")
+	}
+	var want syscall.Statfs_t
+	if err := syscall.Statfs(shm, &want); err != nil {
+		t.Fatalf("statfs %s: %v", shm, err)
+	}
+
+	// The data directory need not exist yet: a fresh install detects first.
+	device, err := detectRootDevice(filepath.Join(shm, "quark-2467-missing", "data"), false)
+	if err != nil {
+		t.Fatalf("detectRootDevice() error = %v", err)
+	}
+	if device == nil {
+		t.Fatal("detectRootDevice() = nil")
+	}
+	if wantTotal := want.Blocks * uint64(want.Bsize); device.TotalBytes != wantTotal {
+		t.Errorf("TotalBytes = %d, want %s's %d", device.TotalBytes, shm, wantTotal)
+	}
+	if device.FileSystem != "tmpfs" {
+		t.Errorf("FileSystem = %q, want tmpfs", device.FileSystem)
+	}
+	if device.MountPoint != "/" || !device.IsInternal {
+		t.Errorf("MountPoint = %q, IsInternal = %v; want the internal device at /", device.MountPoint, device.IsInternal)
+	}
+}
+
+func TestNearestExisting(t *testing.T) {
+	target := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(target); err == nil {
+		target = resolved
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := nearestExisting(filepath.Join(target, "not", "yet")); got != target {
+		t.Errorf("a missing path: got %q, want its existing parent %q", got, target)
+	}
+	if got := nearestExisting(filepath.Join(link, "not", "yet")); got != target {
+		t.Errorf("a missing path behind a symlink: got %q, want %q", got, target)
+	}
+}
+
+func TestParseProcMountsFor_RootFound(t *testing.T) {
 	content := `sysfs /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
 proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
 /dev/sda1 / ext4 rw,relatime 0 0
 tmpfs /tmp tmpfs rw,nosuid,nodev 0 0
 `
-	devicePath, fsType, err := parseProcMountsRoot(strings.NewReader(content))
+	devicePath, fsType, err := parseProcMountsFor(strings.NewReader(content), "/")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -23,11 +113,11 @@ tmpfs /tmp tmpfs rw,nosuid,nodev 0 0
 	}
 }
 
-func TestParseProcMountsRoot_NotFound(t *testing.T) {
+func TestParseProcMountsFor_RootNotFound(t *testing.T) {
 	content := `sysfs /sys sysfs rw 0 0
 proc /proc proc rw 0 0
 `
-	devicePath, fsType, err := parseProcMountsRoot(strings.NewReader(content))
+	devicePath, fsType, err := parseProcMountsFor(strings.NewReader(content), "/")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -39,11 +129,11 @@ proc /proc proc rw 0 0
 	}
 }
 
-func TestParseProcMountsRoot_SkipsMalformedLines(t *testing.T) {
+func TestParseProcMountsFor_RootSkipsMalformedLines(t *testing.T) {
 	content := `tooshort
 /dev/sda1 / ext4 rw,relatime 0 0
 `
-	devicePath, fsType, err := parseProcMountsRoot(strings.NewReader(content))
+	devicePath, fsType, err := parseProcMountsFor(strings.NewReader(content), "/")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -55,17 +145,18 @@ func TestParseProcMountsRoot_SkipsMalformedLines(t *testing.T) {
 	}
 }
 
-func TestParseProcMountsRoot_ReturnsFirstRootMount(t *testing.T) {
-	// If multiple root entries exist, return the first
-	content := `/dev/sda1 / ext4 rw 0 0
-/dev/sda2 / btrfs rw 0 0
+func TestParseProcMountsFor_RootReturnsLastRootMount(t *testing.T) {
+	// Mounts stacked on one mount point: the last covers the others, and it is
+	// the one statfs measures.
+	content := `none / tmpfs rw 0 0
+/dev/sda1 / ext4 rw 0 0
 `
-	devicePath, _, err := parseProcMountsRoot(strings.NewReader(content))
+	devicePath, _, err := parseProcMountsFor(strings.NewReader(content), "/")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if devicePath != "/dev/sda1" {
-		t.Errorf("expected first root '/dev/sda1', got %q", devicePath)
+		t.Errorf("expected last root '/dev/sda1', got %q", devicePath)
 	}
 }
 
@@ -87,8 +178,8 @@ func TestBytesFromStatfs_ReservedBlocksAreNotUsed(t *testing.T) {
 	}
 }
 
-func TestParseProcMountsRoot_Empty(t *testing.T) {
-	devicePath, fsType, err := parseProcMountsRoot(strings.NewReader(""))
+func TestParseProcMountsFor_RootEmpty(t *testing.T) {
+	devicePath, fsType, err := parseProcMountsFor(strings.NewReader(""), "/")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

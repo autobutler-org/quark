@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -48,7 +49,7 @@ func bytesFromStatfs(blocks, free, available, blockSize uint64) (total, used, av
 func detectDevices(categorize bool) ([]Device, error) {
 	devices := []Device{}
 
-	rootDevice, err := detectRootDevice(categorize)
+	rootDevice, err := detectRootDevice(GetDataDir(), categorize)
 	if err != nil {
 		return devices, err
 	}
@@ -118,10 +119,29 @@ func detectDevices(categorize bool) ([]Device, error) {
 	return devices, nil
 }
 
-// parseProcMountsRoot scans /proc/mounts-formatted content from r and returns
-// the device path and filesystem type for the root ("/") mount, or empty
-// strings if not found.
-func parseProcMountsRoot(r io.Reader) (devicePath, fsType string, err error) {
+// nearestExisting resolves the symlinks in path, falling back to its closest
+// parent that exists. A data directory not created yet still names the
+// filesystem it will be created on.
+func nearestExisting(path string) string {
+	for {
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			return resolved
+		}
+		parent := filepath.Dir(path)
+		if parent == path {
+			return path
+		}
+		path = parent
+	}
+}
+
+// parseProcMountsFor scans /proc/mounts-formatted content from r and returns
+// the device path and filesystem type of the mount holding path: the longest
+// mount point that is path or one of its parents. Of several mounts stacked on
+// one mount point the last wins, being the one statfs measures. Both are empty
+// when no mount holds path.
+func parseProcMountsFor(r io.Reader, path string) (devicePath, fsType string, err error) {
+	longest := -1
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		fields := strings.Fields(scanner.Text())
@@ -129,24 +149,32 @@ func parseProcMountsRoot(r io.Reader) (devicePath, fsType string, err error) {
 			continue
 		}
 		// /proc/mounts fields: device mountPoint fsType options dump pass
-		if fields[1] == "/" {
-			return fields[0], fields[2], nil
+		// ponytail: a mount point with a space in it is written "\040" here and
+		// never matches, so the next mount up is reported; unescape if that bites.
+		mountPoint := fields[1]
+		if len(mountPoint) >= longest && (mountPoint == "/" || within(mountPoint, path)) {
+			devicePath, fsType, longest = fields[0], fields[2], len(mountPoint)
 		}
 	}
-	return "", "", scanner.Err()
+	return devicePath, fsType, scanner.Err()
 }
 
-// detectRootDevice parses /proc/mounts to find the root filesystem mount
-// and uses syscall.Statfs to get size information.
-// This replaces the previous df-based approach which spawned a subprocess.
-func detectRootDevice(categorize bool) (*Device, error) {
+// detectRootDevice describes the internal device: the filesystem holding
+// dataDir, which is the root filesystem on the appliance and a mount of its
+// own when a volume is mounted over the data directory, as in a container
+// (#2467). The device, filesystem type and sizes all come from that one
+// filesystem. MountPoint stays "/" whichever it is, because that is how
+// GetDataDirForDevice and the managed-device lookups recognize the internal
+// device.
+func detectRootDevice(dataDir string, categorize bool) (*Device, error) {
 	f, err := os.Open("/proc/mounts")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open /proc/mounts: %w", err)
 	}
 	defer f.Close()
 
-	rootSource, rootFsType, err := parseProcMountsRoot(f)
+	dataPath := nearestExisting(dataDir)
+	rootSource, rootFsType, err := parseProcMountsFor(f, dataPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read /proc/mounts: %w", err)
 	}
@@ -155,8 +183,8 @@ func detectRootDevice(categorize bool) (*Device, error) {
 	}
 
 	var stat syscall.Statfs_t
-	if err := syscall.Statfs("/", &stat); err != nil {
-		return nil, fmt.Errorf("failed to stat root filesystem: %w", err)
+	if err := syscall.Statfs(dataPath, &stat); err != nil {
+		return nil, fmt.Errorf("failed to stat the filesystem holding %s: %w", dataPath, err)
 	}
 
 	totalBytes, usedBytes, availableBytes := bytesFromStatfs(
