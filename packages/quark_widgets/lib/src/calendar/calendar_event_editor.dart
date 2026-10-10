@@ -13,6 +13,7 @@ import 'calendar_event_editor/repeat_end_picker.dart';
 import 'calendar_event_editor/repeat_preset_picker.dart';
 import 'calendar_dates.dart';
 import 'calendar_labels.dart';
+import 'calendar_reminders.dart';
 
 /// The one form for creating and editing a calendar event: title, all day,
 /// start and end, repeat and when it stops, reminder, color, location and
@@ -23,7 +24,7 @@ import 'calendar_labels.dart';
 /// validates, too: it passes a null [onSave] until the draft can be saved,
 /// which disables Save, and [timeError], [repeatError] and [saveError] are
 /// sentences it composed, shown under their fields. Date and time fields open the platform
-/// pickers. It lays itself out for its width: labels beside fields in a
+/// pickers, an all-day reminder's time of day among them. It lays itself out for its width: labels beside fields in a
 /// desktop dialog, above them in a phone's bottom sheet. It is only the form,
 /// so the caller shows it in whichever of the two fits. Its body scrolls, so
 /// give it a bounded height.
@@ -31,7 +32,7 @@ import 'calendar_labels.dart';
 /// Key prefixes: `event_title`, `event_all_day`, `event_start_date`,
 /// `event_start_time`, `event_end_date`, `event_end_time`,
 /// `event_repeat_<preset>`, `event_repeat_ends_never`, `event_repeat_ends_on`,
-/// `event_repeat_until`, `event_remind_<minutes|off>`,
+/// `event_repeat_until`, `event_remind_<minutes|off>`, `event_remind_time`,
 /// `event_color_<index>`, `event_location`, `event_notes`, `event_save`,
 /// `event_cancel`, `event_delete` and `event_close`.
 ///
@@ -172,6 +173,25 @@ class _CalendarEventEditorState extends State<CalendarEventEditor> {
       start
           ? draft.withStartTime(picked.hour, picked.minute)
           : draft.withEndTime(picked.hour, picked.minute),
+    );
+  }
+
+  /// Moves an all-day reminder of [minutes] to a picked time of day, on the
+  /// date it already falls on.
+  Future<void> _pickReminderTime(int minutes) async {
+    final minuteOfDay = CalendarReminders.allDayMinuteOfDay(minutes);
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: minuteOfDay ~/ 60, minute: minuteOfDay % 60),
+    );
+    if (picked == null || !mounted) return;
+    widget.onChanged(
+      widget.draft.copyWith(
+        reminderMinutes: CalendarReminders.allDayMinutes(
+          daysBefore: CalendarReminders.allDayDaysBefore(minutes),
+          minuteOfDay: picked.hour * 60 + picked.minute,
+        ),
+      ),
     );
   }
 
@@ -397,6 +417,9 @@ class _CalendarEventEditorState extends State<CalendarEventEditor> {
                       child: ReminderPicker(
                         value: draft.reminderMinutes,
                         allDay: draft.allDay,
+                        onPickTime: draft.reminderMinutes == null
+                            ? null
+                            : () => _pickReminderTime(draft.reminderMinutes!),
                         onChanged: (minutes) => widget.onChanged(
                           minutes == null
                               ? draft.copyWith(clearReminder: true)
