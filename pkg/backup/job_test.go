@@ -225,31 +225,35 @@ func TestBackupTargetLock_IsADatabaseConstraint(t *testing.T) {
 	}
 }
 
-// A backup whose process died has a terminal state once an instance starts
+// A backup whose process died is run again once an instance notices its
+// owner has stopped beating (#2966), so it still ends in a terminal state
 // (#3084, J12): it used to vanish with the process, and the poll with it.
-func TestSnapshotBackupStatus_RestartLeavesATerminalState(t *testing.T) {
+func TestSnapshotBackupStatus_ADeadOwnersBackupIsRunAgain(t *testing.T) {
 	f := newJobFixture(t, dbtest.NewDB(t))
+	writeTestFile(t, f.internal, "docs/a.txt", "aaa")
 	jobID, err := f.start(f.instance(nil), targetSerial)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Claimed by a process that then died: running, with nothing running it.
 	id, _ := strconv.ParseInt(jobID, 10, 64)
-	if _, err := f.database.Queries.ClaimJob(context.Background(), id); err != nil {
+	if _, err := f.database.Queries.ClaimJob(context.Background(), db.ClaimJobParams{Owner: "dead", ID: id, LaneLimit: 1}); err != nil {
+		t.Fatal(err)
+	}
+	// Raw SQL because no query ages a heartbeat: the queue only ever beats now.
+	if _, err := f.database.Db.Exec("UPDATE jobs SET heartbeat_at = datetime('now', '-1 hour') WHERE id = ?", id); err != nil {
 		t.Fatal(err)
 	}
 
 	restarted := f.instance(nil)
 	restarted.run(t)
-	job := f.waitStatus(t, jobID, BackupStatusFailed)
-	if job.ErrorMsg == "" {
-		t.Error("the interrupted backup carries no error")
-	}
+	job := f.waitStatus(t, jobID, BackupStatusCompleted)
 	if job.CompletedAt == nil {
-		t.Error("the interrupted backup carries no completion time")
+		t.Error("the rerun backup carries no completion time")
 	}
+	assertFileContent(t, filepath.Join(f.target, "internal", "docs/a.txt"), "aaa")
 	if _, err := f.start(restarted, targetSerial); err != nil {
-		t.Errorf("the interrupted backup still holds the target: %v", err)
+		t.Errorf("the finished backup still holds the target: %v", err)
 	}
 }
 

@@ -122,10 +122,55 @@ func pickLane(ctx context.Context, kind string, handler Handler, params json.Raw
 	return lane, nil
 }
 
+// beat is the heartbeat. It says every job this instance is running is still
+// running, cancels the ones the database no longer has it running, which
+// another instance canceled or took, and then takes back the jobs of owners
+// that stopped beating.
+func (q *Queue) beat(ctx context.Context) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	alive, err := q.database.Queries.HeartbeatJobs(ctx, q.instance)
+	if err != nil {
+		// Without a beat of its own this instance's jobs may look stale too,
+		// and taking them back here would run them twice in one process.
+		if ctx.Err() == nil {
+			log.Printf("[jobs] heartbeat: %v", err)
+		}
+		return
+	}
+	for id, running := range q.running {
+		if !slices.Contains(alive, id) {
+			running.cancel()
+		}
+	}
+
+	lease := int64(q.leaseDuration.Seconds())
+	failed, err := q.database.Queries.FailExhaustedStaleJobs(ctx, db.FailExhaustedStaleJobsParams{
+		Reason:       interruptedError,
+		MaxAttempts:  maxAttempts,
+		LeaseSeconds: lease,
+	})
+	if err != nil && ctx.Err() == nil {
+		log.Printf("[jobs] fail jobs interrupted too often: %v", err)
+	}
+	for _, row := range failed {
+		q.publish(eventbus.EventJobFailed, jobFromRow(row))
+	}
+	requeued, err := q.database.Queries.RequeueStaleJobs(ctx, lease)
+	if err != nil && ctx.Err() == nil {
+		log.Printf("[jobs] requeue interrupted jobs: %v", err)
+	}
+	for _, row := range requeued {
+		q.publish(eventbus.EventJobQueued, jobFromRow(row))
+	}
+}
+
 // startNext claims the oldest pending job whose lane has a free slot, starts
 // it on its own goroutine, and reports whether it started one. It holds the
 // lock Cancel takes from reading the running counts through claiming, so no
-// two starts can fill the same slot.
+// two starts here can fill the same slot. The counts in memory only skip
+// lanes this instance has filled by itself: the claim counts the lane across
+// every instance.
 // ponytail: it scans every pending job on each start, which is fine for a
 // backlog of hundreds; skip full lanes in SQL if backlogs reach thousands.
 func (q *Queue) startNext(ctx context.Context, jobs *sync.WaitGroup) bool {
@@ -155,9 +200,13 @@ func (q *Queue) startNext(ctx context.Context, jobs *sync.WaitGroup) bool {
 		if busy[lane] >= limit {
 			continue
 		}
-		row, err := q.database.Queries.ClaimJob(ctx, candidate.ID)
+		row, err := q.database.Queries.ClaimJob(ctx, db.ClaimJobParams{
+			Owner:     q.instance,
+			ID:        candidate.ID,
+			LaneLimit: int64(limit),
+		})
 		if errors.Is(err, sql.ErrNoRows) {
-			continue // canceled since the scan
+			continue // canceled or claimed since the scan, or another instance fills the lane
 		}
 		if err != nil {
 			if ctx.Err() == nil {
@@ -213,13 +262,14 @@ func (q *Queue) reporter(ctx context.Context, job Job) (func(float64), func() fl
 		updated, err := q.database.Queries.UpdateJobProgress(context.WithoutCancel(ctx), db.UpdateJobProgressParams{
 			Progress: latest,
 			ID:       job.ID,
+			Owner:    q.instance,
 		})
 		if err != nil {
 			log.Printf("[jobs] save progress of job %d: %v", job.ID, err)
 			return
 		}
 		if updated == 0 {
-			return // canceled since it started
+			return // canceled or taken by another instance since it started
 		}
 		snapshot := job
 		snapshot.Progress = latest
@@ -228,16 +278,31 @@ func (q *Queue) reporter(ctx context.Context, job Job) (func(float64), func() fl
 	return report, func() float64 { return latest }
 }
 
-// finish records how a job's run ended and publishes it. A job canceled while
-// its Handler was unwinding is left as Cancel recorded it.
+// finish records how a job's run ended and publishes it. A run that shutdown
+// stopped goes back in the queue. A job canceled while its Handler was
+// unwinding is left as Cancel recorded it, and one another instance took is
+// left to that instance.
 func (q *Queue) finish(ctx context.Context, id int64, runErr error, progress float64) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	delete(q.running, id)
 
-	params, kind := finishParams(id, runErr, ctx.Err() != nil, progress)
 	// At shutdown ctx is already canceled, and the row still has to be settled.
-	row, err := q.database.Queries.FinishJob(context.WithoutCancel(ctx), params)
+	settle := context.WithoutCancel(ctx)
+	var row db.Job
+	var err error
+	kind := eventbus.EventJobQueued
+	if runErr != nil && ctx.Err() != nil {
+		row, err = q.database.Queries.ReleaseJob(settle, db.ReleaseJobParams{ID: id, Owner: q.instance})
+	} else {
+		params := db.FinishJobParams{ID: id, Owner: q.instance, Status: string(StatusCompleted), Progress: 1}
+		kind = eventbus.EventJobCompleted
+		if runErr != nil {
+			params.Status, params.Error, params.Progress = string(StatusFailed), runErr.Error(), progress
+			kind = eventbus.EventJobFailed
+		}
+		row, err = q.database.Queries.FinishJob(settle, params)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return
 	}
@@ -246,15 +311,4 @@ func (q *Queue) finish(ctx context.Context, id int64, runErr error, progress flo
 		return
 	}
 	q.publish(kind, jobFromRow(row))
-}
-
-func finishParams(id int64, runErr error, interrupted bool, progress float64) (db.FinishJobParams, eventbus.EventKind) {
-	switch {
-	case runErr == nil:
-		return db.FinishJobParams{ID: id, Status: string(StatusCompleted), Progress: 1}, eventbus.EventJobCompleted
-	case interrupted:
-		return db.FinishJobParams{ID: id, Status: string(StatusFailed), Error: interruptedError, Progress: progress}, eventbus.EventJobFailed
-	default:
-		return db.FinishJobParams{ID: id, Status: string(StatusFailed), Error: runErr.Error(), Progress: progress}, eventbus.EventJobFailed
-	}
 }

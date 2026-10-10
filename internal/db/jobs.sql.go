@@ -19,7 +19,7 @@ SET
 WHERE
     id = ?
     AND status IN ('pending', 'running')
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
 `
 
 func (q *Queries) CancelJob(ctx context.Context, id int64) (Job, error) {
@@ -40,6 +40,8 @@ func (q *Queries) CancelJob(ctx context.Context, id int64) (Job, error) {
 		&i.FinishedAt,
 		&i.UserID,
 		&i.Detail,
+		&i.Owner,
+		&i.HeartbeatAt,
 	)
 	return i, err
 }
@@ -49,16 +51,39 @@ UPDATE jobs
 SET
     status = 'running',
     attempts = attempts + 1,
-    started_at = datetime('now')
+    started_at = datetime('now'),
+    owner = ?1,
+    heartbeat_at = datetime('now')
 WHERE
-    id = ?
-    AND status = 'pending'
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
+    jobs.id = ?2
+    AND jobs.status = 'pending'
+    AND (
+        SELECT
+            COUNT(*)
+        FROM
+            jobs AS busy
+        WHERE
+            busy.status = 'running'
+            AND busy.kind = jobs.kind
+            AND busy.lane = jobs.lane
+    ) < CAST(?3 AS INTEGER)
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
 `
 
-// The status guard makes a job canceled since it was picked match no row.
-func (q *Queries) ClaimJob(ctx context.Context, id int64) (Job, error) {
-	row := q.db.QueryRowContext(ctx, claimJob, id)
+type ClaimJobParams struct {
+	Owner     string
+	ID        int64
+	LaneLimit int64
+}
+
+// Claims a pending job for an instance (#2966). The status guard makes a job
+// canceled or claimed by another instance since it was picked match no row,
+// and so does the lane count, which is what holds a lane's limit across
+// instances. The count is exact on SQLite, which has one writer at a time.
+// PostgreSQL at READ COMMITTED lets two claims count before either commits,
+// so that backend has to serialize claims per lane when it lands.
+func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (Job, error) {
+	row := q.db.QueryRowContext(ctx, claimJob, arg.Owner, arg.ID, arg.LaneLimit)
 	var i Job
 	err := row.Scan(
 		&i.ID,
@@ -75,6 +100,8 @@ func (q *Queries) ClaimJob(ctx context.Context, id int64) (Job, error) {
 		&i.FinishedAt,
 		&i.UserID,
 		&i.Detail,
+		&i.Owner,
+		&i.HeartbeatAt,
 	)
 	return i, err
 }
@@ -84,7 +111,7 @@ INSERT INTO
     jobs (kind, name, params, lane, user_id)
 VALUES
     (?, ?, ?, ?, ?)
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
 `
 
 type CreateJobParams struct {
@@ -119,8 +146,77 @@ func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, erro
 		&i.FinishedAt,
 		&i.UserID,
 		&i.Detail,
+		&i.Owner,
+		&i.HeartbeatAt,
 	)
 	return i, err
+}
+
+const failExhaustedStaleJobs = `-- name: FailExhaustedStaleJobs :many
+UPDATE jobs
+SET
+    status = 'failed',
+    error = ?1,
+    finished_at = datetime('now')
+WHERE
+    status = 'running'
+    AND attempts >= ?2
+    AND (
+        heartbeat_at IS NULL
+        OR heartbeat_at < datetime('now', '-' || CAST(?3 AS INTEGER) || ' seconds')
+    )
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
+`
+
+type FailExhaustedStaleJobsParams struct {
+	Reason       string
+	MaxAttempts  int64
+	LeaseSeconds int64
+}
+
+// A running job whose owner has not beaten for lease_seconds belongs to an
+// instance that is gone. The database's clock is on both sides of the
+// comparison, so instances need not agree on the time. One that has already
+// started max_attempts times fails here, so a job that kills its process does
+// not do it forever; run this before RequeueStaleJobs.
+func (q *Queries) FailExhaustedStaleJobs(ctx context.Context, arg FailExhaustedStaleJobsParams) ([]Job, error) {
+	rows, err := q.db.QueryContext(ctx, failExhaustedStaleJobs, arg.Reason, arg.MaxAttempts, arg.LeaseSeconds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Job
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Name,
+			&i.Status,
+			&i.Params,
+			&i.Progress,
+			&i.Lane,
+			&i.Attempts,
+			&i.Error,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.UserID,
+			&i.Detail,
+			&i.Owner,
+			&i.HeartbeatAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const finishJob = `-- name: FinishJob :one
@@ -133,7 +229,8 @@ SET
 WHERE
     id = ?
     AND status = 'running'
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
+    AND owner = ?
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
 `
 
 type FinishJobParams struct {
@@ -141,16 +238,19 @@ type FinishJobParams struct {
 	Error    string
 	Progress float64
 	ID       int64
+	Owner    string
 }
 
 // Only a running job is finished here, so a job canceled while its handler
-// was still unwinding keeps the canceled status Cancel gave it.
+// was still unwinding keeps the canceled status Cancel gave it, and only by
+// its owner, so a reclaimed job is settled by the instance that reran it.
 func (q *Queries) FinishJob(ctx context.Context, arg FinishJobParams) (Job, error) {
 	row := q.db.QueryRowContext(ctx, finishJob,
 		arg.Status,
 		arg.Error,
 		arg.Progress,
 		arg.ID,
+		arg.Owner,
 	)
 	var i Job
 	err := row.Scan(
@@ -168,13 +268,15 @@ func (q *Queries) FinishJob(ctx context.Context, arg FinishJobParams) (Job, erro
 		&i.FinishedAt,
 		&i.UserID,
 		&i.Detail,
+		&i.Owner,
+		&i.HeartbeatAt,
 	)
 	return i, err
 }
 
 const getActiveBackupJob = `-- name: GetActiveBackupJob :one
 SELECT
-    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
 FROM
     jobs
 WHERE
@@ -205,13 +307,15 @@ func (q *Queries) GetActiveBackupJob(ctx context.Context, targetDeviceSerial str
 		&i.FinishedAt,
 		&i.UserID,
 		&i.Detail,
+		&i.Owner,
+		&i.HeartbeatAt,
 	)
 	return i, err
 }
 
 const getJob = `-- name: GetJob :one
 SELECT
-    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
 FROM
     jobs
 WHERE
@@ -238,29 +342,50 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.FinishedAt,
 		&i.UserID,
 		&i.Detail,
+		&i.Owner,
+		&i.HeartbeatAt,
 	)
 	return i, err
 }
 
-const interruptRunningJobs = `-- name: InterruptRunningJobs :exec
+const heartbeatJobs = `-- name: HeartbeatJobs :many
 UPDATE jobs
 SET
-    status = 'failed',
-    error = ?1,
-    finished_at = datetime('now')
+    heartbeat_at = datetime('now')
 WHERE
-    status = 'running'
+    owner = ?
+    AND status = 'running'
+RETURNING id
 `
 
-// Rows still running when a process starts belong to one that is gone.
-func (q *Queries) InterruptRunningJobs(ctx context.Context, reason string) error {
-	_, err := q.db.ExecContext(ctx, interruptRunningJobs, reason)
-	return err
+// An instance's heartbeat: every job it is still running, which it compares
+// with what it has in memory to learn of one canceled or reclaimed elsewhere.
+func (q *Queries) HeartbeatJobs(ctx context.Context, owner string) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, heartbeatJobs, owner)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listJobs = `-- name: ListJobs :many
 SELECT
-    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
 FROM
     jobs
 WHERE
@@ -303,6 +428,8 @@ func (q *Queries) ListJobs(ctx context.Context, kinds []string) ([]Job, error) {
 			&i.FinishedAt,
 			&i.UserID,
 			&i.Detail,
+			&i.Owner,
+			&i.HeartbeatAt,
 		); err != nil {
 			return nil, err
 		}
@@ -362,7 +489,7 @@ func (q *Queries) ListPendingJobs(ctx context.Context) ([]ListPendingJobsRow, er
 
 const listUserJobs = `-- name: ListUserJobs :many
 SELECT
-    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
 FROM
     jobs
 WHERE
@@ -414,6 +541,8 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]J
 			&i.FinishedAt,
 			&i.UserID,
 			&i.Detail,
+			&i.Owner,
+			&i.HeartbeatAt,
 		); err != nil {
 			return nil, err
 		}
@@ -468,6 +597,111 @@ func (q *Queries) PruneFinishedJobs(ctx context.Context, arg PruneFinishedJobsPa
 	return result.RowsAffected()
 }
 
+const releaseJob = `-- name: ReleaseJob :one
+UPDATE jobs
+SET
+    status = 'pending',
+    progress = 0,
+    owner = '',
+    heartbeat_at = NULL,
+    started_at = NULL
+WHERE
+    id = ?
+    AND status = 'running'
+    AND owner = ?
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
+`
+
+type ReleaseJobParams struct {
+	ID    int64
+	Owner string
+}
+
+// Puts a job its owner was running back in the queue, for an instance that
+// is shutting down: another one, or this one's next start, runs it again.
+func (q *Queries) ReleaseJob(ctx context.Context, arg ReleaseJobParams) (Job, error) {
+	row := q.db.QueryRowContext(ctx, releaseJob, arg.ID, arg.Owner)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Name,
+		&i.Status,
+		&i.Params,
+		&i.Progress,
+		&i.Lane,
+		&i.Attempts,
+		&i.Error,
+		&i.CreatedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.UserID,
+		&i.Detail,
+		&i.Owner,
+		&i.HeartbeatAt,
+	)
+	return i, err
+}
+
+const requeueStaleJobs = `-- name: RequeueStaleJobs :many
+UPDATE jobs
+SET
+    status = 'pending',
+    progress = 0,
+    owner = '',
+    heartbeat_at = NULL,
+    started_at = NULL
+WHERE
+    status = 'running'
+    AND (
+        heartbeat_at IS NULL
+        OR heartbeat_at < datetime('now', '-' || CAST(?1 AS INTEGER) || ' seconds')
+    )
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
+`
+
+// Every other running job whose owner stopped beating goes back in the queue
+// for any instance to run.
+func (q *Queries) RequeueStaleJobs(ctx context.Context, leaseSeconds int64) ([]Job, error) {
+	rows, err := q.db.QueryContext(ctx, requeueStaleJobs, leaseSeconds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Job
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Name,
+			&i.Status,
+			&i.Params,
+			&i.Progress,
+			&i.Lane,
+			&i.Attempts,
+			&i.Error,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.UserID,
+			&i.Detail,
+			&i.Owner,
+			&i.HeartbeatAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const retryJob = `-- name: RetryJob :one
 UPDATE jobs
 SET
@@ -480,7 +714,7 @@ SET
 WHERE
     id = ?
     AND status = 'failed'
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
 `
 
 type RetryJobParams struct {
@@ -509,6 +743,8 @@ func (q *Queries) RetryJob(ctx context.Context, arg RetryJobParams) (Job, error)
 		&i.FinishedAt,
 		&i.UserID,
 		&i.Detail,
+		&i.Owner,
+		&i.HeartbeatAt,
 	)
 	return i, err
 }
@@ -540,15 +776,19 @@ SET
 WHERE
     id = ?
     AND status = 'running'
+    AND owner = ?
 `
 
 type UpdateJobProgressParams struct {
 	Progress float64
 	ID       int64
+	Owner    string
 }
 
+// The owner guard keeps an instance whose job was reclaimed from writing to a
+// run that is no longer its own.
 func (q *Queries) UpdateJobProgress(ctx context.Context, arg UpdateJobProgressParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, updateJobProgress, arg.Progress, arg.ID)
+	result, err := q.db.ExecContext(ctx, updateJobProgress, arg.Progress, arg.ID, arg.Owner)
 	if err != nil {
 		return 0, err
 	}

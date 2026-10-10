@@ -56,7 +56,7 @@ import (
 
 // setupServices starts the background services. The returned func stops the
 // job worker and waits for it, so a job interrupted by shutdown cleans up and
-// is marked failed before the process exits.
+// is back in the queue before the process exits.
 func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error) {
 	if err := storageutil.SetupFilesDir(); err != nil {
 		return nil, nil, fmt.Errorf("failed to setup files directory: %w", err)
@@ -156,7 +156,11 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	go vaultDeviceMonitor(deps)
 	go usbDeviceMonitor(deps)
 
-	// Purge expired sessions once at startup and then every 24 hours. (#1330)
+	// The three periodic tasks below each run once per interval across every
+	// instance on the database, not once per instance (#2966): an instance
+	// that starts inside another's interval skips its turn.
+
+	// Purge expired sessions every 24 hours. (#1330)
 	// GetSession already filters on expires_at, so stale rows are not a security
 	// issue — but they accumulate forever otherwise on a busy instance.
 	go func() {
@@ -169,16 +173,13 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 				}
 			}
 		}
-		purge() // once at startup
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			purge()
-		}
+		workerutil.RunPeriodically(context.Background(), workerutil.RunPeriodicallyParams{
+			Queries: deps.Database().Queries, Name: "session-purge", Interval: 24 * time.Hour, Run: purge,
+		})
 	}()
 
-	// Delete trashed items older than storageutil.TrashRetentionDays, once at
-	// startup and then hourly, on every device namespace in the registry
+	// Delete trashed items older than storageutil.TrashRetentionDays, hourly,
+	// on every device namespace in the registry
 	// (#1814, #2641). The purge publishes trash_changed for each device it
 	// touched.
 	go func() {
@@ -206,16 +207,13 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 				log.Printf("[trash] purged %d expired item(s)", res.Purged)
 			}
 		}
-		purge()
-		ticker := time.NewTicker(time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			purge()
-		}
+		workerutil.RunPeriodically(context.Background(), workerutil.RunPeriodicallyParams{
+			Queries: deps.Database().Queries, Name: "trash-purge", Interval: time.Hour, Run: purge,
+		})
 	}()
 
 	// Prune connected devices and finished jobs past their caps and max ages,
-	// once at startup and then hourly (#2756).
+	// hourly (#2756).
 	go func() {
 		prune := func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -231,12 +229,9 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 				log.Printf("[jobs] pruned %d finished job(s)", res.Removed)
 			}
 		}
-		prune()
-		ticker := time.NewTicker(time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			prune()
-		}
+		workerutil.RunPeriodically(context.Background(), workerutil.RunPeriodicallyParams{
+			Queries: deps.Database().Queries, Name: "device-and-job-prune", Interval: time.Hour, Run: prune,
+		})
 	}()
 
 	// Give the resumable upload sessions their heartbeat. The store itself is
