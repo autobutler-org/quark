@@ -10,6 +10,54 @@ import (
 	"database/sql"
 )
 
+const countMusicTracks = `-- name: CountMusicTracks :one
+SELECT CAST(COUNT(*) AS BIGINT)
+FROM music_tracks
+WHERE
+    (CAST($1 AS BIGINT) = 0 OR album_key = CAST($2 AS TEXT))
+    AND (CAST($3 AS BIGINT) = 0 OR LOWER(album_artist) = LOWER(CAST($4 AS TEXT)))
+    AND (CAST($5 AS BIGINT) = 0 OR LOWER(genre) = LOWER(CAST($6 AS TEXT)))
+`
+
+type CountMusicTracksParams struct {
+	FilterAlbumKey int64
+	AlbumKey       string
+	FilterArtist   int64
+	Artist         string
+	FilterGenre    int64
+	Genre          string
+}
+
+func (q *Queries) CountMusicTracks(ctx context.Context, arg CountMusicTracksParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMusicTracks,
+		arg.FilterAlbumKey,
+		arg.AlbumKey,
+		arg.FilterArtist,
+		arg.Artist,
+		arg.FilterGenre,
+		arg.Genre,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const deleteMusicTrack = `-- name: DeleteMusicTrack :exec
+DELETE FROM music_tracks WHERE serial = $1 AND rel_path = $2
+`
+
+type DeleteMusicTrackParams struct {
+	Serial  string
+	RelPath string
+}
+
+// DeleteMusicTrack drops the one row for a file, nothing under it: a
+// backfill's unseen rows.
+func (q *Queries) DeleteMusicTrack(ctx context.Context, arg DeleteMusicTrackParams) error {
+	_, err := q.db.ExecContext(ctx, deleteMusicTrack, arg.Serial, arg.RelPath)
+	return err
+}
+
 const deleteMusicTracksBySerial = `-- name: DeleteMusicTracksBySerial :exec
 DELETE FROM music_tracks
 WHERE serial = $1
@@ -137,8 +185,8 @@ type ListMusicAlbumsRow struct {
 }
 
 // Browse aggregates. An admin's page is one of these queries. A caller who
-// cannot read the whole tree aggregates in Go from the rows instead; that
-// stream lands with the library service.
+// cannot read the whole tree aggregates in Go from ListMusicTracksAfter
+// instead.
 //
 // Displayed casing is MIN() of the stored tag, so "Rock" and "rock" are one
 // genre and the name does not flicker. SQLite's MIN is byte order;
@@ -328,6 +376,250 @@ func (q *Queries) ListMusicTrackScanStates(ctx context.Context, serial string) (
 	return items, nil
 }
 
+const listMusicTracks = `-- name: ListMusicTracks :many
+SELECT
+    music_tracks.id, music_tracks.serial, music_tracks.rel_path, music_tracks.size, music_tracks.mtime, music_tracks.scanner_version, music_tracks.title, music_tracks.artist, music_tracks.album_artist, music_tracks.album, music_tracks.album_key, music_tracks.genre, music_tracks.track_no, music_tracks.disc_no, music_tracks.year, music_tracks.duration_ms, music_tracks.duration_exact, music_tracks.cover_source, music_tracks.cover_key,
+    CAST(
+        COALESCE(CASE WHEN CAST($1 AS BIGINT) = 0 THEN
+            CASE CAST($2 AS TEXT)
+                WHEN 'title' THEN LOWER(music_tracks.title)
+                WHEN 'artist' THEN LOWER(music_tracks.artist)
+                WHEN 'album' THEN LOWER(music_tracks.album)
+            END
+        END, '') AS TEXT
+    ) AS sort_text_asc,
+    CAST(
+        COALESCE(CASE WHEN CAST($1 AS BIGINT) = 1 THEN
+            CASE CAST($2 AS TEXT)
+                WHEN 'title' THEN LOWER(music_tracks.title)
+                WHEN 'artist' THEN LOWER(music_tracks.artist)
+                WHEN 'album' THEN LOWER(music_tracks.album)
+            END
+        END, '') AS TEXT
+    ) AS sort_text_desc,
+    CAST(
+        (CASE WHEN CAST($1 AS BIGINT) = 1 THEN -1 ELSE 1 END) *
+        (CASE CAST($2 AS TEXT)
+            WHEN 'year' THEN COALESCE(music_tracks.year, 0)
+            WHEN 'added' THEN music_tracks.id
+            ELSE 0
+        END) AS BIGINT
+    ) AS sort_num
+FROM music_tracks
+WHERE
+    (CAST($3 AS BIGINT) = 0 OR music_tracks.album_key = CAST($4 AS TEXT))
+    AND (CAST($5 AS BIGINT) = 0 OR LOWER(music_tracks.album_artist) = LOWER(CAST($6 AS TEXT)))
+    AND (CAST($7 AS BIGINT) = 0 OR LOWER(music_tracks.genre) = LOWER(CAST($8 AS TEXT)))
+ORDER BY
+    sort_text_asc ASC,
+    sort_text_desc DESC,
+    sort_num,
+    LOWER(music_tracks.album_artist),
+    LOWER(music_tracks.album),
+    COALESCE(music_tracks.disc_no, 0),
+    COALESCE(music_tracks.track_no, 0),
+    LOWER(music_tracks.title),
+    music_tracks.id
+LIMIT CAST($10 AS BIGINT) OFFSET CAST($9 AS BIGINT)
+`
+
+type ListMusicTracksParams struct {
+	Descending     int64
+	Sort           string
+	FilterAlbumKey int64
+	AlbumKey       string
+	FilterArtist   int64
+	Artist         string
+	FilterGenre    int64
+	Genre          string
+	Offset         int64
+	Limit          int64
+}
+
+type ListMusicTracksRow struct {
+	MusicTrack   MusicTrack
+	SortTextAsc  string
+	SortTextDesc string
+	SortNum      int64
+}
+
+// Track listing. filter_* are 0 or 1; with 0 the matching value is ignored.
+// sort is 'title', 'artist', 'album', 'year', 'added', or ” for album order;
+// descending is 0 or 1. The sort keys are computed in the select list because
+// sqlc's SQLite engine leaves a parameter in an ORDER BY CASE unexpanded. A key
+// the sort does not use is the same on every row and orders nothing. A numeric key
+// is negated for descending. Every sort ends on the album order and then id,
+// so a page boundary is stable, and nullable columns are COALESCEd so both
+// engines order them alike.
+func (q *Queries) ListMusicTracks(ctx context.Context, arg ListMusicTracksParams) ([]ListMusicTracksRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMusicTracks,
+		arg.Descending,
+		arg.Sort,
+		arg.FilterAlbumKey,
+		arg.AlbumKey,
+		arg.FilterArtist,
+		arg.Artist,
+		arg.FilterGenre,
+		arg.Genre,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMusicTracksRow
+	for rows.Next() {
+		var i ListMusicTracksRow
+		if err := rows.Scan(
+			&i.MusicTrack.ID,
+			&i.MusicTrack.Serial,
+			&i.MusicTrack.RelPath,
+			&i.MusicTrack.Size,
+			&i.MusicTrack.Mtime,
+			&i.MusicTrack.ScannerVersion,
+			&i.MusicTrack.Title,
+			&i.MusicTrack.Artist,
+			&i.MusicTrack.AlbumArtist,
+			&i.MusicTrack.Album,
+			&i.MusicTrack.AlbumKey,
+			&i.MusicTrack.Genre,
+			&i.MusicTrack.TrackNo,
+			&i.MusicTrack.DiscNo,
+			&i.MusicTrack.Year,
+			&i.MusicTrack.DurationMs,
+			&i.MusicTrack.DurationExact,
+			&i.MusicTrack.CoverSource,
+			&i.MusicTrack.CoverKey,
+			&i.SortTextAsc,
+			&i.SortTextDesc,
+			&i.SortNum,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMusicTracksAfter = `-- name: ListMusicTracksAfter :many
+SELECT id, serial, rel_path, size, mtime, scanner_version, title, artist, album_artist, album, album_key, genre, track_no, disc_no, year, duration_ms, duration_exact, cover_source, cover_key
+FROM music_tracks
+WHERE id > CAST($1 AS BIGINT)
+ORDER BY id
+LIMIT CAST($2 AS BIGINT)
+`
+
+type ListMusicTracksAfterParams struct {
+	AfterID int64
+	Limit   int64
+}
+
+// ListMusicTracksAfter is every track in id order, one batch at a time: the
+// stream a non-admin's browse aggregates in Go.
+func (q *Queries) ListMusicTracksAfter(ctx context.Context, arg ListMusicTracksAfterParams) ([]MusicTrack, error) {
+	rows, err := q.db.QueryContext(ctx, listMusicTracksAfter, arg.AfterID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MusicTrack
+	for rows.Next() {
+		var i MusicTrack
+		if err := rows.Scan(
+			&i.ID,
+			&i.Serial,
+			&i.RelPath,
+			&i.Size,
+			&i.Mtime,
+			&i.ScannerVersion,
+			&i.Title,
+			&i.Artist,
+			&i.AlbumArtist,
+			&i.Album,
+			&i.AlbumKey,
+			&i.Genre,
+			&i.TrackNo,
+			&i.DiscNo,
+			&i.Year,
+			&i.DurationMs,
+			&i.DurationExact,
+			&i.CoverSource,
+			&i.CoverKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMusicTracksUnder = `-- name: ListMusicTracksUnder :many
+SELECT id, rel_path, album_artist, album
+FROM music_tracks
+WHERE
+    serial = $1
+    AND (
+        rel_path = $2
+        OR substr(rel_path, 1, length($2) + 1) = $2 || '/'
+    )
+ORDER BY rel_path
+`
+
+type ListMusicTracksUnderParams struct {
+	Serial  string
+	RelPath string
+}
+
+type ListMusicTracksUnderRow struct {
+	ID          int64
+	RelPath     string
+	AlbumArtist string
+	Album       string
+}
+
+// ListMusicTracksUnder is the track at rel_path and every track under it,
+// what a move rekeys after MoveMusicTracks.
+func (q *Queries) ListMusicTracksUnder(ctx context.Context, arg ListMusicTracksUnderParams) ([]ListMusicTracksUnderRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMusicTracksUnder, arg.Serial, arg.RelPath)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMusicTracksUnderRow
+	for rows.Next() {
+		var i ListMusicTracksUnderRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RelPath,
+			&i.AlbumArtist,
+			&i.Album,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const moveMusicTracks = `-- name: MoveMusicTracks :exec
 UPDATE music_tracks
 SET
@@ -353,6 +645,20 @@ type MoveMusicTracksParams struct {
 // unique (serial, rel_path); nothing is rewritten.
 func (q *Queries) MoveMusicTracks(ctx context.Context, arg MoveMusicTracksParams) error {
 	_, err := q.db.ExecContext(ctx, moveMusicTracks, arg.NewRelPath, arg.OldRelPath, arg.Serial)
+	return err
+}
+
+const setMusicTrackAlbumKey = `-- name: SetMusicTrackAlbumKey :exec
+UPDATE music_tracks SET album_key = $1 WHERE id = $2
+`
+
+type SetMusicTrackAlbumKeyParams struct {
+	AlbumKey string
+	ID       int64
+}
+
+func (q *Queries) SetMusicTrackAlbumKey(ctx context.Context, arg SetMusicTrackAlbumKeyParams) error {
+	_, err := q.db.ExecContext(ctx, setMusicTrackAlbumKey, arg.AlbumKey, arg.ID)
 	return err
 }
 
@@ -410,9 +716,8 @@ type UpsertMusicTrackParams struct {
 	CoverKey       string
 }
 
-// Music library cache (#2982). The library service is the caller; it is the
-// next ticket, so nothing in this repository calls these yet. Search is FTS5
-// (SQLite only, #2958) and is raw SQL, not a query here.
+// Music library cache (#2982). pkg/util/musicutil is the caller. Search is
+// FTS5 (SQLite only, #2958) and is raw SQL there, not a query here.
 //
 // A path and the files under it are matched with substr rather than LIKE, so
 // a '%' or '_' in a name is not a wildcard. The same shape as DeleteFavoritesUnder.

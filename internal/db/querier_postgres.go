@@ -85,6 +85,10 @@ func (a *postgresQueries) CountDBVFSEntriesUnder(ctx context.Context, arg CountD
 	return a.q.CountDBVFSEntriesUnder(ctx, pgdb.CountDBVFSEntriesUnderParams(arg))
 }
 
+func (a *postgresQueries) CountMusicTracks(ctx context.Context, arg CountMusicTracksParams) (int64, error) {
+	return a.q.CountMusicTracks(ctx, pgdb.CountMusicTracksParams(arg))
+}
+
 func (a *postgresQueries) CountOtherAccounts(ctx context.Context, id int64) (int64, error) {
 	return a.q.CountOtherAccounts(ctx, id)
 }
@@ -246,6 +250,10 @@ func (a *postgresQueries) DeleteGroup(ctx context.Context, id int64) (int64, err
 
 func (a *postgresQueries) DeleteGroupPathAccess(ctx context.Context, arg DeleteGroupPathAccessParams) (int64, error) {
 	return a.q.DeleteGroupPathAccess(ctx, pgdb.DeleteGroupPathAccessParams(arg))
+}
+
+func (a *postgresQueries) DeleteMusicTrack(ctx context.Context, arg DeleteMusicTrackParams) error {
+	return a.q.DeleteMusicTrack(ctx, pgdb.DeleteMusicTrackParams(arg))
 }
 
 func (a *postgresQueries) DeleteMusicTracksBySerial(ctx context.Context, serial string) error {
@@ -993,6 +1001,42 @@ func (a *postgresQueries) ListMusicTrackScanStates(ctx context.Context, serial s
 	return items, nil
 }
 
+func (a *postgresQueries) ListMusicTracks(ctx context.Context, arg ListMusicTracksParams) ([]ListMusicTracksRow, error) {
+	rows, err := a.q.ListMusicTracks(ctx, pgdb.ListMusicTracksParams(arg))
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListMusicTracksRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListMusicTracksRow{MusicTrack: MusicTrack(row.MusicTrack), SortTextAsc: row.SortTextAsc, SortTextDesc: row.SortTextDesc, SortNum: row.SortNum}
+	}
+	return items, nil
+}
+
+func (a *postgresQueries) ListMusicTracksAfter(ctx context.Context, arg ListMusicTracksAfterParams) ([]MusicTrack, error) {
+	rows, err := a.q.ListMusicTracksAfter(ctx, pgdb.ListMusicTracksAfterParams(arg))
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]MusicTrack, len(rows))
+	for i, row := range rows {
+		items[i] = MusicTrack(row)
+	}
+	return items, nil
+}
+
+func (a *postgresQueries) ListMusicTracksUnder(ctx context.Context, arg ListMusicTracksUnderParams) ([]ListMusicTracksUnderRow, error) {
+	rows, err := a.q.ListMusicTracksUnder(ctx, pgdb.ListMusicTracksUnderParams(arg))
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListMusicTracksUnderRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListMusicTracksUnderRow(row)
+	}
+	return items, nil
+}
+
 func (a *postgresQueries) ListNearDuplicates(ctx context.Context) ([]ListNearDuplicatesRow, error) {
 	rows, err := a.q.ListNearDuplicates(ctx)
 	if err != nil || rows == nil {
@@ -1289,6 +1333,10 @@ func (a *postgresQueries) SetChatReadMarker(ctx context.Context, arg SetChatRead
 
 func (a *postgresQueries) SetGroupPathAccess(ctx context.Context, arg SetGroupPathAccessParams) error {
 	return a.q.SetGroupPathAccess(ctx, pgdb.SetGroupPathAccessParams(arg))
+}
+
+func (a *postgresQueries) SetMusicTrackAlbumKey(ctx context.Context, arg SetMusicTrackAlbumKeyParams) error {
+	return a.q.SetMusicTrackAlbumKey(ctx, pgdb.SetMusicTrackAlbumKeyParams(arg))
 }
 
 func (a *postgresQueries) SetPhotoTakenAt(ctx context.Context, arg SetPhotoTakenAtParams) error {

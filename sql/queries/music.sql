@@ -1,6 +1,5 @@
--- Music library cache (#2982). The library service is the caller; it is the
--- next ticket, so nothing in this repository calls these yet. Search is FTS5
--- (SQLite only, #2958) and is raw SQL, not a query here.
+-- Music library cache (#2982). pkg/util/musicutil is the caller. Search is
+-- FTS5 (SQLite only, #2958) and is raw SQL there, not a query here.
 --
 -- A path and the files under it are matched with substr rather than LIKE, so
 -- a '%' or '_' in a name is not a wildcard. The same shape as DeleteFavoritesUnder.
@@ -86,8 +85,8 @@ WHERE serial = sqlc.arg(serial)
 ORDER BY rel_path;
 
 -- Browse aggregates. An admin's page is one of these queries. A caller who
--- cannot read the whole tree aggregates in Go from the rows instead; that
--- stream lands with the library service.
+-- cannot read the whole tree aggregates in Go from ListMusicTracksAfter
+-- instead.
 --
 -- Displayed casing is MIN() of the stored tag, so "Rock" and "rock" are one
 -- genre and the name does not flicker. SQLite's MIN is byte order;
@@ -183,3 +182,95 @@ SELECT
 FROM music_tracks
 GROUP BY LOWER(genre)
 ORDER BY LOWER(genre);
+
+-- Track listing. filter_* are 0 or 1; with 0 the matching value is ignored.
+-- sort is 'title', 'artist', 'album', 'year', 'added', or '' for album order;
+-- descending is 0 or 1. The sort keys are computed in the select list because
+-- sqlc's SQLite engine leaves a parameter in an ORDER BY CASE unexpanded. A key
+-- the sort does not use is the same on every row and orders nothing. A numeric key
+-- is negated for descending. Every sort ends on the album order and then id,
+-- so a page boundary is stable, and nullable columns are COALESCEd so both
+-- engines order them alike.
+-- name: ListMusicTracks :many
+SELECT
+    sqlc.embed(music_tracks),
+    CAST(
+        COALESCE(CASE WHEN CAST(sqlc.arg(descending) AS BIGINT) = 0 THEN
+            CASE CAST(sqlc.arg(sort) AS TEXT)
+                WHEN 'title' THEN LOWER(music_tracks.title)
+                WHEN 'artist' THEN LOWER(music_tracks.artist)
+                WHEN 'album' THEN LOWER(music_tracks.album)
+            END
+        END, '') AS TEXT
+    ) AS sort_text_asc,
+    CAST(
+        COALESCE(CASE WHEN CAST(sqlc.arg(descending) AS BIGINT) = 1 THEN
+            CASE CAST(sqlc.arg(sort) AS TEXT)
+                WHEN 'title' THEN LOWER(music_tracks.title)
+                WHEN 'artist' THEN LOWER(music_tracks.artist)
+                WHEN 'album' THEN LOWER(music_tracks.album)
+            END
+        END, '') AS TEXT
+    ) AS sort_text_desc,
+    CAST(
+        (CASE WHEN CAST(sqlc.arg(descending) AS BIGINT) = 1 THEN -1 ELSE 1 END) *
+        (CASE CAST(sqlc.arg(sort) AS TEXT)
+            WHEN 'year' THEN COALESCE(music_tracks.year, 0)
+            WHEN 'added' THEN music_tracks.id
+            ELSE 0
+        END) AS BIGINT
+    ) AS sort_num
+FROM music_tracks
+WHERE
+    (CAST(sqlc.arg(filter_album_key) AS BIGINT) = 0 OR music_tracks.album_key = CAST(sqlc.arg(album_key) AS TEXT))
+    AND (CAST(sqlc.arg(filter_artist) AS BIGINT) = 0 OR LOWER(music_tracks.album_artist) = LOWER(CAST(sqlc.arg(artist) AS TEXT)))
+    AND (CAST(sqlc.arg(filter_genre) AS BIGINT) = 0 OR LOWER(music_tracks.genre) = LOWER(CAST(sqlc.arg(genre) AS TEXT)))
+ORDER BY
+    sort_text_asc ASC,
+    sort_text_desc DESC,
+    sort_num,
+    LOWER(music_tracks.album_artist),
+    LOWER(music_tracks.album),
+    COALESCE(music_tracks.disc_no, 0),
+    COALESCE(music_tracks.track_no, 0),
+    LOWER(music_tracks.title),
+    music_tracks.id
+LIMIT CAST(sqlc.arg('limit') AS BIGINT) OFFSET CAST(sqlc.arg('offset') AS BIGINT);
+
+-- name: CountMusicTracks :one
+SELECT CAST(COUNT(*) AS BIGINT)
+FROM music_tracks
+WHERE
+    (CAST(sqlc.arg(filter_album_key) AS BIGINT) = 0 OR album_key = CAST(sqlc.arg(album_key) AS TEXT))
+    AND (CAST(sqlc.arg(filter_artist) AS BIGINT) = 0 OR LOWER(album_artist) = LOWER(CAST(sqlc.arg(artist) AS TEXT)))
+    AND (CAST(sqlc.arg(filter_genre) AS BIGINT) = 0 OR LOWER(genre) = LOWER(CAST(sqlc.arg(genre) AS TEXT)));
+
+-- ListMusicTracksAfter is every track in id order, one batch at a time: the
+-- stream a non-admin's browse aggregates in Go.
+-- name: ListMusicTracksAfter :many
+SELECT *
+FROM music_tracks
+WHERE id > CAST(sqlc.arg(after_id) AS BIGINT)
+ORDER BY id
+LIMIT CAST(sqlc.arg('limit') AS BIGINT);
+
+-- ListMusicTracksUnder is the track at rel_path and every track under it,
+-- what a move rekeys after MoveMusicTracks.
+-- name: ListMusicTracksUnder :many
+SELECT id, rel_path, album_artist, album
+FROM music_tracks
+WHERE
+    serial = sqlc.arg(serial)
+    AND (
+        rel_path = sqlc.arg(rel_path)
+        OR substr(rel_path, 1, length(sqlc.arg(rel_path)) + 1) = sqlc.arg(rel_path) || '/'
+    )
+ORDER BY rel_path;
+
+-- name: SetMusicTrackAlbumKey :exec
+UPDATE music_tracks SET album_key = sqlc.arg(album_key) WHERE id = sqlc.arg(id);
+
+-- DeleteMusicTrack drops the one row for a file, nothing under it: a
+-- backfill's unseen rows.
+-- name: DeleteMusicTrack :exec
+DELETE FROM music_tracks WHERE serial = sqlc.arg(serial) AND rel_path = sqlc.arg(rel_path);
