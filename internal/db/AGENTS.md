@@ -35,8 +35,10 @@ The PostgreSQL set is a sibling directory, not `migrations/postgres/`: the embed
   It does not compare indexes, defaults or constraints.
 - **Every migration has a `.down.sql`** that drops exactly what its `.up.sql` created.
   `TestPostgresMigrationsRunDownAndUpAgain` runs the PostgreSQL set down and up again.
-- **Not in the PostgreSQL schema:** `file_content_fts` and its triggers. They are FTS5, and content search on
-  PostgreSQL is #2958.
+- **Not in the PostgreSQL schema:** `file_content_fts` and its triggers, and `music_tracks_fts` and its
+  triggers. Both are FTS5. Content search on PostgreSQL is #2958, and music search follows it. The
+  `file_content` and `music_tracks` tables themselves are in both schemas, because the generated queries
+  write to them.
 
 sqlc reads an engine's migrations as that engine's schema, so the column types chosen here decide the Go
 types sqlc generates.

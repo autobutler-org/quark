@@ -248,6 +248,14 @@ func (a *postgresQueries) DeleteGroupPathAccess(ctx context.Context, arg DeleteG
 	return a.q.DeleteGroupPathAccess(ctx, pgdb.DeleteGroupPathAccessParams(arg))
 }
 
+func (a *postgresQueries) DeleteMusicTracksBySerial(ctx context.Context, serial string) error {
+	return a.q.DeleteMusicTracksBySerial(ctx, serial)
+}
+
+func (a *postgresQueries) DeleteMusicTracksUnder(ctx context.Context, arg DeleteMusicTracksUnderParams) error {
+	return a.q.DeleteMusicTracksUnder(ctx, pgdb.DeleteMusicTracksUnderParams(arg))
+}
+
 func (a *postgresQueries) DeleteOtherUserSessions(ctx context.Context, arg DeleteOtherUserSessionsParams) error {
 	return a.q.DeleteOtherUserSessions(ctx, pgdb.DeleteOtherUserSessionsParams(arg))
 }
@@ -465,6 +473,11 @@ func (a *postgresQueries) GetInstallID(ctx context.Context) (string, error) {
 func (a *postgresQueries) GetJob(ctx context.Context, id int64) (Job, error) {
 	row, err := a.q.GetJob(ctx, id)
 	return Job(row), err
+}
+
+func (a *postgresQueries) GetMusicTrackScanState(ctx context.Context, arg GetMusicTrackScanStateParams) (GetMusicTrackScanStateRow, error) {
+	row, err := a.q.GetMusicTrackScanState(ctx, pgdb.GetMusicTrackScanStateParams(arg))
+	return GetMusicTrackScanStateRow(row), err
 }
 
 func (a *postgresQueries) GetOldestActiveAdmin(ctx context.Context, id int64) (User, error) {
@@ -932,6 +945,54 @@ func (a *postgresQueries) ListJobs(ctx context.Context, kinds []string) ([]Job, 
 	return items, nil
 }
 
+func (a *postgresQueries) ListMusicAlbums(ctx context.Context, arg ListMusicAlbumsParams) ([]ListMusicAlbumsRow, error) {
+	rows, err := a.q.ListMusicAlbums(ctx, pgdb.ListMusicAlbumsParams(arg))
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListMusicAlbumsRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListMusicAlbumsRow(row)
+	}
+	return items, nil
+}
+
+func (a *postgresQueries) ListMusicArtists(ctx context.Context) ([]ListMusicArtistsRow, error) {
+	rows, err := a.q.ListMusicArtists(ctx)
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListMusicArtistsRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListMusicArtistsRow(row)
+	}
+	return items, nil
+}
+
+func (a *postgresQueries) ListMusicGenres(ctx context.Context) ([]ListMusicGenresRow, error) {
+	rows, err := a.q.ListMusicGenres(ctx)
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListMusicGenresRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListMusicGenresRow(row)
+	}
+	return items, nil
+}
+
+func (a *postgresQueries) ListMusicTrackScanStates(ctx context.Context, serial string) ([]ListMusicTrackScanStatesRow, error) {
+	rows, err := a.q.ListMusicTrackScanStates(ctx, serial)
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListMusicTrackScanStatesRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListMusicTrackScanStatesRow(row)
+	}
+	return items, nil
+}
+
 func (a *postgresQueries) ListNearDuplicates(ctx context.Context) ([]ListNearDuplicatesRow, error) {
 	rows, err := a.q.ListNearDuplicates(ctx)
 	if err != nil || rows == nil {
@@ -1131,6 +1192,10 @@ func (a *postgresQueries) MoveDBVFSEntryTree(ctx context.Context, arg MoveDBVFSE
 
 func (a *postgresQueries) MoveFavorites(ctx context.Context, arg MoveFavoritesParams) error {
 	return a.q.MoveFavorites(ctx, pgdb.MoveFavoritesParams(arg))
+}
+
+func (a *postgresQueries) MoveMusicTracks(ctx context.Context, arg MoveMusicTracksParams) error {
+	return a.q.MoveMusicTracks(ctx, pgdb.MoveMusicTracksParams(arg))
 }
 
 func (a *postgresQueries) MovePathAccessTree(ctx context.Context, arg MovePathAccessTreeParams) (int64, error) {
@@ -1336,6 +1401,11 @@ func (a *postgresQueries) UpsertDeviceRole(ctx context.Context, arg UpsertDevice
 
 func (a *postgresQueries) UpsertFileContent(ctx context.Context, arg UpsertFileContentParams) error {
 	return a.q.UpsertFileContent(ctx, pgdb.UpsertFileContentParams(arg))
+}
+
+func (a *postgresQueries) UpsertMusicTrack(ctx context.Context, arg UpsertMusicTrackParams) (MusicTrack, error) {
+	row, err := a.q.UpsertMusicTrack(ctx, pgdb.UpsertMusicTrackParams(arg))
+	return MusicTrack(row), err
 }
 
 func (a *postgresQueries) UpsertPhotoHash(ctx context.Context, arg UpsertPhotoHashParams) error {

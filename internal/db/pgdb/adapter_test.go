@@ -341,4 +341,219 @@ func exerciseQuerier(t *testing.T, conn *sql.DB) {
 	if left, err := q.ListAlbumItems(ctx, album.ID); err != nil || len(left) != 0 {
 		t.Fatalf("deleting the user left album items: %v, %v", left, err)
 	}
+
+	// Music-library queries have no service caller yet; the next ticket adds
+	// one. Run them here so both engines stay in step until then.
+	exerciseMusic(ctx, t, q)
+}
+
+// exerciseMusic checks the music cache: upsert, the path prefix, a move, a
+// device drop, the browse aggregates and the unchanged-file check.
+func exerciseMusic(ctx context.Context, t *testing.T, q db.Querier) {
+	t.Helper()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	track := func(serial, rel, artist, album, key, genre, cover string, year, duration, size int64) db.UpsertMusicTrackParams {
+		p := db.UpsertMusicTrackParams{
+			Serial: serial, RelPath: rel, Size: size, Mtime: 100, ScannerVersion: 1,
+			Title: rel, Artist: artist, AlbumArtist: artist, Album: album, AlbumKey: key,
+			Genre: genre, DurationExact: 1, CoverSource: cover, CoverKey: cover,
+		}
+		if year > 0 {
+			p.Year = sql.NullInt64{Int64: year, Valid: true}
+		}
+		if duration > 0 {
+			p.DurationMs = sql.NullInt64{Int64: duration, Valid: true}
+		}
+		return p
+	}
+	put := func(p db.UpsertMusicTrackParams) db.MusicTrack {
+		t.Helper()
+		row, err := q.UpsertMusicTrack(ctx, p)
+		must(err)
+		return row
+	}
+	scanPaths := func(serial string) []string {
+		t.Helper()
+		rows, err := q.ListMusicTrackScanStates(ctx, serial)
+		must(err)
+		out := make([]string, len(rows))
+		for i, row := range rows {
+			out[i] = fmt.Sprintf("%s:%d", row.RelPath, row.Size)
+		}
+		return out
+	}
+	albums := func(filter int64, artist string) []string {
+		t.Helper()
+		rows, err := q.ListMusicAlbums(ctx, db.ListMusicAlbumsParams{FilterArtist: filter, Artist: artist})
+		must(err)
+		out := make([]string, len(rows))
+		for i, row := range rows {
+			year := "null"
+			if row.Year.Valid {
+				year = fmt.Sprintf("%d", row.Year.Int64)
+			}
+			out[i] = fmt.Sprintf("%s|%s|%s|%s|%d|%d|%s|%s", row.AlbumKey, row.AlbumArtist, row.Title, year, row.TrackCount, row.DurationMs, row.CoverSerial, row.CoverPath)
+		}
+		return out
+	}
+	if got := albums(0, ""); len(got) != 0 {
+		t.Fatalf("albums before any track: %v", got)
+	}
+
+	first := put(track("", "music/a/1.flac", "Nina", "Blue", "key-blue", "Rock", "", 2001, 100, 10))
+	if again := put(track("", "music/a/1.flac", "Nina", "Blue", "key-blue", "Rock", "", 2001, 100, 10)); again.ID != first.ID || again.TrackNo.Valid {
+		t.Fatalf("second upsert = %+v, want id %d and a null track number", again, first.ID)
+	}
+	replaced := track("", "music/a/1.flac", "Nina", "Blue", "key-blue", "Rock", "", 2001, 100, 10)
+	replaced.Title = "One"
+	if got := put(replaced); got.ID != first.ID || got.Title != "One" || got.Size != 10 {
+		t.Fatalf("replacement upsert = %+v", got)
+	}
+	put(track("", "music/a/2.flac", "Nina", "Blue", "key-blue", "rock", "embedded", 0, 50, 20))
+	put(track("", "music/ab/3.flac", "Nina", "Red", "key-red", "Jazz", "", 1999, 80, 30))
+	gold := track("", "music/c/4.flac", "Sam", "Gold", "key-gold", "", "folder:cover.jpg", 1980, 0, 40)
+	gold.DurationExact = 0
+	if got := put(gold); got.DurationExact != 0 || got.DurationMs.Valid || !got.Year.Valid || got.Year.Int64 != 1980 {
+		t.Fatalf("gold track = %+v", got)
+	}
+	put(track("", "loose/6.flac", "", "", "key-loose", "Pop", "", 0, 0, 1))
+	put(track("usb", "x/5.flac", "nina", "Blue", "key-blue-usb", "ROCK", "", 2001, 10, 5))
+
+	state, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "music/a/1.flac"})
+	must(err)
+	if state.Size != 10 || state.Mtime != 100 || state.ScannerVersion != 1 {
+		t.Fatalf("scan state = %+v", state)
+	}
+	if _, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "missing.flac"}); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("missing scan state = %v, want sql.ErrNoRows", err)
+	}
+	if got, want := scanPaths(""), []string{
+		"loose/6.flac:1", "music/a/1.flac:10", "music/a/2.flac:20", "music/ab/3.flac:30", "music/c/4.flac:40",
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("internal scan states = %v, want %v", got, want)
+	}
+	if got, want := scanPaths("usb"), []string{"x/5.flac:5"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("usb scan states = %v, want %v", got, want)
+	}
+
+	wantAlbums := []string{
+		"key-loose|||null|1|0||loose/6.flac",
+		"key-blue|Nina|Blue|2001|2|150||music/a/2.flac",
+		"key-blue-usb|nina|Blue|2001|1|10|usb|x/5.flac",
+		"key-red|Nina|Red|1999|1|80||music/ab/3.flac",
+		"key-gold|Sam|Gold|1980|1|0||music/c/4.flac",
+	}
+	if got := albums(0, "ignored"); !reflect.DeepEqual(got, wantAlbums) {
+		t.Fatalf("albums = %v, want %v", got, wantAlbums)
+	}
+	if got, want := albums(1, "NINA"), []string{
+		"key-blue|Nina|Blue|2001|2|150||music/a/2.flac",
+		"key-blue-usb|nina|Blue|2001|1|10|usb|x/5.flac",
+		"key-red|Nina|Red|1999|1|80||music/ab/3.flac",
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Nina's albums = %v, want %v", got, want)
+	}
+	if got, want := albums(1, ""), []string{"key-loose|||null|1|0||loose/6.flac"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("untagged albums = %v, want %v", got, want)
+	}
+
+	artists, err := q.ListMusicArtists(ctx)
+	must(err)
+	gotArtists := make([]string, len(artists))
+	for i, row := range artists {
+		gotArtists[i] = fmt.Sprintf("%s|%d|%d|%s|%s", strings.ToLower(row.Name), row.AlbumCount, row.TrackCount, row.CoverSerial, row.CoverPath)
+	}
+	wantArtists := []string{"|1|1||loose/6.flac", "nina|3|4||music/a/2.flac", "sam|1|1||music/c/4.flac"}
+	if !reflect.DeepEqual(gotArtists, wantArtists) {
+		t.Fatalf("artists = %v, want %v", gotArtists, wantArtists)
+	}
+
+	genres, err := q.ListMusicGenres(ctx)
+	must(err)
+	gotGenres := make([]string, len(genres))
+	for i, row := range genres {
+		gotGenres[i] = fmt.Sprintf("%s|%d", strings.ToLower(row.Name), row.TrackCount)
+	}
+	wantGenres := []string{"|1", "jazz|1", "pop|1", "rock|3"}
+	if !reflect.DeepEqual(gotGenres, wantGenres) {
+		t.Fatalf("genres = %v, want %v", gotGenres, wantGenres)
+	}
+
+	// A '%' or '_' in a name is not a wildcard, and a prefix matches characters,
+	// so "caf" does not eat "aé".
+	put(track("", "100%_done/t.flac", "Ada", "Pct", "key-pct", "Pop", "", 2002, 1, 2))
+	put(track("", "100/nope.flac", "Ada", "Other", "key-other", "Pop", "", 2002, 1, 3))
+	put(track("", "aé/b.flac", "Ada", "Accent", "key-accent", "Pop", "", 2003, 1, 4))
+	must(q.DeleteMusicTracksUnder(ctx, db.DeleteMusicTracksUnderParams{RelPath: "100"}))
+	if _, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "100/nope.flac"}); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("100/nope.flac survived a delete of 100: %v", err)
+	}
+	if _, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "100%_done/t.flac"}); err != nil {
+		t.Fatalf("100%%_done was treated as a wildcard: %v", err)
+	}
+	must(q.DeleteMusicTracksUnder(ctx, db.DeleteMusicTracksUnderParams{RelPath: "100%_done"}))
+	if _, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "100%_done/t.flac"}); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("100%%_done/t.flac survived its own prefix: %v", err)
+	}
+	must(q.DeleteMusicTracksUnder(ctx, db.DeleteMusicTracksUnderParams{RelPath: "caf"}))
+	if _, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "aé/b.flac"}); err != nil {
+		t.Fatalf("aé/b.flac was deleted by the prefix caf: %v", err)
+	}
+	must(q.DeleteMusicTracksUnder(ctx, db.DeleteMusicTracksUnderParams{RelPath: "aé"}))
+	if _, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "aé/b.flac"}); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("aé/b.flac survived its prefix: %v", err)
+	}
+
+	must(q.MoveMusicTracks(ctx, db.MoveMusicTracksParams{OldRelPath: "music/a", NewRelPath: "moved/a"}))
+	if got, want := scanPaths(""), []string{
+		"loose/6.flac:1", "moved/a/1.flac:10", "moved/a/2.flac:20", "music/ab/3.flac:30", "music/c/4.flac:40",
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("after the move, scan states = %v, want %v", got, want)
+	}
+	if got := albums(1, "Nina"); len(got) != 3 || !strings.Contains(got[0], "key-blue|Nina|Blue|2001|2|150||moved/a/2.flac") {
+		t.Fatalf("moved album = %v, want key-blue still grouped with the new cover path", got)
+	}
+	moved, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "moved/a/1.flac"})
+	must(err)
+	if moved.Size != 10 || moved.ScannerVersion != 1 {
+		t.Fatalf("moved scan state = %+v", moved)
+	}
+	if _, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "music/a/1.flac"}); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("old path still indexed: %v", err)
+	}
+
+	// The destination is already a track, so the statement fails and neither row moves.
+	if err := q.MoveMusicTracks(ctx, db.MoveMusicTracksParams{OldRelPath: "music/ab/3.flac", NewRelPath: "music/c/4.flac"}); err == nil {
+		t.Fatal("a move onto an indexed path was accepted")
+	}
+	if _, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "music/ab/3.flac"}); err != nil {
+		t.Fatalf("source of the refused move is gone: %v", err)
+	}
+	if _, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "music/c/4.flac"}); err != nil {
+		t.Fatalf("destination of the refused move is gone: %v", err)
+	}
+
+	must(q.DeleteMusicTracksUnder(ctx, db.DeleteMusicTracksUnderParams{RelPath: "moved/a"}))
+	// An exact file, not a folder: the rewritten path has no suffix left over.
+	must(q.MoveMusicTracks(ctx, db.MoveMusicTracksParams{OldRelPath: "loose/6.flac", NewRelPath: "loose/moved.flac"}))
+	if _, err := q.GetMusicTrackScanState(ctx, db.GetMusicTrackScanStateParams{RelPath: "loose/moved.flac"}); err != nil {
+		t.Fatalf("exact file move: %v", err)
+	}
+	must(q.DeleteMusicTracksUnder(ctx, db.DeleteMusicTracksUnderParams{RelPath: "loose/moved.flac"}))
+	must(q.DeleteMusicTracksBySerial(ctx, "usb"))
+	if got, want := scanPaths("usb"), []string{}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("usb after drop = %v", got)
+	}
+	if got, want := scanPaths(""), []string{"music/ab/3.flac:30", "music/c/4.flac:40"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("internal after the deletes = %v, want %v", got, want)
+	}
+	must(q.DeleteMusicTracksBySerial(ctx, ""))
+	if got := albums(0, ""); len(got) != 0 {
+		t.Fatalf("albums after dropping the internal drive: %v", got)
+	}
 }

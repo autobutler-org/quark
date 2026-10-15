@@ -130,8 +130,12 @@ func TestPostgresSchemaMatchesSQLite(t *testing.T) {
 	sqlite := dbtest.NewDB(t).Db
 
 	want := map[string][]column{}
+	// FTS5 virtual tables and the shadow tables SQLite creates beside them are
+	// not in the PostgreSQL schema. A new one has to be named here:
+	// file_content_fts (content search) and music_tracks_fts (music search),
+	// both #2958.
 	tables, err := sqlite.Query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
-		AND name != 'schema_migrations' AND name NOT LIKE 'file_content_fts%'`)
+		AND name != 'schema_migrations' AND name NOT LIKE 'file_content_fts%' AND name NOT LIKE 'music_tracks_fts%'`)
 	if err != nil {
 		t.Fatal(err)
 	}
