@@ -13,7 +13,8 @@ typedef QuarkMarkdownImageBuilder =
     Widget Function(BuildContext context, String src, String alt);
 
 /// A read-only rendering of a Markdown file: headings, paragraphs, lists,
-/// task lists, quotes, code blocks, rules and tables, with selectable text.
+/// task lists, quotes, GitHub alerts (`> [!NOTE]` and the rest, as colored
+/// callouts), code blocks, rules and tables, with selectable text.
 ///
 /// It shows the [document] it is given and does nothing else. Raw HTML in the
 /// source is never interpreted: it appears as the text it was written as. The
@@ -29,9 +30,10 @@ typedef QuarkMarkdownImageBuilder =
 /// `Expanded`, a page body, a `SizedBox`.
 ///
 /// Key prefixes: `markdown_view_retry`, `markdown_view_status`, and
-/// `markdown_link_<n>` on each link, `markdown_image_<n>` on each image and
-/// `markdown_task_<n>` on each task list glyph, where `<n>` is the 0-based
-/// position among links, images or tasks in document order.
+/// `markdown_link_<n>` on each link, `markdown_image_<n>` on each image,
+/// `markdown_task_<n>` on each task list glyph and `markdown_alert_<n>` on
+/// each alert, where `<n>` is the 0-based position among links, images, tasks
+/// or alerts in document order.
 ///
 /// ```dart
 /// QuarkMarkdownView(
