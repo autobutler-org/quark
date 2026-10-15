@@ -3,6 +3,7 @@ package db_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net"
 	"net/url"
 	"strings"
@@ -181,12 +182,16 @@ func TestConnectToPostgresRefusesWhatItCannotCarryForward(t *testing.T) {
 		// arrange puts a migrated or an empty schema into the state under test.
 		migrated bool
 		arrange  string
-		wantErr  []string
+		// wantRecordedVersion requires the refusal to name the version
+		// schema_migrations holds after arrange. A fixed number goes stale
+		// on the next migration.
+		wantRecordedVersion bool
+		wantErr             []string
 	}{
 		{
-			name: "a dirty flag", migrated: true,
+			name: "a dirty flag", migrated: true, wantRecordedVersion: true,
 			arrange: `UPDATE schema_migrations SET dirty = true`,
-			wantErr: []string{"marked dirty at migration 32", "Nothing was changed", "never resets"},
+			wantErr: []string{"Nothing was changed", "never resets"},
 		},
 		{
 			name: "a version this build does not have", migrated: true,
@@ -209,13 +214,21 @@ func TestConnectToPostgresRefusesWhatItCannotCarryForward(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := state(t, conn)
+			wants := append([]string(nil), tc.wantErr...)
+			if tc.wantRecordedVersion {
+				var version int
+				if err := conn.QueryRow(`SELECT version FROM schema_migrations`).Scan(&version); err != nil {
+					t.Fatal(err)
+				}
+				wants = append([]string{fmt.Sprintf("marked dirty at migration %d", version)}, wants...)
+			}
 
 			database, err := db.ConnectToPostgres(databaseURL)
 			if err == nil {
 				database.Db.Close()
 				t.Fatal("ConnectToPostgres opened the database, want a refusal")
 			}
-			for _, want := range tc.wantErr {
+			for _, want := range wants {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("the refusal %q does not say %q", err, want)
 				}
