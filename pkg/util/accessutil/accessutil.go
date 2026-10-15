@@ -523,9 +523,10 @@ type FilterEventResult struct {
 //     so its other sessions clear their unread count. Admins get no pass here
 //     either.
 //   - Otherwise an admin hears every event unchanged.
-//   - trash_changed and account_changed carry no path and pass: each tells an
-//     open app to refetch something that answers for the caller already. The
-//     backup and vault events are appliance-wide and are dropped.
+//   - trash_changed, account_changed and music_library_changed carry no path
+//     and pass: each tells an open app to refetch something that answers for
+//     the caller already. The backup and vault events are appliance-wide and
+//     are dropped.
 //   - A move between two readable paths passes. A move into a readable path
 //     from an unreadable one reads as an upload into the new path's folder, and
 //     one out of a readable path into an unreadable one as a delete of the old
@@ -569,7 +570,7 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 	switch evt.Kind {
 	case eventbus.EventTrashChanged, eventbus.EventAccountChanged, eventbus.EventFeatureFlagChanged,
 		eventbus.EventPublicSettingsChanged, eventbus.EventHostnameChanged, eventbus.EventCalendarChanged,
-		eventbus.EventResync:
+		eventbus.EventMusicLibraryChanged, eventbus.EventResync:
 		return FilterEventResult{Event: evt, Deliver: true}
 	case eventbus.EventBackupStarted, eventbus.EventBackupProgress, eventbus.EventBackupCompleted,
 		eventbus.EventBackupFailed, eventbus.EventVaultDeviceDisconnected, eventbus.EventVaultDeviceReconnected,
