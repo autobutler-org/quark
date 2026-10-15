@@ -68,7 +68,7 @@ func SearchReadable(params SearchReadableParams) (SearchReadableResult, error) {
 // matches costs several queries. Upgrade to an EXISTS join on path_access
 // if it measures slow.
 func readablePage[T any](params ReadablePageParams[T]) ([]T, error) {
-	limit := max(params.Limit, 1)
+	limit := min(max(params.Limit, 1), MaxLimit)
 	batch := 2 * limit
 	kept := make([]T, 0, limit)
 	for offset := 0; ; offset += batch {
