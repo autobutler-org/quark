@@ -70,7 +70,7 @@ func SearchReadable(params SearchReadableParams) (SearchReadableResult, error) {
 func readablePage[T any](params ReadablePageParams[T]) ([]T, error) {
 	limit := min(max(params.Limit, 1), MaxLimit)
 	batch := 2 * limit
-	kept := make([]T, 0, limit)
+	kept := []T{}
 	for offset := 0; ; offset += batch {
 		page, err := params.Fetch(batch, offset)
 		if err != nil {
@@ -92,8 +92,8 @@ func readablePage[T any](params ReadablePageParams[T]) ([]T, error) {
 }
 
 // clampLimit bounds a caller's limit to (0, MaxLimit], using DefaultLimit for
-// zero or less. SearchReadable sizes a slice from it, so it must never trust
-// the caller's value.
+// zero or less. The limit reaches a SQL LIMIT and sizes each fetched batch,
+// so it must never trust the caller's value.
 func clampLimit(limit int) int {
 	if limit <= 0 {
 		return DefaultLimit

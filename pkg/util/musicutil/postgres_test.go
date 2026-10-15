@@ -50,8 +50,9 @@ func TestMusicOnPostgres(t *testing.T) {
 		}
 	}
 	albums, err := musicutil.ListAlbums(musicutil.ListAlbumsParams{Ctx: ctx, DB: database.Db, Access: admin})
-	if err != nil || albums.Total != 3 {
-		t.Errorf("ListAlbums = %+v, %v; want 3 albums", albums, err)
+	// "Mixed" sits in two folders, and the album key includes the folder.
+	if err != nil || albums.Total != 4 {
+		t.Errorf("ListAlbums = %+v, %v; want 4 albums", albums, err)
 	}
 	artists, err := musicutil.ListArtists(musicutil.ListArtistsParams{Ctx: ctx, DB: database.Db, Access: admin})
 	if err != nil || artists.Total != 3 {
