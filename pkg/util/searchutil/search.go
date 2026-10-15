@@ -49,28 +49,44 @@ func SearchReadable(params SearchReadableParams) (SearchReadableResult, error) {
 		return SearchReadableResult{Results: results}, err
 	}
 
-	// ponytail: pages through the ranked matches in batches of twice the limit
-	// and filters each batch in memory, so a caller who can read few of many
-	// matches costs several queries. Upgrade to an EXISTS join on path_access
-	// if it measures slow.
+	page, err := ReadablePage(ReadablePageParams[SearchResult]{
+		Limit: limit,
+		Fetch: func(limit, offset int) ([]SearchResult, error) {
+			return searchPage(params.Ctx, params.DB, params.Query, limit, offset)
+		},
+		Readable: func(r SearchResult) bool {
+			return params.Access.Check(r.Serial, r.RelPath, accessutil.Read).Readable
+		},
+	})
+	return SearchReadableResult(page), err
+}
+
+// readablePage is ReadablePage's loop.
+//
+// ponytail: pages through the ranked matches in batches of twice the limit
+// and filters each batch in memory, so a caller who can read few of many
+// matches costs several queries. Upgrade to an EXISTS join on path_access
+// if it measures slow.
+func readablePage[T any](params ReadablePageParams[T]) ([]T, error) {
+	limit := max(params.Limit, 1)
 	batch := 2 * limit
-	kept := make([]SearchResult, 0, limit)
+	kept := make([]T, 0, limit)
 	for offset := 0; ; offset += batch {
-		page, err := searchPage(params.Ctx, params.DB, params.Query, batch, offset)
+		page, err := params.Fetch(batch, offset)
 		if err != nil {
-			return SearchReadableResult{}, err
+			return nil, err
 		}
 		for _, r := range page {
-			if !params.Access.Check(r.Serial, r.RelPath, accessutil.Read).Readable {
+			if !params.Readable(r) {
 				continue
 			}
 			kept = append(kept, r)
 			if len(kept) == limit {
-				return SearchReadableResult{Results: kept}, nil
+				return kept, nil
 			}
 		}
 		if len(page) < batch {
-			return SearchReadableResult{Results: kept}, nil
+			return kept, nil
 		}
 	}
 }

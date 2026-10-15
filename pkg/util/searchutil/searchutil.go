@@ -50,6 +50,41 @@ func ParseLimit(raw string) int {
 	return clampLimit(n)
 }
 
+// SanitizeQuery makes a user's search text safe to hand to FTS5's MATCH. Text
+// with no FTS5 syntax (quotes, column filters, prefix stars, parentheses,
+// AND, OR, NOT, NEAR) becomes one quoted phrase, so a stray character cannot
+// raise a syntax error; text that uses the syntax passes through, so
+// "artist:nina" still filters a column. Empty text matches nothing.
+func SanitizeQuery(q string) string {
+	return sanitizeFTSQuery(q)
+}
+
+// ReadablePageParams pages through ranked matches on behalf of a caller who
+// may read only some of them.
+type ReadablePageParams[T any] struct {
+	// Limit is the most matches to keep. The caller bounds it; it sizes the
+	// result and each batch is twice it.
+	Limit int
+	// Fetch returns up to limit matches after the first offset, in rank
+	// order. A short page means there are no more.
+	Fetch func(limit, offset int) ([]T, error)
+	// Readable reports whether the caller may see a match.
+	Readable func(T) bool
+}
+
+// ReadablePageResult is up to Limit readable matches, in rank order.
+type ReadablePageResult[T any] struct {
+	Results []T
+}
+
+// ReadablePage keeps fetching batches of twice Limit until it holds Limit
+// readable matches or runs out, so a caller who can read few of many matches
+// still gets a full page (#1907). Content search and music search share it.
+func ReadablePage[T any](params ReadablePageParams[T]) (ReadablePageResult[T], error) {
+	kept, err := readablePage(params)
+	return ReadablePageResult[T]{Results: kept}, err
+}
+
 // BackfillResult reports what a BackfillTree pass did.
 type BackfillResult struct {
 	// Scanned is the number of files visited, indexable or not.
