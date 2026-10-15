@@ -1,5 +1,5 @@
-// Package thumbnailutil generates and caches image and video thumbnails on
-// disk. It owns everything between "which file, which size" and "here are the
+// Package thumbnailutil generates and caches image and video thumbnails, and
+// the cover art of music tracks, on disk. It owns everything between "which file, which size" and "here are the
 // cached bytes": the size tiers, the cache key and directory, thumbnail
 // rendering (including the keyframe decoded out of an AV1 or VP8 video), and
 // the perceptual hash that photo deduplication reads back out of the database.
@@ -9,6 +9,11 @@
 // from the file is the fallback. A file the device cannot decode itself
 // (H.264, HEVC or VP9 video, HEIC) is answered with [NeedsClientRender] so a client
 // can render one and upload it.
+//
+// A track's thumbnail is its cover art (#2982): the picture embedded in it,
+// or the cover image in its folder, whichever the music library recorded.
+// [PrepareCover] keys the cache entry by the picture's hash, so the tracks of
+// an album share one entry per size, and [GenerateCover] renders it.
 //
 // HTTP concerns — ETag negotiation, status codes, the IO semaphore — stay with
 // the caller, which asks [SemaphoreClass] which semaphore to hold; [ETagFromModTime] and [ContentTypeForExt] are here only because
@@ -57,9 +62,13 @@ const (
 // thumbnail needs to be.
 var ErrInvalidThumbnail = errors.New("invalid thumbnail")
 
-// ErrNotMedia reports a thumbnail sent for a file that is neither a photo nor
-// a video.
+// ErrNotMedia reports a thumbnail a client sent for a file that is neither a
+// photo nor a video. A track's cover comes from the track, never a client.
 var ErrNotMedia = errors.New("only photos and videos have thumbnails")
+
+// ErrNoCover reports a track with no cover art: no library row, a row that
+// names no cover, or a picture that no longer matches the row.
+var ErrNoCover = errors.New("track has no cover art")
 
 // ErrNoThumbnail reports a thumbnail upload with no "thumbnail" part in it.
 var ErrNoThumbnail = errors.New(`send the thumbnail as a "thumbnail" part`)
@@ -109,6 +118,50 @@ type PrepareResult struct {
 	RotationQuarters int64
 	Width            uint
 	Height           uint
+}
+
+// PrepareCoverParams names a track's cover thumbnail.
+type PrepareCoverParams struct {
+	Ctx context.Context
+	// Queries reads the track's row in the music library.
+	Queries db.Querier
+	// Serial and RelPath name the track.
+	Serial  string
+	RelPath string
+	// Size is the requested size tier.
+	Size Size
+}
+
+// PrepareCoverResult is the cover's cache entry and where its picture comes
+// from.
+type PrepareCoverResult struct {
+	CachedPath    string
+	CachedModTime time.Time
+	Hit           bool
+	// CoverSource is "embedded" or "folder:<name>", as the library stored it.
+	CoverSource string
+	// CoverKey is the hex sha256 of the picture.
+	CoverKey string
+	Width    uint
+	Height   uint
+}
+
+// GenerateCoverParams renders a track's cover into its cache entry.
+type GenerateCoverParams struct {
+	// Ctx bounds the namespace reads.
+	Ctx context.Context
+	// FS is the namespace of the device the track is on.
+	FS vfs.VFS
+	// RelPath is the track's path in FS.
+	RelPath string
+	// CoverSource and CoverKey are from [PrepareCoverResult].
+	CoverSource string
+	CoverKey    string
+	// Width and Height are the target dimensions.
+	Width  uint
+	Height uint
+	// CachedPath is where the encoded thumbnail is committed.
+	CachedPath string
 }
 
 // GenerateParams renders the thumbnail of a file in a namespace. An image is

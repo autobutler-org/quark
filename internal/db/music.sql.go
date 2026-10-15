@@ -92,6 +92,31 @@ func (q *Queries) DeleteMusicTracksUnder(ctx context.Context, arg DeleteMusicTra
 	return err
 }
 
+const getMusicTrackCover = `-- name: GetMusicTrackCover :one
+SELECT cover_source, cover_key
+FROM music_tracks
+WHERE serial = ?1 AND rel_path = ?2
+`
+
+type GetMusicTrackCoverParams struct {
+	Serial  string
+	RelPath string
+}
+
+type GetMusicTrackCoverRow struct {
+	CoverSource string
+	CoverKey    string
+}
+
+// GetMusicTrackCover is where a track's cover art comes from and the hash of
+// the picture, which keys the thumbnail cache.
+func (q *Queries) GetMusicTrackCover(ctx context.Context, arg GetMusicTrackCoverParams) (GetMusicTrackCoverRow, error) {
+	row := q.db.QueryRowContext(ctx, getMusicTrackCover, arg.Serial, arg.RelPath)
+	var i GetMusicTrackCoverRow
+	err := row.Scan(&i.CoverSource, &i.CoverKey)
+	return i, err
+}
+
 const getMusicTrackScanState = `-- name: GetMusicTrackScanState :one
 SELECT size, mtime, scanner_version
 FROM music_tracks

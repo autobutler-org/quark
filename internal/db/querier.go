@@ -202,6 +202,9 @@ type Querier interface {
 	GetGroup(ctx context.Context, id int64) (Group, error)
 	GetInstallID(ctx context.Context) (string, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
+	// GetMusicTrackCover is where a track's cover art comes from and the hash of
+	// the picture, which keys the thumbnail cache.
+	GetMusicTrackCover(ctx context.Context, arg GetMusicTrackCoverParams) (GetMusicTrackCoverRow, error)
 	// The unchanged-file check. A backfill skips a file whose size, mtime and
 	// scanner_version still match, and deletes rows the walk did not see. Get is
 	// one path; List is every path on a device, which is one read for a pass.

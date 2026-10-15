@@ -12,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/musicutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -23,7 +24,7 @@ import (
 
 // getThumbnail godoc
 // @Summary Get thumbnail for an image
-// @Description Returns a thumbnail for the specified photo or video: resized from the thumbnail a client uploaded for it when there is a fresh one, generated from the file otherwise. When the device cannot render a video or HEIC itself, the 404 body carries "clientRender": true, telling a client that may write the file to render a thumbnail (JPEG, long edge 400) and PUT it to this path.
+// @Description Returns a thumbnail for the specified photo, video or music track. A track's thumbnail is its cover art, embedded or from its folder as the music library recorded it, and a track with none is a 404. A photo or video's is resized from the thumbnail a client uploaded for it when there is a fresh one, generated from the file otherwise. When the device cannot render a video or HEIC itself, the 404 body carries "clientRender": true, telling a client that may write the file to render a thumbnail (JPEG, long edge 400) and PUT it to this path.
 // @Tags thumbnails
 // @Produce png,jpeg
 // @Param filePath path string true "Path to the image file"
@@ -44,7 +45,9 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	serial := c.Query("serial")
 	ext := strings.ToLower(filepath.Ext(filePath))
 	fileType := storageutil.DetermineFileTypeFromPath("file" + ext)
-	if fileType != storageutil.FileTypeImage && fileType != storageutil.FileTypeVideo {
+	// A track's thumbnail is its cover art (#2982).
+	isAudio := musicutil.IsAudioPath(filePath)
+	if fileType != storageutil.FileTypeImage && fileType != storageutil.FileTypeVideo && !isAudio {
 		return serverutil.NotFound(fmt.Errorf("no thumbnail for file type %q: %s", fileType, filePath))
 	}
 	isVideo := fileType == storageutil.FileTypeVideo
@@ -74,6 +77,10 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
+	// A track inside an archive is not in the music library, so it has no cover.
+	if archive.Found && isAudio {
+		return serverutil.NotFound(fmt.Errorf("no cover for archive entry: %s", filePath))
+	}
 	if archive.Found {
 		return getArchiveThumbnail(c, deps, archive, ext, filePath, serial, isVideo)
 	}
@@ -90,6 +97,10 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	}
 	if err != nil {
 		return serverutil.InternalServerError(err)
+	}
+
+	if isAudio {
+		return getCoverThumbnail(c, deps, fsys, serial, relPath)
 	}
 
 	// A thumbnail a client rendered comes first (#2379); generating one here
