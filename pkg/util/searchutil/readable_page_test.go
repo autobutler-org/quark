@@ -77,12 +77,16 @@ func TestReadablePage_ReturnsTheFetchError(t *testing.T) {
 	}
 }
 
-// TestSanitizeQuery quotes plain text and passes FTS5 syntax through.
+// TestSanitizeQuery quotes plain text and passes FTS5 syntax through, but
+// quotes text whose quotes or parentheses do not pair up, which FTS5 would
+// reject as a syntax error.
 func TestSanitizeQuery(t *testing.T) {
 	cases := map[string]string{
 		"nina simone":  `"nina simone"`,
 		"artist:nina":  "artist:nina",
-		`say "hi`:      `say "hi`,
+		`say "hi`:      `"say ""hi"`,
+		`"say hi"`:     `"say hi"`,
+		"(rock OR pop": `"(rock OR pop"`,
 		"  ":           `""`,
 		"rock AND pop": "rock AND pop",
 	}

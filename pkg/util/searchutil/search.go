@@ -160,13 +160,17 @@ func sanitizeFTSQuery(q string) string {
 	if q == "" {
 		return `""`
 	}
-	// If the query already contains FTS5 operators or quotes, pass it through.
+	// If the query already contains FTS5 operators or quotes, pass it through,
+	// unless its quotes or parentheses do not pair up: FTS5 rejects those as
+	// a syntax error, so they are searched for as text instead.
 	upper := strings.ToUpper(q)
-	if strings.ContainsAny(q, `"*:()`) ||
+	balanced := strings.Count(q, `"`)%2 == 0 && strings.Count(q, "(") == strings.Count(q, ")")
+	usesSyntax := strings.ContainsAny(q, `"*:()`) ||
 		strings.Contains(upper, " AND ") ||
 		strings.Contains(upper, " OR ") ||
 		strings.Contains(upper, " NOT ") ||
-		strings.Contains(upper, "NEAR(") {
+		strings.Contains(upper, "NEAR(")
+	if balanced && usesSyntax {
 		return q
 	}
 	// Plain term(s) — wrap in double-quotes to treat as phrase search.
