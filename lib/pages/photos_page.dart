@@ -299,6 +299,9 @@ class PhotosPageState extends State<PhotosPage>
             name: name,
             initialIndex: index,
             imageCount: _controller.photoCount,
+            // The whole library, not the pages loaded so far (#3357).
+            totalCount: _controller.photoTotal,
+            onLoadMore: _controller.loadMoreQuarkPhotos,
             relPath: relPath,
             serial: serial,
             getImageCount: () async => _controller.photoCount,

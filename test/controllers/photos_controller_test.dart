@@ -786,6 +786,48 @@ void main() {
       expect(quark.calls.where((c) => c.startsWith('getPhotos')), hasLength(2));
     });
 
+    // #3357: the viewer counted the page loaded, "41 / 50" of 364.
+    test('the total counts pages not loaded yet, per view', () async {
+      final quark = _FakeQuark(total: 364);
+      final controller = quark.controller();
+      await controller.refresh();
+      expect(controller.photoCount, 50);
+
+      // Quark is the default category; the fake has one device photo.
+      expect(controller.photoTotal, 364);
+      controller.selectCategory(PhotoCategory.all);
+      expect(controller.photoTotal, 365);
+      controller.selectCategory(PhotoCategory.mobile);
+      expect(controller.photoTotal, 1);
+      controller.selectCategory(PhotoCategory.favorites);
+      expect(controller.photoTotal, controller.photoCount);
+
+      // A search's matches and an album arrive whole.
+      controller.selectCategory(PhotoCategory.quark);
+      controller.setSearchQuery('7');
+      expect(controller.photoTotal, controller.photoCount);
+      controller.setSearchQuery('');
+      await controller.showAlbum(1);
+      expect(controller.photoTotal, controller.photoCount);
+      await controller.showAlbum(null);
+      expect(controller.photoTotal, 364);
+
+      await controller.loadMoreQuarkPhotos();
+      expect(controller.photoCount, 100);
+      expect(controller.photoTotal, 364);
+    });
+
+    test('the total holds while the Quark organizes dates (#3356)', () async {
+      AppSettings.instance.photoSortField.value = PhotoSortField.taken;
+      final quark = _FakeQuark(total: 364)..pendingDates = 364;
+      final controller = quark.controller();
+      addTearDown(controller.dispose);
+      await controller.refresh();
+
+      expect(controller.isOrganizingDates, isTrue);
+      expect(controller.photoTotal, 364);
+    });
+
     test('waits for the first page before paging', () async {
       final quark = _FakeQuark(total: 70);
       final controller = quark.controller();
