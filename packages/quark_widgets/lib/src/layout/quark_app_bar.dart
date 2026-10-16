@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../theme/quark_tokens.dart';
+import 'quark_app_bar/quark_app_bar_layout.dart';
 import 'quark_app_bar_bottom.dart';
 import 'quark_app_bar_trailing.dart';
 import 'quark_bar_icon_button.dart';
 import 'quark_brand_button.dart';
 import 'quark_chrome.dart';
 import 'quark_handedness.dart';
+import 'quark_toolbar_scroller.dart';
 import 'refresh_icon_button.dart';
 
 /// The app bar every main page wears: a [QuarkBrandButton] on the left that
@@ -39,6 +41,12 @@ import 'refresh_icon_button.dart';
 /// page whose bar holds more than buttons (Files' navigation and inline
 /// search). [bottom] adds a second row, usually a [QuarkAppBarBottom].
 ///
+/// On a bar too narrow for every action, the brand button keeps its page
+/// name ([middle] gives way first, when there is one), the
+/// [QuarkAppBarTrailing] controls stay in view, and the page's [actions] that
+/// do not fit scroll sideways in a [QuarkToolbarScroller]. Nothing paints
+/// over the brand button.
+///
 /// Key prefixes: `brand_button`, from the [QuarkBrandButton] it renders, and
 /// `refresh_button`, from the [RefreshIconButton] it renders when [onRefresh]
 /// is set.
@@ -63,6 +71,7 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onRefresh,
     this.isRefreshing = false,
     this.middle,
+    this.middleMinWidth = 0,
     this.bottom,
     super.key,
   });
@@ -89,8 +98,14 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isRefreshing;
 
   /// Fills the bar between the refresh slot and [actions], and is what gives
-  /// way first when the bar is narrow. Null leaves that space empty.
+  /// way first when the bar is narrow, down to [middleMinWidth]. Null leaves
+  /// that space empty.
   final Widget? middle;
+
+  /// The width [middle] keeps when the bar is short of room: the page's
+  /// actions scroll before the middle shrinks past it. Zero lets the middle
+  /// give way entirely.
+  final double middleMinWidth;
 
   /// A second row below the bar. Null renders a single row.
   final PreferredSizeWidget? bottom;
@@ -115,9 +130,9 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
     Widget slot(Widget child) => leftHanded
         ? Directionality(textDirection: reading, child: child)
         : child;
-    final trailing = [
-      for (final action in [...actions, ...QuarkAppBarTrailing.of(context)])
-        slot(action),
+    final pageActions = [for (final action in actions) slot(action)];
+    final appActions = [
+      for (final action in QuarkAppBarTrailing.of(context)) slot(action),
     ];
     final middle = this.middle;
     final bottom = this.bottom;
@@ -152,47 +167,70 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
       ],
     );
+    // The app-wide controls stay put, since a notification count is no use
+    // scrolled away. The page's own actions take what is left and scroll
+    // sideways when that is too little, rather than spill over the brand.
+    final trailing = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (pageActions.isNotEmpty)
+          Flexible(
+            child: QuarkToolbarScroller(
+              child: Row(mainAxisSize: MainAxisSize.min, children: pageActions),
+            ),
+          ),
+        ...appActions,
+      ],
+    );
     return QuarkChrome(
       child: Directionality(
         textDirection: leftHanded ? mirrored : reading,
         child: AppBar(
           shape: Border(bottom: BorderSide(color: tokens.border)),
           automaticallyImplyLeading: false,
-          // Without a middle, the brand and refresh hold a fixed leading slot,
-          // so the brand stays whole however many actions a page has.
-          leadingWidth: middle == null ? tokens.spacingSm + slotWidth : null,
-          leading: middle == null
-              ? Builder(
-                  builder: (ctx) => Padding(
-                    padding: EdgeInsetsDirectional.only(
-                      start: tokens.spacingSm,
-                    ),
-                    child: brandAndRefresh(ctx),
-                  ),
-                )
-              : null,
-          // With one, they share a row with it and take only the width the
-          // label needs, which is what leaves Files room for its navigation
-          // and search on a phone.
-          title: middle == null
-              ? null
-              : Builder(
-                  builder: (ctx) => Row(
-                    spacing: tokens.spacingSm,
-                    children: [
-                      ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: slotWidth),
-                        child: brandAndRefresh(ctx),
-                      ),
-                      Expanded(child: slot(middle)),
-                    ],
-                  ),
+          // The brand button opens either drawer, so no implied end drawer
+          // button joins the actions.
+          automaticallyImplyActions: false,
+          // One row holds everything, so the actions are measured against
+          // what the brand leaves them. In AppBar's own actions slot they were
+          // laid out unbounded and painted over the brand once a phone ran out
+          // of room (Photos at 390px). The brand keeps its page name, the
+          // actions take the rest, and a middle fills what remains.
+          // AppBar leaves its title's height open; the bar's row is the bar.
+          title: Container(
+            height: kToolbarHeight,
+            padding: EdgeInsetsDirectional.only(start: tokens.spacingSm),
+            child: CustomMultiChildLayout(
+              delegate: QuarkAppBarLayout(
+                brandMaxWidth: slotWidth,
+                gap: tokens.spacingSm,
+                textDirection: leftHanded ? mirrored : reading,
+                middleMinWidth: middleMinWidth,
+              ),
+              children: [
+                LayoutId(
+                  id: QuarkAppBarSlot.brand,
+                  child: Builder(builder: brandAndRefresh),
                 ),
-          titleSpacing: tokens.spacingSm,
+                if (middle != null)
+                  LayoutId(id: QuarkAppBarSlot.middle, child: slot(middle)),
+                // Actions keep the toolbar's text style, not the title's,
+                // as they had in AppBar's own actions slot.
+                if (pageActions.isNotEmpty || appActions.isNotEmpty)
+                  LayoutId(
+                    id: QuarkAppBarSlot.trailing,
+                    child: DefaultTextStyle(
+                      style:
+                          AppBarTheme.of(context).toolbarTextStyle ??
+                          Theme.of(context).textTheme.bodyMedium!,
+                      child: trailing,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          titleSpacing: 0,
           centerTitle: false,
-          actions: trailing.isEmpty
-              ? null
-              : [Row(mainAxisSize: MainAxisSize.min, children: trailing)],
           bottom: bottom == null
               ? null
               : PreferredSize(
