@@ -101,7 +101,7 @@ class FileBrowserListTile extends StatelessWidget {
                   value: isSelected,
                   onChanged: (_) => onSelectionChanged?.call(item),
                 )
-              : FileListLeading(key: ValueKey(item.apiPath), item: item),
+              : FileListLeading(key: fileThumbnailKey(item), item: item),
           title: Row(
             children: [
               Expanded(
