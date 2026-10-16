@@ -181,6 +181,7 @@ class PhotosController extends ChangeNotifier {
         searchFiles =
         FilesService.searchFiles,
     Duration searchDelay = searchDebounce,
+    Duration pendingDatesDelay = pendingDatesRetry,
     PhotoBytesCache? bytesCache,
     PhotosListCache? listCache,
     AlbumsCache? albumsCache,
@@ -210,6 +211,7 @@ class PhotosController extends ChangeNotifier {
        _deleteFile = deleteFile,
        _searchFiles = searchFiles,
        _searchDelay = searchDelay,
+       _pendingDatesDelay = pendingDatesDelay,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
        _listCache = listCache ?? PhotosListCache.instance,
        _albumsCache = albumsCache ?? AlbumsCache.instance,
@@ -227,6 +229,7 @@ class PhotosController extends ChangeNotifier {
     _quark = cached.photos.map(_Photo.fromWire).toList(growable: false);
     _quarkSort = (_sortField, _sortOrder);
     _quarkTotal = cached.total;
+    _pendingDates = cached.pendingDates;
     _quarkLoaded = true;
   }
 
@@ -270,6 +273,10 @@ class PhotosController extends ChangeNotifier {
 
   /// How long typing has to pause before the Quark is asked to search.
   static const Duration searchDebounce = Duration(milliseconds: 300);
+
+  /// How long to wait before asking the Quark again while it is still
+  /// reading capture dates (#3356).
+  static const Duration pendingDatesRetry = Duration(seconds: 3);
 
   final Future<wire.PaginatedPhotosResponse> Function({
     int offset,
@@ -346,6 +353,7 @@ class PhotosController extends ChangeNotifier {
   final Future<List<FileNode>> Function(String query, {List<String>? serials})?
   _searchFiles;
   final Duration _searchDelay;
+  final Duration _pendingDatesDelay;
   final PhotoBytesCache _bytesCache;
   final PhotosListCache _listCache;
   final AlbumsCache _albumsCache;
@@ -359,6 +367,12 @@ class PhotosController extends ChangeNotifier {
   /// must not leave on screen under the new one's name.
   (PhotoSortField, PhotoSortOrder)? _quarkSort;
   int _quarkTotal = 0;
+
+  /// How many library photos the Quark had still to date at the last page,
+  /// under the taken sort (#3356). While above zero, [refresh] sets
+  /// [_datesTimer] to ask again.
+  int _pendingDates = 0;
+  Timer? _datesTimer;
   bool _quarkLoaded = false;
   bool _isLoadingMore = false;
   List<_Photo> _mobile = const [];
@@ -458,16 +472,26 @@ class PhotosController extends ChangeNotifier {
 
   /// The month runs [photos] is split into under a date sort, headed by the
   /// date that sort orders by (#2592), or null under a name sort, where a
-  /// month header would split nothing meaningful (#979).
+  /// month header would split nothing meaningful (#979). While the Quark is
+  /// still reading capture dates, the library under the taken sort is one
+  /// "Organizing dates…" section instead (#3356).
   List<PhotoGridSection>? get photoSections => switch (_sortField) {
     PhotoSortField.name => null,
     PhotoSortField.added => photoMonthSections([
       for (final photo in _visible()) photo.date,
     ]),
+    PhotoSortField.taken when isOrganizingDates => organizingDatesSections(
+      _visible().length,
+    ),
     PhotoSortField.taken => photoMonthSections([
       for (final photo in _visible()) photo.takenDate ?? photo.date,
     ]),
   };
+
+  /// Whether the library grid is waiting on the Quark to read capture dates
+  /// before it can head photos by when they were taken (#3356).
+  bool get isOrganizingDates =>
+      _sortField == PhotoSortField.taken && _pendingDates > 0 && !_showsAlbum;
 
   /// How many photos the grid shows.
   int get photoCount => _visible().length;
@@ -720,12 +744,14 @@ class PhotosController extends ChangeNotifier {
       // from the host that was just removed may outlive it.
       _quark = const [];
       _quarkTotal = 0;
+      _pendingDates = 0;
       _quarkLoaded = false;
       _quarkUnreachable = false;
     } else if (error == null || _quark.isEmpty || _quarkSort != (sort, order)) {
       _quark = quarkPage.photos.map(_Photo.fromWire).toList(growable: false);
       _quarkSort = (sort, order);
       _quarkTotal = quarkPage.total;
+      _pendingDates = quarkPage.pendingDates;
       _quarkLoaded = true;
       _quarkUnreachable = error != null && isQuarkUnreachableError(error);
       if (error == null && sameScope) {
@@ -734,8 +760,17 @@ class PhotosController extends ChangeNotifier {
           total: quarkPage.total,
           sort: sort,
           order: order,
+          pendingDates: quarkPage.pendingDates,
         );
       }
+    }
+    // While the Quark is still reading capture dates, ask again so the grid
+    // re-sections once they land (#3356). Each listing reads another batch,
+    // so the count only goes down. A Quark that did not answer is left to the
+    // next refresh rather than asked on a timer.
+    _datesTimer?.cancel();
+    if (error == null && _pendingDates > 0) {
+      _datesTimer = Timer(_pendingDatesDelay, refresh);
     }
     notifyListeners();
   }
@@ -762,6 +797,7 @@ class PhotosController extends ChangeNotifier {
       if (generation != _generation || _disposed) return;
       _quark = [..._quark, ...response.photos.map(_Photo.fromWire)];
       _quarkTotal = response.total;
+      _pendingDates = response.pendingDates;
     } catch (e) {
       debugPrint('[photos_controller.dart] Error loading more photos: $e');
     } finally {
@@ -778,10 +814,20 @@ class PhotosController extends ChangeNotifier {
         sort: _sortField,
         order: _sortOrder,
       );
-      return (photos: response.photos, total: response.total, error: null);
+      return (
+        photos: response.photos,
+        total: response.total,
+        pendingDates: response.pendingDates,
+        error: null,
+      );
     } catch (e) {
       debugPrint('[photos_controller.dart] Error loading photos: $e');
-      return (photos: const <wire.PhotoItem>[], total: 0, error: e);
+      return (
+        photos: const <wire.PhotoItem>[],
+        total: 0,
+        pendingDates: 0,
+        error: e,
+      );
     }
   }
 
@@ -894,6 +940,7 @@ class PhotosController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _searchTimer?.cancel();
+    _datesTimer?.cancel();
     super.dispose();
   }
 
@@ -1658,7 +1705,12 @@ class PhotosController extends ChangeNotifier {
 }
 
 /// The first page of Quark photos, or the [error] that kept it away.
-typedef _QuarkPage = ({List<wire.PhotoItem> photos, int total, Object? error});
+typedef _QuarkPage = ({
+  List<wire.PhotoItem> photos,
+  int total,
+  int pendingDates,
+  Object? error,
+});
 
 /// One photo from either source, with what the services need to reach it.
 class _Photo {

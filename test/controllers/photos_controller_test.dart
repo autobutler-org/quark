@@ -125,6 +125,9 @@ class _FakeQuark {
   /// when it has none (#2592).
   int? Function(int i) takenOf = (_) => null;
 
+  /// How many photos the Quark says it has still to date (#3356).
+  int pendingDates = 0;
+
   /// The capture date the Quark reports for an album item's path.
   DateTime? Function(String relPath) albumTakenOf = (_) => null;
 
@@ -159,6 +162,7 @@ class _FakeQuark {
     albumsCache: albumsCache,
     activeHost: () => host,
     searchDelay: Duration.zero,
+    pendingDatesDelay: Duration.zero,
     // Every photo the Quark holds whose name matches, loaded or not, and a
     // file that is no photo, the way the files search answers (#2059).
     searchFiles: (query, {serials}) async {
@@ -203,6 +207,7 @@ class _FakeQuark {
             total: total,
             offset: offset,
             limit: limit,
+            pendingDates: pendingDates,
           );
         },
     loadDeviceAssets: () async => [
@@ -924,6 +929,56 @@ void main() {
         ]);
       },
     );
+
+    test('the taken sort says it is organizing while dates are pending, then '
+        're-sections once they land (#3356)', () async {
+      AppSettings.instance.photoSortField.value = PhotoSortField.taken;
+      final uploaded = secondsAt(DateTime(2026, 10, 1));
+      final quark = _FakeQuark(total: 3)
+        ..mtimeOf = ((_) => uploaded)
+        ..pendingDates = 3;
+      final controller = quark.controller();
+      addTearDown(controller.dispose);
+
+      await controller.refresh();
+
+      // Not one giant section under the upload month.
+      expect(controller.isOrganizingDates, isTrue);
+      expect(controller.photoSections!.map((s) => (s.label, s.count)), [
+        ('Organizing dates\u2026', 3),
+      ]);
+
+      // The Quark reads the dates; the controller asks again on its own.
+      quark
+        ..pendingDates = 0
+        ..takenOf = (i) => secondsAt(DateTime(2022, 9 - i, 22));
+      final asked = quark.calls.where((c) => c == 'getPhotos(0)').length;
+      await pumpEventQueue();
+
+      expect(
+        quark.calls.where((c) => c == 'getPhotos(0)').length,
+        greaterThan(asked),
+      );
+      expect(controller.isOrganizingDates, isFalse);
+      expect(controller.photoSections!.map((s) => s.label), [
+        'September 2022',
+        'August 2022',
+        'July 2022',
+      ]);
+    });
+
+    test('pending dates do not hold back the added sort', () async {
+      final quark = _FakeQuark(total: 1)
+        ..mtimeOf = ((_) => secondsAt(DateTime(2026, 10, 1)))
+        ..pendingDates = 1;
+      final controller = quark.controller();
+      addTearDown(controller.dispose);
+
+      await controller.refresh();
+
+      expect(controller.isOrganizingDates, isFalse);
+      expect(controller.photoSections!.single.label, 'October 2026');
+    });
 
     test('the added sort heads by date added, whatever was taken', () async {
       final uploaded = secondsAt(DateTime(2026, 9, 29));

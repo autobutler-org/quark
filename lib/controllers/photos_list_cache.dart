@@ -3,9 +3,13 @@ import 'package:quark/models/photo_sort.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/photo_grid_config.dart';
 
-/// The Quark photos a visit to the Photos page left behind, and how many the
-/// Quark holds in all.
-typedef CachedPhotoPage = ({List<PhotoItem> photos, int total});
+/// The Quark photos a visit to the Photos page left behind, how many the
+/// Quark holds in all, and how many of those it had still to date (#3356).
+typedef CachedPhotoPage = ({
+  List<PhotoItem> photos,
+  int total,
+  int pendingDates,
+});
 
 /// The first page of Quark photos and the favorite keys from the last visit
 /// to the Photos page, so the next one has a grid on its first frame while a
@@ -67,19 +71,21 @@ class PhotosListCache {
     return _sort == (sort, order) ? _page : null;
   }
 
-  /// Keeps the head of [photos], which arrived in [sort] and [order], and the
-  /// Quark's [total], in place of what was kept before.
+  /// Keeps the head of [photos], which arrived in [sort] and [order], the
+  /// Quark's [total] and its [pendingDates], in place of what was kept before.
   void putPhotos(
     List<PhotoItem> photos, {
     required int total,
     required PhotoSortField sort,
     required PhotoSortOrder order,
+    int pendingDates = 0,
   }) {
     _enterScope();
     _sort = (sort, order);
     _page = (
       photos: List.unmodifiable(photos.take(PhotoGridConfig.maxCachedPhotos)),
       total: total,
+      pendingDates: pendingDates,
     );
   }
 

@@ -17,11 +17,16 @@ type PaginatedPhotosResponse struct {
 	Total  int                      `json:"total"`
 	Offset int                      `json:"offset"`
 	Limit  int                      `json:"limit"`
+	// PendingDates counts the photos whose capture date has still not been
+	// read, under sort=taken only. They sort by their date added until a later
+	// listing reads them, so a client lists again while it is above zero
+	// (#3356).
+	PendingDates int `json:"pendingDates,omitempty"`
 }
 
 // listPhotos godoc
 // @Summary List photos
-// @Description Finds all photos across all managed devices with pagination support.
+// @Description Finds all photos across all managed devices with pagination support. Under sort=taken each photo carries its EXIF capture date as takenAt, read on the spot for a photo never read before, and pendingDates counts those left for a later listing.
 // @Tags photos
 // @Produce json
 // @Param offset query int false "Pagination offset (default 0)"
@@ -45,8 +50,9 @@ func listPhotos(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(err)
 	}
 
-	// Capture dates are read from the database; without one, the taken sort
-	// falls back to the date added.
+	// Capture dates are read from the database, and recorded there as the
+	// listing reads them; without one, the taken sort falls back to the date
+	// added.
 	var queries db.Querier
 	if database := deps.Database(); database != nil {
 		queries = database.Queries
@@ -68,10 +74,11 @@ func listPhotos(c *gin.Context) *serverutil.Response {
 	}
 
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(PaginatedPhotosResponse{
-		Photos: result.Photos,
-		Total:  result.Total,
-		Offset: result.Offset,
-		Limit:  result.Limit,
+		Photos:       result.Photos,
+		Total:        result.Total,
+		Offset:       result.Offset,
+		Limit:        result.Limit,
+		PendingDates: result.PendingDates,
 	})
 }
 

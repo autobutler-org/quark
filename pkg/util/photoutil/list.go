@@ -2,7 +2,9 @@ package photoutil
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"log"
 	"path"
 	"sort"
 	"strconv"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -39,7 +42,9 @@ type PhotoSummary struct {
 	Serial       string `json:"serial"`
 	HasLiveVideo bool   `json:"hasLiveVideo,omitempty"`
 	// TakenAt is the EXIF capture date in Unix seconds, set under SortTaken
-	// for a photo whose date is known (#2592).
+	// for a photo whose date is known (#2592). A photo whose EXIF has not been
+	// read yet is read by the listing itself, so a fresh upload carries its
+	// date the first time it is listed (#3356).
 	TakenAt int64 `json:"takenAt,omitempty"`
 }
 
@@ -59,8 +64,8 @@ type ListPhotosParams struct {
 	// field.
 	Sort  string
 	Order string
-	// Queries reads the capture dates SortTaken orders by. Nil sorts SortTaken
-	// by the date added alone.
+	// Queries reads the capture dates SortTaken orders by, and records the
+	// ones the listing reads. Nil sorts SortTaken by the date added alone.
 	Queries db.Querier
 	// Offset and Limit page the sorted result.
 	Offset int
@@ -73,6 +78,11 @@ type ListPhotosResult struct {
 	Total  int
 	Offset int
 	Limit  int
+	// PendingDates counts the photos, across the whole library, whose EXIF
+	// has still not been read under SortTaken: this listing read as many as
+	// it may, and they sort by their date added until a later one reads them
+	// (#3356).
+	PendingDates int
 }
 
 // ParsePagination reads the offset and limit query parameters, falling back to
@@ -230,34 +240,121 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 		})
 	}
 
+	pending := 0
 	if params.Sort == SortTaken && params.Queries != nil {
-		taken, err := TakenDates(TakenDatesParams{Ctx: params.Ctx, Queries: params.Queries})
-		if err != nil {
+		if pending, err = fillTakenDates(params, allPhotos); err != nil {
 			return ListPhotosResult{}, err
-		}
-		for i, photo := range allPhotos {
-			key := DuplicatePhoto{DeviceSerial: photo.Serial, RelPath: accessutil.Canonical(photo.RelPath)}
-			if t, ok := taken.Dates[key]; ok {
-				allPhotos[i].TakenAt = t.Unix()
-			}
 		}
 	}
 	sortPhotos(allPhotos, params.Sort, params.Order)
 
 	total := len(allPhotos)
-	if params.Offset >= total {
-		return ListPhotosResult{
-			Photos: []PhotoSummary{},
-			Total:  total,
-			Offset: params.Offset,
-			Limit:  params.Limit,
-		}, nil
+	page := []PhotoSummary{}
+	if params.Offset < total {
+		page = allPhotos[params.Offset:min(params.Offset+params.Limit, total)]
+	}
+	return ListPhotosResult{
+		Photos:       page,
+		Total:        total,
+		Offset:       params.Offset,
+		Limit:        params.Limit,
+		PendingDates: pending,
+	}, nil
+}
+
+// takenDatesPerList caps the EXIF headers one SortTaken listing reads, so a
+// library copied in all at once is dated over a few listings rather than
+// holding up the first one.
+var takenDatesPerList = 200
+
+// fillTakenDates sets TakenAt on every photo whose capture date is known, and
+// reads the EXIF of up to takenDatesPerList photos never read before, newest
+// first, recording what it finds (#3356). Until now a photo was dated only
+// when its thumbnail rendered or the startup backfill reached it, so a fresh
+// upload listed under its upload date. It returns how many photos are left
+// unread. A photo that cannot be read is logged and not counted: the next
+// listing tries it again, but a client waiting on the count never waits on a
+// file that will not open.
+func fillTakenDates(params ListPhotosParams, photos []PhotoSummary) (int, error) {
+	taken, err := TakenDates(TakenDatesParams{Ctx: params.Ctx, Queries: params.Queries})
+	if err != nil {
+		return 0, err
+	}
+	states, err := params.Queries.ListPhotoHashStates(params.Ctx)
+	if err != nil {
+		return 0, fmt.Errorf("list photo hashes: %w", err)
+	}
+	stored := make(map[DuplicatePhoto]bool, len(states))
+	checked := make(map[DuplicatePhoto]bool, len(states))
+	for _, row := range states {
+		key := DuplicatePhoto{DeviceSerial: row.DeviceSerial, RelPath: row.RelPath}
+		stored[key] = true
+		checked[key] = row.TakenChecked
 	}
 
-	return ListPhotosResult{
-		Photos: allPhotos[params.Offset:min(params.Offset+params.Limit, total)],
-		Total:  total,
-		Offset: params.Offset,
-		Limit:  params.Limit,
-	}, nil
+	var unread []int
+	for i, photo := range photos {
+		key := DuplicatePhoto{DeviceSerial: photo.Serial, RelPath: accessutil.Canonical(photo.RelPath)}
+		if t, ok := taken.Dates[key]; ok {
+			photos[i].TakenAt = t.Unix()
+		} else if !checked[key] && !storageutil.IsTrashPath(key.RelPath) {
+			unread = append(unread, i)
+		}
+	}
+	// The newest are the likeliest to be what was just uploaded.
+	sort.SliceStable(unread, func(a, b int) bool { return photos[unread[a]].MTime > photos[unread[b]].MTime })
+
+	for n, i := range unread {
+		if n == takenDatesPerList {
+			return len(unread) - n, nil
+		}
+		if err := params.Ctx.Err(); err != nil {
+			return 0, err
+		}
+		key := DuplicatePhoto{DeviceSerial: photos[i].Serial, RelPath: accessutil.Canonical(photos[i].RelPath)}
+		at, err := recordTakenAt(params, key, stored[key])
+		if err != nil {
+			log.Printf("[photos] read capture date of %q (serial=%q): %v", key.RelPath, key.DeviceSerial, err)
+			continue
+		}
+		if at.Valid {
+			photos[i].TakenAt = at.Time.Unix()
+		}
+	}
+	return 0, nil
+}
+
+// recordTakenAt reads one photo's capture date through its device's namespace
+// and stores it, on the photo's row when it has one and on a new row of its
+// own otherwise. A new row holds no hashes; BackfillHashes fills them in, as
+// it does for any photo missing them, and so too when a thumbnail stored this
+// photo's hashes between the listing's read of the rows and this write.
+func recordTakenAt(params ListPhotosParams, photo DuplicatePhoto, stored bool) (sql.NullTime, error) {
+	fsys, err := DeviceFS(params.Registry, photo.DeviceSerial)
+	if err != nil {
+		return sql.NullTime{}, err
+	}
+	f, err := fsys.Open(params.Ctx, photo.RelPath)
+	if err != nil {
+		return sql.NullTime{}, err
+	}
+	defer f.Close()
+	takenAt, err := readTakenAt(f, photo.RelPath)
+	if err != nil {
+		return sql.NullTime{}, err
+	}
+	if stored {
+		err = params.Queries.SetPhotoTakenAt(params.Ctx, db.SetPhotoTakenAtParams{
+			TakenAt: takenAt, DeviceSerial: photo.DeviceSerial, RelPath: photo.RelPath,
+		})
+	} else {
+		err = params.Queries.UpsertPhotoHash(params.Ctx, db.UpsertPhotoHashParams{
+			DeviceSerial: photo.DeviceSerial, RelPath: photo.RelPath,
+			TakenAt: takenAt, TakenChecked: true,
+		})
+	}
+	if err != nil {
+		return sql.NullTime{}, fmt.Errorf("store capture date: %w", err)
+	}
+	return takenAt, nil
 }
