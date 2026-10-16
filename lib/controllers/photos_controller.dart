@@ -496,6 +496,18 @@ class PhotosController extends ChangeNotifier {
   /// How many photos the grid shows.
   int get photoCount => _visible().length;
 
+  /// How many photos the grid's view holds, pages not fetched yet included,
+  /// so the image viewer counts the whole library rather than what has
+  /// loaded (#3357). Every view without [hasMore] has arrived whole. While
+  /// the Quark is organizing dates the total is still the library's own.
+  int get photoTotal {
+    if (!hasMore) return photoCount;
+    // The web shows Quark photos whatever the category.
+    return _category == PhotoCategory.all && !_isWeb
+        ? _quarkTotal + _mobile.length
+        : _quarkTotal;
+  }
+
   /// Which photos the grid shows.
   PhotoCategory get selectedCategory => _category;
 
