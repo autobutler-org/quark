@@ -483,9 +483,9 @@ func (a *postgresQueries) GetJob(ctx context.Context, id int64) (Job, error) {
 	return Job(row), err
 }
 
-func (a *postgresQueries) GetMusicTrackCover(ctx context.Context, arg GetMusicTrackCoverParams) (GetMusicTrackCoverRow, error) {
-	row, err := a.q.GetMusicTrackCover(ctx, pgdb.GetMusicTrackCoverParams(arg))
-	return GetMusicTrackCoverRow(row), err
+func (a *postgresQueries) GetMusicTrack(ctx context.Context, arg GetMusicTrackParams) (MusicTrack, error) {
+	row, err := a.q.GetMusicTrack(ctx, pgdb.GetMusicTrackParams(arg))
+	return MusicTrack(row), err
 }
 
 func (a *postgresQueries) GetMusicTrackScanState(ctx context.Context, arg GetMusicTrackScanStateParams) (GetMusicTrackScanStateRow, error) {

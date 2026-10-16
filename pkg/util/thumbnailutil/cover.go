@@ -25,14 +25,14 @@ import (
 // content, an entry that exists is a hit. A track the library has no row for,
 // or whose row names no cover, is [ErrNoCover].
 func PrepareCover(params PrepareCoverParams) (PrepareCoverResult, error) {
-	row, err := params.Queries.GetMusicTrackCover(params.Ctx, db.GetMusicTrackCoverParams{
+	row, err := params.Queries.GetMusicTrack(params.Ctx, db.GetMusicTrackParams{
 		Serial: params.Serial, RelPath: params.RelPath,
 	})
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && (row.CoverSource == "" || row.CoverKey == "")) {
 		return PrepareCoverResult{}, ErrNoCover
 	}
 	if err != nil {
-		return PrepareCoverResult{}, fmt.Errorf("get music track cover: %w", err)
+		return PrepareCoverResult{}, fmt.Errorf("get music track: %w", err)
 	}
 
 	dir, err := CacheDir()

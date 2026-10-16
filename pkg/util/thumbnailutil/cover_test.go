@@ -237,3 +237,36 @@ func TestCoverChangedSinceScan(t *testing.T) {
 		t.Errorf("a changed cover must not be cached under the old key: %v", err)
 	}
 }
+
+// trackSpy counts the music queries PrepareCover makes. Any other method of
+// the embedded Querier is nil and panics, so a listing query fails the test.
+type trackSpy struct {
+	db.Querier
+	got   []db.GetMusicTrackParams
+	inner db.Querier
+}
+
+func (s *trackSpy) GetMusicTrack(ctx context.Context, arg db.GetMusicTrackParams) (db.MusicTrack, error) {
+	s.got = append(s.got, arg)
+	return s.inner.GetMusicTrack(ctx, arg)
+}
+
+// TestCoverLooksUpOneTrack: PrepareCover reads the track with one
+// GetMusicTrack call for its serial and path, a missing track included, and
+// runs no other query.
+func TestCoverLooksUpOneTrack(t *testing.T) {
+	_, queries := library(t, map[string][]byte{
+		"Album/01.flac":   coverFLAC("one", nil),
+		"Album/cover.jpg": coverImage(t, 50, 50, color.White, false),
+	})
+	spy := &trackSpy{inner: queries}
+	for relPath, wantErr := range map[string]error{"Album/01.flac": nil, "Album/missing.flac": ErrNoCover} {
+		spy.got = nil
+		if _, err := prepareCover(t, spy, relPath, SizeSm); !errors.Is(err, wantErr) {
+			t.Errorf("PrepareCover(%s) = %v, want %v", relPath, err, wantErr)
+		}
+		if len(spy.got) != 1 || spy.got[0].RelPath != relPath || spy.got[0].Serial != "" {
+			t.Errorf("PrepareCover(%s) looked up %+v, want one lookup of that path on the internal drive", relPath, spy.got)
+		}
+	}
+}
