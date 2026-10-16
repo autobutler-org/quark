@@ -275,9 +275,10 @@ UPDATE music_tracks SET album_key = sqlc.arg(album_key) WHERE id = sqlc.arg(id);
 -- name: DeleteMusicTrack :exec
 DELETE FROM music_tracks WHERE serial = sqlc.arg(serial) AND rel_path = sqlc.arg(rel_path);
 
--- GetMusicTrackCover is where a track's cover art comes from and the hash of
--- the picture, which keys the thumbnail cache.
--- name: GetMusicTrackCover :one
-SELECT cover_source, cover_key
+-- GetMusicTrack is the one row for a file. Cover art reads its cover_source
+-- and cover_key: where the picture comes from and its hash, which keys the
+-- thumbnail cache.
+-- name: GetMusicTrack :one
+SELECT *
 FROM music_tracks
 WHERE serial = sqlc.arg(serial) AND rel_path = sqlc.arg(rel_path);
