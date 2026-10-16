@@ -7,6 +7,10 @@ import 'package:video_player/video_player.dart';
 
 /// The photo on screen: the Live Photo video while it plays, otherwise the
 /// rotatable, zoomable still.
+///
+/// A double-tap on the still reports where its second tap went down, in the
+/// zoom's own viewport coordinates, through [onDoubleTapDown], then fires
+/// [onDoubleTap]: the caller zooms around that point (#3358).
 class CurrentPhoto extends StatelessWidget {
   final Uint8List bytes;
   final Animation<double> rotation;
@@ -14,6 +18,12 @@ class CurrentPhoto extends StatelessWidget {
   final bool zoomedIn;
   final bool liveVideoPlaying;
   final VideoPlayerController? liveVideoController;
+
+  /// Called with the point a double-tap's second tap went down on.
+  final ValueChanged<Offset> onDoubleTapDown;
+
+  /// Called when the double-tap completes.
+  final VoidCallback onDoubleTap;
 
   const CurrentPhoto({
     super.key,
@@ -23,6 +33,8 @@ class CurrentPhoto extends StatelessWidget {
     required this.zoomedIn,
     required this.liveVideoPlaying,
     required this.liveVideoController,
+    required this.onDoubleTapDown,
+    required this.onDoubleTap,
   });
 
   /// Pixel width to decode the photo at, or null for its full resolution.
@@ -56,20 +68,26 @@ class CurrentPhoto extends StatelessWidget {
       animation: rotation,
       builder: (_, child) =>
           Transform.rotate(angle: rotation.value, child: child),
-      child: InteractiveViewer(
-        transformationController: zoomController,
-        child: LayoutBuilder(
-          builder: (context, constraints) => Image.memory(
-            bytes,
-            fit: BoxFit.contain,
-            cacheWidth: _decodeWidth(context, constraints),
-            // Keep the downscaled frame on screen while the full-resolution
-            // one decodes, so starting a pinch doesn't blank the photo.
-            gaplessPlayback: true,
-            errorBuilder: (context, error, stack) => const Icon(
-              QuarkIcons.broken_image,
-              size: 64,
-              color: Colors.white54,
+      // Inside the rotation and outside the zoom, so the point is in the
+      // coordinates the zoom's matrix maps from.
+      child: GestureDetector(
+        onDoubleTapDown: (details) => onDoubleTapDown(details.localPosition),
+        onDoubleTap: onDoubleTap,
+        child: InteractiveViewer(
+          transformationController: zoomController,
+          child: LayoutBuilder(
+            builder: (context, constraints) => Image.memory(
+              bytes,
+              fit: BoxFit.contain,
+              cacheWidth: _decodeWidth(context, constraints),
+              // Keep the downscaled frame on screen while the full-resolution
+              // one decodes, so starting a pinch doesn't blank the photo.
+              gaplessPlayback: true,
+              errorBuilder: (context, error, stack) => const Icon(
+                QuarkIcons.broken_image,
+                size: 64,
+                color: Colors.white54,
+              ),
             ),
           ),
         ),
