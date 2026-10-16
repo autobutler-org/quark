@@ -101,21 +101,39 @@ void main() {
       expect(items(2), isNotNull);
     });
 
-    test('adding a photo forgets that album\'s items', () async {
+    // The tree carries each album's count, which the change made wrong
+    // (#3361).
+    test('adding a photo forgets that album\'s items and the tree', () async {
       answer(201, _itemJson);
 
-      await AlbumService.addPhotoToAlbum(
+      final added = await AlbumService.addPhotoToAlbum(
         1,
         deviceSerial: 'sd1',
         relPath: 'camera/1.jpg',
       );
 
+      expect(added, isTrue);
       expect(items(1), isNull);
       expect(items(2), isNotNull);
+      expect(cache.albums, isNull);
+    });
+
+    test('a photo already in the album is not added, and forgets nothing '
+        '(#3361)', () async {
+      answer(200, _itemJson);
+
+      final added = await AlbumService.addPhotoToAlbum(
+        1,
+        deviceSerial: 'sd1',
+        relPath: 'camera/1.jpg',
+      );
+
+      expect(added, isFalse);
+      expect(items(1), isNotNull);
       expect(cache.albums, isNotNull);
     });
 
-    test('removing a photo forgets that album\'s items', () async {
+    test('removing a photo forgets that album\'s items and the tree', () async {
       answer(204);
 
       await AlbumService.removePhotoFromAlbum(
@@ -126,7 +144,7 @@ void main() {
 
       expect(items(1), isNull);
       expect(items(2), isNotNull);
-      expect(cache.albums, isNotNull);
+      expect(cache.albums, isNull);
     });
 
     test('a change the Quark refused forgets nothing', () async {

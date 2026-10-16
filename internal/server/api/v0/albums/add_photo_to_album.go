@@ -17,13 +17,15 @@ import (
 
 // addPhotoToAlbum godoc
 // @Summary Add a photo to an album
-// @Description Adds a photo (by device serial + relative path) to an album. Idempotent. Needs read access on the photo.
+// @Description Adds a photo (by device serial + relative path) to an album. Idempotent: a photo already in the album
+// @Description answers 200 rather than 201, so the client can say nothing changed. Needs read access on the photo.
 // @Tags albums
 // @Accept json
 // @Produce json
 // @Param id path int true "Album ID"
 // @Param body body addPhotoRequest true "Photo reference"
-// @Success 201 {object} AlbumItemJSON
+// @Success 200 {object} AlbumItemJSON "Already in the album"
+// @Success 201 {object} AlbumItemJSON "Added"
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden: system album"
 // @Failure 404 {object} serverutil.Response "Not Found"
@@ -65,6 +67,15 @@ func addPhotoToAlbum(c *gin.Context) *serverutil.Response {
 		return resp
 	}
 
+	member, err := inAlbum(deps.Database().Queries, album, req.DeviceSerial, req.RelPath)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	status := 201
+	if member {
+		status = 200
+	}
+
 	item, err := deps.Database().Queries.AddPhotoToAlbum(context.Background(), db.AddPhotoToAlbumParams{
 		AlbumID:      id,
 		DeviceSerial: req.DeviceSerial,
@@ -74,7 +85,7 @@ func addPhotoToAlbum(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(err)
 	}
 
-	return serverutil.Ok().WithStatusCode(201).WithContentType(serverutil.ContentTypeJSON).WithData(AlbumItemJSON{
+	return serverutil.Ok().WithStatusCode(status).WithContentType(serverutil.ContentTypeJSON).WithData(AlbumItemJSON{
 		ID:           item.ID,
 		AlbumID:      item.AlbumID,
 		DeviceSerial: item.DeviceSerial,

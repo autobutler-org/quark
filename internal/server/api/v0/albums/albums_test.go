@@ -580,3 +580,35 @@ func TestAlbums_PerUser(t *testing.T) {
 		t.Errorf("ben's trips = %+v, %v; want it still at the root", got, err)
 	}
 }
+
+// TestAddPhotoToAlbum_ReportsWhetherAdded checks that a photo new to the album
+// answers 201 and one already in it 200, so the client can tell the user that
+// nothing changed (#3361). Either way the album holds the photo once.
+func TestAddPhotoToAlbum_ReportsWhetherAdded(t *testing.T) {
+	engine, q, owner := newAlbumEngine(t)
+	ctx := context.Background()
+	album, err := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Trips"})
+	if err != nil {
+		t.Fatalf("CreateAlbum: %v", err)
+	}
+	path := fmt.Sprintf("/api/v0/albums/%d/items", album.ID)
+	photo := `{"deviceSerial":"","relPath":"a.jpg"}`
+
+	if w := doAlbumReq(engine, http.MethodPost, path, photo); w.Code != http.StatusCreated {
+		t.Fatalf("first add = %d, want 201: %s", w.Code, w.Body.String())
+	}
+	w := doAlbumReq(engine, http.MethodPost, path, photo)
+	if w.Code != http.StatusOK {
+		t.Fatalf("second add = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	var item AlbumItemJSON
+	if err := json.Unmarshal(w.Body.Bytes(), &item); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if item.RelPath != "a.jpg" || item.AlbumID != album.ID {
+		t.Errorf("second add answered %+v", item)
+	}
+	if n, _ := q.CountAlbumItems(ctx, album.ID); n != 1 {
+		t.Errorf("items = %d, want 1", n)
+	}
+}

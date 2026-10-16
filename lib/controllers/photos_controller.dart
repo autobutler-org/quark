@@ -46,6 +46,7 @@ class AddToAlbumOutcome {
   /// Creates an outcome.
   const AddToAlbumOutcome({
     required this.added,
+    this.alreadyIn = 0,
     required this.skipped,
     required this.failed,
     this.error,
@@ -53,6 +54,10 @@ class AddToAlbumOutcome {
 
   /// Photos the Quark added.
   final int added;
+
+  /// Photos the album already held, which the Quark left as they were
+  /// (#3361).
+  final int alreadyIn;
 
   /// Device photos, which cannot go into an album yet.
   final int skipped;
@@ -122,7 +127,7 @@ class PhotosController extends ChangeNotifier {
     Future<PhotoAlbum> Function(int id, String name) renameAlbum =
         AlbumService.renameAlbum,
     Future<void> Function(int id) deleteAlbum = AlbumService.deleteAlbum,
-    Future<PhotoAlbumItem> Function(
+    Future<bool> Function(
           int albumId, {
           required String deviceSerial,
           required String relPath,
@@ -303,7 +308,7 @@ class PhotosController extends ChangeNotifier {
   final Future<PhotoAlbum> Function(String name, {int? parentId}) _createAlbum;
   final Future<PhotoAlbum> Function(int id, String name) _renameAlbum;
   final Future<void> Function(int id) _deleteAlbum;
-  final Future<PhotoAlbumItem> Function(
+  final Future<bool> Function(
     int albumId, {
     required String deviceSerial,
     required String relPath,
@@ -406,6 +411,9 @@ class PhotosController extends ChangeNotifier {
   bool _selectionMode = false;
   final Set<String> _selectedIds = {};
   AlbumItem? _addingToAlbum;
+
+  /// The photos [_addingToAlbum] already holds, which cannot be picked.
+  Set<String> _albumMemberIds = const {};
 
   // ── Albums ─────────────────────────────────────────────────────────────────
 
@@ -616,6 +624,11 @@ class PhotosController extends ChangeNotifier {
 
   /// The album the selection is being added to, or null in plain selection.
   AlbumItem? get addingToAlbum => _addingToAlbum;
+
+  /// The [PhotoItem.id]s of the photos [addingToAlbum] already holds, which
+  /// the grid shows checked and the selection cannot take (#3361). Empty
+  /// outside adding mode, and until the album's items have answered.
+  Set<String> get albumMemberIds => Set.unmodifiable(_albumMemberIds);
 
   /// How the user's albums are ordered in [albums].
   AlbumSort get albumSort => _albumSort;
@@ -1119,13 +1132,39 @@ class PhotosController extends ChangeNotifier {
 
   /// Starts selecting photos, with nothing selected. With [addingTo], the
   /// selection is headed for that album, and the grid switches to All photos
-  /// to pick from until the selection is added or canceled.
+  /// to pick from until the selection is added or canceled. The photos
+  /// already in that album are marked and cannot be picked
+  /// ([albumMemberIds]): from the album's items when it was showing, else
+  /// from the Quark.
   void enterSelectionMode({AlbumItem? addingTo}) {
+    final showing = addingTo != null && addingTo.id == _albumId
+        ? _albumItems
+        : null;
     if (addingTo != null) _albumId = null;
     _selectionMode = true;
     _addingToAlbum = addingTo;
+    _albumMemberIds = {...?showing?.map((photo) => photo.id)};
     _selectedIds.clear();
     notifyListeners();
+    if (addingTo != null && showing == null) {
+      unawaited(_loadAlbumMembers(addingTo));
+    }
+  }
+
+  /// Asks the Quark which photos [album] holds, for [albumMemberIds]. A
+  /// failure marks none, and the Quark's idempotent add stays the guard.
+  Future<void> _loadAlbumMembers(AlbumItem album) async {
+    try {
+      final items = await _listAlbumItems(album.id);
+      if (_disposed || _addingToAlbum != album) return;
+      _albumMemberIds = {
+        for (final item in items) _Photo.fromAlbumItem(item).id,
+      };
+      _selectedIds.removeAll(_albumMemberIds);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[photos_controller.dart] Error loading album members: $e');
+    }
   }
 
   /// Stops selecting photos and forgets the selection. When the selection was
@@ -1134,20 +1173,28 @@ class PhotosController extends ChangeNotifier {
     final returnTo = _addingToAlbum;
     _selectionMode = false;
     _addingToAlbum = null;
+    _albumMemberIds = const {};
     _selectedIds.clear();
     notifyListeners();
     if (returnTo != null) unawaited(showAlbum(returnTo.id));
   }
 
-  /// Adds [id] to the selection, or takes it out.
+  /// Adds [id] to the selection, or takes it out. A photo the album being
+  /// added to already holds stays out.
   void toggleSelection(String id) {
+    if (_albumMemberIds.contains(id)) return;
     if (!_selectedIds.remove(id)) _selectedIds.add(id);
     notifyListeners();
   }
 
-  /// Selects every photo the grid shows.
+  /// Selects every photo the grid shows, but those the album being added to
+  /// already holds.
   void selectAll() {
-    _selectedIds.addAll(_visible().map((photo) => photo.id));
+    _selectedIds.addAll(
+      _visible()
+          .map((photo) => photo.id)
+          .where((id) => !_albumMemberIds.contains(id)),
+    );
     notifyListeners();
   }
 
@@ -1163,19 +1210,24 @@ class PhotosController extends ChangeNotifier {
     if (!_selectionMode) {
       _selectionMode = true;
       _addingToAlbum = null;
+      _albumMemberIds = const {};
       _selectedIds.clear();
     }
     toggleSelection(id);
   }
 
-  /// Adds every selected Quark photo to [albumId], then leaves selection mode.
-  /// When adding to an album added nothing, selection mode stays, so the user
-  /// can try again.
+  /// Adds every selected Quark photo to [albumId], then leaves selection mode
+  /// and, when anything was added, reloads the tree so the album's count
+  /// follows (#3361). When adding to an album changed nothing, because every
+  /// photo failed or could not go in, selection mode stays, so the user can
+  /// try again.
   ///
-  /// Device photos are counted as skipped, and a photo the Quark refuses as
-  /// failed, so the page can say what happened.
+  /// Device photos are counted as skipped, a photo the album already held as
+  /// already in, and a photo the Quark refuses as failed, so the page can say
+  /// what happened.
   Future<AddToAlbumOutcome> addSelectedToAlbum(int albumId) async {
     var added = 0;
+    var alreadyIn = 0;
     var skipped = 0;
     var failed = 0;
     Object? error;
@@ -1187,20 +1239,22 @@ class PhotosController extends ChangeNotifier {
         continue;
       }
       try {
-        await _addPhotoToAlbum(
+        final isNew = await _addPhotoToAlbum(
           albumId,
           deviceSerial: photo.serial ?? '',
           relPath: relPath,
         );
-        added++;
+        isNew ? added++ : alreadyIn++;
       } catch (e) {
         failed++;
         error = e;
       }
     }
-    if (added > 0 || _addingToAlbum == null) exitSelectionMode();
+    if (added + alreadyIn > 0 || _addingToAlbum == null) exitSelectionMode();
+    if (added > 0) await loadAlbums();
     return AddToAlbumOutcome(
       added: added,
+      alreadyIn: alreadyIn,
       skipped: skipped,
       failed: failed,
       error: error,
@@ -1235,6 +1289,13 @@ class PhotosController extends ChangeNotifier {
         : showAlbum(link.resolveAlbumLink(_albums, pending)?.id);
     notifyListeners();
     await showing;
+  }
+
+  /// Reloads the tree and the showing album's items, after a change made
+  /// outside the controller, such as the add-to-album sheet, so the
+  /// sidebar's counts and the grid follow it (#3361).
+  Future<void> albumsChanged() async {
+    await Future.wait([loadAlbums(), _loadAlbumItems()]);
   }
 
   /// A fresh copy of the albums a photo can be added to, for a picker that
@@ -1295,6 +1356,7 @@ class PhotosController extends ChangeNotifier {
     if (id != null) {
       _selectionMode = false;
       _addingToAlbum = null;
+      _albumMemberIds = const {};
       _selectedIds.clear();
     }
     notifyListeners();

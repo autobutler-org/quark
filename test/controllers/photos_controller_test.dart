@@ -118,6 +118,10 @@ class _FakeQuark {
   };
   Object? albumItemsError;
 
+  /// Whether each album's count is the number of its files, the way the
+  /// Quark counts, rather than what [albums] says.
+  bool countFiles = false;
+
   /// The modified time, in seconds, the Quark reports for photo i.
   int Function(int i) mtimeOf = (_) => 0;
 
@@ -234,7 +238,16 @@ class _FakeQuark {
       await albumsGate;
       final error = albumsError;
       if (error != null) throw error;
-      return albums;
+      if (!countFiles) return albums;
+      return [
+        for (final a in albums)
+          _album(
+            a.id,
+            a.name,
+            smartType: a.smartType,
+            count: albumFiles[a.id]?.length ?? 0,
+          ),
+      ];
     },
     createAlbum: (name, {int? parentId}) async {
       calls.add('create($name, $parentId)');
@@ -248,13 +261,11 @@ class _FakeQuark {
         (albumId, {required deviceSerial, required relPath}) async {
           if (failingAdds.contains(relPath)) throw const ApiException(500);
           calls.add('add($albumId, $relPath)');
-          return PhotoAlbumItem(
-            id: 1,
-            albumId: albumId,
-            deviceSerial: deviceSerial,
-            relPath: relPath,
-            addedAt: DateTime(2024),
-          );
+          // The Quark's add is idempotent, and says whether it added (#3361).
+          final files = albumFiles.putIfAbsent(albumId, () => []);
+          if (files.contains(relPath)) return false;
+          files.add(relPath);
+          return true;
         },
     removePhotoFromAlbum:
         (albumId, {required deviceSerial, required relPath}) async {
@@ -1672,14 +1683,126 @@ void main() {
       );
       expect(controller.selectedAlbumId, isNull, reason: 'picks from library');
       controller.toggleSelection('sd1:camera/2.jpg');
+      quark.calls.clear();
       await controller.addSelectedToAlbum(1);
-      quark.albumFiles[1]!.add('camera/2.jpg');
       await pumpEventQueue();
 
       expect(controller.selectionMode, isFalse);
       expect(controller.selectedAlbumId, 1);
       expect(quark.calls, contains('add(1, camera/2.jpg)'));
-      expect(quark.calls.last, 'items(1)');
+      expect(quark.calls, contains('items(1)'));
+      expect(controller.photoCount, 2);
+    });
+
+    test('a photo already in the album is not counted as added, and still '
+        'ends the add (#3361)', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      // Picked from the library, not from the album's own add mode.
+      controller.enterSelectionMode();
+      controller.toggleSelection('sd1:camera/1.jpg');
+
+      final outcome = await controller.addSelectedToAlbum(1);
+
+      expect((outcome.added, outcome.alreadyIn, outcome.failed), (0, 1, 0));
+      expect(controller.selectionMode, isFalse);
+      expect(quark.albumFiles[1], ['camera/1.jpg']);
+    });
+
+    test('adding to an album marks the photos already in it, which cannot '
+        'be picked again (#3361)', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+
+      controller.enterSelectionMode(
+        addingTo: const AlbumItem(id: 1, name: 'Trips'),
+      );
+      await pumpEventQueue();
+
+      expect(controller.albumMemberIds, {'sd1:camera/1.jpg'});
+      expect(controller.selectedIds, isEmpty);
+      controller.toggleSelection('sd1:camera/1.jpg');
+      expect(controller.selectedIds, isEmpty, reason: 'a member is locked');
+      controller.selectAll();
+      expect(controller.selectedIds, isNot(contains('sd1:camera/1.jpg')));
+      expect(controller.selectedIds, contains('sd1:camera/0.jpg'));
+
+      controller.exitSelectionMode();
+      expect(controller.albumMemberIds, isEmpty);
+    });
+
+    test(
+      'adding to an album not yet open asks the Quark for its members',
+      () async {
+        final quark = _FakeQuark();
+        final controller = quark.controller();
+        await controller.refresh();
+        quark.calls.clear();
+
+        controller.enterSelectionMode(
+          addingTo: const AlbumItem(id: 1, name: 'Trips'),
+        );
+        await pumpEventQueue();
+
+        expect(quark.calls, contains('items(1)'));
+        expect(controller.albumMemberIds, {'sd1:camera/1.jpg'});
+      },
+    );
+
+    test('a real add reloads the tree, so the sidebar count is the album\'s '
+        '(#3361)', () async {
+      final quark = _FakeQuark()..countFiles = true;
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+      expect(controller.albumById(1)!.itemCount, 1);
+
+      controller.enterSelectionMode(
+        addingTo: const AlbumItem(id: 1, name: 'Trips'),
+      );
+      controller.toggleSelection('sd1:camera/2.jpg');
+      await controller.addSelectedToAlbum(1);
+      await pumpEventQueue();
+
+      expect(controller.selectedAlbumId, 1);
+      expect(controller.photoCount, 2);
+      expect(controller.albumById(1)!.itemCount, controller.photoCount);
+      expect(
+        controller.albums.firstWhere((a) => a.id == 1).itemCount,
+        controller.photoCount,
+      );
+    });
+
+    test('a remove reloads the tree, so the sidebar count is the album\'s '
+        '(#3361)', () async {
+      final quark = _FakeQuark()..countFiles = true;
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+
+      await controller.removeFromSelectedAlbum('sd1:camera/1.jpg');
+
+      expect(controller.photoCount, 0);
+      expect(controller.albumById(1)!.itemCount, 0);
+    });
+
+    test('a change made outside the controller reloads the tree when the '
+        'page says so', () async {
+      final quark = _FakeQuark()..countFiles = true;
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+      quark.albumFiles[1]!.add('camera/2.jpg');
+      quark.calls.clear();
+
+      await controller.albumsChanged();
+
+      expect(quark.calls, containsAll(['listAlbums', 'items(1)']));
+      expect(controller.albumById(1)!.itemCount, 2);
+      expect(controller.photoCount, 2);
     });
 
     test('canceling the add returns to the album too', () async {
