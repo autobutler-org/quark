@@ -1,7 +1,7 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/generic_file_viewer_page.dart';
@@ -25,6 +25,13 @@ import 'package:quark/utils/file_kind.dart';
 /// back — replaces this history entry with the page the URL's `?from=` names
 /// (#1678), or the file's folder without one, so browser back from there
 /// never bounces into the viewer again.
+///
+/// A photo opens at once, then steps through the other photos in its folder,
+/// by name as Files lists them, once the folder's listing lands; a listing
+/// that fails leaves it the one photo (#3378, #3379). Each step replaces the
+/// address bar's entry with the photo's own `/view` URL rather than adding
+/// one, so a reload reopens the photo on screen and back still closes the
+/// viewer.
 class FileViewerPage extends StatefulWidget {
   /// The file's path on the Quark, as the route's `:path` delivers it.
   final String filePath;
@@ -32,16 +39,22 @@ class FileViewerPage extends StatefulWidget {
   /// The device the file is on; empty lets the Quark pick.
   final String serial;
 
-  /// Fetches an SVG's markup. A parameter so a test can answer without a
-  /// Quark.
+  /// Fetches an SVG's markup, and the photos a photo steps to. A parameter so
+  /// a test can answer without a Quark.
   final Future<Uint8List?> Function(String filePath, {String? serial})
   downloadBytes;
+
+  /// Lists the folder a photo steps through. A parameter so a test can answer
+  /// without a Quark.
+  final Future<List<FileNode>> Function(String path, {List<String>? serials})
+  listFiles;
 
   const FileViewerPage({
     super.key,
     required this.filePath,
     this.serial = '',
     this.downloadBytes = FilesService.downloadFileBytes,
+    this.listFiles = FilesService.getFiles,
   });
 
   @override
@@ -64,8 +77,82 @@ class _FileViewerPageState extends State<FileViewerPage> {
     serial: _serial,
   );
 
+  late final String _folder = widget.filePath.contains('/')
+      ? widget.filePath.substring(0, widget.filePath.lastIndexOf('/'))
+      : '';
+
+  /// The names of the folder's photos in the order Files lists them, this one
+  /// among them. Null until the listing lands, and for good when it fails.
+  List<String>? _photos;
+
   /// A system back reaches both this page's scope and the photo viewer's own.
   bool _closed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_kind == FileKind.image) _listPhotos();
+  }
+
+  /// Lists the photo's folder for the photos either side of it. Only the
+  /// photo's own drive counts: every sibling carries the folder's serial.
+  Future<void> _listPhotos() async {
+    final List<FileNode> nodes;
+    try {
+      nodes = await widget.listFiles(
+        _folder,
+        serials: _serial == null ? null : [_serial],
+      );
+    } catch (e) {
+      debugPrint('FileViewerPage: failed to list $_folder: $e');
+      return;
+    }
+    // Files' default order: by name, ignoring case.
+    final photos = [
+      for (final node in nodes)
+        if (!node.isDir &&
+            node.deviceSerial == widget.serial &&
+            fileKindForName(node.name) == FileKind.image)
+          node.name,
+    ]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    if (!mounted || !photos.contains(_name)) return;
+    setState(() => _photos = photos);
+  }
+
+  String _photoPath(int index) =>
+      _folder.isEmpty ? _photos![index] : '$_folder/${_photos![index]}';
+
+  Future<(Uint8List?, String, String?, String?)> _loadPhoto(int index) async {
+    final bytes = await _photoBytes(index);
+    return (bytes, _photos![index], _photoPath(index), _serial);
+  }
+
+  Future<Uint8List?> _photoBytes(int index) {
+    final path = _photoPath(index);
+    return PhotoBytesCache.instance.fetch(
+      PhotoBytesCache.key(path, _serial),
+      () => widget.downloadBytes(path, serial: _serial),
+    );
+  }
+
+  /// Puts the photo the viewer stepped to in the address bar, in place of
+  /// this entry: browser history holds the viewer once, however many photos
+  /// it showed. The router is not told, so this page and the viewer stay.
+  void _showInAddressBar(int index) {
+    final from = GoRouterState.of(
+      context,
+    ).uri.queryParameters[AppRoutes.editorFromParam];
+    SystemNavigator.routeInformationUpdated(
+      uri: Uri.parse(
+        AppRoutes.viewFilePath(
+          _photoPath(index),
+          serial: widget.serial,
+          from: from,
+        ),
+      ),
+      replace: true,
+    );
+  }
 
   void _close() {
     if (_closed) return;
@@ -91,6 +178,11 @@ class _FileViewerPageState extends State<FileViewerPage> {
           name: _name,
           relPath: widget.filePath,
           serial: _serial,
+          initialIndex: _photos?.indexOf(_name) ?? 0,
+          imageCount: _photos?.length ?? 1,
+          onLoadImage: _photos == null ? null : _loadPhoto,
+          onPrefetchImage: _photos == null ? null : _photoBytes,
+          onImageShown: _showInAddressBar,
           onClose: _close,
         ),
         FileKind.svg => FutureBuilder<Uint8List?>(
