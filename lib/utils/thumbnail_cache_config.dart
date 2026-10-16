@@ -21,4 +21,13 @@ abstract final class ThumbnailCacheConfig {
   /// cannot know that, so the bound keeps an oversized response from costing
   /// its full size in memory once per tile.
   static const int memCacheWidth = 400;
+
+  /// How long a thumbnail whose load the Quark turned away for being busy
+  /// (a 503 when its IO semaphore times out, which it answers with
+  /// `Retry-After: 5`) waits before loading again, doubled on each retry.
+  static const Duration busyRetryDelay = Duration(seconds: 5);
+
+  /// How many times a thumbnail retries after the Quark was busy before it
+  /// settles on its placeholder.
+  static const int busyRetries = 3;
 }
