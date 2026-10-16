@@ -192,8 +192,9 @@ void main() {
   }
 
   // Files opens a photo at its own /view URL rather than pushing the viewer
-  // over the browser. There is no list of neighbors there, so the arrows have
-  // nowhere to go, but Escape and f still answer straight away.
+  // over the browser. The folder listing fails here (every request answers
+  // with the photo), so the arrows have nowhere to go, but Escape and f still
+  // answer straight away.
   group('opened from Files', () {
     Future<GoRouter> openFromFiles(WidgetTester tester) async {
       final router = GoRouter(

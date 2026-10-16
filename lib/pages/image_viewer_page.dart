@@ -49,6 +49,9 @@ const _kPageAnimDuration = Duration(milliseconds: 250);
 ///
 /// Navigation: pass [initialIndex], [imageCount], [onLoadImage]. A list the
 /// caller loads a page at a time also passes [totalCount] and [onLoadMore].
+/// A caller that learns the list only after opening (Files, listing the
+/// photo's folder) rebuilds the viewer with the new [imageCount] and
+/// [initialIndex]; the photo on screen stays and moves to that place (#3379).
 /// Keyboard: ← → navigate, Escape closes, i toggles sidebar, f toggles
 /// favorite, r rotates 90° CW. The viewer takes the keyboard focus once its
 /// route is in, whatever it was opened from (#3360).
@@ -90,6 +93,10 @@ class ImageViewerPage extends StatefulWidget {
   /// there are more, and awaited when a step lands past the last one.
   final Future<void> Function()? onLoadMore;
 
+  /// Called with the index of each photo the viewer steps to, once it is on
+  /// screen, so a caller can keep the address bar on it.
+  final ValueChanged<int>? onImageShown;
+
   /// Relative path on the Quark device (enables metadata & server actions).
   final String? relPath;
 
@@ -116,6 +123,7 @@ class ImageViewerPage extends StatefulWidget {
     this.getImageCount,
     this.totalCount,
     this.onLoadMore,
+    this.onImageShown,
     this.relPath,
     this.serial,
     this.sourceAlbum,
@@ -228,6 +236,35 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     setState(() {
       _currentBytes = bytes;
       if (bytes == null) _loadError = Errors.message(error, 'load the photo');
+    });
+  }
+
+  /// Takes up a list the caller learned after opening: the count at once, and
+  /// the photo's place in it once the page view holds that many pages. The
+  /// photo was the only one until now, so nothing the user did is undone.
+  @override
+  void didUpdateWidget(ImageViewerPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.imageCount == oldWidget.imageCount &&
+        widget.initialIndex == oldWidget.initialIndex) {
+      return;
+    }
+    _liveImageCount = widget.imageCount;
+    final index = widget.initialIndex;
+    if (_currentIndex != oldWidget.initialIndex ||
+        _targetIndex != _currentIndex ||
+        index == _currentIndex) {
+      return;
+    }
+    // Until the next frame lays out the new pages, the page view cannot
+    // scroll to [index]; the photo stays on page 0 for that frame rather
+    // than leaving a spinner there.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _currentIndex != oldWidget.initialIndex) return;
+      if (_targetIndex != _currentIndex) return;
+      setState(() => _currentIndex = _targetIndex = index);
+      if (_pageController.hasClients) _pageController.jumpToPage(index);
+      _prefetchNeighbors();
     });
   }
 
@@ -449,6 +486,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       });
       _loadMetadataForCurrent();
       _prefetchNeighbors();
+      widget.onImageShown?.call(newIndex);
     } catch (e) {
       debugPrint('ImageViewerPage: failed to load image $newIndex: $e');
       if (!mounted || _targetIndex != newIndex) return;

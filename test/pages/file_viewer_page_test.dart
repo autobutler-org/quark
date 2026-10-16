@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:quark/models/file_node.dart';
 import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/file_viewer_page.dart';
 import 'package:quark/pages/generic_file_viewer_page.dart';
@@ -13,6 +17,11 @@ import 'package:quark/pages/pdf_viewer_page.dart';
 import 'package:quark/pages/svg_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/files_service.dart';
+import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/widgets/image_viewer/current_photo.dart';
+import 'package:quark/widgets/image_viewer/metadata_sidebar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 import '../support/fake_video_player_platform.dart';
@@ -59,7 +68,9 @@ void main() {
     String folder,
     String file, {
     Future<Uint8List?> Function(String, {String? serial})? downloadBytes,
+    Future<List<FileNode>> Function(String, {List<String>? serials})? listFiles,
     String? from,
+    String? serial,
   }) async {
     final view = router.configuration.routes.whereType<GoRoute>().firstWhere(
       (route) => route.path == '${AppRoutes.viewFile}/:path(.*)',
@@ -67,7 +78,7 @@ void main() {
     final r = GoRouter(
       initialLocation: AppRoutes.filesPath(folder),
       routes: [
-        if (downloadBytes == null)
+        if (downloadBytes == null && listFiles == null)
           view
         else
           GoRoute(
@@ -75,7 +86,9 @@ void main() {
             redirect: view.redirect,
             builder: (_, state) => FileViewerPage(
               filePath: state.pathParameters['path']!,
-              downloadBytes: downloadBytes,
+              serial: state.uri.queryParameters['serial'] ?? '',
+              downloadBytes: downloadBytes ?? FilesService.downloadFileBytes,
+              listFiles: listFiles ?? FilesService.getFiles,
             ),
           ),
         GoRoute(
@@ -97,7 +110,7 @@ void main() {
     addTearDown(r.dispose);
     await tester.pumpWidget(MaterialApp.router(routerConfig: r));
     await tester.pump();
-    r.go(AppRoutes.viewFilePath(file, from: from));
+    r.go(AppRoutes.viewFilePath(file, from: from, serial: serial));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     return r;
@@ -239,5 +252,189 @@ void main() {
 
     expect(find.byType(SvgPicture), findsNothing);
     expect(find.text("Couldn't open the file."), findsOneWidget);
+  });
+
+  // #3378, #3379: a photo opened from Files had nowhere to step, and then
+  // waited on the folder's listing before it would show.
+  group('a photo steps through its folder', () {
+    // 64x64 solid PNG — the viewer needs bytes it can actually decode.
+    final png = Uint8List.fromList(
+      base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAT0lEQVR42u3P'
+        'QQkAAAgEsIttCIMZywi+hcEKLNXzWgQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE'
+        'BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQELgvWNcGlSbHPawAAAABJRU5ErkJg'
+        'gg==',
+      ),
+    );
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      resetSharedHttpClient();
+      // The viewer's own download of the opened photo, and its metadata.
+      sharedHttpClientFactory = () => MockClient((request) async {
+        if (request.url.path == '/api/v0/photos/metadata') {
+          return http.Response('{}', 404);
+        }
+        return http.Response.bytes(png, 200);
+      });
+    });
+
+    tearDown(() {
+      resetSharedHttpClient();
+      sharedHttpClientFactory = buildLocalTrustHttpClient;
+    });
+
+    FileNode node(String name, {bool isDir = false, String serial = ''}) =>
+        FileNode(
+          name: name,
+          size: 1,
+          isDir: isDir,
+          deviceName: '',
+          devicePath: '',
+          deviceSerial: serial,
+          dirPath: 'photos/$name',
+        );
+
+    /// Lets a photo decode, which takes real async, then settles.
+    Future<void> settle(WidgetTester tester) async {
+      await tester.runAsync(() async {
+        await tester.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await tester.pump();
+      });
+      await tester.pumpAndSettle();
+    }
+
+    ImageViewerPage viewer(WidgetTester tester) =>
+        tester.widget<ImageViewerPage>(find.byType(ImageViewerPage));
+
+    /// The name of the photo on screen, as the info sidebar has it.
+    String shown(WidgetTester tester) =>
+        tester.widget<MetadataSidebar>(find.byType(MetadataSidebar)).name;
+
+    Future<void> press(WidgetTester tester, LogicalKeyboardKey key) async {
+      await tester.sendKeyEvent(key);
+      await settle(tester);
+    }
+
+    testWidgets('by name, skipping what is not a photo', (tester) async {
+      final downloads = <String>[];
+      List<String>? listedSerials;
+      final r = await openFromFolder(
+        tester,
+        'photos',
+        'photos/b.jpg',
+        listFiles: (path, {serials}) async {
+          expect(path, 'photos');
+          listedSerials = serials;
+          return [
+            node('d.jpg'),
+            node('c.txt'),
+            node('e.jpg', isDir: true),
+            node('A.jpg'),
+            node('b.jpg'),
+          ];
+        },
+        downloadBytes: (path, {serial}) async {
+          downloads.add(path);
+          return png;
+        },
+      );
+      await settle(tester);
+      expect(listedSerials, isNull);
+      expect(viewer(tester).imageCount, 3);
+      expect(viewer(tester).initialIndex, 1);
+      expect(find.text('2 / 3'), findsOneWidget);
+
+      await press(tester, LogicalKeyboardKey.arrowRight);
+      expect(find.text('3 / 3'), findsOneWidget);
+      expect(shown(tester), 'd.jpg');
+      expect(downloads, contains('photos/d.jpg'));
+      // The step replaced the viewer's entry; it did not add one.
+      expect(history, ['/files/photos', '/view/photos/d.jpg']);
+
+      await press(tester, LogicalKeyboardKey.arrowLeft);
+      expect(find.text('2 / 3'), findsOneWidget);
+      expect(shown(tester), 'b.jpg');
+
+      await press(tester, LogicalKeyboardKey.arrowLeft);
+      expect(find.text('1 / 3'), findsOneWidget);
+      expect(shown(tester), 'A.jpg');
+      expect(history, ['/files/photos', '/view/photos/A.jpg']);
+
+      // Closing still lands on the folder, in the viewer's one entry.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(at(r), '/files/photos');
+      expect(history, ['/files/photos', '/files/photos']);
+    });
+
+    testWidgets('on the folder\'s drive only', (tester) async {
+      final downloads = <(String, String?)>[];
+      List<String>? listedSerials;
+      await openFromFolder(
+        tester,
+        'photos',
+        'photos/b.jpg',
+        serial: 'usb1',
+        listFiles: (path, {serials}) async {
+          listedSerials = serials;
+          return [
+            node('a.jpg', serial: 'usb1'),
+            node('b.jpg', serial: 'usb1'),
+            node('c.jpg'),
+          ];
+        },
+        downloadBytes: (path, {serial}) async {
+          downloads.add((path, serial));
+          return png;
+        },
+      );
+      await settle(tester);
+      expect(listedSerials, ['usb1']);
+      expect(viewer(tester).imageCount, 2);
+
+      await press(tester, LogicalKeyboardKey.arrowLeft);
+      expect(shown(tester), 'a.jpg');
+      expect(downloads, contains(('photos/a.jpg', 'usb1')));
+      expect(history.last, '/view/photos/a.jpg?serial=usb1');
+    });
+
+    testWidgets('the photo shows before the listing lands', (tester) async {
+      final listing = Completer<List<FileNode>>();
+      await openFromFolder(
+        tester,
+        'photos',
+        'photos/b.jpg',
+        listFiles: (_, {serials}) => listing.future,
+        downloadBytes: (_, {serial}) async => png,
+      );
+      await settle(tester);
+      expect(find.byType(CurrentPhoto), findsOneWidget);
+      expect(viewer(tester).imageCount, 1);
+
+      listing.complete([node('a.jpg'), node('b.jpg'), node('c.jpg')]);
+      await settle(tester);
+      expect(find.byType(CurrentPhoto), findsOneWidget);
+      expect(find.text('2 / 3'), findsOneWidget);
+      expect(shown(tester), 'b.jpg');
+    });
+
+    testWidgets('a listing that fails leaves the one photo', (tester) async {
+      await openFromFolder(
+        tester,
+        'photos',
+        'photos/b.jpg',
+        listFiles: (_, {serials}) async => throw Exception('offline'),
+        downloadBytes: (_, {serial}) async => png,
+      );
+      await settle(tester);
+
+      await press(tester, LogicalKeyboardKey.arrowRight);
+      expect(find.byType(CurrentPhoto), findsOneWidget);
+      expect(viewer(tester).imageCount, 1);
+      expect(shown(tester), 'b.jpg');
+      expect(history, ['/files/photos', '/view/photos/b.jpg']);
+    });
   });
 }
