@@ -6,20 +6,26 @@ import '../core/quark_loader.dart';
 import '../models/duplicate_group_item.dart';
 import '../models/duplicate_photo_item.dart';
 import '../theme/quark_tokens.dart';
+import 'duplicate_group_list/duplicate_delete_bar.dart';
 import 'duplicate_group_list/duplicate_group_card.dart';
+import 'duplicate_group_list/duplicate_suggestion_header.dart';
 
-/// Groups of duplicate photos, each copy marked Keep or Delete, with a button
-/// that deletes every copy marked Delete (#1666).
+/// Groups of duplicate photos, each copy marked Keep or Delete (#1666).
 ///
 /// Holds nothing: which copies are marked comes in as [selectedIds], a tap on
-/// a copy goes out through [onToggle], and the button calls
-/// [onDeleteSelected]. Each group keeps at least one copy, so its last kept
-/// copy cannot be marked. Loading, the error, and an empty result each have
-/// their own state.
+/// a copy goes out through [onToggle]. Each group keeps at least one copy, so
+/// its last kept copy cannot be marked. Loading, the error, and an empty
+/// result each have their own state.
+///
+/// The delete bar shows only while a copy is marked (#3362), counting the
+/// marked copies and the groups they are in, since some may be scrolled out
+/// of view; its button calls [onDeleteSelected]. With [onSelectSuggested], a
+/// row above the groups offers to mark the suggested copies.
 ///
 /// Key prefixes: `duplicate_group_<id>` on each group,
-/// `duplicate_photo_<id>` on each copy, and `duplicates_delete` on the
-/// delete button.
+/// `duplicate_photo_<id>` on each copy, `duplicates_select_suggested` on the
+/// suggestion button, and `duplicates_selection_summary`,
+/// `duplicates_clear_selection` and `duplicates_delete` on the delete bar.
 ///
 /// ```dart
 /// DuplicateGroupList(
@@ -28,6 +34,8 @@ import 'duplicate_group_list/duplicate_group_card.dart';
 ///   thumbnailBuilder: (context, photo) => Image.network(urlFor(photo)),
 ///   onToggle: controller.toggle,
 ///   onDeleteSelected: confirmAndDelete,
+///   onSelectSuggested: controller.selectSuggested,
+///   onClearSelection: controller.clearSelection,
 /// );
 /// ```
 class DuplicateGroupList extends StatelessWidget {
@@ -38,6 +46,8 @@ class DuplicateGroupList extends StatelessWidget {
     required this.thumbnailBuilder,
     required this.onToggle,
     required this.onDeleteSelected,
+    this.onSelectSuggested,
+    this.onClearSelection,
     this.isLoading = false,
     this.isDeleting = false,
     this.error,
@@ -59,6 +69,13 @@ class DuplicateGroupList extends StatelessWidget {
 
   /// Called when the delete button is tapped.
   final VoidCallback onDeleteSelected;
+
+  /// Called when Select suggested is tapped. Null hides the row offering it,
+  /// for when there is nothing left to suggest.
+  final VoidCallback? onSelectSuggested;
+
+  /// Called when the delete bar's Clear is tapped. Null hides Clear.
+  final VoidCallback? onClearSelection;
 
   /// Whether the groups are loading. Shows a loader while there are none.
   final bool isLoading;
@@ -93,47 +110,37 @@ class DuplicateGroupList extends StatelessWidget {
       );
     }
 
-    final count = selectedIds.length;
+    final onSelectSuggested = this.onSelectSuggested;
+    final header = onSelectSuggested == null ? 0 : 1;
     return Column(
       children: [
         Expanded(
           child: ListView.separated(
             padding: EdgeInsets.all(tokens.spacingMd),
-            itemCount: groups.length,
+            itemCount: groups.length + header,
             separatorBuilder: (_, _) => SizedBox(height: tokens.spacingMd),
-            itemBuilder: (context, index) => DuplicateGroupCard(
-              group: groups[index],
-              selectedIds: selectedIds,
-              thumbnailBuilder: thumbnailBuilder,
-              onToggle: onToggle,
-            ),
+            itemBuilder: (context, index) => index < header
+                ? DuplicateSuggestionHeader(
+                    onSelectSuggested: onSelectSuggested!,
+                  )
+                : DuplicateGroupCard(
+                    group: groups[index - header],
+                    selectedIds: selectedIds,
+                    thumbnailBuilder: thumbnailBuilder,
+                    onToggle: onToggle,
+                  ),
           ),
         ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.all(tokens.spacingMd),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                key: const ValueKey('duplicates_delete'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: tokens.error,
-                  foregroundColor: tokens.errorForeground,
-                ),
-                onPressed: count == 0 || isDeleting ? null : onDeleteSelected,
-                icon: isDeleting
-                    ? const QuarkLoader(size: 20)
-                    : const Icon(QuarkIcons.delete_outline),
-                label: Text(
-                  count == 0
-                      ? 'Tap a copy to mark it for deletion'
-                      : 'Delete $count ${count == 1 ? 'photo' : 'photos'}',
-                ),
-              ),
-            ),
+        if (selectedIds.isNotEmpty)
+          DuplicateDeleteBar(
+            count: selectedIds.length,
+            groupCount: groups
+                .where((g) => g.photos.any((p) => selectedIds.contains(p.id)))
+                .length,
+            onDelete: onDeleteSelected,
+            onClear: onClearSelection,
+            isDeleting: isDeleting,
           ),
-        ),
       ],
     );
   }

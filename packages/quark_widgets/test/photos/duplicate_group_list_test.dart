@@ -5,7 +5,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 /// The duplicates view (#1666). The part worth guarding is that it is always
-/// clear which copy is kept, and that a group can never lose every copy.
+/// clear which copy is kept, that a group can never lose every copy, and
+/// that no delete is offered before the user marks a copy (#3362).
 void main() {
   const exact = DuplicateGroupItem(
     id: 'g1',
@@ -36,6 +37,7 @@ void main() {
     bool isDeleting = false,
     String? error,
     List<String>? events,
+    bool suggestions = false,
   }) => pumpAt(
     tester,
     DuplicateGroupList(
@@ -48,6 +50,8 @@ void main() {
           const ColoredBox(color: Colors.teal),
       onToggle: (id) => events?.add('toggle:$id'),
       onDeleteSelected: () => events?.add('delete'),
+      onSelectSuggested: suggestions ? () => events?.add('suggest') : null,
+      onClearSelection: () => events?.add('clear'),
     ),
     size: size,
     brightness: brightness,
@@ -113,6 +117,55 @@ void main() {
     expect(find.text('Delete 1 photo'), findsOneWidget);
   });
 
+  testBothViewports('counts the marked copies and the groups they are in', (
+    tester,
+    size,
+  ) async {
+    await pumpList(tester, size: size, selectedIds: const {'b', 'd', 'e'});
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Delete 3 photos'), findsOneWidget);
+    expect(find.text('3 copies in 2 groups'), findsOneWidget);
+  });
+
+  testBothViewports('offers the suggestion without marking anything', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpList(tester, size: size, suggestions: true, events: events);
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Delete'), findsNothing);
+    expect(find.byKey(const ValueKey('duplicates_delete')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('duplicates_select_suggested')));
+    await tester.pump();
+
+    expect(events, ['suggest']);
+  });
+
+  testWidgets('hides the suggestion when there is none to make', (
+    tester,
+  ) async {
+    await pumpList(tester);
+
+    expect(
+      find.byKey(const ValueKey('duplicates_select_suggested')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('clears the marks from the bar', (tester) async {
+    final events = <String>[];
+    await pumpList(tester, selectedIds: const {'b'}, events: events);
+
+    await tester.tap(find.byKey(const ValueKey('duplicates_clear_selection')));
+    await tester.pump();
+
+    expect(events, ['clear']);
+  });
+
   testBothViewports('reports taps and the delete, once each', (
     tester,
     size,
@@ -144,11 +197,14 @@ void main() {
     expect(events, isEmpty);
   });
 
-  testWidgets('nothing marked means nothing to delete', (tester) async {
-    await pumpList(tester);
+  testBothViewports('nothing marked shows no delete bar', (tester, size) async {
+    await pumpList(tester, size: size);
 
-    expect(deleteButton(tester).onPressed, isNull);
-    expect(find.text('Tap a copy to mark it for deletion'), findsOneWidget);
+    expect(find.byKey(const ValueKey('duplicates_delete')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('duplicates_selection_summary')),
+      findsNothing,
+    );
   });
 
   testWidgets('a running delete busies the button', (tester) async {
@@ -156,6 +212,14 @@ void main() {
 
     expect(deleteButton(tester).onPressed, isNull);
     expect(find.byType(QuarkLoader), findsOneWidget);
+    expect(
+      tester
+          .widget<TextButton>(
+            find.byKey(const ValueKey('duplicates_clear_selection')),
+          )
+          .onPressed,
+      isNull,
+    );
   });
 
   testBothViewports('survives long names and many groups', (
@@ -165,6 +229,8 @@ void main() {
     await pumpList(
       tester,
       size: size,
+      suggestions: true,
+      selectedIds: const {'0-1', '2-1', '2-2'},
       groups: [
         for (var g = 0; g < 30; g++)
           DuplicateGroupItem(

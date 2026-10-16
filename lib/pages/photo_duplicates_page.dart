@@ -3,7 +3,8 @@ import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/controllers/duplicates_controller.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
-import 'package:quark/utils/file_browser_dialog_utils.dart';
+import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/utils/trash_config.dart';
 import 'package:quark/widgets/photos/photo_thumbnail.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -11,6 +12,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// (#1666). A drill-down from Photos at `/photos/duplicates`, so it has a
 /// back button rather than the drawer. When a picture is saved in several
 /// formats, the bar offers which format to keep.
+///
+/// Nothing is marked until the user marks it or taps Select suggested, and
+/// the confirmation names every marked copy before any is deleted (#3362).
 class PhotoDuplicatesPage extends StatefulWidget {
   const PhotoDuplicatesPage({super.key, this.controller});
 
@@ -30,10 +34,19 @@ class _PhotoDuplicatesPageState extends State<PhotoDuplicatesPage>
   Future<void> refresh() => _controller.load();
 
   Future<void> _deleteSelected() async {
-    final count = _controller.selectedIds.length;
-    final confirmed = await confirmDelete(
+    final photos = _controller.selectedPhotos;
+    final confirmed = await QuarkWidget.showDialog<bool>(
       context,
-      count == 1 ? '1 photo' : '$count photos',
+      useRootNavigator: true,
+      builder: (dialogContext) => DuplicateDeleteDialog(
+        photos: photos,
+        body:
+            '${photos.length == 1 ? 'It moves' : 'They move'} to Trash. You '
+            'can restore ${photos.length == 1 ? 'it' : 'them'} for '
+            '${TrashConfig.retentionDays} days.',
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+      ),
     );
     if (confirmed != true || !mounted) return;
     final failed = await _controller.deleteSelected();
@@ -81,10 +94,17 @@ class _PhotoDuplicatesPageState extends State<PhotoDuplicatesPage>
             error: error == null
                 ? null
                 : Errors.message(error, 'find duplicate photos'),
-            thumbnailBuilder: (context, photo) =>
-                PhotoThumbnail(url: _controller.thumbnailUrl(photo.id)),
+            thumbnailBuilder: (context, photo) => PhotoThumbnail(
+              url: _controller.thumbnailUrl(photo.id),
+              path: _controller.thumbnailSource(photo.id)?.path,
+              serial: _controller.thumbnailSource(photo.id)?.serial,
+            ),
             onToggle: _controller.toggle,
             onDeleteSelected: _deleteSelected,
+            onSelectSuggested: _controller.hasSuggestions
+                ? _controller.selectSuggested
+                : null,
+            onClearSelection: _controller.clearSelection,
           ),
         );
       },

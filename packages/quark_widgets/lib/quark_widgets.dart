@@ -149,6 +149,7 @@ export 'src/models/ssh_key_item.dart';
 export 'src/models/transcode_format_option.dart';
 export 'src/models/upload_target.dart';
 export 'src/models/user_account_item.dart';
+export 'src/photos/duplicate_delete_dialog.dart';
 export 'src/photos/duplicate_format_button.dart';
 export 'src/photos/duplicate_group_list.dart';
 export 'src/photos/live_badge.dart';

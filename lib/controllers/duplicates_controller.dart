@@ -9,11 +9,12 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Everything the duplicates page shows and does (#1666): the groups, which
 /// copies are marked for deletion, and deleting them.
 ///
-/// Identical copies start with every copy but the first marked, since one is
-/// as good as another; similar photos start with none marked, since they may
-/// differ in ways that matter. Every group keeps at least one copy. A reload
-/// keeps the user's marks: only a group made entirely of photos it has not
-/// shown before gets the defaults.
+/// Nothing starts marked (#3362): a copy marked before the user chose it put
+/// a delete one tap away on a phone. [selectSuggested] marks every identical
+/// copy but the first in one go, since one is as good as another; similar
+/// photos are never suggested, since they may differ in ways that matter.
+/// Every group keeps at least one copy. A reload keeps the user's marks, and a
+/// group made entirely of photos it has not shown before starts unmarked.
 ///
 /// A similar group whose copies are each a different format and whose
 /// perceptual hashes are all within
@@ -77,6 +78,20 @@ class DuplicatesController extends ChangeNotifier {
   /// The ids of the copies marked for deletion.
   Set<String> get selectedIds => Set.unmodifiable(_selected);
 
+  /// The copies marked for deletion, in the order the page lists them, for
+  /// the confirmation to name every one, on screen or not.
+  List<DuplicatePhotoItem> get selectedPhotos => [
+    for (final group in _groups)
+      for (final photo in group.photos)
+        if (_selected.contains(photo.id)) photo,
+  ];
+
+  /// Whether [selectSuggested] would mark anything: some identical group has
+  /// a copy beyond its first one left unmarked.
+  bool get hasSuggestions => _groups.any(
+    (g) => g.isExact && _suggested(g).any((id) => !_selected.contains(id)),
+  );
+
   /// The format whose copy to keep in each same-picture group, or null for
   /// any.
   String? get preferredFormat => _preferredFormat;
@@ -98,6 +113,13 @@ class DuplicatesController extends ChangeNotifier {
   /// Why the last load failed, or null. The page words it.
   Object? get error => _error;
 
+  /// The path and drive of the copy [id], for its thumbnail to retry a busy
+  /// Quark and backfill one it lacks (#3362); null for an unknown id.
+  ({String path, String serial})? thumbnailSource(String id) {
+    final path = _paths[id];
+    return path == null ? null : (path: path.relPath, serial: path.serial);
+  }
+
   /// The thumbnail of the copy [id].
   Uri? thumbnailUrl(String id) {
     final path = _paths[id];
@@ -107,7 +129,7 @@ class DuplicatesController extends ChangeNotifier {
   }
 
   /// Loads the groups, keeping the marks in every group it has shown before
-  /// and marking the spare identical copies in each new one.
+  /// and marking none in a new one, unless a preferred format applies.
   Future<void> load() async {
     _isLoading = true;
     _error = null;
@@ -136,7 +158,7 @@ class DuplicatesController extends ChangeNotifier {
             ],
           ),
       ];
-      for (final (index, group) in _groups.indexed) {
+      for (final group in _groups) {
         final ids = [for (final p in group.photos) p.id];
         if (ids.any(seen.contains)) {
           final kept = ids.where(marked.contains).toSet();
@@ -144,8 +166,6 @@ class DuplicatesController extends ChangeNotifier {
           // is the copy that went away.
           if (kept.length == ids.length) kept.remove(ids.first);
           _selected.addAll(kept);
-        } else if (groups[index].isExact) {
-          _selected.addAll(ids.skip(1));
         } else {
           _applyPreference(group);
         }
@@ -170,6 +190,23 @@ class DuplicatesController extends ChangeNotifier {
     final kept = group.first.photos.where((p) => !_selected.contains(p.id));
     if (kept.length <= 1) return;
     _selected.add(id);
+    _notify();
+  }
+
+  /// Marks the suggested copies: in each identical group, every copy but
+  /// one. A group whose first copy the user marked keeps the first copy they
+  /// left unmarked instead, so the suggestion never undoes a choice to keep.
+  void selectSuggested() {
+    for (final group in _groups.where((g) => g.isExact)) {
+      _selected.addAll(_suggested(group));
+    }
+    _notify();
+  }
+
+  /// Clears every mark.
+  void clearSelection() {
+    if (_selected.isEmpty) return;
+    _selected.clear();
     _notify();
   }
 
@@ -249,6 +286,17 @@ class DuplicatesController extends ChangeNotifier {
         deviceName: serial.isEmpty ? null : devices[serial] ?? serial,
       ),
     );
+  }
+
+  /// The copies [selectSuggested] marks in [group]: all but the first one not
+  /// already marked.
+  Iterable<String> _suggested(DuplicateGroupItem group) {
+    final ids = [for (final p in group.photos) p.id];
+    final keep = ids.firstWhere(
+      (id) => !_selected.contains(id),
+      orElse: () => ids.first,
+    );
+    return ids.where((id) => id != keep);
   }
 
   /// Marks the copies of [group] that are not in the preferred format, when it
