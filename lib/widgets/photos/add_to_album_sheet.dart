@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:quark/models/photo_album.dart';
 import 'package:quark/services/album_service.dart';
+import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Opens the package's [AddToAlbumSheet] for one photo, and adds it to or
-/// takes it out of whichever album is tapped, until Done closes it.
+/// takes it out of whichever album is tapped, until Done closes it. The
+/// albums the photo is already in open checked, from its metadata (#3361).
 ///
 /// Still service-coupled: it calls [AlbumService] itself. Moving that into a
 /// controller is still to do; the album page it served is gone (#1916), and
@@ -16,28 +19,78 @@ class AddToAlbumSheetHost extends StatefulWidget {
   const AddToAlbumSheetHost({
     required this.deviceSerial,
     required this.relPath,
+    this.onChanged,
+    this.listAlbums = AlbumService.listAlbums,
+    this.loadMemberAlbumIds = _memberAlbumIds,
+    this.addPhotoToAlbum = AlbumService.addPhotoToAlbum,
+    this.removePhotoFromAlbum = AlbumService.removePhotoFromAlbum,
     super.key,
   });
 
-  /// Shows the sheet for the photo at [relPath] on [deviceSerial].
-  static Future<void> show(
+  /// Shows the sheet for the photo at [relPath] on [deviceSerial]. Answers
+  /// whether any album changed, however the sheet was closed, so the caller
+  /// can reload what counts its albums (#3361).
+  static Future<bool> show(
     BuildContext context, {
     required String deviceSerial,
     required String relPath,
-  }) {
-    return showQuarkSheet<void>(
+  }) async {
+    var changed = false;
+    await showQuarkSheet<void>(
       context,
       title: 'Add to album',
-      builder: (_) =>
-          AddToAlbumSheetHost(deviceSerial: deviceSerial, relPath: relPath),
+      builder: (_) => AddToAlbumSheetHost(
+        deviceSerial: deviceSerial,
+        relPath: relPath,
+        onChanged: () => changed = true,
+      ),
     );
+    return changed;
   }
+
+  /// The ids of the albums the photo is in, read from its metadata.
+  static Future<Set<int>> _memberAlbumIds(
+    String relPath, {
+    String? serial,
+  }) async => {
+    for (final album in (await FilesService.getPhotoMetadata(
+      relPath,
+      serial: serial,
+    )).albums)
+      album.id,
+  };
 
   /// The device the photo is stored on.
   final String deviceSerial;
 
   /// The photo's path on that device.
   final String relPath;
+
+  /// Called after each add or removal the Quark took.
+  final VoidCallback? onChanged;
+
+  /// Lists the album tree.
+  final Future<List<PhotoAlbum>> Function({bool tree}) listAlbums;
+
+  /// The ids of the albums the photo at `relPath` is already in.
+  final Future<Set<int>> Function(String relPath, {String? serial})
+  loadMemberAlbumIds;
+
+  /// Adds the photo to an album, answering whether it was new to it.
+  final Future<bool> Function(
+    int albumId, {
+    required String deviceSerial,
+    required String relPath,
+  })
+  addPhotoToAlbum;
+
+  /// Takes the photo out of an album.
+  final Future<void> Function(
+    int albumId, {
+    required String deviceSerial,
+    required String relPath,
+  })
+  removePhotoFromAlbum;
 
   @override
   State<AddToAlbumSheetHost> createState() => _AddToAlbumSheetHostState();
@@ -54,12 +107,29 @@ class _AddToAlbumSheetHostState extends State<AddToAlbumSheetHost> {
     _load();
   }
 
-  Future<void> _load() async {
+  /// The albums the photo is in, or none when they cannot be read.
+  Future<Set<int>> _loadMembers() async {
     try {
-      final albums = await AlbumService.listAlbums(tree: true);
+      return await widget.loadMemberAlbumIds(
+        widget.relPath,
+        serial: widget.deviceSerial.isEmpty ? null : widget.deviceSerial,
+      );
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  Future<void> _load() async {
+    // Without its memberships the sheet still adds; the Quark's add is
+    // idempotent, so an unchecked album the photo is in changes nothing.
+    final members = _loadMembers();
+    try {
+      final albums = await widget.listAlbums(tree: true);
+      final memberIds = await members;
       if (!mounted) return;
       setState(() {
         _albums = albums.toUserAlbumItems();
+        _memberIds.addAll(memberIds);
         _loading = false;
       });
     } catch (_) {
@@ -72,18 +142,19 @@ class _AddToAlbumSheetHostState extends State<AddToAlbumSheetHost> {
     final isMember = _memberIds.contains(album.id);
     try {
       if (isMember) {
-        await AlbumService.removePhotoFromAlbum(
+        await widget.removePhotoFromAlbum(
           album.id,
           deviceSerial: widget.deviceSerial,
           relPath: widget.relPath,
         );
       } else {
-        await AlbumService.addPhotoToAlbum(
+        await widget.addPhotoToAlbum(
           album.id,
           deviceSerial: widget.deviceSerial,
           relPath: widget.relPath,
         );
       }
+      widget.onChanged?.call();
       if (!mounted) return;
       setState(() {
         if (isMember) {
@@ -110,11 +181,12 @@ class _AddToAlbumSheetHostState extends State<AddToAlbumSheetHost> {
     if (name == null || name.isEmpty || !mounted) return;
     try {
       final album = await AlbumService.createAlbum(name);
-      await AlbumService.addPhotoToAlbum(
+      await widget.addPhotoToAlbum(
         album.id,
         deviceSerial: widget.deviceSerial,
         relPath: widget.relPath,
       );
+      widget.onChanged?.call();
       if (!mounted) return;
       setState(() {
         _albums = [

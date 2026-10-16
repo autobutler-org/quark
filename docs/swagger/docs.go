@@ -1628,7 +1628,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Adds a photo (by device serial + relative path) to an album. Idempotent. Needs read access on the photo.",
+                "description": "Adds a photo (by device serial + relative path) to an album. Idempotent: a photo already in the album\nanswers 200 rather than 201, so the client can say nothing changed. Needs read access on the photo.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1658,8 +1658,14 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "Already in the album",
+                        "schema": {
+                            "$ref": "#/definitions/v0_albums.AlbumItemJSON"
+                        }
+                    },
                     "201": {
-                        "description": "Created",
+                        "description": "Added",
                         "schema": {
                             "$ref": "#/definitions/v0_albums.AlbumItemJSON"
                         }

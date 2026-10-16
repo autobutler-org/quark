@@ -116,7 +116,10 @@ class AlbumService with AuthenticatedService {
         .toList();
   }
 
-  static Future<PhotoAlbumItem> addPhotoToAlbum(
+  /// Adds the photo at [relPath] on [deviceSerial] to [albumId]. Answers
+  /// whether it was new to the album: the Quark answers 200 for a photo
+  /// already in it, which changes nothing (#3361).
+  static Future<bool> addPhotoToAlbum(
     int albumId, {
     required String deviceSerial,
     required String relPath,
@@ -126,13 +129,15 @@ class AlbumService with AuthenticatedService {
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'deviceSerial': deviceSerial, 'relPath': relPath}),
     );
+    if (response.statusCode == 200) return false;
     if (response.statusCode != 201) {
       throw ApiException(response.statusCode, 'Failed to add photo to album');
     }
-    AlbumsCache.instance.dropItems(albumId);
-    return PhotoAlbumItem.fromJson(
-      json.decode(response.body) as Map<String, dynamic>,
-    );
+    // The tree carries the album's count, which is now one short.
+    AlbumsCache.instance
+      ..dropAlbums()
+      ..dropItems(albumId);
+    return true;
   }
 
   static Future<void> removePhotoFromAlbum(
@@ -151,6 +156,8 @@ class AlbumService with AuthenticatedService {
         'Failed to remove photo from album',
       );
     }
-    AlbumsCache.instance.dropItems(albumId);
+    AlbumsCache.instance
+      ..dropAlbums()
+      ..dropItems(albumId);
   }
 }

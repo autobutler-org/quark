@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -143,4 +144,18 @@ func takenAt(dates map[int64]time.Time, id int64) string {
 		return ""
 	}
 	return sqlutil.FormatTime(t)
+}
+
+// inAlbum reports whether the album already holds the photo at relPath on
+// serial, so a repeated add can answer that nothing changed (#3361).
+func inAlbum(q db.Querier, album db.PhotoAlbum, serial, relPath string) (bool, error) {
+	holding, err := q.ListAlbumsContainingPhoto(context.Background(), db.ListAlbumsContainingPhotoParams{
+		UserID:       album.UserID.Int64,
+		DeviceSerial: serial,
+		RelPath:      relPath,
+	})
+	if err != nil {
+		return false, err
+	}
+	return slices.ContainsFunc(holding, func(a db.PhotoAlbum) bool { return a.ID == album.ID }), nil
 }

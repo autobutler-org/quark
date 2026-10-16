@@ -467,11 +467,21 @@ class PhotosPageState extends State<PhotosPage>
     final added = outcome.added;
     if (added == 0 && outcome.skipped > 0) {
       _snack('No photos added — device photos cannot be added to albums yet');
+    } else if (added == 0 && outcome.alreadyIn > 0 && outcome.failed == 0) {
+      // Nothing changed, so nothing was added (#3361).
+      _snack(
+        outcome.alreadyIn == 1
+            ? 'Already in "${album.name}"'
+            : '${outcome.alreadyIn} photos already in "${album.name}"',
+      );
     } else if (added > 0) {
-      final failed = outcome.failed > 0 ? ' (${outcome.failed} failed)' : '';
+      final notes = [
+        if (outcome.alreadyIn > 0) '${outcome.alreadyIn} already in it',
+        if (outcome.failed > 0) '${outcome.failed} failed',
+      ];
       _snack(
         '$added ${added == 1 ? 'photo' : 'photos'} added to "${album.name}"'
-        '$failed',
+        '${notes.isEmpty ? '' : ' (${notes.join(', ')})'}',
       );
     } else {
       _snack(Errors.message(outcome.error, 'add photos to "${album.name}"'));
@@ -568,11 +578,7 @@ class PhotosPageState extends State<PhotosPage>
     final path = _controller.quarkPathOf(id);
     if (_demo || path == null) return;
     AlbumItemMenu(
-      onAddToAnotherAlbum: () => AddToAlbumSheetHost.show(
-        context,
-        deviceSerial: path.serial,
-        relPath: path.relPath,
-      ),
+      onAddToAnotherAlbum: () => _showAddToAlbumSheet(path),
       onRemoveFromFavorites: album.isFavorites
           ? () => _toggleFavorite(id)
           : null,
@@ -589,11 +595,7 @@ class PhotosPageState extends State<PhotosPage>
     if (path == null) return;
     LibraryPhotoMenu(
       isFavorite: photo.isFavorite,
-      onAddToAlbum: () => AddToAlbumSheetHost.show(
-        context,
-        deviceSerial: path.serial,
-        relPath: path.relPath,
-      ),
+      onAddToAlbum: () => _showAddToAlbumSheet(path),
       onToggleFavorite: () => _toggleFavorite(photo.id),
       onDownload: () => _downloadPhoto(photo.id),
       onShare: () => showShareSheet(
@@ -605,6 +607,20 @@ class PhotosPageState extends State<PhotosPage>
       onMakeACopy: () => _copyPhoto(photo.id),
       onDelete: () => _deletePhoto(photo),
     ).showAt(context, position);
+  }
+
+  /// The add-to-album sheet for the photo at [path], then the tree and the
+  /// showing album reloaded when the sheet changed any album, so the
+  /// sidebar's counts follow without a reload (#3361).
+  Future<void> _showAddToAlbumSheet(
+    ({String serial, String relPath}) path,
+  ) async {
+    final changed = await AddToAlbumSheetHost.show(
+      context,
+      deviceSerial: path.serial,
+      relPath: path.relPath,
+    );
+    if (changed && mounted) await _controller.albumsChanged();
   }
 
   Future<void> _downloadPhoto(String id) async {
@@ -892,7 +908,13 @@ class PhotosPageState extends State<PhotosPage>
                                       contentWidth,
                                       c.columns,
                                     ),
-                                    selectedIds: selectedIds,
+                                    // The album being added to's own photos
+                                    // show checked, and cannot be picked
+                                    // (#3361).
+                                    selectedIds: {
+                                      ...selectedIds,
+                                      ...c.albumMemberIds,
+                                    },
                                     selectionMode: c.selectionMode,
                                     isLoading:
                                         isInitialLoad ||

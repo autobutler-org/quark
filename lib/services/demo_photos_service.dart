@@ -136,7 +136,7 @@ class DemoPhotosService {
 
   static Future<void> deleteAlbum(int id) => _refuse();
 
-  static Future<PhotoAlbumItem> addPhotoToAlbum(
+  static Future<bool> addPhotoToAlbum(
     int albumId, {
     required String deviceSerial,
     required String relPath,

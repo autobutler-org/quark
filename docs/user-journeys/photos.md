@@ -206,6 +206,8 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 - Selected photos are associated with the album. Another account's albums are never offered.
 - The grid returns to the album, now showing the added photos, and the sidebar shows its new count.
+- While picking, the photos the album already holds show checked and cannot be picked again.
+- Adding a photo the album already holds changes nothing and says "Already in "<name>"", never "1 photo added".
 - Canceling the selection (or pressing Escape) also returns to the album, with nothing added.
 - System albums (Favorites, Inbox) show no **Add Photos** action.
 - Photos can also be added from plain selection mode: **Select**, pick photos, then **Add to album** in the bottom bar.
