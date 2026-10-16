@@ -1,18 +1,18 @@
 import 'dart:typed_data';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:quark/services/demo_photos_service.dart';
 import 'package:quark/services/thumbnail_cache_manager.dart';
-import 'package:quark/utils/thumbnail_cache_config.dart';
 import 'package:quark/widgets/thumbnails/backfilling_thumbnail.dart';
 
 /// The picture inside a photo tile: a Quark photo's thumbnail over the
 /// network, or a device photo's straight off disk through photo_manager.
 /// A Quark photo's thumbnail is kept on disk by [ThumbnailCacheManager], under
 /// a key without the session token, so a cold launch or a new sign-in draws
-/// the grid without downloading it again (#1777).
+/// the grid without downloading it again (#1777), and through
+/// [ThumbnailCacheManager.image], so a tile scrolled away and back shows the
+/// picture it already decoded rather than a black square (#3366).
 /// A [url] with [DemoPhotosService.assetScheme] names a bundled sample photo,
 /// drawn from the asset bundle with no request at all.
 ///
@@ -62,22 +62,17 @@ class PhotoThumbnail extends StatelessWidget {
         BuildContext context,
         int generation,
         void Function([Object? error]) onFailed,
-      ) => ExcludeSemantics(
+      ) => Image(
         key: ValueKey(generation),
-        child: CachedNetworkImage(
-          imageUrl: url.toString(),
-          cacheKey: ThumbnailCacheManager.keyFor(url),
-          cacheManager: ThumbnailCacheManager.instance,
-          memCacheWidth: ThumbnailCacheConfig.memCacheWidth,
-          fit: BoxFit.cover,
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          placeholder: (context, url) => placeholder,
-          errorWidget: (context, url, error) {
-            onFailed(error);
-            return placeholder;
-          },
-        ),
+        image: ThumbnailCacheManager.image(url),
+        fit: BoxFit.cover,
+        excludeFromSemantics: true,
+        frameBuilder: (context, child, frame, synchronous) =>
+            frame == null ? placeholder : child,
+        errorBuilder: (context, error, stack) {
+          onFailed(error);
+          return placeholder;
+        },
       );
       final path = this.path;
       return path == null
