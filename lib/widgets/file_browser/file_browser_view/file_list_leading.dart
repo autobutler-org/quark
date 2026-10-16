@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/files_service.dart';
@@ -16,9 +15,14 @@ import 'package:shimmer/shimmer.dart';
 /// noise to a screen reader (#2603).
 ///
 /// The thumbnail, and the icon when the file has none, are keyed by
-/// [FileNode.apiPath]. A list reuses the element in a slot; without that key
+/// [fileThumbnailKey]. A list reuses the element in a slot; without that key
 /// the slot keeps painting the previous file's image until the new URL
 /// settles.
+///
+/// The picture comes from [ThumbnailCacheManager.image], so it is decoded
+/// once. The list leaves the screen whenever a file opens in a viewer, and a
+/// thumbnail decoded again when it came back painted another row's picture
+/// on the web (#3355).
 class FileListLeading extends StatelessWidget {
   const FileListLeading({required this.item, super.key});
 
@@ -31,12 +35,22 @@ class FileListLeading extends StatelessWidget {
     final icon = Center(
       child: QuarkFileIcon(name: item.name, isDir: item.isDir),
     );
-    final thumbKey = ValueKey(item.apiPath);
+    final thumbKey = fileThumbnailKey(item);
 
     final url = FilesService.constructThumbnailUrl(
       item.apiPath,
       serial: item.deviceSerial,
       size: 'sm',
+    );
+    final placeholder = Shimmer.fromColors(
+      baseColor: Colors.grey[800]!,
+      highlightColor: Colors.grey[700]!,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.grey[800],
+          borderRadius: BorderRadius.circular(4),
+        ),
+      ),
     );
     return SizedBox(
       width: size,
@@ -51,39 +65,28 @@ class FileListLeading extends StatelessWidget {
               // cache key.
               builder: (context, generation, onFailed) => KeyedSubtree(
                 key: ValueKey(generation),
-                child: CachedNetworkImage(
-                  key: thumbKey,
-                  imageUrl: url.toString(),
-                  cacheKey: ThumbnailCacheManager.keyFor(url),
-                  cacheManager: ThumbnailCacheManager.instance,
-                  // Only the decoded thumbnail replaces the icon; the
-                  // placeholder and error states fall back to it so nothing
-                  // shifts.
-                  imageBuilder: (context, imageProvider) => ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Image(
-                      image: imageProvider,
-                      fit: BoxFit.cover,
-                      excludeFromSemantics: true,
-                    ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Image(
+                    key: thumbKey,
+                    image: ThumbnailCacheManager.image(url),
+                    fit: BoxFit.cover,
+                    width: size,
+                    height: size,
+                    excludeFromSemantics: true,
+                    // Only the decoded thumbnail replaces the icon; the
+                    // placeholder and error states fall back to it so nothing
+                    // shifts.
+                    frameBuilder: (context, child, frame, synchronous) =>
+                        frame == null ? placeholder : child,
+                    // A video or HEIC with no thumbnail yet gets one rendered
+                    // here and uploaded (#2381); a busy Quark is asked again
+                    // (#3349).
+                    errorBuilder: (context, error, stack) {
+                      onFailed(error);
+                      return icon;
+                    },
                   ),
-                  placeholder: (context, url) => Shimmer.fromColors(
-                    baseColor: Colors.grey[800]!,
-                    highlightColor: Colors.grey[700]!,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[800],
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  // A video or HEIC with no thumbnail yet gets one rendered
-                  // here and uploaded (#2381); a busy Quark is asked again
-                  // (#3349).
-                  errorWidget: (context, url, error) {
-                    onFailed(error);
-                    return icon;
-                  },
                 ),
               ),
             ),

@@ -1,7 +1,15 @@
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/utils/file_kind.dart';
+import 'package:flutter/foundation.dart';
 import 'package:quark_widgets/quark_widgets.dart' show CalendarLabels;
+
+/// The key a node's thumbnail, and its list leading, are built with: the
+/// device and the path, `serial:path`. A list reuses the element in a slot
+/// for whichever file lands there, so without it a slot keeps the previous
+/// file's picture (#2106); the serial keeps the same path on two drives apart.
+ValueKey<String> fileThumbnailKey(FileNode node) =>
+    ValueKey('${node.deviceSerial}:${node.apiPath}');
 
 /// Whether the server can render a thumbnail for this node. Videos go
 /// through ffmpeg frame extraction on the backend and come back as JPEG,
