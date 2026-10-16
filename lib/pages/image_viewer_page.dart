@@ -47,9 +47,14 @@ const _kPageAnimDuration = Duration(milliseconds: 250);
 /// Optional context: [sourceAlbum] — when set, the more menu shows
 /// "Remove from [Album]" instead of "Add to Album."
 ///
-/// Navigation: pass [initialIndex], [imageCount], [onLoadImage].
+/// Navigation: pass [initialIndex], [imageCount], [onLoadImage]. A list the
+/// caller loads a page at a time also passes [totalCount] and [onLoadMore].
 /// Keyboard: ← → navigate, Escape closes, i toggles sidebar, f toggles
-/// favorite, r rotates 90° CW.
+/// favorite, r rotates 90° CW. The viewer takes the keyboard focus once its
+/// route is in, whatever it was opened from (#3360).
+///
+/// Touch: a swipe sideways turns the page, a double-tap zooms in around the
+/// tap and back out, and a swipe down closes the viewer (#3358).
 class ImageViewerPage extends StatefulWidget {
   final Uint8List? bytes;
   final String name;
@@ -69,7 +74,21 @@ class ImageViewerPage extends StatefulWidget {
   /// reason to refetch the grid behind them).
   final Future<void> Function(int index)? onPrefetchImage;
 
+  /// Reads how many photos [onLoadImage] can load now, after each step.
   final Future<int> Function()? getImageCount;
+
+  /// How many photos the list holds in all, pages the caller has not loaded
+  /// yet included. Null when [imageCount] already counts every one.
+  ///
+  /// The counter shows this rather than [imageCount], so a library whose
+  /// first page of fifty is loaded does not read "41 / 50" (#3357).
+  final int? totalCount;
+
+  /// Loads the caller's next page of the list, so [getImageCount] grows.
+  ///
+  /// Called while the user nears the last loaded photo and [totalCount] says
+  /// there are more, and awaited when a step lands past the last one.
+  final Future<void> Function()? onLoadMore;
 
   /// Relative path on the Quark device (enables metadata & server actions).
   final String? relPath;
@@ -95,6 +114,8 @@ class ImageViewerPage extends StatefulWidget {
     this.onLoadImage,
     this.onPrefetchImage,
     this.getImageCount,
+    this.totalCount,
+    this.onLoadMore,
     this.relPath,
     this.serial,
     this.sourceAlbum,
@@ -143,7 +164,16 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   bool _liveVideoReady = false;
 
   SharedPreferences? _prefs;
-  final _focusNode = FocusNode();
+  final _focusNode = FocusNode(debugLabel: 'ImageViewerPage');
+
+  // The route this viewer is on, watched for the end of its transition.
+  ModalRoute<Object?>? _route;
+
+  // The next page of the caller's list, while it loads.
+  Future<void>? _loadingMore;
+
+  // Where the second tap of a double-tap went down, in the zoom's viewport.
+  Offset _doubleTapAt = Offset.zero;
 
   // Zoom/pan state of the photo. Swipe-to-navigate only applies while the
   // photo sits at 1x; once zoomed, a horizontal drag pans the photo, and the
@@ -202,7 +232,31 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route == _route) return;
+    _route?.animation?.removeStatusListener(_onRouteAnimation);
+    _route = route;
+    route?.animation?.addStatusListener(_onRouteAnimation);
+  }
+
+  /// Takes the keyboard focus once the route has finished coming in.
+  ///
+  /// `autofocus` alone is not enough. Opened from a search, the search field
+  /// is a DOM input on the web, and the route taking the focus closes it; the
+  /// browser's focus falls to the page body, and the engine reports the
+  /// Flutter view unfocused, which parks the framework's focus on the root
+  /// scope — out of this viewer, so Esc and f went nowhere until the photo
+  /// was clicked (#3360). Asking again after the transition, when that has
+  /// all happened, moves the focus back in and has the engine focus the view.
+  void _onRouteAnimation(AnimationStatus status) {
+    if (status.isCompleted && mounted) _focusNode.requestFocus();
+  }
+
+  @override
   void dispose() {
+    _route?.animation?.removeStatusListener(_onRouteAnimation);
     _liveVideoController?.dispose();
     _rotationAnim.dispose();
     _focusNode.dispose();
@@ -233,10 +287,14 @@ class _ImageViewerPageState extends State<ImageViewerPage>
 
   // --- Navigation ---
 
+  /// How many pages the viewer offers: the whole list when the caller says
+  /// how long it is, not just what it has loaded (#3357).
+  int get _pageCount => math.max(widget.totalCount ?? 0, _liveImageCount);
+
   // Measured from the newest requested photo so the chevrons stay live, and
   // keep stepping, while a download is still in flight.
   bool get _hasPrev => _targetIndex > 0;
-  bool get _hasNext => _targetIndex < _liveImageCount - 1;
+  bool get _hasNext => _targetIndex < _pageCount - 1;
 
   // A PageView carries the swipe so the photo tracks the finger and settles
   // with an animation (#1707). The keyboard and the chevrons drive the same
@@ -248,7 +306,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   // instead of asking for the same photo twice (#1710).
   void _goToPage(int delta) {
     final target = _targetIndex + delta;
-    if (target < 0 || target >= _liveImageCount) return;
+    if (target < 0 || target >= _pageCount) return;
     if (!_pageController.hasClients) {
       _navigate(target);
       return;
@@ -288,7 +346,8 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     if (zoomed != _zoomedIn) setState(() => _zoomedIn = zoomed);
   }
 
-  /// Downloads the photos either side of this one into the loader's cache.
+  /// Downloads the photos either side of this one into the loader's cache,
+  /// and the caller's next page of the list once the end of it is in reach.
   ///
   /// The next thing the user does is nearly always "next photo" or "previous
   /// photo", so paying for those while they look at this one is what makes the
@@ -297,6 +356,10 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   /// produce a snackbar, and the widget may well be gone before the download
   /// lands (#1710).
   void _prefetchNeighbors() {
+    if (_currentIndex + ImageViewerConfig.prefetchWindow >=
+        _liveImageCount - 1) {
+      unawaited(_loadMore());
+    }
     final prefetch = widget.onPrefetchImage;
     if (prefetch == null) return;
     for (var delta = 1; delta <= ImageViewerConfig.prefetchWindow; delta++) {
@@ -305,6 +368,28 @@ class _ImageViewerPageState extends State<ImageViewerPage>
         unawaited(prefetch(index).catchError((Object _) {}));
       }
     }
+  }
+
+  /// Loads the caller's next page of the list, when it has one, and reads the
+  /// count again. Calls made while a page is loading share it.
+  Future<void> _loadMore() {
+    final onLoadMore = widget.onLoadMore;
+    if (onLoadMore == null || _liveImageCount >= _pageCount) {
+      return Future.value();
+    }
+    return _loadingMore ??= () async {
+      try {
+        await onLoadMore();
+        final count = await widget.getImageCount?.call();
+        if (mounted && count != null) {
+          setState(() => _liveImageCount = count);
+        }
+      } catch (e) {
+        debugPrint('ImageViewerPage: failed to load more photos: $e');
+      } finally {
+        _loadingMore = null;
+      }
+    }();
   }
 
   /// Shows the photo at [newIndex], downloading it first.
@@ -320,12 +405,15 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   /// [PhotoBytesCache], so a superseded load is not wasted (#1710).
   Future<void> _navigate(int newIndex) async {
     if (!mounted) return;
-    if (newIndex < 0 || newIndex >= _liveImageCount) return;
+    if (newIndex < 0 || newIndex >= _pageCount) return;
     if (widget.onLoadImage == null) return;
 
     _targetIndex = newIndex;
     setState(() => _loading = true);
     try {
+      // A step past the loaded page waits for the next one to arrive.
+      if (newIndex >= _liveImageCount) await _loadMore();
+      if (!mounted || _targetIndex != newIndex) return;
       final (bytes, name, relPath, serial) = await widget.onLoadImage!(
         newIndex,
       );
@@ -727,6 +815,24 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     }
   }
 
+  // --- Zoom ---
+
+  /// Zooms to [ImageViewerConfig.doubleTapZoomScale] around the double-tap,
+  /// keeping the point under the finger where it is, or back out to 1x.
+  void _toggleZoom() {
+    if (_zoomedIn) {
+      _zoomController.value = Matrix4.identity();
+      return;
+    }
+    const scale = ImageViewerConfig.doubleTapZoomScale;
+    final at = _doubleTapAt;
+    _zoomController.value = Matrix4.translationValues(
+      -at.dx * (scale - 1),
+      -at.dy * (scale - 1),
+      0,
+    )..multiply(Matrix4.diagonal3Values(scale, scale, 1));
+  }
+
   // --- Keyboard ---
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
@@ -791,6 +897,8 @@ class _ImageViewerPageState extends State<ImageViewerPage>
               zoomedIn: _zoomedIn,
               liveVideoPlaying: _liveVideoPlaying,
               liveVideoController: _liveVideoController,
+              onDoubleTapDown: (at) => _doubleTapAt = at,
+              onDoubleTap: _toggleZoom,
             )
           : Padding(
               padding: const EdgeInsets.all(24),
@@ -809,7 +917,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
             ),
       pageController: _pageController,
       currentIndex: _currentIndex,
-      imageCount: _liveImageCount,
+      imageCount: _pageCount,
       onPageChanged: _onPageChanged,
       zoomedIn: _zoomedIn,
       loading: _loading,
@@ -821,6 +929,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       onTapDismissSidebar: !isDesktop && _sidebarOpen
           ? () => setState(() => _sidebarOpen = false)
           : null,
+      onSwipeDown: _zoomedIn ? null : _close,
     );
     // The photo is the one item on screen, so a right-click anywhere on it
     // opens its menu, at the pointer (#2276).
@@ -843,16 +952,17 @@ class _ImageViewerPageState extends State<ImageViewerPage>
         if (didPop) return;
         _close();
       },
-      child: KeyboardListener(
+      child: Focus(
+        key: const ValueKey('image_viewer_focus'),
         focusNode: _focusNode,
         autofocus: true,
-        onKeyEvent: (e) => _handleKey(_focusNode, e),
+        onKeyEvent: _handleKey,
         child: Scaffold(
           backgroundColor: Colors.black,
           appBar: ImageViewerAppBar(
             isDesktop: isDesktop,
             currentIndex: _currentIndex,
-            imageCount: _liveImageCount,
+            imageCount: _pageCount,
             hasPrev: _hasPrev,
             hasNext: _hasNext,
             onPrevious: () => _goToPage(-1),
