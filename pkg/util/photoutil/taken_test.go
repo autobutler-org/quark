@@ -209,6 +209,80 @@ func TestListPhotos_SortByTaken(t *testing.T) {
 	}
 }
 
+// TestListPhotos_SortByTakenReadsUnreadDates: a photo no thumbnail or
+// backfill has read yet is dated by the taken listing itself, so a fresh
+// upload lists under its capture date at once (#3356). The listing reads at
+// most its cap, newest first, counts the rest as pending, and records what it
+// read so the next listing finishes the job.
+func TestListPhotos_SortByTakenReadsUnreadDates(t *testing.T) {
+	defer photoutil.SetTakenDatesPerList(1)()
+	database := dbtest.NewDB(t)
+	ctx := context.Background()
+	const serial = "USB-PHOTOS"
+	mountPoint := t.TempDir()
+	filesDir := filepath.Join(mountPoint, "quark", "data", "files")
+	if err := os.MkdirAll(filesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := []struct {
+		name, taken string
+		uploaded    time.Time
+	}{
+		{"first.jpg", "2019:07:04 12:30:00", time.Now().Add(-time.Hour)},
+		{"second.jpg", "2022:09:22 08:00:00", time.Now()},
+	}
+	for _, f := range files {
+		p := filepath.Join(filesDir, f.name)
+		if err := os.WriteFile(p, exifJPEG(t, 1, f.taken), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, f.uploaded, f.uploaded); err != nil {
+			t.Fatal(err)
+		}
+	}
+	registry := deviceRegistry(t, storageutil.NewStorageService(usbDetector{mountPoint: mountPoint, serial: serial}))
+	list := func() photoutil.ListPhotosResult {
+		t.Helper()
+		page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
+			Ctx: ctx, Registry: registry, Access: systemAccess(t), Queries: database.Queries,
+			Sort: photoutil.SortTaken, Order: photoutil.OrderDesc, Limit: 50,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return page
+	}
+	takenOf := func(page photoutil.ListPhotosResult) map[string]int64 {
+		out := map[string]int64{}
+		for _, p := range page.Photos {
+			out[p.FileName] = p.TakenAt
+		}
+		return out
+	}
+
+	first := list()
+	if first.PendingDates != 1 {
+		t.Errorf("first listing pending = %d, want 1", first.PendingDates)
+	}
+	if got, want := takenOf(first)["second.jpg"], localTime(t, files[1].taken).Unix(); got != want {
+		t.Errorf("second.jpg takenAt = %d, want %d: the newest is read first", got, want)
+	}
+
+	second := list()
+	if second.PendingDates != 0 {
+		t.Errorf("second listing pending = %d, want 0", second.PendingDates)
+	}
+	got := takenOf(second)
+	for _, f := range files {
+		if want := localTime(t, f.taken).Unix(); got[f.name] != want {
+			t.Errorf("%s takenAt = %d, want %d", f.name, got[f.name], want)
+		}
+	}
+	if stored := takenAtRows(t, database.Queries); len(stored) != 2 {
+		t.Errorf("stored capture dates = %v, want both", stored)
+	}
+}
+
 func summaryNames(photos []photoutil.PhotoSummary) []string {
 	names := make([]string, len(photos))
 	for i, p := range photos {

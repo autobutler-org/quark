@@ -1,9 +1,13 @@
 package v0_photos_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
+	"image"
+	"image/jpeg"
 	"net/http"
 	"strings"
 	"testing"
@@ -121,5 +125,79 @@ func TestListPhotos_SortByTaken(t *testing.T) {
 	}
 	if got, want := resp.Photos[0].TakenAt, taken["old.jpg"].Unix(); got != want {
 		t.Errorf("old.jpg takenAt = %d, want %d", got, want)
+	}
+}
+
+// exifJPEG encodes a small JPEG carrying an EXIF DateTimeOriginal of taken,
+// written "2006:01:02 15:04:05" the way cameras write it.
+func exifJPEG(t *testing.T, taken string) []byte {
+	t.Helper()
+	// TIFF header; IFD0 holding only the pointer to the Exif IFD; the Exif IFD
+	// holding only DateTimeOriginal (ASCII); then the string.
+	const ifd0, exifIFD, dateOffset = 8, 8 + 18, 8 + 18 + 18
+	value := append([]byte(taken), 0)
+	tiff := new(bytes.Buffer)
+	for _, v := range []any{
+		[]byte("II"), uint16(42), uint32(ifd0),
+		uint16(1), uint16(0x8769), uint16(4), uint32(1), uint32(exifIFD), uint32(0),
+		uint16(1), uint16(0x9003), uint16(2), uint32(len(value)), uint32(dateOffset), uint32(0),
+		value,
+	} {
+		_ = binary.Write(tiff, binary.LittleEndian, v)
+	}
+	payload := append([]byte("Exif\x00\x00"), tiff.Bytes()...)
+	segment := []byte{0xFF, 0xE1, 0, 0}
+	binary.BigEndian.PutUint16(segment[2:], uint16(len(payload)+2))
+	segment = append(segment, payload...)
+
+	plain := new(bytes.Buffer)
+	if err := jpeg.Encode(plain, image.NewGray(image.Rect(0, 0, 8, 8)), nil); err != nil {
+		t.Fatal(err)
+	}
+	// After the SOI marker, before everything else.
+	return append(append(append([]byte{}, plain.Bytes()[:2]...), segment...), plain.Bytes()[2:]...)
+}
+
+// TestListPhotos_SortByTakenDatesFreshUpload: a photo uploaded a moment ago,
+// which no thumbnail or startup backfill has read, is listed under sort=taken
+// with its EXIF capture date at once, not under its upload date (#3356).
+func TestListPhotos_SortByTakenDatesFreshUpload(t *testing.T) {
+	reg := vfs.NewRegistry()
+	mem := vfs.NewMemVFS("files")
+	if err := reg.Register(vfs.Namespace{ID: "files", Description: "files"}, mem); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	deps := deputil.NewDependencies().WithVFSRegistry(reg).WithDatabase(dbtest.NewDB(t))
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", accessutil.System)
+		c.Next()
+	})
+	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_photos.NewRouter())
+
+	const taken = "2022:09:22 08:15:00"
+	if err := mem.Write(context.Background(), "/trip.jpg", bytes.NewReader(exifJPEG(t, taken)), vfs.WriteOptions{ContentType: "image/jpeg"}); err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+
+	w := doPhotosReq(engine, http.MethodGet, "/api/v0/photos?sort=taken", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list returned %d: %s", w.Code, w.Body.String())
+	}
+	var resp v0_photos.PaginatedPhotosResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	want, err := time.ParseInLocation("2006:01:02 15:04:05", taken, time.Local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Photos) != 1 || resp.Photos[0].TakenAt != want.Unix() {
+		t.Fatalf("photos = %+v, want trip.jpg with takenAt %d", resp.Photos, want.Unix())
+	}
+	if resp.PendingDates != 0 {
+		t.Errorf("pendingDates = %d, want 0", resp.PendingDates)
 	}
 }

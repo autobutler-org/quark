@@ -6619,7 +6619,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Finds all photos across all managed devices with pagination support.",
+                "description": "Finds all photos across all managed devices with pagination support. Under sort=taken each photo carries its EXIF capture date as takenAt, read on the spot for a photo never read before, and pendingDates counts those left for a later listing.",
                 "produces": [
                     "application/json"
                 ],
@@ -11941,7 +11941,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "takenAt": {
-                    "description": "TakenAt is the EXIF capture date in Unix seconds, set under SortTaken\nfor a photo whose date is known (#2592).",
+                    "description": "TakenAt is the EXIF capture date in Unix seconds, set under SortTaken\nfor a photo whose date is known (#2592). A photo whose EXIF has not been\nread yet is read by the listing itself, so a fresh upload carries its\ndate the first time it is listed (#3356).",
                     "type": "integer"
                 }
             }
@@ -13227,6 +13227,10 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "offset": {
+                    "type": "integer"
+                },
+                "pendingDates": {
+                    "description": "PendingDates counts the photos whose capture date has still not been\nread, under sort=taken only. They sort by their date added until a later\nlisting reads them, so a client lists again while it is above zero\n(#3356).",
                     "type": "integer"
                 },
                 "photos": {

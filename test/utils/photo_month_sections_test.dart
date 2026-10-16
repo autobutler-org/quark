@@ -60,4 +60,30 @@ void main() {
       ('Unknown date', 2),
     ]);
   });
+
+  test('photos taken across three months make three runs (#3356)', () {
+    expect(
+      runs([
+        DateTime(2024, 5, 3),
+        DateTime(2023, 1, 9),
+        DateTime(2023, 1, 2),
+        DateTime(2022, 9, 22),
+      ]),
+      [('May 2024', 1), ('January 2023', 2), ('September 2022', 1)],
+    );
+  });
+
+  group('organizingDatesSections (#3356)', () {
+    test('heads every photo with one Organizing dates section', () {
+      final sections = organizingDatesSections(364);
+
+      expect(sections.map((s) => (s.label, s.count)), [
+        ('Organizing dates\u2026', 364),
+      ]);
+    });
+
+    test('an empty grid has no section', () {
+      expect(organizingDatesSections(0), isEmpty);
+    });
+  });
 }

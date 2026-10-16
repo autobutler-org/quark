@@ -56,3 +56,16 @@ List<PhotoGridSection> photoMonthSections(Iterable<DateTime?> dates) {
   close();
   return sections;
 }
+
+/// The one section a grid of [count] photos shows while the Quark is still
+/// reading capture dates (#3356). Photos it has not read yet sort by when
+/// they were added, so month runs would file a whole fresh upload under this
+/// month; one honest header stands in until every date is known.
+List<PhotoGridSection> organizingDatesSections(int count) => [
+  if (count > 0)
+    PhotoGridSection(
+      id: 'organizing-dates',
+      label: 'Organizing dates\u2026',
+      count: count,
+    ),
+];

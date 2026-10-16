@@ -5,11 +5,17 @@ class PaginatedPhotosResponse {
   final int offset;
   final int limit;
 
+  /// How many photos the Quark has still to read a capture date for, sent
+  /// only under the date-taken sort. Until it is zero, those photos sort by
+  /// their date added, so a client asks again (#3356).
+  final int pendingDates;
+
   const PaginatedPhotosResponse({
     required this.photos,
     required this.total,
     required this.offset,
     required this.limit,
+    this.pendingDates = 0,
   });
 
   factory PaginatedPhotosResponse.fromJson(Map<String, dynamic> json) {
@@ -24,6 +30,7 @@ class PaginatedPhotosResponse {
       total: json['total'] as int? ?? 0,
       offset: json['offset'] as int? ?? 0,
       limit: json['limit'] as int? ?? 50,
+      pendingDates: json['pendingDates'] as int? ?? 0,
     );
   }
 }
@@ -38,7 +45,8 @@ class PhotoItem {
   final bool hasLiveVideo;
 
   /// When the photo was taken, from its EXIF data, in Unix seconds. Sent only
-  /// under the date-taken sort, and only once the Quark has read it (#2592).
+  /// under the date-taken sort, and only once the Quark has read it (#2592),
+  /// which the listing itself does for a photo never read before (#3356).
   final int? takenAt;
 
   const PhotoItem({

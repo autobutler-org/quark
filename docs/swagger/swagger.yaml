@@ -809,7 +809,9 @@ definitions:
       takenAt:
         description: |-
           TakenAt is the EXIF capture date in Unix seconds, set under SortTaken
-          for a photo whose date is known (#2592).
+          for a photo whose date is known (#2592). A photo whose EXIF has not been
+          read yet is read by the listing itself, so a fresh upload carries its
+          date the first time it is listed (#3356).
         type: integer
     type: object
   playbackutil.State:
@@ -1771,6 +1773,13 @@ definitions:
       limit:
         type: integer
       offset:
+        type: integer
+      pendingDates:
+        description: |-
+          PendingDates counts the photos whose capture date has still not been
+          read, under sort=taken only. They sort by their date added until a later
+          listing reads them, so a client lists again while it is above zero
+          (#3356).
         type: integer
       photos:
         items:
@@ -7252,6 +7261,9 @@ paths:
   /photos:
     get:
       description: Finds all photos across all managed devices with pagination support.
+        Under sort=taken each photo carries its EXIF capture date as takenAt, read
+        on the spot for a photo never read before, and pendingDates counts those left
+        for a later listing.
       parameters:
       - description: Pagination offset (default 0)
         in: query

@@ -45,6 +45,25 @@ void main() {
     expect(peek()!.total, 60);
   });
 
+  test('a put keeps how many dates the Quark had still to read (#3356)', () {
+    cache.putPhotos(
+      [_photo(0)],
+      total: 1,
+      sort: PhotoSortField.taken,
+      order: PhotoSortOrder.desc,
+      pendingDates: 1,
+    );
+
+    expect(
+      cache
+          .photos(sort: PhotoSortField.taken, order: PhotoSortOrder.desc)!
+          .pendingDates,
+      1,
+    );
+    put(1);
+    expect(peek()!.pendingDates, 0);
+  });
+
   test('a put replaces the one before it', () {
     put(3);
     put(1);
