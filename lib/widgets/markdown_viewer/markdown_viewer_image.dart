@@ -1,6 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/markdown_viewer_files.dart';
+import 'package:quark/utils/svg_viewport.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 /// An image in a Markdown file (#2987).
@@ -9,7 +13,12 @@ import 'package:quark_icons/quark_icons.dart';
 /// — loads through the download endpoint. One on the web is not fetched
 /// until the reader taps "Load remote image": loading it tells that server
 /// who opened the file. Anything else (`data:`, an address that does not
-/// parse) shows its alt text.
+/// parse) shows its alt text, as does one that fails to load or decode.
+///
+/// An address whose path ends in `.svg` renders through `flutter_svg`, since
+/// `Image.network` decodes raster formats only; `svgWithViewport` sizes a root
+/// that declares no usable size. Scripts in the SVG never run and its own
+/// external references are never fetched.
 ///
 /// Key prefix: `markdown_viewer_load_image_<src>` on the load button.
 class MarkdownViewerImage extends StatelessWidget {
@@ -47,23 +56,32 @@ class MarkdownViewerImage extends StatelessWidget {
     final fallback = Text(alt.isEmpty ? src : alt);
     Widget onError(BuildContext context, Object error, StackTrace? stack) =>
         fallback;
-    switch (target.kind) {
-      // ponytail: Image.network decodes raster formats only, so an SVG shows
-      // its alt text. Route by extension to the SVG renderer if that matters.
-      case MarkdownLinkKind.file:
-        return Image.network(
-          FilesService.downloadUrl(target.value, serial: serial).toString(),
-          headers: FilesService.instance.authHeaders,
-          semanticLabel: alt,
-          errorBuilder: onError,
-        );
-      case MarkdownLinkKind.remote:
-        if (remoteAllowed) {
-          return Image.network(
-            target.value,
+    // ponytail: SVG is picked by extension, so an SVG served from a path
+    // without one (some badge services) shows its alt text. Sniff the
+    // response's content type if that matters.
+    Widget network(String url, String path, {Map<String, String>? headers}) =>
+        path.toLowerCase().endsWith('.svg')
+        ? SvgPicture(
+            _SizedSvgLoader(url, headers: headers),
+            semanticsLabel: alt,
+            errorBuilder: onError,
+          )
+        : Image.network(
+            url,
+            headers: headers,
             semanticLabel: alt,
             errorBuilder: onError,
           );
+    switch (target.kind) {
+      case MarkdownLinkKind.file:
+        return network(
+          FilesService.downloadUrl(target.value, serial: serial).toString(),
+          target.value,
+          headers: FilesService.instance.authHeaders,
+        );
+      case MarkdownLinkKind.remote:
+        if (remoteAllowed) {
+          return network(target.value, Uri.parse(target.value).path);
         }
         return Tooltip(
           message: target.value,
@@ -80,4 +98,15 @@ class MarkdownViewerImage extends StatelessWidget {
         return fallback;
     }
   }
+}
+
+/// Fetches an SVG like [SvgNetworkLoader] and hands the markup through
+/// [svgWithViewport] first, so a root sized `100%` or not at all still lays
+/// out in the text.
+class _SizedSvgLoader extends SvgNetworkLoader {
+  const _SizedSvgLoader(super.url, {super.headers});
+
+  @override
+  String provideSvg(Uint8List? message) =>
+      svgWithViewport(super.provideSvg(message));
 }

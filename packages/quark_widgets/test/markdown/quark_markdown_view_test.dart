@@ -323,6 +323,69 @@ void main() {
     expect(find.byType(Image), findsNothing);
   });
 
+  testBothViewports('renders GitHub alerts as callouts', (tester, size) async {
+    const kinds = {
+      'NOTE': ('Note', QuarkIcons.info_outline),
+      'TIP': ('Tip', QuarkIcons.light_mode_outlined),
+      'IMPORTANT': ('Important', QuarkIcons.star_border),
+      'WARNING': ('Warning', QuarkIcons.warning_amber),
+      'CAUTION': ('Caution', QuarkIcons.error_outline),
+    };
+    await pumpAt(
+      tester,
+      QuarkMarkdownView(
+        document: QuarkMarkdownDocument.parse(
+          kinds.keys
+              .map((kind) => '> [!$kind]\n> Body of $kind ${'word ' * 30}')
+              .join('\n\n'),
+        ),
+      ),
+      size: size,
+    );
+    expect(tester.takeException(), isNull);
+    final quark = QuarkTokens.of(
+      tester.element(find.byType(QuarkMarkdownView)),
+    );
+    final colors = [
+      quark.primary,
+      quark.success,
+      quark.primary,
+      quark.warning,
+      quark.error,
+    ];
+    var index = 0;
+    for (final MapEntry(key: kind, value: (title, icon)) in kinds.entries) {
+      final alert = find.byKey(ValueKey('markdown_alert_$index'));
+      await _reveal(tester, alert);
+      expect(alert, findsOneWidget);
+      Finder inAlert(Finder finder) =>
+          find.descendant(of: alert, matching: finder);
+      expect(inAlert(find.text(title, findRichText: true)), findsOneWidget);
+      expect(
+        inAlert(find.textContaining('Body of $kind', findRichText: true)),
+        findsOneWidget,
+      );
+      expect(tester.widget<Icon>(inAlert(find.byType(Icon))).icon, icon);
+      expect(
+        tester.widget<Icon>(inAlert(find.byType(Icon))).color,
+        colors[index],
+      );
+      index++;
+    }
+  });
+
+  testBothViewports('keeps a plain quote a quote', (tester, size) async {
+    await pumpAt(
+      tester,
+      QuarkMarkdownView(
+        document: QuarkMarkdownDocument.parse('> [!NOPE]\n> Just a quote'),
+      ),
+      size: size,
+    );
+    expect(find.byKey(const ValueKey('markdown_alert_0')), findsNothing);
+    expect(find.textContaining('[!NOPE]', findRichText: true), findsOneWidget);
+  });
+
   testBothViewports('shows a loader while loading', (tester, size) async {
     await pumpAt(
       tester,

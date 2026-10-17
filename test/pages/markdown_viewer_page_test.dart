@@ -2,12 +2,16 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:quark/controllers/code_viewer_controller.dart';
 import 'package:quark/controllers/markdown_viewer_controller.dart';
 import 'package:quark/pages/markdown_viewer_page.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/markdown_viewer/markdown_viewer_image.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -43,6 +47,31 @@ void main() {
   }
 
   final opened = <Uri>[];
+
+  /// Runs [body] with every `http.Client` answering [svg] and recording
+  /// each request in [requests]: `flutter_svg` fetches through package:http,
+  /// which the test binding's 400-for-everything does not cover usefully.
+  Future<void> withSvgServer(
+    String svg,
+    List<http.Request> requests,
+    Future<void> Function() body,
+  ) => http.runWithClient(
+    body,
+    () => MockClient((request) async {
+      requests.add(request);
+      return http.Response(svg, 200);
+    }),
+  );
+
+  /// Waits on the real-time fetch an `SvgPicture` started, then lets it paint.
+  Future<void> settleSvg(WidgetTester tester) async {
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+  }
 
   Future<GoRouter> pumpViewer(
     WidgetTester tester, {
@@ -235,6 +264,62 @@ void main() {
     expect(url.queryParameters.values, contains('notes/trip/img/map.png'));
     await tester.pumpAndSettle();
     tester.takeException();
+  });
+
+  testWidgets('an SVG on the Quark renders as a vector, with auth', (
+    tester,
+  ) async {
+    final requests = <http.Request>[];
+    // No size and no viewBox: the viewer has to give it one to lay out.
+    const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect width="9" '
+        'height="9"/></svg>';
+    await withSvgServer(svg, requests, () async {
+      await pumpViewer(tester, content: '![logo](img/Logo.SVG)\n');
+      await settleSvg(tester);
+    });
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(Image), findsNothing);
+    expect(find.byType(SvgPicture), findsOneWidget);
+    expect(find.text('logo'), findsNothing);
+    final url = requests.single.url;
+    expect(url.path, '/api/v0/files/download');
+    expect(url.queryParameters.values, contains('notes/trip/img/Logo.SVG'));
+    final loader =
+        tester.widget<SvgPicture>(find.byType(SvgPicture)).bytesLoader
+            as SvgNetworkLoader;
+    expect(loader.headers, FilesService.instance.authHeaders);
+  });
+
+  testWidgets('a remote SVG waits for the reader, then renders as a vector', (
+    tester,
+  ) async {
+    const src = 'https://example.com/badge.svg?style=flat';
+    final requests = <http.Request>[];
+    const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="80" '
+        'height="20"><rect width="80" height="20"/></svg>';
+    await withSvgServer(svg, requests, () async {
+      await pumpViewer(tester, content: '![build]($src)\n');
+      await settleSvg(tester);
+      expect(find.byType(SvgPicture), findsNothing);
+      expect(requests, isEmpty);
+
+      await tester.tap(
+        find.byKey(const ValueKey('markdown_viewer_load_image_$src')),
+      );
+      await settleSvg(tester);
+    });
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(Image), findsNothing);
+    expect(find.byType(SvgPicture), findsOneWidget);
+    expect(requests.single.url.toString(), src);
+    final loader =
+        tester.widget<SvgPicture>(find.byType(SvgPicture)).bytesLoader
+            as SvgNetworkLoader;
+    expect(loader.headers, isNull);
   });
 
   testWidgets('Edit hands the file to the plaintext editor', (tester) async {

@@ -2,20 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 
 import '../../theme/quark_tokens.dart';
+import '../quark_markdown_document.dart';
 import '../quark_markdown_view.dart';
+import 'markdown_alert.dart';
 import 'markdown_code_block.dart';
 import 'markdown_flow.dart';
 import 'markdown_inline.dart';
 import 'markdown_list.dart';
 import 'markdown_table.dart';
 
-/// One block of a `QuarkMarkdownView`: a heading, paragraph, quote, list,
-/// code block, rule or table, picked by [node]'s tag.
+/// One block of a `QuarkMarkdownView`: a heading, paragraph, quote, alert,
+/// list, code block, rule or table, picked by [node]'s tag.
 ///
 /// A node that is not an element is a block of raw HTML, and is shown as the
-/// text it was written as. An element with a tag this does not know (an
-/// alert, the footnotes section) renders its children, so nothing in a
-/// document is dropped.
+/// text it was written as. An element with a tag this does not know (the
+/// footnotes section) renders its children, so nothing in a document is
+/// dropped.
 ///
 /// Key prefixes: none of its own; see `QuarkMarkdownView`.
 ///
@@ -63,6 +65,17 @@ class MarkdownBlock extends StatelessWidget {
       'h5' || 'h6' => textTheme.titleSmall,
       _ => null,
     };
+    if (markdownAlertKind(node) != null) {
+      return MarkdownAlert(
+        key: ValueKey(
+          'markdown_alert_${node.attributes[markdownIndexAttribute]}',
+        ),
+        alert: node,
+        style: style,
+        onLinkTap: onLinkTap,
+        imageBuilder: imageBuilder,
+      );
+    }
     if (heading != null) {
       return Padding(
         padding: EdgeInsets.only(top: quark.spacingSm),
