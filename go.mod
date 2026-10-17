@@ -24,6 +24,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/mholt/archiver/v4 v4.0.0-alpha.9
 	github.com/nwaples/rardecode/v2 v2.2.0
+	github.com/richardlehane/mscfb v1.0.9
 	github.com/shirou/gopsutil/v4 v4.26.9
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
@@ -124,6 +125,7 @@ require (
 	github.com/quic-go/quic-go v0.61.0 // indirect
 	github.com/rcarmo/go-264 v0.0.0-20260918175710-241fd4164612 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/richardlehane/msoleps v1.0.3 // indirect
 	github.com/safchain/ethtool v0.7.0 // indirect
 	github.com/sorairolake/lzip-go v0.3.5 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
