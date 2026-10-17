@@ -1991,6 +1991,130 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
+  // ── Music ─────────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'MusicCoverArt',
+    group: 'Music',
+    build: (context, log) => Wrap(
+      spacing: 16,
+      runSpacing: 16,
+      children: [
+        const SizedBox.square(dimension: 160, child: MusicCoverArt()),
+        SizedBox.square(
+          dimension: 160,
+          child: MusicCoverArt(
+            semanticLabel: 'Cover for Kind of Blue',
+            coverBuilder: (context) => ColoredBox(
+              color: QuarkTokens.of(context).primary,
+              child: const Center(child: Icon(QuarkIcons.disc_full, size: 64)),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'TrackListTile',
+    group: 'Music',
+    build: (context, log) => TrackListTile(
+      item: const MusicTrackItem(
+        path: 'Miles Davis/Kind of Blue/01 So What.flac',
+        title: 'So What',
+        artist: 'Miles Davis',
+        album: 'Kind of Blue',
+        duration: Duration(minutes: 9, seconds: 22),
+      ),
+      onTap: (track) => log('TrackListTile.onTap(${track.path})'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'AlbumGridTile',
+    group: 'Music',
+    build: (context, log) => SizedBox(
+      width: 220,
+      child: AlbumGridTile(
+        albumKey: 'kind-of-blue',
+        title: 'Kind of Blue',
+        albumArtist: 'Miles Davis',
+        year: 1959,
+        trackCount: 5,
+        onTap: (key) => log('AlbumGridTile.onTap($key)'),
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'ArtistListTile',
+    group: 'Music',
+    build: (context, log) => ArtistListTile(
+      name: 'Nina Simone',
+      albumCount: 8,
+      trackCount: 74,
+      onTap: (name) => log('ArtistListTile.onTap($name)'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'GenreListTile',
+    group: 'Music',
+    build: (context, log) => GenreListTile(
+      name: 'Jazz',
+      trackCount: 312,
+      onTap: (name) => log('GenreListTile.onTap($name)'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'MusicSearchResults',
+    group: 'Music',
+    build: (context, log) => MusicSearchResults(
+      query: 'blue',
+      results: const [
+        MusicSearchResult(
+          track: MusicTrackItem(
+            path: 'Miles Davis/Kind of Blue/02 Freddie Freeloader.flac',
+            title: 'Freddie Freeloader',
+            artist: 'Miles Davis',
+            album: 'Kind of Blue',
+            duration: Duration(minutes: 9, seconds: 46),
+          ),
+          snippet: 'Miles Davis — Kind of Blue',
+        ),
+        MusicSearchResult(
+          track: MusicTrackItem(
+            path: 'Joni Mitchell/Blue/01 All I Want.flac',
+            title: 'All I Want',
+            artist: 'Joni Mitchell',
+            album: 'Blue',
+            duration: Duration(minutes: 3, seconds: 34),
+          ),
+          snippet: 'Joni Mitchell — Blue',
+        ),
+      ],
+      onTrackTap: (track) =>
+          log('MusicSearchResults.onTrackTap(${track.path})'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'MusicLibraryEmptyState',
+    group: 'Music',
+    build: (context, log) => SizedBox(
+      height: 420,
+      child: Row(
+        children: [
+          Expanded(
+            child: MusicLibraryEmptyState(
+              onScan: () => log('MusicLibraryEmptyState.onScan'),
+            ),
+          ),
+          Expanded(
+            child: MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: const MusicLibraryEmptyState(isScanning: true),
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+
   // ── Chat ──────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'QuarkChatLayout',
