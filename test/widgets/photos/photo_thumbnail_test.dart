@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/thumbnail_cache_manager.dart';
+import 'package:quark/utils/decode_once_image.dart';
 import 'package:quark/utils/thumbnail_cache_config.dart';
 import 'package:quark/widgets/photos/photo_thumbnail.dart';
 
@@ -95,14 +96,14 @@ void main() {
         ),
       );
 
-      final cached = tester.widget<CachedNetworkImage>(
-        find.byType(CachedNetworkImage),
-      );
-      expect(cached.imageUrl, url.toString());
+      final image = tester.widget<Image>(find.byType(Image)).image;
+      final resized = (image as DecodeOnceImage).image as ResizeImage;
+      final cached = resized.imageProvider as CachedNetworkImageProvider;
+      expect(cached.url, url.toString());
       expect(cached.cacheKey, ThumbnailCacheManager.keyFor(url));
       expect(cached.cacheKey, isNot(contains('secret-token')));
       expect(cached.cacheManager, same(ThumbnailCacheManager.instance));
-      expect(cached.memCacheWidth, ThumbnailCacheConfig.memCacheWidth);
+      expect(resized.width, ThumbnailCacheConfig.memCacheWidth);
       await _finish(tester);
     });
 

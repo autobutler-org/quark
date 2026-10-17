@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/thumbnail_cache_manager.dart';
+import 'package:quark/utils/decode_once_image.dart';
 import 'package:quark/utils/thumbnail_cache_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -100,17 +101,20 @@ void main() {
     expect(ThumbnailCacheManager.keyFor(thumbnail()), isNot(home));
   });
 
-  test('evict drops the bytes on disk and both decoded images', () async {
+  test('evict drops the bytes on disk and every decoded image', () async {
     final url = thumbnail(size: 'sm');
     final key = ThumbnailCacheManager.keyFor(url);
     final provider = CachedNetworkImageProvider(url.toString(), cacheKey: key);
-    // The file browser decodes at full size; the photo grid bounds the width.
+    final resized = ResizeImage(
+      provider,
+      width: ThumbnailCacheConfig.memCacheWidth,
+    );
+    // The file browser decodes at full size; the photo grid bounds the width
+    // and decodes once (#3366).
     final cacheKeys = [
       await provider.obtainKey(ImageConfiguration.empty),
-      await ResizeImage(
-        provider,
-        width: ThumbnailCacheConfig.memCacheWidth,
-      ).obtainKey(ImageConfiguration.empty),
+      await resized.obtainKey(ImageConfiguration.empty),
+      await DecodeOnceImage(resized).obtainKey(ImageConfiguration.empty),
     ];
     final imageCache = PaintingBinding.instance.imageCache;
     for (final cacheKey in cacheKeys) {
