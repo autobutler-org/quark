@@ -67,7 +67,7 @@ PROBE_VERSION := v0.14.0
 # The CI tool pins below are bumped by Renovate (renovate.json, customManagers) and read by
 # .github/actions/setup-* to key the tool cache, so keep each on one `NAME := vX.Y.Z` line.
 # renovate: datasource=go depName=github.com/sqlc-dev/sqlc
-SQLC_VERSION := v1.30.0
+SQLC_VERSION := v1.31.1
 # renovate: datasource=go depName=github.com/swaggo/swag
 SWAG_VERSION := v1.16.6
 # renovate: datasource=go depName=github.com/golangci/golangci-lint/v2
