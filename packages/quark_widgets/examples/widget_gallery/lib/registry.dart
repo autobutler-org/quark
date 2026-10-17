@@ -1871,6 +1871,19 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'DuplicateDeleteDialog',
+    group: 'Photos',
+    build: (context, log) => DuplicateDeleteDialog(
+      photos: const [
+        DuplicatePhotoItem(id: 'b', name: 'beach.jpg', location: 'Backups'),
+        DuplicatePhotoItem(id: 'd', name: 'dog.jpg', location: 'USB · Edits'),
+      ],
+      body: 'They move to Trash. You can restore them for 30 days.',
+      onConfirm: () => log('DuplicateDeleteDialog.onConfirm'),
+      onCancel: () => log('DuplicateDeleteDialog.onCancel'),
+    ),
+  ),
+  GalleryEntry(
     name: 'DuplicateFormatButton',
     group: 'Photos',
     build: (context, log) => DuplicateFormatButton(

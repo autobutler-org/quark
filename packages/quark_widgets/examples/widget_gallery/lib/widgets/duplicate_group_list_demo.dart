@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Holds the marked copies [DuplicateGroupList] refuses to hold, so tapping a
-/// copy flips it between Keep and Delete the way a page would.
+/// copy flips it between Keep and Delete the way a page would. Nothing starts
+/// marked; Select suggested marks the identical group's spare copy.
 class DuplicateGroupListDemo extends StatefulWidget {
   /// Creates the demo, reporting every callback through [log].
   const DuplicateGroupListDemo({required this.log, super.key});
@@ -38,7 +39,7 @@ class _DuplicateGroupListDemoState extends State<DuplicateGroupListDemo> {
     ),
   ];
 
-  final Set<String> _selected = {'b'};
+  final Set<String> _selected = {};
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +57,16 @@ class _DuplicateGroupListDemoState extends State<DuplicateGroupListDemo> {
       onDeleteSelected: () => widget.log(
         'DuplicateGroupList.onDeleteSelected(${_selected.join(', ')})',
       ),
+      onSelectSuggested: _selected.contains('b')
+          ? null
+          : () {
+              widget.log('DuplicateGroupList.onSelectSuggested');
+              setState(() => _selected.add('b'));
+            },
+      onClearSelection: () {
+        widget.log('DuplicateGroupList.onClearSelection');
+        setState(_selected.clear);
+      },
     );
   }
 }

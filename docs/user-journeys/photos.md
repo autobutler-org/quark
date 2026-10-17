@@ -439,18 +439,25 @@ added outside Quark shows up once its thumbnail loads or after the next restart.
 **Steps:**
 
 1. On All photos, tap **Duplicates** in the app bar (`/photos/duplicates`).
-2. Tap a copy to switch it between **Keep** and **Delete**.
+2. Tap a copy to switch it between **Keep** and **Delete**, or tap **Select suggested** to mark every identical copy
+   but one.
 3. Optionally, when a picture is saved in more than one format, pick a format from **Keep: Any** in the app bar.
-4. Tap **Delete N photos** and confirm.
+4. Tap **Delete N photos**, check the copies the confirmation lists, and confirm.
 
 **Expected result:**
 
 - Photos are grouped as **Identical copies** (the same file) or **Similar photos** (alike, but maybe edited or
   resized). Each copy shows its name and folder, and its drive when it is not on the internal one.
-- In a group of identical copies, every copy but the first starts marked **Delete**; similar photos start with none
-  marked. A group always keeps at least one copy.
-- The page refreshes itself now and then without losing the marks: only a group that appears for the first time gets
-  the starting marks.
+- Every copy starts marked **Keep**, and no delete bar shows until a copy is marked **Delete**. **Select suggested**
+  marks every copy but one in each identical group and never touches similar photos; it is offered while an identical
+  group still has a spare copy unmarked. A group always keeps at least one copy.
+- While copies are marked, the bar at the bottom counts them and the groups they are in (**5 copies in 4 groups**), so
+  marks scrolled out of view are still counted, and **Clear** clears every mark. The confirmation names every marked
+  copy with its folder.
+- The page refreshes itself now and then without losing the marks; a group that appears for the first time starts
+  with none marked.
+- Every copy's thumbnail loads, in identical and similar groups alike: one the Quark refused while busy is asked for
+  again, and one it lacks is rendered on this device where it can be.
 - **Keep: Any** appears only when a similar group is one picture saved in several formats: every copy is a
   different format (`IMG_1.HEIC` and an exported `IMG_1.jpg`), and their perceptual hashes are all within a few bits
   of each other. Names play no part, so a renamed export still counts and two shots that merely share a name do not.

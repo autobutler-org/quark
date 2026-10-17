@@ -100,20 +100,84 @@ void main() {
     ]);
   });
 
-  test('marks the spare identical copies and no similar ones', () async {
+  // #3362: a group that opened with a copy marked made a red "Delete 5
+  // photos" bar the first thing on screen, before the user chose anything.
+  test('marks no copy until the user does', () async {
     final controller = _FakeQuark().controller();
 
     await controller.load();
+
+    expect(controller.selectedIds, isEmpty);
+    expect(controller.hasSuggestions, isTrue);
+  });
+
+  test('select suggested marks the spare identical copies and no similar '
+      'ones', () async {
+    final controller = _FakeQuark().controller();
+    await controller.load();
+
+    controller.selectSuggested();
 
     expect(controller.selectedIds, {
       'USB1:Backups/beach.jpg',
       ':beach copy.jpg',
     });
+    expect(controller.hasSuggestions, isFalse);
+  });
+
+  test('select suggested keeps a copy the user left unmarked', () async {
+    final controller = _FakeQuark().controller();
+    await controller.load();
+    controller.toggle(':Camera/beach.jpg');
+
+    controller.selectSuggested();
+
+    expect(controller.selectedIds, {':Camera/beach.jpg', ':beach copy.jpg'});
+  });
+
+  test('clears every mark', () async {
+    final controller = _FakeQuark().controller();
+    await controller.load();
+    controller.selectSuggested();
+    controller.toggle(':Edits/dog.jpg');
+
+    controller.clearSelection();
+
+    expect(controller.selectedIds, isEmpty);
+  });
+
+  test('lists the marked copies in the order the page shows them', () async {
+    final controller = _FakeQuark().controller();
+    await controller.load();
+
+    controller.toggle(':Edits/dog.jpg');
+    controller.toggle(':beach copy.jpg');
+
+    expect(controller.selectedPhotos.map((p) => p.id), [
+      ':beach copy.jpg',
+      ':Edits/dog.jpg',
+    ]);
+  });
+
+  test('hands each copy\'s path and drive to its thumbnail', () async {
+    final controller = _FakeQuark().controller();
+    await controller.load();
+
+    expect(controller.thumbnailSource('USB1:Backups/beach.jpg'), (
+      path: 'Backups/beach.jpg',
+      serial: 'USB1',
+    ));
+    expect(controller.thumbnailSource(':Camera/dog.jpg'), (
+      path: 'Camera/dog.jpg',
+      serial: '',
+    ));
+    expect(controller.thumbnailSource('nope'), isNull);
   });
 
   test('a group always keeps one copy', () async {
     final controller = _FakeQuark().controller();
     await controller.load();
+    controller.selectSuggested();
 
     controller.toggle(':Camera/beach.jpg');
     expect(controller.selectedIds, isNot(contains(':Camera/beach.jpg')));
@@ -127,6 +191,7 @@ void main() {
   test('a reload keeps the marks the user changed', () async {
     final controller = _FakeQuark().controller();
     await controller.load();
+    controller.selectSuggested();
 
     controller.toggle(':beach copy.jpg');
     controller.toggle(':Edits/dog.jpg');
@@ -138,10 +203,11 @@ void main() {
     });
   });
 
-  test('a reload marks the spare copies of a new group', () async {
+  test('a reload marks nothing in a new group', () async {
     final quark = _FakeQuark();
     final controller = quark.controller();
     await controller.load();
+    controller.selectSuggested();
     controller.toggle(':beach copy.jpg');
 
     quark.groups = [
@@ -156,13 +222,14 @@ void main() {
     ];
     await controller.load();
 
-    expect(controller.selectedIds, {'USB1:Backups/beach.jpg', ':cat copy.jpg'});
+    expect(controller.selectedIds, {'USB1:Backups/beach.jpg'});
   });
 
   test('a reload still keeps one copy of every group', () async {
     final quark = _FakeQuark();
     final controller = quark.controller();
     await controller.load();
+    controller.selectSuggested();
 
     quark.groups = [
       const DuplicateGroup(
@@ -255,21 +322,14 @@ void main() {
     await controller.load();
 
     controller.setPreferredFormat('HEIC');
-    expect(controller.selectedIds, {
-      'USB1:Backups/beach.jpg',
-      ':beach copy.jpg',
-      ':Export/IMG_1.jpg',
-    });
+    expect(controller.selectedIds, {':Export/IMG_1.jpg'});
 
     controller.setPreferredFormat('JPEG');
     expect(controller.selectedIds, contains(':Camera/IMG_1.HEIC'));
     expect(controller.selectedIds, isNot(contains(':Export/IMG_1.jpg')));
 
     controller.setPreferredFormat(null);
-    expect(controller.selectedIds, {
-      'USB1:Backups/beach.jpg',
-      ':beach copy.jpg',
-    });
+    expect(controller.selectedIds, isEmpty);
   });
 
   test(
@@ -285,7 +345,7 @@ void main() {
       controller.setPreferredFormat('HEIC');
 
       expect(controller.selectedIds, {
-        'USB1:Backups/beach.jpg',
+        ':beach copy.jpg',
         ':Edits/dog.jpg',
         ':Export/IMG_1.jpg',
       });
@@ -338,6 +398,7 @@ void main() {
     final quark = _FakeQuark();
     final controller = quark.controller();
     await controller.load();
+    controller.selectSuggested();
     quark.calls.clear();
 
     final failed = await controller.deleteSelected();
@@ -355,6 +416,7 @@ void main() {
     final quark = _FakeQuark()..failingDeletes.add('beach copy.jpg');
     final controller = quark.controller();
     await controller.load();
+    controller.selectSuggested();
 
     expect(await controller.deleteSelected(), 1);
   });
