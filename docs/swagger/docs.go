@@ -8542,7 +8542,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns a thumbnail for the specified photo or video: resized from the thumbnail a client uploaded for it when there is a fresh one, generated from the file otherwise. When the device cannot render a video or HEIC itself, the 404 body carries \"clientRender\": true, telling a client that may write the file to render a thumbnail (JPEG, long edge 400) and PUT it to this path.",
+                "description": "Returns a thumbnail for the specified photo, video or music track. A track's thumbnail is its cover art, embedded or from its folder as the music library recorded it, and a track with none is a 404. A photo or video's is resized from the thumbnail a client uploaded for it when there is a fresh one, generated from the file otherwise. When the device cannot render a video or HEIC itself, the 404 body carries \"clientRender\": true, telling a client that may write the file to render a thumbnail (JPEG, long edge 400) and PUT it to this path.",
                 "produces": [
                     "image/png",
                     "image/jpeg"

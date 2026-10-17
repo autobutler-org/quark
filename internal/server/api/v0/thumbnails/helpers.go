@@ -14,6 +14,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/thumbnailutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -107,6 +108,63 @@ func getArchiveThumbnail(
 	}
 
 	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, thumbnailutil.ContentTypeForExt(ext))
+}
+
+// getCoverThumbnail serves a track's cover art at the requested size. The
+// cache entry is shared by every track with the same picture; the caller has
+// already checked the caller may read this track.
+func getCoverThumbnail(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, serial, relPath string) *serverutil.Response {
+	prepared, err := thumbnailutil.PrepareCover(thumbnailutil.PrepareCoverParams{
+		Ctx:     c.Request.Context(),
+		Queries: deps.Database().Queries,
+		Serial:  serial,
+		RelPath: relPath,
+		Size:    thumbnailutil.ParseSize(c.Query("size")),
+	})
+	if errors.Is(err, thumbnailutil.ErrNoCover) {
+		return serverutil.NotFound(err)
+	}
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+
+	cachedModTime := prepared.CachedModTime
+	if !prepared.Hit {
+		if sem := deps.IOSemaphore().For(iosemutil.Decode); sem != nil {
+			if !sem.AcquireDefault(c.Request.Context()) {
+				slog.Warn("thumbnail: IO semaphore timed out (cover art)",
+					"path", relPath,
+					"available", sem.Available(),
+					"cap", sem.Cap(),
+				)
+				c.Header("Retry-After", "5")
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "server busy, please retry"})
+				return nil
+			}
+			defer sem.Release()
+		}
+
+		generated, genErr := thumbnailutil.GenerateCover(thumbnailutil.GenerateCoverParams{
+			Ctx:         c.Request.Context(),
+			FS:          fsys,
+			RelPath:     relPath,
+			CoverSource: prepared.CoverSource,
+			CoverKey:    prepared.CoverKey,
+			Width:       prepared.Width,
+			Height:      prepared.Height,
+			CachedPath:  prepared.CachedPath,
+		})
+		if errors.Is(genErr, thumbnailutil.ErrNoCover) || errors.Is(genErr, thumbnailutil.ErrUnsupportedSource) ||
+			errors.Is(genErr, photoutil.ErrImageTooLarge) {
+			return serverutil.NotFound(genErr)
+		}
+		if genErr != nil {
+			return serverutil.InternalServerError(genErr)
+		}
+		cachedModTime = generated.CachedModTime
+	}
+
+	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, "image/jpeg")
 }
 
 // clientThumbnailFallthrough is returned by getClientThumbnail when the file
