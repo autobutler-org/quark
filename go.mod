@@ -13,6 +13,7 @@ require (
 	github.com/autobutler-org/sprocket v0.2.1
 	github.com/bep/imagemeta v1.1.0
 	github.com/coder/websocket v1.8.15
+	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/gen2brain/heic v0.7.2
 	github.com/gin-contrib/cors v1.7.9
 	github.com/gin-gonic/gin v1.12.0
