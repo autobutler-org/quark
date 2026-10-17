@@ -199,6 +199,36 @@ type MaintenanceRun struct {
 	StartedAt time.Time
 }
 
+type MusicTrack struct {
+	ID             int64
+	Serial         string
+	RelPath        string
+	Size           int64
+	Mtime          int64
+	ScannerVersion int64
+	Title          string
+	Artist         string
+	AlbumArtist    string
+	Album          string
+	AlbumKey       string
+	Genre          string
+	TrackNo        sql.NullInt64
+	DiscNo         sql.NullInt64
+	Year           sql.NullInt64
+	DurationMs     sql.NullInt64
+	DurationExact  int64
+	CoverSource    string
+	CoverKey       string
+}
+
+type MusicTracksFt struct {
+	Title       string
+	Artist      string
+	AlbumArtist string
+	Album       string
+	Genre       string
+}
+
 type PathAccess struct {
 	ID           int64
 	DeviceSerial string

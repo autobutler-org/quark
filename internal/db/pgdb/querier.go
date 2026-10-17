@@ -110,6 +110,12 @@ type Querier interface {
 	DeleteGroup(ctx context.Context, id int64) (int64, error)
 	// DeleteGroupPathAccess drops a group's row on exactly one path.
 	DeleteGroupPathAccess(ctx context.Context, arg DeleteGroupPathAccessParams) (int64, error)
+	// DeleteMusicTracksBySerial drops a device's tracks when the drive goes away.
+	// serial '' is the internal drive.
+	DeleteMusicTracksBySerial(ctx context.Context, serial string) error
+	// DeleteMusicTracksUnder drops the track at rel_path, and every track under
+	// it when rel_path is a folder.
+	DeleteMusicTracksUnder(ctx context.Context, arg DeleteMusicTracksUnderParams) error
 	// "Sign out everywhere else" (#1663): every session of the user but the one
 	// the request came in on.
 	DeleteOtherUserSessions(ctx context.Context, arg DeleteOtherUserSessionsParams) error
@@ -192,6 +198,10 @@ type Querier interface {
 	GetGroup(ctx context.Context, id int64) (Group, error)
 	GetInstallID(ctx context.Context) (string, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
+	// The unchanged-file check. A backfill skips a file whose size, mtime and
+	// scanner_version still match, and deletes rows the walk did not see. Get is
+	// one path; List is every path on a device, which is one read for a pass.
+	GetMusicTrackScanState(ctx context.Context, arg GetMusicTrackScanStateParams) (GetMusicTrackScanStateRow, error)
 	// GetOldestActiveAdmin is the longest-standing active admin other than one
 	// account: the heir of an account that deletes itself (#1909).
 	GetOldestActiveAdmin(ctx context.Context, id int64) (User, error)
@@ -310,6 +320,23 @@ type Querier interface {
 	// is the PostgreSQL form and sql/queries/sqlite/jobs_sqlite.sql the SQLite
 	// one: change both together.
 	ListJobs(ctx context.Context, kinds []string) ([]Job, error)
+	// Browse aggregates. An admin's page is one of these queries. A caller who
+	// cannot read the whole tree aggregates in Go from the rows instead; that
+	// stream lands with the library service.
+	//
+	// Displayed casing is MIN() of the stored tag, so "Rock" and "rock" are one
+	// genre and the name does not flicker. SQLite's MIN is byte order;
+	// PostgreSQL's follows the database collation. filter_artist is 0 or 1. 0 returns
+	// every album; 1 keeps LOWER(album_artist) = LOWER(artist), and artist may
+	// be empty.
+	//
+	// The two cover subqueries share an ORDER BY over the unique (serial,
+	// rel_path), so they name the same file: one with cover art if any track has
+	// it, otherwise the first path.
+	ListMusicAlbums(ctx context.Context, arg ListMusicAlbumsParams) ([]ListMusicAlbumsRow, error)
+	ListMusicArtists(ctx context.Context) ([]ListMusicArtistsRow, error)
+	ListMusicGenres(ctx context.Context) ([]ListMusicGenresRow, error)
+	ListMusicTrackScanStates(ctx context.Context, serial string) ([]ListMusicTrackScanStatesRow, error)
 	ListNearDuplicates(ctx context.Context) ([]ListNearDuplicatesRow, error)
 	// ListPathAccessForUser returns every row that applies to a user: their own,
 	// their groups', and the built-in everyone group's. accessutil resolves
@@ -385,6 +412,12 @@ type Querier interface {
 	// and not NOT EXISTS: sqlc v1.30.0's SQLite engine leaves a parameter under a
 	// NOT unexpanded (sqlc-dev/sqlc#4110; v1.31.1 expands it).
 	MoveFavorites(ctx context.Context, arg MoveFavoritesParams) error
+	// MoveMusicTracks rewrites rel_path for old_rel_path and everything under it.
+	// album_key embeds the folder and is not recomputed here: the hash is built
+	// in Go, and a move does not re-read the file. The library service updates
+	// the key. A destination that is already a track fails the statement on the
+	// unique (serial, rel_path); nothing is rewritten.
+	MoveMusicTracks(ctx context.Context, arg MoveMusicTracksParams) error
 	// MovePathAccessTree points the rows on a path and everything beneath it at
 	// where it moved, onto another device as well. substr, not LIKE: LIKE is
 	// case-insensitive and treats _ and % as wildcards, and "foo" must not match
@@ -496,6 +529,15 @@ type Querier interface {
 	UpsertDeviceName(ctx context.Context, arg UpsertDeviceNameParams) error
 	UpsertDeviceRole(ctx context.Context, arg UpsertDeviceRoleParams) error
 	UpsertFileContent(ctx context.Context, arg UpsertFileContentParams) error
+	// Music library cache (#2982). The library service is the caller; it is the
+	// next ticket, so nothing in this repository calls these yet. Search is FTS5
+	// (SQLite only, #2958) and is raw SQL, not a query here.
+	//
+	// A path and the files under it are matched with substr rather than LIKE, so
+	// a '%' or '_' in a name is not a wildcard. The same shape as DeleteFavoritesUnder.
+	// UpsertMusicTrack inserts a track or replaces the row already stored for
+	// that file. The id is stable across a replacement.
+	UpsertMusicTrack(ctx context.Context, arg UpsertMusicTrackParams) (MusicTrack, error)
 	// UpsertPhotoHash stores a photo's hashes, and its capture date when
 	// taken_checked says the EXIF was read. A write that did not read it keeps
 	// the date already stored.

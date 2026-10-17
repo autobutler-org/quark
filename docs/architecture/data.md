@@ -60,6 +60,7 @@ leaves the rest of the server serving.
 | Feature                                                          | On PostgreSQL today                                                                                      | Issue |
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----- |
 | Content search (`GET /files/search/content`)                     | Refused. Files are still indexed into `file_content`, so the text is there when search arrives           | #2958 |
+| Music search                                                     | No route yet. `music_tracks` is shared; FTS5 `music_tracks_fts` is SQLite only, like content search      | #2958 |
 | Snapshot backup (`POST /storage/devices/snapshot-backup`)        | Refused before anything is copied: every snapshot includes the chat backup                               | #2963 |
 | Chat backup and restore (`backup.ExportChat`, `ImportChat`)      | Refused: both attach a SQLite file to the live connection                                                | #2963 |
 | Moving the vault to or from a drive (`PUT /vault/storage-location`) | Refused. The vault stays in the main database                                                          | #2963 |
@@ -108,6 +109,7 @@ erDiagram
     photo_albums ||--o{ photo_albums : "parent_id"
     photo_albums ||--o{ photo_album_items : contains
     file_content ||--|| file_content_fts : "FTS5 external content"
+    music_tracks ||--|| music_tracks_fts : "FTS5 external content, SQLite only"
 
     users { int id  string username  bool is_admin  string status }
     sessions { string token  int user_id  datetime expires_at  datetime last_used_at }
@@ -120,6 +122,7 @@ erDiagram
     photo_rotations { string device_serial  string rel_path  int rotation_quarters }
     photo_hashes { string device_serial  string rel_path  string dhash  string content_hash }
     file_content { string serial  string rel_path  string extracted }
+    music_tracks { string serial  string rel_path  string title  string album_key }
     jobs { int id  string kind  string status  string lane  real progress  int attempts }
     connected_devices { string ip_address  string user_agent  datetime last_seen_at }
     device_names { string device_serial  string display_name }
@@ -150,6 +153,10 @@ join. `path_access.level` is `read`, `write` or `owner`, and each row names exac
 | `014_per_user_photos`  | owner column on `photo_albums`, `photo_favorites`                       |
 | `021_calendar`         | `calendars` (one default, Personal), `calendar_events`                  |
 | `022_calendar_event_owner` | owner column on `calendar_events`                                   |
+| `033_music_library`    | `music_tracks`, `music_tracks_fts` (FTS5, SQLite only)              |
+
+`music_tracks` (#2982) is a cache built from audio files, not a record: every column is derived, and a rescan
+rebuilds it. `music_tracks_fts` is its FTS5 mirror and exists only on SQLite, with `file_content_fts`.
 
 Migrations are numbered, gap-free and paired; `make check/migrations` fails a PR whose number is at or below
 `main`'s highest, because golang-migrate would silently skip it on upgraded devices.
