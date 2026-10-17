@@ -1304,6 +1304,90 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
+  // ── Documents ─────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'QuarkDocumentView',
+    group: 'Documents',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 16,
+      children: [
+        SizedBox(
+          height: 620,
+          child: QuarkDocumentView(
+            document: _galleryDocument,
+            onLinkTap: (href) => log('QuarkDocumentView.onLinkTap($href)'),
+            imageBuilder: (context, image) {
+              log('QuarkDocumentView.imageBuilder(${image.part})');
+              return DecoratedBox(
+                decoration: BoxDecoration(
+                  color: QuarkTokens.of(context).card,
+                  borderRadius: BorderRadius.circular(
+                    QuarkTokens.of(context).radiusMd,
+                  ),
+                ),
+                child: const Center(
+                  child: Icon(QuarkIcons.image_outlined, size: 64),
+                ),
+              );
+            },
+          ),
+        ),
+        const Text('Loading'),
+        const SizedBox(
+          height: 160,
+          child: QuarkDocumentView(
+            document: QuarkDocument.empty(),
+            isLoading: true,
+          ),
+        ),
+        const Text('Failed to load'),
+        SizedBox(
+          height: 260,
+          child: QuarkDocumentView(
+            document: const QuarkDocument.empty(),
+            error: "Couldn't open the document.",
+            onRetry: () => log('QuarkDocumentView.onRetry'),
+          ),
+        ),
+        const Text('Empty'),
+        const SizedBox(
+          height: 220,
+          child: QuarkDocumentView(document: QuarkDocument.empty()),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkDocumentProperties',
+    group: 'Documents',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 16,
+      children: [
+        QuarkDocumentProperties(properties: _galleryDocumentProperties),
+        const Text('Loading'),
+        const SizedBox(
+          height: 160,
+          child: QuarkDocumentProperties(isLoading: true),
+        ),
+        const Text('Failed to load'),
+        SizedBox(
+          height: 260,
+          child: QuarkDocumentProperties(
+            error: "Couldn't load properties.",
+            onRetry: () => log('QuarkDocumentProperties.onRetry'),
+          ),
+        ),
+        const Text('No saved properties'),
+        const SizedBox(
+          height: 220,
+          child: QuarkDocumentProperties(properties: DocumentProperties()),
+        ),
+      ],
+    ),
+  ),
+
   // ── 3D models ─────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'QuarkModelViewer',
@@ -3108,6 +3192,34 @@ void main() {
 final QuarkMarkdownDocument _galleryMarkdownImage = QuarkMarkdownDocument.parse(
   'The cabin: ![The cabin at dawn](photos/cabin.jpg), and a '
   '[link](https://example.com) nobody handles.',
+);
+
+final QuarkDocument _galleryDocument = QuarkDocument.parse('''
+{"type":"meta","version":1,"format":"docx","title":"Q3 report"}
+{"type":"heading","level":1,"runs":[{"text":"Quarterly report"}]}
+{"type":"paragraph","align":"justify","runs":[{"text":"Revenue "},{"text":"rose","bold":true},{"text":" again. Read the ","italic":true},{"text":"forecast","link":"reports/forecast.docx"},{"text":" next."}]}
+{"type":"listItem","ordered":true,"level":0,"marker":"1.","runs":[{"text":"Review the regional totals"}]}
+{"type":"listItem","ordered":true,"level":1,"marker":"a.","runs":[{"text":"North America"}]}
+{"type":"table","rows":[{"cells":[{"colSpan":2,"rowSpan":1,"blocks":[{"type":"paragraph","runs":[{"text":"Revenue by quarter","bold":true}]}]}]},{"cells":[{"colSpan":1,"rowSpan":1,"blocks":[{"type":"paragraph","runs":[{"text":"Q2"}]}]},{"colSpan":1,"rowSpan":1,"blocks":[{"type":"paragraph","runs":[{"text":"Q3"}]}]}]}]}
+{"type":"image","part":"word/media/chart.png","alt":"Revenue chart","width":640,"height":360}
+{"type":"image","external":true,"alt":"Partner logo"}
+{"type":"omitted","what":"embedded spreadsheet"}
+{"type":"pageBreak"}
+{"type":"paragraph","runs":[{"text":"Appendix"}]}
+{"type":"end","truncated":true,"words":1234,"characters":7020,"paragraphs":88,"pages":12,"warnings":["1 embedded object not shown"]}
+''');
+
+final DocumentProperties _galleryDocumentProperties = DocumentProperties(
+  title: 'Q3 report',
+  author: 'Ada Lovelace',
+  subject: 'Revenue and forecasts',
+  created: DateTime(2026, 7, 1, 9, 30),
+  modified: DateTime(2026, 10, 15, 14, 5),
+  pages: 12,
+  words: 1234,
+  characters: 7020,
+  application: 'LibreOffice Writer',
+  countsSource: 'saved',
 );
 
 const List<String> _galleryCodeLines = [
