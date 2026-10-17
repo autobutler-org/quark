@@ -98,6 +98,13 @@ const (
 	// or deleted. Data is the event's id; Path is empty. The calendar is
 	// shared by every account (#1144), so every client hears it.
 	EventCalendarChanged EventKind = "calendar_changed"
+
+	// EventMusicLibraryChanged fires when the music library's rows on a device
+	// changed (#2982): tracks were indexed, moved or dropped, or a scan
+	// finished. DeviceSerial names the device; Path and Data are empty. It is
+	// debounced to at most one per device every two seconds while changes keep
+	// landing, and only says "fetch again": the fetch is access-filtered.
+	EventMusicLibraryChanged EventKind = "music_library_changed"
 )
 
 // HostnameChanged is the data of a hostname_changed event.

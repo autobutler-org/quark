@@ -90,6 +90,10 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 			IOSemaphore: deps.IOSemaphore().For(iosemutil.Copy),
 		}),
 	})
+	// The music indexer's rescan is a job, so it registers before the queue
+	// runs; its event loop starts beside the content indexer below.
+	music := newMusicIndexer(deps)
+	jobs.Register(jobutil.RegisterParams{Kind: musicRescanKind, Handler: music.rescanHandler()})
 	jobsCtx, cancelJobs := context.WithCancel(context.Background())
 	jobsDone := make(chan struct{})
 	go func() {
@@ -136,6 +140,10 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	// Start the FTS5 content indexer — indexes uploaded text files and
 	// removes entries for deleted/moved files.
 	go startContentIndexer(deps)
+
+	// Keep the music library in step with the file tree, and announce its
+	// changes as music_library_changed (#2982).
+	go music.run(deps)
 
 	// Tell chat key holders when a group or account change leaves a member
 	// waiting for a channel key (#2417).
