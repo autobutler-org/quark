@@ -49,35 +49,51 @@ func SearchReadable(params SearchReadableParams) (SearchReadableResult, error) {
 		return SearchReadableResult{Results: results}, err
 	}
 
-	// ponytail: pages through the ranked matches in batches of twice the limit
-	// and filters each batch in memory, so a caller who can read few of many
-	// matches costs several queries. Upgrade to an EXISTS join on path_access
-	// if it measures slow.
+	page, err := ReadablePage(ReadablePageParams[SearchResult]{
+		Limit: limit,
+		Fetch: func(limit, offset int) ([]SearchResult, error) {
+			return searchPage(params.Ctx, params.DB, params.Query, limit, offset)
+		},
+		Readable: func(r SearchResult) bool {
+			return params.Access.Check(r.Serial, r.RelPath, accessutil.Read).Readable
+		},
+	})
+	return SearchReadableResult(page), err
+}
+
+// readablePage is ReadablePage's loop.
+//
+// ponytail: pages through the ranked matches in batches of twice the limit
+// and filters each batch in memory, so a caller who can read few of many
+// matches costs several queries. Upgrade to an EXISTS join on path_access
+// if it measures slow.
+func readablePage[T any](params ReadablePageParams[T]) ([]T, error) {
+	limit := min(max(params.Limit, 1), MaxLimit)
 	batch := 2 * limit
-	kept := make([]SearchResult, 0, limit)
+	kept := []T{}
 	for offset := 0; ; offset += batch {
-		page, err := searchPage(params.Ctx, params.DB, params.Query, batch, offset)
+		page, err := params.Fetch(batch, offset)
 		if err != nil {
-			return SearchReadableResult{}, err
+			return nil, err
 		}
 		for _, r := range page {
-			if !params.Access.Check(r.Serial, r.RelPath, accessutil.Read).Readable {
+			if !params.Readable(r) {
 				continue
 			}
 			kept = append(kept, r)
 			if len(kept) == limit {
-				return SearchReadableResult{Results: kept}, nil
+				return kept, nil
 			}
 		}
 		if len(page) < batch {
-			return SearchReadableResult{Results: kept}, nil
+			return kept, nil
 		}
 	}
 }
 
 // clampLimit bounds a caller's limit to (0, MaxLimit], using DefaultLimit for
-// zero or less. SearchReadable sizes a slice from it, so it must never trust
-// the caller's value.
+// zero or less. The limit reaches a SQL LIMIT and sizes each fetched batch,
+// so it must never trust the caller's value.
 func clampLimit(limit int) int {
 	if limit <= 0 {
 		return DefaultLimit
@@ -144,13 +160,17 @@ func sanitizeFTSQuery(q string) string {
 	if q == "" {
 		return `""`
 	}
-	// If the query already contains FTS5 operators or quotes, pass it through.
+	// If the query already contains FTS5 operators or quotes, pass it through,
+	// unless its quotes or parentheses do not pair up: FTS5 rejects those as
+	// a syntax error, so they are searched for as text instead.
 	upper := strings.ToUpper(q)
-	if strings.ContainsAny(q, `"*:()`) ||
+	balanced := strings.Count(q, `"`)%2 == 0 && strings.Count(q, "(") == strings.Count(q, ")")
+	usesSyntax := strings.ContainsAny(q, `"*:()`) ||
 		strings.Contains(upper, " AND ") ||
 		strings.Contains(upper, " OR ") ||
 		strings.Contains(upper, " NOT ") ||
-		strings.Contains(upper, "NEAR(") {
+		strings.Contains(upper, "NEAR(")
+	if balanced && usesSyntax {
 		return q
 	}
 	// Plain term(s) — wrap in double-quotes to treat as phrase search.

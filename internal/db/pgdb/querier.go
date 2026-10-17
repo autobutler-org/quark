@@ -49,6 +49,7 @@ type Querier interface {
 	CountChatUnreadForUser(ctx context.Context, userID int64) ([]CountChatUnreadForUserRow, error)
 	CountConnectedDevices(ctx context.Context) (int64, error)
 	CountDBVFSEntriesUnder(ctx context.Context, arg CountDBVFSEntriesUnderParams) (int64, error)
+	CountMusicTracks(ctx context.Context, arg CountMusicTracksParams) (int64, error)
 	// CountOtherAccounts counts the active and disabled accounts other than one.
 	// Pending requests are not accounts yet, so they do not count.
 	CountOtherAccounts(ctx context.Context, id int64) (int64, error)
@@ -110,6 +111,9 @@ type Querier interface {
 	DeleteGroup(ctx context.Context, id int64) (int64, error)
 	// DeleteGroupPathAccess drops a group's row on exactly one path.
 	DeleteGroupPathAccess(ctx context.Context, arg DeleteGroupPathAccessParams) (int64, error)
+	// DeleteMusicTrack drops the one row for a file, nothing under it: a
+	// backfill's unseen rows.
+	DeleteMusicTrack(ctx context.Context, arg DeleteMusicTrackParams) error
 	// DeleteMusicTracksBySerial drops a device's tracks when the drive goes away.
 	// serial '' is the internal drive.
 	DeleteMusicTracksBySerial(ctx context.Context, serial string) error
@@ -321,8 +325,8 @@ type Querier interface {
 	// one: change both together.
 	ListJobs(ctx context.Context, kinds []string) ([]Job, error)
 	// Browse aggregates. An admin's page is one of these queries. A caller who
-	// cannot read the whole tree aggregates in Go from the rows instead; that
-	// stream lands with the library service.
+	// cannot read the whole tree aggregates in Go from ListMusicTracksAfter
+	// instead.
 	//
 	// Displayed casing is MIN() of the stored tag, so "Rock" and "rock" are one
 	// genre and the name does not flicker. SQLite's MIN is byte order;
@@ -337,6 +341,21 @@ type Querier interface {
 	ListMusicArtists(ctx context.Context) ([]ListMusicArtistsRow, error)
 	ListMusicGenres(ctx context.Context) ([]ListMusicGenresRow, error)
 	ListMusicTrackScanStates(ctx context.Context, serial string) ([]ListMusicTrackScanStatesRow, error)
+	// Track listing. filter_* are 0 or 1; with 0 the matching value is ignored.
+	// sort is 'title', 'artist', 'album', 'year', 'added', or '' for album order;
+	// descending is 0 or 1. The sort keys are computed in the select list because
+	// sqlc's SQLite engine leaves a parameter in an ORDER BY CASE unexpanded. A key
+	// the sort does not use is the same on every row and orders nothing. A numeric key
+	// is negated for descending. Every sort ends on the album order and then id,
+	// so a page boundary is stable, and nullable columns are COALESCEd so both
+	// engines order them alike.
+	ListMusicTracks(ctx context.Context, arg ListMusicTracksParams) ([]ListMusicTracksRow, error)
+	// ListMusicTracksAfter is every track in id order, one batch at a time: the
+	// stream a non-admin's browse aggregates in Go.
+	ListMusicTracksAfter(ctx context.Context, arg ListMusicTracksAfterParams) ([]MusicTrack, error)
+	// ListMusicTracksUnder is the track at rel_path and every track under it,
+	// what a move rekeys after MoveMusicTracks.
+	ListMusicTracksUnder(ctx context.Context, arg ListMusicTracksUnderParams) ([]ListMusicTracksUnderRow, error)
 	ListNearDuplicates(ctx context.Context) ([]ListNearDuplicatesRow, error)
 	// ListPathAccessForUser returns every row that applies to a user: their own,
 	// their groups', and the built-in everyone group's. accessutil resolves
@@ -479,6 +498,7 @@ type Querier interface {
 	// SetGroupPathAccess grants a group a level on a path, replacing the level any
 	// earlier grant to that group on that path carried.
 	SetGroupPathAccess(ctx context.Context, arg SetGroupPathAccessParams) error
+	SetMusicTrackAlbumKey(ctx context.Context, arg SetMusicTrackAlbumKeyParams) error
 	// SetPhotoTakenAt records the capture date of a photo whose hashes are
 	// already stored (#2592).
 	SetPhotoTakenAt(ctx context.Context, arg SetPhotoTakenAtParams) error
@@ -529,9 +549,8 @@ type Querier interface {
 	UpsertDeviceName(ctx context.Context, arg UpsertDeviceNameParams) error
 	UpsertDeviceRole(ctx context.Context, arg UpsertDeviceRoleParams) error
 	UpsertFileContent(ctx context.Context, arg UpsertFileContentParams) error
-	// Music library cache (#2982). The library service is the caller; it is the
-	// next ticket, so nothing in this repository calls these yet. Search is FTS5
-	// (SQLite only, #2958) and is raw SQL, not a query here.
+	// Music library cache (#2982). pkg/util/musicutil is the caller. Search is
+	// FTS5 (SQLite only, #2958) and is raw SQL there, not a query here.
 	//
 	// A path and the files under it are matched with substr rather than LIKE, so
 	// a '%' or '_' in a name is not a wildcard. The same shape as DeleteFavoritesUnder.

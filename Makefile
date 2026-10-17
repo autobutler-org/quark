@@ -1630,7 +1630,7 @@ test/db-backend: ## Prove the DB_BACKEND switch rejects a bad value and reaches 
 # say to run `make serve/postgres`. -count=1 because the database is not an input go's test
 # cache can see.
 POSTGRES_TEST_PACKAGES := ./internal/db/... ./internal/server ./pkg/util/sqlutil ./pkg/util/searchutil ./pkg/backup \
-	./pkg/util/authutil ./pkg/util/chatutil
+	./pkg/util/authutil ./pkg/util/chatutil ./pkg/util/musicutil
 .PHONY: test/db/postgres
 test/db/postgres: internal/server/public/stub.txt ## Check the database layer and a first run of the server on PostgreSQL (start it with make serve/postgres)
 	QUARK_DB_BACKEND=postgres QUARK_DATABASE_URL='$(call POSTGRES_URL,127.0.0.1)' \
