@@ -1,5 +1,5 @@
-/// Tuning for photo caching, prefetching and decoding in the image viewer
-/// (#1710).
+/// Tuning for photo caching, prefetching, decoding and gestures in the image
+/// viewer (#1710, #3358).
 ///
 /// Gathered here rather than spread through the viewer and its cache because
 /// every one of these numbers is a tradeoff someone will want to revisit, and
@@ -40,4 +40,28 @@ abstract final class ImageViewerConfig {
   /// physics and killing the swipe the viewer just gained (#1707). The 1%
   /// band this trades away is magnification no one can see.
   static const double zoomedInScale = 1.01;
+
+  /// How far across the screen a swipe has to carry the photo to turn the
+  /// page when the finger comes to rest before it lifts.
+  ///
+  /// A flick turns the page on its speed alone. A thumb swipe often slows to a
+  /// stop before it lifts, and then has no speed left to read; page physics
+  /// alone would then settle on whichever page is nearer, which takes a drag
+  /// past half the screen. A quarter is a deliberate swipe on any phone, and
+  /// still far more than the jitter of a tap or a vertical swipe (#3358).
+  static const double pageTurnFraction = 0.25;
+
+  /// How far down a drag has to pull the photo to close the viewer once the
+  /// finger rests.
+  static const double dismissDragDistance = 120;
+
+  /// Downward speed, in logical pixels a second, that closes the viewer
+  /// whatever the distance: a flick down.
+  static const double dismissFlingVelocity = 700;
+
+  /// The magnification a double-tap zooms to, around the point tapped.
+  ///
+  /// Comfortably inside the `InteractiveViewer`'s default 2.5x ceiling, so a
+  /// pinch can still go further from there.
+  static const double doubleTapZoomScale = 2;
 }
