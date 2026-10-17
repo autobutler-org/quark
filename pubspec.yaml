@@ -98,7 +98,7 @@ dependencies:
   # flutter_image_compress, depended on directly: the app-facing package also
   # endorses a web implementation, which Flutter registers in every web build
   # whether or not the app imports it.
-  fc_native_video_thumbnail: ^3.0.1
+  fc_native_video_thumbnail: ^4.0.0
   flutter_image_compress_common: ^1.1.1
   flutter_image_compress_platform_interface: ^1.1.0
 
