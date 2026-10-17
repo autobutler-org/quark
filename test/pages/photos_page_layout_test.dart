@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/photos_page.dart';
+import 'package:quark/widgets/photos/photos_bar_bottom.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 // The photos view rendered nothing below 900px: the compact branch puts the
@@ -71,6 +72,27 @@ void main() {
         reason: 'compact -> desktop must not throw',
       );
     });
+  });
+
+  // Upload and Search sit beside Tools in the library's second row, which
+  // leaves the top bar room for the page name on a phone.
+  testWidgets('compact: upload and search sit in the library row', (
+    tester,
+  ) async {
+    await pumpPhotos(tester, compactSize);
+
+    for (final key in const ['photos_upload', 'photos_search']) {
+      expect(
+        find.descendant(
+          of: find.byType(PhotosBarBottom),
+          matching: find.byKey(ValueKey(key)),
+        ),
+        findsOneWidget,
+        reason: key,
+      );
+    }
+    expect(find.text('Photos'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   // The same Expanded-in-a-Column bug lived one level down in the album

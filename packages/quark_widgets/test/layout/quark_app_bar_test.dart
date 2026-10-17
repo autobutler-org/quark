@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -33,7 +34,10 @@ void main() {
 
     expect(find.byType(QuarkBrandButton), findsOneWidget);
     expect(find.text('Photos'), findsOneWidget);
-    expect(tester.widget<AppBar>(find.byType(AppBar)).title, isNull);
+    expect(
+      tester.getRect(find.byType(QuarkBrandButton)).left,
+      lessThan(tester.getRect(find.byType(AppBar)).width / 2),
+    );
   });
 
   testBothViewports('opens the drawer from the brand button', (
@@ -65,15 +69,109 @@ void main() {
     );
   });
 
-  testWidgets('reserves enough leading width for the brand button', (
+  testWidgets('gives the brand button its whole label when there is room', (
     tester,
   ) async {
     await pumpAt(tester, page(), size: narrowViewport, scaffold: false);
 
-    final bar = tester.widget<AppBar>(find.byType(AppBar));
+    final label = find.text('Photos');
     expect(
-      bar.leadingWidth,
-      greaterThanOrEqualTo(QuarkBrandButton.preferredWidth),
+      tester.getRect(label).width,
+      tester.getSize(label).width,
+      reason: 'the label is laid out at its natural width',
+    );
+    expect(
+      tester
+          .renderObject<RenderParagraph>(
+            find.descendant(of: label, matching: find.byType(RichText)),
+          )
+          .didExceedMaxLines,
+      isFalse,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  // A phone's Photos bar carried eight buttons and painted them over the
+  // brand and refresh buttons, because AppBar lays its actions out unbounded.
+  Widget crowded() => QuarkAppBarTrailing(
+    actions: [
+      for (final key in const ['app_a', 'app_b'])
+        QuarkBarIconButton(
+          key: ValueKey(key),
+          icon: QuarkIcons.notifications_outlined,
+          tooltip: key,
+          onPressed: () {},
+        ),
+    ],
+    child: page(
+      onRefresh: () {},
+      actions: [
+        for (var i = 0; i < 8; i++)
+          QuarkBarIconButton(
+            key: ValueKey('action_$i'),
+            icon: QuarkIcons.check_circle_outline,
+            tooltip: 'Action $i',
+            onPressed: () {},
+          ),
+      ],
+    ),
+  );
+
+  testBothViewports('never paints an action over the brand or refresh', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, crowded(), size: size, scaffold: false);
+
+    final leadEnd = tester.getRect(refreshButton()).right;
+    final first = tester.getRect(find.byKey(const ValueKey('action_0')));
+    expect(first.left, greaterThanOrEqualTo(leadEnd));
+    expect(
+      tester
+          .renderObject<RenderParagraph>(
+            find.descendant(
+              of: find.text('Photos'),
+              matching: find.byType(RichText),
+            ),
+          )
+          .didExceedMaxLines,
+      isFalse,
+      reason: 'the page name stays whole however many actions there are',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keeps the app-wide controls in view when actions scroll', (
+    tester,
+  ) async {
+    await pumpAt(tester, crowded(), size: narrowViewport, scaffold: false);
+
+    final bar = tester.getRect(find.byType(AppBar));
+    for (final key in const ['app_a', 'app_b']) {
+      final rect = tester.getRect(find.byKey(ValueKey(key)));
+      expect(rect.right, lessThanOrEqualTo(bar.right), reason: key);
+    }
+    final last = find.byKey(const ValueKey('action_7'));
+    expect(
+      tester.getRect(last).left,
+      greaterThanOrEqualTo(
+        tester.getRect(find.byKey(const ValueKey('app_a'))).left,
+      ),
+      reason: 'the last page action starts out scrolled past the edge',
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('action_0')),
+      const Offset(-1000, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getRect(last).right,
+      lessThanOrEqualTo(
+        tester.getRect(find.byKey(const ValueKey('app_a'))).left,
+      ),
+      reason: 'a drag brings the last action into view beside them',
     );
     expect(tester.takeException(), isNull);
   });
@@ -166,13 +264,10 @@ void main() {
       scaffold: false,
     );
 
-    final bar = tester.widget<AppBar>(find.byType(AppBar));
-    expect(
-      bar.leadingWidth,
-      greaterThan(QuarkBrandButton.preferredWidth),
-      reason: 'the slot needs its own width, or the brand button is clipped',
-    );
-    expect(bar.leadingWidth, lessThan(narrowViewport.width));
+    final brand = tester.getRect(find.byKey(const ValueKey('brand_button')));
+    final refresh = tester.getRect(refreshButton());
+    expect(refresh.left, greaterThanOrEqualTo(brand.right));
+    expect(refresh.right, lessThanOrEqualTo(narrowViewport.width));
     expect(tester.takeException(), isNull);
   });
 

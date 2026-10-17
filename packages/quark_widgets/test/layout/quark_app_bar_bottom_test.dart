@@ -16,6 +16,14 @@ void main() {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        pinnedActions: [
+          QuarkBarIconButton(
+            key: const ValueKey('search'),
+            icon: QuarkIcons.search_rounded,
+            tooltip: 'Search',
+            onPressed: () => log('search'),
+          ),
+        ],
         actions: [
           QuarkBarChip(
             key: const ValueKey('upload'),
@@ -70,6 +78,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(log, ['grid']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testBothViewports('keeps its pinned actions in the row at every width', (
+    tester,
+    size,
+  ) async {
+    final log = <String>[];
+    await pumpAt(tester, page(log.add), size: size, scaffold: false);
+
+    await tester.tap(find.byKey(const ValueKey('search')));
+    await tester.pump();
+
+    expect(log, ['search']);
+    if (size == narrowViewport) {
+      expect(
+        tester.getRect(find.byKey(const ValueKey('search'))).right,
+        lessThanOrEqualTo(tester.getRect(menu).left),
+      );
+    }
     expect(tester.takeException(), isNull);
   });
 

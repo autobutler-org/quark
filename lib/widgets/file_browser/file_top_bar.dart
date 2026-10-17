@@ -206,6 +206,11 @@ class _FileTopBarState extends State<FileTopBar> {
       icon: QuarkIcons.storage_rounded,
       onRefresh: widget.onRefresh,
       isRefreshing: widget.isRefreshing,
+      // The back and search buttons stay whole on a phone; Select and the
+      // theme toggle scroll instead.
+      middleMinWidth:
+          QuarkBarIconButton.tapTargetSize * 2 +
+          QuarkTokens.of(context).spacingXs,
       middle: Row(
         spacing: QuarkTokens.of(context).spacingXs,
         children: [

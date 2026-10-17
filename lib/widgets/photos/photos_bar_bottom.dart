@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The Photos page's second bar row: what the grid shows on the left, and the
-/// way into Duplicates on the right (#2576).
+/// The Photos page's second bar row: what the grid shows on the left, then
+/// the page's [pinnedActions] (Upload and Search) and the way into Duplicates
+/// on the right (#2576). The pinned ones stay in the row at every width, which
+/// is what leaves the top bar room for the page name on a phone.
 ///
 /// Duplicates used to be a copy icon in the top row whose only name was a
 /// hover tooltip, which a touch screen never shows. Here it is a chip reading
@@ -17,6 +19,7 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
   const PhotosBarBottom({
     required this.title,
     required this.onDuplicates,
+    this.pinnedActions = const [],
     super.key,
   });
 
@@ -25,6 +28,9 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
 
   /// Opens the duplicates review.
   final VoidCallback onDuplicates;
+
+  /// Bar buttons shown beside Duplicates, or beside its menu, at every width.
+  final List<Widget> pinnedActions;
 
   static const _tooltip = 'Find photos saved more than once';
 
@@ -46,6 +52,7 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
           ).textTheme.titleMedium?.copyWith(color: tokens.foreground),
         ),
       ),
+      pinnedActions: pinnedActions,
       actions: [
         QuarkBarChip(
           key: const ValueKey('photos_duplicates'),

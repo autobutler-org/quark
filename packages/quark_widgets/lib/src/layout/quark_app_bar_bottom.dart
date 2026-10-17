@@ -15,6 +15,8 @@ import 'quark_bar_icon_button.dart';
 /// used to make that decision itself with an 860 pixel `LayoutBuilder`; it
 /// lives here so every page that needs a second row shares it.
 ///
+/// [pinnedActions] sit in the row at every width, ahead of the menu.
+///
 /// [menuChildren] is not a copy of [actions]: a chip row and a menu are
 /// different shapes, and a page may offer less on a phone (Files' create
 /// actions move to a floating button there).
@@ -36,6 +38,7 @@ class QuarkAppBarBottom extends StatelessWidget implements PreferredSizeWidget {
   /// Creates a second row led by [lead].
   const QuarkAppBarBottom({
     required this.lead,
+    this.pinnedActions = const [],
     this.actions = const [],
     this.menuChildren = const [],
     this.menuLabel = 'Views',
@@ -52,6 +55,11 @@ class QuarkAppBarBottom extends StatelessWidget implements PreferredSizeWidget {
   /// What fills the left of the row, usually a breadcrumb. It is given the
   /// width the actions leave, so it can truncate itself to fit.
   final Widget lead;
+
+  /// Actions the row shows at every width, before [actions] or the menu:
+  /// the ones a phone user should not have to open a menu for, such as
+  /// Photos' Upload and Search.
+  final List<Widget> pinnedActions;
 
   /// The row's actions at [collapseBreakpoint] and wider, in order.
   final List<Widget> actions;
@@ -88,6 +96,7 @@ class QuarkAppBarBottom extends StatelessWidget implements PreferredSizeWidget {
           return Row(
             children: [
               Expanded(child: lead),
+              ...pinnedActions,
               if (!compact) ...actions,
               if (compact && menuChildren.isNotEmpty)
                 MenuAnchor(

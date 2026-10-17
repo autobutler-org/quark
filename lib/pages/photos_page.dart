@@ -725,7 +725,11 @@ class PhotosPageState extends State<PhotosPage>
             final albumError = c.albumError;
             final searchError = c.searchError;
 
-            final actions = [
+            // Upload and Search live in the library's second row, beside
+            // Tools, so a phone's top bar keeps room for the page name. Pages
+            // without that row carry them in the top bar.
+            final libraryRow = album == null && !_demo;
+            final primaryActions = [
               QuarkBarChip(
                 key: const ValueKey('photos_upload'),
                 icon: QuarkIcons.upload_rounded,
@@ -739,6 +743,9 @@ class PhotosPageState extends State<PhotosPage>
                 selected: _searchOpen,
                 onPressed: _toggleSearch,
               ),
+            ];
+            final actions = [
+              if (!libraryRow) ...primaryActions,
               if (album == null)
                 QuarkBarIconButton(
                   key: const ValueKey('photos_select'),
@@ -797,7 +804,7 @@ class PhotosPageState extends State<PhotosPage>
                           ),
                       ],
                     )
-                  : album == null && !_demo
+                  : libraryRow
                   ? QuarkAppBar(
                       label: 'Photos',
                       icon: QuarkIcons.photo_library_outlined,
@@ -806,6 +813,7 @@ class PhotosPageState extends State<PhotosPage>
                       isRefreshing: isRefreshing,
                       bottom: PhotosBarBottom(
                         title: 'Library',
+                        pinnedActions: primaryActions,
                         onDuplicates: () =>
                             context.go(AppRoutes.photoDuplicates),
                       ),
