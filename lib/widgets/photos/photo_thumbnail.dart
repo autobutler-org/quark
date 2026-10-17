@@ -61,7 +61,7 @@ class PhotoThumbnail extends StatelessWidget {
       Widget thumbnail(
         BuildContext context,
         int generation,
-        VoidCallback onFailed,
+        void Function([Object? error]) onFailed,
       ) => ExcludeSemantics(
         key: ValueKey(generation),
         child: CachedNetworkImage(
@@ -74,14 +74,14 @@ class PhotoThumbnail extends StatelessWidget {
           fadeOutDuration: Duration.zero,
           placeholder: (context, url) => placeholder,
           errorWidget: (context, url, error) {
-            onFailed();
+            onFailed(error);
             return placeholder;
           },
         ),
       );
       final path = this.path;
       return path == null
-          ? thumbnail(context, 0, () {})
+          ? thumbnail(context, 0, ([_]) {})
           : BackfillingThumbnail(
               path: path,
               serial: serial,

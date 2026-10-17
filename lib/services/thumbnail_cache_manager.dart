@@ -12,8 +12,9 @@ import 'package:quark/utils/thumbnail_cache_key.dart';
 /// A widget passes [instance] and [keyFor] to its `CachedNetworkImage`. On the
 /// web that widget leaves caching to the browser and the store goes unused.
 abstract final class ThumbnailCacheManager {
-  /// The one store, shared so its object budget is counted once.
-  static final CacheManager instance = CacheManager(
+  /// The one store, shared so its object budget is counted once. A test
+  /// swaps in a fake one so thumbnails load without the network or a disk.
+  static BaseCacheManager instance = CacheManager(
     Config(
       ThumbnailCacheConfig.storeKey,
       stalePeriod: ThumbnailCacheConfig.stalePeriod,

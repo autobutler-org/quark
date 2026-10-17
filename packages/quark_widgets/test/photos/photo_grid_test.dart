@@ -375,4 +375,65 @@ void main() {
 
     await expectTapTargetGuidelines(tester);
   });
+
+  /// #3349: a tile scrolled far enough away is disposed. Coming back builds
+  /// it afresh, and its thumbnail is asked for its own photo, not whichever
+  /// photo last used that slot.
+  testBothViewports('rebuilds each tile with its own photo after scrolling '
+      'away and back', (tester, size) async {
+    final photos = [
+      for (var i = 0; i < 300; i++) PhotoItem(id: 'p$i', name: 'p$i.jpg'),
+    ];
+    final built = <String>[];
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await pumpAt(
+      tester,
+      CustomScrollView(
+        controller: controller,
+        slivers: [
+          PhotoGrid(
+            photos: photos,
+            crossAxisCount: 3,
+            emptyState: const SizedBox(),
+            thumbnailBuilder: (context, photo) {
+              built.add(photo.id);
+              return Text(photo.name);
+            },
+            onTap: (_) {},
+            onLongPress: (_) {},
+          ),
+        ],
+      ),
+      size: size,
+    );
+    final first = [
+      for (final photo in photos)
+        if (find
+            .byKey(ValueKey('photo_tile_${photo.id}'))
+            .evaluate()
+            .isNotEmpty)
+          photo,
+    ];
+    expect(first, isNotEmpty);
+
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pump();
+    for (final photo in first) {
+      expect(find.byKey(ValueKey('photo_tile_${photo.id}')), findsNothing);
+    }
+
+    built.clear();
+    controller.jumpTo(0);
+    await tester.pump();
+    for (final photo in first) {
+      final tile = find.byKey(ValueKey('photo_tile_${photo.id}'));
+      expect(tile, findsOneWidget);
+      expect(
+        find.descendant(of: tile, matching: find.text(photo.name)),
+        findsOneWidget,
+      );
+      expect(built, contains(photo.id), reason: '${photo.id} was not rebuilt');
+    }
+  });
 }

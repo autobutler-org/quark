@@ -78,9 +78,10 @@ class FileListLeading extends StatelessWidget {
                     ),
                   ),
                   // A video or HEIC with no thumbnail yet gets one rendered
-                  // here and uploaded (#2381).
+                  // here and uploaded (#2381); a busy Quark is asked again
+                  // (#3349).
                   errorWidget: (context, url, error) {
-                    onFailed();
+                    onFailed(error);
                     return icon;
                   },
                 ),
