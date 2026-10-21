@@ -32,6 +32,30 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- The autofill service (#3600), on from API 26 through quark_autofill_enabled. Only the system
+             can bind it. -->
+        <service
+            android:name="org.autobutler.autofill.QuarkAutofillService"
+            android:label="@string/autofill_service_label"
+            android:enabled="@bool/quark_autofill_enabled"
+            android:exported="true"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.autofill"
+                android:resource="@xml/autofill_service" />
+        </service>
+        <!-- cspell:words Recents -->
+        <!-- Its biometric unlock, launched only through the fill response's IntentSender. -->
+        <activity
+            android:name="org.autobutler.autofill.AutofillUnlockActivity"
+            android:enabled="@bool/quark_autofill_enabled"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -48,5 +72,18 @@
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
         </intent>
+        <!-- The browsers whose web domain the autofill service believes once their signature checks out
+             (org.autobutler.autofill.TrustedBrowsers). Keep the two lists the same. -->
+        <!-- cspell:disable -->
+        <package android:name="com.android.chrome" />
+        <package android:name="org.mozilla.firefox" />
+        <package android:name="org.mozilla.focus" />
+        <package android:name="com.sec.android.app.sbrowser" />
+        <package android:name="com.microsoft.emmx" />
+        <package android:name="com.brave.browser" />
+        <package android:name="com.duckduckgo.mobile.android" />
+        <package android:name="com.vivaldi.browser" />
+        <package android:name="com.opera.browser" />
+        <!-- cspell:enable -->
     </queries>
 </manifest>
