@@ -215,7 +215,8 @@ class ChatChannelEvent {
   final int actorId;
 
   /// The JSON the signature covers, byte for byte: `{"userId"|"groupId",
-  /// "name", "permissions"}` for a member change, `{"version"}` for a key.
+  /// "name", "permissions"}` for a member change, `{"version"}` for a key,
+  /// with `"regenerated": true` when an admin regenerated it.
   final String payload;
 
   /// When the Quark recorded it.
@@ -229,6 +230,17 @@ class ChatChannelEvent {
 
   /// [payload], decoded.
   Map<String, dynamic> get data => jsonDecode(payload) as Map<String, dynamic>;
+
+  /// Whether this is a [keyCreated] an admin made by regenerating a stuck
+  /// channel's key (#3455), which its payload marks `"regenerated": true`.
+  bool get isRegeneration {
+    if (kind != keyCreated) return false;
+    try {
+      return data['regenerated'] == true;
+    } on Object {
+      return false;
+    }
+  }
 
   /// Whether this records giving account [userId] or group [groupId]
   /// [permissions], or removing its row when [permissions] is null: what a

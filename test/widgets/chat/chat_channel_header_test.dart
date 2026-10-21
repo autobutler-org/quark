@@ -68,6 +68,28 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('regenerate channel keys is a routine item at $size', (
+      tester,
+    ) async {
+      final log = <String>[];
+      await pumpHeader(
+        tester,
+        size,
+        ChatChannelHeader(
+          name: 'general',
+          onRegenerateKeys: () => log.add('regenerate'),
+        ),
+      );
+      await openMenu(tester);
+      expect(find.text('Regenerate channel keys'), findsOneWidget);
+      expect(key('chat_channel_menu_divider'), findsNothing);
+
+      await tester.tap(key('chat_channel_regenerate_keys'));
+      await tester.pumpAndSettle();
+      expect(log, ['regenerate']);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('no divider without both kinds at $size', (tester) async {
       await pumpHeader(
         tester,

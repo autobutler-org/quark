@@ -6,7 +6,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// messages, with its settings beside them (#2422).
 ///
 /// The settings button opens a menu of the actions whose callbacks are set:
-/// edit the name and topic and members, then, under a divider so they are
+/// edit the name and topic and members, regenerate the channel's key (offered
+/// to an admin waiting for it, #3455), then, under a divider so they are
 /// hard to hit by mistake, leave and delete for everyone in the error color
 /// (#2498). With none set, as for a reader in `general`, there is no button.
 ///
@@ -18,7 +19,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Keys: `chat_channel_search` on the search button; `chat_channel_settings`
 /// on the settings button; `chat_channel_private` on the lock;
-/// `chat_channel_edit`, `chat_channel_members`,
+/// `chat_channel_edit`, `chat_channel_members`, `chat_channel_regenerate_keys`,
 /// `chat_channel_menu_divider`, `chat_channel_leave` and
 /// `chat_channel_delete` on the menu's items.
 class ChatChannelHeader extends StatelessWidget {
@@ -31,6 +32,7 @@ class ChatChannelHeader extends StatelessWidget {
     this.onSearch,
     this.onEdit,
     this.onMembers,
+    this.onRegenerateKeys,
     this.onDelete,
     this.onLeave,
     super.key,
@@ -64,6 +66,9 @@ class ChatChannelHeader extends StatelessWidget {
   /// Opens the members sheet; null leaves it out.
   final VoidCallback? onMembers;
 
+  /// Asks to regenerate the channel's key as an admin; null leaves it out.
+  final VoidCallback? onRegenerateKeys;
+
   /// Asks to delete the channel; null leaves it out.
   final VoidCallback? onDelete;
 
@@ -87,6 +92,13 @@ class ChatChannelHeader extends StatelessWidget {
           leadingIcon: const Icon(QuarkIcons.group_outlined, size: 18),
           onPressed: onMembers,
           child: const Text('Members'),
+        ),
+      if (onRegenerateKeys case final onRegenerateKeys?)
+        MenuItemButton(
+          key: const ValueKey('chat_channel_regenerate_keys'),
+          leadingIcon: const Icon(QuarkIcons.key_outlined, size: 18),
+          onPressed: onRegenerateKeys,
+          child: const Text('Regenerate channel keys'),
         ),
     ];
     final danger = TextStyle(color: tokens.error);

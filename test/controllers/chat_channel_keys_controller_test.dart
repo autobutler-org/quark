@@ -30,6 +30,41 @@ class _FakeQuark {
 
   Uint8List signKeyOf(int user) => members[user]!.sign.publicKey;
 
+  /// Creates [version] with [me]'s grant of it, as the next version only,
+  /// and records its key_created event.
+  ChatChannelEvent? store(
+    int me,
+    int channelId,
+    int version,
+    Uint8List sealedKey,
+    Uint8List signature, {
+    bool regenerated = false,
+  }) {
+    if (version != current + 1) return null;
+    current = version;
+    rotationNeeded = false;
+    grants[(version, me)] = ChatKeyGrant(
+      version: version,
+      userId: me,
+      sealedKey: sealedKey,
+      grantedBy: me,
+      granterSignKey: signKeyOf(me),
+      signature: signature,
+    );
+    final event = ChatChannelEvent(
+      id: events.length + 1,
+      channelId: channelId,
+      kind: ChatChannelEvent.keyCreated,
+      actorId: me,
+      payload: regenerated
+          ? '{"version":$version,"regenerated":true}'
+          : '{"version":$version}',
+      createdAt: DateTime.utc(2026),
+    );
+    events.add(event);
+    return event;
+  }
+
   ChatChannelKeysController client(int me) => ChatChannelKeysController(
     identity: () => members[me],
     crypto: () => crypto,
@@ -43,29 +78,20 @@ class _FakeQuark {
       ],
       rotationNeeded: rotationNeeded,
     ),
-    createVersion: (channelId, version, sealedKey, signature) async {
-      if (version != current + 1) return null;
-      current = version;
-      rotationNeeded = false;
-      grants[(version, me)] = ChatKeyGrant(
-        version: version,
-        userId: me,
-        sealedKey: sealedKey,
-        grantedBy: me,
-        granterSignKey: signKeyOf(me),
-        signature: signature,
-      );
-      final event = ChatChannelEvent(
-        id: events.length + 1,
-        channelId: channelId,
-        kind: ChatChannelEvent.keyCreated,
-        actorId: me,
-        payload: '{"version":$version}',
-        createdAt: DateTime.utc(2026),
-      );
-      events.add(event);
-      return event;
-    },
+    createVersion: (channelId, version, sealedKey, signature) async =>
+        store(me, channelId, version, sealedKey, signature),
+    regenerateVersion: (channelId, version, sealedKey, signature) async =>
+        // The Quark refuses an admin who already holds the current key.
+        grants.containsKey((current, me))
+        ? null
+        : store(
+            me,
+            channelId,
+            version,
+            sealedKey,
+            signature,
+            regenerated: true,
+          ),
     fetchPending: (channelId) async => ChatPendingGrants(
       pending: [
         for (var v = 1; v <= current; v++)
@@ -270,6 +296,81 @@ void main() {
     expect(await bob.ensureKeys(_channel), isFalse);
     sameKey(alice, bob, 1);
     sameKey(alice, bob, 2);
+  });
+
+  test(
+    'an admin regenerates a stuck key and shares it with everyone',
+    () async {
+      // alice made version 1 and signed out before bob and carol published
+      // their keys, so they wait on her.
+      publish(1);
+      await quark.client(1).ensureKeys(_channel);
+      publish(2);
+      publish(3);
+      final bob = quark.client(2);
+      final carol = quark.client(3);
+      expect(await bob.ensureKeys(_channel), isTrue);
+      expect(await carol.ensureKeys(_channel), isTrue);
+
+      expect(await bob.regenerate(_channel), isTrue);
+
+      expect(quark.current, 2);
+      expect(bob.isWaiting(_channel), isFalse);
+      final event = quark.events.last;
+      expect(event.isRegeneration, isTrue);
+      expect(event.actorId, 2);
+      expect(bob.verifyEvent(event), isTrue, reason: 'signed by the admin');
+      // Everyone with keys has version 2 at once, the away holder included.
+      for (final user in [1, 3]) {
+        expect(quark.grants[(2, user)]?.grantedBy, 2);
+      }
+      expect(await carol.ensureKeys(_channel), isFalse);
+      sameKey(bob, carol, 2);
+      // Version 1 is still alice's alone to share.
+      expect(carol.keyFor(_channel, 1), isNull);
+      expect(quark.grants.containsKey((1, 3)), isFalse);
+    },
+  );
+
+  test('regenerating while holding the key changes nothing', () async {
+    publish(1);
+    final alice = quark.client(1);
+    await alice.ensureKeys(_channel);
+
+    expect(await alice.regenerate(_channel), isFalse);
+
+    expect(quark.current, 1);
+    expect(quark.events, hasLength(1));
+    expect(alice.isWaiting(_channel), isFalse);
+  });
+
+  test('a regeneration event is signed only if it says so', () async {
+    publish(1);
+    publish(2);
+    await quark.client(1).ensureKeys(_channel);
+    // A Quark that records a regeneration as an ordinary key: unsigned.
+    final bob = ChatChannelKeysController(
+      identity: () => quark.members[2],
+      crypto: () => crypto,
+      userId: () => 2,
+      fetchKeys: (channelId) async => ChatChannelKeys(
+        currentVersion: quark.current,
+        versions: [for (var v = 1; v <= quark.current; v++) v],
+        grants: const [],
+        rotationNeeded: false,
+      ),
+      regenerateVersion: (channelId, version, sealedKey, signature) async =>
+          quark.store(2, channelId, version, sealedKey, signature),
+      fetchPending: (channelId) async => const ChatPendingGrants(
+        pending: [],
+        currentVersion: 2,
+        rotationNeeded: false,
+      ),
+      signEvent: (channelId, eventId, signature) async =>
+          fail('signed an event that did not match'),
+    );
+
+    expect(await bob.regenerate(_channel), isTrue);
   });
 
   test('chat_key_needed has a holder share the key unprompted', () async {
