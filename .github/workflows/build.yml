@@ -276,10 +276,12 @@ jobs:
           IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
           IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64 }}
         run: |
           if [[ -n "${IOS_DIST_CERT_P12_BASE64}" ]] \
             && [[ -n "${IOS_DIST_CERT_PASSWORD}" ]] \
-            && [[ -n "${IOS_PROVISIONING_PROFILE_BASE64}" ]]; then
+            && [[ -n "${IOS_PROVISIONING_PROFILE_BASE64}" ]] \
+            && [[ -n "${IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64}" ]]; then
             echo "available=true" >> "${GITHUB_OUTPUT}"
           else
             echo "available=false" >> "${GITHUB_OUTPUT}"
@@ -291,6 +293,7 @@ jobs:
           IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
           IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64 }}
         run: ./scripts/ios-ci-signing.bash
       - name: Build [ios]
         if: steps.signing.outputs.available == 'true'
@@ -320,6 +323,6 @@ jobs:
         run: |
           rm -rf ~/Library/MobileDevice/Provisioning\ Profiles
           rm -rf ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles
-          rm -f ios/ExportOptions.ci.plist
+          rm -f ios/ExportOptions.ci.plist ios/CredentialProvider/Signing.ci.xcconfig
           security delete-keychain ~/Library/Keychains/quark-signing.keychain-db || true
           git checkout -- ios/Flutter/Release.xcconfig || true
