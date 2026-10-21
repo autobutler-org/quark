@@ -1,9 +1,12 @@
+// cspell:words vaultkeystore
 package org.autobutler
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.util.TimeZone
+import org.autobutler.autofill.AutofillSettings
+import org.autobutler.vaultkeystore.VaultKeystore
 
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -19,5 +22,11 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
+        // The vault key behind a strong biometric (#3595).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, VaultKeystore.CHANNEL)
+            .setMethodCallHandler(VaultKeystore(this))
+        // Whether Quark is the autofill service, and the screen that makes it one (#3600).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AutofillSettings.CHANNEL)
+            .setMethodCallHandler(AutofillSettings(this))
     }
 }

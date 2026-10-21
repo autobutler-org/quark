@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Quark's autofill service (#3600). Its settings are the app, where the vault page turns biometric unlock on. -->
+<autofill-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="org.autobutler.MainActivity" />
