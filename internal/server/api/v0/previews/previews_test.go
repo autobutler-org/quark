@@ -9,6 +9,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"image"
+	"image/png"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,6 +27,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/docreadutil"
+	"github.com/autobutler-org/quark/pkg/util/pptxutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -366,6 +370,111 @@ func TestGetProperties_Refusals(t *testing.T) {
 		w := h.get("properties", map[string]string{"filePath": tc.filePath})
 		if w.Code != tc.want {
 			t.Errorf("%s: status = %d, want %d: %s", name, w.Code, tc.want, w.Body.String())
+		}
+	}
+}
+
+// writePptx exports a two-slide deck whose slides show the same picture as a
+// .pptx at rel, and returns the picture.
+func (h harness) writePptx(t *testing.T, rel string) []byte {
+	t.Helper()
+	var pic bytes.Buffer
+	if err := png.Encode(&pic, image.NewGray(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	const deck = `{"schemaVersion":1,"title":"Talk","slides":[
+		{"id":"s1","elements":[{"id":"a","type":"image","frame":{"x":0,"y":0,"width":10,"height":10},"source":"dog.png"}]},
+		{"id":"s2","elements":[{"id":"b","type":"image","frame":{"x":0,"y":0,"width":10,"height":10},"source":"dog.png"}]}]}`
+	var out bytes.Buffer
+	if _, err := pptxutil.ExportQslide(pptxutil.ExportQslideParams{
+		Source: strings.NewReader(deck),
+		Out:    &out,
+		OpenImage: func(string) (io.ReadCloser, int64, error) {
+			return io.NopCloser(bytes.NewReader(pic.Bytes())), int64(pic.Len()), nil
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h.writeFile(t, rel, out.Bytes())
+	return pic.Bytes()
+}
+
+func TestPreviewSlides_StreamsTheDeckAndItsPicturesServe(t *testing.T) {
+	h := newHarness(t)
+	pic := h.writePptx(t, "shared/talk.pptx")
+
+	w := h.get("slides", map[string]string{"filePath": "shared/talk.pptx"})
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	var got struct {
+		Deck struct {
+			Slides []struct {
+				Elements []struct {
+					Source string `json:"source"`
+				} `json:"elements"`
+			} `json:"slides"`
+		} `json:"deck"`
+		Warnings []any `json:"warnings"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body is not one JSON object: %v\n%s", err, w.Body.String())
+	}
+	if len(got.Deck.Slides) != 2 || got.Warnings == nil {
+		t.Fatalf("preview = %+v", got)
+	}
+	ref := got.Deck.Slides[0].Elements[0].Source
+	part, ok := strings.CutPrefix(ref, "part:")
+	if !ok || !strings.HasPrefix(part, "ppt/media/") {
+		t.Fatalf("picture reference = %q, want part:ppt/media/...", ref)
+	}
+
+	w = h.get("part", map[string]string{"filePath": "shared/talk.pptx", "part": part})
+	if w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), pic) || w.Header().Get("Content-Type") != "image/png" {
+		t.Errorf("part %s: status %d, %d bytes as %q", part, w.Code, w.Body.Len(), w.Header().Get("Content-Type"))
+	}
+}
+
+func TestPreviewSlides_Refusals(t *testing.T) {
+	h := newHarness(t)
+	h.writePptx(t, "other/secret.pptx")
+	h.writeFile(t, "shared/fake.pptx", []byte("this is plain text"))
+	h.writeFile(t, "shared/legacy.ppt", []byte("binary"))
+
+	for name, tc := range map[string]struct {
+		filePath string
+		want     int
+	}{
+		"no access":            {"other/secret.pptx", http.StatusNotFound},
+		"missing":              {"shared/missing.pptx", http.StatusNotFound},
+		"not what it claims":   {"shared/fake.pptx", http.StatusBadRequest},
+		"legacy binary format": {"shared/legacy.ppt", http.StatusBadRequest},
+		"no filePath":          {"", http.StatusBadRequest},
+	} {
+		w := h.get("slides", map[string]string{"filePath": tc.filePath})
+		if w.Code != tc.want {
+			t.Errorf("%s: status = %d, want %d: %s", name, w.Code, tc.want, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), `"deck"`) {
+			t.Errorf("%s: a refusal started a deck: %s", name, w.Body.String())
+		}
+	}
+}
+
+func TestGetPart_ServesOnlyAPresentationsMediaFolder(t *testing.T) {
+	h := newHarness(t)
+	h.writePptx(t, "shared/talk.pptx")
+
+	for _, part := range []string{
+		"ppt/presentation.xml", "ppt/slides/slide1.xml", "ppt/media/../presentation.xml",
+		"word/media/image1.png", "ppt/media/image9.png",
+	} {
+		w := h.get("part", map[string]string{"filePath": "shared/talk.pptx", "part": part})
+		if w.Code != http.StatusNotFound {
+			t.Errorf("%s: status = %d, want 404", part, w.Code)
 		}
 	}
 }

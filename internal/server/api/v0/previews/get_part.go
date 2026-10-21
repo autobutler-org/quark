@@ -13,11 +13,11 @@ import (
 
 // getPart godoc
 // @Summary Get an image from inside a document
-// @Description Streams one image a document preview's image block names. This is not a general zip browser: only a PNG, JPEG, GIF or WebP entry under the document's media folder (word/media/ for .docx and .docm, Pictures/ for .odt), named without any climbing, is served, and anything else is a 404. Needs read access on the document.
+// @Description Streams one image a document preview's image block names, or a slides preview's "part:" picture reference with the prefix taken off. This is not a general zip browser: only a PNG, JPEG, GIF, WebP or BMP entry under the document's media folder (word/media/ for .docx and .docm, Pictures/ for .odt, ppt/media/ for .pptx, .pptm and .ppsx), named without any climbing, is served, and anything else is a 404. Needs read access on the document.
 // @Tags previews
-// @Produce png,jpeg,gif,image/webp
+// @Produce png,jpeg,gif,image/webp,image/bmp
 // @Param filePath query string true "Path to the document"
-// @Param part query string true "The image's entry inside the document, e.g. word/media/image1.png"
+// @Param part query string true "The image's entry inside the document, e.g. word/media/image1.png or ppt/media/image3.png"
 // @Param serial query string false "Device serial number"
 // @Success 200 {file} binary "Image content"
 // @Failure 400 {object} serverutil.Response "Bad Request"
