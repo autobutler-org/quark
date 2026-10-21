@@ -1017,6 +1017,12 @@ var (
 	// ErrRotationNotNeeded reports creating a key version after the first
 	// while nobody outside the channel holds the current one.
 	ErrRotationNotNeeded = errors.New("the channel key doesn't need rotating")
+	// ErrRegenerateAdminOnly reports a regeneration (#3455) by an account
+	// that isn't an admin.
+	ErrRegenerateAdminOnly = errors.New("only an admin can regenerate a channel's key")
+	// ErrRegenerateNotNeeded reports a regeneration by an admin who already
+	// holds the current version, and so can share it instead.
+	ErrRegenerateNotNeeded = errors.New("you already hold this channel's current key; it is shared from you without regenerating")
 	// ErrInvalidGrant reports a grant of the wrong size, or for an account
 	// that isn't a member with published chat keys.
 	ErrInvalidGrant = errors.New("that key grant is malformed or names someone who can't receive it")
@@ -1102,7 +1108,8 @@ type ChannelEvent struct {
 	// ActorID is who made the change; absent once that account is deleted.
 	ActorID int64 `json:"actorId,omitempty"`
 	// Payload is the JSON the signature covers, byte for byte: for a member
-	// change {"userId"|"groupId", "name", "permissions"}, for a key {"version"}.
+	// change {"userId"|"groupId", "name", "permissions"}, for a key {"version"},
+	// with "regenerated": true when an admin regenerated it (#3455).
 	Payload string `json:"payload"`
 	// Signature and SignerSignKey are both absent until the actor signs.
 	Signature     []byte    `json:"signature,omitempty"`
@@ -1331,6 +1338,11 @@ type CreateKeyVersionParams struct {
 	Version   int64
 	SealedKey []byte
 	Signature []byte
+	// Regenerate is an admin regenerating a stuck channel's key (#3455): it
+	// may create the next version without rotationNeeded, while the admin,
+	// who must also hold read_messages, holds no grant of the current one.
+	// The key_created event then says so.
+	Regenerate bool
 }
 
 // CreateKeyVersionResult is the new version, the caller's grant and the
@@ -1347,9 +1359,18 @@ type CreateKeyVersionResult struct {
 // grants through UploadGrants. A version that isn't the
 // next one is ErrVersionConflict, so two clients racing to rotate leave one
 // winner. Access errors are GetChannelKeys'.
+//
+// With Regenerate, a non-admin gets ErrRegenerateAdminOnly and an admin who
+// holds the current version ErrRegenerateNotNeeded: one who doesn't hold it is
+// waiting on whoever does, and regenerating is how they stop waiting (#3455).
+// So each regeneration needs a version the admin lacks, and an admin can't
+// stack versions by repeating it.
 func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, error) {
 	if !validGrant(params.SealedKey, params.Signature) {
 		return CreateKeyVersionResult{}, ErrInvalidGrant
+	}
+	if params.Regenerate && !params.Principal.IsAdmin {
+		return CreateKeyVersionResult{}, ErrRegenerateAdminOnly
 	}
 	if params.Database == nil {
 		return CreateKeyVersionResult{}, accessutil.ErrNoDatabase
@@ -1383,7 +1404,12 @@ func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, er
 		}
 		// Only a removal rotates the key (#2485): without one, a member could
 		// mint versions at will and bury the channel's history under them.
-		if state.current > 0 && !state.rotationNeeded() {
+		// An admin regenerating is the one exception, and only while they
+		// lack the current version (#3455).
+		switch {
+		case params.Regenerate && state.holders[state.current][params.Principal.UserID]:
+			return ErrRegenerateNotNeeded
+		case !params.Regenerate && state.current > 0 && !state.rotationNeeded():
 			return ErrRotationNotNeeded
 		}
 		actor := sql.NullInt64{Int64: params.Principal.UserID, Valid: true}
@@ -1397,7 +1423,7 @@ func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, er
 		if err != nil {
 			return err
 		}
-		event, err := recordEvent(params.Ctx, q, params.ChannelID, EventKeyCreated, params.Principal.UserID, keyEventPayload{Version: params.Version})
+		event, err := recordEvent(params.Ctx, q, params.ChannelID, EventKeyCreated, params.Principal.UserID, keyEventPayload{Version: params.Version, Regenerated: params.Regenerate})
 		if err != nil {
 			return err
 		}

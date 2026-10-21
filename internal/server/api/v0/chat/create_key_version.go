@@ -1,9 +1,6 @@
 package v0_chat
 
 import (
-	"net/http"
-
-	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
 	"github.com/gin-gonic/gin"
@@ -27,36 +24,7 @@ import (
 // @Security BearerAuth
 // @Router /chat/channels/{id}/keys [post]
 func createKeyVersion(c *gin.Context) *serverutil.Response {
-	deps, principal, failed := callerContext(c)
-	if failed != nil {
-		return failed
-	}
-	if limited := rateLimited(deps, principal, "keys"); limited != nil {
-		return limited
-	}
-	id, failed := channelID(c)
-	if failed != nil {
-		return failed
-	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, chatutil.MaxKeysRequestBytes)
-	var body createKeyVersionBody
-	if err := c.ShouldBindJSON(&body); err != nil {
-		return serverutil.BadRequest(chatutil.ErrInvalidGrant)
-	}
-	result, err := chatutil.CreateKeyVersion(chatutil.CreateKeyVersionParams{
-		Ctx:       c.Request.Context(),
-		Database:  deps.Database(),
-		EventBus:  deps.EventBus(),
-		Principal: principal,
-		ChannelID: id,
-		Version:   body.Version,
-		SealedKey: body.SealedKey,
-		Signature: body.Signature,
-	})
-	if err != nil {
-		return chatError(err)
-	}
-	return serverutil.Ok().WithData(result)
+	return newKeyVersion(c, false)
 }
 
 var createKeyVersionRoute = serverutil.ApiRoute("POST", "/chat/channels/:id/keys", createKeyVersion)

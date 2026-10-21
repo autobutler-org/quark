@@ -2,11 +2,12 @@
 // channels, listing and changing a channel's members, and each account's chat keys, where /chat/keys/me holds the
 // caller's wrapped identity and /chat/keys/:userId serves any account's public keys. /chat/channels/:id/keys serves
 // a channel's key versions and the caller's key grants, with /keys/pending and /keys/grants for filling other
-// members' grants and DELETE /keys/grants/:version for rejecting the caller's own, /chat/channels/:id/events its signed membership and key events, and /chat/channels/:id/messages
+// members' grants, DELETE /keys/grants/:version for rejecting the caller's own and POST /keys/regenerate,
+// admin-only, for an admin member to start a fresh key when the holders are away, /chat/channels/:id/events its signed membership and key events, and /chat/channels/:id/messages
 // its encrypted messages, which /chat/messages/:id deletes, and /chat/channels/:id/read moves the caller's read
 // marker, which the unread counts in the channel list are counted from. /chat/messages/:id/reactions adds an encrypted reaction
-// to a message and /chat/reactions/:id removes one. No route is admin-only;
-// admins may manage any channel but, like everyone else, list only the channels they are members of, and keys,
+// to a message and /chat/reactions/:id removes one. Only POST /keys/regenerate is admin-only, and it still needs
+// read_messages; admins may manage any channel but, like everyone else, list only the channels they are members of, and keys,
 // events and messages are for members alone. A channel the caller may not see is a 404.
 package v0_chat
 
