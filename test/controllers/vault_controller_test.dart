@@ -420,6 +420,49 @@ void main() {
       expect(other.entries, isEmpty);
     });
 
+    test('editing an entry keeps its Android app link and fields from a '
+        'newer app (#3601)', () async {
+      final c = await unlocked();
+      // As the Android service or a newer extension would write it.
+      final id = await c.save(
+        VaultItemData.fromJson({
+          'kind': 'entry',
+          'name': 'Bank',
+          'username': 'grace',
+          'androidApps': [
+            {
+              'packageName': 'com.example.bank',
+              'sha256CertFingerprints': ['AB:CD'],
+            },
+          ],
+          'passkeys': [
+            {'rpId': 'bank.example'},
+          ],
+        }),
+      );
+
+      await c.saveDraft(
+        const VaultEntryDraft(name: 'Bank', username: 'ada'),
+        id: id,
+      );
+
+      // A second device reads what the rewrite stored.
+      final other = controller();
+      await other.load();
+      await other.unlock(_password);
+      final json = other.itemById(id)!.data.toJson();
+      expect(json['username'], 'ada');
+      expect(json['androidApps'], [
+        {
+          'packageName': 'com.example.bank',
+          'sha256CertFingerprints': ['AB:CD'],
+        },
+      ]);
+      expect(json['passkeys'], [
+        {'rpId': 'bank.example'},
+      ]);
+    });
+
     test('search, folder filtering and URL matching run in memory', () async {
       final c = await unlocked();
       final work = await c.save(const VaultItemData.folder('Work'));

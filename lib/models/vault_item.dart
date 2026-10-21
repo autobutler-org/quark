@@ -44,13 +44,49 @@ class VaultCustomField {
   };
 }
 
+/// A native Android app an entry fills (#3601): its package, and the
+/// signing certificates it must carry for the entry to fill it.
+class VaultAndroidApp {
+  /// Builds a link.
+  const VaultAndroidApp({
+    required this.packageName,
+    this.sha256CertFingerprints = const [],
+  });
+
+  /// The app's package name, such as `com.example.bank`.
+  final String packageName;
+
+  /// The SHA-256 fingerprints of every certificate the app is signed with,
+  /// as the native service writes them.
+  final List<String> sha256CertFingerprints;
+
+  /// Reads one link of a decrypted item.
+  factory VaultAndroidApp.fromJson(Map<String, dynamic> json) =>
+      VaultAndroidApp(
+        packageName: json['packageName'] as String? ?? '',
+        sha256CertFingerprints: [
+          for (final print
+              in json['sha256CertFingerprints'] as List? ?? const [])
+            print as String,
+        ],
+      );
+
+  /// The link as it is encrypted.
+  Map<String, dynamic> toJson() => {
+    'packageName': packageName,
+    'sha256CertFingerprints': sha256CertFingerprints,
+  };
+}
+
 /// Everything one vault item holds, which is all encrypted on the client
 /// (#3461): the Quark stores only the ciphertext of [toJson], and sees
 /// neither the kind, the name, the folder nor any secret.
 ///
 /// The JSON is the plaintext layout [formatVersion] names. Fields that are
 /// empty are left out, and a missing field reads as empty, so a field added
-/// later reads from an older item without a new version.
+/// later reads from an older item without a new version. A field this app
+/// does not know, written by a newer app or the browser extension, is kept
+/// in [unknownFields] and written back, so rewriting an item never drops it.
 class VaultItemData {
   /// Builds an item.
   const VaultItemData({
@@ -63,6 +99,8 @@ class VaultItemData {
     this.totpSecret = '',
     this.customFields = const [],
     this.folderId,
+    this.androidApps = const [],
+    this.unknownFields = const {},
   });
 
   /// A folder named [name].
@@ -74,7 +112,9 @@ class VaultItemData {
       notes = '',
       totpSecret = '',
       customFields = const [],
-      folderId = null;
+      folderId = null,
+      androidApps = const [],
+      unknownFields = const {};
 
   /// The plaintext layout this class reads and writes, sent beside the
   /// ciphertext as `formatVersion` and bound into it as additional data.
@@ -107,6 +147,55 @@ class VaultItemData {
   /// The item id of the folder this is filed in, or null for none. A folder
   /// that has since been deleted reads as none.
   final int? folderId;
+
+  /// The native Android apps this entry fills, each only while it is signed
+  /// with the certificates its link lists.
+  final List<VaultAndroidApp> androidApps;
+
+  /// The fields of the decrypted JSON this app does not read, as they were.
+  final Map<String, dynamic> unknownFields;
+
+  /// The JSON keys this class reads; any other is kept in [unknownFields].
+  static const _knownKeys = {
+    'kind',
+    'name',
+    'url',
+    'username',
+    'password',
+    'notes',
+    'totpSecret',
+    'customFields',
+    'folderId',
+    'androidApps',
+  };
+
+  /// This item with the given fields replaced, keeping [androidApps] and
+  /// [unknownFields]. Pass [clearFolder] to file it in no folder.
+  VaultItemData copyWith({
+    VaultItemKind? kind,
+    String? name,
+    String? url,
+    String? username,
+    String? password,
+    String? notes,
+    String? totpSecret,
+    List<VaultCustomField>? customFields,
+    int? folderId,
+    bool clearFolder = false,
+    List<VaultAndroidApp>? androidApps,
+  }) => VaultItemData(
+    kind: kind ?? this.kind,
+    name: name ?? this.name,
+    url: url ?? this.url,
+    username: username ?? this.username,
+    password: password ?? this.password,
+    notes: notes ?? this.notes,
+    totpSecret: totpSecret ?? this.totpSecret,
+    customFields: customFields ?? this.customFields,
+    folderId: clearFolder ? null : folderId ?? this.folderId,
+    androidApps: androidApps ?? this.androidApps,
+    unknownFields: unknownFields,
+  );
 
   /// [url]'s host, lowercased, or empty when it has none. A URL typed with
   /// no scheme (`example.com/login`) is read as https.
@@ -143,11 +232,20 @@ class VaultItemData {
           VaultCustomField.fromJson(field as Map<String, dynamic>),
       ],
       folderId: (json['folderId'] as num?)?.toInt(),
+      androidApps: [
+        for (final app in json['androidApps'] as List? ?? const [])
+          VaultAndroidApp.fromJson(app as Map<String, dynamic>),
+      ],
+      unknownFields: {
+        for (final MapEntry(:key, :value) in json.entries)
+          if (!_knownKeys.contains(key)) key: value,
+      },
     );
   }
 
   /// The item as it is encrypted.
   Map<String, dynamic> toJson() => {
+    ...unknownFields,
     'kind': kind.name,
     'name': name,
     if (url.isNotEmpty) 'url': url,
@@ -158,6 +256,8 @@ class VaultItemData {
     if (customFields.isNotEmpty)
       'customFields': [for (final field in customFields) field.toJson()],
     'folderId': ?folderId,
+    if (androidApps.isNotEmpty)
+      'androidApps': [for (final app in androidApps) app.toJson()],
   };
 
   /// [toJson] as the UTF-8 bytes that are encrypted.

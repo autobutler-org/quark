@@ -207,24 +207,27 @@ class VaultController extends ChangeNotifier {
     return folder?.data.kind == VaultItemKind.folder ? folder!.data.name : '';
   }
 
-  /// Saves [draft] as a new entry, or over entry [id], keeping the custom
-  /// fields it already had. Returns the entry's id.
-  Future<int> saveDraft(VaultEntryDraft draft, {int? id}) => save(
-    VaultItemData(
-      kind: VaultItemKind.entry,
-      name: draft.name,
-      url: draft.url,
-      username: draft.username,
-      password: draft.password,
-      notes: draft.notes,
-      totpSecret: draft.totpSecret,
-      customFields: id == null
-          ? const []
-          : itemById(id)?.data.customFields ?? const [],
-      folderId: draft.folderId,
-    ),
-    id: id,
-  );
+  /// Saves [draft] as a new entry, or over entry [id], keeping what the
+  /// draft does not carry: custom fields, Android app links and fields from
+  /// a newer app (#3601). Returns the entry's id.
+  Future<int> saveDraft(VaultEntryDraft draft, {int? id}) {
+    final existing = id == null ? null : itemById(id)?.data;
+    return save(
+      (existing ?? const VaultItemData(kind: VaultItemKind.entry, name: ''))
+          .copyWith(
+            kind: VaultItemKind.entry,
+            name: draft.name,
+            url: draft.url,
+            username: draft.username,
+            password: draft.password,
+            notes: draft.notes,
+            totpSecret: draft.totpSecret,
+            folderId: draft.folderId,
+            clearFolder: draft.folderId == null,
+          ),
+      id: id,
+    );
+  }
 
   /// The item with [id], or null.
   VaultItem? itemById(int id) {
