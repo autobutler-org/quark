@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/account_keys.dart';
+import 'package:quark/models/vault_item.dart';
 import 'package:quark/services/account_crypto.dart';
 import 'package:quark/utils/error_text.dart';
 
@@ -189,6 +191,13 @@ void main() {
           formatVersion: 1,
           wrongKey: _wrong,
         ),
+        () => crypto.decryptVaultItem(
+          sealed.ciphertext.sublist(0, 15),
+          sealed.nonce,
+          key,
+          formatVersion: 1,
+          wrongKey: _wrong,
+        ),
       ];
       for (final attempt in attempts) {
         expect(
@@ -198,6 +207,31 @@ void main() {
           ),
         );
       }
+    });
+
+    // The item every client pins: quark-browser-extensions, ios/ and
+    // android/ read the same file (#3597).
+    test('opens the shared item vector', () {
+      final vector =
+          (jsonDecode(
+                    File('test/fixtures/vault_vectors.json').readAsStringSync(),
+                  )
+                  as Map<String, dynamic>)['item']
+              as Map<String, dynamic>;
+      final key = crypto.sodium.secureCopy(
+        Uint8List.fromList((vector['key'] as List).cast<int>()),
+      );
+      addTearDown(key.dispose);
+
+      final opened = crypto.decryptVaultItem(
+        base64Decode(vector['ciphertext'] as String),
+        base64Decode(vector['nonce'] as String),
+        key,
+        formatVersion: vector['formatVersion'] as int,
+        wrongKey: _wrong,
+      );
+      expect(utf8.decode(opened), vector['plaintext']);
+      expect(VaultItemData.decode(opened).name, 'GitHub');
     });
 
     test('does not open as a plain wrap, without the additional data', () {
