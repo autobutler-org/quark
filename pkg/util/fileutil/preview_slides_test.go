@@ -136,3 +136,85 @@ func TestOpenDocumentPartServesOnlyThePresentationsMediaFolder(t *testing.T) {
 		}
 	}
 }
+
+func TestPreviewSlidesStreamsAnOdpWithPicturesNamedInPlace(t *testing.T) {
+	f := newImportFixture(t)
+	seedOdp(t, f.root, "decks/Talk.odp")
+	before := f.tree(t)
+
+	var out bytes.Buffer
+	result, err := fileutil.PreviewSlides(previewSlidesParams(f, "decks/Talk.odp", &out))
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	if result.Slides != 2 || result.Pictures != 1 {
+		t.Errorf("result = %+v", result)
+	}
+	var got slidesPreview
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("not one JSON object: %v\n%s", err, out.String())
+	}
+	if got.Deck.Title != "Talk" || len(got.Deck.Slides) != 2 || got.Deck.Slides[1].Notes != "Thanks" {
+		t.Fatalf("deck = %+v", got.Deck)
+	}
+	ref := got.Deck.Slides[0].Elements[0].Source
+	if ref != fileutil.SlidePartPrefix+odpPicture || got.Deck.Slides[1].Elements[0].Source != ref {
+		t.Errorf("picture references = %q, %q", ref, got.Deck.Slides[1].Elements[0].Source)
+	}
+	if got.Warnings == nil {
+		t.Error("warnings = null, want a list")
+	}
+	if after := f.tree(t); strings.Join(after, ",") != strings.Join(before, ",") {
+		t.Errorf("a preview wrote files: %v -> %v", before, after)
+	}
+
+	opened, err := fileutil.OpenDocumentPart(fileutil.OpenDocumentPartParams{
+		Ctx: context.Background(), Registry: f.params.Registry, FilePath: "decks/Talk.odp",
+		Part: strings.TrimPrefix(ref, fileutil.SlidePartPrefix),
+	})
+	if err != nil {
+		t.Fatalf("open %s: %v", ref, err)
+	}
+	defer opened.Close()
+	body, err := io.ReadAll(opened.Reader)
+	if err != nil || !bytes.HasPrefix(body, []byte("\x89PNG")) || opened.ContentType != "image/png" {
+		t.Errorf("part = %d bytes, %q, %v", len(body), opened.ContentType, err)
+	}
+}
+
+func TestPreviewSlidesRefusesAnOdpItCannotRead(t *testing.T) {
+	f := newImportFixture(t)
+	writeTestFile(t, f.root, "Fake.odp", []byte("not a zip"))
+	writeTestFile(t, f.root, "Locked.odp", odpPackage(t, true))
+	writeTestFile(t, f.root, "Template.otp", odpPackage(t, false))
+
+	for _, name := range []string{"Fake.odp", "Locked.odp", "Template.otp"} {
+		var out bytes.Buffer
+		_, err := fileutil.PreviewSlides(previewSlidesParams(f, name, &out))
+		var unsupported *fileutil.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Errorf("%s: err = %v, want UnsupportedError", name, err)
+		}
+		if out.Len() != 0 {
+			t.Errorf("%s: wrote %q before failing", name, out.String())
+		}
+	}
+}
+
+func TestOpenDocumentPartServesOnlyTheOdpPicturesFolder(t *testing.T) {
+	f := newImportFixture(t)
+	seedOdp(t, f.root, "Talk.odp")
+
+	for _, part := range []string{
+		"content.xml", "styles.xml", "META-INF/manifest.xml", "Pictures/../content.xml",
+		"ppt/media/image1.png", "Pictures/", "Pictures/missing.png",
+	} {
+		_, err := fileutil.OpenDocumentPart(fileutil.OpenDocumentPartParams{
+			Ctx: context.Background(), Registry: f.params.Registry, FilePath: "Talk.odp", Part: part,
+		})
+		var notFound *fileutil.NotFoundError
+		if !errors.As(err, &notFound) {
+			t.Errorf("%s: err = %v, want NotFoundError", part, err)
+		}
+	}
+}

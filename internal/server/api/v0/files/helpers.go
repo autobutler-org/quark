@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 
@@ -305,4 +306,68 @@ func uploadedPaths(written []uploadutil.UploadedFile) uploadFilesResponse {
 		paths = append(paths, strings.TrimPrefix(file.Path, "/"))
 	}
 	return uploadFilesResponse{Paths: paths}
+}
+
+// importPresentation is the import route every presentation format shares:
+// it checks read access on filePath and write access on rootDir (the file's
+// own folder when left out), calls run, makes the caller the owner of what
+// it wrote, and answers with the .qslide's path and warnings. Kind names the
+// format in the log.
+func importPresentation(c *gin.Context, kind string,
+	run func(fileutil.ImportPptxParams) (fileutil.ImportPptxResult, error)) *serverutil.Response {
+	filePath := c.Query("filePath")
+	if filePath == "" {
+		return serverutil.BadRequest(errors.New("filePath query parameter is required"))
+	}
+	rootDir, ok := c.GetQuery("rootDir")
+	if !ok {
+		rootDir = path.Dir(filePath)
+	}
+	if rootDir == "." {
+		rootDir = ""
+	}
+	serial := c.Query("serial")
+
+	deps, access, resp := loadCaller(c)
+	if resp != nil {
+		return resp
+	}
+	if resp := gateReadWrite(access, serial, filePath, rootDir); resp != nil {
+		return resp
+	}
+
+	result, err := run(fileutil.ImportPptxParams{
+		Ctx:      c.Request.Context(),
+		Registry: deps.VFSRegistry(),
+		EventBus: deps.EventBus(),
+		FilePath: filePath,
+		RootDir:  rootDir,
+		Serial:   serial,
+	})
+	if err != nil {
+		// An import runs for as long as the package is large, and the access
+		// log only carries the status code (#1705).
+		slog.Error("import: presentation import failed", "kind", kind, "path", filePath, "err", err)
+		return fileError(err)
+	}
+	accessutil.RecordOwner(c.Request.Context(), deps.Database(), access, serial, result.Path)
+	if result.MediaDirCreated {
+		accessutil.RecordOwner(c.Request.Context(), deps.Database(), access, serial, result.MediaDir)
+	} else {
+		for _, p := range result.Media {
+			accessutil.RecordOwner(c.Request.Context(), deps.Database(), access, serial, p)
+		}
+	}
+
+	warnings := make([]ImportWarningJSON, 0, len(result.Warnings))
+	for _, w := range result.Warnings {
+		warnings = append(warnings, ImportWarningJSON{Slide: w.Slide, Message: w.Message})
+	}
+	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(ImportPptxJSON{
+		Path:     result.Path,
+		MediaDir: result.MediaDir,
+		Slides:   result.Slides,
+		Pictures: result.Pictures,
+		Warnings: warnings,
+	})
 }

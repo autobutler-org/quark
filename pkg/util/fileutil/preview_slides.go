@@ -7,13 +7,12 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/autobutler-org/quark/pkg/util/pptxutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // SlidePartPrefix marks a picture reference in a slides preview as an entry
 // inside the presentation itself, served by the part endpoint, rather than a
-// file: "part:ppt/media/image3.png".
+// file: "part:ppt/media/image3.png", "part:Pictures/1000000.png".
 const SlidePartPrefix = "part:"
 
 // PreviewSlidesParams says which presentation to preview and where the deck
@@ -56,10 +55,10 @@ type PreviewSlidesResult struct {
 	Slides   int
 	Pictures int
 	// Warnings lists what was left out or approximated, slide by slide.
-	Warnings []pptxutil.ImportWarning
+	Warnings []SlideWarning
 }
 
-// PreviewSlides streams a PowerPoint presentation as the .qslide deck the
+// PreviewSlides streams a PowerPoint or OpenDocument presentation as the .qslide deck the
 // presentation viewer draws (docs/architecture/read-only-documents.md,
 // Slides). It is the import's reader with nothing stored: each picture is
 // named in place, as [SlidePartPrefix] and its entry in the package, and
@@ -70,7 +69,8 @@ type PreviewSlidesResult struct {
 // [NotFoundError] or an [UnsupportedError]; one after it leaves the object
 // unclosed, which is how the client tells a cut-off deck from a whole one.
 func PreviewSlides(params PreviewSlidesParams) (PreviewSlidesResult, error) {
-	if !IsPptxPath(params.FilePath) {
+	read, ok := slideReaderFor(params.FilePath)
+	if !ok {
 		return PreviewSlidesResult{}, &UnsupportedError{
 			Err: fmt.Errorf("not a presentation Quark can show: %s", filepath.Base(params.FilePath)),
 		}
@@ -86,37 +86,25 @@ func PreviewSlides(params PreviewSlidesParams) (PreviewSlidesResult, error) {
 	defer closer.Close()
 
 	out := &envelopeWriter{w: params.Out, prefix: `{"deck":`}
-	imported, err := pptxutil.ImportPptx(pptxutil.ImportPptxParams{
-		Source: ctxReaderAt{ctx: params.Ctx, r: source},
-		Size:   size,
-		Out:    out,
-		StoreMedia: func(part, _ string, r io.Reader) (string, error) {
-			if _, err := io.Copy(io.Discard, r); err != nil {
-				return "", err
-			}
-			return SlidePartPrefix + part, nil
-		},
-		Title: titleFromPath(params.FilePath),
-	})
+	storeMedia := func(part, _ string, r io.Reader) (string, error) {
+		if _, err := io.Copy(io.Discard, r); err != nil {
+			return "", err
+		}
+		return SlidePartPrefix + part, nil
+	}
+	imported, err := read(params.Ctx, ctxReaderAt{ctx: params.Ctx, r: source}, size, out,
+		storeMedia, titleFromPath(params.FilePath))
 	if err != nil {
 		return PreviewSlidesResult{}, importError(err)
 	}
-	warnings := make([]SlideWarning, 0, len(imported.Warnings))
-	for _, w := range imported.Warnings {
-		warnings = append(warnings, SlideWarning(w))
-	}
-	tail, err := json.Marshal(warnings)
+	tail, err := json.Marshal(imported.Warnings)
 	if err != nil {
 		return PreviewSlidesResult{}, err
 	}
 	if _, err := fmt.Fprintf(out, `,"warnings":%s}`+"\n", tail); err != nil {
 		return PreviewSlidesResult{}, err
 	}
-	return PreviewSlidesResult{
-		Slides:   imported.Slides,
-		Pictures: imported.Pictures,
-		Warnings: imported.Warnings,
-	}, nil
+	return PreviewSlidesResult(imported), nil
 }
 
 // titleFromPath is a presentation's title when the package names none: its
