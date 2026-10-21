@@ -294,3 +294,7 @@ a plaintext: the app derives and opens everything ([Chat security](../chat-secur
 derivation). A snapshot copies both tables as they are into `vault_items_backup.db`, and `backup.ImportVault`
 restores them ([Backup](backup.md)). The household vault of `005_vault`, one master password for everyone, is
 dropped by `038_drop_household_vault`.
+
+The phone apps keep a copy of an account's vault ciphertext, and optionally its vault key behind a biometric, so
+that iOS and Android autofill can fill logins without the Quark. That is all on the phone, not in a database here:
+[Native vault autofill](vault-autofill.md).
