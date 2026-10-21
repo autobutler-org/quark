@@ -86,10 +86,19 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         }
     }
 
-    /// A QuickType identity (#3599) was picked. Reading the key always shows Face ID or Touch ID, so there is no
-    /// fill without the user: iOS calls ``prepareInterfaceToProvideCredential(for:)`` next.
+    /// A QuickType identity (#3599) was picked. Its record is looked up in the ciphertext cache first, which needs
+    /// no key: an item the cache no longer lists, or an account it no longer holds, fills nothing. Reading the key
+    /// always shows Face ID or Touch ID, so there is no fill without the user: for a record the cache holds, iOS
+    /// calls ``prepareInterfaceToProvideCredential(for:)`` next.
     override func provideCredentialWithoutUserInteraction(for credentialIdentity: ASPasswordCredentialIdentity) {
-        cancel(.userInteractionRequired)
+        let record = credentialIdentity.recordIdentifier ?? ""
+        queue.async {
+            let caches = Self.cacheDirectory().map { VaultAutofillCache.load(directory: $0) } ?? []
+            let held = caches.contains(where: { $0.holds(recordIdentifier: record) })
+            DispatchQueue.main.async { [weak self] in
+                self?.cancel(held ? .userInteractionRequired : .credentialIdentityNotFound)
+            }
+        }
     }
 
     /// Fills the QuickType identity (#3599) whose record identifier is a ``VaultAutofillEntry/recordIdentifier``.

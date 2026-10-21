@@ -59,7 +59,7 @@ class VaultBiometricController extends ChangeNotifier {
        _read = read ?? VaultBiometric.read,
        _delete = delete ?? VaultBiometric.delete,
        _clearCache = clearCache ?? NativeVaultCache.instance.clear,
-       _account = account ?? _activeAccountKey;
+       _account = account ?? activeAccountKey;
 
   /// The app's controller.
   static final VaultBiometricController instance = VaultBiometricController();
@@ -370,7 +370,7 @@ class VaultBiometricController extends ChangeNotifier {
 
   /// The account key (`VaultCache.accountKey`) of the account signed in on
   /// the active Quark, or null for none.
-  static Future<String?> _activeAccountKey() async {
+  static Future<String?> activeAccountKey() async {
     final settings = AppSettings.instance;
     final host = settings.activeHost;
     if (host == null || settings.sessionToken == null) return null;

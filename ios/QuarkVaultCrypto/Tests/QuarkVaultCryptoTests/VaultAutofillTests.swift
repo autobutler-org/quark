@@ -104,6 +104,16 @@ final class VaultAutofillTests: XCTestCase {
         XCTAssertNil(VaultAutofill.credential(for: entry, in: cache, vaultKey: [UInt8](repeating: 7, count: 32)))
     }
 
+    func testAQuickTypeRecordIsHeldOnlyWhileTheCacheListsItsItem() throws {
+        let cache = try cache()
+        let entry = try XCTUnwrap(VaultAutofill.entries(in: cache, matching: [], vaultKey: key)?.first)
+        XCTAssertTrue(cache.holds(recordIdentifier: entry.recordIdentifier))
+        XCTAssertFalse(cache.holds(recordIdentifier: "\(account)/9"), "an item since deleted")
+        XCTAssertFalse(cache.holds(recordIdentifier: "acct_ffffffffffffffffffffffffffffffff/42"), "another account")
+        XCTAssertFalse(cache.holds(recordIdentifier: "\(account)/42/1"), "a record that does not parse")
+        XCTAssertFalse(cache.holds(recordIdentifier: account), "no item id")
+    }
+
     func testTheKeyMustMatchTheStoredFingerprint() throws {
         for vector in fingerprints {
             let vectorKey = try XCTUnwrap(vector["key"] as? [Int]).map { UInt8($0) }

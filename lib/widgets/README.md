@@ -315,6 +315,11 @@ lib/widgets/
                                 asks for the login password before the vault
                                 is deleted (#3615); app-side for the app's
                                 ConfirmPasswordField
+  vault_quicktype/
+    vault_quicktype_button.dart the vault bar's QuickType opt-in (#3599):
+                                follows QuickTypeController and opens the
+                                package VaultBiometricSettingsDialog over it;
+                                empty off iOS or without biometric unlock
   video_viewer/
     convert_video.dart          runs TranscodeDialogHost, queues the job and
                                 shows its snack bar; the viewer and Files share it

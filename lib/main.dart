@@ -12,6 +12,7 @@ import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/controllers/notifications_controller.dart';
+import 'package:quark/controllers/quicktype_controller.dart';
 import 'package:quark/controllers/vault_biometric_controller.dart';
 import 'package:quark/controllers/vault_cache_controller.dart';
 import 'package:quark/controllers/vault_controller.dart';
@@ -78,6 +79,12 @@ Future<void> _run() async {
   // Unlocks the vault with a face or fingerprint where turned on, and
   // deletes the cached key when the account or the vault changes (#3595).
   VaultBiometricController.instance.start(vault: VaultController.instance);
+  // Keeps opted-in vault logins in the iOS QuickType bar, and empties it
+  // on every event that ends the opt-in (#3599).
+  QuickTypeController.instance.start(
+    vault: VaultController.instance,
+    biometric: VaultBiometricController.instance,
+  );
   // A right-click opens an item's own menu everywhere it has one (#2276), so
   // the browser's menu is turned off once, for the whole app. Text fields
   // fall back to Flutter's own copy/paste menu.

@@ -86,6 +86,15 @@ public struct VaultAutofillCache: Equatable {
         return VaultAutofillCache(accountKey: accountKey, host: host, username: username, syncedAt: syncedAt, items: items)
     }
 
+    /// Whether this cache still lists the item a QuickType identity's `recordIdentifier` (#3599) names, as
+    /// ``VaultAutofillEntry/recordIdentifier`` makes it: this account's key, a slash, and the item's id. A record
+    /// for another account, or one that does not parse, is not held.
+    public func holds(recordIdentifier: String) -> Bool {
+        let parts = recordIdentifier.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 2, parts[0] == accountKey, let id = Int64(parts[1]) else { return false }
+        return items.contains(where: { $0.id == id })
+    }
+
     /// Dart's `toIso8601String` writes microseconds, which `ISO8601DateFormatter` does not read, so the
     /// fraction is dropped first.
     private static func parseDate(_ text: String) -> Date? {

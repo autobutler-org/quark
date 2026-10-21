@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/controllers/quicktype_controller.dart';
 import 'package:quark/controllers/recovery_phrase_controller.dart';
 import 'package:quark/controllers/vault_biometric_controller.dart';
 import 'package:quark/controllers/vault_controller.dart';
@@ -28,6 +29,7 @@ import 'package:quark/widgets/vault/vault_entry_page.dart';
 import 'package:quark/widgets/vault/vault_error_view.dart';
 import 'package:quark/widgets/vault/vault_export_menu.dart';
 import 'package:quark/widgets/vault/vault_start_over_dialog.dart';
+import 'package:quark/widgets/vault_quicktype/vault_quicktype_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -39,17 +41,20 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// list, search, add, edit, delete, import and export. Where
 /// [VaultBiometricController] says the device can, the lock screen opens
 /// with Face ID, Touch ID or a fingerprint instead (#3595), and the open
-/// vault offers to turn that on and has the setting in its bar. An open vault
-/// whose key has no wrap under the recovery phrase offers to add one, so a
-/// recovery keeps it (#3530).
+/// vault offers to turn that on and has the setting in its bar. On iOS with
+/// biometric unlock on, the bar also has the opt-in for QuickType suggestions
+/// (#3599). An open vault whose key has no wrap under the recovery phrase
+/// offers to add one, so a recovery keeps it (#3530).
 class VaultPage extends StatefulWidget {
   /// Creates the page over [controller], the app's vault by default,
-  /// [biometric], the app's biometric unlock by default, and
-  /// [recoveryPhrase], the app's recovery phrase offer by default.
+  /// [biometric], the app's biometric unlock by default, [recoveryPhrase],
+  /// the app's recovery phrase offer by default, and [quickType], the app's
+  /// QuickType setting by default.
   const VaultPage({
     this.controller,
     this.biometric,
     this.recoveryPhrase,
+    this.quickType,
     super.key,
   });
 
@@ -61,6 +66,9 @@ class VaultPage extends StatefulWidget {
 
   /// The recovery phrase offer. Tests pass one with fake services.
   final RecoveryPhraseController? recoveryPhrase;
+
+  /// The QuickType setting. Tests pass one with a fake store.
+  final QuickTypeController? quickType;
 
   @override
   State<VaultPage> createState() => _VaultPageState();
@@ -281,6 +289,10 @@ class _VaultPageState extends State<VaultPage>
                   tooltip: _biometric.settingTitle,
                   onPressed: _biometricSettings,
                 ),
+              VaultQuickTypeButton(
+                controller: widget.quickType,
+                onOpen: _vault.touch,
+              ),
               QuarkBarIconButton(
                 key: const ValueKey('vault_lock'),
                 icon: QuarkIcons.lock_open,

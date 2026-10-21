@@ -28,5 +28,9 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "VaultKeychain") {
       VaultKeychain.register(with: registrar.messenger())
     }
+    // Quark logins in the QuickType bar, opt-in (#3599).
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "QuickTypeIdentities") {
+      QuickTypeIdentities.register(with: registrar.messenger())
+    }
   }
 }
