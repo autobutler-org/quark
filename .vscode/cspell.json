@@ -37,7 +37,8 @@
     "tmp",
     "web/sodium.js",
     "**/testdata/**",
-    "test/chaos/powercut/lazyfs.patch"
+    "test/chaos/powercut/lazyfs.patch",
+    "test/fixtures/vault_vectors.json"
   ],
   "ignoreRandomStrings": true,
   "gitignoreRoot": ".gitignore",

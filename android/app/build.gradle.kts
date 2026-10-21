@@ -1,3 +1,4 @@
+// cspell:words lazysodium goterl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
@@ -97,4 +98,32 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// The vault crypto native autofill runs with no Flutter engine (#3597,
+// docs/design/native-autofill-vault.md, Decision 1): libsodium, the C library
+// the app's Dart links, through lazysodium. @aar turns off transitive
+// resolution, so JNA is named here too, at the version lazysodium declares.
+dependencies {
+    implementation("com.goterl:lazysodium-android:5.2.0@aar")
+    implementation("net.java.dev.jna:jna:5.17.0@aar")
+
+    // The JVM unit tests cannot load the Android .so files, so they run the
+    // same lazysodium API over lazysodium-java's bundled desktop libsodium,
+    // and read the vector file with a real org.json in place of android.jar's
+    // stubs.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.goterl:lazysodium-java:5.2.0")
+    testImplementation("org.json:json:20260814")
+}
+
+// lazysodium 5.2.0 is Java 21 bytecode; 5.2.0 is the first whose .so files are 16 KB
+// aligned, as Play requires. The app is unaffected, since D8 dexes it, but the JVM
+// unit tests load it as it is, so they run on a Java 21 toolchain. Gradle finds one
+// under /usr/lib/jvm on CI's Ubuntu runners. The vector file the tests read lives
+// outside the module, so it is named as an input, or a change to it alone would
+// leave the tests up to date.
+tasks.withType<Test>().configureEach {
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(21)) })
+    inputs.file(rootProject.file("../test/fixtures/vault_vectors.json"))
 }

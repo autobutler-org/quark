@@ -255,8 +255,8 @@ class AccountCrypto {
     );
   }
 
-  /// Opens what [encryptVaultItem] produced. A wrong key, a tampered
-  /// ciphertext or a [formatVersion] other than the one it was sealed with
+  /// Opens what [encryptVaultItem] produced. A wrong key, a tampered or
+  /// truncated ciphertext or a [formatVersion] other than the one it was sealed with
   /// throws a [MessageException] carrying [wrongKey]. The caller disposes
   /// [vaultKey].
   Uint8List decryptVaultItem(
@@ -266,7 +266,9 @@ class AccountCrypto {
     required int formatVersion,
     required String wrongKey,
   }) {
-    if (nonce.length != _aead.nonceBytes) throw MessageException(wrongKey);
+    if (nonce.length != _aead.nonceBytes || ciphertext.length < _aead.aBytes) {
+      throw MessageException(wrongKey);
+    }
     try {
       return _aead.decrypt(
         cipherText: ciphertext,
