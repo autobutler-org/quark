@@ -60,12 +60,16 @@ web:
 android:
   - *flutter
   - android/**
+  # test/unit/android checks the vault crypto against it.
+  - test/fixtures/vault_vectors.json
 linux:
   - *flutter
   - linux/**
 ios:
   - *flutter
   - ios/**
+  # test/unit/ios checks the vault crypto against it.
+  - test/fixtures/vault_vectors.json
   - scripts/ios-ci-signing.bash
 frontend:
   - *flutter

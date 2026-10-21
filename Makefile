@@ -1062,6 +1062,12 @@ generate/frontend/quark-icons: ## Regenerate QuarkIcons.ttf from SVGs using fant
 generate/frontend/widget-docs: ## Regenerate the widget gallery's docs from /// class comments
 	$(MAKE) -C packages/quark_widgets generate/docs
 
+.PHONY: generate/frontend/vault-vectors
+generate/frontend/vault-vectors: generate/frontend/sbom ## Rewrite test/fixtures/vault_vectors.json from the Dart vault crypto
+	# Not part of generate/frontend: the same test fails whenever the file drifts,
+	# and it runs Argon2id at the shipped 64 MiB cost.
+	flutter test test/services/vault_vectors_test.dart --dart-define=WRITE_VAULT_VECTORS=true
+
 .PHONY: generate/frontend/sbom
 generate/frontend/sbom: generate/frontend/pub-get ## Generate Flutter SBOM asset from pubspec.lock
 	# Plain `dart`, not `dart run`: `dart run` first runs every dependency's native
@@ -1349,6 +1355,19 @@ test/stress/capacity: build/backend ## Simulate STRESS_USERS app clients against
 
 .PHONY: test/unit
 test/unit: test/unit/backend test/unit/frontend ## Run unit tests
+
+# The native unit tests are not part of test/unit: they need a JDK and the Android
+# SDK, or Swift and libsodium, which CI's build-android and build-ios jobs have.
+.PHONY: test/unit/android
+test/unit/android: generate/frontend/sbom ## Run the Android JVM unit tests (needs a JDK and the Android SDK)
+	# --config-only writes android/gradlew and local.properties without building.
+	# cspell:words gradlew
+	flutter build apk --config-only
+	cd android && ./gradlew :app:testDebugUnitTest
+
+.PHONY: test/unit/ios
+test/unit/ios: ## Run the iOS vault crypto package's tests (needs Swift; libsodium on Linux)
+	swift test --package-path ios/QuarkVaultCrypto
 
 .PHONY: test/unit/backend
 test/unit/backend: check/db internal/server/public/stub.txt ## Run unit tests for backend

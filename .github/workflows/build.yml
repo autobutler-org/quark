@@ -149,6 +149,10 @@ jobs:
       - name: Build [android]
         run: |
           make build/frontend/android
+      # The JVM unit tests, the vault crypto native autofill runs (#3597) among them.
+      - name: Test [android]
+        run: |
+          make test/unit/android
       # Saved on main only, like the Flutter SDK in .github/actions/setup-flutter: this
       # cache is 3 GB, and a copy saved on any other ref is one only that ref can restore.
       - name: Save Gradle caches
@@ -264,6 +268,11 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      # The vault crypto the AutoFill extension runs (#3597): a Swift package, so
+      # `swift test` on the host covers it with no simulator and no Xcode project.
+      - name: Test [ios]
+        run: |
+          make test/unit/ios
       # Dependabot pull requests run with the secrets withheld, so the signing material
       # is empty and a signed build is impossible however correct the branch is. The
       # job-level `if` above cannot see that: dependabot's branches live in this
