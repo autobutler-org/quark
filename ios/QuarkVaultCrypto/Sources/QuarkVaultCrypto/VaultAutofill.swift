@@ -68,17 +68,17 @@ public struct VaultAutofillCache: Equatable {
         let range = NSRange(accountKey.startIndex..., in: accountKey)
         guard accountPattern.firstMatch(in: accountKey, range: range) != nil,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              (json["schema"] as? NSNumber)?.intValue == schema,
+              json["schema"] as? Int == schema,
               let host = json["host"] as? String,
               let username = json["username"] as? String,
               let rawItems = json["items"] as? [[String: Any]]
         else { return nil }
         var items: [Item] = []
         for raw in rawItems {
-            guard let id = (raw["id"] as? NSNumber)?.int64Value,
+            guard let id = raw["id"] as? Int64,
                   let ciphertext = (raw["ciphertext"] as? String).flatMap({ Data(base64Encoded: $0) }),
                   let nonce = (raw["nonce"] as? String).flatMap({ Data(base64Encoded: $0) }),
-                  let formatVersion = (raw["formatVersion"] as? NSNumber)?.intValue
+                  let formatVersion = raw["formatVersion"] as? Int
             else { return nil }
             items.append(Item(id: id, ciphertext: Array(ciphertext), nonce: Array(nonce), formatVersion: formatVersion))
         }
