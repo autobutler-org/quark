@@ -163,6 +163,10 @@ func documentMediaDir(filePath string) (string, bool) {
 	if IsPptxPath(filePath) {
 		return "ppt/media/", true
 	}
+	if IsOdpPath(filePath) {
+		// Matched lowercased; ODF writes Pictures/.
+		return "pictures/", true
+	}
 	format, ok := docreadutil.FormatForName(filePath)
 	if !ok {
 		return "", false

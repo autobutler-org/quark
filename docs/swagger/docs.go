@@ -5773,6 +5773,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/files/import/odp": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reads an .odp and writes it as a .qslide, the format the Slides editor opens, in rootDir — the .odp's own folder when rootDir is left out. Its pictures are copied into a \u003cname\u003e_media folder beside the presentation. Nothing is overwritten: a name already taken is kept, and the import lands under the next free numbered name, as Talk_(1).qslide. What the editor cannot show — charts, embedded objects, video, animations, freeform paths — is skipped or approximated and listed in the warnings, slide by slide. Macros are never read. A file that is not an .odp, is not what its name says, is encrypted, or is past the import limits is a 400. The .odp itself is left untouched. Needs read access on it and write access on rootDir; the caller owns what the import created.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Import an OpenDocument presentation as a Quark presentation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Path to the .odp file to import",
+                        "name": "filePath",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Folder to write the presentation into; defaults to the .odp's folder",
+                        "name": "rootDir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device serial number",
+                        "name": "serial",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_files.ImportPptxJSON"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/files/import/pptx": {
             "post": {
                 "security": [
@@ -8186,7 +8256,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Streams one image a document preview's image block names, or a slides preview's \"part:\" picture reference with the prefix taken off. This is not a general zip browser: only a PNG, JPEG, GIF, WebP or BMP entry under the document's media folder (word/media/ for .docx and .docm, Pictures/ for .odt, ppt/media/ for .pptx, .pptm and .ppsx), named without any climbing, is served, and anything else is a 404. Needs read access on the document.",
+                "description": "Streams one image a document preview's image block names, or a slides preview's \"part:\" picture reference with the prefix taken off. This is not a general zip browser: only a PNG, JPEG, GIF, WebP or BMP entry under the document's media folder (word/media/ for .docx and .docm, Pictures/ for .odt and .odp, ppt/media/ for .pptx, .pptm and .ppsx), named without any climbing, is served, and anything else is a 404. Needs read access on the document.",
                 "produces": [
                     "image/png",
                     "image/jpeg",
@@ -8208,7 +8278,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "The image's entry inside the document, e.g. word/media/image1.png or ppt/media/image3.png",
+                        "description": "The image's entry inside the document, e.g. word/media/image1.png, ppt/media/image3.png or Pictures/10000000000001.png",
                         "name": "part",
                         "in": "query",
                         "required": true
@@ -8377,7 +8447,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Streams a .pptx, .pptm or .ppsx presentation as JSON for the read-only presentation viewer: {deck, warnings}, the deck a .qslide presentation and each warning a {slide, message}. The deck is written slide by slide as it is read, and each picture is named in place by its entry in the package after a \"part:\" prefix (part:ppt/media/image3.png), which GET /previews/part serves; nothing is stored. The warnings, what was left out or approximated with slide 0 for the deck, come after the deck because they are known only at its end, so a body that does not parse was cut off by a server error. Macros are never read. A file that is not what its name says, or is past the import limits, is a 400. Needs read access on the presentation.",
+                "description": "Streams a .pptx, .pptm, .ppsx or .odp presentation as JSON for the read-only presentation viewer: {deck, warnings}, the deck a .qslide presentation and each warning a {slide, message}. The deck is written slide by slide as it is read, and each picture is named in place by its entry in the package after a \"part:\" prefix (part:ppt/media/image3.png, part:Pictures/10000000000001.png), which GET /previews/part serves; nothing is stored. The warnings, what was left out or approximated with slide 0 for the deck, come after the deck because they are known only at its end, so a body that does not parse was cut off by a server error. Macros are never read. A file that is not what its name says, is encrypted, or is past the import limits is a 400. Needs read access on the presentation.",
                 "produces": [
                     "application/json"
                 ],

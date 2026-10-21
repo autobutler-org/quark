@@ -36,12 +36,14 @@ func (r *router) Routes() []*serverutil.Route {
 	}
 }
 
-// slidesRouter holds the PowerPoint export and import routes.
+// slidesRouter holds the PowerPoint export and import routes, and the
+// OpenDocument presentation import.
 type slidesRouter struct{}
 
 func (r *slidesRouter) Routes() []*serverutil.Route {
 	return []*serverutil.Route{
 		exportPptxRoute,
+		importOdpRoute,
 		importPptxRoute,
 	}
 }

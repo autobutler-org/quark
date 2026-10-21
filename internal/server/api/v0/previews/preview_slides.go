@@ -12,7 +12,7 @@ import (
 
 // previewSlides godoc
 // @Summary Preview a presentation
-// @Description Streams a .pptx, .pptm or .ppsx presentation as JSON for the read-only presentation viewer: {deck, warnings}, the deck a .qslide presentation and each warning a {slide, message}. The deck is written slide by slide as it is read, and each picture is named in place by its entry in the package after a "part:" prefix (part:ppt/media/image3.png), which GET /previews/part serves; nothing is stored. The warnings, what was left out or approximated with slide 0 for the deck, come after the deck because they are known only at its end, so a body that does not parse was cut off by a server error. Macros are never read. A file that is not what its name says, or is past the import limits, is a 400. Needs read access on the presentation.
+// @Description Streams a .pptx, .pptm, .ppsx or .odp presentation as JSON for the read-only presentation viewer: {deck, warnings}, the deck a .qslide presentation and each warning a {slide, message}. The deck is written slide by slide as it is read, and each picture is named in place by its entry in the package after a "part:" prefix (part:ppt/media/image3.png, part:Pictures/10000000000001.png), which GET /previews/part serves; nothing is stored. The warnings, what was left out or approximated with slide 0 for the deck, come after the deck because they are known only at its end, so a body that does not parse was cut off by a server error. Macros are never read. A file that is not what its name says, is encrypted, or is past the import limits is a 400. Needs read access on the presentation.
 // @Tags previews
 // @Produce json
 // @Param filePath query string true "Path to the presentation"
