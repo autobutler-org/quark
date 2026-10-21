@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The autofill service needs API 26; values-v26 turns it on (#3600). -->
+    <bool name="quark_autofill_enabled">false</bool>
+</resources>
