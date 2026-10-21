@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/chat_channel_share_target.dart';
 import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/controllers/chat_unread_controller.dart';
+import 'package:quark/controllers/recovery_phrase_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
@@ -19,6 +20,7 @@ import 'package:quark/widgets/chat/chat_search_bar.dart';
 import 'package:quark/widgets/chat/chat_unlock_prompt.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/recovery_phrase/add_recovery_phrase_offer.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/users/user_avatar.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -73,7 +75,12 @@ import 'package:url_launcher/url_launcher.dart';
 /// further back. Nothing typed there goes to the Quark.
 class ChatPage extends StatefulWidget {
   /// Creates the page on channel [channelId].
-  const ChatPage({required this.channelId, this.controller, super.key});
+  const ChatPage({
+    required this.channelId,
+    this.controller,
+    this.recoveryPhrase,
+    super.key,
+  });
 
   /// The channel in the URL: an id, or `general`.
   final String channelId;
@@ -81,6 +88,11 @@ class ChatPage extends StatefulWidget {
   /// A controller to use instead of the real one; the page disposes it.
   @visibleForTesting
   final ChatController? controller;
+
+  /// The offer to add the recovery phrase to chat keys that have no wrap
+  /// under it (#3530); the app's by default.
+  @visibleForTesting
+  final RecoveryPhraseController? recoveryPhrase;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -90,6 +102,8 @@ class _ChatPageState extends State<ChatPage>
     with WidgetsBindingObserver, AutoRefreshMixin {
   late final ChatController _controller =
       (widget.controller ?? ChatController())..select(widget.channelId);
+  late final RecoveryPhraseController _phrase =
+      widget.recoveryPhrase ?? RecoveryPhraseController.instance;
 
   /// Whether this window is focused on the page. An unfocused window keeps
   /// the open channel's unread badge; a focused one does not (#3255).
@@ -136,7 +150,8 @@ class _ChatPageState extends State<ChatPage>
   }
 
   @override
-  Future<void> refresh() => _controller.refresh();
+  Future<void> refresh() =>
+      Future.wait([_controller.refresh(), _phrase.check()]);
 
   /// Puts the URL on the channel actually open, when the one asked for fell
   /// back to the default. After the frame: this can run from
@@ -445,7 +460,7 @@ class _ChatPageState extends State<ChatPage>
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _controller,
+      listenable: Listenable.merge([_controller, _phrase]),
       builder: (context, _) {
         final c = _controller;
         final channel = c.selectedChannel;
@@ -494,182 +509,213 @@ class _ChatPageState extends State<ChatPage>
                       ? null
                       : Errors.message(c.unlockError, 'unlock your messages'),
                 )
-              : QuarkChatLayout(
-                  header: channel == null
-                      ? null
-                      : ChatChannelHeader(
-                          name: partner ?? channel.name,
-                          isDirect: partner != null,
-                          topic: channel.topic,
-                          isPrivate: channel.isPrivate,
-                          onSearch: c.canSearch ? c.toggleSearch : null,
-                          onEdit: c.canManageSelected ? _editChannel : null,
-                          onMembers: c.canManageMembers ? _openMembers : null,
-                          onRegenerateKeys:
-                              c.canRegenerateKeys && !c.isRegeneratingKeys
-                              ? _regenerateKeys
-                              : null,
-                          onDelete: c.canManageSelected && !channel.isDefault
-                              ? _deleteChannel
-                              : null,
-                          onLeave: c.canLeaveSelected ? _leaveChannel : null,
-                        ),
-                  channelList: QuarkChannelList(
-                    serverName: serverName,
-                    channels: _channelsWithoutOwnBadge(c.channelItems, openId),
-                    otherChannels: _channelsWithoutOwnBadge(
-                      c.otherChannelItems,
-                      openId,
-                    ),
-                    selectedChannelId: channel == null ? null : '${channel.id}',
-                    isLoading: c.isLoadingChannels && c.channels.isEmpty,
-                    error: c.channelsError == null
-                        ? null
-                        : Errors.message(c.channelsError, 'load the channels'),
-                    onSelect: _openChannel,
-                  ),
-                  messages: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (c.isSearching)
-                        ChatSearchBar(
-                          matchCount: matches,
-                          hasOlder: c.hasOlderMessages,
-                          isLoadingOlder: c.isLoadingMessages,
-                          onChanged: c.search,
-                          onLoadOlder: c.loadOlder,
-                          onClose: c.toggleSearch,
-                        ),
-                      Expanded(
-                        child: c.isChannelMissing
-                            ? ChatChannelNotFound(
-                                onOpenGeneral: () => _openChannel(
-                                  ChatController.defaultChannelSlug,
+              : Column(
+                  children: [
+                    if (_phrase.offerChat)
+                      AddRecoveryPhraseOffer(controller: _phrase),
+                    Expanded(
+                      child: QuarkChatLayout(
+                        header: channel == null
+                            ? null
+                            : ChatChannelHeader(
+                                name: partner ?? channel.name,
+                                isDirect: partner != null,
+                                topic: channel.topic,
+                                isPrivate: channel.isPrivate,
+                                onSearch: c.canSearch ? c.toggleSearch : null,
+                                onEdit: c.canManageSelected
+                                    ? _editChannel
+                                    : null,
+                                onMembers: c.canManageMembers
+                                    ? _openMembers
+                                    : null,
+                                onRegenerateKeys:
+                                    c.canRegenerateKeys && !c.isRegeneratingKeys
+                                    ? _regenerateKeys
+                                    : null,
+                                onDelete:
+                                    c.canManageSelected && !channel.isDefault
+                                    ? _deleteChannel
+                                    : null,
+                                onLeave: c.canLeaveSelected
+                                    ? _leaveChannel
+                                    : null,
+                              ),
+                        channelList: QuarkChannelList(
+                          serverName: serverName,
+                          channels: _channelsWithoutOwnBadge(
+                            c.channelItems,
+                            openId,
+                          ),
+                          otherChannels: _channelsWithoutOwnBadge(
+                            c.otherChannelItems,
+                            openId,
+                          ),
+                          selectedChannelId: channel == null
+                              ? null
+                              : '${channel.id}',
+                          isLoading: c.isLoadingChannels && c.channels.isEmpty,
+                          error: c.channelsError == null
+                              ? null
+                              : Errors.message(
+                                  c.channelsError,
+                                  'load the channels',
                                 ),
-                              )
-                            : matches == 0
-                            ? const EmptyStateWidget(
-                                icon: QuarkIcons.search,
-                                headline: 'No loaded message matches',
-                                subtext:
-                                    'Only the messages loaded on this device '
-                                    'are searched.',
-                              )
-                            : QuarkMessageList(
-                                key: ValueKey(
-                                  'chat_messages_${channel?.id ?? 'none'}',
-                                ),
-                                messages: c.messageItems,
-                                isLoading:
-                                    c.isLoadingMessages ||
-                                    (channel == null && c.isLoadingChannels),
-                                error: messagesError == null
-                                    ? null
-                                    : Errors.message(
-                                        messagesError,
-                                        'load the channel',
-                                      ),
-                                // While searching, the search bar offers
-                                // older messages instead.
-                                hasMore: matches == null && c.hasOlderMessages,
+                          onSelect: _openChannel,
+                        ),
+                        messages: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (c.isSearching)
+                              ChatSearchBar(
+                                matchCount: matches,
+                                hasOlder: c.hasOlderMessages,
+                                isLoadingOlder: c.isLoadingMessages,
+                                onChanged: c.search,
                                 onLoadOlder: c.loadOlder,
-                                onAtBottomChanged: c.setAtBottom,
+                                onClose: c.toggleSearch,
+                              ),
+                            Expanded(
+                              child: c.isChannelMissing
+                                  ? ChatChannelNotFound(
+                                      onOpenGeneral: () => _openChannel(
+                                        ChatController.defaultChannelSlug,
+                                      ),
+                                    )
+                                  : matches == 0
+                                  ? const EmptyStateWidget(
+                                      icon: QuarkIcons.search,
+                                      headline: 'No loaded message matches',
+                                      subtext:
+                                          'Only the messages loaded on this device '
+                                          'are searched.',
+                                    )
+                                  : QuarkMessageList(
+                                      key: ValueKey(
+                                        'chat_messages_${channel?.id ?? 'none'}',
+                                      ),
+                                      messages: c.messageItems,
+                                      isLoading:
+                                          c.isLoadingMessages ||
+                                          (channel == null &&
+                                              c.isLoadingChannels),
+                                      error: messagesError == null
+                                          ? null
+                                          : Errors.message(
+                                              messagesError,
+                                              'load the channel',
+                                            ),
+                                      // While searching, the search bar offers
+                                      // older messages instead.
+                                      hasMore:
+                                          matches == null && c.hasOlderMessages,
+                                      onLoadOlder: c.loadOlder,
+                                      onAtBottomChanged: c.setAtBottom,
+                                      permissions: channel == null
+                                          ? null
+                                          : c.selectedPermissions,
+                                      currentUserId: c.currentUserKey,
+                                      mentionNames: c.mentionNames,
+                                      currentUserName: c.currentUserName,
+                                      onCopy: _copyMessage,
+                                      onDelete: _deleteMessage,
+                                      onReact: _react,
+                                      onEncryptionHelp: _explainEncryption,
+                                      onOpenLink: (uri) => launchUrl(
+                                        uri,
+                                        mode: LaunchMode.externalApplication,
+                                      ),
+                                      avatarBuilder: (context, userId) {
+                                        final id = int.tryParse(userId) ?? 0;
+                                        return UserAvatar(
+                                          userId: id,
+                                          name: c.nameOf(id),
+                                          version: c.avatarVersionOf(id),
+                                          size: QuarkMessageList.avatarSize,
+                                        );
+                                      },
+                                    ),
+                            ),
+                            if (encryption != null)
+                              QuarkEncryptionNotice(
+                                status: encryption,
+                                isChecking: c.isCheckingKey,
+                                onCheckAgain: c.checkKey,
+                                onLearnMore: _explainEncryption,
+                              ),
+                            for (final send in c.outboundSends)
+                              ChatFailedSendBar(
+                                id: send.id,
+                                text: send.text,
+                                error: send.failed
+                                    ? Errors.message(
+                                        send.error,
+                                        'send the message',
+                                      )
+                                    : null,
+                                onRetry: () => c.retry(send.id),
+                                onDiscard: () => c.discard(send.id),
+                              ),
+                            // Chrome pinned to the bottom edge keeps clear of the
+                            // rounded display corners and the home indicator
+                            // (#2788).
+                            QuarkEdgeInset(
+                              child: QuarkMessageComposer(
+                                // A new state per channel. The text is that
+                                // channel's draft, kept for this app session.
+                                key: ValueKey('chat_composer_${channel?.id}'),
+                                initialText: channel == null
+                                    ? ''
+                                    : c.draftFor(channel.id),
+                                onChanged: channel == null
+                                    ? null
+                                    : (text) => c.setDraft(channel.id, text),
+                                hintText: channel == null
+                                    ? 'Message'
+                                    : 'Message ${c.titleOf(channel)}',
                                 permissions: channel == null
                                     ? null
                                     : c.selectedPermissions,
-                                currentUserId: c.currentUserKey,
+                                isWaitingForKey: c.isWaitingForKey,
+                                disabledReason: c.composerDisabledReason,
+                                maxLength: ChatConfig.maxMessageLength,
                                 mentionNames: c.mentionNames,
-                                currentUserName: c.currentUserName,
-                                onCopy: _copyMessage,
-                                onDelete: _deleteMessage,
-                                onReact: _react,
-                                onEncryptionHelp: _explainEncryption,
-                                onOpenLink: (uri) => launchUrl(
-                                  uri,
-                                  mode: LaunchMode.externalApplication,
-                                ),
-                                avatarBuilder: (context, userId) {
-                                  final id = int.tryParse(userId) ?? 0;
-                                  return UserAvatar(
-                                    userId: id,
-                                    name: c.nameOf(id),
-                                    version: c.avatarVersionOf(id),
-                                    size: QuarkMessageList.avatarSize,
-                                  );
-                                },
+                                onSend: c.send,
                               ),
-                      ),
-                      if (encryption != null)
-                        QuarkEncryptionNotice(
-                          status: encryption,
-                          isChecking: c.isCheckingKey,
-                          onCheckAgain: c.checkKey,
-                          onLearnMore: _explainEncryption,
+                            ),
+                          ],
                         ),
-                      for (final send in c.outboundSends)
-                        ChatFailedSendBar(
-                          id: send.id,
-                          text: send.text,
-                          error: send.failed
-                              ? Errors.message(send.error, 'send the message')
-                              : null,
-                          onRetry: () => c.retry(send.id),
-                          onDiscard: () => c.discard(send.id),
-                        ),
-                      // Chrome pinned to the bottom edge keeps clear of the
-                      // rounded display corners and the home indicator
-                      // (#2788).
-                      QuarkEdgeInset(
-                        child: QuarkMessageComposer(
-                          // A new state per channel. The text is that
-                          // channel's draft, kept for this app session.
-                          key: ValueKey('chat_composer_${channel?.id}'),
-                          initialText: channel == null
-                              ? ''
-                              : c.draftFor(channel.id),
-                          onChanged: channel == null
+                        memberList: QuarkMemberList(
+                          members: c.memberItems,
+                          permissions: c.managingPermissions,
+                          onAddMembers: _openMembers,
+                          onRemove: _removeMember,
+                          expandedIds: c.expandedGroupIds,
+                          onToggleExpanded: c.toggleGroup,
+                          isLoading: c.isLoadingMembers && c.members.isEmpty,
+                          error: c.membersError == null
                               ? null
-                              : (text) => c.setDraft(channel.id, text),
-                          hintText: channel == null
-                              ? 'Message'
-                              : 'Message ${c.titleOf(channel)}',
-                          permissions: channel == null
-                              ? null
-                              : c.selectedPermissions,
-                          isWaitingForKey: c.isWaitingForKey,
-                          disabledReason: c.composerDisabledReason,
-                          maxLength: ChatConfig.maxMessageLength,
-                          mentionNames: c.mentionNames,
-                          onSend: c.send,
+                              : Errors.message(
+                                  c.membersError,
+                                  'load the members',
+                                ),
+                          avatarBuilder: (context, userId) {
+                            final id = int.tryParse(userId) ?? 0;
+                            return UserAvatar(
+                              userId: id,
+                              name: c.nameOf(id),
+                              version: c.avatarVersionOf(id),
+                              size: QuarkMemberList.avatarSize,
+                            );
+                          },
                         ),
+                        isChannelListOpen: c.isChannelListOpen,
+                        isMemberListOpen: c.isMemberListOpen,
+                        onToggleChannelList: c.toggleChannelList,
+                        onToggleMemberList: c.toggleMemberList,
                       ),
-                    ],
-                  ),
-                  memberList: QuarkMemberList(
-                    members: c.memberItems,
-                    permissions: c.managingPermissions,
-                    onAddMembers: _openMembers,
-                    onRemove: _removeMember,
-                    expandedIds: c.expandedGroupIds,
-                    onToggleExpanded: c.toggleGroup,
-                    isLoading: c.isLoadingMembers && c.members.isEmpty,
-                    error: c.membersError == null
-                        ? null
-                        : Errors.message(c.membersError, 'load the members'),
-                    avatarBuilder: (context, userId) {
-                      final id = int.tryParse(userId) ?? 0;
-                      return UserAvatar(
-                        userId: id,
-                        name: c.nameOf(id),
-                        version: c.avatarVersionOf(id),
-                        size: QuarkMemberList.avatarSize,
-                      );
-                    },
-                  ),
-                  isChannelListOpen: c.isChannelListOpen,
-                  isMemberListOpen: c.isMemberListOpen,
-                  onToggleChannelList: c.toggleChannelList,
-                  onToggleMemberList: c.toggleMemberList,
+                    ),
+                  ],
                 ),
         );
       },

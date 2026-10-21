@@ -518,6 +518,13 @@ abstract final class Errors {
   static const String chatKeysWrongPhrase =
       "That recovery phrase doesn't unlock your messages.";
 
+  /// Adding a recovery phrase to keys that have no phrase wrap, with a phrase
+  /// the Quark says is not the account's (#3530). It checks before storing
+  /// anything, so nothing changed.
+  static const String recoveryPhraseNotTheAccounts =
+      "That isn't your account's recovery phrase. Nothing was changed; check "
+      'the words and try again.';
+
   /// The Quark sent the account's encrypted keys, chat's or the vault's,
   /// with an Argon2id cost below the app's standard or above its ceiling
   /// (#3648). The app refuses to open them: a weaker cost is one only a

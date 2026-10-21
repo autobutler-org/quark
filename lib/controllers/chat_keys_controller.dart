@@ -244,6 +244,37 @@ class ChatKeysController extends ChangeNotifier {
     }
   }
 
+  /// Adding a recovery phrase's half of the work, before
+  /// `PUT /auth/recovery-key` checks the phrase and stores the result (#3530):
+  /// fetches the stored keys, opens them with [password], and returns them
+  /// wrapped afresh under [password] and [phraseWrapKey], the `wrapKey` of
+  /// the account's phrase, both over [authSalt]. Nothing is uploaded here: a
+  /// mistyped phrase must never reach the Quark as a wrap, and only that
+  /// request checks it. Null for an account with no keys yet. A wrong
+  /// password throws a [MessageException] carrying
+  /// [Errors.chatKeysWrongPassword].
+  Future<WrappedChatKeys?> keysForPhrase({
+    required String password,
+    required SecureKey phraseWrapKey,
+    required Uint8List authSalt,
+  }) async {
+    final crypto = await _cryptoLoaded();
+    final stored = await _fetchMine();
+    if (stored == null) return null;
+    final identity = _openByPassword(crypto, stored, password);
+    try {
+      return _wrapAll(
+        crypto,
+        identity,
+        password,
+        authSalt,
+        phraseWrapKey: phraseWrapKey,
+      );
+    } finally {
+      identity.dispose();
+    }
+  }
+
   /// Opens [stored]'s password wrap in whichever scheme it records.
   static ChatIdentity _openByPassword(
     ChatCrypto crypto,

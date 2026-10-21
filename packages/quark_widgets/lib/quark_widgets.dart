@@ -197,6 +197,8 @@ export 'src/users/group_members_sheet.dart';
 export 'src/users/pending_request_list.dart';
 export 'src/users/principal_picker.dart';
 export 'src/users/user_list.dart';
+export 'src/vault/add_recovery_phrase_dialog.dart';
+export 'src/vault/recovery_phrase_offer.dart';
 export 'src/vault/vault_biometric_offer.dart';
 export 'src/vault/vault_biometric_settings_dialog.dart';
 export 'src/vault/vault_biometric_unlock.dart';
