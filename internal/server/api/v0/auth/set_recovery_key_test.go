@@ -16,6 +16,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/vaultutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
@@ -205,5 +206,124 @@ func TestRequestAccount_RecoveryKey(t *testing.T) {
 	}
 	if w := postJSON(engine, "/api/v0/auth/recover", map[string]string{"username": "asker", "recoveryKey": recoveryKey, "newAuthKey": authKeyOf(2)}); w.Code != http.StatusOK {
 		t.Errorf("recover with the requested key = %d %s, want 200", w.Code, w.Body)
+	}
+}
+
+// TestSetRecoveryKey_CurrentRecoveryKey gives keys made with no phrase wrap
+// one under the phrase the account already has (#3530). The Quark checks
+// currentRecoveryKey before anything is written, so a mistyped phrase stores
+// nothing and never replaces the account's, and a replay after the phrase
+// has moved on is refused too.
+func TestSetRecoveryKey_CurrentRecoveryKey(t *testing.T) {
+	ctx := context.Background()
+	engine, database := newAuthKeyEngine(t)
+	queries := database.Queries
+	key := dbtest.AuthKey("original-password")
+	for _, name := range []string{"bob", "carol"} {
+		if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: database, Username: name, AuthKey: key, SaltSecret: dbtest.SaltSecret, Files: vfs.NewMemVFS("files")}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bob, carol := userByName(t, queries, "bob"), userByName(t, queries, "carol")
+	recoveryKey := authKeyOf(9)
+	if _, err := authutil.SetRecoveryKey(ctx, database, authutil.SetRecoveryKeyParams{UserID: bob.ID, RecoveryKey: recoveryKey}); err != nil {
+		t.Fatal(err)
+	}
+	bob = userByName(t, queries, "bob")
+	noPhrase := chatKeysOf(1)
+	noPhrase.WrappedByPhrase, noPhrase.SaltRp = nil, nil
+	if _, err := chatutil.PutKeys(chatutil.PutKeysParams{Ctx: ctx, Queries: queries, UserID: bob.ID, Keys: noPhrase}); err != nil {
+		t.Fatal(err)
+	}
+	noPhraseVault := vaultKeyOf(1)
+	noPhraseVault.WrappedByPhrase, noPhraseVault.SaltRp = nil, nil
+	if _, err := vaultutil.CreateKey(vaultutil.CreateKeyParams{Ctx: ctx, Queries: queries, UserID: bob.ID, Key: noPhraseVault}); err != nil {
+		t.Fatal(err)
+	}
+	phraseWraps := func() (chat, vault []byte) {
+		t.Helper()
+		c, err := chatutil.GetKeys(chatutil.GetKeysParams{Ctx: ctx, Queries: queries, UserID: bob.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := vaultutil.GetKey(vaultutil.GetKeyParams{Ctx: ctx, Queries: queries, UserID: bob.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.Keys.WrappedByPhrase, v.Key.WrappedByPhrase
+	}
+	unchanged := func(after string) {
+		t.Helper()
+		if chat, vault := phraseWraps(); chat != nil || vault != nil {
+			t.Errorf("%s stored a phrase wrap", after)
+		}
+		if row := userByName(t, queries, "bob"); row.RecoveryKeyHash != bob.RecoveryKeyHash {
+			t.Errorf("%s replaced the recovery key", after)
+		}
+	}
+	body := func(current, next string) map[string]any {
+		return map[string]any{"currentRecoveryKey": current, "recoveryKey": next, "chatKeys": chatKeysOf(3), "vaultKey": vaultKeyOf(3)}
+	}
+
+	if w := putRecoveryKey(t, database, bob, body(authKeyOf(8), authKeyOf(8))); w.Code != http.StatusForbidden {
+		t.Errorf("wrong phrase = %d %s, want 403", w.Code, w.Body)
+	}
+	unchanged("a wrong phrase")
+	if w := putRecoveryKey(t, database, bob, body(recoveryKey, authKeyOf(8))); w.Code != http.StatusBadRequest {
+		t.Errorf("a different recoveryKey = %d %s, want 400", w.Code, w.Body)
+	}
+	unchanged("a different recoveryKey")
+	if w := putRecoveryKey(t, database, bob, body("not-base64", "not-base64")); w.Code != http.StatusBadRequest {
+		t.Errorf("malformed phrase key = %d %s, want 400", w.Code, w.Body)
+	}
+	unchanged("a malformed phrase key")
+	// Without currentRecoveryKey the body is a rotation, which takes the
+	// password: a session alone gets 403.
+	if w := putRecoveryKey(t, database, bob, body("", recoveryKey)); w.Code != http.StatusForbidden {
+		t.Errorf("missing phrase = %d %s, want 403", w.Code, w.Body)
+	}
+	unchanged("a missing phrase")
+	if w := putRecoveryKey(t, database, carol, body(recoveryKey, recoveryKey)); w.Code != http.StatusForbidden {
+		t.Errorf("an account with no recovery key = %d %s, want 403", w.Code, w.Body)
+	}
+	if row := userByName(t, queries, "carol"); row.RecoveryKeyHash != "" {
+		t.Error("confirming a phrase gave an account with none a recovery key")
+	}
+
+	// A failed write inside the transaction stores neither wrap.
+	if _, err := database.Db.Exec(`CREATE TRIGGER refuse_vault_keys BEFORE UPDATE ON vault_keys BEGIN SELECT RAISE(ABORT, 'refused'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if w := putRecoveryKey(t, database, bob, body(recoveryKey, recoveryKey)); w.Code != http.StatusInternalServerError {
+		t.Errorf("failing vault key write = %d %s, want 500", w.Code, w.Body)
+	}
+	if _, err := database.Db.Exec(`DROP TRIGGER refuse_vault_keys`); err != nil {
+		t.Fatal(err)
+	}
+	unchanged("a failed vault key write")
+
+	if w := putRecoveryKey(t, database, bob, body(recoveryKey, recoveryKey)); w.Code != http.StatusNoContent {
+		t.Fatalf("the account's phrase = %d %s, want 204", w.Code, w.Body)
+	}
+	if chat, vault := phraseWraps(); !bytes.Equal(chat, chatKeysOf(3).WrappedByPhrase) || !bytes.Equal(vault, vaultKeyOf(3).WrappedByPhrase) {
+		t.Error("the account's phrase didn't store both phrase wraps")
+	}
+	if row := userByName(t, queries, "bob"); row.RecoveryKeyHash != bob.RecoveryKeyHash {
+		t.Error("confirming the phrase replaced the recovery key")
+	}
+	// A recovery with that phrase now finds both wraps to open.
+	if w := postJSON(engine, "/api/v0/auth/recover/keys", map[string]string{"username": "bob", "recoveryKey": recoveryKey}); w.Code != http.StatusOK || decodeBody(t, w)["wrappedByPhrase"] == nil {
+		t.Errorf("recover/keys after confirming = %d %s, want the phrase wrap", w.Code, w.Body)
+	}
+
+	// Replayed once the phrase has moved on, the old key is refused.
+	if w := putRecoveryKey(t, database, bob, map[string]any{"password": key, "recoveryKey": authKeyOf(7), "chatKeys": chatKeysOf(5), "vaultKey": vaultKeyOf(5)}); w.Code != http.StatusNoContent {
+		t.Fatalf("rotation = %d %s, want 204", w.Code, w.Body)
+	}
+	if w := putRecoveryKey(t, database, bob, body(recoveryKey, recoveryKey)); w.Code != http.StatusForbidden {
+		t.Errorf("replay after a rotation = %d %s, want 403", w.Code, w.Body)
+	}
+	if chat, vault := phraseWraps(); !bytes.Equal(chat, chatKeysOf(5).WrappedByPhrase) || !bytes.Equal(vault, vaultKeyOf(5).WrappedByPhrase) {
+		t.Error("a replay after a rotation overwrote the new phrase's wraps")
 	}
 }

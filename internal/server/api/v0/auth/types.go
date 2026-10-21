@@ -145,6 +145,11 @@ type setRecoveryKeyBody struct {
 	// RecoveryKey is the standard base64 of the 32-byte key the client derived
 	// from the phrase it generated and the account's auth salt.
 	RecoveryKey string `json:"recoveryKey" binding:"required"`
+	// CurrentRecoveryKey, when set, re-confirms the caller with the recovery
+	// key it has now in place of Password, and keeps that phrase: RecoveryKey
+	// must be the same key, and ChatKeys and VaultKey are wrapped under it
+	// (#3530). A wrong one is a 403 and nothing is written.
+	CurrentRecoveryKey string `json:"currentRecoveryKey,omitempty"`
 	// ChatKeys is the account's chat identity re-wrapped under the new
 	// phrase, stored in the same transaction. Absent leaves the stored keys as
 	// they are.

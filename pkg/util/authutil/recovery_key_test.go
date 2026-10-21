@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -221,4 +223,122 @@ func TestNewAccount_RecoveryKey(t *testing.T) {
 			t.Errorf("%s has a phrase hash", name)
 		}
 	}
+}
+
+// confirmRecoveryKey runs ConfirmRecoveryKey for userID behind guard and
+// reports whether its AfterConfirm step ran.
+func confirmRecoveryKey(database *db.DatabaseSqlc, guard *ratelimitutil.LoginGuard, userID int64, key string) (bool, error) {
+	ran := false
+	_, err := authutil.ConfirmRecoveryKey(context.Background(), database, authutil.ConfirmRecoveryKeyParams{
+		UserID: userID, RecoveryKey: key, Guard: guard, ClientIP: "203.0.113.7",
+		AfterConfirm: func(db.Querier, int64) error { ran = true; return nil },
+	})
+	return ran, err
+}
+
+// TestConfirmRecoveryKey wraps keys under the phrase an account has, and only
+// that one (#3530): a wrong, missing or malformed key, or an account with no
+// recovery key, is refused before the store step runs, and the right key
+// runs it without replacing the stored key.
+func TestConfirmRecoveryKey(t *testing.T) {
+	database := setupWithKeys(t)
+	queries := database.Queries
+	addLegacy(t, queries)
+	ada, old := userRow(t, queries, "ada"), userRow(t, queries, "old")
+
+	for _, tc := range []struct {
+		name   string
+		userID int64
+		key    string
+		want   error
+	}{
+		{"wrong key", ada.ID, authKeyOf(8), authutil.ErrInvalidRecoveryPhrase},
+		{"missing", ada.ID, "", authutil.ErrInvalidRecoveryKey},
+		{"malformed", ada.ID, "not-base64", authutil.ErrInvalidRecoveryKey},
+		{"no recovery key", old.ID, authKeyOf(9), authutil.ErrInvalidRecoveryPhrase},
+		{"gone account", 9999, authKeyOf(9), authutil.ErrUserNotFound},
+	} {
+		ran, err := confirmRecoveryKey(database, nil, tc.userID, tc.key)
+		if !errors.Is(err, tc.want) || ran {
+			t.Errorf("%s: %v, stored %v, want %v and nothing stored", tc.name, err, ran, tc.want)
+		}
+	}
+
+	ran, err := confirmRecoveryKey(database, nil, ada.ID, authKeyOf(9))
+	if err != nil || !ran {
+		t.Fatalf("right key: %v, stored %v, want the store step run", err, ran)
+	}
+	if row := userRow(t, queries, "ada"); row.RecoveryKeyHash != ada.RecoveryKeyHash {
+		t.Error("confirming the key replaced it")
+	}
+	if err := checkRecovery(queries, "ada", authKeyOf(9)); err != nil {
+		t.Errorf("the key stopped recovering the account: %v", err)
+	}
+
+	// A store step that fails rolls the transaction back with its error.
+	refused := errors.New("refused")
+	_, err = authutil.ConfirmRecoveryKey(context.Background(), database, authutil.ConfirmRecoveryKeyParams{
+		UserID: ada.ID, RecoveryKey: authKeyOf(9),
+		AfterConfirm: func(db.Querier, int64) error { return refused },
+	})
+	if !errors.Is(err, refused) {
+		t.Errorf("failing store step: %v, want its error", err)
+	}
+}
+
+// TestConfirmRecoveryKey_Replay replays a confirmation once the account's
+// phrase has moved on: the old key no longer matches, so nothing is wrapped
+// under a phrase the account stopped having.
+func TestConfirmRecoveryKey_Replay(t *testing.T) {
+	database := setupWithKeys(t)
+	ada := userRow(t, database.Queries, "ada")
+	if _, err := authutil.SetRecoveryKey(context.Background(), database, authutil.SetRecoveryKeyParams{UserID: ada.ID, RecoveryKey: authKeyOf(7)}); err != nil {
+		t.Fatal(err)
+	}
+	if ran, err := confirmRecoveryKey(database, nil, ada.ID, authKeyOf(9)); !errors.Is(err, authutil.ErrInvalidRecoveryPhrase) || ran {
+		t.Errorf("replayed old key: %v, stored %v, want refused and nothing stored", err, ran)
+	}
+}
+
+// TestConfirmRecoveryKey_Lockout counts wrong keys toward the sign-in
+// lockouts (#3578): once they lock the account, the right key is refused too,
+// and so is a sign-in.
+func TestConfirmRecoveryKey_Lockout(t *testing.T) {
+	database := setupWithKeys(t)
+	ada := userRow(t, database.Queries, "ada")
+	now := time.Unix(1_700_000_000, 0)
+	guard := lockoutGuard(&now)
+
+	for i := range 3 {
+		if _, err := confirmRecoveryKey(database, guard, ada.ID, authKeyOf(8)); !errors.Is(err, authutil.ErrInvalidRecoveryPhrase) {
+			t.Fatalf("wrong key %d: %v", i+1, err)
+		}
+	}
+	if ran, err := confirmRecoveryKey(database, guard, ada.ID, authKeyOf(9)); !isLocked(err) || ran {
+		t.Errorf("right key while locked out: %v, stored %v, want the lockout and nothing stored", err, ran)
+	}
+	_, err := authutil.Login(context.Background(), database.Queries, authutil.LoginParams{
+		Username: "ada", AuthKey: authKeyOf(1), Guard: guard, ClientIP: "203.0.113.7",
+	})
+	if !isLocked(err) {
+		t.Errorf("sign-in after wrong recovery keys: %v, want the lockout", err)
+	}
+}
+
+// lockoutGuard locks a pair or an account out after three failures, against a
+// clock the test moves.
+func lockoutGuard(now *time.Time) *ratelimitutil.LoginGuard {
+	return ratelimitutil.NewLoginGuard(ratelimitutil.LoginGuardParams{
+		Now:              func() time.Time { return *now },
+		PairThreshold:    3,
+		IPThreshold:      100,
+		AccountThreshold: 3,
+		BaseLockout:      time.Minute,
+	})
+}
+
+// isLocked reports whether err is the guard's refusal.
+func isLocked(err error) bool {
+	var locked *authutil.TooManyAttemptsError
+	return errors.As(err, &locked)
 }

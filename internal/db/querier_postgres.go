@@ -539,6 +539,10 @@ func (a *postgresQueries) IsUserAdmin(ctx context.Context, username string) (int
 	return a.q.IsUserAdmin(ctx, username)
 }
 
+func (a *postgresQueries) KeepRecoveryKey(ctx context.Context, arg KeepRecoveryKeyParams) (int64, error) {
+	return a.q.KeepRecoveryKey(ctx, pgdb.KeepRecoveryKeyParams(arg))
+}
+
 func (a *postgresQueries) ListAccountRequestHistory(ctx context.Context, limit int64) ([]ListAccountRequestHistoryRow, error) {
 	rows, err := a.q.ListAccountRequestHistory(ctx, limit)
 	if err != nil || rows == nil {
