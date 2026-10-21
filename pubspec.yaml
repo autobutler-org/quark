@@ -38,6 +38,8 @@ dependencies:
   shared_preferences: ^2.5.5
   open_file: ^4.0.0
   path_provider: ^2.1.6
+  # The app group container, for the native autofill vault cache (#3596).
+  path_provider_foundation: ^2.6.0
   video_player: ^2.6.0
   web: ^1.1.1
   photo_manager: ^3.12.0
