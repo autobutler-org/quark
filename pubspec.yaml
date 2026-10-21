@@ -96,6 +96,10 @@ dependencies:
   # their own video_player backends.
   video_player_media_kit: ^2.0.0
   media_kit_libs_linux: ^1.2.1
+  # Linux upload thumbnails (#3421): a screenshot of the libmpv player's frame,
+  # resized and re-encoded as JPEG with image.
+  media_kit: ^1.2.6
+  image: ^4.5.4
   # The phone joins the tailnet itself (#1881). hook/build.dart compiles
   # cmd/tsnetbridge for the iOS and Android targets. cspell:words ffi tsnetbridge
   code_assets: ^2.1.0
