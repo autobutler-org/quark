@@ -198,10 +198,14 @@ func ExportQslide(params ExportQslideParams) (ExportQslideResult, error) {
 
 // StoreMediaFunc stores a picture an import found, under a name like
 // image1.png whose extension matches its content, and returns the reference
-// the .qslide names it by. It reads r to EOF; r fails with [ErrTooLarge] past
-// [MaxImageBytes], and a picture that fails that way is skipped with a
-// warning. Any other error fails the import.
-type StoreMediaFunc func(name string, r io.Reader) (string, error)
+// the .qslide names it by. Part is the picture's entry in the package, such
+// as ppt/media/image1.png, for a caller that refers to it in place rather
+// than storing it. It reads r to EOF, even when it keeps nothing: the size
+// limits are checked as r is read, so a picture read only in part is never
+// found past them. r fails with [ErrTooLarge] past [MaxImageBytes], and a
+// picture that fails that way is skipped with a warning. Any other error
+// fails the import.
+type StoreMediaFunc func(part, name string, r io.Reader) (string, error)
 
 // ImportPptxParams is one .pptx on its way to becoming a .qslide.
 type ImportPptxParams struct {
