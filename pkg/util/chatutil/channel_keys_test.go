@@ -716,3 +716,46 @@ func TestRecipientRejectsGrant(t *testing.T) {
 		t.Errorf("carol's refilled grants = %+v", got)
 	}
 }
+
+// regenerate is createVersion through an admin's regeneration (#3455).
+func (f fixture) regenerate(as string, channelID, version int64) (chatutil.CreateKeyVersionResult, error) {
+	own := f.signedGrant(as, channelID, version, as, 9)
+	return chatutil.CreateKeyVersion(chatutil.CreateKeyVersionParams{
+		Ctx: context.Background(), Database: f.database, EventBus: f.bus, Principal: f.as(as), ChannelID: channelID,
+		Version: version, SealedKey: own.SealedKey, Signature: own.Signature, Regenerate: true,
+	})
+}
+
+// TestAdminRegeneratesWhileLackingTheKey pins who may regenerate (#3455): an
+// admin who reads the channel and lacks its current version, once per version
+// they lack, and nobody else.
+func TestAdminRegeneratesWhileLackingTheKey(t *testing.T) {
+	f := newFixture(t)
+	f.publishKeys(t, "admin", "bob", "carol")
+	general := f.general(t)
+	if _, err := f.createVersion("bob", general.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.regenerate("carol", general.ID, 2); !errors.Is(err, chatutil.ErrRegenerateAdminOnly) {
+		t.Errorf("carol regenerating: %v, want ErrRegenerateAdminOnly", err)
+	}
+	created, err := f.regenerate("admin", general.ID, 2)
+	if err != nil {
+		t.Fatalf("admin regenerating: %v", err)
+	}
+	if created.Event.Payload != `{"version":2,"regenerated":true}` {
+		t.Errorf("payload = %s", created.Event.Payload)
+	}
+	if _, err := f.regenerate("admin", general.ID, 3); !errors.Is(err, chatutil.ErrRegenerateNotNeeded) {
+		t.Errorf("regenerating while holding the key: %v, want ErrRegenerateNotNeeded", err)
+	}
+	if got := f.pendingFor(t, "admin", general.ID); !slices.Equal(got[2], []string{"bob", "carol"}) {
+		t.Errorf("admin can fill %v, want version 2 for bob and carol", got)
+	}
+
+	// An admin outside a channel learns nothing of it here either.
+	secret := f.create(t, "bob", "secret")
+	if _, err := f.regenerate("admin", secret.ID, 1); !errors.Is(err, chatutil.ErrChannelNotFound) {
+		t.Errorf("admin outside the channel: %v, want ErrChannelNotFound", err)
+	}
+}
