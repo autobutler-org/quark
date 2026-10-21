@@ -3886,6 +3886,94 @@ const docTemplate = `{
                 }
             }
         },
+        "/chat/channels/{id}/keys/regenerate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates the next version of a channel's key even though rotationNeeded is false, for an admin who holds read_messages but no grant of the current version: the members holding it are away, and the others wait on them (#3455). The body is POST /keys': the version and the caller's own grant, base64. The caller then fills every other member's grant. The key_created event's payload carries \"regenerated\": true, for the caller to sign. Shares POST /keys' rate limit. Messages under older versions still need a holder of those to share them.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Regenerate a chat channel's key as an admin",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The version and the caller's grant of it",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.createKeyVersionBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.CreateKeyVersionResult"
+                        }
+                    },
+                    "400": {
+                        "description": "a sealed key or signature of the wrong size, or a signature that doesn't verify against the caller's chat keys",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller isn't an admin",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, the caller doesn't hold read_messages on it, or has no chat keys",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "version isn't the next one, or the caller already holds the current version",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "the caller sent too many of these in a short time; the limit is per account",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/chat/channels/{id}/members": {
             "get": {
                 "security": [
@@ -11606,7 +11694,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payload": {
-                    "description": "Payload is the JSON the signature covers, byte for byte: for a member\nchange {\"userId\"|\"groupId\", \"name\", \"permissions\"}, for a key {\"version\"}.",
+                    "description": "Payload is the JSON the signature covers, byte for byte: for a member\nchange {\"userId\"|\"groupId\", \"name\", \"permissions\"}, for a key {\"version\"},\nwith \"regenerated\": true when an admin regenerated it (#3455).",
                     "type": "string"
                 },
                 "signature": {

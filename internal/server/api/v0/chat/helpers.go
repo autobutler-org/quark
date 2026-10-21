@@ -46,6 +46,43 @@ func rateLimited(deps deputil.Dependencies, principal accessutil.Principal, rout
 	return serverutil.NewResponse().WithStatusCode(http.StatusTooManyRequests).WithError(errTooManyRequests)
 }
 
+// newKeyVersion is POST /keys and, with regenerate, POST /keys/regenerate
+// (#3455): both create the next version with the caller's own grant, and draw
+// on one rate-limit bucket, so regenerating adds no budget to key creation.
+func newKeyVersion(c *gin.Context, regenerate bool) *serverutil.Response {
+	deps, principal, failed := callerContext(c)
+	if failed != nil {
+		return failed
+	}
+	if limited := rateLimited(deps, principal, "keys"); limited != nil {
+		return limited
+	}
+	id, failed := channelID(c)
+	if failed != nil {
+		return failed
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, chatutil.MaxKeysRequestBytes)
+	var body createKeyVersionBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		return serverutil.BadRequest(chatutil.ErrInvalidGrant)
+	}
+	result, err := chatutil.CreateKeyVersion(chatutil.CreateKeyVersionParams{
+		Ctx:        c.Request.Context(),
+		Database:   deps.Database(),
+		EventBus:   deps.EventBus(),
+		Principal:  principal,
+		ChannelID:  id,
+		Version:    body.Version,
+		SealedKey:  body.SealedKey,
+		Signature:  body.Signature,
+		Regenerate: regenerate,
+	})
+	if err != nil {
+		return chatError(err)
+	}
+	return serverutil.Ok().WithData(result)
+}
+
 // channelID reads the :id path parameter. One that isn't a positive integer
 // names no channel.
 func channelID(c *gin.Context) (int64, *serverutil.Response) {
@@ -68,7 +105,7 @@ func chatError(err error) *serverutil.Response {
 		return serverutil.NotFound(err)
 	case errors.Is(err, chatutil.ErrForbidden), errors.Is(err, chatutil.ErrNotHeld),
 		errors.Is(err, chatutil.ErrNotSubset), errors.Is(err, chatutil.ErrCreatorRow),
-		errors.Is(err, chatutil.ErrNotHolder), errors.Is(err, chatutil.ErrAdminOnly),
+		errors.Is(err, chatutil.ErrNotHolder), errors.Is(err, chatutil.ErrAdminOnly), errors.Is(err, chatutil.ErrRegenerateAdminOnly),
 		errors.Is(err, chatutil.ErrReadOnly), errors.Is(err, chatutil.ErrNotMessageAuthor),
 		errors.Is(err, chatutil.ErrNoReactions), errors.Is(err, chatutil.ErrNotReactionAuthor):
 		return serverutil.Forbidden(err)
@@ -77,6 +114,7 @@ func chatError(err error) *serverutil.Response {
 	case errors.Is(err, chatutil.ErrMessageTooLarge):
 		return serverutil.NewResponse().WithStatusCode(http.StatusRequestEntityTooLarge).WithError(err)
 	case errors.Is(err, chatutil.ErrNameTaken), errors.Is(err, chatutil.ErrVersionConflict), errors.Is(err, chatutil.ErrRotationNotNeeded),
+		errors.Is(err, chatutil.ErrRegenerateNotNeeded),
 		errors.Is(err, chatutil.ErrEventSigned),
 		errors.Is(err, chatutil.ErrMessageDeleted), errors.Is(err, chatutil.ErrTooManyReactions),
 		errors.Is(err, chatutil.ErrDuplicateMessage):

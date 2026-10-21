@@ -32,6 +32,8 @@ type memberEventPayload struct {
 // keyEventPayload is a key_created event's payload.
 type keyEventPayload struct {
 	Version int64 `json:"version"`
+	// Regenerated marks a version an admin regenerated (#3455).
+	Regenerated bool `json:"regenerated,omitempty"`
 }
 
 // rotationNeeded is whether someone outside the channel holds its current
