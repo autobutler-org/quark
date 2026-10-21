@@ -14,6 +14,7 @@ type router struct{}
 func (r *router) Routes() []*serverutil.Route {
 	return []*serverutil.Route{
 		previewDocumentRoute,
+		previewSlidesRoute,
 		getPartRoute,
 		getPropertiesRoute,
 	}
