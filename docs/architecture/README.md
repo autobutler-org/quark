@@ -9,6 +9,7 @@ repository root; everything here expands on it. Diagrams are Mermaid, so GitHub 
 | [Backend](backend.md)                 | layers, startup, dependency graph, middleware, background work |
 | [Request flows](request-flows.md)     | auth, streaming upload, live events, background jobs           |
 | [Data](data.md)                       | SQLite databases, schema, VFS, the vault                       |
+| [Native vault autofill](vault-autofill.md) | iOS and Android autofill: what is kept on the phone, what the OS sees, what is cleared when |
 | [Durability](durability.md)           | what survives a crash or power cut, and the residual risk      |
 | [Backup](backup.md)                   | what a snapshot holds, the chat export, restoring chat, and backup reminders |
 | [Version history](versions.md)        | file snapshots: storage, retention, restore, following moves   |

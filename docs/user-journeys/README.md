@@ -35,7 +35,7 @@ Journey IDs are stable — don't renumber when adding new ones.
 | [sheets.md](sheets.md)                   | Spreadsheet editor (.qsheet files)                    |
 | [slides.md](slides.md)                   | Presentation editor (.qslide files)                   |
 | [books.md](books.md)                     | Books page (every PDF and EPUB, opened in the viewer)  |
-| [vault.md](vault.md)                     | Each account's password vault (setup, entries, import/export) |
+| [vault.md](vault.md)                     | Each account's password vault (setup, entries, import/export, phone autofill) |
 | [health.md](health.md)                   | System page, Health tab: live metrics                  |
 | [storage-devices.md](storage-devices.md) | System page, Storage tab: drive management             |
 | [jobs.md](jobs.md)                       | System page, Jobs tab: the job queue                   |
