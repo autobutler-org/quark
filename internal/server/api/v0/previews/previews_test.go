@@ -1,6 +1,6 @@
 package v0_previews_test
 
-// cspell:ignore descr
+// cspell:ignore descr xlink xmlns
 
 import (
 	"archive/zip"
@@ -583,5 +583,147 @@ func TestPreviewSheet_Refusals(t *testing.T) {
 		if strings.Contains(w.Body.String(), `"tabs"`) {
 			t.Errorf("%s: a refusal started a sheet: %s", name, w.Body.String())
 		}
+	}
+}
+
+// odpXMLNS is the namespace declarations an .odp's parts carry.
+const odpXMLNS = `xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" ` +
+	`xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" ` +
+	`xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" ` +
+	`xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" ` +
+	`xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" ` +
+	`xmlns:xlink="http://www.w3.org/1999/xlink" ` +
+	`xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0" ` +
+	`xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"`
+
+// odpPicture is the one picture odpPackage's slides show.
+const odpPicture = "Pictures/10000000000001.png"
+
+// odpPackage is a two-slide OpenDocument presentation whose slides show the
+// same picture, the second with notes. An encrypted one marks content.xml
+// password-protected in its manifest.
+func odpPackage(t *testing.T, encrypted bool) []byte {
+	t.Helper()
+	const mime = "application/vnd.oasis.opendocument.presentation"
+	var pic bytes.Buffer
+	if err := png.Encode(&pic, image.NewGray(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	contentEntry := `<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>`
+	if encrypted {
+		contentEntry = `<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml">` +
+			`<manifest:encryption-data/></manifest:file-entry>`
+	}
+	picture := `<draw:frame svg:x="1cm" svg:y="1cm" svg:width="4cm" svg:height="3cm">` +
+		`<draw:image xlink:href="` + odpPicture + `"/></draw:frame>`
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, p := range []struct{ name, body string }{
+		{"mimetype", mime},
+		{"META-INF/manifest.xml", `<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">` +
+			`<manifest:file-entry manifest:full-path="/" manifest:media-type="` + mime + `"/>` + contentEntry +
+			`</manifest:manifest>`},
+		{"styles.xml", `<office:document-styles ` + odpXMLNS + `><office:automatic-styles>` +
+			`<style:page-layout style:name="PM1"><style:page-layout-properties fo:page-width="28cm" fo:page-height="15.75cm"/></style:page-layout>` +
+			`</office:automatic-styles><office:master-styles>` +
+			`<style:master-page style:name="Default" style:page-layout-name="PM1"/>` +
+			`</office:master-styles></office:document-styles>`},
+		{"content.xml", `<office:document-content ` + odpXMLNS + `><office:body><office:presentation>` +
+			`<draw:page draw:name="one" draw:master-page-name="Default">` + picture + `</draw:page>` +
+			`<draw:page draw:name="two" draw:master-page-name="Default">` + picture +
+			`<presentation:notes><draw:frame presentation:class="notes" svg:x="0cm" svg:y="0cm" svg:width="4cm" svg:height="4cm">` +
+			`<draw:text-box><text:p>Thanks</text:p></draw:text-box></draw:frame></presentation:notes></draw:page>` +
+			`</office:presentation></office:body></office:document-content>`},
+		{odpPicture, pic.String()},
+	} {
+		w, err := zw.Create(p.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(w, p.body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestPreviewSlides_StreamsAnOdpAndItsPicturesServe(t *testing.T) {
+	h := newHarness(t)
+	h.writeFile(t, "shared/talk.odp", odpPackage(t, false))
+
+	w := h.get("slides", map[string]string{"filePath": "shared/talk.odp"})
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	var got struct {
+		Deck struct {
+			Slides []struct {
+				Elements []struct {
+					Source string `json:"source"`
+				} `json:"elements"`
+			} `json:"slides"`
+		} `json:"deck"`
+		Warnings []any `json:"warnings"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body is not one JSON object: %v\n%s", err, w.Body.String())
+	}
+	if len(got.Deck.Slides) != 2 || got.Warnings == nil {
+		t.Fatalf("preview = %+v", got)
+	}
+	ref := got.Deck.Slides[0].Elements[0].Source
+	if ref != "part:"+odpPicture {
+		t.Fatalf("picture reference = %q, want part:%s", ref, odpPicture)
+	}
+
+	w = h.get("part", map[string]string{"filePath": "shared/talk.odp", "part": odpPicture})
+	if w.Code != http.StatusOK || !bytes.HasPrefix(w.Body.Bytes(), []byte("\x89PNG")) || w.Header().Get("Content-Type") != "image/png" {
+		t.Errorf("part: status %d, %d bytes as %q", w.Code, w.Body.Len(), w.Header().Get("Content-Type"))
+	}
+}
+
+func TestPreviewSlides_OdpRefusals(t *testing.T) {
+	h := newHarness(t)
+	h.writeFile(t, "other/secret.odp", odpPackage(t, false))
+	h.writeFile(t, "shared/fake.odp", []byte("this is plain text"))
+	h.writeFile(t, "shared/locked.odp", odpPackage(t, true))
+
+	for name, tc := range map[string]struct {
+		filePath string
+		want     int
+	}{
+		"no access":          {"other/secret.odp", http.StatusNotFound},
+		"missing":            {"shared/missing.odp", http.StatusNotFound},
+		"not what it claims": {"shared/fake.odp", http.StatusBadRequest},
+		"encrypted":          {"shared/locked.odp", http.StatusBadRequest},
+	} {
+		w := h.get("slides", map[string]string{"filePath": tc.filePath})
+		if w.Code != tc.want {
+			t.Errorf("%s: status = %d, want %d: %s", name, w.Code, tc.want, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), `"deck"`) {
+			t.Errorf("%s: a refusal started a deck: %s", name, w.Body.String())
+		}
+	}
+}
+
+func TestGetPart_ServesOnlyTheOdpPicturesFolder(t *testing.T) {
+	h := newHarness(t)
+	h.writeFile(t, "shared/talk.odp", odpPackage(t, false))
+	h.writeFile(t, "other/secret.odp", odpPackage(t, false))
+
+	for _, part := range []string{
+		"content.xml", "META-INF/manifest.xml", "Pictures/../content.xml", "ppt/media/image1.png", "Pictures/missing.png",
+	} {
+		w := h.get("part", map[string]string{"filePath": "shared/talk.odp", "part": part})
+		if w.Code != http.StatusNotFound {
+			t.Errorf("%s: status = %d, want 404", part, w.Code)
+		}
+	}
+	if w := h.get("part", map[string]string{"filePath": "other/secret.odp", "part": odpPicture}); w.Code != http.StatusNotFound {
+		t.Errorf("unreadable presentation: status = %d, want 404", w.Code)
 	}
 }

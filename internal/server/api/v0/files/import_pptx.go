@@ -1,11 +1,6 @@
 package v0_files
 
 import (
-	"errors"
-	"log/slog"
-	"path"
-
-	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
@@ -28,61 +23,7 @@ import (
 // @Security BearerAuth
 // @Router /files/import/pptx [post]
 func importPptx(c *gin.Context) *serverutil.Response {
-	filePath := c.Query("filePath")
-	if filePath == "" {
-		return serverutil.BadRequest(errors.New("filePath query parameter is required"))
-	}
-	rootDir, ok := c.GetQuery("rootDir")
-	if !ok {
-		rootDir = path.Dir(filePath)
-	}
-	if rootDir == "." {
-		rootDir = ""
-	}
-	serial := c.Query("serial")
-
-	deps, access, resp := loadCaller(c)
-	if resp != nil {
-		return resp
-	}
-	if resp := gateReadWrite(access, serial, filePath, rootDir); resp != nil {
-		return resp
-	}
-
-	result, err := fileutil.ImportPptxToQslide(fileutil.ImportPptxParams{
-		Ctx:      c.Request.Context(),
-		Registry: deps.VFSRegistry(),
-		EventBus: deps.EventBus(),
-		FilePath: filePath,
-		RootDir:  rootDir,
-		Serial:   serial,
-	})
-	if err != nil {
-		// An import runs for as long as the package is large, and the access
-		// log only carries the status code (#1705).
-		slog.Error("import: pptx import failed", "path", filePath, "err", err)
-		return fileError(err)
-	}
-	accessutil.RecordOwner(c.Request.Context(), deps.Database(), access, serial, result.Path)
-	if result.MediaDirCreated {
-		accessutil.RecordOwner(c.Request.Context(), deps.Database(), access, serial, result.MediaDir)
-	} else {
-		for _, p := range result.Media {
-			accessutil.RecordOwner(c.Request.Context(), deps.Database(), access, serial, p)
-		}
-	}
-
-	warnings := make([]ImportWarningJSON, 0, len(result.Warnings))
-	for _, w := range result.Warnings {
-		warnings = append(warnings, ImportWarningJSON{Slide: w.Slide, Message: w.Message})
-	}
-	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(ImportPptxJSON{
-		Path:     result.Path,
-		MediaDir: result.MediaDir,
-		Slides:   result.Slides,
-		Pictures: result.Pictures,
-		Warnings: warnings,
-	})
+	return importPresentation(c, "pptx", fileutil.ImportPptxToQslide)
 }
 
 var importPptxRoute = serverutil.ApiRoute(

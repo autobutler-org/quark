@@ -1,8 +1,9 @@
 // Package v0_files serves /api/v0/files: listing, searching and stat-ing files, uploads (including resumable upload
 // sessions), downloads and archive views, moves, deletes and new folders, spreadsheet conversions between .xlsx
-// and .qsheet (the .xlsx export streamed back as a download), and a presentation's .pptx export and import. The
-// .pptx routes are GET /files/export/pptx and POST /files/import/pptx. An upload that saves over a .qslide,
-// .qsheet or .qdoc snapshots the old content into its version history first.
+// and .qsheet (the .xlsx export streamed back as a download), a presentation's .pptx export and import, and an
+// .odp import. The presentation routes are GET /files/export/pptx, POST /files/import/pptx and
+// POST /files/import/odp. An upload that saves over a .qslide, .qsheet or .qdoc snapshots the old content into its
+// version history first.
 package v0_files
 
 import (
@@ -25,7 +26,8 @@ type ConvertXlsxJSON struct {
 	Cells int    `json:"cells"`
 }
 
-// ImportPptxJSON reports the .qslide a PowerPoint file was imported as. The
+// ImportPptxJSON reports the .qslide a PowerPoint file or an OpenDocument
+// presentation was imported as. The
 // client opens Path and shows the warnings: what the import left out or
 // approximated.
 type ImportPptxJSON struct {

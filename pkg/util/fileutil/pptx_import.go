@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/odputil"
 	"github.com/autobutler-org/quark/pkg/util/pptxutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -52,7 +53,7 @@ type ImportPptxResult struct {
 	Slides   int
 	Pictures int
 	// Warnings lists what was left out or approximated, slide by slide.
-	Warnings []pptxutil.ImportWarning
+	Warnings []SlideWarning
 }
 
 // ImportPptxToQslide reads the PowerPoint file at params.FilePath and writes
@@ -71,6 +72,13 @@ func ImportPptxToQslide(params ImportPptxParams) (ImportPptxResult, error) {
 			Err: fmt.Errorf("not a PowerPoint file Quark can import: %s", filepath.Base(params.FilePath)),
 		}
 	}
+	return importSlides(params, readPptx)
+}
+
+// importSlides writes the presentation read turns into .qslide JSON in
+// params.RootDir, with its pictures in a <name>_media folder beside it: the
+// import every presentation format shares once its extension is checked.
+func importSlides(params ImportPptxParams, read slideReader) (ImportPptxResult, error) {
 	if climbsOut(params.RootDir) {
 		return ImportPptxResult{}, invalidPath(params.RootDir)
 	}
@@ -119,13 +127,7 @@ func ImportPptxToQslide(params ImportPptxParams) (ImportPptxResult, error) {
 	pr, pw := io.Pipe()
 	imported := make(chan importOutcome, 1)
 	go func() {
-		result, err := pptxutil.ImportPptx(pptxutil.ImportPptxParams{
-			Source:     source,
-			Size:       size,
-			Out:        pw,
-			StoreMedia: storeMedia,
-			Title:      stem,
-		})
+		result, err := read(params.Ctx, source, size, pw, storeMedia, stem)
 		// Closing with the error is what stops the destination from storing a
 		// truncated presentation as if it were whole.
 		pw.CloseWithError(err)
@@ -184,18 +186,63 @@ func IsPptxPath(filePath string) bool {
 	return false
 }
 
+// slideReader reads one presentation format from source, size bytes long,
+// and writes it to out as .qslide JSON, handing each picture to store.
+// Title names the deck when the file names none.
+type slideReader func(ctx context.Context, source io.ReaderAt, size int64, out io.Writer,
+	store pptxutil.StoreMediaFunc, title string) (slideOutcome, error)
+
+// slideOutcome is what a [slideReader] read.
+type slideOutcome struct {
+	Slides   int
+	Pictures int
+	Warnings []SlideWarning
+}
+
+// slideReaderFor picks the reader for a presentation by its extension, not
+// ok for a file that is not one Quark can read.
+func slideReaderFor(filePath string) (slideReader, bool) {
+	switch {
+	case IsPptxPath(filePath):
+		return readPptx, true
+	case IsOdpPath(filePath):
+		return readOdp, true
+	}
+	return nil, false
+}
+
+// readPptx is the [slideReader] for PowerPoint. The reader takes no
+// context; a caller that needs a deadline puts it on source.
+func readPptx(_ context.Context, source io.ReaderAt, size int64, out io.Writer,
+	store pptxutil.StoreMediaFunc, title string) (slideOutcome, error) {
+	imported, err := pptxutil.ImportPptx(pptxutil.ImportPptxParams{
+		Source:     source,
+		Size:       size,
+		Out:        out,
+		StoreMedia: store,
+		Title:      title,
+	})
+	warnings := make([]SlideWarning, 0, len(imported.Warnings))
+	for _, w := range imported.Warnings {
+		warnings = append(warnings, SlideWarning(w))
+	}
+	return slideOutcome{Slides: imported.Slides, Pictures: imported.Pictures, Warnings: warnings}, err
+}
+
 // importOutcome carries what the import goroutine produced back to the
 // caller, so an import failure is reported as itself rather than as the
 // broken-pipe write error it causes.
 type importOutcome struct {
-	result pptxutil.ImportPptxResult
+	result slideOutcome
 	err    error
 }
 
-// importError makes a package that is malformed or past the import limits
-// the caller's file, not a server fault.
+// importError makes a package that is malformed, encrypted or past the
+// import limits the caller's file, not a server fault.
 func importError(err error) error {
-	if errors.Is(err, pptxutil.ErrNotPptx) || errors.Is(err, pptxutil.ErrTooLarge) {
+	if errors.Is(err, pptxutil.ErrNotPptx) || errors.Is(err, pptxutil.ErrTooLarge) ||
+		errors.Is(err, odputil.ErrMalformed) || errors.Is(err, odputil.ErrTooLarge) ||
+		errors.Is(err, odputil.ErrEncrypted) {
 		return &UnsupportedError{Err: err}
 	}
 	return err
@@ -213,6 +260,6 @@ func discardImport(params ImportPptxParams, fsys vfs.VFS, media []string, mediaD
 		discardTemp(params.Ctx, fsys, mediaDir)
 	}
 	if len(media) > 0 {
-		slog.Info("pptx: removed the pictures of a failed import", "path", params.FilePath, "count", len(media))
+		slog.Info("slides: removed the pictures of a failed import", "path", params.FilePath, "count", len(media))
 	}
 }
