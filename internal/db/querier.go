@@ -249,6 +249,12 @@ type Querier interface {
 	InsertChatKeyGrant(ctx context.Context, arg InsertChatKeyGrantParams) error
 	IsFavorite(ctx context.Context, arg IsFavoriteParams) (bool, error)
 	IsUserAdmin(ctx context.Context, username string) (int64, error)
+	// KeepRecoveryKey holds an account's recovery key in a transaction that stores
+	// keys newly wrapped under the phrase that key was checked against (#3530). It
+	// writes the hash back unchanged, and only the hash that was checked matches,
+	// so a key replaced in the meantime matches no row and the caller rolls back
+	// rather than wrap under a phrase the account no longer has.
+	KeepRecoveryKey(ctx context.Context, arg KeepRecoveryKeyParams) (int64, error)
 	ListAccountRequestHistory(ctx context.Context, limit int64) ([]ListAccountRequestHistoryRow, error)
 	// ListAccountsMissingHome names every active account that does not own its
 	// home, which the startup repair then gives one (#1908). The grant is what

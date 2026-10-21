@@ -312,6 +312,28 @@ func loginFailed(guard *ratelimitutil.LoginGuard, attempt ratelimitutil.LoginAtt
 	return fmt.Errorf("invalid credentials")
 }
 
+// guardedSecret runs check, which checks a secret the attempt's account gave
+// other than at sign-in, such as a recovery key, behind guard, so a guesser on
+// that route meets the same lockouts as one at sign-in (#3578). A locked-out
+// attempt gets *TooManyAttemptsError without check running. A wrong secret,
+// ErrIncorrectPassword or ErrInvalidRecoveryPhrase, is counted and logged as a
+// failed sign-in, and a right one is recorded as a success. Any other error
+// (a malformed request, a gone account, a failed lookup) is not a guess and is
+// neither.
+func guardedSecret(guard *ratelimitutil.LoginGuard, attempt ratelimitutil.LoginAttempt, check func() error) error {
+	if wait := guard.Check(attempt).RetryAfter; wait > 0 {
+		return &TooManyAttemptsError{RetryAfter: wait}
+	}
+	err := check()
+	switch {
+	case err == nil:
+		guard.RecordSuccess(attempt)
+	case errors.Is(err, ErrIncorrectPassword), errors.Is(err, ErrInvalidRecoveryPhrase):
+		_ = loginFailed(guard, attempt)
+	}
+	return err
+}
+
 // unavailable logs a session or account lookup the database could not answer
 // and returns ErrUnavailable in its place, so the cause reaches the log and
 // stays out of the response (#2858). The caller has already set aside

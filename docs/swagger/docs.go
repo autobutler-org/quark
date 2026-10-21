@@ -2410,7 +2410,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Re-confirms the caller with password, which carries the auth key, exactly as DELETE /auth/account takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is written. Then gives the signed-in account the recovery key its client derived from a recovery phrase the client generated, (#2430). recoveryKey is the standard base64 of the 32-byte key derived from the phrase and the salt GET /auth/salt returned. chatKeys, when sent, replaces the account's chat identity in the same transaction, re-wrapped under the new phrase, exactly as /auth/recover stores it, and vaultKey likewise replaces the wraps of the account's vault key (storing it as the first when the account has none) and publishes vault_changed to the account's sessions; nothing changes if any part fails. The client calls this after a sign-in whose response says legacyRecovery, such as the first sign-in of an account an admin created. Shares the sign-in rate limit, and the body is at most 8 KiB.",
+                "description": "Re-confirms the caller with password, which carries the auth key, exactly as DELETE /auth/account takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is written. Then gives the signed-in account the recovery key its client derived from a recovery phrase the client generated, (#2430). recoveryKey is the standard base64 of the 32-byte key derived from the phrase and the salt GET /auth/salt returned. chatKeys, when sent, replaces the account's chat identity in the same transaction, re-wrapped under the new phrase, exactly as /auth/recover stores it, and vaultKey likewise replaces the wraps of the account's vault key (storing it as the first when the account has none) and publishes vault_changed to the account's sessions; nothing changes if any part fails. The client calls this after a sign-in whose response says legacyRecovery, such as the first sign-in of an account an admin created. With currentRecoveryKey in place of password, the account keeps its phrase and gets chatKeys and vaultKey wrapped under it, for keys made with no phrase wrap (#3530): currentRecoveryKey is checked against the stored recovery key before anything is written, recoveryKey must be the same key, a wrong one is a 403, and an account with no recovery key yet gets the same 403. Shares the sign-in rate limit, and the body is at most 8 KiB. Repeated wrong currentRecoveryKeys lock out the address or the account as wrong passwords at POST /auth/login do, and count toward the same lockouts: the answer is then 429 with Retry-After in seconds (#3578).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2437,7 +2437,7 @@ const docTemplate = `{
                         "description": "No Content"
                     },
                     "400": {
-                        "description": "a malformed recoveryKey, chatKeys or vaultKey",
+                        "description": "a malformed recoveryKey, chatKeys or vaultKey, or a currentRecoveryKey other than recoveryKey",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2449,7 +2449,7 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "the auth key is wrong or missing",
+                        "description": "the auth key is wrong or missing, or currentRecoveryKey is not the account's recovery key",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2467,9 +2467,15 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "Too Many Requests",
+                        "description": "too many requests, or locked out after repeated wrong currentRecoveryKeys; see Retry-After",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "seconds until the lockout lifts"
+                            }
                         }
                     },
                     "500": {
@@ -13647,6 +13653,10 @@ const docTemplate = `{
                             "$ref": "#/definitions/chatutil.Keys"
                         }
                     ]
+                },
+                "currentRecoveryKey": {
+                    "description": "CurrentRecoveryKey, when set, re-confirms the caller with the recovery\nkey it has now in place of Password, and keeps that phrase: RecoveryKey\nmust be the same key, and ChatKeys and VaultKey are wrapped under it\n(#3530). A wrong one is a 403 and nothing is written.",
+                    "type": "string"
                 },
                 "password": {
                     "description": "Password re-confirms the caller with its auth key, so a session alone\ncannot replace the recovery credential, as delete-account takes it. A\nraw password is refused with 426 (#2430).",

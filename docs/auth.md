@@ -213,6 +213,16 @@ for an account that has no recovery key. An account that has one refuses every r
   is written. `chatKeys` and `vaultKey` are the chat identity and the vault key re-wrapped under the new phrase,
   stored in the same transaction, as `/auth/recover` takes them. The login response carries `legacyRecovery: true`
   for an account with no recovery key, which tells the app to do this.
+- **Adding a phrase wrap to keys that have none (#3530).** Chat keys made at an ordinary sign-in, and a vault set up
+  without the phrase, have no wrap under the recovery phrase, so a recovery could not carry them over. The same
+  route, with `currentRecoveryKey` in place of `password`, wraps them under the phrase the account already has:
+  body `{currentRecoveryKey, recoveryKey, chatKeys?, vaultKey?}`, where `recoveryKey` is the same key. The Quark
+  checks `currentRecoveryKey` against the stored recovery key hash before anything is written, so a mistyped phrase
+  is a 403 and changes nothing, and the recovery key itself is never replaced. The transaction matches only the hash
+  it checked, so a request replayed after the phrase changed is refused too. An account with no recovery key yet gets
+  the same 403, a `recoveryKey` that differs from `currentRecoveryKey` a 400. Wrong keys count toward the sign-in
+  lockout, as at `/auth/recover`. The app asks for the phrase and the password where a key has no phrase wrap; the
+  Quark never sees either, only the recovery key and the wraps.
 
 ### Changing a password
 

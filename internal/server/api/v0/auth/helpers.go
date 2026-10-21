@@ -3,6 +3,7 @@ package v0_auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/vaultutil"
 
@@ -190,4 +192,45 @@ func queryBool(c *gin.Context, name string) (bool, bool) {
 		return false, false
 	}
 	return value, true
+}
+
+// errRecoveryKeyChanged refuses a body whose currentRecoveryKey and
+// recoveryKey differ: re-confirming with the current phrase keeps it, and a
+// new phrase is given with password instead (#3530).
+var errRecoveryKeyChanged = errors.New("currentRecoveryKey keeps the recovery phrase, so recoveryKey must be the same key")
+
+// confirmRecoveryKey answers PUT /auth/recovery-key for a body carrying
+// currentRecoveryKey: it stores the keys wrapped under the phrase the account
+// already has, once the Quark has checked that key, and never replaces it
+// (#3530).
+func confirmRecoveryKey(c *gin.Context, deps deputil.Dependencies, userID int64, req setRecoveryKeyBody) *serverutil.Response {
+	if req.RecoveryKey != req.CurrentRecoveryKey {
+		return serverutil.BadRequest(errRecoveryKeyChanged)
+	}
+	afterConfirm, announce, err := storeRewrappedKeys(c.Request.Context(), deps, req.ChatKeys, req.VaultKey)
+	if err != nil {
+		return serverutil.BadRequest(err)
+	}
+	_, err = authutil.ConfirmRecoveryKey(c.Request.Context(), deps.Database(), authutil.ConfirmRecoveryKeyParams{
+		UserID:       userID,
+		RecoveryKey:  req.CurrentRecoveryKey,
+		Guard:        deps.LoginGuard(),
+		ClientIP:     ratelimitutil.ExtractIP(c.ClientIP()),
+		AfterConfirm: afterConfirm,
+	})
+	if locked := lockoutResponse(c, err); locked != nil {
+		return locked
+	}
+	switch {
+	case errors.Is(err, authutil.ErrInvalidRecoveryKey):
+		return serverutil.BadRequest(err)
+	case errors.Is(err, authutil.ErrInvalidRecoveryPhrase):
+		return serverutil.NewResponse().WithStatusCode(http.StatusForbidden).WithError(err)
+	case errors.Is(err, authutil.ErrUserNotFound):
+		return serverutil.Unauthorized(fmt.Errorf("not authenticated"))
+	case err != nil:
+		return serverutil.InternalServerError(err)
+	}
+	announce()
+	return serverutil.NewResponse().WithStatusCode(http.StatusNoContent)
 }

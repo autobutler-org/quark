@@ -454,6 +454,29 @@ type SetRecoveryKeyParams struct {
 // SetRecoveryKeyResult is empty; a stored key has nothing to report.
 type SetRecoveryKeyResult struct{}
 
+// ConfirmRecoveryKeyParams names the signed-in account and the recovery key
+// its client derived from the phrase the user typed, to wrap the account's
+// keys under that phrase without changing it (#3530).
+type ConfirmRecoveryKeyParams struct {
+	UserID int64
+	// RecoveryKey is the standard base64 of the 32-byte key the client derived
+	// from the phrase and the account's auth salt. It must be the key the
+	// account has.
+	RecoveryKey string
+	// Guard counts a wrong key toward the sign-in lockouts and refuses every
+	// attempt while one runs (#3578); nil checks nothing.
+	Guard *ratelimitutil.LoginGuard
+	// ClientIP is the address the attempt came from, which Guard keys on.
+	ClientIP string
+	// AfterConfirm, when set, runs in the transaction that holds the checked
+	// key, with that transaction's queries and the account's id. An error
+	// rolls it back. The caller stores the keys wrapped under the phrase here.
+	AfterConfirm func(queries db.Querier, userID int64) error
+}
+
+// ConfirmRecoveryKeyResult is empty; a confirmed key has nothing to report.
+type ConfirmRecoveryKeyResult struct{}
+
 // ChangePasswordParams replaces the signed-in account's auth key with the one
 // of a new password.
 type ChangePasswordParams struct {
@@ -1194,6 +1217,57 @@ func SetRecoveryKey(ctx context.Context, database *db.DatabaseSqlc, params SetRe
 		return nil
 	})
 	return SetRecoveryKeyResult{}, err
+}
+
+// ConfirmRecoveryKey checks that params.RecoveryKey is the signed-in
+// account's recovery key and then runs params.AfterConfirm, so keys wrapped
+// under a phrase are stored only when that phrase is the account's (#3530). A
+// mistyped phrase is refused before anything is written, and the recovery
+// key itself is never replaced. The key is checked behind params.Guard as
+// CheckRecovery checks one, and the transaction matches only the hash that
+// was checked, so a key replaced between the check and the write refuses too.
+//
+// It returns ErrInvalidRecoveryKey for a missing or malformed key,
+// ErrUserNotFound when the account is gone, and ErrInvalidRecoveryPhrase for a
+// wrong key or an account with no recovery key yet, which gets one with
+// SetRecoveryKey instead.
+func ConfirmRecoveryKey(ctx context.Context, database *db.DatabaseSqlc, params ConfirmRecoveryKeyParams) (ConfirmRecoveryKeyResult, error) {
+	if err := validateKey(params.RecoveryKey, ErrInvalidRecoveryKey); err != nil {
+		return ConfirmRecoveryKeyResult{}, err
+	}
+	// Read before the transaction, not in it, for the reason SetRecoveryKey
+	// gives.
+	user, err := database.Queries.GetUserByID(ctx, params.UserID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ConfirmRecoveryKeyResult{}, ErrUserNotFound
+	}
+	if err != nil {
+		return ConfirmRecoveryKeyResult{}, fmt.Errorf("look up the account: %w", err)
+	}
+	attempt := ratelimitutil.LoginAttempt{Account: user.Username, IP: params.ClientIP}
+	err = guardedSecret(params.Guard, attempt, func() error {
+		if !CheckPassword(params.RecoveryKey, user.RecoveryKeyHash) {
+			return ErrInvalidRecoveryPhrase
+		}
+		return nil
+	})
+	if err != nil {
+		return ConfirmRecoveryKeyResult{}, err
+	}
+	err = db.InTx(ctx, database.Db, func(q db.Querier) error {
+		held, err := q.KeepRecoveryKey(ctx, db.KeepRecoveryKeyParams{RecoveryKeyHash: user.RecoveryKeyHash, ID: user.ID})
+		if err != nil {
+			return fmt.Errorf("hold the recovery key: %w", err)
+		}
+		if held == 0 {
+			return ErrInvalidRecoveryPhrase
+		}
+		if params.AfterConfirm != nil {
+			return params.AfterConfirm(q, user.ID)
+		}
+		return nil
+	})
+	return ConfirmRecoveryKeyResult{}, err
 }
 
 // ChangePassword replaces the signed-in account's auth key with the one of a

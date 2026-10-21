@@ -279,6 +279,30 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const keepRecoveryKey = `-- name: KeepRecoveryKey :execrows
+UPDATE users
+SET recovery_key_hash = $1
+WHERE id = $2 AND recovery_key_hash = $1
+`
+
+type KeepRecoveryKeyParams struct {
+	RecoveryKeyHash string
+	ID              int64
+}
+
+// KeepRecoveryKey holds an account's recovery key in a transaction that stores
+// keys newly wrapped under the phrase that key was checked against (#3530). It
+// writes the hash back unchanged, and only the hash that was checked matches,
+// so a key replaced in the meantime matches no row and the caller rolls back
+// rather than wrap under a phrase the account no longer has.
+func (q *Queries) KeepRecoveryKey(ctx context.Context, arg KeepRecoveryKeyParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, keepRecoveryKey, arg.RecoveryKeyHash, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const listActiveSessionsForUser = `-- name: ListActiveSessionsForUser :many
 SELECT token, user_id, expires_at, created_at, last_used_at
 FROM sessions

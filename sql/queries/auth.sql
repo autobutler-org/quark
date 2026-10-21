@@ -39,6 +39,16 @@ UPDATE users
 SET recovery_key_hash = sqlc.arg(recovery_key_hash), recovery_phrase_hash = ''
 WHERE id = sqlc.arg(id);
 
+-- KeepRecoveryKey holds an account's recovery key in a transaction that stores
+-- keys newly wrapped under the phrase that key was checked against (#3530). It
+-- writes the hash back unchanged, and only the hash that was checked matches,
+-- so a key replaced in the meantime matches no row and the caller rolls back
+-- rather than wrap under a phrase the account no longer has.
+-- name: KeepRecoveryKey :execrows
+UPDATE users
+SET recovery_key_hash = sqlc.arg(recovery_key_hash)
+WHERE id = sqlc.arg(id) AND recovery_key_hash = sqlc.arg(recovery_key_hash);
+
 -- SetUserCredentials replaces what an account signs in with: the auth key a
 -- recovery sets, and the salt it was derived with (#2430). It clears the
 -- password hash, so a password the Quark once saw stops signing in.
