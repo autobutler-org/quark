@@ -2,7 +2,8 @@
 
 # Prepares a macOS CI runner to produce a signed App Store build:
 #   1. imports the Apple Distribution certificate into a throwaway keychain
-#   2. installs the App Store provisioning profile
+#   2. installs the App Store provisioning profiles: the app's and the AutoFill
+#      extension's (ios/CredentialProvider, #3598)
 #   3. writes an ExportOptions plist wired for manual signing
 #
 # Reads its inputs from the environment so nothing sensitive lands in argv or
@@ -24,11 +25,15 @@ Options:
 Required environment variables:
   IOS_DIST_CERT_P12_BASE64        base64 of the Apple Distribution .p12
   IOS_DIST_CERT_PASSWORD          password protecting that .p12
-  IOS_PROVISIONING_PROFILE_BASE64 base64 of the App Store .mobileprovision
+  IOS_PROVISIONING_PROFILE_BASE64 base64 of the app's App Store .mobileprovision
+  IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64
+                                  base64 of the AutoFill extension's App Store
+                                  .mobileprovision (org.autobutler.quark.CredentialProvider)
 
 To produce the base64 values locally:
   base64 -i Certificates.p12 | pbcopy
   base64 -i Quark_App_Store.mobileprovision | pbcopy
+  base64 -i Quark_AutoFill_App_Store.mobileprovision | pbcopy
 
 See docs/ios-release.md for how to obtain the certificate and profile.
 USAGE
@@ -51,7 +56,8 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 missing=0
-for var in IOS_DIST_CERT_P12_BASE64 IOS_DIST_CERT_PASSWORD IOS_PROVISIONING_PROFILE_BASE64; do
+for var in IOS_DIST_CERT_P12_BASE64 IOS_DIST_CERT_PASSWORD IOS_PROVISIONING_PROFILE_BASE64 \
+    IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64; do
     if [[ -z "${!var:-}" ]]; then
         echo "Error: ${var} is not set."
         missing=1
@@ -69,6 +75,7 @@ trap 'rm -rf "${WORK_DIR}"' EXIT
 
 CERT_PATH="${WORK_DIR}/dist.p12"
 PROFILE_PATH="${WORK_DIR}/profile.mobileprovision"
+AUTOFILL_PROFILE_PATH="${WORK_DIR}/autofill.mobileprovision"
 decode_secret() {
     local var_name="$1" out="$2" what="$3"
     if ! printf '%s' "${!var_name}" | base64 --decode > "${out}" 2>/dev/null; then
@@ -84,6 +91,7 @@ decode_secret() {
 }
 decode_secret IOS_DIST_CERT_P12_BASE64 "${CERT_PATH}" "certificate"
 decode_secret IOS_PROVISIONING_PROFILE_BASE64 "${PROFILE_PATH}" "profile"
+decode_secret IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64 "${AUTOFILL_PROFILE_PATH}" "profile"
 
 # A dedicated keychain keeps the runner's login keychain untouched and lets the
 # job leave no credentials behind. The password is ephemeral and never leaves
@@ -136,64 +144,86 @@ if ! security find-identity -v -p codesigning | grep -q "Apple Distribution"; th
     exit 1
 fi
 
-# Read the profile's own metadata rather than hardcoding a name that Apple may
-# regenerate. The profile is a CMS-signed plist.
-PROFILE_PLIST="${WORK_DIR}/profile.plist"
-# Do not silence this: under `set -e` a suppressed failure here exits the script with
-# no output at all, which is the least debuggable thing it can do.
-if ! security cms -D -i "${PROFILE_PATH}" > "${PROFILE_PLIST}" 2>"${WORK_DIR}/cms.err"; then
-    echo "Error: IOS_PROVISIONING_PROFILE_BASE64 did not decode to a valid"
-    echo "  .mobileprovision file. 'security cms' said:"
-    sed 's/^/    /' "${WORK_DIR}/cms.err"
-    echo
-    echo "  Decoded $(wc -c < "${PROFILE_PATH}" | tr -d ' ') bytes; first 16 bytes were:"
-    echo "    $(head -c 16 "${PROFILE_PATH}" | xxd -p 2>/dev/null || true)"
-    echo "  A real profile begins with an ASN.1 SEQUENCE (hex 3082...)."
-    echo
-    echo "  Regenerate the secret with:"
-    echo "    base64 -i <file>.mobileprovision \\"
-    echo "      | gh secret set IOS_PROVISIONING_PROFILE_BASE64 --repo <owner>/<repo>"
+# Reads a profile's own metadata rather than hardcoding a name that Apple may
+# regenerate, checks it is a manually managed App Store profile, and installs it.
+# Sets PROFILE_NAME, PROFILE_UUID, TEAM_ID and BUNDLE_ID.
+install_profile() {
+    local var_name="$1" path="$2"
+    # The profile is a CMS-signed plist.
+    local plist="${WORK_DIR}/${var_name}.plist"
+    # Do not silence this: under `set -e` a suppressed failure here exits the script with
+    # no output at all, which is the least debuggable thing it can do.
+    if ! security cms -D -i "${path}" > "${plist}" 2>"${WORK_DIR}/cms.err"; then
+        echo "Error: ${var_name} did not decode to a valid"
+        echo "  .mobileprovision file. 'security cms' said:"
+        sed 's/^/    /' "${WORK_DIR}/cms.err"
+        echo
+        echo "  Decoded $(wc -c < "${path}" | tr -d ' ') bytes; first 16 bytes were:"
+        echo "    $(head -c 16 "${path}" | xxd -p 2>/dev/null || true)"
+        echo "  A real profile begins with an ASN.1 SEQUENCE (hex 3082...)."
+        echo
+        echo "  Regenerate the secret with:"
+        echo "    base64 -i <file>.mobileprovision \\"
+        echo "      | gh secret set ${var_name} --repo <owner>/<repo>"
+        exit 1
+    fi
+
+    PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "${plist}")"
+    PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "${plist}")"
+    TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "${plist}")"
+    local app_id
+    app_id="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "${plist}")"
+    BUNDLE_ID="${app_id#"${TEAM_ID}."}"
+
+    if /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "${plist}" >/dev/null 2>&1; then
+        echo "Error: '${PROFILE_NAME}' is a development or ad-hoc profile (it lists devices)."
+        echo "  App Store distribution needs a profile of type 'App Store Connect'."
+        echo "  Create one at https://developer.apple.com/account/resources/profiles"
+        exit 1
+    fi
+
+    # Xcode-managed profiles are the ones automatic signing generates for you. Manual
+    # signing refuses them outright -- "is Xcode managed, but signing settings require a
+    # manually managed profile" -- and the archive only discovers that ~40s in. Catch it now.
+    if [[ "$(/usr/libexec/PlistBuddy -c 'Print :IsXcodeManaged' "${plist}" 2>/dev/null)" == "true" ]]; then
+        echo "Error: '${PROFILE_NAME}' is an Xcode-managed profile."
+        echo "  CI signs manually, and Xcode refuses to use a managed profile that way."
+        echo "  Reusing the one Xcode created locally will not work, however convenient."
+        echo
+        echo "  Fix: create a manually managed profile at"
+        echo "       https://developer.apple.com/account/resources/profiles"
+        echo "       Type 'App Store Connect', App ID '${BUNDLE_ID}', your Apple Distribution"
+        echo "       certificate. Then:"
+        echo "         base64 -i <downloaded>.mobileprovision \\"
+        echo "           | gh secret set ${var_name} --repo <owner>/<repo>"
+        exit 1
+    fi
+
+    # Xcode 16 moved the profile directory. xcodebuild still reads the legacy path, but
+    # which one wins depends on the toolchain version on the runner, so install to both.
+    local dir
+    for dir in \
+        "${HOME}/Library/MobileDevice/Provisioning Profiles" \
+        "${HOME}/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+        mkdir -p "${dir}"
+        cp "${path}" "${dir}/${PROFILE_UUID}.mobileprovision"
+    done
+}
+
+install_profile IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64 "${AUTOFILL_PROFILE_PATH}"
+AUTOFILL_PROFILE_NAME="${PROFILE_NAME}"
+AUTOFILL_PROFILE_UUID="${PROFILE_UUID}"
+AUTOFILL_TEAM_ID="${TEAM_ID}"
+AUTOFILL_BUNDLE_ID="${BUNDLE_ID}"
+install_profile IOS_PROVISIONING_PROFILE_BASE64 "${PROFILE_PATH}"
+
+# The extension's App ID sits under the app's, and both sign with one team's certificate.
+if [[ "${AUTOFILL_BUNDLE_ID}" != "${BUNDLE_ID}.CredentialProvider" || "${AUTOFILL_TEAM_ID}" != "${TEAM_ID}" ]]; then
+    echo "Error: IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64 is for '${AUTOFILL_BUNDLE_ID}'"
+    echo "  (team ${AUTOFILL_TEAM_ID}), expected '${BUNDLE_ID}.CredentialProvider' (team ${TEAM_ID})."
+    echo "  The two secrets are probably swapped, or the extension's profile is for another App ID."
     exit 1
 fi
-
-PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "${PROFILE_PLIST}")"
-PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "${PROFILE_PLIST}")"
-TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "${PROFILE_PLIST}")"
-APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "${PROFILE_PLIST}")"
-BUNDLE_ID="${APP_ID#"${TEAM_ID}."}"
-
-if /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "${PROFILE_PLIST}" >/dev/null 2>&1; then
-    echo "Error: '${PROFILE_NAME}' is a development or ad-hoc profile (it lists devices)."
-    echo "  App Store distribution needs a profile of type 'App Store Connect'."
-    echo "  Create one at https://developer.apple.com/account/resources/profiles"
-    exit 1
-fi
-
-# Xcode-managed profiles are the ones automatic signing generates for you. Manual
-# signing refuses them outright -- "is Xcode managed, but signing settings require a
-# manually managed profile" -- and the archive only discovers that ~40s in. Catch it now.
-if [[ "$(/usr/libexec/PlistBuddy -c 'Print :IsXcodeManaged' "${PROFILE_PLIST}" 2>/dev/null)" == "true" ]]; then
-    echo "Error: '${PROFILE_NAME}' is an Xcode-managed profile."
-    echo "  CI signs manually, and Xcode refuses to use a managed profile that way."
-    echo "  Reusing the one Xcode created locally will not work, however convenient."
-    echo
-    echo "  Fix: create a manually managed profile at"
-    echo "       https://developer.apple.com/account/resources/profiles"
-    echo "       Type 'App Store Connect', App ID '${BUNDLE_ID}', your Apple Distribution"
-    echo "       certificate. Then:"
-    echo "         base64 -i <downloaded>.mobileprovision \\"
-    echo "           | gh secret set IOS_PROVISIONING_PROFILE_BASE64 --repo <owner>/<repo>"
-    exit 1
-fi
-
-# Xcode 16 moved the profile directory. xcodebuild still reads the legacy path, but
-# which one wins depends on the toolchain version on the runner, so install to both.
-for PROFILE_DIR in \
-    "${HOME}/Library/MobileDevice/Provisioning Profiles" \
-    "${HOME}/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
-    mkdir -p "${PROFILE_DIR}"
-    cp "${PROFILE_PATH}" "${PROFILE_DIR}/${PROFILE_UUID}.mobileprovision"
-done
 
 # `flutter build ipa` archives using the project's own signing settings, and the Runner
 # target specifies none -- so Xcode falls back to automatic signing, which needs an Apple
@@ -226,6 +256,18 @@ PROVISIONING_PROFILE_SPECIFIER = ${PROFILE_NAME}
 DEVELOPMENT_TEAM = ${TEAM_ID}
 XCCONFIG
 
+# The extension does not build on Flutter's Release.xcconfig, so the block above never
+# reaches it. Its own xcconfig includes this file when it exists (.gitignore keeps it out
+# of commits).
+AUTOFILL_XCCONFIG="${REPO_ROOT}/ios/CredentialProvider/Signing.ci.xcconfig"
+cat > "${AUTOFILL_XCCONFIG}" <<XCCONFIG
+${MARKER}
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = Apple Distribution
+PROVISIONING_PROFILE_SPECIFIER = ${AUTOFILL_PROFILE_NAME}
+DEVELOPMENT_TEAM = ${TEAM_ID}
+XCCONFIG
+
 cat > "${OUT}" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -244,6 +286,8 @@ cat > "${OUT}" <<PLIST
 	<dict>
 		<key>${BUNDLE_ID}</key>
 		<string>${PROFILE_NAME}</string>
+		<key>${AUTOFILL_BUNDLE_ID}</key>
+		<string>${AUTOFILL_PROFILE_NAME}</string>
 	</dict>
 	<key>destination</key>
 	<string>export</string>
@@ -263,6 +307,8 @@ echo "Signing ready."
 echo "  Team:    ${TEAM_ID}"
 echo "  Bundle:  ${BUNDLE_ID}"
 echo "  Profile: ${PROFILE_NAME} (${PROFILE_UUID})"
+echo "  AutoFill: ${AUTOFILL_BUNDLE_ID}, ${AUTOFILL_PROFILE_NAME} (${AUTOFILL_PROFILE_UUID})"
 echo "  Export:  ${OUT}"
 echo "  Keychain: ${KEYCHAIN}"
 echo "  Archive signing pinned to Manual in ${RELEASE_XCCONFIG#"${REPO_ROOT}/"}"
+echo "    and ${AUTOFILL_XCCONFIG#"${REPO_ROOT}/"}"

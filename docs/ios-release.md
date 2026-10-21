@@ -11,6 +11,9 @@ This document is only about shipping to the App Store.
 |---|---|
 | Apple Team | `4NK7MWUA57` (Autobutler LLC) |
 | Bundle ID | `org.autobutler.quark` |
+| AutoFill extension bundle ID | `org.autobutler.quark.CredentialProvider` (`ios/CredentialProvider`, #3598) |
+| App group (app and extension) | `group.org.autobutler.quark` |
+| Keychain access group (app and extension) | `4NK7MWUA57.org.autobutler.quark.shared` |
 | App Store listing name | Quark by AutoButler |
 | Home screen name (`CFBundleDisplayName`) | Quark |
 
@@ -93,17 +96,19 @@ to build and verify without publishing).
 
 CI runs the same `make build/frontend/ios/ipa` target as local, so the two cannot drift.
 The only difference is signing: locally Xcode signs automatically from your keychain,
-while CI imports a certificate and profile into a throwaway keychain and signs manually.
+while CI imports a certificate and two profiles, the app's and the AutoFill extension's, into
+a throwaway keychain and signs manually.
 
 ### Secrets
 
-All six are required. Add them under Settings > Secrets and variables > Actions.
+All seven are required. Add them under Settings > Secrets and variables > Actions.
 
 | Secret | What it is |
 |---|---|
 | `IOS_DIST_CERT_P12_BASE64` | base64 of the Apple Distribution certificate exported as `.p12` |
 | `IOS_DIST_CERT_PASSWORD` | the password you set when exporting that `.p12` |
-| `IOS_PROVISIONING_PROFILE_BASE64` | base64 of the App Store `.mobileprovision` |
+| `IOS_PROVISIONING_PROFILE_BASE64` | base64 of the app's App Store `.mobileprovision` |
+| `IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64` | base64 of the AutoFill extension's App Store `.mobileprovision` |
 | `APP_STORE_CONNECT_KEY_ID` | API key ID |
 | `APP_STORE_CONNECT_ISSUER_ID` | API issuer ID |
 | `APP_STORE_CONNECT_PRIVATE_KEY` | full contents of the `.p8`, including the BEGIN/END lines |
@@ -140,6 +145,39 @@ manually managed profile.
 The CI script rejects both that and development/ad-hoc profiles up front, rather than
 letting the archive discover it forty seconds in.
 
+### Producing the AutoFill extension's profile secret
+
+The AutoFill Credential Provider extension (#3598) is a second target with its own App ID,
+so it needs its own profile. Until `IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64` exists,
+`build.yml`'s `build-ios` job builds unsigned and `release-ios.yml` stops at "Prepare code
+signing". In the developer portal, at
+<https://developer.apple.com/account/resources/identifiers>:
+
+1. **App group.** Under Identifiers > App Groups, register `group.org.autobutler.quark` if it
+   is not there yet (the app's cache for autofill, #3596, already uses it).
+2. **The app's App ID.** On `org.autobutler.quark`, turn on **App Groups** and assign
+   `group.org.autobutler.quark`, if it is not on yet. Changing an App ID's capabilities
+   invalidates its profiles: regenerate the app's App Store profile and update
+   `IOS_PROVISIONING_PROFILE_BASE64` if you changed anything here.
+3. **The extension's App ID.** Register an explicit App ID `org.autobutler.quark.CredentialProvider`
+   with **App Groups** (assign `group.org.autobutler.quark`) and **AutoFill Credential
+   Provider** turned on.
+4. **The profile.** Under Profiles, create an **App Store Connect** distribution profile for
+   `org.autobutler.quark.CredentialProvider` with the same Apple Distribution certificate,
+   download it, then:
+
+   ```bash
+   base64 -i Quark_AutoFill_App_Store.mobileprovision \
+     | gh secret set IOS_AUTOFILL_PROVISIONING_PROFILE_BASE64 --repo autobutler-org/quark
+   ```
+
+The Keychain access group needs no portal setting: a group under the team's own prefix is
+always allowed. `scripts/ios-ci-signing.bash` checks that the profile is for
+`<app bundle ID>.CredentialProvider` on the same team, installs it, writes the extension's
+manual signing to `ios/CredentialProvider/Signing.ci.xcconfig` (gitignored, deleted after the
+job), and lists both profiles in the generated `ExportOptions.ci.plist`. Locally, automatic
+signing creates both profiles itself and `ios/ExportOptions.plist` needs no change.
+
 ### Build numbers in CI
 
 The workflow uses `github.run_number` unless you pass `build_number` explicitly. Because
@@ -149,8 +187,8 @@ with an explicit `build_number` above the last one used.
 
 ### Expiry
 
-Apple Distribution certificates last one year and provisioning profiles one year. Both
-secrets must be regenerated before they expire, or tagged releases start failing at the
+Apple Distribution certificates last one year and provisioning profiles one year. The
+certificate and both profile secrets must be regenerated before they expire, or tagged releases start failing at the
 signing step. Nothing warns you in advance.
 
 ## Versioning rules
@@ -220,6 +258,11 @@ Set in `ios/Runner.xcodeproj/project.pbxproj`:
   builds and Apple Distribution for archives. Do not pin it back.
 - `IPHONEOS_DEPLOYMENT_TARGET = 15.0`. Apple rejects uploads below 15.0 from Spring 2027.
   This costs no devices — iOS 15 runs on the same hardware as iOS 13 (iPhone 6s onward).
+
+The `CredentialProvider` target is the AutoFill extension, embedded in `Runner` through the
+"Embed Foundation Extensions" phase, which sits before "Thin Binary". It builds on
+`ios/CredentialProvider/CredentialProvider.xcconfig` rather than Flutter's xcconfig files, and takes
+its version and build number from `Flutter/Generated.xcconfig`, so they always match the app's.
 
 `ios/ExportOptions.plist` drives the export: `app-store-connect` method, automatic
 signing, symbols uploaded.
