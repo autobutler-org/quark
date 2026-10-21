@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/controllers/recovery_phrase_controller.dart';
 import 'package:quark/controllers/vault_biometric_controller.dart';
 import 'package:quark/controllers/vault_controller.dart';
 import 'package:quark/router.dart';
@@ -22,6 +23,7 @@ import 'package:quark/utils/web_download_stub.dart'
     as web_download;
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/recovery_phrase/add_recovery_phrase_offer.dart';
 import 'package:quark/widgets/vault/vault_entry_page.dart';
 import 'package:quark/widgets/vault/vault_error_view.dart';
 import 'package:quark/widgets/vault/vault_export_menu.dart';
@@ -37,17 +39,28 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// list, search, add, edit, delete, import and export. Where
 /// [VaultBiometricController] says the device can, the lock screen opens
 /// with Face ID, Touch ID or a fingerprint instead (#3595), and the open
-/// vault offers to turn that on and has the setting in its bar.
+/// vault offers to turn that on and has the setting in its bar. An open vault
+/// whose key has no wrap under the recovery phrase offers to add one, so a
+/// recovery keeps it (#3530).
 class VaultPage extends StatefulWidget {
-  /// Creates the page over [controller], the app's vault by default, and
-  /// [biometric], the app's biometric unlock by default.
-  const VaultPage({this.controller, this.biometric, super.key});
+  /// Creates the page over [controller], the app's vault by default,
+  /// [biometric], the app's biometric unlock by default, and
+  /// [recoveryPhrase], the app's recovery phrase offer by default.
+  const VaultPage({
+    this.controller,
+    this.biometric,
+    this.recoveryPhrase,
+    super.key,
+  });
 
   /// The vault shown. Tests pass one with fake services.
   final VaultController? controller;
 
   /// The biometric unlock. Tests pass one with a fake keystore.
   final VaultBiometricController? biometric;
+
+  /// The recovery phrase offer. Tests pass one with fake services.
+  final RecoveryPhraseController? recoveryPhrase;
 
   @override
   State<VaultPage> createState() => _VaultPageState();
@@ -59,13 +72,23 @@ class _VaultPageState extends State<VaultPage>
       widget.controller ?? VaultController.instance;
   late final VaultBiometricController _biometric =
       widget.biometric ?? VaultBiometricController.instance;
+  late final RecoveryPhraseController _phrase =
+      widget.recoveryPhrase ?? RecoveryPhraseController.instance;
   bool _importing = false;
 
   /// Whether the user chose to type the password over the biometric.
   bool _usePassword = false;
 
   @override
-  Future<void> refresh() => Future.wait([_vault.load(), _biometric.refresh()]);
+  Future<void> refresh() =>
+      Future.wait([_vault.load(), _biometric.refresh(), _phrase.check()]);
+
+  /// Sets the vault up, then asks again whether its key has a phrase wrap:
+  /// one set up without the phrase is offered it at once.
+  Future<void> _setUp(String password, String phrase) async {
+    await _vault.setUp(password, phrase: phrase);
+    await _phrase.check();
+  }
 
   void _openEntry([int? id]) {
     _vault.touch();
@@ -213,7 +236,7 @@ class _VaultPageState extends State<VaultPage>
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([_vault, _biometric]),
+      listenable: Listenable.merge([_vault, _biometric, _phrase]),
       builder: (context, _) {
         final status = _vault.status;
         final unlocked = status == VaultStatus.unlocked;
@@ -279,6 +302,8 @@ class _VaultPageState extends State<VaultPage>
                   onEnable: _biometricSettings,
                   onDismiss: _biometric.dismissOffer,
                 ),
+              if (unlocked && _phrase.offerVault)
+                AddRecoveryPhraseOffer(controller: _phrase),
               Expanded(
                 child: switch (status) {
                   VaultStatus.loading => const Center(child: QuarkLoader()),
@@ -311,8 +336,7 @@ class _VaultPageState extends State<VaultPage>
                     error: formError == null
                         ? null
                         : Errors.message(formError, 'set up your vault'),
-                    onSubmit: (password, phrase) =>
-                        _vault.setUp(password, phrase: phrase),
+                    onSubmit: _setUp,
                   ),
                   VaultStatus.locked
                       when _biometric.canUnlock && !_usePassword =>

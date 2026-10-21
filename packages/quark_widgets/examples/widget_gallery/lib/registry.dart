@@ -3226,6 +3226,25 @@ final List<GalleryEntry> registry = [
       ),
     ),
   ),
+  GalleryEntry(
+    name: 'RecoveryPhraseOffer',
+    group: 'Vault',
+    build: (context, log) => RecoveryPhraseOffer(
+      message:
+          'Add your recovery phrase so a recovery keeps your vault and '
+          'messages.',
+      onAdd: () => log('RecoveryPhraseOffer.onAdd'),
+      onDismiss: () => log('RecoveryPhraseOffer.onDismiss'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'AddRecoveryPhraseDialog',
+    group: 'Vault',
+    build: (context, log) => AddRecoveryPhraseDialog(
+      onSubmit: (phrase, password) => log('AddRecoveryPhraseDialog.onSubmit'),
+      onCancel: () => log('AddRecoveryPhraseDialog.onCancel'),
+    ),
+  ),
 
   GalleryEntry(
     name: 'CalendarEmptyNotice',

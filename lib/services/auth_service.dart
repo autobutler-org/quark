@@ -12,6 +12,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_secret.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/chat_crypto.dart';
+import 'package:quark/services/chat_key_service.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/services/feature_flags_service.dart';
 import 'package:quark/services/settings_service.dart';
@@ -179,6 +180,21 @@ Future<WrappedChatKeys?> Function({
 })
 chatKeysForPasswordChange = ChatKeysController.instance.keysForPasswordChange;
 
+/// Opens the account's chat keys with the password and wraps them under it
+/// and the account's recovery phrase, for [AuthService.addRecoveryPhrase] to
+/// send (#3530). See [ChatKeysController.keysForPhrase]. Overridable in tests.
+Future<WrappedChatKeys?> Function({
+  required String password,
+  required SecureKey phraseWrapKey,
+  required Uint8List authSalt,
+})
+chatKeysForPhrase = ChatKeysController.instance.keysForPhrase;
+
+/// The signed-in account's own wrapped chat keys, or null when it has none,
+/// for [AuthService.missingPhraseWraps] (#3530). Overridable in tests.
+Future<WrappedChatKeys?> Function({String? sessionToken}) chatKeysFetch =
+    ChatKeyService.fetchMine;
+
 /// The signed-in account's wrapped vault key, or null when it has no vault,
 /// for [AuthService.changePassword] and a recovery phrase rotation to
 /// re-wrap (#3461). [sessionToken] is for a session the app has not stored
@@ -340,7 +356,7 @@ Future<WrappedVaultKey?> _vaultKeyForRecovery({
 Future<WrappedVaultKey?> _vaultKeyForNewPhrase({
   required String password,
   required AuthKeys phraseKeys,
-  required String sessionToken,
+  String? sessionToken,
   required Uint8List authSalt,
 }) async {
   final stored = await vaultKeyFetch(sessionToken: sessionToken);
@@ -395,6 +411,12 @@ void _unlockChatKeys({
 /// A recovery phrase the app generated, and its keys under an account's auth
 /// salt (#2430). The caller disposes [keys].
 typedef NewRecoveryPhrase = ({String phrase, AuthKeys keys});
+
+/// Which of the signed-in account's keys have no wrap under the recovery
+/// phrase, so a recovery would lose them (#3530): [chat] for a chat identity,
+/// [vault] for a vault key. A key the account does not have is not missing
+/// one.
+typedef MissingPhraseWraps = ({bool chat, bool vault});
 
 /// Generates a recovery phrase and derives its keys under [salt], at the
 /// cost every recovery key is derived with.
@@ -1179,6 +1201,93 @@ class AuthService {
       }
       // The status alone: the Quark's text for a refused key is not copy.
       throw ApiException(response.statusCode, 'Password change failed');
+    }
+  }
+
+  /// Which of the signed-in account's keys have no wrap under its recovery
+  /// phrase (#3530), so the app can offer [addRecoveryPhrase] where a
+  /// recovery would otherwise lose the vault or the chat history.
+  static Future<MissingPhraseWraps> missingPhraseWraps() async {
+    final chat = await chatKeysFetch();
+    final vault = await vaultKeyFetch();
+    return (
+      chat: chat != null && chat.byPhrase == null,
+      vault: vault != null && vault.byPhrase == null,
+    );
+  }
+
+  /// Wraps the signed-in account's chat identity and vault key under the
+  /// recovery phrase it already has, so a recovery with that phrase carries
+  /// both over to the new password (#3530).
+  ///
+  /// [password] opens what is stored; [phrase] is what the user typed. The
+  /// app derives the phrase's keys over the account's auth salt, wraps the
+  /// keys under its `wrapKey`, and sends `PUT /auth/recovery-key` its
+  /// recovery key as `currentRecoveryKey`. The Quark checks that key against
+  /// the one it holds before it stores anything, so a mistyped phrase writes
+  /// nothing and never replaces the account's phrase: it throws a
+  /// [MessageException] carrying [Errors.recoveryPhraseNotTheAccounts]. A
+  /// password that opens neither key throws before anything is sent. The
+  /// Quark is sent the recovery key and the wraps, never the phrase, the
+  /// password, a wrap key or the vault key.
+  static Future<void> addRecoveryPhrase({
+    required String password,
+    required String phrase,
+  }) async {
+    final session = await _sessionAccount();
+    final secret = await AuthSecret.resolve(
+      username: session.username,
+      password: password,
+      use: AuthSecretUse.reconfirm,
+    );
+    final crypto = await ChatCrypto.load();
+    final phraseKeys = crypto.deriveRecoveryKeys(
+      phrase,
+      secret.salt,
+      KdfParams.standard,
+    );
+    try {
+      final chatKeys = await chatKeysForPhrase(
+        password: password,
+        phraseWrapKey: phraseKeys.wrapKey,
+        authSalt: secret.salt,
+      );
+      final hasVault = await vaultKeyFetch() != null;
+      final vaultKey = await _vaultKeyForNewPhrase(
+        password: password,
+        phraseKeys: phraseKeys,
+        authSalt: secret.salt,
+      );
+      if (hasVault && vaultKey == null) {
+        throw const MessageException(Errors.vaultWrongPassword);
+      }
+      if (chatKeys == null && vaultKey == null) return;
+      final response = await authHttpClientFactory()
+          .put(
+            _baseUri.resolve('/api/v0/auth/recovery-key'),
+            headers: {
+              'Authorization': ?session.authorization,
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              // The phrase the account has: the Quark checks it and keeps it.
+              'currentRecoveryKey': phraseKeys.authKey,
+              'recoveryKey': phraseKeys.authKey,
+              'chatKeys': ?chatKeys?.toJson(),
+              'vaultKey': ?vaultKey?.toJson(),
+            }),
+          )
+          .timeout(kAuthRequestTimeout);
+      if (response.statusCode == 401) throw const UnauthorizedException();
+      if (response.statusCode == 403) {
+        throw const MessageException(Errors.recoveryPhraseNotTheAccounts);
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        // The status alone: the Quark's text for a refused key is not copy.
+        throw ApiException(response.statusCode, 'Adding the phrase failed');
+      }
+    } finally {
+      phraseKeys.dispose();
     }
   }
 

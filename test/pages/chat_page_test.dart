@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/chat_controller.dart';
+import 'package:quark/controllers/recovery_phrase_controller.dart';
 import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
@@ -13,6 +14,7 @@ import 'package:quark/pages/chat_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/utils/chat_config.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/widgets/recovery_phrase/add_recovery_phrase_offer.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/fake_chat.dart';
@@ -29,6 +31,7 @@ void main() {
     Size size, {
     String location = '/chat/general',
     FakeChat? chat,
+    RecoveryPhraseController? recoveryPhrase,
   }) async {
     ChatController.clearSessionDrafts();
     addTearDown(ChatController.clearSessionDrafts);
@@ -42,6 +45,7 @@ void main() {
           builder: (context, state) => ChatPage(
             channelId: state.pathParameters['channelId']!,
             controller: fake.controller,
+            recoveryPhrase: recoveryPhrase,
           ),
         ),
       ],
@@ -429,6 +433,58 @@ void main() {
         findsOneWidget,
       );
       expect(fake.opened[1]!.opens, 1);
+      expect(tester.takeException(), isNull);
+    });
+
+    // #3530: chat keys with no phrase wrap offer the recovery phrase, and
+    // only the account's phrase is taken.
+    testWidgets('keys with no phrase wrap offer the recovery phrase ($label)', (
+      tester,
+    ) async {
+      var missing = (chat: true, vault: false);
+      final added = <String>[];
+      final phrase = RecoveryPhraseController(
+        missing: () async => missing,
+        addPhrase: ({required password, required phrase}) async {
+          added.add(phrase);
+          if (phrase != 'apple bread cloud') {
+            throw const MessageException(Errors.recoveryPhraseNotTheAccounts);
+          }
+          missing = (chat: false, vault: false);
+        },
+        account: () => 'grace',
+      );
+      addTearDown(phrase.dispose);
+      await pumpChat(tester, size, recoveryPhrase: phrase);
+
+      final add = find.byKey(const ValueKey('recovery_phrase_offer_add'));
+      await tester.ensureVisible(add);
+      await tester.pumpAndSettle();
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+      Future<void> submit(String typed) async {
+        await tester.enterText(
+          find.byKey(const ValueKey('add_recovery_phrase_phrase')),
+          typed,
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey('add_recovery_phrase_password')),
+          'pw',
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('add_recovery_phrase_submit')),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await submit('apple bread clown');
+      expect(find.text(Errors.recoveryPhraseNotTheAccounts), findsOneWidget);
+      expect(find.byType(AddRecoveryPhraseOffer), findsOneWidget);
+
+      await submit('apple bread cloud');
+      expect(find.byType(AddRecoveryPhraseDialog), findsNothing);
+      expect(find.byType(AddRecoveryPhraseOffer), findsNothing);
+      expect(added, ['apple bread clown', 'apple bread cloud']);
       expect(tester.takeException(), isNull);
     });
 
