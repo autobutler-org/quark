@@ -1350,10 +1350,15 @@ test/stress/capacity: build/backend ## Simulate STRESS_USERS app clients against
 .PHONY: test/unit
 test/unit: test/unit/backend test/unit/frontend ## Run unit tests
 
+# The backend unit packages: everything but the API handler packages, which
+# test/integration/backend runs, and the chaos suites. Recursive, so `go list` runs
+# only for a target that reads it; pass BACKEND_UNIT_PACKAGES=<pkgs> to run fewer.
+BACKEND_UNIT_PACKAGES = $(shell $(GO) list ./... | grep -v '/internal/server/api/v0/' | grep -v '/test/chaos')
+
 .PHONY: test/unit/backend
 test/unit/backend: check/db internal/server/public/stub.txt ## Run unit tests for backend
 	# Generate coverage report for unit tests (excludes integration test packages)
-	$(GO) test -v $(shell $(GO) list ./... | grep -v '/internal/server/api/v0/' | grep -v '/test/chaos') \
+	$(GO) test -v $(BACKEND_UNIT_PACKAGES) \
 		-coverprofile=coverage.out \
 		-covermode=atomic
 	# Apply coverage ignore directives
@@ -1368,6 +1373,13 @@ test/unit/backend: check/db internal/server/public/stub.txt ## Run unit tests fo
 		$(GO) tool cover \
 			-func=coverage.out.ignored
 	fi
+
+# A separate target rather than a flag on test/unit/backend: -race needs cgo and makes
+# the suite several times slower, so CI runs it as a job of its own beside the
+# coverage run (#3220).
+.PHONY: test/unit/backend/race
+test/unit/backend/race: check/db internal/server/public/stub.txt ## Run backend unit tests with the race detector
+	CGO_ENABLED=1 $(GO) test -race $(BACKEND_UNIT_PACKAGES)
 
 # Test tuning. Each suite is a `flutter test` run, and each run spawns several
 # flutter_tester processes, so memory use is roughly FRONTEND_SUITE_JOBS x

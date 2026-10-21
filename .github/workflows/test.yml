@@ -1,3 +1,4 @@
+# cspell:words dorny unrun
 name: Test
 on:
   # Also on push to main so the badges have a run attributed to the branch. Without it
@@ -70,9 +71,41 @@ jobs:
           PRINT_COVERAGE: true
         run: |
           make test/unit/backend
+      # The total lands on the run's summary page and the per-file report is an artifact,
+      # so neither has to be dug out of the log. Nothing gates on the number yet (#3220).
+      - name: Publish coverage total
+        run: |
+          total="$(go tool cover -func=coverage.out.ignored | tail -1 | awk '{print $NF}')"
+          echo "### Backend unit test coverage: ${total}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-coverage
+          path: coverage.html
+          if-no-files-found: warn
       - name: Run integration tests
         run: |
           make test/integration/backend
+  # The unit packages again under the race detector, beside test-backend rather than in
+  # it: -race makes the suite several times slower (#3220).
+  test-backend-race:
+    needs: changes
+    if: needs.changes.outputs.backend != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Setup go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Setup sqlc
+        uses: ./.github/actions/setup-sqlc
+      - name: Setup swag
+        uses: ./.github/actions/setup-swag
+      - name: Run unit tests with the race detector
+        run: |
+          make test/unit/backend/race
   # What is checked on a real PostgreSQL (the Makefile lists it beside test/db/postgres): the
   # query and schema layer, connecting and migrating, a first run of the server driven over
   # HTTP against the same journey on SQLite, and what is refused by name. Only this; running
