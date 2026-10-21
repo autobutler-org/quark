@@ -8,8 +8,8 @@ import 'package:quark/services/authenticated_service.dart';
 
 /// The channel key and event routes under `/api/v0/chat/channels/:id` (#2417):
 /// key versions and this account's grants, the grants it can fill, uploading
-/// them, rejecting its own, creating a version, and the channel's signed system
-/// events.
+/// them, rejecting its own, creating a version or regenerating one as an
+/// admin, and the channel's signed system events.
 ///
 /// Everything here is sealed keys, signatures and public keys;
 /// `ChatChannelKeysController` does the crypto.
@@ -33,22 +33,25 @@ class ChatChannelKeysService with AuthenticatedService {
     int version,
     Uint8List sealedKey,
     Uint8List signature,
-  ) async {
-    final response = await instance.authenticatedPost(
-      _uri(channelId, '/keys'),
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'version': version,
-        'sealedKey': base64Encode(sealedKey),
-        'signature': base64Encode(signature),
-      }),
-    );
-    if (response.statusCode == 409) return null;
-    throwUnlessOk(response, 'create key $version of channel $channelId');
-    return ChatChannelEvent.fromJson(
-      _json(response)['event'] as Map<String, dynamic>,
-    );
-  }
+  ) => _postVersion(channelId, '/keys', version, sealedKey, signature);
+
+  /// Regenerates the key as an admin (#3455): creates [version] although no
+  /// rotation is needed, with this account's own grant of it, and returns
+  /// the `key_created` event to sign. Null when the Quark answers 409:
+  /// another member created [version] first, or this account already holds
+  /// the current version and can share it instead.
+  static Future<ChatChannelEvent?> regenerateVersion(
+    int channelId,
+    int version,
+    Uint8List sealedKey,
+    Uint8List signature,
+  ) => _postVersion(
+    channelId,
+    '/keys/regenerate',
+    version,
+    sealedKey,
+    signature,
+  );
 
   /// The grants this account holds the key to fill.
   static Future<ChatPendingGrants> fetchPending(int channelId) async {
@@ -111,6 +114,29 @@ class ChatChannelKeysService with AuthenticatedService {
       body: jsonEncode({'signature': base64Encode(signature)}),
     );
     throwUnlessOk(response, 'sign event $eventId of channel $channelId');
+  }
+
+  static Future<ChatChannelEvent?> _postVersion(
+    int channelId,
+    String suffix,
+    int version,
+    Uint8List sealedKey,
+    Uint8List signature,
+  ) async {
+    final response = await instance.authenticatedPost(
+      _uri(channelId, suffix),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'version': version,
+        'sealedKey': base64Encode(sealedKey),
+        'signature': base64Encode(signature),
+      }),
+    );
+    if (response.statusCode == 409) return null;
+    throwUnlessOk(response, 'create key $version of channel $channelId');
+    return ChatChannelEvent.fromJson(
+      _json(response)['event'] as Map<String, dynamic>,
+    );
   }
 
   static Uri _uri(int channelId, String suffix, [Map<String, String>? query]) =>
