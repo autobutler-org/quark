@@ -409,6 +409,10 @@ ciphertext, the nonce and `formatVersion`, and nothing else about an item.
 - **Unlock.** The vault opens with the login password, which derives `vaultWrapKey` in the app; there is no
   separate vault password. A wrong password fails to open the wrap and sends nothing. The open key and the
   decrypted items live in memory only, and are forgotten on lock, after 15 minutes idle, and at sign-out.
+- **Biometric unlock and autofill (phones only).** Opt-in per device, the phone app keeps the vault key behind Face
+  ID, Touch ID or a strong fingerprint, so whoever can pass that check on the unlocked phone can open the vault and
+  fill from it. Locking forgets only the key in memory. What is kept, what the OS sees and what clears it is in
+  [Native vault autofill](architecture/vault-autofill.md).
 - **Credential changes.** A password change, a recovery and a new recovery phrase send the vault key re-wrapped as
   `vaultKey` beside `chatKeys`, stored in the same transaction. The phrase wrap is kept across a password change.
   Setup sends the login password's auth key beside the wraps, and the Quark re-confirms it before storing the key,
