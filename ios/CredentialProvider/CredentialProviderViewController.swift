@@ -137,7 +137,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         var changed = false
         for cache in caches {
             switch keychain.read(account: cache.accountKey) {
-            case var .key(key, fingerprint):
+            case .key(var key, let fingerprint):
                 // A key that is not the one the app fingerprinted, or that opens none of the items, is stale.
                 if VaultAutofill.keyMatches(key, fingerprint: fingerprint),
                    let entries = VaultAutofill.entries(in: cache, matching: sites, vaultKey: key) {
