@@ -100,6 +100,7 @@ stores a weaker one.
 | Sign-in, no keys yet          | An account from before chat: generates and uploads, wrapped under the password only    |
 | Sign-in                       | Downloads the wraps and opens the password one with the password from the form. A first-scheme password wrap is re-wrapped under `wrapKey` |
 | Sign-in, no recovery key      | The Quark answers `legacyRecovery: true`, as for an admin-created account's first sign-in: the app opens or makes the identity, generates a phrase, wraps the identity under it, and sends `recoveryKey` and the new row to `PUT /api/v0/auth/recovery-key`. Only after its 204 does it show the phrase |
+| Adding the phrase             | Keys with no phrase wrap offer **Add your recovery phrase** on the vault and chat pages (#3530). The app opens the keys with the password, wraps them under the typed phrase's keys over the auth salt, and sends that phrase's `recoveryKey` as `currentRecoveryKey` to `PUT /api/v0/auth/recovery-key` with the new rows. Nothing is uploaded before the Quark has checked it |
 | Recovery                      | Sends `recoveryKey`, never the phrase, to fetch the wraps and to reset the password; opens the phrase wrap with the phrase's `wrapKey`, or an older one with Argon2id of the phrase, and sends both re-wrapped |
 | Recovery, Quark-made phrase   | The Quark answers `legacyRecovery: true`, so the app has to send the phrase, once. Generates a new one, sends its key as `newRecoveryKey` with the reset, wraps the identity under it, and shows it after the reset |
 | Restart on a phone or desktop | Reads the unwrapped seeds back from the platform keystore (`flutter_secure_storage`)  |
@@ -113,7 +114,9 @@ session to upload keys with, and nothing keeps it until the first sign-in. If su
 can open its old identity, so recovery makes a new one and its earlier messages stay sealed. Accounts from setup
 get their keys while the phrase is on screen. An account with no recovery key, an admin-created one or one whose
 phrase the Quark made before #2430, is given a phrase at its next sign-in, and that adds the phrase wrap it was
-missing.
+missing. Any other account adds it with the phrase it already has (#3530): the chat and vault pages offer to, and
+the Quark checks the phrase's `recoveryKey` against the one it holds before it stores the wraps, so a mistyped
+phrase is refused with nothing written and never replaces the account's.
 
 ### Routes
 
@@ -126,7 +129,10 @@ missing.
 - `POST /api/v0/auth/recover` takes an optional `chatKeys` with the re-wrapped row and stores it in the password
   reset's transaction.
 - `PUT /api/v0/auth/recovery-key`: with a session and the `authKey` re-confirmed, stores a new `recoveryKey`, clears
-  the Quark-made phrase, and stores the re-wrapped row in one transaction.
+  the Quark-made phrase, and stores the re-wrapped row in one transaction. With `currentRecoveryKey` in place of the
+  `authKey` it keeps the phrase instead: the Quark checks that key against the stored hash behind the sign-in
+  lockout, and only then stores the rows wrapped under it, in a transaction that matches the hash it checked
+  (#3530).
 - `PUT /api/v0/auth/password`: with a session and the current `authKey` re-confirmed, stores the new password's
   `authKey` and the row re-wrapped under it in one transaction.
 
@@ -419,8 +425,9 @@ ciphertext, the nonce and `formatVersion`, and nothing else about an item.
   so the password wrap is always under the login password that these flows re-wrap from. Setup takes the recovery
   phrase as an optional field and, when it is filled in, stores the phrase wrap with the
   first `PUT /api/v0/vault/key`. Nothing checks that phrase against the Quark, so a mistyped one is stored and
-  never opens the vault. A vault set up without the phrase has no phrase wrap until the account is given a new
-  phrase (`PUT /api/v0/auth/recovery-key`); until then a recovery cannot open it.
+  never opens the vault. A vault set up without the phrase has no phrase wrap until the open vault's
+  **Add your recovery phrase** adds one under the checked phrase (#3530), or the account is given a new phrase;
+  until then a recovery cannot open it.
 - **No admin recovery.** Nobody holds a copy of the vault key. An account that loses both its password and its
   phrase wrap loses the vault, and `DELETE /api/v0/vault` lets it start a new one. That delete re-confirms the
   login password's auth key, which the user always knows (after a recovery it is the new one), so a signed-in
