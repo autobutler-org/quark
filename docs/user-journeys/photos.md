@@ -453,6 +453,9 @@ added outside Quark shows up once its thumbnail loads or after the next restart.
 
 - Photos are grouped as **Identical copies** (the same file) or **Similar photos** (alike, but maybe edited or
   resized). Each copy shows its name and folder, and its drive when it is not on the internal one.
+- A very flat photo (an overcast sky, a snowfield, fog) is never offered as a similar photo: it is grouped only with
+  byte-identical copies, because different flat photos look alike to the comparison. Until the background pass has
+  read a photo again after an update, it counts as flat too.
 - Every copy starts marked **Keep**, and no delete bar shows until a copy is marked **Delete**. **Select suggested**
   marks every copy but one in each identical group and never touches similar photos; it is offered while an identical
   group still has a spare copy unmarked. A group always keeps at least one copy.

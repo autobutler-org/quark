@@ -115,7 +115,7 @@ erDiagram
     photo_album_items { int album_id  string device_serial  string rel_path }
     photo_favorites { string device_serial  string rel_path }
     photo_rotations { string device_serial  string rel_path  int rotation_quarters }
-    photo_hashes { string device_serial  string rel_path  string dhash  string content_hash }
+    photo_hashes { string device_serial  string rel_path  string dhash  int dhash_detail  string content_hash }
     file_content { string serial  string rel_path  string extracted }
     music_tracks { string serial  string rel_path  string title  string album_key }
     jobs { int id  string kind  string status  string lane  real progress  int attempts }
@@ -151,9 +151,16 @@ join. `path_access.level` is `read`, `write` or `owner`, and each row names exac
 | `036_music_library`    | `music_tracks`, `music_tracks_fts` (FTS5, SQLite only)              |
 | `037_per_account_vault` | `vault_keys`, `vault_items`                                            |
 | `038_drop_household_vault` | drops `005_vault`'s tables                                          |
+| `041_photo_hash_detail` | `photo_hashes.dhash_detail` column                                      |
 
 `music_tracks` (#2982) is a cache built from audio files, not a record: every column is derived, and a rescan
 rebuilds it. `music_tracks_fts` is its FTS5 mirror and exists only on SQLite, with `file_content_fts`.
+
+`photo_hashes.dhash_detail` (migration 041, #3520) counts how many of a photo's 64 dHash bits compare two grid cells
+whose mean luma is at least 4 levels apart. A smooth photo (an overcast sky, a snowfield, fog) has few, and its hash
+is mostly ties, so duplicate detection near-matches a photo only when at least 32 bits carry detail; any other photo
+is grouped by its SHA-256 alone. A row hashed before the column existed has `NULL`, meaning unknown: it matches only
+byte-identical copies until the startup backfill reads the photo again and fills it in.
 
 Migrations are numbered, gap-free and paired; `make check/migrations` fails a PR whose number is at or below
 `main`'s highest, because golang-migrate would silently skip it on upgraded devices.
