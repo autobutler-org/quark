@@ -128,9 +128,10 @@ Covers first-boot setup, login, logout, and password recovery.
   **Continue**; Back stays on the phrase until then. The old phrase stops working.
 - Once an account has a phrase the app made, recovering it sends only a key derived from the phrase, unless the
   Quark answers that the account has none, as a reset Quark does; then the phrase goes out that once, as above.
-- The account's vault survives the recovery only if its key has a phrase wrap: the phrase was typed at vault setup
-  (JN-VT-001), or the account was given a new phrase after setup. Otherwise the vault stays under the old password
-  and can only be started over (JN-VT-021).
+- The account's vault and chat history survive the recovery only if their keys have a phrase wrap: the phrase was
+  typed at vault setup (JN-VT-001), the phrase was added afterwards from the vault or chat page (JN-VT-023), or the
+  account was given a new phrase since. Otherwise the vault stays under the old password and can only be started
+  over (JN-VT-021), and chat gets a new identity whose earlier messages stay sealed.
 
 ---
 

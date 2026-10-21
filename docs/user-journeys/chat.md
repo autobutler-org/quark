@@ -449,3 +449,28 @@ on two devices or browsers, one with `general` open and one on **Files**.
 - Chat is end-to-end encrypted, so a mention is only the text `@name` inside the message. The app finds it after
   decrypting; the Quark is never told who was mentioned ([`docs/chat-security.md`](../chat-security.md)).
 - A mention sends no notification and adds no badge to a channel that isn't open.
+
+---
+
+### JN-CHAT-021: Add the recovery phrase so a recovery keeps chat history
+
+**Preconditions:** The account's chat keys were made at a sign-in, so they have no phrase wrap, and chat is
+unlocked.
+
+**Steps:**
+
+1. Navigate to `/chat`.
+2. The card **Add your recovery phrase** shows above the channels.
+3. Tap **Add phrase**, enter the account's recovery phrase and the password you sign in with, and tap **Add phrase**.
+
+**Expected result:**
+
+- The dialog closes and the card goes away. A later recovery with that phrase (JN-AUTH-005) keeps the same chat
+  identity, so earlier messages stay readable.
+- A phrase that is not the account's is refused with "That isn't your account's recovery phrase. Nothing was
+  changed; check the words and try again.", and nothing changes.
+
+**Notes:**
+
+- The same step as on the vault page (JN-VT-023): one dialog wraps both the chat keys and the vault key, and the
+  Quark checks the phrase before it stores anything ([`docs/chat-security.md`](../chat-security.md)).

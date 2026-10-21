@@ -60,10 +60,10 @@ saved an entry in it (JN-VT-006).
   it stores anything, so the vault is always wrapped under the login password and a later password change
   (JN-VT-020) keeps it.
 - With the recovery phrase filled in, the key is also stored wrapped under a key the phrase derives, so a recovery
-  with that phrase keeps the vault (JN-VT-020). Nothing checks the phrase against the Quark: a mistyped one is
-  accepted and simply never opens the vault.
-- A vault set up without the phrase has no phrase wrap. It gets one only when the account is next given a new
-  recovery phrase, and until then a recovery cannot keep it.
+  with that phrase keeps the vault (JN-VT-020). Nothing checks the phrase typed here against the Quark: a mistyped
+  one is accepted and simply never opens the vault.
+- A vault set up without the phrase has no phrase wrap, and a recovery cannot keep it. The open vault then offers
+  **Add your recovery phrase** (JN-VT-023), which checks the phrase with the Quark before it adds the wrap.
 
 ---
 
@@ -405,8 +405,9 @@ the restore route chat restore will use (#2428). `POST /api/v0/vault/import-back
 - The app opens the vault key with the current password and sends it back wrapped under the new one, in the same
   request that changes the password. The entries themselves are not touched.
 - A recovery with the recovery phrase (JN-AUTH-005) keeps the vault the same way, as long as the vault key has a
-  phrase wrap: the phrase was typed at setup (JN-VT-001), or the account has been given a new phrase since. Without
-  one, nothing the account still holds opens the vault, and JN-VT-021 is the way out.
+  phrase wrap: the phrase was typed at setup (JN-VT-001), it was added later (JN-VT-023), or the account has been
+  given a new phrase since. Without one, nothing the account still holds opens the vault, and JN-VT-021 is the way
+  out.
 
 ---
 
@@ -430,7 +431,8 @@ a recovery that could not carry it over.
 **Notes:**
 
 - Nobody, an admin included, can recover a vault the account's password and recovery phrase no longer open. This is
-  the only way out.
+  the only way out. Adding the phrase while the password still opens the vault (JN-VT-023) is what keeps a later
+  recovery from ending here.
 - The account's other open sessions lock and show the setup screen too.
 
 ---
@@ -456,6 +458,41 @@ a recovery that could not carry it over.
 **Notes:**
 
 - **Delete folder** shows only while a folder is chosen.
+
+---
+
+### JN-VT-023: Add the recovery phrase to a vault set up without it
+
+**Preconditions:** The account has a vault whose key has no phrase wrap: it was set up without the phrase
+(JN-VT-001). The account has a recovery phrase.
+
+**Steps:**
+
+1. Navigate to `/vault` and unlock it (JN-VT-003).
+2. The card **Add your recovery phrase** says "Add your recovery phrase so a recovery keeps your vault and
+   messages."
+3. Tap **Add phrase**.
+4. Enter a phrase that is not the account's, and the password you sign in with, and tap **Add phrase**.
+5. Correct the phrase and tap **Add phrase** again.
+
+**Expected result:**
+
+- Step 4 shows "That isn't your account's recovery phrase. Nothing was changed; check the words and try again." The
+  dialog stays open with what was typed, and the vault, the chat keys and the account's phrase are unchanged.
+- Step 5 closes the dialog, says "Recovery phrase added. A recovery now keeps your vault and messages.", and the card
+  goes away.
+- A recovery with that phrase (JN-AUTH-005) then keeps the vault (JN-VT-020) and the chat history.
+- **Not now** hides the card until the app restarts.
+
+**Notes:**
+
+- The app opens the vault key and the chat keys with the password, wraps them under keys the phrase derives, and
+  sends the Quark the phrase's recovery key and the new wraps. The Quark checks that recovery key against the one it
+  holds before it stores anything, so a mistyped phrase never becomes a wrap and never replaces the account's
+  phrase. Neither the phrase, the password nor the vault key is sent.
+- Wrong phrases count toward the sign-in lockout (JN-AUTH-018).
+- Chat keys made at a sign-in have no phrase wrap either, and chat offers the same card (JN-CHAT-021); adding the
+  phrase from either page covers both.
 
 ---
 
