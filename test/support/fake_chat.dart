@@ -183,6 +183,12 @@ class FakeChat {
         calls.add('ensure keys $id');
         return false;
       },
+      regenerateKeys: (id) async {
+        calls.add('regenerate keys $id');
+        _fail();
+        waiting.remove(id);
+        return true;
+      },
       signMemberChange: (event, {userId, groupId, permissions}) async =>
           calls.add('sign ${event?.id} user=$userId $permissions'),
       listMembers: (_) async {

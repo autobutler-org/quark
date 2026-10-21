@@ -158,6 +158,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     Future<SharePrincipals> Function() loadPrincipals =
         SharingService.principals,
     Future<bool> Function(int channelId)? ensureKeys,
+    Future<bool> Function(int channelId)? regenerateKeys,
     SignMemberChangeFn? signMemberChange,
     bool Function()? isAdmin,
     ChatMessagesController Function(int channelId)? messagesFor,
@@ -182,6 +183,8 @@ class ChatController extends ChangeNotifier with SafeNotifier {
        _loadPrincipals = loadPrincipals,
        _ensureKeys =
            ensureKeys ?? ChatChannelKeysController.instance.ensureKeys,
+       _regenerateKeys =
+           regenerateKeys ?? ChatChannelKeysController.instance.regenerate,
        _signMemberChange =
            signMemberChange ??
            ChatChannelKeysController.instance.signMemberChange,
@@ -243,6 +246,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   final SetChatMemberFn _setMember;
   final Future<SharePrincipals> Function() _loadPrincipals;
   final Future<bool> Function(int channelId) _ensureKeys;
+  final Future<bool> Function(int channelId) _regenerateKeys;
   final SignMemberChangeFn _signMemberChange;
   final bool Function() _isAdmin;
   final ChatMessagesController Function(int channelId) _messagesFor;
@@ -285,6 +289,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   bool _isUnlocking = false;
   Object? _unlockError;
   bool _isCheckingKey = false;
+  bool _isRegeneratingKeys = false;
   bool _isSaving = false;
   Object? _saveError;
   SharePrincipals _principals = const SharePrincipals();
@@ -490,6 +495,35 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       debugPrint('chat: no key yet for channel ${channel.id}: $e');
     } finally {
       _isCheckingKey = false;
+      notifyListeners();
+    }
+  }
+
+  /// Whether [regenerateKeys] is offered: to an admin waiting for the open
+  /// channel's key (#3455). An admin who holds the key shares it without
+  /// regenerating, and the Quark refuses them.
+  bool get canRegenerateKeys => isAdmin && isWaitingForKey;
+
+  /// Whether [regenerateKeys] is running.
+  bool get isRegeneratingKeys => _isRegeneratingKeys;
+
+  /// Regenerates the open channel's key as an admin (#3455): a fresh version
+  /// that this account shares with every member who has set up chat, so
+  /// nobody waits on the members holding the current one. Messages sent
+  /// under the old key stay waiting until one of those members is back.
+  /// Returns the error for `Errors.message`, or null.
+  Future<Object?> regenerateKeys() async {
+    final channel = _selected;
+    if (channel == null || _isRegeneratingKeys) return null;
+    _isRegeneratingKeys = true;
+    notifyListeners();
+    try {
+      await _regenerateKeys(channel.id);
+      return null;
+    } catch (e) {
+      return e;
+    } finally {
+      _isRegeneratingKeys = false;
       notifyListeners();
     }
   }
@@ -1088,6 +1122,9 @@ class ChatController extends ChangeNotifier with SafeNotifier {
             : '$actor removed $name';
       case ChatChannelEvent.keyCreated:
         final version = (data['version'] as num?)?.toInt() ?? 0;
+        if (event.isRegeneration) {
+          return "$actor regenerated this channel's key";
+        }
         return version <= 1
             ? '$actor set up encryption for this channel'
             : '$actor made a new key for this channel';

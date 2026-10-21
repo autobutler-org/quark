@@ -564,6 +564,12 @@ void main() {
       say(event(ChatChannelEvent.keyCreated, {'version': 2})),
       'ada made a new key for this channel',
     );
+    expect(
+      say(
+        event(ChatChannelEvent.keyCreated, {'version': 2, 'regenerated': true}),
+      ),
+      "ada regenerated this channel's key",
+    );
   });
 
   test('chat_channel_changed reloads the channels', () async {
@@ -1114,6 +1120,46 @@ void main() {
       ]);
       final items = chat.controller.messageItems;
       expect(items.map((i) => i.isEncryptionEvent), [false, true]);
+      chat.controller.dispose();
+    });
+
+    // #3455: only an admin waiting on the key is offered a fresh one.
+    test('an admin waiting for the key can regenerate it', () async {
+      final member = FakeChat()..waiting.add(1);
+      member.controller.select('general');
+      await member.controller.refresh();
+      expect(member.controller.canRegenerateKeys, isFalse);
+      member.controller.dispose();
+
+      final holder = FakeChat(isAdmin: true);
+      holder.controller.select('general');
+      await holder.controller.refresh();
+      expect(holder.controller.canRegenerateKeys, isFalse);
+      holder.controller.dispose();
+
+      final chat = FakeChat(isAdmin: true)..waiting.add(1);
+      chat.controller.select('general');
+      await chat.controller.refresh();
+      expect(chat.controller.canRegenerateKeys, isTrue);
+      chat.calls.clear();
+
+      final regenerating = chat.controller.regenerateKeys();
+      expect(chat.controller.isRegeneratingKeys, isTrue);
+      expect(await regenerating, isNull);
+      expect(chat.controller.isRegeneratingKeys, isFalse);
+      expect(chat.calls, ['regenerate keys 1']);
+      chat.controller.dispose();
+    });
+
+    test('a failed regeneration is returned for the page to show', () async {
+      final chat = FakeChat(isAdmin: true)..waiting.add(1);
+      chat.controller.select('general');
+      await chat.controller.refresh();
+      final failure = ApiException(403, 'regenerate');
+      chat.failWith = failure;
+
+      expect(await chat.controller.regenerateKeys(), same(failure));
+      expect(chat.controller.isRegeneratingKeys, isFalse);
       chat.controller.dispose();
     });
 

@@ -570,6 +570,50 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // #3455: an admin waiting on a key nobody online holds makes a new one,
+    // after reading what stays unreadable.
+    testWidgets('an admin regenerates a stuck channel key ($label)', (
+      tester,
+    ) async {
+      final fake = FakeChat(isAdmin: true)..waiting.add(1);
+      await pumpChat(tester, size, chat: fake);
+      fake.calls.clear();
+
+      await tester.tap(find.byKey(const ValueKey('chat_channel_settings')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('chat_channel_regenerate_keys')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('stay unreadable to them until someone who holds'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('regenerate_keys_confirm')));
+      await tester.pumpAndSettle();
+
+      expect(fake.calls, ['regenerate keys 1']);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a member waiting for the key cannot regenerate it ($label)', (
+      tester,
+    ) async {
+      final fake = FakeChat()..waiting.add(1);
+      await pumpChat(tester, size, chat: fake);
+      if (find
+          .byKey(const ValueKey('chat_channel_settings'))
+          .evaluate()
+          .isNotEmpty) {
+        await tester.tap(find.byKey(const ValueKey('chat_channel_settings')));
+        await tester.pumpAndSettle();
+      }
+      expect(
+        find.byKey(const ValueKey('chat_channel_regenerate_keys')),
+        findsNothing,
+      );
+    });
+
     testWidgets('a member copies a message from its menu ($label)', (
       tester,
     ) async {

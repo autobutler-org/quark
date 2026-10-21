@@ -181,7 +181,7 @@ is pending again, and the holders hear `chat_key_needed` and refill it. The bad 
   member, signs, and uploads. The first grant for a member and version wins, and later ones are ignored.
   `chat_key_granted` then tells the recipients.
 - **Waiting.** Until its grant lands, a member sees "Waiting for a member to share the key". The Quark can't end
-  that wait itself.
+  that wait itself, and when every holder is away an admin can, by regenerating the key (below).
 - **The first key.** A channel starts with no version. The first member client to open it, `general` on a new
   Quark included, creates version 1. Creating a version must name the next number, so two clients racing leave
   one winner.
@@ -197,6 +197,30 @@ kept with no recipient for this purpose. The Quark reports `rotationNeeded` and 
 next member client online creates the next version and grants it to the remaining members. That member doesn't
 have to hold the old version. Messages from then on use the new key. The Quark refuses any version after the first
 unless `rotationNeeded` is true, with 409, so a member can't bury the channel under versions nobody needs (#2485).
+
+### Regenerating a stuck key (#3455)
+
+A holder has to be online to fill a grant, so a channel whose only holders are away leaves everyone else waiting:
+in `general`, whoever opened it first may be the one holder for good. An admin can end that wait with
+**Regenerate channel keys** in the channel's settings menu. The app offers it only to an admin who is waiting for
+the key themselves, and the Quark holds it to these rules:
+
+- **Who.** An admin who holds `read_messages` on the channel. A non-admin gets 403. An admin without
+  `read_messages` gets 404, as on every key route: regenerating never adds anyone to a channel. An admin outside it
+  adds themselves first, which is its own `member_set` event.
+- **When.** Only while the admin holds no grant of the current version. An admin who holds it shares it as any
+  holder does, so they get 409. Regenerating gives them the new version, so the next regeneration needs someone else
+  to make a newer one first, and an admin can't stack up versions by repeating it.
+- **What.** It is key creation in every other way. The admin's app generates the key, grants it to the admin, signs,
+  and then seals it to every member with published chat keys, the away holder too, through the same pending-grant
+  path as a rotation. It names the next version, so a race with a rotation leaves one winner. It draws on the same
+  rate-limit bucket as `POST /keys`.
+- **Record.** The `key_created` event's payload is `{"version":N,"regenerated":true}`, which the admin's client
+  signs only when it matches what it asked for. Members see "ada regenerated this channel's key", and when.
+- **What stays waiting.** Messages under the older versions still need someone who holds those versions. When the
+  original holder is back, their app fills those grants as before. The confirmation dialog says so.
+- **What the Quark learns.** Nothing new. It never sees the new key, only the sealed grants and the event, as for
+  any other version.
 
 ### Channel events
 
@@ -228,6 +252,8 @@ All need `read_messages`: anyone else gets 404, delegated managers and admins in
 - `GET /api/v0/chat/channels/:id/keys` returns the versions, the current one, the caller's own grants, and
   `rotationNeeded`.
 - `POST /api/v0/chat/channels/:id/keys` creates the next version with the caller's own grant.
+- `POST /api/v0/chat/channels/:id/keys/regenerate` does the same for an admin who lacks the current version, without
+  `rotationNeeded`. The only admin-only key route, and it still needs `read_messages`: a non-admin gets 403.
 - `GET /api/v0/chat/channels/:id/keys/pending` returns the grants the caller can fill.
 - `POST /api/v0/chat/channels/:id/keys/grants` uploads grants for versions the caller holds.
 - `DELETE /api/v0/chat/channels/:id/keys/grants/:version` deletes the caller's own grant of a version.
@@ -440,7 +466,7 @@ ciphertext, and a malicious running Quark, or the web app it serves, can still c
 
 ## Rate limits
 
-Posting a message, creating a key version, uploading key grants, and moving a read marker are each limited per
+Posting a message, creating or regenerating a key version (one bucket for both), uploading key grants, and moving a read marker are each limited per
 account (#2485), with a separate bucket per route, so a member can't flood a channel with ciphertext or grant rows. The limit is a burst of
 100 and then 10 a second (`ChatWriteRate` and `ChatWriteBurst` in `pkg/util/deputil`), far above what the app
 sends: a grant upload carries up to 256 grants, so one burst refills a rotation for thousands of members. Going
@@ -487,5 +513,13 @@ Quark restarts.
   (`ListChannels` with `All`); that is by design, for admin tooling (#2488).
 - **A device that's already unlocked.** On phones and desktop the unwrapped seeds sit in the platform keystore
   while signed in, so anyone who can use the signed-in app can read chat.
+- **An admin who abuses regeneration.** An admin can already add themselves to any channel and be granted every
+  version, history included, so regenerating gives them no message they couldn't already read. What it adds is
+  this: they can start a version for a channel whose holders are away, and their app chooses that key and seals it.
+  A malicious admin client could seal a useless key, or different keys to different members, so members can't read
+  each other's new messages until someone rotates. Any member who creates a version could do the same today. Each
+  regeneration is a `key_created` event members see with the admin's name. The Quark refuses one while the admin
+  holds the current key, so the admin can't keep moving the channel to new versions. Nothing here lets an admin read
+  a message sent before they were added to the channel without a member granting it.
 - **A removed member's copies.** Removal rotates the channel key for future messages, but nothing takes back what
   a member already downloaded. The Quark also stops serving them grants and ciphertext.

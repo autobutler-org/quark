@@ -404,6 +404,38 @@ class _ChatPageState extends State<ChatPage>
     );
   }
 
+  /// Asks an admin waiting for the key before regenerating it (#3455), and
+  /// says what stays unreadable.
+  Future<void> _regenerateKeys() async {
+    final channel = _controller.selectedChannel;
+    if (channel == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => ConfirmDeleteDialog(
+        title: 'Regenerate the keys of ${_controller.titleOf(channel)}?',
+        body:
+            "Members are waiting for someone who holds this channel's key to "
+            'come back. A new key, shared from your device, lets everyone who '
+            'has set up chat read and send new messages right away. Messages '
+            'already sent with the old key stay unreadable to them until '
+            'someone who holds it is back. Everyone in the channel sees that '
+            'you made the new key.',
+        keyPrefix: 'regenerate_keys',
+        confirmLabel: 'Regenerate',
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+      ),
+    );
+    if (confirmed != true) return;
+    final error = await _controller.regenerateKeys();
+    if (error == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(Errors.message(error, "regenerate the channel's keys")),
+      ),
+    );
+  }
+
   Future<void> _leaveChannel() async {
     final channel = _controller.selectedChannel;
     if (channel == null) return;
@@ -496,6 +528,10 @@ class _ChatPageState extends State<ChatPage>
                                     : null,
                                 onMembers: c.canManageMembers
                                     ? _openMembers
+                                    : null,
+                                onRegenerateKeys:
+                                    c.canRegenerateKeys && !c.isRegeneratingKeys
+                                    ? _regenerateKeys
                                     : null,
                                 onDelete:
                                     c.canManageSelected && !channel.isDefault
