@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the autofill service (#3600) says. Plain words, one next step, and never a password, an error code or
+     a reason only an engineer would follow (docs/design/native-autofill-vault.md, "Failure UX"). -->
+<resources>
+    <string name="autofill_service_label">Quark</string>
+    <string name="autofill_title">Quark</string>
+    <!-- %1$s is the site, such as bank.example. -->
+    <string name="autofill_unlock">Use a saved login for %1$s</string>
+    <string name="autofill_locked">Open Quark and unlock your vault to use autofill</string>
+    <string name="autofill_app_unsupported">Quark can fill logins in your browser, not in this app yet</string>
+    <string name="autofill_unsure_site">Quark can\'t tell which website this is, so it won\'t fill it</string>
+    <!-- %1$s is the site, %2$s the app that asked, such as Chrome. -->
+    <string name="autofill_prompt_title">Fill your %1$s login into %2$s?</string>
+    <!-- %1$s is the site. -->
+    <string name="autofill_no_match">No saved login for %1$s.</string>
+    <string name="autofill_invalidated">Your fingerprints or face changed, so open Quark and unlock with your password once.</string>
+    <string name="autofill_locked_out">Too many tries. Wait a moment, then try again.</string>
+    <string name="autofill_open_quark">Open Quark</string>
+    <string name="autofill_cancel">Cancel</string>
+    <string name="autofill_ok">OK</string>
+</resources>
