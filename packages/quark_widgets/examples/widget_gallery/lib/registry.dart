@@ -3149,6 +3149,49 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'VaultBiometricUnlock',
+    group: 'Vault',
+    build: (context, log) => SizedBox(
+      height: 480,
+      child: VaultBiometricUnlock(
+        title: 'Your vault is locked',
+        message:
+            'Open it with Face ID, or with the password you sign in to Quark '
+            'with.',
+        unlockLabel: 'Unlock with Face ID',
+        error:
+            'The faces or fingerprints on this device changed, so unlock with '
+            'your password this time.',
+        onUnlock: () => log('VaultBiometricUnlock.onUnlock'),
+        onUsePassword: () => log('VaultBiometricUnlock.onUsePassword'),
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'VaultBiometricOffer',
+    group: 'Vault',
+    build: (context, log) => VaultBiometricOffer(
+      title: 'Unlock with Face ID?',
+      message: 'Open your vault on this device without typing your password.',
+      onEnable: () => log('VaultBiometricOffer.onEnable'),
+      onDismiss: () => log('VaultBiometricOffer.onDismiss'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'VaultBiometricSettingsDialog',
+    group: 'Vault',
+    build: (context, log) => VaultBiometricSettingsDialog(
+      title: 'Unlock with Face ID',
+      explanation:
+          'Open your vault on this device with Face ID instead of your '
+          'password. Anyone who can pass Face ID on this device can open your '
+          'vault.',
+      value: false,
+      onChanged: (on) => log('VaultBiometricSettingsDialog.onChanged($on)'),
+      onClose: () => log('VaultBiometricSettingsDialog.onClose'),
+    ),
+  ),
+  GalleryEntry(
     name: 'VaultEntryDetails',
     group: 'Vault',
     build: (context, log) => VaultEntryDetails(

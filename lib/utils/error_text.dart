@@ -4,6 +4,7 @@ import 'package:quark/models/account_keys.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/photo_index_service.dart';
+import 'package:quark/services/vault_biometric.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -535,6 +536,53 @@ abstract final class Errors {
   /// Saving or deleting after the vault locked itself, which forgets its key.
   static const String vaultLocked =
       'Your vault locked itself. Unlock it and try again.';
+
+  /// A cached vault key that no longer opens the vault (#3595): it was
+  /// replaced from another session, or started over. The key is deleted.
+  static const String vaultBiometricStale =
+      'Your vault has changed since this was turned on, so unlock it with '
+      'your password this time.';
+
+  /// A face or fingerprint was added or removed, or the passcode turned off,
+  /// so the system made the cached vault key unusable and it was deleted.
+  static const String vaultBiometricInvalidated =
+      'The faces or fingerprints on this device changed, so unlock with your '
+      'password this time.';
+
+  /// The cached vault key is gone from this device's secure storage.
+  static const String vaultBiometricMissing =
+      'This device no longer has a way to open your vault without your '
+      'password. Unlock with your password.';
+
+  /// The system locked biometrics after too many tries.
+  static const String vaultBiometricLockedOut =
+      'Too many tries. Unlock with your password for now.';
+
+  /// Turning biometric unlock on where the device can't keep the key.
+  static const String vaultBiometricUnavailable =
+      "This device can't keep your vault behind a face or fingerprint. Check "
+      'that one is set up in your device settings.';
+
+  /// A biometric unlock, or turning one on, that did not go through:
+  /// nothing for a cancel, which is not an error, a sentence for each
+  /// [VaultBiometricException] that changes what the user does, else
+  /// [message]. [action] is as in [message].
+  static String? vaultBiometric(Object? error, String action) =>
+      switch (error) {
+        VaultBiometricException(failure: VaultBiometricFailure.canceled) =>
+          null,
+        VaultBiometricException(failure: VaultBiometricFailure.invalidated) =>
+          vaultBiometricInvalidated,
+        VaultBiometricException(failure: VaultBiometricFailure.missing) =>
+          vaultBiometricMissing,
+        VaultBiometricException(failure: VaultBiometricFailure.lockedOut) =>
+          vaultBiometricLockedOut,
+        VaultBiometricException(failure: VaultBiometricFailure.stale) =>
+          vaultBiometricStale,
+        VaultBiometricException(failure: VaultBiometricFailure.unavailable) =>
+          vaultBiometricUnavailable,
+        _ => message(error, action),
+      };
 
   /// Setting up the vault with a password the account doesn't sign in with:
   /// the Quark re-confirms it and answers 403 (#3461).

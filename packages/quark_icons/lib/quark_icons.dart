@@ -522,6 +522,7 @@ class QuarkIcons {
   static const IconData lock_open = Icons.lock_open;
   static const IconData lock_outline = Icons.lock_outline;
   static const IconData shield_outlined = Icons.shield_outlined;
+  static const IconData fingerprint = Icons.fingerprint;
   static const IconData logout = Icons.logout;
   static const IconData person_outline = Icons.person_outline;
   static const IconData group_outlined = Icons.group_outlined;

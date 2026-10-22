@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/controllers/vault_biometric_controller.dart';
 import 'package:quark/controllers/vault_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -33,13 +34,20 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// A composition over [VaultController], which holds the vault's state and
 /// does all of its crypto: set up or unlock with the login password, then
-/// list, search, add, edit, delete, import and export.
+/// list, search, add, edit, delete, import and export. Where
+/// [VaultBiometricController] says the device can, the lock screen opens
+/// with Face ID, Touch ID or a fingerprint instead (#3595), and the open
+/// vault offers to turn that on and has the setting in its bar.
 class VaultPage extends StatefulWidget {
-  /// Creates the page over [controller], the app's vault by default.
-  const VaultPage({this.controller, super.key});
+  /// Creates the page over [controller], the app's vault by default, and
+  /// [biometric], the app's biometric unlock by default.
+  const VaultPage({this.controller, this.biometric, super.key});
 
   /// The vault shown. Tests pass one with fake services.
   final VaultController? controller;
+
+  /// The biometric unlock. Tests pass one with a fake keystore.
+  final VaultBiometricController? biometric;
 
   @override
   State<VaultPage> createState() => _VaultPageState();
@@ -49,10 +57,15 @@ class _VaultPageState extends State<VaultPage>
     with WidgetsBindingObserver, AutoRefreshMixin {
   late final VaultController _vault =
       widget.controller ?? VaultController.instance;
+  late final VaultBiometricController _biometric =
+      widget.biometric ?? VaultBiometricController.instance;
   bool _importing = false;
 
+  /// Whether the user chose to type the password over the biometric.
+  bool _usePassword = false;
+
   @override
-  Future<void> refresh() => _vault.load();
+  Future<void> refresh() => Future.wait([_vault.load(), _biometric.refresh()]);
 
   void _openEntry([int? id]) {
     _vault.touch();
@@ -78,6 +91,27 @@ class _VaultPageState extends State<VaultPage>
     } catch (e) {
       if (mounted) showMessage(context, Errors.message(e, 'delete your vault'));
     }
+  }
+
+  /// The biometric setting, which says what turning it on means before the
+  /// switch does anything.
+  Future<void> _biometricSettings() async {
+    _vault.touch();
+    await QuarkWidget.showDialog<void>(
+      context,
+      builder: (dialogContext) => ListenableBuilder(
+        listenable: _biometric,
+        builder: (_, _) => VaultBiometricSettingsDialog(
+          title: _biometric.settingTitle,
+          explanation: _biometric.settingExplanation,
+          value: _biometric.enabled,
+          isBusy: _biometric.isBusy,
+          error: Errors.vaultBiometric(_biometric.error, 'change this setting'),
+          onChanged: (on) => on ? _biometric.enable() : _biometric.disable(),
+          onClose: () => Navigator.of(dialogContext).pop(),
+        ),
+      ),
+    );
   }
 
   /// Asks for a folder's name and makes it. The dialog stays open with what
@@ -179,12 +213,16 @@ class _VaultPageState extends State<VaultPage>
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _vault,
+      listenable: Listenable.merge([_vault, _biometric]),
       builder: (context, _) {
         final status = _vault.status;
         final unlocked = status == VaultStatus.unlocked;
         final formError = _vault.formError;
         final error = _vault.error;
+        final biometricError = Errors.vaultBiometric(
+          _biometric.error,
+          'unlock your vault',
+        );
         return QuarkPageScaffold(
           title: 'Vault',
           icon: QuarkIcons.lock_outline,
@@ -213,6 +251,13 @@ class _VaultPageState extends State<VaultPage>
                 onPressed: _importing ? null : _import,
               ),
               VaultExportMenu(onExport: _export),
+              if (_biometric.isAvailable)
+                QuarkBarIconButton(
+                  key: const ValueKey('vault_biometric_settings'),
+                  icon: QuarkIcons.fingerprint,
+                  tooltip: _biometric.settingTitle,
+                  onPressed: _biometricSettings,
+                ),
               QuarkBarIconButton(
                 key: const ValueKey('vault_lock'),
                 icon: QuarkIcons.lock_open,
@@ -223,66 +268,97 @@ class _VaultPageState extends State<VaultPage>
             const AppThemeToggle(),
           ],
           drawer: const AppDrawer(activeSection: QuarkDrawerSection.vault),
-          body: switch (status) {
-            VaultStatus.loading => const Center(child: QuarkLoader()),
-            VaultStatus.error when isQuarkUnreachableError(error!) =>
-              QuarkDisconnectedView(
-                hostAddress: AppSettings.instance.activeHost,
-                onRetry: manualRefresh,
-                onManageHosts: () =>
-                    context.go(AppRoutes.settingsTab(SettingsTab.general)),
+          body: Column(
+            children: [
+              if (_biometric.shouldOffer)
+                VaultBiometricOffer(
+                  title: '${_biometric.settingTitle}?',
+                  message:
+                      'Open your vault on this device without typing your '
+                      'password.',
+                  onEnable: _biometricSettings,
+                  onDismiss: _biometric.dismissOffer,
+                ),
+              Expanded(
+                child: switch (status) {
+                  VaultStatus.loading => const Center(child: QuarkLoader()),
+                  VaultStatus.error when isQuarkUnreachableError(error!) =>
+                    QuarkDisconnectedView(
+                      hostAddress: AppSettings.instance.activeHost,
+                      onRetry: manualRefresh,
+                      onManageHosts: () => context.go(
+                        AppRoutes.settingsTab(SettingsTab.general),
+                      ),
+                    ),
+                  VaultStatus.error => VaultErrorView(
+                    message: Errors.message(error, 'load your vault'),
+                    onRetry: manualRefresh,
+                  ),
+                  VaultStatus.noVault => VaultPasswordForm(
+                    key: const ValueKey('vault_setup'),
+                    icon: QuarkIcons.shield_outlined,
+                    title: 'Set up your vault',
+                    message:
+                        'Your vault is encrypted on your devices with the password '
+                        'you sign in to Quark with, so there is no second password '
+                        'to remember. Nobody else, not even an admin, can open it.',
+                    submitLabel: 'Set up vault',
+                    phraseHelp:
+                        'Your account recovery phrase lets a recovery keep this '
+                        'vault if you forget your password. A mistyped phrase is '
+                        "not checked: it simply won't open the vault.",
+                    isBusy: _vault.isBusy,
+                    error: formError == null
+                        ? null
+                        : Errors.message(formError, 'set up your vault'),
+                    onSubmit: (password, phrase) =>
+                        _vault.setUp(password, phrase: phrase),
+                  ),
+                  VaultStatus.locked
+                      when _biometric.canUnlock && !_usePassword =>
+                    VaultBiometricUnlock(
+                      key: const ValueKey('vault_biometric_lock'),
+                      title: 'Your vault is locked',
+                      message:
+                          'Open it with ${_biometric.methodName}, or with the '
+                          'password you sign in to Quark with.',
+                      unlockLabel: _biometric.settingTitle,
+                      isBusy: _biometric.isBusy,
+                      error: biometricError,
+                      onUnlock: _biometric.unlock,
+                      onUsePassword: () => setState(() => _usePassword = true),
+                    ),
+                  VaultStatus.locked => VaultPasswordForm(
+                    key: const ValueKey('vault_unlock'),
+                    title: 'Your vault is locked',
+                    message:
+                        'Enter the password you sign in to Quark with. Your vault '
+                        'opens on this device; the Quark never sees what is in it.',
+                    submitLabel: 'Unlock',
+                    isBusy: _vault.isBusy,
+                    // A biometric unlock that fell back here says why.
+                    error: formError == null
+                        ? biometricError
+                        : Errors.message(formError, 'unlock your vault'),
+                    secondaryLabel: 'Start over',
+                    onSecondary: _startOver,
+                    onSubmit: (password, _) => _vault.unlock(password),
+                  ),
+                  VaultStatus.unlocked => VaultEntryList(
+                    entries: _vault.visibleRows,
+                    folders: _vault.folderOptions,
+                    selectedFolderId: _vault.folderId,
+                    initialQuery: _vault.query,
+                    vaultIsEmpty: _vault.entries.isEmpty,
+                    onSearchChanged: _vault.search,
+                    onFolderSelected: _vault.filterFolder,
+                    onDeleteFolder: _deleteFolder,
+                    onTapEntry: _openEntry,
+                  ),
+                },
               ),
-            VaultStatus.error => VaultErrorView(
-              message: Errors.message(error, 'load your vault'),
-              onRetry: manualRefresh,
-            ),
-            VaultStatus.noVault => VaultPasswordForm(
-              key: const ValueKey('vault_setup'),
-              icon: QuarkIcons.shield_outlined,
-              title: 'Set up your vault',
-              message:
-                  'Your vault is encrypted on your devices with the password '
-                  'you sign in to Quark with, so there is no second password '
-                  'to remember. Nobody else, not even an admin, can open it.',
-              submitLabel: 'Set up vault',
-              phraseHelp:
-                  'Your account recovery phrase lets a recovery keep this '
-                  'vault if you forget your password. A mistyped phrase is '
-                  "not checked: it simply won't open the vault.",
-              isBusy: _vault.isBusy,
-              error: formError == null
-                  ? null
-                  : Errors.message(formError, 'set up your vault'),
-              onSubmit: (password, phrase) =>
-                  _vault.setUp(password, phrase: phrase),
-            ),
-            VaultStatus.locked => VaultPasswordForm(
-              key: const ValueKey('vault_unlock'),
-              title: 'Your vault is locked',
-              message:
-                  'Enter the password you sign in to Quark with. Your vault '
-                  'opens on this device; the Quark never sees what is in it.',
-              submitLabel: 'Unlock',
-              isBusy: _vault.isBusy,
-              error: formError == null
-                  ? null
-                  : Errors.message(formError, 'unlock your vault'),
-              secondaryLabel: 'Start over',
-              onSecondary: _startOver,
-              onSubmit: (password, _) => _vault.unlock(password),
-            ),
-            VaultStatus.unlocked => VaultEntryList(
-              entries: _vault.visibleRows,
-              folders: _vault.folderOptions,
-              selectedFolderId: _vault.folderId,
-              initialQuery: _vault.query,
-              vaultIsEmpty: _vault.entries.isEmpty,
-              onSearchChanged: _vault.search,
-              onFolderSelected: _vault.filterFolder,
-              onDeleteFolder: _deleteFolder,
-              onTapEntry: _openEntry,
-            ),
-          },
+            ],
+          ),
         );
       },
     );
