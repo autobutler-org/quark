@@ -56,6 +56,11 @@ enum VaultStatus {
 /// another session. A `vault_changed` or `resync` event reads the vault
 /// again.
 ///
+/// A key the platform keystore kept behind biometrics opens the vault
+/// without the password ([unlockWithCachedKey], #3595); [cacheKey] hands the
+/// open key to that keystore. A cached key that is not this vault's any more
+/// leaves the vault locked and sets [cachedKeyStale].
+///
 /// Every collaborator is a parameter with a real default; tests pass fakes.
 class VaultController extends ChangeNotifier {
   /// Builds a controller. [session] is followed so a sign-out or a switch of
@@ -120,6 +125,8 @@ class VaultController extends ChangeNotifier {
   List<VaultItem> _items = const [];
   Object? _error;
   bool _busy = false;
+  bool _fromCache = false;
+  bool _cachedKeyStale = false;
   Object? _formError;
   String _query = '';
   int? _folderId;
@@ -137,6 +144,22 @@ class VaultController extends ChangeNotifier {
 
   /// Whether [setUp] or [unlock] is running.
   bool get isBusy => _busy;
+
+  /// Whether the open key came from the keystore ([unlockWithCachedKey])
+  /// rather than the password.
+  bool get unlockedFromCache => _key != null && _fromCache;
+
+  /// Whether a cached key turned out not to be this vault's: its fingerprint
+  /// did not match, or the vault has items and none opened under it. Cleared
+  /// by the next unlock and by a session change.
+  bool get cachedKeyStale => _cachedKeyStale;
+
+  /// The open key's fingerprint ([AccountCrypto.vaultKeyFingerprint]), or
+  /// null while locked.
+  Uint8List? get keyFingerprint {
+    final key = _key;
+    return key == null ? null : _crypto!.vaultKeyFingerprint(key);
+  }
 
   /// Why the last [setUp] or [unlock] failed, for `Errors.message`.
   Object? get formError => _formError;
@@ -264,8 +287,10 @@ class VaultController extends ChangeNotifier {
       _checked = true;
       if (stored == null) {
         _forget();
-      } else if (_key != null) {
-        await _fetchItems();
+      } else if (_key != null && await _fetchItems() && _fromCache) {
+        // The vault was replaced from another session under a cached key.
+        _forget();
+        _cachedKeyStale = true;
       }
       _error = null;
     } catch (e) {
@@ -362,6 +387,57 @@ class VaultController extends ChangeNotifier {
       _error = e;
     }
   });
+
+  /// Opens the vault with [key], a vault key the platform keystore handed
+  /// back after a biometric check (#3595), and zeroes [key].
+  ///
+  /// Returns false and leaves the vault locked, with [cachedKeyStale] set,
+  /// when the key is not this vault's: its fingerprint is not [fingerprint],
+  /// the one it was stored with, or the vault has items at this app's format
+  /// version and none opens under it (it was replaced from another session).
+  /// A failed item list after the key opened is [error], as in [unlock].
+  Future<bool> unlockWithCachedKey(Uint8List key, Uint8List fingerprint) async {
+    try {
+      if (_stored == null) return false;
+      final crypto = await _cryptoLoaded();
+      if (key.length != crypto.vaultKeyBytes) return _staleCachedKey();
+      final secure = crypto.sodium.secureCopy(key);
+      if (!listEquals(crypto.vaultKeyFingerprint(secure), fingerprint)) {
+        secure.dispose();
+        return _staleCachedKey();
+      }
+      _adopt(secure, const []);
+      _fromCache = true;
+      try {
+        if (await _fetchItems()) {
+          _forget();
+          return _staleCachedKey();
+        }
+      } catch (e) {
+        _error = e;
+      }
+      notifyListeners();
+      return true;
+    } finally {
+      key.fillRange(0, key.length, 0);
+    }
+  }
+
+  /// Hands [store] the open vault key's bytes and fingerprint, for the
+  /// platform keystore (#3595), and zeroes the bytes once it returns. Throws
+  /// a [MessageException] carrying [Errors.vaultLocked] while locked.
+  Future<void> cacheKey(
+    Future<void> Function(Uint8List key, Uint8List fingerprint) store,
+  ) async {
+    final key = _requireKey();
+    final fingerprint = _crypto!.vaultKeyFingerprint(key);
+    final bytes = key.extractBytes();
+    try {
+      await store(bytes, fingerprint);
+    } finally {
+      bytes.fillRange(0, bytes.length, 0);
+    }
+  }
 
   /// Forgets the vault key and every decrypted item.
   void lock() {
@@ -550,18 +626,23 @@ class VaultController extends ChangeNotifier {
 
   /// Lists and decrypts every item. An item that does not open, or is in a
   /// layout newer than this app's, is left out rather than failing the rest.
-  Future<void> _fetchItems() async {
+  ///
+  /// Returns whether the key looks stale: the vault has items at this app's
+  /// format version and none of them opened.
+  Future<bool> _fetchItems() async {
     final key = _key;
     final stored = await _listItems();
     // Locked, or opened again, while the list was on its way.
-    if (key == null || !identical(key, _key)) return;
+    if (key == null || !identical(key, _key)) return false;
     final crypto = _crypto!;
     final items = <VaultItem>[];
+    var readable = 0;
     for (final item in stored) {
       try {
         // ponytail: a newer layout is hidden and never rewritten; read it
         // here once a second format version exists.
         if (item.formatVersion != VaultItemData.formatVersion) continue;
+        readable++;
         final plaintext = crypto.decryptVaultItem(
           item.ciphertext,
           item.nonce,
@@ -577,6 +658,13 @@ class VaultController extends ChangeNotifier {
       }
     }
     _items = items;
+    return readable > 0 && items.isEmpty;
+  }
+
+  bool _staleCachedKey() {
+    _cachedKeyStale = true;
+    notifyListeners();
+    return false;
   }
 
   Future<void> _runForm(Future<void> Function() run) async {
@@ -598,6 +686,8 @@ class VaultController extends ChangeNotifier {
     _key = key;
     _items = items;
     _error = null;
+    _fromCache = false;
+    _cachedKeyStale = false;
     touch();
   }
 
@@ -633,6 +723,7 @@ class VaultController extends ChangeNotifier {
     _forget();
     _checked = false;
     _stored = null;
+    _cachedKeyStale = false;
     _error = null;
     _formError = null;
     notifyListeners();

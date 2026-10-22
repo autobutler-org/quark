@@ -1,3 +1,4 @@
+// cspell:words generichash outlen
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -225,6 +226,27 @@ class AccountCrypto {
       bytes.fillRange(0, bytes.length, 0);
     }
   }
+
+  /// The bytes of a vault key, the length every vault key has.
+  int get vaultKeyBytes => _aead.keyBytes;
+
+  /// [vaultKey]'s fingerprint, which names the key without revealing it, so
+  /// a cached key can be checked against the one it was stored as (#3595):
+  ///
+  /// ```text
+  /// fp = crypto_generichash(outlen = 16,
+  ///                         message = utf8("quark-vault-key-fingerprint-v1"),
+  ///                         key = vaultKey)
+  /// ```
+  ///
+  /// That is keyed BLAKE2b, pinned to the native code by
+  /// `test/fixtures/vault_vectors.json`. The caller disposes [vaultKey].
+  Uint8List vaultKeyFingerprint(SecureKey vaultKey) =>
+      sodium.crypto.genericHash(
+        message: utf8.encode('quark-vault-key-fingerprint-v1'),
+        outLen: 16,
+        key: vaultKey,
+      );
 
   /// Encrypts one vault item's [plaintext] under [vaultKey] (#3461), with
   /// XChaCha20-Poly1305 and a fresh random nonce.

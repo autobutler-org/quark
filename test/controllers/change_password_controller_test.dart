@@ -135,4 +135,29 @@ void main() {
 
     expect(await flight, isTrue);
   });
+
+  test('a change that goes through deletes the vault key cached behind '
+      'biometrics, and a failed one keeps it (#3595)', () async {
+    var wipes = 0;
+    var fail = false;
+    final controller = ChangePasswordController(
+      changePasswordRequest:
+          ({
+            required String currentPassword,
+            required String newPassword,
+          }) async {
+            if (fail) throw const ApiException(403);
+          },
+      onPasswordChanged: () async => wipes++,
+    );
+    addTearDown(controller.dispose);
+
+    fail = true;
+    expect(await change(controller), isFalse);
+    expect(wipes, 0);
+
+    fail = false;
+    expect(await change(controller), isTrue);
+    expect(wipes, 1);
+  });
 }

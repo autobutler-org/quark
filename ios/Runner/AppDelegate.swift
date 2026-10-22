@@ -24,5 +24,9 @@ import UIKit
         result(FlutterMethodNotImplemented)
       }
     }
+    // The vault key behind Face ID or Touch ID (#3595).
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "VaultKeychain") {
+      VaultKeychain.register(with: registrar.messenger())
+    }
   }
 }
