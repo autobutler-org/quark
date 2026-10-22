@@ -3593,6 +3593,17 @@ const List<SshKeyItem> _gallerySshKeys = [
 
 /// The fake jobs: one of every state the list draws.
 const List<JobItem> _galleryJobs = [
+  // A trim reports no progress, so it is drawn busy rather than at 0%.
+  JobItem(
+    id: 5,
+    name: 'Trim party.mp4',
+    status: JobItemStatus.running,
+    reportsProgress: false,
+    attempts: 1,
+    elapsed: Duration(seconds: 6),
+    isQuickCopy: true,
+    canCancel: true,
+  ),
   JobItem(
     id: 4,
     name: 'Convert vacation.mkv to MOV',

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:quark/models/job.dart';
+import 'package:quark/models/trim_result.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
@@ -72,6 +73,9 @@ class JobsController extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
+  /// Every job of a kind in [JobKinds], newest first.
+  List<Job> get jobs => _jobs;
+
   /// Whether a fetch is in flight.
   bool get isLoading => _isLoading;
 
@@ -98,6 +102,7 @@ class JobsController extends ChangeNotifier {
           JobStatus.unknown => JobItemStatus.unknown,
         },
         progress: job.progress,
+        reportsProgress: job.reportsProgress,
         attempts: job.attempts,
         elapsed: switch (job.startedAt) {
           null => null,
@@ -182,39 +187,47 @@ class JobsController extends ChangeNotifier {
   }
 
   /// The announcement for [job] finishing, or null when it has not completed
-  /// or failed.
+  /// or failed. A trim's says where the clip was saved, and where it starts
+  /// when that is not where it was asked to.
   static JobAnnouncement? announcementFor(Job job) {
     final relPath = job.params['relPath'];
+    final source = relPath is String && relPath.isNotEmpty ? relPath : null;
+    final name = source?.split('/').last;
     final format = job.params['format'];
-    final isConversion =
-        job.kind == JobKinds.videoTranscode &&
-        relPath is String &&
-        relPath.isNotEmpty &&
-        format is String &&
-        format.isNotEmpty;
-    final conversion = isConversion
-        ? '${relPath.split('/').last} to ${format.toUpperCase()}'
-        : null;
+    final trimmed = TrimResult.fromJob(job);
+    // What the job did, as a sentence once it is done and as a verb phrase
+    // for a failure; null for a kind the app has no words for.
+    final (String done, String action)? said = switch (job.kind) {
+      JobKinds.videoTranscode
+          when name != null && format is String && format.isNotEmpty =>
+        (
+          'Converted $name to ${format.toUpperCase()}',
+          'convert $name to ${format.toUpperCase()}',
+        ),
+      JobKinds.videoTrim when name != null => (
+        trimmed?.savedMessage(TrimResult.requestedStart(job)) ??
+            'Trimmed $name',
+        'trim $name',
+      ),
+      _ => null,
+    };
 
     switch (job.status) {
       case JobStatus.completed:
-        if (conversion == null) return JobAnnouncement(job.name);
+        if (said == null) return JobAnnouncement(job.name);
         final serial = job.params['serial'];
         return JobAnnouncement(
-          'Converted $conversion',
+          said.$1,
           actionLabel: 'Show',
           // The output lands beside the source.
           route: AppRoutes.containingFolder(
-            relPath! as String,
+            trimmed?.relPath ?? source!,
             serial: serial is String ? serial : '',
           ),
         );
       case JobStatus.failed:
         return JobAnnouncement(
-          Errors.jobFailed(
-            action: conversion == null ? null : 'convert $conversion',
-            name: job.name,
-          ),
+          Errors.jobFailed(action: said?.$2, name: job.name),
           actionLabel: 'View',
           route: AppRoutes.systemTab(SystemTab.jobs),
         );

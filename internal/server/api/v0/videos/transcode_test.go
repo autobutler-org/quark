@@ -25,6 +25,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/transcodeutil"
+	"github.com/autobutler-org/quark/pkg/util/trimutil"
 	"github.com/autobutler-org/quark/pkg/util/videoutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
@@ -65,7 +66,8 @@ type harness struct {
 }
 
 // newHarness mounts the videos router over a fake USB disk and a real temp
-// database, with the transcode job kind registered as it is at boot. The
+// database, with the transcode and trim job kinds registered as they are at
+// boot. The
 // worker is not started, so jobs stay pending unless a test calls runWorker.
 func newHarness(t *testing.T) harness {
 	t.Helper()
@@ -98,6 +100,12 @@ func newHarnessWithRemux(t *testing.T, remux transcodeutil.RemuxFunc) harness {
 		Kind: transcodeutil.Kind,
 		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{
 			Storage: storage, Registry: registry, Database: database, EventBus: bus, Remux: remux,
+		}),
+	})
+	queue.Register(jobutil.RegisterParams{
+		Kind: trimutil.Kind,
+		Handler: trimutil.NewHandler(trimutil.NewHandlerParams{
+			Storage: storage, Registry: registry, Database: database, EventBus: bus,
 		}),
 	})
 	deps := deputil.NewDependencies().
@@ -135,16 +143,7 @@ func (h harness) post(body string) *httptest.ResponseRecorder {
 
 func (h harness) runWorker(t *testing.T) {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		h.queue.Run(ctx)
-	}()
-	t.Cleanup(func() {
-		cancel()
-		<-done
-	})
+	startQueue(t, h.queue)
 }
 
 func (h harness) job(t *testing.T, id int64) jobutil.Job {
@@ -344,6 +343,7 @@ func TestTrimVideo(t *testing.T) {
 	h.writeClip(t, "clip.mp4")
 	h.writeClip(t, "phone.MOV")
 	copyFixture(t, tsFixture, filepath.Join(h.filesDir, "clip.ts"))
+	h.runWorker(t)
 
 	cases := []struct {
 		name      string
@@ -356,17 +356,7 @@ func TestTrimVideo(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			w := h.trim(fmt.Sprintf(`{"relPath":%q,"serial":%q,"startMs":1200,"endMs":2200}`, c.source, testSerial))
-			if w.Code != http.StatusOK {
-				t.Fatalf("trim returned %d, want 200: %s", w.Code, w.Body.String())
-			}
-			var body struct {
-				RelPath       string `json:"relPath"`
-				ActualStartMs int64  `json:"actualStartMs"`
-			}
-			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-				t.Fatal(err)
-			}
+			body := h.trimOK(t, c.source, 1200, 2200)
 			if body.RelPath != c.wantPath || body.ActualStartMs != c.wantStart {
 				t.Fatalf("trim = %+v, want %s starting at %dms", body, c.wantPath, c.wantStart)
 			}
@@ -375,13 +365,8 @@ func TestTrimVideo(t *testing.T) {
 			}
 			// Open file browsers refresh on this, so the clip is listed
 			// without waiting for the next refresh interval.
-			select {
-			case e := <-h.events:
-				if e.Kind != eventbus.EventUpload || e.Path != c.wantPath || e.DeviceSerial != testSerial {
-					t.Errorf("event = %+v, want an upload of %s on %s", e, c.wantPath, testSerial)
-				}
-			default:
-				t.Error("the trim published no event")
+			if e, ok := h.upload(); !ok || e.Path != c.wantPath || e.DeviceSerial != testSerial {
+				t.Errorf("event = %+v (found %v), want an upload of %s on %s", e, ok, c.wantPath, testSerial)
 			}
 		})
 	}
@@ -389,26 +374,30 @@ func TestTrimVideo(t *testing.T) {
 	// The client picks endMs from its player's duration, which can land a
 	// millisecond past the server's probe of the same file (#2385): an end at
 	// or past the end of the video means "to the end". The fixture is 3s long.
-	for _, endMs := range []int{3000, 3001, 60000} {
+	for _, endMs := range []int64{3000, 3001, 60000} {
 		t.Run(fmt.Sprintf("an end of %dms runs to the end", endMs), func(t *testing.T) {
-			w := h.trim(fmt.Sprintf(`{"relPath":"clip.mp4","serial":%q,"startMs":1200,"endMs":%d}`, testSerial, endMs))
-			if w.Code != http.StatusOK {
-				t.Fatalf("trim returned %d, want 200: %s", w.Code, w.Body.String())
+			h.trimOK(t, "clip.mp4", 1200, endMs)
+		})
+	}
+
+	for name, body := range map[string]string{
+		"a start at the end of the video": `{"relPath":"clip.mp4","serial":%q,"startMs":3000,"endMs":3500}`,
+		"a negative start":                `{"relPath":"clip.mp4","serial":%q,"startMs":-1,"endMs":3500}`,
+		"an end before the start":         `{"relPath":"clip.mp4","serial":%q,"startMs":2000,"endMs":1000}`,
+		"no relPath":                      `{"relPath":"","serial":%q,"startMs":0,"endMs":1000}`,
+		"the device root":                 `{"relPath":"/","serial":%q,"startMs":0,"endMs":1000}`,
+	} {
+		t.Run(name+" is a 400", func(t *testing.T) {
+			if w := h.trim(fmt.Sprintf(body, testSerial)); w.Code != http.StatusBadRequest {
+				t.Fatalf("trim returned %d, want 400: %s", w.Code, w.Body.String())
 			}
 		})
 	}
 
-	t.Run("a start at the end of the video is a 400", func(t *testing.T) {
-		w := h.trim(fmt.Sprintf(`{"relPath":"clip.mp4","serial":%q,"startMs":3000,"endMs":3500}`, testSerial))
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("trim returned %d, want 400: %s", w.Code, w.Body.String())
-		}
-	})
-
-	t.Run("a transport stream is a 422 and leaves nothing behind", func(t *testing.T) {
-		w := h.trim(fmt.Sprintf(`{"relPath":"clip.ts","serial":%q,"startMs":0,"endMs":1000}`, testSerial))
-		if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "MPEG-TS") {
-			t.Fatalf("trim returned %d %s, want a 422 naming MPEG-TS", w.Code, w.Body.String())
+	t.Run("a transport stream fails its job and leaves nothing behind", func(t *testing.T) {
+		job := waitForJob(t, h.queue, acceptedJobID(t, h.trim(fmt.Sprintf(`{"relPath":"clip.ts","serial":%q,"startMs":0,"endMs":1000}`, testSerial))))
+		if job.Status != jobutil.StatusFailed || !strings.Contains(job.Error, "MPEG-TS") {
+			t.Fatalf("job = %s %q, want failed naming MPEG-TS", job.Status, job.Error)
 		}
 		if _, err := os.Stat(filepath.Join(h.filesDir, "clip_trimmed.ts")); !os.IsNotExist(err) {
 			t.Errorf("a refused trim left a file: %v", err)
@@ -479,9 +468,9 @@ func TestTrimNeverReplacesAFile(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	w := h.trim(fmt.Sprintf(`{"relPath":"clip.mp4","serial":%q,"startMs":0,"endMs":1000}`, testSerial))
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"clip_trimmed_(2).mp4"`) {
-		t.Fatalf("trim returned %d %s, want 200 with clip_trimmed_(2).mp4", w.Code, w.Body.String())
+	h.runWorker(t)
+	if got := h.trimOK(t, "clip.mp4", 0, 1000).RelPath; got != "clip_trimmed_(2).mp4" {
+		t.Fatalf("the clip landed at %q, want clip_trimmed_(2).mp4", got)
 	}
 	for _, name := range []string{"clip_trimmed.mp4", "clip_trimmed_(1).mp4"} {
 		if got, _ := os.ReadFile(filepath.Join(h.filesDir, name)); string(got) != "mine" {

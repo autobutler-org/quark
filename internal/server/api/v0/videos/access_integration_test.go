@@ -20,6 +20,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/transcodeutil"
+	"github.com/autobutler-org/quark/pkg/util/trimutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
@@ -41,6 +42,7 @@ type videoHarness struct {
 	database  *db.DatabaseSqlc
 	userID    int64
 	principal *accessutil.Principal
+	queue     *jobutil.Queue
 }
 
 func newVideoHarness(t *testing.T) videoHarness {
@@ -67,6 +69,10 @@ func newVideoHarness(t *testing.T) videoHarness {
 		Kind:    transcodeutil.Kind,
 		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{Storage: storage, Registry: registry, Database: database}),
 	})
+	queue.Register(jobutil.RegisterParams{
+		Kind:    trimutil.Kind,
+		Handler: trimutil.NewHandler(trimutil.NewHandlerParams{Storage: storage, Registry: registry, Database: database}),
+	})
 	deps := deputil.NewDependencies().
 		WithStorageService(storage).
 		WithVFSRegistry(registry).
@@ -84,7 +90,7 @@ func newVideoHarness(t *testing.T) videoHarness {
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_videos.NewRouter())
 
-	h := videoHarness{engine: engine, filesDir: filesDir, database: database, userID: user.ID, principal: principal}
+	h := videoHarness{engine: engine, filesDir: filesDir, database: database, userID: user.ID, principal: principal, queue: queue}
 	h.writeVideo(t, "shared/clip.mp4")
 	h.writeVideo(t, "private/clip.mp4")
 	return h
@@ -106,21 +112,20 @@ func (h videoHarness) grant(t *testing.T, rel string, level accessutil.Level) {
 	}
 }
 
-// do sends a request and returns the status and, on success, the relPath the
-// edit wrote.
-func (h videoHarness) do(t *testing.T, method, path, body string) (int, string) {
+// do sends a request and returns the status and, for a queued job, its id.
+func (h videoHarness) do(t *testing.T, method, path, body string) (int, int64) {
 	t.Helper()
 	w := httptest.NewRecorder()
 	h.engine.ServeHTTP(w, httptest.NewRequest(method, path, strings.NewReader(body)))
 	var out struct {
-		RelPath string `json:"relPath"`
+		JobID int64 `json:"jobId"`
 	}
-	if w.Code == http.StatusOK && method == http.MethodPost {
+	if w.Code == http.StatusAccepted {
 		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 			t.Fatalf("decode %s: %v", w.Body.String(), err)
 		}
 	}
-	return w.Code, out.RelPath
+	return w.Code, out.JobID
 }
 
 // expect checks the status of metadata and the formats it converts to, which
@@ -150,7 +155,7 @@ func (h videoHarness) level(t *testing.T, rel string) string {
 
 func TestVideoAccess_AdminWritesNoRows(t *testing.T) {
 	h := newVideoHarness(t)
-	h.expect(t, "private/clip.mp4", http.StatusOK, http.StatusOK)
+	h.expect(t, "private/clip.mp4", http.StatusOK, http.StatusAccepted)
 	var rows int
 	if err := h.database.Db.QueryRow(`SELECT COUNT(*) FROM path_access`).Scan(&rows); err != nil {
 		t.Fatal(err)
@@ -171,9 +176,14 @@ func TestVideoAccess_NonAdmin(t *testing.T) {
 	h.expect(t, "private/clip.mp4", http.StatusNotFound, http.StatusNotFound)
 
 	h.grant(t, "shared", accessutil.Write)
-	code, clip := h.do(t, http.MethodPost, "/api/v0/videos/trim", `{"relPath":"shared/clip.mp4","startMs":0,"endMs":500}`)
-	if code != http.StatusOK || h.level(t, clip) != "owner" {
-		t.Errorf("trim = %d, owner row on %q = %q, want 200 and owner", code, clip, h.level(t, clip))
+	code, id := h.do(t, http.MethodPost, "/api/v0/videos/trim", `{"relPath":"shared/clip.mp4","startMs":0,"endMs":500}`)
+	if code != http.StatusAccepted {
+		t.Fatalf("trim = %d, want 202", code)
+	}
+	startQueue(t, h.queue)
+	clip := trimResult(t, waitForJob(t, h.queue, id)).RelPath
+	if h.level(t, clip) != "owner" {
+		t.Errorf("owner row on the clip %q = %q, want owner", clip, h.level(t, clip))
 	}
 	if got := h.level(t, "shared/clip.mp4"); got != "" {
 		t.Errorf("source video gained a %q row, want none", got)

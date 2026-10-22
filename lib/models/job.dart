@@ -5,8 +5,11 @@ abstract final class JobKinds {
   /// Converting a video to another format.
   static const String videoTranscode = 'video-transcode';
 
+  /// Cutting a clip out of a video. It reports no progress until it is done.
+  static const String videoTrim = 'video-trim';
+
   /// Every kind above, for a listing that shows them all.
-  static const List<String> all = [videoTranscode];
+  static const List<String> all = [videoTranscode, videoTrim];
 }
 
 /// Where a [Job] is in its life.
@@ -36,6 +39,7 @@ class Job {
     required this.createdAt,
     this.lane = '',
     this.params = const {},
+    this.detail = const {},
     this.progress = 0,
     this.attempts = 0,
     this.startedAt,
@@ -65,6 +69,15 @@ class Job {
   /// Empty when the Quark sends none.
   final Map<String, Object?> params;
 
+  /// What the job saved about itself while it ran, unmodifiable. For a
+  /// completed [JobKinds.videoTrim] that is the clip's `relPath` and its
+  /// `actualStartMs`. Empty until the job saves anything.
+  final Map<String, Object?> detail;
+
+  /// Whether [progress] means anything while the job runs. A trim has no
+  /// progress to report, so it is shown as busy rather than stuck at 0%.
+  bool get reportsProgress => kind != JobKinds.videoTrim;
+
   final JobStatus status;
 
   /// From 0 to 1.
@@ -87,12 +100,8 @@ class Job {
     kind: json['kind'] as String? ?? '',
     lane: json['lane'] as String? ?? '',
     name: json['name'] as String? ?? '',
-    params: switch (json['params']) {
-      final Map<String, dynamic> params => Map<String, Object?>.unmodifiable(
-        params,
-      ),
-      _ => const {},
-    },
+    params: _object(json['params']),
+    detail: _object(json['detail']),
     status: JobStatus.values.asNameMap()[json['status']] ?? JobStatus.unknown,
     progress: (json['progress'] as num?)?.toDouble() ?? 0,
     attempts: (json['attempts'] as num?)?.toInt() ?? 0,
@@ -103,6 +112,13 @@ class Job {
     finishedAt: _parseTime(json['finishedAt']),
   );
 }
+
+Map<String, Object?> _object(Object? value) => switch (value) {
+  final Map<String, dynamic> object => Map<String, Object?>.unmodifiable(
+    object,
+  ),
+  _ => const {},
+};
 
 DateTime? _parseTime(Object? value) =>
     value is String ? DateTime.tryParse(value) : null;

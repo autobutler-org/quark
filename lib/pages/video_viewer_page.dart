@@ -5,7 +5,11 @@ import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/file_viewer_actions.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/controllers/video_playback_controller.dart';
+import 'package:quark/models/job.dart';
+import 'package:quark/router.dart';
 import 'package:quark/services/playback_position_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/local_media_proxy.dart';
@@ -20,6 +24,16 @@ import 'package:quark/widgets/video_viewer/convert_video.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:video_player/video_player.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+
+/// Queues a trim of [relPath] and returns its job id —
+/// [FilesService.trimVideo].
+typedef TrimVideoFn =
+    Future<int> Function(
+      String relPath, {
+      String? serial,
+      required int startMs,
+      required int endMs,
+    });
 
 /// Full-screen player for a video file on the Quark.
 class VideoViewerPage extends StatefulWidget {
@@ -48,6 +62,14 @@ class VideoViewerPage extends StatefulWidget {
   /// Queues the conversion [convertVideo] starts.
   final TranscodeVideoFn transcodeVideo;
 
+  /// Queues the trim Save Clip starts.
+  final TrimVideoFn trimVideo;
+
+  /// Follows and cancels the trim job. Null is the app's one controller,
+  /// whose finish announcement says where the clip was saved and where it
+  /// starts.
+  final JobsController? jobs;
+
   const VideoViewerPage({
     super.key,
     required this.url,
@@ -59,6 +81,8 @@ class VideoViewerPage extends StatefulWidget {
     this.setPlaybackWatched = PlaybackPositionService.setWatched,
     this.loadTranscodeFormats = FilesService.listTranscodeFormats,
     this.transcodeVideo = FilesService.transcodeVideo,
+    this.trimVideo = FilesService.trimVideo,
+    this.jobs,
   });
 
   @override
@@ -78,7 +102,10 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
   // The RepaintBoundary around the video, which Save Frame captures.
   final _frameKey = GlobalKey();
   bool _trimMode = false;
+  // Save Clip's request is in flight.
   bool _exportingTrim = false;
+  // The trim job this page queued, until it ends.
+  int? _trimJobId;
   // Trim handles as fractions [0.0, 1.0] of total duration.
   double _trimStart = 0.0;
   double _trimEnd = 1.0;
@@ -192,9 +219,12 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
         value.size.height > 0;
   }
 
+  JobsController get _jobs => widget.jobs ?? JobsController.instance;
+
   @override
   void initState() {
     super.initState();
+    _jobs.addListener(_onJobsChanged);
     final params = widget.url.queryParameters;
     final relPath = params['filePath'] ?? '';
     if (relPath.isNotEmpty) {
@@ -326,6 +356,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
 
   @override
   void dispose() {
+    _jobs.removeListener(_onJobsChanged);
     // The listener has kept the last position current; save it before the
     // player goes. The request outlives the page, its reply is dropped.
     _playback?.flush();
@@ -417,7 +448,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
 
     setState(() => _exportingTrim = true);
     try {
-      final trimmed = await FilesService.trimVideo(
+      final id = await widget.trimVideo(
         relPath,
         serial: serial,
         startMs: startMs,
@@ -425,13 +456,23 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
       );
       if (!mounted) return;
       setState(() {
+        _trimJobId = id;
         _trimMode = false;
         _trimStart = 0.0;
         _trimEnd = 1.0;
       });
+      // The finish announcement says where the clip landed; until then the
+      // app bar shows the trim running, and the Jobs page lists it.
       showMessage(
         context,
-        trimmed.savedMessage(Duration(milliseconds: startMs)),
+        'Trim started',
+        action: SnackBarAction(
+          label: 'View',
+          onPressed: () {
+            if (!mounted) return;
+            context.go(AppRoutes.systemTab(SystemTab.jobs));
+          },
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -439,6 +480,30 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
     } finally {
       if (mounted) setState(() => _exportingTrim = false);
     }
+  }
+
+  /// Clears the running trim once its job has ended, however it ended.
+  void _onJobsChanged() {
+    final id = _trimJobId;
+    if (id == null || !mounted) return;
+    final job = _jobs.jobs.where((j) => j.id == id).firstOrNull;
+    if (job == null ||
+        job.status == JobStatus.pending ||
+        job.status == JobStatus.running) {
+      return;
+    }
+    setState(() => _trimJobId = null);
+  }
+
+  Future<void> _cancelTrim() async {
+    final id = _trimJobId;
+    if (id == null) return;
+    final refused = await _jobs.cancel(id);
+    if (!mounted) return;
+    if (refused == null) setState(() => _trimJobId = null);
+    // "Trim started" is out of date either way.
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    showMessage(context, refused ?? 'Trim canceled');
   }
 
   Future<void> _saveFrame() async {
@@ -541,12 +606,21 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
             mainAxisSize: MainAxisSize.min,
             spacing: QuarkTokens.of(context).spacingSm,
             children: [
-              if (_exportingTrim)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
+              // A trim reports no progress, so it shows busy rather than
+              // a percentage that would sit at 0%. Cancel waits for the job.
+              if (_exportingTrim || _trimJobId != null) ...[
+                const Tooltip(
+                  key: ValueKey('video_viewer_trim_progress'),
+                  message: 'Trimming',
                   child: QuarkLoader(size: 20),
-                )
-              else if (_trimMode) ...[
+                ),
+                TextButton(
+                  key: const ValueKey('video_viewer_trim_cancel'),
+                  style: onChrome,
+                  onPressed: _trimJobId == null ? null : _cancelTrim,
+                  child: const Text('Cancel'),
+                ),
+              ] else if (_trimMode) ...[
                 TextButton(
                   style: onChrome,
                   onPressed: _exportTrim,

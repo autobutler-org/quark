@@ -34,6 +34,7 @@ class JobItem {
     required this.name,
     required this.status,
     this.progress = 0,
+    this.reportsProgress = true,
     this.attempts = 0,
     this.elapsed,
     this.isQuickCopy = false,
@@ -52,6 +53,11 @@ class JobItem {
 
   /// From 0 to 1, drawn as a bar while [status] is running.
   final double progress;
+
+  /// Whether [progress] is known. A running job that has no progress to
+  /// report is drawn busy, with no bar and no percentage, rather than stuck
+  /// at 0%.
+  final bool reportsProgress;
 
   /// How many times the job has started running.
   final int attempts;

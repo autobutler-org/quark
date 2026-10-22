@@ -11394,7 +11394,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Copies the sub-clip [startMs, endMs] of the source video into a new file beside it without re-encoding (fast, lossless). The clip is shown from startMs: the frames back to the keyframe before it are kept but hidden, so they still decode. actualStartMs reports where the clip is shown from, which is startMs except where there is nothing to hide the lead-in behind or nothing to hide: a start before the video's first keyframe or past its last frame, or a TS output, begins at that keyframe instead. An endMs at or past the end of the video keeps the rest of it; a startMs at or past the end is a 400. The clip keeps the source's format where the device writes it and is an MP4 otherwise. The original file is not modified. An MPEG-TS source cannot be trimmed and is a 422, and so is a file that can't be read as a video. Needs read access on the video and write access on its folder; the caller owns the new clip.",
+                "description": "Queues a background job that copies the sub-clip [startMs, endMs] of the source video into a new file beside it without re-encoding (fast, lossless). Follow the job with GET /jobs/{id} or the job_* events, and cancel it with DELETE /jobs/{id}; a canceled or failed trim leaves no partial file. The job reports no progress until it completes, because the trimmer has no progress hook yet. A completed job's detail holds relPath, the clip's path, and actualStartMs, where the clip is shown from: startMs, except where there is nothing to hide the lead-in behind or nothing to hide — a start before the video's first keyframe or past its last frame, or a TS output, begins at that keyframe instead. An endMs at or past the end of the video keeps the rest of it; a startMs at or past the end is a 400. The clip keeps the source's format where the device writes it and is an MP4 otherwise. The original file is not modified. A file that can't be read as a video is a 422; an MPEG-TS source fails the job. Needs read access on the video and write access on its folder; the job runs as, and the clip is owned by, the caller.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11404,7 +11404,7 @@ const docTemplate = `{
                 "tags": [
                     "videos"
                 ],
-                "summary": "Trim a video clip",
+                "summary": "Queue a video trim",
                 "parameters": [
                     {
                         "description": "Trim request",
@@ -11417,8 +11417,8 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "202": {
+                        "description": "Accepted",
                         "schema": {
                             "$ref": "#/definitions/v0_videos.trimVideoResponse"
                         }
@@ -11442,13 +11442,13 @@ const docTemplate = `{
                         }
                     },
                     "422": {
-                        "description": "Unprocessable Entity — the video's container can't be trimmed, or the file can't be read as a video",
+                        "description": "Unprocessable Entity — the file can't be read as a video",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal Server Error — the job could not be queued; the cause is logged",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -15161,12 +15161,8 @@ const docTemplate = `{
         "v0_videos.trimVideoResponse": {
             "type": "object",
             "properties": {
-                "actualStartMs": {
-                    "description": "ActualStartMs is where the clip is shown from in the source: startMs,\nexcept in the few cases videoutil.TrimResult.Start names where it is a\nkeyframe instead.",
+                "jobId": {
                     "type": "integer"
-                },
-                "relPath": {
-                    "type": "string"
                 }
             }
         },

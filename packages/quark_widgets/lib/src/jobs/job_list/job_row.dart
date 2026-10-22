@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../core/quark_loader.dart';
 import '../../models/job_item.dart';
 import '../../theme/quark_tokens.dart';
 
 /// One job in a `JobList`: its name, a status line, a progress bar while it
-/// runs, and a Cancel or Retry action when [JobItem] offers one.
+/// runs (a busy loader for a job that reports no progress), and a Cancel or
+/// Retry action when [JobItem] offers one.
 ///
 /// Key prefixes: `job_row_<id>` on the row, `job_cancel_<id>` and
 /// `job_retry_<id>` on the actions.
@@ -33,7 +35,7 @@ class JobRow extends StatelessWidget {
     final elapsed = item.elapsed;
     final details = [
       _statusLabel(item.status),
-      if (item.status == JobItemStatus.running)
+      if (item.status == JobItemStatus.running && item.reportsProgress)
         '${(item.progress.clamp(0, 1) * 100).round()}%',
       if (elapsed != null) _formatElapsed(elapsed),
       if (item.attempts > 1) 'Attempt ${item.attempts}',
@@ -86,11 +88,16 @@ class JobRow extends StatelessWidget {
           if (item.status == JobItemStatus.running)
             Padding(
               padding: EdgeInsets.only(top: tokens.spacingXs),
-              child: LinearProgressIndicator(
-                value: item.progress.clamp(0, 1).toDouble(),
-                color: tokens.primary,
-                backgroundColor: tokens.border,
-              ),
+              child: item.reportsProgress
+                  ? LinearProgressIndicator(
+                      value: item.progress.clamp(0, 1).toDouble(),
+                      color: tokens.primary,
+                      backgroundColor: tokens.border,
+                    )
+                  : const Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: QuarkLoader(size: 16),
+                    ),
             ),
         ],
       ),

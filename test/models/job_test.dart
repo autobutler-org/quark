@@ -98,4 +98,40 @@ void main() {
       expect(job.params, isEmpty);
     });
   });
+
+  group('detail', () {
+    test('parses what a completed trim saved, unmodifiable', () {
+      final job = Job.fromJson({
+        'id': 8,
+        'kind': JobKinds.videoTrim,
+        'status': 'completed',
+        'detail': {'relPath': 'videos/a_trimmed.mp4', 'actualStartMs': 1875},
+      });
+
+      expect(job.detail, {
+        'relPath': 'videos/a_trimmed.mp4',
+        'actualStartMs': 1875,
+      });
+      expect(() => job.detail['relPath'] = 'x', throwsUnsupportedError);
+    });
+
+    test('is empty when missing or not an object', () {
+      expect(Job.fromJson({'id': 9, 'status': 'running'}).detail, isEmpty);
+      expect(
+        Job.fromJson({'id': 9, 'status': 'running', 'detail': 'x'}).detail,
+        isEmpty,
+      );
+    });
+  });
+
+  test('a trim reports no progress; a conversion does', () {
+    expect(
+      Job.fromJson({'id': 1, 'kind': JobKinds.videoTrim}).reportsProgress,
+      isFalse,
+    );
+    expect(
+      Job.fromJson({'id': 2, 'kind': JobKinds.videoTranscode}).reportsProgress,
+      isTrue,
+    );
+  });
 }

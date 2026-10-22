@@ -79,6 +79,38 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 
+  testWidgets('a job with no progress to report is busy, not at 0%', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      const JobList(
+        items: [
+          JobItem(
+            id: 5,
+            name: 'Trim party.mp4',
+            status: JobItemStatus.running,
+            reportsProgress: false,
+            elapsed: Duration(seconds: 4),
+            isQuickCopy: true,
+            canCancel: true,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Running · 0:04 · Quick copy'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('job_row_5')),
+        matching: find.byType(QuarkLoader),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('job_cancel_5')), findsOneWidget);
+  });
+
   testWidgets('offers Cancel and Retry only where the item does', (
     tester,
   ) async {

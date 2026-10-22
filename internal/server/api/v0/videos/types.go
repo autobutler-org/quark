@@ -52,13 +52,10 @@ type trimVideoRequest struct {
 	EndMs   int64  `json:"endMs"`
 }
 
-// trimVideoResponse is returned on success.
+// trimVideoResponse is returned when a trim is queued. The completed job's
+// detail is a trimutil.Result.
 type trimVideoResponse struct {
-	RelPath string `json:"relPath"`
-	// ActualStartMs is where the clip is shown from in the source: startMs,
-	// except in the few cases videoutil.TrimResult.Start names where it is a
-	// keyframe instead.
-	ActualStartMs int64 `json:"actualStartMs"`
+	JobID int64 `json:"jobId"`
 }
 
 type albumRefJSON struct {

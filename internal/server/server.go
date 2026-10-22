@@ -41,6 +41,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/tlsutil"
 	"github.com/autobutler-org/quark/pkg/util/transcodeutil"
 	"github.com/autobutler-org/quark/pkg/util/trashutil"
+	"github.com/autobutler-org/quark/pkg/util/trimutil"
 	"github.com/autobutler-org/quark/pkg/util/updateutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
@@ -71,6 +72,15 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	jobs.Register(jobutil.RegisterParams{
 		Kind: transcodeutil.Kind,
 		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{
+			Storage:  deps.StorageService(),
+			Registry: deps.VFSRegistry(),
+			Database: deps.Database(),
+			EventBus: deps.EventBus(),
+		}),
+	})
+	jobs.Register(jobutil.RegisterParams{
+		Kind: trimutil.Kind,
+		Handler: trimutil.NewHandler(trimutil.NewHandlerParams{
 			Storage:  deps.StorageService(),
 			Registry: deps.VFSRegistry(),
 			Database: deps.Database(),

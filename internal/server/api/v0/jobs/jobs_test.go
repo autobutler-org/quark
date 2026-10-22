@@ -213,7 +213,7 @@ func TestListGetAndCancelJobs(t *testing.T) {
 	if w.Code != http.StatusOK || len(jobs) != 2 || jobs[0]["name"] != "second" {
 		t.Fatalf("GET /jobs = %d %s, want two jobs newest first", w.Code, w.Body.String())
 	}
-	wantKeys := []string{"id", "kind", "lane", "name", "params", "status", "progress", "attempts", "createdAt", "startedAt", "finishedAt", "error"}
+	wantKeys := []string{"id", "kind", "lane", "name", "params", "detail", "status", "progress", "attempts", "createdAt", "startedAt", "finishedAt", "error"}
 	if params, ok := jobs[0]["params"].(map[string]any); !ok || len(params) != 0 {
 		t.Errorf("params for a job enqueued without any = %v, want {}", jobs[0]["params"])
 	}

@@ -1171,9 +1171,10 @@ class FilesService with AuthenticatedService {
         .toList(growable: false);
   }
 
-  /// Trims [relPath] to the range [startMs, endMs] and saves a new file.
-  /// Returns where the clip was saved and where it really starts.
-  static Future<TrimResult> trimVideo(
+  /// Queues a trim of [relPath] to the range [startMs, endMs] into a new file
+  /// beside it, and returns the job's id, which `JobsService` can look up or
+  /// cancel. The completed job's detail is a [TrimResult].
+  static Future<int> trimVideo(
     String relPath, {
     String? serial,
     required int startMs,
@@ -1194,9 +1195,8 @@ class FilesService with AuthenticatedService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, 'Failed to trim video');
     }
-    return TrimResult.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return (data['jobId'] as num).toInt();
   }
 
   /// Queues a conversion of [relPath] into [format], one of the formats

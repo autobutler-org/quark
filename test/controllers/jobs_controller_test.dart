@@ -21,8 +21,10 @@ Map<String, dynamic> _json(
     'format': 'mov',
     'quality': 'original',
   },
+  Map<String, Object?> detail = const {},
 }) => {
   'id': id,
+  'detail': detail,
   'kind': kind,
   'lane': lane,
   'name': name,
@@ -84,6 +86,20 @@ void main() {
     built.clear();
     await events.close();
   });
+
+  test(
+    'a running trim is drawn busy, a conversion with its progress',
+    () async {
+      served = [
+        Job.fromJson(_json(2, kind: JobKinds.videoTrim, lane: 'copy')),
+        Job.fromJson(_json(1)),
+      ];
+      final controller = build();
+      await controller.load();
+      expect(controller.items.map((i) => i.reportsProgress), [false, true]);
+      expect(controller.items[0].canCancel, isTrue);
+    },
+  );
 
   test('maps loaded jobs into items and counts the running ones', () async {
     served = [
@@ -281,6 +297,64 @@ void main() {
       )!;
       expect(failed.message, "Back up didn't finish.");
       expect(failed.route, AppRoutes.systemTab(SystemTab.jobs));
+    });
+
+    Map<String, dynamic> trim({
+      String status = 'completed',
+      int startMs = 1800,
+      int actualStartMs = 1800,
+    }) => _json(
+      1,
+      status: status,
+      kind: JobKinds.videoTrim,
+      lane: 'copy',
+      name: 'Trim party.mp4',
+      params: {
+        'relPath': 'videos/party.mp4',
+        'serial': 'USB 1',
+        'startMs': startMs,
+        'endMs': 3500,
+      },
+      detail: status == 'completed'
+          ? {
+              'relPath': 'videos/party_trimmed.mp4',
+              'actualStartMs': actualStartMs,
+            }
+          : const {},
+    );
+
+    test('a completed trim names its clip and shows its folder', () {
+      final a = JobsController.announcementFor(Job.fromJson(trim()))!;
+      expect(a.message, 'Clip saved as party_trimmed.mp4.');
+      expect(a.actionLabel, 'Show');
+      expect(a.route, '/files/videos?serial=USB+1');
+    });
+
+    test('a trim that starts elsewhere than asked says where', () {
+      final a = JobsController.announcementFor(
+        Job.fromJson(trim(startMs: 1800, actualStartMs: 0)),
+      )!;
+      expect(
+        a.message,
+        'Clip saved as party_trimmed.mp4. It starts at 0:00 instead of 0:01, '
+        'the closest point this video can be cut.',
+      );
+    });
+
+    test('a trim shown from a start that reads the same says nothing more', () {
+      // 1.8s and 1.875s both read 0:01, so the message is the plain one.
+      final a = JobsController.announcementFor(
+        Job.fromJson(trim(startMs: 1800, actualStartMs: 1875)),
+      )!;
+      expect(a.message, 'Clip saved as party_trimmed.mp4.');
+    });
+
+    test('a failed trim gets Errors copy naming the video', () {
+      final a = JobsController.announcementFor(
+        Job.fromJson(trim(status: 'failed')),
+      )!;
+      expect(a.message, "Couldn't trim party.mp4.");
+      expect(a.route, AppRoutes.systemTab(SystemTab.jobs));
     });
 
     test('nothing to say for a job that did not complete or fail', () {
