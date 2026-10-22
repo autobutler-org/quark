@@ -6,5 +6,10 @@
 	<array>
 		<string>group.org.autobutler.quark</string>
 	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)org.autobutler.quark</string>
+		<string>$(AppIdentifierPrefix)org.autobutler.quark.shared</string>
+	</array>
 </dict>
 </plist>

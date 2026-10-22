@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:quark/controllers/vault_biometric_controller.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
@@ -8,6 +9,10 @@ import 'package:quark/utils/safe_set_state_mixin.dart';
 ///
 /// The page owns the dialog and closes it; this owns the request and what the
 /// dialog shows while it runs and after it fails.
+///
+/// A change that goes through deletes the vault key cached behind
+/// biometrics on this device (#3595), so the next vault unlock asks for the
+/// new password once.
 ///
 /// The service call arrives as a function parameter defaulting to the real
 /// static method, so a test passes a fake without a mocking library.
@@ -20,13 +25,17 @@ class ChangePasswordController extends ChangeNotifier with SafeNotifier {
         })
         changePasswordRequest =
         AuthService.changePassword,
-  }) : _changePasswordRequest = changePasswordRequest;
+    Future<void> Function()? onPasswordChanged,
+  }) : _changePasswordRequest = changePasswordRequest,
+       _onPasswordChanged =
+           onPasswordChanged ?? VaultBiometricController.instance.forgetAll;
 
   final Future<void> Function({
     required String currentPassword,
     required String newPassword,
   })
   _changePasswordRequest;
+  final Future<void> Function() _onPasswordChanged;
 
   bool _isWorking = false;
   String? _error;
@@ -55,6 +64,7 @@ class ChangePasswordController extends ChangeNotifier with SafeNotifier {
         currentPassword: currentPassword,
         newPassword: newPassword,
       );
+      await _onPasswordChanged();
       return true;
     } catch (error) {
       _error = Errors.message(error, 'change your password');

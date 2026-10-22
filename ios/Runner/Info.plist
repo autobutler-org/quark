@@ -26,6 +26,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>QuarkKeychainAccessGroup</key>
+	<string>$(AppIdentifierPrefix)org.autobutler.quark.shared</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -33,6 +35,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Quark can open your password vault with Face ID instead of your password, if you turn that on.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Quark can take a photo with the camera when you pick a file to upload to your Quark server.</string>
 	<key>NSBonjourServices</key>
