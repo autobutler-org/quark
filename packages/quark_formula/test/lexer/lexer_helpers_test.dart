@@ -83,5 +83,15 @@ void main() {
 
       expect(() => scanFormulaWord(r'$foo', 0), throwsA(isA<LexError>()));
     });
+
+    test('parseCellRef reads A1 references as zero-based (row, col)', () {
+      expect(parseCellRef('A1'), (0, 0));
+      expect(parseCellRef('b2'), (1, 1));
+      expect(parseCellRef('Z10'), (9, 25));
+      expect(parseCellRef('AA1'), (0, 26));
+      for (final bad in ['', 'A', '1', 'A0', '1A', r'$A1', 'A1B']) {
+        expect(parseCellRef(bad), isNull, reason: bad);
+      }
+    });
   });
 }

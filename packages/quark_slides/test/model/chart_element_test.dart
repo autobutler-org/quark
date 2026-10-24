@@ -44,6 +44,15 @@ void main() {
       expect(ChartData.fromGrid(const []), ChartData());
     });
 
+    test('tryParseValue flags what parseValue reads as 0', () {
+      expect(ChartData.tryParseValue(' 1,200 '), 1200);
+      expect(ChartData.tryParseValue('50%'), 50);
+      expect(ChartData.tryParseValue(''), 0);
+      expect(ChartData.tryParseValue('n/a'), isNull);
+      expect(ChartData.tryParseValue('1e999'), isNull);
+      expect(ChartData.parseValue('n/a'), 0);
+    });
+
     test('a grid past the limits is refused', () {
       expect(
         () => ChartData.fromGrid([

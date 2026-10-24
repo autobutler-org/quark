@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../lexer/helpers.dart';
 import '../parser/ast.dart';
 import '../token.dart';
 import 'builtins.dart';
@@ -180,7 +181,7 @@ class FormulaEvaluator {
   }
 
   FormulaValue _readCell(String ref) {
-    final coordinates = _parseCellRef(ref);
+    final coordinates = parseCellRef(ref);
     if (coordinates == null) {
       return refError('Invalid cell reference $ref');
     }
@@ -188,8 +189,8 @@ class FormulaEvaluator {
   }
 
   List<FormulaValue> _resolveRange(String startRef, String endRef) {
-    final start = _parseCellRef(startRef);
-    final end = _parseCellRef(endRef);
+    final start = parseCellRef(startRef);
+    final end = parseCellRef(endRef);
     if (start == null || end == null) {
       return [refError('Invalid range reference $startRef:$endRef')];
     }
@@ -207,37 +208,6 @@ class FormulaEvaluator {
     }
     return values;
   }
-
-  (int, int)? _parseCellRef(String ref) {
-    var splitIndex = 0;
-    while (splitIndex < ref.length && _isAlpha(ref.codeUnitAt(splitIndex))) {
-      splitIndex++;
-    }
-    if (splitIndex == 0 || splitIndex == ref.length) {
-      return null;
-    }
-
-    final columnText = ref.substring(0, splitIndex);
-    final rowText = ref.substring(splitIndex);
-    final row = int.tryParse(rowText);
-    if (row == null || row <= 0) {
-      return null;
-    }
-
-    var column = 0;
-    for (final rune in columnText.runes) {
-      final upper = String.fromCharCode(rune).toUpperCase().codeUnitAt(0);
-      if (!_isAlpha(upper)) {
-        return null;
-      }
-      column = column * 26 + (upper - 64);
-    }
-
-    return (row - 1, column - 1);
-  }
-
-  bool _isAlpha(int codeUnit) =>
-      codeUnit >= 65 && codeUnit <= 90 || codeUnit >= 97 && codeUnit <= 122;
 
   double _pow(double left, double right) => math.pow(left, right).toDouble();
 }
