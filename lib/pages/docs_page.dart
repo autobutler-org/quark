@@ -1,28 +1,23 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quark/controllers/file_type_listing_cache.dart';
+import 'package:quark/controllers/doc_sheet_listing_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
-import 'package:quark/services/app_settings.dart';
-import 'package:quark/services/files_service.dart';
-import 'package:quark/services/content_search_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
-import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
-import 'package:quark/utils/safe_set_state_mixin.dart';
-import 'package:quark_icons/quark_icons.dart';
-import 'package:quark_widgets/quark_widgets.dart';
-import 'package:quark/widgets/docs/docs_body.dart';
-import 'package:quark/widgets/docs/docs_search_bar.dart';
+import 'package:quark/widgets/doc_sheet_body.dart';
+import 'package:quark/widgets/doc_sheet_kind.dart';
+import 'package:quark/widgets/file_type_search_bar.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
-/// The Docs page: the user's `.qdoc` documents, with a way to start a new one. A search also matches document
-/// contents and lists the sheets whose names match.
+/// The Docs page: the user's `.qdoc` documents, with a way to start a new one.
+/// A search also matches document contents and lists the sheets whose names
+/// match. Its state is a [DocSheetListingController], shared with Sheets.
 class DocsPage extends StatefulWidget {
   const DocsPage({super.key});
 
@@ -31,99 +26,29 @@ class DocsPage extends StatefulWidget {
 }
 
 class _DocsPageState extends State<DocsPage>
-    with SafeSetStateMixin, WidgetsBindingObserver, AutoRefreshMixin {
-  List<FileNode> _files = [];
-  List<FileNode> _filtered = [];
-
-  /// Every sheet, so a search can list the ones that match in an
-  /// "In Sheets" section (#2259).
-  List<FileNode> _sheets = [];
-  List<FileNode> _sheetsFiltered = [];
-  List<ContentSearchResult> _contentResults = [];
-  bool _contentSearching = false;
-
-  /// The thrown object, not its message — the render decides whether it means
-  /// "your Quark is unreachable" or "the request failed" (#1637).
-  Object? _error;
-  final _searchController = TextEditingController();
-  Timer? _contentSearchDebounce;
+    with WidgetsBindingObserver, AutoRefreshMixin {
+  final _controller = DocSheetListingController(
+    fileType: 'qdoc',
+    otherType: 'qsheet',
+    emptyFile: '{"ops":[{"insert":"\\n"}]}',
+  );
+  final _search = TextEditingController();
 
   @override
   void initState() {
-    // Show the last listing on the first frame, then let the refresh the
-    // mixin starts replace it (#1780).
-    final cachedDocs = FileTypeListingCache.instance.peek('qdoc');
-    if (cachedDocs != null) {
-      _files = cachedDocs;
-      _filtered = List.of(cachedDocs);
-      _sheets = FileTypeListingCache.instance.peek('qsheet') ?? const [];
-    }
     super.initState();
-    if (cachedDocs != null) isInitialLoad = false;
-    _searchController.addListener(_onSearchChanged);
+    _search.addListener(() => _controller.setQuery(_search.text));
   }
 
   @override
   void dispose() {
-    _contentSearchDebounce?.cancel();
-    _searchController.dispose();
+    _search.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
-  Future<void> refresh() async {
-    try {
-      final results = await Future.wait([
-        FileTypeListingCache.instance.fetch('qdoc'),
-        FileTypeListingCache.instance.fetch('qsheet'),
-      ]);
-      setStateSafely(() {
-        _files = results[0];
-        _sheets = results[1];
-        _applyFilter();
-        // Cleared on success rather than up front, so a poll against an
-        // unreachable Quark does not blink the error view away and back.
-        _error = null;
-      });
-    } catch (e) {
-      setStateSafely(() {
-        _error = e;
-      });
-    }
-  }
-
-  void _onSearchChanged() {
-    _applyFilter();
-    _contentSearchDebounce?.cancel();
-    final q = _searchController.text.trim();
-    if (q.isEmpty) {
-      setStateSafely(() {
-        _contentResults = [];
-        _contentSearching = false;
-      });
-      return;
-    }
-    setStateSafely(() => _contentSearching = true);
-    _contentSearchDebounce = Timer(const Duration(milliseconds: 400), () async {
-      final results = await ContentSearchService.search(q);
-      setStateSafely(() {
-        _contentResults = results;
-        _contentSearching = false;
-      });
-    });
-  }
-
-  void _applyFilter() {
-    final query = _searchController.text.trim().toLowerCase();
-    bool matches(FileNode f) => f.matchesSearch(query);
-    setStateSafely(() {
-      _filtered = query.isEmpty
-          ? List.of(_files)
-          : _files.where(matches).toList();
-      // The other type only appears as search results, never as the library.
-      _sheetsFiltered = query.isEmpty ? [] : _sheets.where(matches).toList();
-    });
-  }
+  Future<void> refresh() => _controller.refresh();
 
   void _openDoc(FileNode node) => context.go(
     AppRoutes.docFile(
@@ -141,44 +66,30 @@ class _DocsPageState extends State<DocsPage>
     ),
   );
 
-  Future<void> _renameFile(FileNode node) async {
+  Future<void> _rename(FileNode node) async {
     final renamed = await renameDocOrSheet(
       context,
       node,
-      siblings: [..._files, ..._sheets],
+      siblings: _controller.siblings,
     );
     if (renamed != null) manualRefresh();
   }
 
-  Future<void> _createNewDoc() async {
+  Future<void> _create() async {
     final name = await promptForNewFileName(
       context,
       title: 'New Document',
       hintText: 'Document name',
     );
     if (name == null || name.isEmpty || !mounted) return;
-
     try {
-      final fileName = name.endsWith('.qdoc') ? name : '$name.qdoc';
-      final bytes = '{"ops":[{"insert":"\\n"}]}'.codeUnits;
-      // A member cannot write the device root, only their home (#2139).
-      final dir = landingPath(
-        isAdmin: AppSettings.instance.isAdmin.value,
-        username: AppSettings.instance.username,
-      );
-      final landed = await FilesService.uploadBytes(dir, fileName, bytes);
-      if (!mounted) return;
-      context.go(
-        AppRoutes.docFile(
-          landed.firstOrNull ?? (dir.isEmpty ? fileName : '$dir/$fileName'),
-          from: AppRoutes.docs,
-        ),
-        extra: true,
-      );
-    } catch (e) {
+      final path = await _controller.create(name);
       if (mounted) {
-        showMessage(context, Errors.upload(e, 'create the document'));
+        context.go(AppRoutes.docFile(path, from: AppRoutes.docs), extra: true);
       }
+    } catch (e) {
+      if (!mounted) return;
+      showMessage(context, Errors.upload(e, 'create the document'));
     }
   }
 
@@ -194,28 +105,36 @@ class _DocsPageState extends State<DocsPage>
           key: const ValueKey('docs_new'),
           icon: QuarkIcons.add_rounded,
           label: 'New document',
-          onPressed: _createNewDoc,
+          onPressed: _create,
         ),
         const AppThemeToggle(),
       ],
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.docs),
       body: Column(
         children: [
-          DocsSearchBar(controller: _searchController),
+          FileTypeSearchBar(
+            controller: _search,
+            hintText: 'Search docs…',
+            keyPrefix: 'docs',
+          ),
           Expanded(
-            child: DocsBody(
-              loading: isInitialLoad,
-              error: _error,
-              files: _filtered,
-              sheetFiles: _sheetsFiltered,
-              contentResults: _contentResults,
-              contentSearching: _contentSearching,
-              searchQuery: _searchController.text,
-              onRetry: manualRefresh,
-              onCreateNew: _createNewDoc,
-              onOpenDoc: _openDoc,
-              onOpenSheet: _openSheet,
-              onRename: _renameFile,
+            child: ListenableBuilder(
+              listenable: _controller,
+              builder: (context, _) => DocSheetBody(
+                kind: DocSheetKind.docs,
+                loading: isInitialLoad && !_controller.hasListing,
+                error: _controller.error,
+                files: _controller.filtered,
+                otherFiles: _controller.otherFiltered,
+                contentResults: _controller.contentResults,
+                contentSearching: _controller.contentSearching,
+                searchQuery: _controller.query,
+                onRetry: manualRefresh,
+                onCreateNew: _create,
+                onOpenDoc: _openDoc,
+                onOpenSheet: _openSheet,
+                onRename: _rename,
+              ),
             ),
           ),
         ],

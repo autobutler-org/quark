@@ -10,7 +10,7 @@ import 'package:quark/controllers/file_type_listing_cache.dart';
 import 'package:quark/pages/docs_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/authenticated_service.dart';
-import 'package:quark/widgets/docs/docs_body.dart';
+import 'package:quark/widgets/doc_sheet_body.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -61,7 +61,7 @@ void main() {
   // The app bar's refresh button spins too; only the body's loader means the
   // list is not there.
   final bodyLoader = find.descendant(
-    of: find.byType(DocsBody),
+    of: find.byType(DocSheetBody),
     matching: find.byType(QuarkLoader),
   );
 
@@ -107,6 +107,23 @@ void main() {
     expect(bodyLoader, findsOneWidget);
 
     gate!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('budget'), findsOneWidget);
+  });
+
+  testWidgets('the search bar is keyed docs_search and filters by name', (
+    tester,
+  ) async {
+    await visitDocs(tester);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('docs_search_clear')), findsNothing);
+
+    await tester.enterText(find.byKey(const ValueKey('docs_search')), 'zz');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(find.text('budget'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('docs_search_clear')));
     await tester.pumpAndSettle();
     expect(find.text('budget'), findsOneWidget);
   });

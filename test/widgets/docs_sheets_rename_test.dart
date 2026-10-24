@@ -11,8 +11,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/content_search_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
-import 'package:quark/widgets/docs/docs_body.dart';
-import 'package:quark/widgets/sheets/sheets_body.dart';
+import 'package:quark/widgets/doc_sheet_body.dart';
+import 'package:quark/widgets/doc_sheet_kind.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// #2056: a sheet or doc could only be renamed from Files → Move/Rename.
@@ -38,11 +38,12 @@ void main() {
     List<ContentSearchResult> results = const [],
     String query = '',
     ValueChanged<FileNode>? onRename,
-  }) => SheetsBody(
+  }) => DocSheetBody(
+    kind: DocSheetKind.sheets,
     loading: false,
     error: null,
     files: files,
-    docFiles: docFiles,
+    otherFiles: docFiles,
     contentResults: results,
     contentSearching: false,
     searchQuery: query,
@@ -80,11 +81,12 @@ void main() {
     final notes = node('notes.qdoc');
     await pump(
       tester,
-      DocsBody(
+      DocSheetBody(
+        kind: DocSheetKind.docs,
         loading: false,
         error: null,
         files: [notes],
-        sheetFiles: const [],
+        otherFiles: const [],
         contentResults: const [],
         contentSearching: false,
         searchQuery: '',

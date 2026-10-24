@@ -8,6 +8,7 @@ import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
+import 'package:quark/widgets/file_type_search_bar.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
@@ -15,7 +16,6 @@ import 'package:quark/widgets/slides/import/import_power_point.dart';
 import 'package:quark/widgets/slides/import/slides_import_bar_bottom.dart';
 import 'package:quark/widgets/slides/insert/slide_quark_image_dialog.dart';
 import 'package:quark/widgets/slides/slides_body.dart';
-import 'package:quark/widgets/slides/slides_search_bar.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -156,7 +156,11 @@ class _SlidesPageState extends State<SlidesPage>
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.slides),
       body: Column(
         children: [
-          SlidesSearchBar(controller: _search),
+          FileTypeSearchBar(
+            controller: _search,
+            hintText: 'Search presentations…',
+            keyPrefix: 'slides',
+          ),
           Expanded(
             child: ListenableBuilder(
               listenable: _controller,

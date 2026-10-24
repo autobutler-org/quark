@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quark/widgets/docs/docs_body.dart';
-import 'package:quark/widgets/sheets/sheets_body.dart';
+import 'package:quark/widgets/doc_sheet_body.dart';
+import 'package:quark/widgets/doc_sheet_kind.dart';
 
 /// #2044: both lists offered "Create new …" only when the library was empty,
 /// so a search that matched nothing left the user with centered copy and a
@@ -16,11 +16,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: DocsBody(
+          body: DocSheetBody(
+            kind: DocSheetKind.docs,
             loading: false,
             error: null,
             files: const [],
-            sheetFiles: const [],
+            otherFiles: const [],
             contentResults: const [],
             contentSearching: false,
             searchQuery: query,
@@ -43,11 +44,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SheetsBody(
+          body: DocSheetBody(
+            kind: DocSheetKind.sheets,
             loading: false,
             error: null,
             files: const [],
-            docFiles: const [],
+            otherFiles: const [],
             contentResults: const [],
             contentSearching: false,
             searchQuery: query,

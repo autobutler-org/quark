@@ -1,28 +1,23 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quark/controllers/file_type_listing_cache.dart';
+import 'package:quark/controllers/doc_sheet_listing_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
-import 'package:quark/services/app_settings.dart';
-import 'package:quark/services/files_service.dart';
-import 'package:quark/services/content_search_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
-import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
-import 'package:quark/utils/safe_set_state_mixin.dart';
-import 'package:quark_icons/quark_icons.dart';
-import 'package:quark_widgets/quark_widgets.dart';
+import 'package:quark/widgets/doc_sheet_body.dart';
+import 'package:quark/widgets/doc_sheet_kind.dart';
+import 'package:quark/widgets/file_type_search_bar.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
-import 'package:quark/widgets/sheets/sheets_body.dart';
-import 'package:quark/widgets/sheets/sheets_search_bar.dart';
+import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
-/// The Sheets page: the user's `.qsheet` spreadsheets, with a way to start a new one. A search also matches sheet
-/// contents and lists the docs whose names match.
+/// The Sheets page: the user's `.qsheet` spreadsheets, with a way to start a
+/// new one. A search also matches sheet contents and lists the docs whose
+/// names match. Its state is a [DocSheetListingController], shared with Docs.
 class SheetsPage extends StatefulWidget {
   const SheetsPage({super.key});
 
@@ -31,107 +26,29 @@ class SheetsPage extends StatefulWidget {
 }
 
 class _SheetsPageState extends State<SheetsPage>
-    with SafeSetStateMixin, WidgetsBindingObserver, AutoRefreshMixin {
-  List<FileNode> _files = [];
-  List<FileNode> _filtered = [];
-
-  /// Every doc, so a search can list the ones that match in an
-  /// "In Docs" section (#2259).
-  List<FileNode> _docs = [];
-  List<FileNode> _docsFiltered = [];
-  List<ContentSearchResult> _contentResults = [];
-  bool _contentSearching = false;
-
-  /// The thrown object, not its message — the render decides whether it means
-  /// "your Quark is unreachable" or "the request failed" (#1637).
-  Object? _error;
-  final _searchController = TextEditingController();
-  Timer? _contentSearchDebounce;
+    with WidgetsBindingObserver, AutoRefreshMixin {
+  final _controller = DocSheetListingController(
+    fileType: 'qsheet',
+    otherType: 'qdoc',
+    emptyFile: '{"tabs":[{"name":"Sheet 1","data":{"columns":[],"rows":[]}}]}',
+  );
+  final _search = TextEditingController();
 
   @override
   void initState() {
-    // Show the last listing on the first frame, then let the refresh the
-    // mixin starts replace it, as Docs does (#1780, #3729).
-    final cachedSheets = FileTypeListingCache.instance.peek('qsheet');
-    if (cachedSheets != null) {
-      _files = cachedSheets;
-      _filtered = List.of(cachedSheets);
-      _docs = FileTypeListingCache.instance.peek('qdoc') ?? const [];
-    }
     super.initState();
-    if (cachedSheets != null) isInitialLoad = false;
-    _searchController.addListener(_onSearchChanged);
+    _search.addListener(() => _controller.setQuery(_search.text));
   }
 
   @override
   void dispose() {
-    _contentSearchDebounce?.cancel();
-    _searchController.dispose();
+    _search.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
-  Future<void> refresh() async {
-    try {
-      final results = await Future.wait([
-        FileTypeListingCache.instance.fetch('qsheet'),
-        FileTypeListingCache.instance.fetch('qdoc'),
-      ]);
-      setStateSafely(() {
-        _files = results[0];
-        _docs = results[1];
-        _applyFilter();
-        // Cleared on success rather than up front, so a poll against an
-        // unreachable Quark does not blink the error view away and back.
-        _error = null;
-      });
-    } catch (e) {
-      setStateSafely(() {
-        _error = e;
-      });
-    }
-  }
-
-  void _onSearchChanged() {
-    _applyFilter();
-    _contentSearchDebounce?.cancel();
-    final q = _searchController.text.trim();
-    if (q.isEmpty) {
-      setStateSafely(() {
-        _contentResults = [];
-        _contentSearching = false;
-      });
-      return;
-    }
-    setStateSafely(() => _contentSearching = true);
-    _contentSearchDebounce = Timer(const Duration(milliseconds: 400), () async {
-      final results = await ContentSearchService.search(q);
-      setStateSafely(() {
-        _contentResults = results;
-        _contentSearching = false;
-      });
-    });
-  }
-
-  void _applyFilter() {
-    final query = _searchController.text.trim().toLowerCase();
-    bool matches(FileNode f) => f.matchesSearch(query);
-    setStateSafely(() {
-      _filtered = query.isEmpty
-          ? List.of(_files)
-          : _files.where(matches).toList();
-      // The other type only appears as search results, never as the library.
-      _docsFiltered = query.isEmpty ? [] : _docs.where(matches).toList();
-    });
-  }
-
-  void _openSheet(FileNode node) => context.go(
-    AppRoutes.sheetFile(
-      node.apiPath,
-      serial: node.deviceSerial,
-      from: AppRoutes.sheets,
-    ),
-  );
+  Future<void> refresh() => _controller.refresh();
 
   void _openDoc(FileNode node) => context.go(
     AppRoutes.docFile(
@@ -141,45 +58,38 @@ class _SheetsPageState extends State<SheetsPage>
     ),
   );
 
-  Future<void> _renameFile(FileNode node) async {
+  void _openSheet(FileNode node) => context.go(
+    AppRoutes.sheetFile(
+      node.apiPath,
+      serial: node.deviceSerial,
+      from: AppRoutes.sheets,
+    ),
+  );
+
+  Future<void> _rename(FileNode node) async {
     final renamed = await renameDocOrSheet(
       context,
       node,
-      siblings: [..._files, ..._docs],
+      siblings: _controller.siblings,
     );
     if (renamed != null) manualRefresh();
   }
 
-  Future<void> _createNewSheet() async {
+  Future<void> _create() async {
     final name = await promptForNewFileName(
       context,
       title: 'New Spreadsheet',
       hintText: 'Spreadsheet name',
     );
     if (name == null || name.isEmpty || !mounted) return;
-
     try {
-      final fileName = name.endsWith('.qsheet') ? name : '$name.qsheet';
-      final bytes =
-          '{"tabs":[{"name":"Sheet 1","data":{"columns":[],"rows":[]}}]}'
-              .codeUnits;
-      // A member cannot write the device root, only their home (#2139).
-      final dir = landingPath(
-        isAdmin: AppSettings.instance.isAdmin.value,
-        username: AppSettings.instance.username,
-      );
-      final landed = await FilesService.uploadBytes(dir, fileName, bytes);
-      if (!mounted) return;
-      context.go(
-        AppRoutes.sheetFile(
-          landed.firstOrNull ?? (dir.isEmpty ? fileName : '$dir/$fileName'),
-          from: AppRoutes.sheets,
-        ),
-      );
-    } catch (e) {
+      final path = await _controller.create(name);
       if (mounted) {
-        showMessage(context, Errors.upload(e, 'create the sheet'));
+        context.go(AppRoutes.sheetFile(path, from: AppRoutes.sheets));
       }
+    } catch (e) {
+      if (!mounted) return;
+      showMessage(context, Errors.upload(e, 'create the sheet'));
     }
   }
 
@@ -195,28 +105,36 @@ class _SheetsPageState extends State<SheetsPage>
           key: const ValueKey('sheets_new'),
           icon: QuarkIcons.add_rounded,
           label: 'New spreadsheet',
-          onPressed: _createNewSheet,
+          onPressed: _create,
         ),
         const AppThemeToggle(),
       ],
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.sheets),
       body: Column(
         children: [
-          SheetsSearchBar(controller: _searchController),
+          FileTypeSearchBar(
+            controller: _search,
+            hintText: 'Search sheets…',
+            keyPrefix: 'sheets',
+          ),
           Expanded(
-            child: SheetsBody(
-              loading: isInitialLoad,
-              error: _error,
-              files: _filtered,
-              docFiles: _docsFiltered,
-              contentResults: _contentResults,
-              contentSearching: _contentSearching,
-              searchQuery: _searchController.text,
-              onRetry: manualRefresh,
-              onCreateNew: _createNewSheet,
-              onOpenSheet: _openSheet,
-              onOpenDoc: _openDoc,
-              onRename: _renameFile,
+            child: ListenableBuilder(
+              listenable: _controller,
+              builder: (context, _) => DocSheetBody(
+                kind: DocSheetKind.sheets,
+                loading: isInitialLoad && !_controller.hasListing,
+                error: _controller.error,
+                files: _controller.filtered,
+                otherFiles: _controller.otherFiltered,
+                contentResults: _controller.contentResults,
+                contentSearching: _controller.contentSearching,
+                searchQuery: _controller.query,
+                onRetry: manualRefresh,
+                onCreateNew: _create,
+                onOpenDoc: _openDoc,
+                onOpenSheet: _openSheet,
+                onRename: _rename,
+              ),
             ),
           ),
         ],

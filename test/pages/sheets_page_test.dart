@@ -11,7 +11,7 @@ import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/sheets_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/authenticated_service.dart';
-import 'package:quark/widgets/sheets/sheets_body.dart';
+import 'package:quark/widgets/doc_sheet_body.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -62,7 +62,7 @@ void main() {
   // The app bar's refresh button spins too; only the body's loader means the
   // list is not there.
   final bodyLoader = find.descendant(
-    of: find.byType(SheetsBody),
+    of: find.byType(DocSheetBody),
     matching: find.byType(QuarkLoader),
   );
 

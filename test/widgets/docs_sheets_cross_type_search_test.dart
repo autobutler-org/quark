@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/content_search_service.dart';
-import 'package:quark/widgets/docs/docs_body.dart';
-import 'package:quark/widgets/sheets/sheets_body.dart';
+import 'package:quark/widgets/doc_sheet_body.dart';
+import 'package:quark/widgets/doc_sheet_kind.dart';
 
 /// #2259: Docs listed only .qdoc filename matches and Sheets only .qsheet, and
 /// every content hit — whatever its type — opened in the current page's
@@ -71,11 +71,12 @@ void main() {
     List<FileNode> files = const [],
     List<FileNode> docFiles = const [],
     List<ContentSearchResult> results = contentResults,
-  }) => SheetsBody(
+  }) => DocSheetBody(
+    kind: DocSheetKind.sheets,
     loading: false,
     error: null,
     files: files,
-    docFiles: docFiles,
+    otherFiles: docFiles,
     contentResults: results,
     contentSearching: false,
     searchQuery: 'budget',
@@ -89,11 +90,12 @@ void main() {
     List<FileNode> files = const [],
     List<FileNode> sheetFiles = const [],
     List<ContentSearchResult> results = contentResults,
-  }) => DocsBody(
+  }) => DocSheetBody(
+    kind: DocSheetKind.docs,
     loading: false,
     error: null,
     files: files,
-    sheetFiles: sheetFiles,
+    otherFiles: sheetFiles,
     contentResults: results,
     contentSearching: false,
     searchQuery: 'budget',
