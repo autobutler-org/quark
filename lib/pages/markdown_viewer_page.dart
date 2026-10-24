@@ -7,6 +7,7 @@ import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/markdown_viewer_files.dart';
 import 'package:quark/widgets/code_viewer/code_viewer_body.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
+import 'package:quark/widgets/layout/leave_pop_scope.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/markdown_viewer/markdown_viewer_body.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -105,19 +106,17 @@ class _MarkdownViewerPageState extends State<MarkdownViewerPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Nothing underneath is the usual case: Files opens the viewer at its own
-    // URL, so leaving goes to the folder that holds the file (#1749).
     final canPop = context.canPop();
     void leave() => context.go(
-      AppRoutes.containingFolder(widget.filePath, serial: widget.deviceSerial),
+      AppRoutes.leaveFile(
+        context,
+        widget.filePath,
+        serial: widget.deviceSerial,
+      ),
     );
 
-    return PopScope(
-      // A system back with nothing underneath would close the app.
-      canPop: canPop,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && !canPop) leave();
-      },
+    return LeavePopScope(
+      onLeave: leave,
       child: ListenableBuilder(
         listenable: _controller,
         builder: (context, _) => Scaffold(

@@ -167,11 +167,11 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     }
     if (!mounted) return;
     context.go(
-      AppRoutes.editorOrigin(context) ??
-          AppRoutes.containingFolder(
-            widget.filePath,
-            serial: widget.deviceSerial,
-          ),
+      AppRoutes.leaveFile(
+        context,
+        widget.filePath,
+        serial: widget.deviceSerial,
+      ),
     );
   }
 

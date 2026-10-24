@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/health_service.dart';
+import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/health/health_severity.dart';
@@ -127,7 +128,7 @@ class HealthBody extends StatelessWidget {
           unit: '%',
           criticalThreshold: healthMemoryCriticalPercent,
           detail:
-              '${_formatBytes(status.memUsedBytes)} used of ${_formatBytes(status.memTotalBytes)}',
+              '${StorageDevice.formatBytes(status.memUsedBytes)} used of ${StorageDevice.formatBytes(status.memTotalBytes)}',
         ),
         const SizedBox(height: 8),
         MetricCard(
@@ -139,7 +140,7 @@ class HealthBody extends StatelessWidget {
           // Same whole-disk scope the Files footer states (#2024). Without it
           // this line and Devices read as two different disks (#2011).
           detail:
-              '${_formatBytes(status.diskUsedBytes)} used of ${_formatBytes(status.diskTotalBytes)} · whole disk, including system software',
+              '${StorageDevice.formatBytes(status.diskUsedBytes)} used of ${StorageDevice.formatBytes(status.diskTotalBytes)} · whole disk, including system software',
         ),
         if (status.temperatureCelsius > 0) ...[
           const SizedBox(height: 8),
@@ -155,16 +156,4 @@ class HealthBody extends StatelessWidget {
       ],
     );
   }
-}
-
-String _formatBytes(int bytes) {
-  if (bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  int i = 0;
-  double val = bytes.toDouble();
-  while (val >= 1024 && i < units.length - 1) {
-    val /= 1024;
-    i++;
-  }
-  return '${val.toStringAsFixed(1)} ${units[i]}';
 }

@@ -17,6 +17,7 @@ import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/utils/sheet_config.dart';
 import 'package:quark/utils/sheet_tab_names.dart';
+import 'package:quark/widgets/layout/leave_pop_scope.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/spreadsheet_editor/sheet_tab_view.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -101,11 +102,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   /// opened from (#2403). A sheet reached by a link has none, and lands in the
   /// folder that holds it rather than the home folder (#1749).
   void _leave() => context.go(
-    AppRoutes.editorOrigin(context) ??
-        AppRoutes.containingFolder(
-          widget.filePath,
-          serial: widget.deviceSerial,
-        ),
+    AppRoutes.leaveFile(context, widget.filePath, serial: widget.deviceSerial),
   );
 
   @override
@@ -493,15 +490,6 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       );
     }
 
-    final canPop = Navigator.of(context).canPop();
-    return PopScope(
-      // With nothing underneath, a system back would close the app; it
-      // leaves as the app bar's back button does.
-      canPop: canPop,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && !canPop) _leave();
-      },
-      child: page,
-    );
+    return LeavePopScope(onLeave: _leave, child: page);
   }
 }

@@ -96,6 +96,9 @@ lib/widgets/
     connection_sheet_button.dart
                                 ConnectionIndicator that opens ConnectionSheet
                                 and navigates to Settings › Network
+    leave_pop_scope.dart        LeavePopScope, a system back on a page opened
+                                at its own URL leaves instead of closing the
+                                app; tied to the router's history
     startup_loader.dart         StartupLoader, the app `main` paints while
                                 the saved settings are slow to load; a whole
                                 MaterialApp, so it stays with `main`

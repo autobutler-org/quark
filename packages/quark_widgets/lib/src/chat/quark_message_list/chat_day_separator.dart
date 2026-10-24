@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../calendar/calendar_labels.dart';
 import '../../theme/quark_tokens.dart';
 
 /// The rule across a message list where one day's messages end and the next
@@ -13,24 +14,9 @@ class ChatDaySeparator extends StatelessWidget {
   /// Any moment on the day to label. Only the date is used.
   final DateTime date;
 
-  static const List<String> _months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-
   /// The label drawn for [date], such as `September 24, 2026`.
   static String labelFor(DateTime date) =>
-      '${_months[date.month - 1]} ${date.day}, ${date.year}';
+      '${CalendarLabels.month(date.month)} ${date.day}, ${date.year}';
 
   @override
   Widget build(BuildContext context) {

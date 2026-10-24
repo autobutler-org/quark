@@ -29,13 +29,10 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/services/upload_chunk_source.dart';
 import 'package:quark/services/client_thumbnails.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
-import 'package:quark/utils/code_viewer_files.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
-import 'package:quark/utils/markdown_viewer_files.dart';
-import 'package:quark/utils/model_viewer_files.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_browser_drag_config.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
@@ -1227,7 +1224,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       _refreshFileState();
       switch (kind) {
         case FileKind.qdoc || FileKind.qsheet || FileKind.qslide:
-          _openResolvedFile(filePath, kind, fileName, justCreated: true);
+          _openResolvedFile(filePath, kind, justCreated: true);
         case FileKind.text || FileKind.code:
           _goToEditor(filePath, AppRoutes.plaintextEditorPath(filePath));
         default:
@@ -1408,7 +1405,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       _openResolvedFile(
         qsheetPath,
         FileKind.qsheet,
-        qsheetName,
         serial: serialOrNull(node.deviceSerial),
       );
     } catch (e) {
@@ -1455,7 +1451,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       _openResolvedFile(
         qsheetPath,
         FileKind.qsheet,
-        qsheetPath.split('/').last,
         serial: serialOrNull(node.deviceSerial),
       );
     } on ApiException catch (e) {
@@ -1521,7 +1516,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     _openResolvedFile(
       folder.isEmpty ? qsheetName : '$folder/$qsheetName',
       FileKind.qsheet,
-      qsheetName,
       serial: serialOrNull(node.deviceSerial),
     );
   }
@@ -1546,29 +1540,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     // The file opens on the device it is listed on, which in a view of more
     // than one drive is not the first one selected (#3337).
     final serial = serialOrNull(node.deviceSerial);
-    if (opensInCodeViewer(node.name)) {
-      _goToEditor(
-        node.apiPath,
-        AppRoutes.codeViewerPath(node.apiPath, serial: serial),
-      );
-      return;
-    }
-    // Markdown opens rendered (#2987).
-    if (opensInMarkdownViewer(node.name)) {
-      _goToEditor(
-        node.apiPath,
-        AppRoutes.markdownViewerPath(node.apiPath, serial: serial),
-      );
-      return;
-    }
-    // STL, OBJ, PLY, glTF and 3MF open in the 3D model viewer (#2988).
-    if (opensInModelViewer(node.name)) {
-      _goToEditor(
-        node.apiPath,
-        AppRoutes.modelViewerPath(node.apiPath, serial: serial),
-      );
-      return;
-    }
     switch (kind) {
       // Navigate into archives as virtual directories.
       case FileKind.archive:
@@ -1580,13 +1551,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       // Excel workbooks — offer to convert to .qsheet (#1741).
       case FileKind.xlsx:
         return _handleXlsxOpen(node);
-      // Prose opens in the plaintext editor, at its own URL.
-      case FileKind.text || FileKind.code:
-        _goToEditor(
-          node.apiPath,
-          AppRoutes.plaintextEditorPath(node.apiPath, serial: serial),
-        );
-        return;
       default:
         break;
     }
@@ -1594,7 +1558,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     // Everything else: the listing already says what the file is, so open
     // its viewer now rather than routing to the file's URL and waiting on a
     // stat first (#1564).
-    _openResolvedFile(node.apiPath, kind, node.name, serial: serial);
+    _openResolvedFile(node.apiPath, kind, serial: serial);
   }
 
   Future<void> _openArchiveFile(FileNode node) async {
@@ -1959,7 +1923,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     await _openResolvedFile(
       filePath,
       fileKindForName(fileName),
-      fileName,
       serial: serialOrNull(widget.deviceSerial),
     );
   }
@@ -1974,72 +1937,30 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   /// file on a second drive opened against the first one 404s (#3337).
   Future<void> _openResolvedFile(
     String filePath,
-    FileKind kind,
-    String fileName, {
+    FileKind kind, {
     String? serial,
     bool justCreated = false,
   }) async {
     if (!mounted) return;
 
-    // Source, config and log files open read-only and highlighted (#2991),
-    // matching what clicking the row does.
-    if (opensInCodeViewer(fileName)) {
-      _goToEditor(filePath, AppRoutes.codeViewerPath(filePath, serial: serial));
-      return;
-    }
-    // Markdown opens rendered (#2987).
-    if (opensInMarkdownViewer(fileName)) {
+    // The slide editor leaves for the Slides list unless told where it was
+    // opened from (#2403).
+    final route = viewerRouteFor(
+      filePath,
+      serial: serial,
+      from: AppRoutes.containingFolder(filePath, serial: serial ?? ''),
+    );
+    if (route != null) {
+      // `extra: true` opens a doc just created editable (#1568).
       _goToEditor(
         filePath,
-        AppRoutes.markdownViewerPath(filePath, serial: serial),
-      );
-      return;
-    }
-    // STL, OBJ, PLY, glTF and 3MF open in the 3D model viewer (#2988).
-    if (opensInModelViewer(fileName)) {
-      _goToEditor(
-        filePath,
-        AppRoutes.modelViewerPath(filePath, serial: serial),
+        route,
+        extra: kind == FileKind.qdoc ? justCreated : null,
       );
       return;
     }
 
     switch (kind) {
-      case FileKind.qdoc:
-        _goToEditor(
-          filePath,
-          AppRoutes.docFile(filePath, serial: serial),
-          extra: justCreated,
-        );
-        return;
-
-      case FileKind.qsheet:
-        _goToEditor(filePath, AppRoutes.sheetFile(filePath, serial: serial));
-        return;
-
-      case FileKind.qslide:
-        // The slide editor leaves for the Slides list unless told where it
-        // was opened from (#2403).
-        _goToEditor(
-          filePath,
-          AppRoutes.slideFile(
-            filePath,
-            serial: serial,
-            from: AppRoutes.containingFolder(filePath, serial: serial ?? ''),
-          ),
-        );
-        return;
-
-      // Prose opens in the plaintext editor.
-      case FileKind.text || FileKind.code:
-        // Matches what clicking the row does — without this a deep link to a
-        // file the browser opens happily reports "No supported editor".
-        _goToEditor(
-          filePath,
-          AppRoutes.plaintextEditorPath(filePath, serial: serial),
-        );
-        return;
-
       // Every kind with an in-app viewer opens at its own /view URL, so a
       // reload or a shared link reopens it (#2328). Types with no viewer of
       // their own get download + "Open with…" there, which beats the "No

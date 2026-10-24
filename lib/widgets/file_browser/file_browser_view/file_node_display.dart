@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/file_node.dart';
+import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark_widgets/quark_widgets.dart' show CalendarLabels;
 
@@ -51,18 +52,9 @@ String fileListCellText(FileListColumn column, FileNode node) =>
 
 String formatFileSize(int bytes, bool isDir, {int compressedSize = 0}) {
   if (isDir) return fileCellPlaceholder;
-  final sizeStr = _formatBytes(bytes);
+  final sizeStr = StorageDevice.formatBytes(bytes);
   if (compressedSize > 0 && compressedSize != bytes) {
-    return '${_formatBytes(compressedSize)} → $sizeStr';
+    return '${StorageDevice.formatBytes(compressedSize)} → $sizeStr';
   }
   return sizeStr;
-}
-
-String _formatBytes(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  if (bytes < 1024 * 1024 * 1024) {
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
 }

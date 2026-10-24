@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/file_viewer_actions.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/controllers/video_playback_controller.dart';
@@ -114,11 +115,11 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
   ({String message, bool offerDownload}) _playbackFailure({
     required bool opened,
   }) {
-    final ext = _extensionOf(widget.name);
-    final lower = widget.name.toLowerCase();
+    final extension = fileExtension(widget.name);
+    final ext = extension.toUpperCase();
     // A .ts file holds picture and sound the browser can play in another
     // container, so the reason names the container and never the codec.
-    if (lower.endsWith('.ts')) {
+    if (extension == '.ts') {
       return (
         message: Errors.unsupportedVideoContainer(ext),
         offerDownload: true,
@@ -128,7 +129,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
     // browser refuses the file outright. Once it has opened and still has
     // no picture, the container is fine and the codec is not.
     if (_isNonWebNativeFormat(widget.name) &&
-        !(opened && lower.endsWith('.mov'))) {
+        !(opened && extension == '.mov')) {
       return (message: Errors.unsupportedVideoFormat(ext), offerDownload: true);
     }
     if (opened) {
@@ -189,12 +190,6 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
         !value.hasError &&
         value.size.width > 0 &&
         value.size.height > 0;
-  }
-
-  String _extensionOf(String name) {
-    final idx = name.lastIndexOf('.');
-    if (idx < 0) return '';
-    return name.substring(idx).toUpperCase();
   }
 
   @override

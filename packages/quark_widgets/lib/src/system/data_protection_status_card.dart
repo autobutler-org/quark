@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../calendar/calendar_labels.dart';
 import '../core/quark_loader.dart';
 import '../theme/quark_tokens.dart';
 import 'data_protection_drive.dart';
@@ -211,22 +212,7 @@ class DataProtectionStatusCard extends StatelessWidget {
   }
 }
 
-const _months = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
 String _formatBackedUp(DateTime time) {
   final local = time.toLocal();
-  return '${_months[local.month - 1]} ${local.day}, ${local.year}';
+  return '${CalendarLabels.month(local.month)} ${local.day}, ${local.year}';
 }
