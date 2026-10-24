@@ -115,50 +115,10 @@ class SbomService with AuthenticatedService {
   }
 
   /// Load Flutter SBOM from the embedded asset.
-  static Future<List<FlutterPackage>> getFlutterSbom() async {
-    final assetCandidates = <String>[
-      'assets/sbom_flutter.json',
-      'sbom_flutter.json',
-    ];
-
-    Object? rootBundleError;
-    for (final assetPath in assetCandidates) {
-      try {
-        final raw = await rootBundle.loadString(assetPath);
-        return _parseFlutterPackages(raw);
-      } catch (e) {
-        debugPrint('[sbom_service.dart] Error: $e');
-        rootBundleError = e;
-      }
-    }
-
-    // Web builds can serve assets under /assets/assets/* depending on host setup.
-    if (kIsWeb) {
-      final webCandidates = <String>[
-        'assets/sbom_flutter.json',
-        'assets/assets/sbom_flutter.json',
-      ];
-      for (final relativePath in webCandidates) {
-        try {
-          final response = await instance.authenticatedGet(
-            Uri.base.resolve(relativePath),
-          );
-          if (response.statusCode == 200) {
-            return _parseFlutterPackages(response.body);
-          }
-        } catch (_) {
-          // Continue trying candidates.
-        }
-      }
-    }
-
-    throw Exception(
-      'Failed to load Flutter SBOM asset. Tried '
-      '${assetCandidates.join(', ')}'
-      '${kIsWeb ? ', assets/sbom_flutter.json, assets/assets/sbom_flutter.json' : ''}. '
-      'Last rootBundle error: $rootBundleError',
-    );
-  }
+  static Future<List<FlutterPackage>> getFlutterSbom() async =>
+      _parseFlutterPackages(
+        await rootBundle.loadString('assets/sbom_flutter.json'),
+      );
 
   static List<FlutterPackage> _parseFlutterPackages(String rawJson) {
     final json = jsonDecode(rawJson) as Map<String, dynamic>;
