@@ -131,8 +131,8 @@ String defaultSlideChartDataLabel(ChartElement chart) {
       : data.series;
   return [
     for (final (c, category) in data.categories.indexed)
-      '${category.trim().isEmpty ? 'Category ${c + 1}' : category.trim()}: '
-          '${[for (final (s, one) in series.indexed) '${one.name.trim().isEmpty ? 'Series ${s + 1}' : one.name.trim()} '
+      '${category.trim().isEmpty ? ChartData.categoryName(c) : category.trim()}: '
+          '${[for (final (s, one) in series.indexed) '${one.name.trim().isEmpty ? ChartData.seriesName(s) : one.name.trim()} '
                 '${formatChartValue(one.values[c])}'].join(', ')}.',
   ].join(' ');
 }

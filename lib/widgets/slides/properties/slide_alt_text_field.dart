@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/slides/properties/slide_commit_field.dart';
 
 /// The alt text of the selected picture, what a screen reader reads for it
 /// on the slide: a wrapping field that saves once editing ends — on Enter
@@ -6,7 +7,7 @@ import 'package:flutter/material.dart';
 /// shows [value].
 ///
 /// Key prefixes: `slide_prop_alt_text` on the field.
-class SlideAltTextField extends StatefulWidget {
+class SlideAltTextField extends StatelessWidget {
   /// A field showing [value].
   const SlideAltTextField({
     required this.value,
@@ -25,63 +26,28 @@ class SlideAltTextField extends StatefulWidget {
   final bool readOnly;
 
   @override
-  State<SlideAltTextField> createState() => _SlideAltTextFieldState();
-}
-
-class _SlideAltTextFieldState extends State<SlideAltTextField> {
-  late final _text = TextEditingController(text: widget.value);
-  final _focus = FocusNode();
-
-  /// The text last submitted, so Enter and the focus loss after it submit
-  /// once between them.
-  String? _submitted;
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() {
-      if (!_focus.hasFocus) _submit();
-    });
-  }
-
-  @override
-  void didUpdateWidget(SlideAltTextField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_focus.hasFocus && oldWidget.value != widget.value) {
-      _text.text = widget.value;
-      _submitted = null;
-    }
-  }
-
-  @override
-  void dispose() {
-    _text.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    if (_text.text == widget.value || _text.text == _submitted) return;
-    _submitted = _text.text;
-    widget.onSubmitted(_text.text);
-  }
-
-  @override
-  Widget build(BuildContext context) => TextField(
-    key: const ValueKey('slide_prop_alt_text'),
-    controller: _text,
-    focusNode: _focus,
-    readOnly: widget.readOnly,
-    minLines: 2,
-    maxLines: 5,
-    keyboardType: TextInputType.text,
-    textInputAction: TextInputAction.done,
-    decoration: const InputDecoration(
-      labelText: 'Alt text',
-      helperText: 'Describe the picture for people who cannot see it',
-      helperMaxLines: 2,
+  Widget build(BuildContext context) => SlideCommitField(
+    text: value,
+    onCommit: (typed) {
+      if (typed != value) onSubmitted(typed);
+      return null;
+    },
+    builder: (context, controller, focusNode, commit) => TextField(
+      key: const ValueKey('slide_prop_alt_text'),
+      controller: controller,
+      focusNode: focusNode,
+      readOnly: readOnly,
+      minLines: 2,
+      maxLines: 5,
+      keyboardType: TextInputType.text,
+      textInputAction: TextInputAction.done,
+      decoration: const InputDecoration(
+        labelText: 'Alt text',
+        helperText: 'Describe the picture for people who cannot see it',
+        helperMaxLines: 2,
+      ),
+      onSubmitted: (_) => commit(),
+      onEditingComplete: commit,
     ),
-    onSubmitted: (_) => _submit(),
-    onEditingComplete: _submit,
   );
 }

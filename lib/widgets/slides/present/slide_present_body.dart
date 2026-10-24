@@ -6,7 +6,6 @@ import 'package:quark/widgets/slides/present/slide_present_stage.dart';
 import 'package:quark/widgets/slides/present/slide_presenter_view.dart';
 import 'package:quark/widgets/slides/slide_image.dart';
 import 'package:quark/widgets/slides/slides_error_view.dart';
-import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Everything on screen while presenting (#1165): the loader, the load
@@ -60,11 +59,7 @@ class SlidePresentBody extends StatelessWidget {
 
     final collapsed = QuarkSplitView.isCollapsed(context);
     final speaker = c.presenterView && !collapsed;
-    Widget imageBuilder(BuildContext context, SlideImageSource image) =>
-        SlideImage(
-          image: NetworkImage(c.imageUrl(image.source).toString()),
-          fit: image.fit,
-        );
+    final imageBuilder = SlideImage.builder(c.imageUrl);
     final stage = SlidePresentStage(
       key: const ValueKey('slide_present_stage'),
       slide: slide,

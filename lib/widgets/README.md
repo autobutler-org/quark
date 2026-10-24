@@ -227,14 +227,14 @@ lib/widgets/
                                 SlideThemePicker and SlideLayoutPicker are
                                 data in, callbacks out; SlideThemeControl,
                                 SlideLayoutControl and SlidePickerMenuButton
-                                read SlideEditorController and call its
-                                commands
+                                (theme, layout and transition) read
+                                SlideEditorController and call its commands
     transition/                 the transition picker (#1164): its kind,
                                 direction and length fields, the preview
                                 stage and the thumbnail marker are data in,
-                                callbacks out; SlideTransitionControl and
-                                SlideTransitionMenuButton read
-                                SlideEditorController and call its commands
+                                callbacks out; SlideTransitionControl reads
+                                SlideEditorController and calls its commands,
+                                and SlidePickerMenuButton opens it
     toolbar/                    the slide toolbar: SlideToolbarActions maps
                                 the controller into choices, the rows and
                                 phone menus draw them; SlideToolbarGroup is

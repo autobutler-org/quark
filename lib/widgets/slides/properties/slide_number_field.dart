@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:quark/widgets/slides/properties/slide_commit_field.dart';
 
 /// A numeric field in the slide properties panel — X, Y, width, height,
 /// rotation — labeled [label] with its [unit] after the number.
@@ -11,7 +12,7 @@ import 'package:flutter/services.dart';
 /// [value], so a drag on the canvas updates it.
 ///
 /// Key prefixes: none of its own; the panel passes `slide_prop_<name>`.
-class SlideNumberField extends StatefulWidget {
+class SlideNumberField extends StatelessWidget {
   /// A field for [value], called [label].
   const SlideNumberField({
     required this.label,
@@ -40,69 +41,29 @@ class SlideNumberField extends StatefulWidget {
       : value.toStringAsFixed(1);
 
   @override
-  State<SlideNumberField> createState() => _SlideNumberFieldState();
-}
-
-class _SlideNumberFieldState extends State<SlideNumberField> {
-  late final _text = TextEditingController(
-    text: SlideNumberField.format(widget.value),
-  );
-  final _focus = FocusNode();
-
-  /// The text last submitted, so Enter and the focus loss after it submit
-  /// once between them.
-  String? _submitted;
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() {
-      if (!_focus.hasFocus) _submit();
-    });
-  }
-
-  @override
-  void didUpdateWidget(SlideNumberField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_focus.hasFocus && oldWidget.value != widget.value) {
-      _text.text = SlideNumberField.format(widget.value);
-      _submitted = null;
-    }
-  }
-
-  @override
-  void dispose() {
-    _text.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    if (_text.text == _submitted) return;
-    _submitted = _text.text;
-    final number = double.tryParse(_text.text.trim());
-    if (number == null || !number.isFinite) {
-      _text.text = SlideNumberField.format(widget.value);
-      return;
-    }
-    if (number != widget.value) widget.onSubmitted?.call(number);
-  }
-
-  @override
-  Widget build(BuildContext context) => TextField(
-    controller: _text,
-    focusNode: _focus,
-    readOnly: widget.onSubmitted == null,
-    keyboardType: const TextInputType.numberWithOptions(
-      decimal: true,
-      signed: true,
+  Widget build(BuildContext context) => SlideCommitField(
+    text: format(value),
+    onCommit: (typed) {
+      final number = double.tryParse(typed.trim());
+      if (number == null || !number.isFinite) return format(value);
+      if (number != value) onSubmitted?.call(number);
+      return null;
+    },
+    builder: (context, controller, focusNode, commit) => TextField(
+      controller: controller,
+      focusNode: focusNode,
+      readOnly: onSubmitted == null,
+      keyboardType: const TextInputType.numberWithOptions(
+        decimal: true,
+        signed: true,
+      ),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[-0-9.]'))],
+      decoration: InputDecoration(
+        labelText: label,
+        suffixText: unit.isEmpty ? null : unit,
+        isDense: true,
+      ),
+      onSubmitted: (_) => commit(),
     ),
-    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[-0-9.]'))],
-    decoration: InputDecoration(
-      labelText: widget.label,
-      suffixText: widget.unit.isEmpty ? null : widget.unit,
-      isDense: true,
-    ),
-    onSubmitted: (_) => _submit(),
   );
 }

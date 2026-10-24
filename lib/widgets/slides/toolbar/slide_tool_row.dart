@@ -6,7 +6,6 @@ import 'package:quark/widgets/slides/theme/slide_picker_menu_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_choice_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_choice_menu_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
-import 'package:quark/widgets/slides/transition/slide_transition_menu_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -97,7 +96,10 @@ class SlideToolRow extends StatelessWidget {
                   controller: actions.controller,
                   kind: SlidePickerKind.layout,
                 ),
-                SlideTransitionMenuButton(controller: actions.controller),
+                SlidePickerMenuButton(
+                  controller: actions.controller,
+                  kind: SlidePickerKind.transition,
+                ),
               ],
             ),
           ),

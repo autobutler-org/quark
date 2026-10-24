@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark/widgets/slides/transition/slide_enum_chips.dart';
+import 'package:quark/widgets/slides/transition/slide_transition_duration_field.dart';
 import 'package:quark/widgets/slides/transition/slide_transition_labels.dart';
 import 'package:quark/widgets/slides/transition/slide_transition_marker.dart';
 import 'package:quark/widgets/slides/transition/slide_transition_preview.dart';
-import 'package:quark/widgets/slides/transition/slide_transition_direction_field.dart';
-import 'package:quark/widgets/slides/transition/slide_transition_duration_field.dart';
-import 'package:quark/widgets/slides/transition/slide_transition_kind_field.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -43,12 +42,18 @@ void main() {
         tester,
         Column(
           children: [
-            SlideTransitionKindField(
-              kind: SlideTransitionKind.push,
+            SlideEnumChips(
+              values: SlideTransitionKind.values,
+              selected: SlideTransitionKind.push,
+              label: SlideTransitionLabels.kind,
+              keyPrefix: 'slide_transition_kind',
               onChanged: kinds.add,
             ),
-            SlideTransitionDirectionField(
-              direction: SlideTransitionDirection.left,
+            SlideEnumChips(
+              values: SlideTransitionDirection.values,
+              selected: SlideTransitionDirection.left,
+              label: SlideTransitionLabels.direction,
+              keyPrefix: 'slide_transition_direction',
               onChanged: directions.add,
             ),
             SlideTransitionDurationField(
@@ -76,8 +81,11 @@ void main() {
         tester,
         const Column(
           children: [
-            SlideTransitionKindField(
-              kind: SlideTransitionKind.none,
+            SlideEnumChips(
+              values: SlideTransitionKind.values,
+              selected: SlideTransitionKind.none,
+              label: SlideTransitionLabels.kind,
+              keyPrefix: 'slide_transition_kind',
               onChanged: null,
             ),
             SlideTransitionDurationField(durationMs: 500, onChanged: null),
@@ -197,8 +205,11 @@ void main() {
         tester,
         Column(
           children: [
-            SlideTransitionKindField(
-              kind: SlideTransitionKind.wipe,
+            SlideEnumChips(
+              values: SlideTransitionKind.values,
+              selected: SlideTransitionKind.wipe,
+              label: SlideTransitionLabels.kind,
+              keyPrefix: 'slide_transition_kind',
               onChanged: (_) {},
             ),
             SlideTransitionPreview(

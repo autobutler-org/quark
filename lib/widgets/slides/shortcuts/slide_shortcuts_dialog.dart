@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/utils/slide_shortcuts.dart';
+import 'package:quark/widgets/slides/slide_dialog_header.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -62,24 +63,9 @@ class _SlideShortcutsDialogState extends State<SlideShortcutsDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text(
-                        'Keyboard shortcuts',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                  ),
-                  QuarkBarIconButton(
-                    key: const ValueKey('slide_shortcuts_close'),
-                    icon: QuarkIcons.close,
-                    tooltip: 'Close',
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
+              const SlideDialogHeader(
+                title: 'Keyboard shortcuts',
+                closeKey: 'slide_shortcuts_close',
               ),
               SizedBox(height: tokens.spacingSm),
               TextField(
