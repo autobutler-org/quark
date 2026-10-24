@@ -26,25 +26,21 @@ void main() {
     );
   });
 
-  /// #2599: the web build was invisible to screen readers until someone found
-  /// Flutter's hidden "Enable accessibility" button, and a bare `<html>` left
-  /// them guessing the language to read it in (WCAG 3.1.1).
+  /// #2599: a bare `<html>` left screen readers guessing the language to read
+  /// the page in (WCAG 3.1.1).
   group('screen readers', () {
     test('are told the page language', () {
       expect(flattened(), contains('<html lang="en">'));
     });
 
-    // main() loads settings and starts controllers before runApp, so it
-    // cannot run under a test; this guards the call instead.
-    test('get the semantics tree without opting in', () {
-      final main = File(
-        'lib/main.dart',
-      ).readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
+    // Turning the semantics tree on at startup stopped typing in Docs and
+    // Slides on web (#3743). main() loads settings and starts controllers
+    // before runApp, so it cannot run under a test; this guards the call
+    // against coming back before #3743 is fixed.
+    test('do not get the semantics tree forced on at startup', () {
+      final main = File('lib/main.dart').readAsStringSync();
 
-      expect(
-        main,
-        contains('if (kIsWeb) SemanticsBinding.instance.ensureSemantics();'),
-      );
+      expect(main, isNot(contains('ensureSemantics()')));
     });
   });
 
