@@ -285,7 +285,6 @@ void main() {
     final entry = reader.entries.single as ChatTimelineMessage;
     expect(entry.state, ChatMessageState.waiting);
     expect(entry.text, isNull);
-    expect(reader.isWaitingForKey, isTrue);
     await expectLater(
       reader.send('too soon'),
       throwsA(

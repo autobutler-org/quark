@@ -59,10 +59,6 @@ class AppRoutes {
   /// e.g. /view/photos/2024/beach.jpg opens the photo viewer (#2328).
   static const viewFile = '/view';
 
-  /// Deep-link pattern for a specific path inside the file browser.
-  /// e.g. /files/photos/2024 navigates directly to photos/2024.
-  static const filesDeep = '/files/:path(.*)';
-
   static const photos = '/photos';
 
   /// Photos that duplicate each other, a drill-down from Photos (#1666).
@@ -155,13 +151,9 @@ class AppRoutes {
   // TODO(pre-v1.0.0, #1601): delete this constant and its redirect GoRoute.
   static const jobs = '/jobs';
 
-  /// The admin-only Users page (#1662). Its tabs have their own URLs, see
-  /// [usersTab]; this bare path redirects to the first one.
+  /// The admin-only Users page (#1662). Its tabs have their own URLs, one
+  /// per [UsersTab]; this bare path redirects to the first one.
   static const users = '/users';
-
-  /// One tab of the Users page, e.g. usersTab(UsersTab.groups) →
-  /// '/users/groups'.
-  static String usersTab(UsersTab tab) => '$users/${tab.slug}';
 
   /// The Settings page. Its tabs have their own URLs, see [settingsTab];
   /// this bare path redirects to the first one (#2350).

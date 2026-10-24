@@ -78,12 +78,3 @@ Future<void> extractNode({required FileNode node}) {
     serial: serialOrNull(node.deviceSerial),
   );
 }
-
-Future<void> deleteNode({required FileNode node}) {
-  final rootDir = toRootDir(parentPath(node.apiPath));
-  return FilesService.deleteFile(
-    rootDir,
-    trimTrailingSlashes(node.name),
-    deviceSerial: serialOrNull(node.deviceSerial),
-  );
-}

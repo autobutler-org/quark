@@ -91,7 +91,6 @@ void main() {
     expect(settings.filesWelcome.value, FilesWelcome.newOwner);
     expect(settings.sessionTokenFor('https://quark.local'), isNull);
     expect(settings.usernameFor('https://quark.local'), isNull);
-    expect(settings.hasAcceptedTermsFor('https://quark.local'), isFalse);
   });
 
   test('the session token never reads null on the way', () async {

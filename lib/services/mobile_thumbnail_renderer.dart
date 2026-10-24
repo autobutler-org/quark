@@ -106,14 +106,13 @@ Future<Uint8List?> renderMobileVideoThumbnailFromUrl({
   required String name,
   required Uri url,
   MobileThumbnailCodecs? codecs,
-  Duration timeout = ClientThumbnailConfig.renderTimeout,
 }) async {
   if (fileKindForName(name) != FileKind.video) return null;
   try {
     return await _renderVideo(
       codecs ?? MobileThumbnailCodecs.platform,
       url.toString(),
-    ).timeout(timeout);
+    ).timeout(ClientThumbnailConfig.renderTimeout);
   } catch (e) {
     debugPrint('[mobile_thumbnail_renderer.dart] No thumbnail for $name: $e');
     return null;

@@ -43,11 +43,7 @@ void main() {
     answer(404, {'error': 'no chat keys for that account'});
 
     expect(await ChatKeyService.fetchMine(), isNull);
-    expect(await ChatKeyService.fetchPublic(7), isNull);
-    expect(requests.map((r) => r.url.path), [
-      '/api/v0/chat/keys/me',
-      '/api/v0/chat/keys/7',
-    ]);
+    expect(requests.map((r) => r.url.path), ['/api/v0/chat/keys/me']);
   });
 
   test('stores keys as base64 with an explicit session', () async {

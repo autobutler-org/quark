@@ -134,7 +134,7 @@ class SettingsAboutTab extends StatelessWidget {
                     subtitle: '${flutterSbom.length} packages',
                     items: [
                       for (final p in flutterSbom)
-                        SbomEntry(name: p.name, version: p.version, url: p.url),
+                        SbomEntry(name: p.name, version: p.version),
                     ],
                   ),
                 const SizedBox(height: 8),

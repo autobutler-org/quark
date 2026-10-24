@@ -311,9 +311,6 @@ class ChatController extends ChangeNotifier {
   /// such as one just deleted or left, which falls back to the default.
   bool get isChannelMissing => _isChannelMissing;
 
-  /// The open channel's timeline, null with no channel open. Tests read it.
-  ChatMessagesController? get messages => _messages;
-
   /// The open channel's members.
   List<ChatMember> get members => _members;
 
@@ -332,9 +329,6 @@ class ChatController extends ChangeNotifier {
   /// Whether the member sheet is showing in the collapsed layout.
   bool get isMemberListOpen => _isMemberListOpen;
 
-  /// Sends not yet stored, oldest first, across every channel.
-  List<ChatPendingSend> get pending => _pending;
-
   /// The open channel's sends the Quark has not stored, oldest first.
   ///
   /// One with [ChatPendingSend.failed] is waiting on the user. The rest are
@@ -342,12 +336,6 @@ class ChatController extends ChangeNotifier {
   List<ChatPendingSend> get outboundSends => [
     for (final p in _pending)
       if (p.channelId == _selected?.id) p,
-  ];
-
-  /// The open channel's sends that failed, oldest first.
-  List<ChatPendingSend> get failedSends => [
-    for (final p in outboundSends)
-      if (p.failed) p,
   ];
 
   /// Whether chat needs the password before anything can be read: on web
@@ -432,14 +420,11 @@ class ChatController extends ChangeNotifier {
   /// Whether the open channel's search bar is showing (#2429).
   bool get isSearching => _isSearching;
 
-  /// What is being searched for, as typed; empty when nothing is.
-  String get searchQuery => _searchQuery;
-
-  /// How many loaded messages match [searchQuery]. Null while not searching
+  /// How many loaded messages match the [search] query. Null while not searching
   /// or while the query is blank, when [messageItems] is the whole timeline.
   int? get searchMatchCount => _searchMatches?.length;
 
-  /// The loaded messages whose decrypted text contains [searchQuery],
+  /// The loaded messages whose decrypted text contains the [search] query,
   /// whatever the case or accent, oldest first; null when there is no query. A message
   /// waiting for its key, one that won't open, a deleted one and a system
   /// line have no text to match.
@@ -512,9 +497,6 @@ class ChatController extends ChangeNotifier {
   /// What this account may do in the open channel, empty with none open.
   Set<ChatPermission> get selectedPermissions =>
       _selected?.permissions ?? const {};
-
-  /// Whether this account may post in the open channel.
-  bool get canSend => _selected?.canSend ?? false;
 
   /// The signed-in account's id as the message list carries authors.
   String? get currentUserKey => _currentUserId()?.toString();
@@ -725,7 +707,7 @@ class ChatController extends ChangeNotifier {
   static void clearSessionDrafts() => _sessionDrafts.clear();
 
   /// Sends [text] to the open channel, showing it as pending at once. A
-  /// failure keeps it in [failedSends] with its own retry, so the composer
+  /// failure keeps it in [outboundSends] with its own retry, so the composer
   /// and the channel's draft are cleared at once; every other channel's
   /// draft stays. A failed send still here when the controller is disposed
   /// goes back into its channel's draft, so leaving chat never loses it.

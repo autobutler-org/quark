@@ -163,12 +163,8 @@ mixin AuthenticatedService {
   ///
   /// The caller owns the returned file and must [DownloadedFile.delete] it.
   /// Not available on web, which has no filesystem to stream onto.
-  Future<DownloadedFile> authenticatedDownload(
-    Uri uri, {
-    Map<String, String>? headers,
-  }) async {
-    final request = http.Request('GET', uri)..headers.addAll(headers ?? {});
-    final response = await authenticatedSend(request);
+  Future<DownloadedFile> authenticatedDownload(Uri uri) async {
+    final response = await authenticatedSend(http.Request('GET', uri));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       await response.stream.drain<void>();

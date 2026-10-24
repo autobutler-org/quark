@@ -255,13 +255,11 @@ void main() {
     saveFailure = Exception('offline');
     expect(await c.save(), isFalse);
     expect(c.saveState, SlideSaveState.failed);
-    expect(c.saveError, same(saveFailure));
     expect(reported, [saveFailure]);
 
     saveFailure = null;
     expect(await c.save(), isTrue);
     expect(c.saveState, SlideSaveState.saved);
-    expect(c.saveError, isNull);
   });
 
   testWidgets('leaving inside the pause saves the pending edits', (
@@ -1243,17 +1241,17 @@ void main() {
         ),
       );
       await c.load();
-      expect(c.slideTransition, isNull);
+      expect(c.selectedSlide?.transition, isNull);
       expect(c.effectiveTransition, fade);
 
       const push = SlideTransitionSpec(kind: SlideTransitionKind.push);
       c.setSlideTransition(push);
-      expect(c.slideTransition, push);
+      expect(c.selectedSlide?.transition, push);
       expect(c.effectiveTransition, push);
       expect(c.saveState, SlideSaveState.dirty);
 
       c.undo();
-      expect(c.slideTransition, isNull);
+      expect(c.selectedSlide?.transition, isNull);
       expect(c.effectiveTransition, fade);
       expect(c.canUndo, isFalse);
     });
@@ -1267,7 +1265,7 @@ void main() {
       expect(c.slides.every((s) => s.transition == null), isTrue);
       c.undo();
       expect(c.presentation!.defaultTransition, SlideTransitionSpec.none);
-      expect(c.slideTransition, const SlideTransitionSpec.fade());
+      expect(c.selectedSlide?.transition, const SlideTransitionSpec.fade());
     });
 
     test('a view-only deck ignores transition changes', () async {
@@ -1275,14 +1273,14 @@ void main() {
       await c.load();
       c.setSlideTransition(fade);
       c.applyTransitionToAll(fade);
-      expect(c.slideTransition, isNull);
+      expect(c.selectedSlide?.transition, isNull);
       expect(c.presentation!.defaultTransition, SlideTransitionSpec.none);
       expect(c.canUndo, isFalse);
     });
 
     test('nothing is selected before the load', () {
       final c = controllerFor(deck(1));
-      expect(c.slideTransition, isNull);
+      expect(c.selectedSlide?.transition, isNull);
       expect(c.effectiveTransition, SlideTransitionSpec.none);
       c.setSlideTransition(fade);
       c.applyTransitionToAll(fade);

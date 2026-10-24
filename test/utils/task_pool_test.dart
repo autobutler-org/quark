@@ -11,7 +11,7 @@ void main() {
       worker: (item) async => done.add(item),
     );
 
-    pool.addAll([1, 2, 3, 4, 5]);
+    [1, 2, 3, 4, 5].forEach(pool.add);
     await pool.drain();
 
     expect(done, unorderedEquals([1, 2, 3, 4, 5]));
@@ -33,7 +33,7 @@ void main() {
       },
     );
 
-    pool.addAll(List.generate(10, (i) => i));
+    List.generate(10, (i) => i).forEach(pool.add);
     final draining = pool.drain();
 
     await pumpEventQueue();
@@ -64,7 +64,7 @@ void main() {
       },
     );
 
-    pool.addAll(['slow', 'a', 'b', 'c']);
+    ['slow', 'a', 'b', 'c'].forEach(pool.add);
     final draining = pool.drain();
     await pumpEventQueue();
 
@@ -93,7 +93,6 @@ void main() {
     await pool.drain();
 
     expect(done, containsAll([1, 99]), reason: 'the same run took it');
-    expect(pool.pending, 0);
   });
 
   test('drain during a drain joins it rather than starting another', () async {
@@ -107,7 +106,7 @@ void main() {
       },
     );
 
-    pool.addAll([1, 2]);
+    [1, 2].forEach(pool.add);
     final first = pool.drain();
     final second = pool.drain();
 
@@ -129,7 +128,7 @@ void main() {
       },
     );
 
-    pool.addAll([1, 2, 3, 4]);
+    [1, 2, 3, 4].forEach(pool.add);
 
     // One bad item must not strand the queue — but the caller still hears
     // about it rather than the failure vanishing.
@@ -160,7 +159,6 @@ void main() {
     await expectLater(pool.drain(), throwsStateError);
 
     // The failed run must not leave the pool wedged as "still draining".
-    expect(pool.isDraining, isFalse);
     pool.add(2);
     await pool.drain();
     expect(attempt, 2);
@@ -170,7 +168,6 @@ void main() {
     final pool = TaskPool<int>(concurrency: 2, worker: (_) async {});
 
     await pool.drain();
-    expect(pool.isDraining, isFalse);
 
     // And it still works afterwards — the empty run must not leave a stale
     // future behind that later drains would return instead of running.
@@ -194,7 +191,7 @@ void main() {
       },
     );
 
-    pool.addAll(List.generate(10, (i) => i));
+    List.generate(10, (i) => i).forEach(pool.add);
     final draining = pool.drain();
     await pumpEventQueue();
 
@@ -206,8 +203,6 @@ void main() {
     await draining;
 
     expect(started, hasLength(2));
-    expect(pool.pending, 0);
-    expect(pool.isDraining, isFalse);
   });
 
   test('rejects a nonsensical concurrency', () {

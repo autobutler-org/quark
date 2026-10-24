@@ -110,7 +110,7 @@ void main() {
       title: 'Flutter packages',
       subtitle: '2 packages',
       items: [
-        SbomEntry(name: 'go_router', version: '14.0.0', url: 'https://pub.dev'),
+        SbomEntry(name: 'go_router', version: '14.0.0'),
         SbomEntry(name: 'http', version: '1.2.0'),
       ],
     ),

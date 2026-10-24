@@ -147,10 +147,6 @@ class VaultController extends ChangeNotifier {
   /// The folder the entries are filtered to, or null for all.
   int? get folderId => _folderId;
 
-  /// Whether the account's vault key has a recovery phrase wrap, so a
-  /// recovery can open it.
-  bool get hasPhraseWrap => _stored?.byPhrase != null;
-
   /// Every folder, by name.
   List<VaultItem> get folders => _sorted(VaultItemKind.folder);
 
@@ -236,21 +232,6 @@ class VaultController extends ChangeNotifier {
       if (item.id == id) return item;
     }
     return null;
-  }
-
-  /// The entries saved for the site at [url]: those whose host is [url]'s,
-  /// or a parent domain of it, so `accounts.example.com` matches an entry for
-  /// `example.com`.
-  List<VaultItem> entriesForUrl(String url) {
-    final host = VaultItemData.hostOf(url);
-    if (host.isEmpty) return const [];
-    return [
-      for (final item in entries)
-        if (item.data.urlHost case final entryHost
-            when entryHost.isNotEmpty &&
-                (host == entryHost || host.endsWith('.$entryHost')))
-          item,
-    ];
   }
 
   /// Reads the account's vault key and, while unlocked, every item again. A

@@ -234,8 +234,6 @@ class UploadManager extends ChangeNotifier {
   /// once, and four dialogs stacked on top of each other is not a question.
   Future<void> _prompts = Future<void>.value();
 
-  final Map<String, ChunkedUploadProgress> _chunked = {};
-
   /// Emits once each time the queue drains.
   Stream<UploadBatchResult> get results => _results.stream;
 
@@ -245,18 +243,6 @@ class UploadManager extends ChangeNotifier {
   int get total => _total;
 
   int get completed => _completed;
-
-  /// Byte progress for the files currently going up in chunks, keyed by their
-  /// destination.
-  ///
-  /// [completed] counts whole files, which says nothing useful while a single
-  /// four-gigabyte file is in flight — it sits at zero for as long as the
-  /// upload takes. This is the finer reading, published on the same
-  /// [ChangeNotifier] and updated once per committed chunk, so a listener that
-  /// wants it pays a map write per 8 MiB and one that does not pays nothing.
-  /// Small files never appear here; they are one request and have no interior.
-  Map<String, ChunkedUploadProgress> get chunkedProgress =>
-      Map.unmodifiable(_chunked);
 
   /// Drops everything not yet started and lets the run finish.
   ///
@@ -340,7 +326,6 @@ class UploadManager extends ChangeNotifier {
       _stoppedEarly = false;
       _firstError = null;
       _note = null;
-      _chunked.clear();
       setUploadUnloadGuard(active: false);
       notifyListeners();
       if (!_results.isClosed) {
@@ -578,7 +563,6 @@ class UploadManager extends ChangeNotifier {
     final total = source.size;
     final name = queued.upload.name;
     final rootDir = toRootDir(queued.targetPath);
-    final progressKey = '${queued.targetPath}/$name';
     final fileKey = uploadFileIdentity(
       rootDir: rootDir,
       fileName: name,
@@ -601,14 +585,12 @@ class UploadManager extends ChangeNotifier {
           total: total,
           rootDir: rootDir,
           fileKey: fileKey,
-          progressKey: progressKey,
         );
         if (committed != null) {
           _store.remove(fileKey);
           // The session ended at the commit, so the thumbnail goes to the
           // file where the last chunk said it landed.
           await _attachThumbnail(committed.path, queued.serial, thumbnail);
-          _chunked.remove(progressKey);
           _consecutiveFailures = 0;
           _completed++;
           notifyListeners();
@@ -623,12 +605,10 @@ class UploadManager extends ChangeNotifier {
         // a chunk boundary. The session ends with it, so its staged bytes go
         // now rather than sitting on the server's disk until they expire.
         _abandonStoredSession(fileKey);
-        _chunked.remove(progressKey);
         return;
       } catch (e) {
         if (_isNameTaken(e)) {
           _abandonStoredSession(fileKey);
-          _chunked.remove(progressKey);
           throw const _NameTaken();
         }
         lastError = e;
@@ -645,7 +625,6 @@ class UploadManager extends ChangeNotifier {
     }
 
     _abandonStoredSession(fileKey);
-    _chunked.remove(progressKey);
     _recordFailure(name, Errors.message(lastError, 'upload $name'));
   }
 
@@ -689,7 +668,6 @@ class UploadManager extends ChangeNotifier {
     required int total,
     required String rootDir,
     required String fileKey,
-    required String progressKey,
   }) async {
     final name = queued.upload.name;
 
@@ -709,7 +687,6 @@ class UploadManager extends ChangeNotifier {
 
     var offset = record.offset;
     _store.write(record);
-    _reportChunkProgress(progressKey, name, offset, total);
 
     // A resync that does not move is a server disagreeing with itself. Counted
     // rather than trusted, so a stuck offset ends the file instead of spinning
@@ -746,7 +723,6 @@ class UploadManager extends ChangeNotifier {
           offset = committed;
           record = record.copyWith(offset: offset);
           _store.write(record);
-          _reportChunkProgress(progressKey, name, offset, total);
           if (complete) {
             return outcome;
           }
@@ -770,7 +746,6 @@ class UploadManager extends ChangeNotifier {
           offset = committed;
           record = record.copyWith(offset: offset);
           _store.write(record);
-          _reportChunkProgress(progressKey, name, offset, total);
         case ChunkSessionGone():
           return null;
         case ChunkRejected():
@@ -901,11 +876,6 @@ class UploadManager extends ChangeNotifier {
     throw lastError ?? Exception('chunk $start-$end could not be sent');
   }
 
-  void _reportChunkProgress(String key, String name, int sent, int total) {
-    _chunked[key] = ChunkedUploadProgress(name: name, sent: sent, total: total);
-    notifyListeners();
-  }
-
   void _recordFailure(String name, String reason) {
     _failed++;
     _completed++;
@@ -952,25 +922,6 @@ class UploadManager extends ChangeNotifier {
 /// server's offset next time rather than counted against the batch.
 class _UploadStopped implements Exception {
   const _UploadStopped();
-}
-
-/// How far one chunked file has got, in bytes.
-class ChunkedUploadProgress {
-  const ChunkedUploadProgress({
-    required this.name,
-    required this.sent,
-    required this.total,
-  });
-
-  final String name;
-
-  /// Bytes the server has committed. Never a local tally — see
-  /// [ChunkAccepted.offset].
-  final int sent;
-
-  final int total;
-
-  double get fraction => total <= 0 ? 0 : sent / total;
 }
 
 class _QueuedUpload {

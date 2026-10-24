@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -184,14 +183,12 @@ void main() {
     );
     await AppSettings.instance.setUsername('alice');
     AppSettings.instance.isAdmin.value = false;
-    FileBrowserCache.instance.clearOpenFile();
     overrides = _RecordingHttpOverrides();
   });
 
   tearDown(() async {
     AppSettings.instance.isAdmin.value = false;
     await AppSettings.instance.setUsername(null);
-    FileBrowserCache.instance.clearOpenFile();
   });
 
   // The shared client is built once and kept (#1782), so a client built inside

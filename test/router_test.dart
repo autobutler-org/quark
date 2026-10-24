@@ -707,12 +707,12 @@ void main() {
     testWidgets('the base path redirects to the first tab', (tester) async {
       final r = await pumpTabbed(tester, AppRoutes.users);
 
-      expect(at(r), AppRoutes.usersTab(UsersTab.accounts));
+      expect(at(r), '/users/accounts');
       expect(find.text('tab accounts'), findsOneWidget);
     });
 
     testWidgets('a tab URL opens on that tab', (tester) async {
-      final r = await pumpTabbed(tester, AppRoutes.usersTab(UsersTab.groups));
+      final r = await pumpTabbed(tester, '/users/groups');
 
       expect(at(r), '/users/groups');
       expect(find.text('tab groups'), findsOneWidget);
@@ -746,7 +746,7 @@ void main() {
       expect(tester.state(find.byType(_TabbedPage)), same(before));
 
       // The browser's back button lands as a go to the earlier URL.
-      r.go(AppRoutes.usersTab(UsersTab.accounts));
+      r.go('/users/accounts');
       await tester.pumpAndSettle();
 
       expect(find.text('tab accounts'), findsOneWidget);
@@ -781,7 +781,7 @@ void main() {
     testWidgets('a tab URL wins over initialTab', (tester) async {
       final r = await pumpTabbed(
         tester,
-        AppRoutes.usersTab(UsersTab.accounts),
+        '/users/accounts',
         initialTab: () => UsersTab.groups,
       );
 

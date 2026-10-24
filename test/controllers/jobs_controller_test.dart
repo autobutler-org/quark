@@ -122,7 +122,7 @@ void main() {
     expect(controller.runningCount, 1);
 
     session.value = null;
-    expect(controller.jobs, isEmpty);
+    expect(controller.items, isEmpty);
     expect(controller.runningCount, 0);
 
     session.value = 'other';
@@ -156,7 +156,7 @@ void main() {
       );
     await pumpEventQueue();
 
-    expect(controller.jobs.map((j) => j.id), [2, 1]);
+    expect(controller.items.map((j) => j.id), [2, 1]);
     expect(controller.runningCount, 2);
     expect(listCalls, 1, reason: 'only the initial load');
   });
@@ -194,7 +194,7 @@ void main() {
     await pumpEventQueue();
 
     expect(listCalls, 3);
-    expect(controller.jobs, isEmpty);
+    expect(controller.items, isEmpty);
   });
 
   // #2763: the Quark sends resync when this socket fell behind and it dropped
@@ -218,7 +218,7 @@ void main() {
     await controller.load();
 
     expect(await controller.cancel(1), isNull);
-    expect(controller.jobs.single.status, JobStatus.canceled);
+    expect(controller.items.single.status, JobItemStatus.canceled);
 
     final refusing = build(cancelJob: (_) => throw const ApiException(409));
     expect(await refusing.cancel(1), 'That job has already finished.');

@@ -9,7 +9,6 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quark/controllers/albums_cache.dart';
-import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/controllers/photos_controller.dart';
 import 'package:quark/controllers/photos_list_cache.dart';
@@ -182,13 +181,11 @@ void main() {
       HostEntry(name: 'Test', hostAddress: 'http://localhost:8080'),
     );
     PhotoBytesCache.instance.clear();
-    FileBrowserCache.instance.clearOpenFile();
     StorageService.invalidateDeviceCache();
   });
 
   tearDown(() {
     PhotoBytesCache.instance.clear();
-    FileBrowserCache.instance.clearOpenFile();
     StorageService.invalidateDeviceCache();
     resetSharedHttpClient();
     sharedHttpClientFactory = buildLocalTrustHttpClient;

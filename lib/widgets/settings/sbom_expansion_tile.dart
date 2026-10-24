@@ -3,16 +3,13 @@ import 'package:flutter/material.dart';
 /// One dependency in a software bill of materials.
 class SbomEntry {
   /// Creates an entry for a package.
-  const SbomEntry({required this.name, required this.version, this.url});
+  const SbomEntry({required this.name, required this.version});
 
   /// The package name, as the ecosystem spells it.
   final String name;
 
   /// The resolved version.
   final String version;
-
-  /// Where the package lives, when the bill of materials names it.
-  final String? url;
 }
 
 /// A collapsed list of dependencies, headed by a count.

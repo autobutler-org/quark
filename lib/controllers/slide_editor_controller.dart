@@ -87,8 +87,8 @@ enum SlideSaveState {
 /// the one last saved: the model is immutable, so undoing back to it leaves
 /// nothing to save.
 ///
-/// A failed save leaves [saveState] at [SlideSaveState.failed] with
-/// [saveError] set, and calls [onSaveFailed] so the page can say so. The next
+/// A failed save leaves [saveState] at [SlideSaveState.failed] and calls
+/// [onSaveFailed] so the page can say so. The next
 /// edit, or [save], tries again.
 ///
 /// The canvas edits [document] directly, so its edits take the same path as
@@ -130,8 +130,8 @@ enum SlideSaveState {
 /// selected slide's layout unless it is given one, and on title and
 /// content after a title or blank slide (#2899).
 ///
-/// **Transitions** (#1164). [slideTransition] is the selected slide's own,
-/// [effectiveTransition] the one it plays; [setSlideTransition] and
+/// **Transitions** (#1164). [effectiveTransition] is the one the selected
+/// slide plays; [setSlideTransition] and
 /// [applyTransitionToAll] change them, one undo step each.
 ///
 /// **Tables** (#1160). [insertTable] puts a table in the middle of the
@@ -176,9 +176,7 @@ class SlideEditorController extends ChangeNotifier {
     this.loadPresentation = SlidesService.load,
     this.savePresentation = SlidesService.save,
     this.mediaUrl = FilesService.constructMediaUrl,
-    this.autosaveDelay = const Duration(seconds: 2),
     this.newId,
-    this.fontFamilies = defaultFontFamilies,
     this.pickImageFile = SlidesService.pickImageFile,
     this.uploadImage = SlidesService.uploadImage,
     this.readImageSize = SlidesService.readImageSize,
@@ -208,13 +206,10 @@ class SlideEditorController extends ChangeNotifier {
   final MediaUrlFn mediaUrl;
 
   /// How long editing has to pause before the autosave runs.
-  final Duration autosaveDelay;
+  static const autosaveDelay = Duration(seconds: 2);
 
   /// Generates ids for new slides; the package's random ids by default.
   final String Function()? newId;
-
-  /// The font families the toolbar offers.
-  final List<String> fontFamilies;
 
   /// Asks the user for a picture on this device.
   final PickImageFileFn pickImageFile;
@@ -267,7 +262,7 @@ class SlideEditorController extends ChangeNotifier {
   /// The canvas's text editing session and the toolbar's text formatting
   /// commands.
   late final SlideTextEditingController textEditing =
-      SlideTextEditingController(fontFamilies: fontFamilies);
+      SlideTextEditingController(fontFamilies: defaultFontFamilies);
 
   /// The table cells selected on the canvas, which the table commands act
   /// on; shared with the canvas.
@@ -277,8 +272,8 @@ class SlideEditorController extends ChangeNotifier {
   /// the canvas.
   final SlideChartEditingController charts = SlideChartEditingController();
 
-  /// The families the toolbar offers by default: the generic ones every
-  /// platform can draw.
+  /// The families the toolbar offers: the generic ones every platform can
+  /// draw.
   static const defaultFontFamilies = ['sans-serif', 'serif', 'monospace'];
 
   /// The size of text whose runs set none, as the canvas draws it.
@@ -351,9 +346,6 @@ class SlideEditorController extends ChangeNotifier {
   /// message — the page decides whether it means "your Quark is unreachable"
   /// or "the request failed" (#1637).
   Object? get loadError => _loadError;
-
-  /// The thrown object from the last failed save; null once one succeeds.
-  Object? get saveError => _saveError;
 
   /// The document the canvas edits, or null before the presentation has
   /// loaded.
@@ -940,9 +932,6 @@ class SlideEditorController extends ChangeNotifier {
 
   // ── Transitions ───────────────────────────────────────────────────────────
 
-  /// The selected slide's own transition; null when it follows the deck.
-  SlideTransitionSpec? get slideTransition => selectedSlide?.transition;
-
   /// The transition the selected slide plays: its own, or the deck's.
   SlideTransitionSpec get effectiveTransition {
     final slide = selectedSlide;
@@ -1464,7 +1453,7 @@ class SlideEditorController extends ChangeNotifier {
 
   /// Saves now, without waiting for the autosave. Returns whether the
   /// presentation on screen is saved once it finishes; a failure is also
-  /// reported through [saveError] and [onSaveFailed].
+  /// reported through [saveState] and [onSaveFailed].
   Future<bool> save() async {
     _commitNotes();
     _autosaveTimer?.cancel();

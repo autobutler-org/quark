@@ -15,7 +15,6 @@ class SlideTableSizeStepper extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
-    this.min = 1,
     this.max = 20,
     super.key,
   });
@@ -33,7 +32,7 @@ class SlideTableSizeStepper extends StatelessWidget {
   final ValueChanged<int> onChanged;
 
   /// The smallest count.
-  final int min;
+  static const min = 1;
 
   /// The largest count.
   final int max;

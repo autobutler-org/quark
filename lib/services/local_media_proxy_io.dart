@@ -108,9 +108,6 @@ class _LocalMediaProxyIo implements LocalMediaProxy {
   );
 
   @override
-  Uri get upstreamUrl => _upstream;
-
-  @override
   MediaUpstreamException? get lastUpstreamError => _lastUpstreamError;
 
   void _listen() {

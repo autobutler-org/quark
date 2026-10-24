@@ -913,20 +913,6 @@ class FilesService with AuthenticatedService {
     return response.bodyBytes;
   }
 
-  /// Download thumbnail bytes for the specified filePath using the thumbnails endpoint.
-  /// Returns the raw bytes of the thumbnail image, or throws on non-success status codes.
-  static Future<Uint8List?> downloadThumbnailBytes(
-    String filePath, {
-    String? serial,
-  }) async {
-    final uri = constructThumbnailUrl(filePath, serial: serial);
-    final response = await instance.authenticatedGet(uri);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to download thumbnail');
-    }
-    return response.bodyBytes;
-  }
-
   static Future<PhotoMetadata> getPhotoMetadata(
     String relPath, {
     String? serial,
@@ -1169,11 +1155,8 @@ class FilesService with AuthenticatedService {
     return Map<String, dynamic>.from(decoded);
   }
 
-  static Future<List<Map<String, dynamic>>> listAvailableVersions({
-    bool all = false,
-  }) async {
-    final endpointUri = apiBaseUri.resolve('/api/v0/version/available');
-    final uri = all ? endpointUri.replace(query: 'all=true') : endpointUri;
+  static Future<List<Map<String, dynamic>>> listAvailableVersions() async {
+    final uri = apiBaseUri.resolve('/api/v0/version/available');
     final response = await instance.authenticatedGet(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(

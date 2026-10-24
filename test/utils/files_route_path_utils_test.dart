@@ -47,18 +47,10 @@ void main() {
   });
 
   group('supported editor helpers', () {
-    test('recognize editor-backed file paths and types', () {
-      expect(hasSupportedFilesEditorForPath('/Documents/report.qdoc'), isTrue);
-      expect(
-        hasSupportedFilesEditorForPath('/Documents/budget.qsheet'),
-        isTrue,
-      );
-      expect(hasSupportedFilesEditorForPath('/Documents/photo.jpg'), isFalse);
-
+    test('recognize editor-backed file types', () {
       expect(hasSupportedFilesEditorForType(FileKind.qdoc), isTrue);
       expect(hasSupportedFilesEditorForType(FileKind.qsheet), isTrue);
       expect(hasSupportedFilesEditorForType(FileKind.qslide), isTrue);
-      expect(hasSupportedFilesEditorForPath('/Talks/Pitch.QSLIDE'), isTrue);
       expect(hasSupportedFilesEditorForType(FileKind.image), isFalse);
     });
   });

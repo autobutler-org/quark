@@ -54,7 +54,6 @@ void main() {
     await h.controller.load();
     expect(h.controller.status?.hostname, 'quark');
     expect(h.controller.status?.networkName, 'quark-2');
-    expect(h.controller.isLoading, isFalse);
     expect(h.controller.error, isNull);
     expect(h.controller.renamedTo, isNull);
     expect(h.moves, isEmpty);
@@ -68,7 +67,6 @@ void main() {
     await controller.load();
     expect(controller.status, isNull);
     expect(controller.error, isNull);
-    expect(controller.isLoading, isFalse);
   });
 
   // #3087: a rename made while the socket was down sent no event this

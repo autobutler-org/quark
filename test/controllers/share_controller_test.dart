@@ -302,7 +302,6 @@ void main() {
     expect(c.grants, const [
       GrantItem(principal: ada, level: AccessLevel.owner),
     ]);
-    expect(c.isLoading, isFalse);
   });
 
   test('reads the level set on the item itself', () async {

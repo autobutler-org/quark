@@ -166,7 +166,6 @@ void main() {
       controller.error,
       Errors.message(const ApiException(500), 'load your notifications'),
     );
-    expect(controller.isLoading, isFalse);
     expect(controller.hasLoaded, isFalse);
   });
 
@@ -201,7 +200,6 @@ void main() {
     answers[0].complete(const [_due]);
     await first;
     expect(controller.notifications, isEmpty);
-    expect(controller.isLoading, isFalse);
   });
 
   test('an answer for the previous session is dropped', () async {
@@ -268,7 +266,6 @@ void main() {
     final controller = build();
     await controller.loadPreferences();
     expect(controller.preferencesLoaded, isFalse);
-    expect(controller.isLoadingPreferences, isFalse);
     expect(
       controller.preferencesError,
       Errors.message(

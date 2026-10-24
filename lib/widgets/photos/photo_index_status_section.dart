@@ -17,14 +17,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// [Errors].
 class PhotoIndexStatusSection extends StatefulWidget {
   /// Creates the section.
-  const PhotoIndexStatusSection({super.key, this.controller, this.isAdmin});
+  const PhotoIndexStatusSection({super.key, this.controller});
 
   /// Overrides the controller, for a test. Null uses the real services.
   final PhotoIndexController? controller;
-
-  /// Overrides whether the account is an admin, for a test. Null reads
-  /// [AppSettings.isAdmin].
-  final ValueListenable<bool>? isAdmin;
 
   @override
   State<PhotoIndexStatusSection> createState() =>
@@ -34,8 +30,7 @@ class PhotoIndexStatusSection extends StatefulWidget {
 class _PhotoIndexStatusSectionState extends State<PhotoIndexStatusSection> {
   late final PhotoIndexController _controller =
       widget.controller ?? PhotoIndexController();
-  late final ValueListenable<bool> _isAdmin =
-      widget.isAdmin ?? AppSettings.instance.isAdmin;
+  final ValueListenable<bool> _isAdmin = AppSettings.instance.isAdmin;
 
   @override
   void initState() {

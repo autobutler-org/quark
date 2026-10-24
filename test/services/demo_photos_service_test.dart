@@ -36,14 +36,6 @@ void main() {
 
   tearDown(() => AppSettings.instance.setDemoMode(false));
 
-  test('follows the demo mode switch', () async {
-    expect(DemoPhotosService.isEnabled, isFalse);
-
-    await AppSettings.instance.setDemoMode(true);
-
-    expect(DemoPhotosService.isEnabled, isTrue);
-  });
-
   test('every listed photo is a bundled asset', () async {
     expect(photos, isNotEmpty);
     for (final photo in photos) {
@@ -56,11 +48,8 @@ void main() {
 
   test('every photo carries the demo serial', () {
     for (final photo in photos) {
-      expect(DemoPhotosService.isDemoSerial(photo.serial), isTrue);
+      expect(photo.serial, DemoPhotosService.deviceSerial);
     }
-    expect(DemoPhotosService.isDemoSerial(''), isFalse);
-    expect(DemoPhotosService.isDemoSerial('ABC123'), isFalse);
-    expect(DemoPhotosService.isDemoSerial(null), isFalse);
   });
 
   test(
@@ -140,7 +129,7 @@ void main() {
       expect(items.length, album.itemCount, reason: album.name);
       for (final item in items) {
         expect(item.albumId, album.id);
-        expect(DemoPhotosService.isDemoSerial(item.deviceSerial), isTrue);
+        expect(item.deviceSerial, DemoPhotosService.deviceSerial);
         expect(relPaths, contains(item.relPath));
       }
     }

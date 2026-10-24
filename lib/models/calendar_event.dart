@@ -132,20 +132,17 @@ class CalendarEvent {
   /// A copy with the given fields replaced. [clearRepeatUntil] drops the
   /// last date; otherwise [repeatUntil] replaces it when set.
   CalendarEvent copyWith({
-    int? id,
-    DateTime? start,
-    DateTime? end,
     CalendarRepeat? repeat,
     DateTime? repeatUntil,
     bool clearRepeatUntil = false,
     List<DateTime>? excludedStarts,
   }) => CalendarEvent(
-    id: id ?? this.id,
+    id: id,
     title: title,
     notes: notes,
     location: location,
-    start: start ?? this.start,
-    end: end ?? this.end,
+    start: start,
+    end: end,
     allDay: allDay,
     timeZone: timeZone,
     repeat: repeat ?? this.repeat,

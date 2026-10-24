@@ -41,8 +41,7 @@ typedef ListImportFolderFn = Future<List<FileNode>> Function(String path);
 /// away and back.
 class SlidesController extends ChangeNotifier {
   /// Every service call is a parameter defaulting to the real one, so a test
-  /// passes fakes. [searchDebounce] is how long typing has to pause before the
-  /// contents are searched.
+  /// passes fakes.
   SlidesController({
     ListSlidesFn? listSlides,
     List<FileNode>? Function()? peekSlides,
@@ -53,7 +52,6 @@ class SlidesController extends ChangeNotifier {
     this.pickPowerPoint = SlidesService.pickPowerPointFile,
     this.listFolder = SlidesService.listFolder,
     this.landingFolder = SlidesService.landingFolder,
-    this.searchDebounce = const Duration(milliseconds: 400),
   }) : listSlides =
            listSlides ??
            (() => FileTypeListingCache.instance.fetch(SlidesService.fileType)),
@@ -74,7 +72,9 @@ class SlidesController extends ChangeNotifier {
 
   /// The folder new files land in, where the PowerPoint picker opens.
   final String Function() landingFolder;
-  final Duration searchDebounce;
+
+  /// How long typing has to pause before the contents are searched.
+  static const searchDebounce = Duration(milliseconds: 400);
 
   List<FileNode> _files;
   String _query = '';

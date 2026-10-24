@@ -29,9 +29,6 @@ class PhotoBytesCache {
 
   int _heldBytes = 0;
 
-  /// Bytes currently retained. Exposed for tests and diagnostics.
-  int get heldBytes => _heldBytes;
-
   static String key(String relPath, String? serial) =>
       '${serial ?? ''} $relPath';
 

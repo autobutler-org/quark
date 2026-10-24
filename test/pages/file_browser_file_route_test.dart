@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/pages/pdf_viewer_page.dart';
 import 'package:quark/pages/audio_player_page.dart';
@@ -59,10 +58,7 @@ class _RecordingClient implements HttpClient {
   }
 
   /// Enough of a backend for the deep-link flow to run for real: the page has
-  /// to reach the qsheet branch and push the editor itself, because that is
-  /// what marks the file open. Marking it open from the test instead trips the
-  /// `isFileOpen` early return, which resets the path to the parent and hides
-  /// the very request under test.
+  /// to reach the qsheet branch and push the editor itself.
   static String _bodyFor(Uri url) {
     if (url.path.endsWith('/api/v0/files/stat')) {
       final path = url.queryParameters['filePath'] ?? '';
@@ -223,11 +219,8 @@ void main() {
     await AppSettings.instance.addHost(
       HostEntry(name: 'Test', hostAddress: 'http://localhost:8080'),
     );
-    FileBrowserCache.instance.clearOpenFile();
     overrides = _RecordingHttpOverrides();
   });
-
-  tearDown(FileBrowserCache.instance.clearOpenFile);
 
   // The shared client is built once and kept (#1782), so a client built inside
   // one test's HttpOverrides zone would answer the next test's requests too.

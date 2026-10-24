@@ -115,10 +115,6 @@ class PhotoIndexStatus {
 
   /// Whether the pass is held, or will hold when it starts.
   final bool paused;
-
-  /// Whether duplicate results cover the whole library: no pass running or
-  /// paused, and every photo hashed or failed.
-  bool get isComplete => !running && !paused && hashed + failed >= total;
 }
 
 PhotoIndexFailureReason _reason(Object? raw) => switch (raw) {

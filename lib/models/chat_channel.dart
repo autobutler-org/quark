@@ -59,9 +59,6 @@ class ChatChannel {
   /// A channel listed without it is one the caller only manages.
   bool get canRead => permissions.contains(ChatPermission.readMessages);
 
-  /// Whether the caller may post.
-  bool get canSend => permissions.contains(ChatPermission.sendMessages);
-
   /// The other person's username when this is a private conversation that
   /// [me] is in, and null for any other channel (#3257).
   ///

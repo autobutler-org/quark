@@ -82,14 +82,6 @@ class Job {
   /// Null until the job completes, fails, or is canceled.
   final DateTime? finishedAt;
 
-  /// How long the job has run: start to finish, or start to now while it is
-  /// still going. Null before it starts.
-  Duration? get elapsed {
-    final started = startedAt;
-    if (started == null) return null;
-    return (finishedAt ?? DateTime.now()).difference(started);
-  }
-
   factory Job.fromJson(Map<String, dynamic> json) => Job(
     id: (json['id'] as num?)?.toInt() ?? 0,
     kind: json['kind'] as String? ?? '',

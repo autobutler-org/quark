@@ -2,7 +2,6 @@ import 'package:flutter/services.dart';
 import 'package:quark/models/paginated_photos_response.dart';
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/models/photo_sort.dart';
-import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/error_text.dart';
 
 /// The bundled sample library Demo mode shows instead of the Quark's (#1746).
@@ -26,10 +25,6 @@ class DemoPhotosService {
   static const int hikingAlbumId = -3;
   static const int homeAlbumId = -4;
   static const int cityBreakAlbumId = -5;
-
-  static bool get isEnabled => AppSettings.instance.demoMode.value;
-
-  static bool isDemoSerial(String? serial) => serial == deviceSerial;
 
   static final List<PhotoItem> photos = List.unmodifiable([
     _photo('sunrise-hills.jpg', 11215, DateTime.utc(2025, 6, 14, 5, 48)),

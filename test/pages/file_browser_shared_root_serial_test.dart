@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/router.dart' as app;
 import 'package:quark/router.dart' show AppRoutes;
 import 'package:quark/services/app_settings.dart';
@@ -97,13 +96,11 @@ void main() {
       HostEntry(name: 'Test', hostAddress: 'http://localhost:8080'),
     );
     await AppSettings.instance.setUsername('alice');
-    FileBrowserCache.instance.clearOpenFile();
     StorageService.invalidateDeviceCache();
   });
 
   tearDown(() async {
     await AppSettings.instance.setUsername(null);
-    FileBrowserCache.instance.clearOpenFile();
     StorageService.invalidateDeviceCache();
     resetSharedHttpClient();
     sharedHttpClientFactory = buildLocalTrustHttpClient;

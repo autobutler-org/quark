@@ -33,24 +33,23 @@ void main() {
       expect(results.single.snippet, '<b> hello world</b>');
     });
 
-    test('exposes filename and tag-stripped snippet for the result tile', () {
+    test('exposes the tag-stripped snippet for the result tile', () {
       final decoded = jsonDecode(realResponse) as List;
       final result = ContentSearchResult.fromJson(
         decoded.first as Map<String, dynamic>,
       );
 
-      expect(result.filename, 'something.txt.qdoc');
       expect(result.plainSnippet, ' hello world');
     });
 
-    test('reads nested paths down to the filename', () {
+    test('reads nested paths', () {
       final result = ContentSearchResult.fromJson({
         'serial': 'ABC123',
         'relPath': 'notes/2026/meeting.qdoc',
         'snippet': 'x',
       });
 
-      expect(result.filename, 'meeting.qdoc');
+      expect(result.relPath, 'notes/2026/meeting.qdoc');
       expect(result.deviceSerial, 'ABC123');
     });
 

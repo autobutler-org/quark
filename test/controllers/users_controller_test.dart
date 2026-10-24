@@ -85,7 +85,6 @@ void main() {
     ]);
     expect(c.accessRequestsEnabled, isTrue);
     expect(c.hasLoaded, isTrue);
-    expect(c.isLoading, isFalse);
     expect(c.error, isNull);
     // Once as the load starts, once when it lands.
     expect(notified, 2);
@@ -129,7 +128,6 @@ void main() {
     expect(c.error, isA<ApiException>());
     expect(c.hasLoaded, isFalse);
     expect(c.accessRequestsEnabled, isNull);
-    expect(c.isLoading, isFalse);
 
     fail = false;
     await c.load();
@@ -156,7 +154,6 @@ void main() {
     await stale;
 
     expect(c.accounts, const [UserAccountItem(username: 'bob')]);
-    expect(c.isLoading, isFalse);
   });
 
   for (final (name, call, run) in [

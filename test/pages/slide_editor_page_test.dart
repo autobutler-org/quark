@@ -1298,32 +1298,41 @@ void main() {
       await tester.ensureVisible(key('slide_transition_kind_push'));
       await tester.tap(key('slide_transition_kind_push'));
       await tester.pumpAndSettle();
-      expect(c.slideTransition?.kind, SlideTransitionKind.push);
+      expect(c.selectedSlide?.transition?.kind, SlideTransitionKind.push);
       expect(c.saveState, SlideSaveState.dirty);
       expect(key('slide_transition_marker'), findsOneWidget);
 
       await tester.ensureVisible(key('slide_transition_direction_up'));
       await tester.tap(key('slide_transition_direction_up'));
       await tester.pumpAndSettle();
-      expect(c.slideTransition?.direction, SlideTransitionDirection.up);
+      expect(
+        c.selectedSlide?.transition?.direction,
+        SlideTransitionDirection.up,
+      );
 
       await tester.ensureVisible(key('slide_transition_duration'));
       await tester.drag(key('slide_transition_duration'), const Offset(400, 0));
       await tester.pumpAndSettle();
-      expect(c.slideTransition?.durationMs, SlideTransitionSpec.maxDurationMs);
+      expect(
+        c.selectedSlide?.transition?.durationMs,
+        SlideTransitionSpec.maxDurationMs,
+      );
       expect(find.text('2000 ms'), findsOneWidget);
 
       // Length, direction and kind were one undo step each.
       c.undo();
       expect(
-        c.slideTransition?.durationMs,
+        c.selectedSlide?.transition?.durationMs,
         SlideTransitionSpec.defaultDurationMs,
       );
       c.undo();
-      expect(c.slideTransition?.direction, SlideTransitionDirection.left);
+      expect(
+        c.selectedSlide?.transition?.direction,
+        SlideTransitionDirection.left,
+      );
       c.undo();
       await tester.pumpAndSettle();
-      expect(c.slideTransition, isNull);
+      expect(c.selectedSlide?.transition, isNull);
       expect(c.canUndo, isFalse);
       expect(key('slide_transition_marker'), findsNothing);
 
@@ -1381,7 +1390,7 @@ void main() {
       expect(key('slide_transition_kind_zoom'), findsNWidgets(2));
       await tester.tap(key('slide_transition_kind_zoom').first);
       await tester.pumpAndSettle();
-      expect(c.slideTransition?.kind, SlideTransitionKind.zoom);
+      expect(c.selectedSlide?.transition?.kind, SlideTransitionKind.zoom);
       expect(tester.takeException(), isNull);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
@@ -1399,7 +1408,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(key('slide_transition_kind_fade'));
       await tester.pumpAndSettle();
-      expect(c.slideTransition?.kind, SlideTransitionKind.fade);
+      expect(c.selectedSlide?.transition?.kind, SlideTransitionKind.fade);
       expect(key('slide_transition_duration'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.tapAt(const Offset(180, 20));
@@ -1416,7 +1425,7 @@ void main() {
       await tester.ensureVisible(key('slide_transition_kind_fade'));
       await tester.tap(key('slide_transition_kind_fade'));
       await tester.pumpAndSettle();
-      expect(c.slideTransition, isNull);
+      expect(c.selectedSlide?.transition, isNull);
       expect(key('slide_transition_apply_all'), findsNothing);
     });
 

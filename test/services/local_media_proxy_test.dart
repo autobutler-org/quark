@@ -239,7 +239,6 @@ void main() {
       expect(proxy.localUrl.port, greaterThan(0));
       // 16 random bytes, hex-encoded.
       expect(proxy.localUrl.path, matches(r'^/[0-9a-f]{32}$'));
-      expect(proxy.upstreamUrl, upstream.url);
     });
 
     test('passes a plain GET through byte for byte', () async {
