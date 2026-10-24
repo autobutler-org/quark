@@ -13,16 +13,12 @@ import '../support/pump.dart';
 /// used to read the host address out of `AppSettings` instead of taking it in.
 void main() {
   group('QuarkDisconnectedView', () {
-    testWidgets('states plainly that the app is not connected', (tester) async {
+    testWidgets('states plainly that the app is not connected and lists '
+        'every troubleshooting step', (tester) async {
       await pumpAt(tester, const QuarkDisconnectedView());
 
       expect(find.text(quarkDisconnectedHeadline), findsOneWidget);
       expect(find.text(quarkDisconnectedBody), findsOneWidget);
-    });
-
-    testWidgets('lists every troubleshooting step', (tester) async {
-      await pumpAt(tester, const QuarkDisconnectedView());
-
       for (final step in quarkTroubleshootingSteps) {
         expect(find.text(step), findsOneWidget);
       }

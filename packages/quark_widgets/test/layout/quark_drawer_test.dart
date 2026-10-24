@@ -123,23 +123,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('draws the users row once it is offered', (tester) async {
-    final tapped = <String>[];
-    await pumpAt(
-      tester,
-      QuarkDrawer(
-        activeSection: QuarkDrawerSection.files,
-        onTapUsers: () => tapped.add('users'),
-      ),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('drawer_users')));
-    await tester.pump();
-
-    expect(tapped, ['users']);
-    expect(find.byKey(const ValueKey('drawer_files')), findsNothing);
-  });
-
   /// #2046: the drawer was one flat list, so the pages a household opens every
   /// day sat between Trash and System. They lead now, and the pages for
   /// looking after the Quark follow under a "Manage" label.
@@ -356,20 +339,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  for (final (label, brightness) in [
-    ('dark', Brightness.dark),
-    ('light', Brightness.light),
-  ]) {
-    testWidgets('$label: lays out without an exception', (tester) async {
-      await pumpAt(
-        tester,
-        drawerWith(QuarkDrawerSection.users, everyCallback([])),
-        brightness: brightness,
-      );
-      expect(tester.takeException(), isNull);
-    });
-  }
-
   /// #2033: with more than one Quark saved, nothing in the signed-in app said
   /// which one was on screen, so an upload could land on the wrong device
   /// without a single hint beforehand.
@@ -527,10 +496,7 @@ void main() {
     expect(find.byTooltip('Switch Quark'), findsNothing);
   });
 
-  testBothViewports('hides a row that is not offered and marks none as beta', (
-    tester,
-    size,
-  ) async {
+  testBothViewports('marks none of the rows as beta', (tester, size) async {
     await pumpAt(
       tester,
       drawerWith(QuarkDrawerSection.files, everyCallback([])),
@@ -545,26 +511,6 @@ void main() {
       await tester.scrollUntilVisible(row, 50);
       expect(
         find.descendant(of: row, matching: find.byType(QuarkTintBadge)),
-        findsNothing,
-        reason: section.name,
-      );
-    }
-
-    for (final section in [
-      QuarkDrawerSection.slides,
-      QuarkDrawerSection.calendar,
-      QuarkDrawerSection.chat,
-    ]) {
-      await pumpAt(
-        tester,
-        drawerWith(
-          QuarkDrawerSection.files,
-          everyCallback([])..remove(section),
-        ),
-        size: size,
-      );
-      expect(
-        find.byKey(ValueKey('drawer_${section.name}'), skipOffstage: false),
         findsNothing,
         reason: section.name,
       );

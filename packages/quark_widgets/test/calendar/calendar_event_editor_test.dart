@@ -233,15 +233,22 @@ void main() {
   });
 
   testWidgets('shows the errors the caller composed', (tester) async {
+    final early = _draft.copyWith(
+      repeat: CalendarRepeat.weekly,
+      repeatUntil: DateTime(2026, 9, 1),
+    );
     await pumpAt(
       tester,
       _Harness().editor(
+        draft: early,
         timeError: 'The event has to end after it starts.',
         saveError: "Couldn't save the event.",
+        repeatError: 'Too early.',
       ),
     );
     expect(find.text('The event has to end after it starts.'), findsOneWidget);
     expect(find.text("Couldn't save the event."), findsOneWidget);
+    expect(find.text('Too early.'), findsOneWidget);
   });
 
   testWidgets('Save, Cancel, close and Delete call back', (tester) async {
@@ -329,18 +336,6 @@ void main() {
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
     expect(h.changed?.repeatUntil, DateTime(2026, 9, 25));
-  });
-
-  testWidgets('shows the repeat end error the caller composed', (tester) async {
-    final early = _draft.copyWith(
-      repeat: CalendarRepeat.weekly,
-      repeatUntil: DateTime(2026, 9, 1),
-    );
-    await pumpAt(
-      tester,
-      _Harness().editor(draft: early, repeatError: 'Too early.'),
-    );
-    expect(find.text('Too early.'), findsOneWidget);
   });
 
   testLargeText('the repeat end fits at large text', (tester, size) async {

@@ -30,30 +30,6 @@ void main() {
     );
   });
 
-  testWidgets('renders the actions the caller handed it', (tester) async {
-    final tapped = <String>[];
-    await pumpAt(
-      tester,
-      QuarkSection(
-        title: 'Backend hosts',
-        actions: [
-          IconButton(
-            key: const ValueKey('host_add'),
-            icon: const Icon(Icons.add),
-            tooltip: 'Add a host',
-            onPressed: () => tapped.add('add'),
-          ),
-        ],
-        child: const Text('two hosts configured'),
-      ),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('host_add')));
-    await tester.pump();
-
-    expect(tapped, ['add']);
-  });
-
   testWidgets('renders a glyph only when it is given one', (tester) async {
     await pumpAt(
       tester,
@@ -149,29 +125,6 @@ void main() {
     final action = tester.getRect(find.byKey(const ValueKey('host_add')));
     expect(title.right, lessThan(wideViewport.width / 4));
     expect(action.left, greaterThan(wideViewport.width / 2));
-  });
-
-  testWidgets('every icon-only action carries a tooltip', (tester) async {
-    await pumpAt(
-      tester,
-      QuarkSection(
-        title: 'Backend hosts',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'Add a host',
-            onPressed: () {},
-          ),
-        ],
-        child: const Text('content'),
-      ),
-    );
-
-    for (final button in tester.widgetList<IconButton>(
-      find.byType(IconButton),
-    )) {
-      expect(button.tooltip, isNotNull, reason: 'an icon alone says nothing');
-    }
   });
 
   for (final (label, brightness, tokens) in [

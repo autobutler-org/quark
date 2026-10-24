@@ -62,44 +62,38 @@ void main() {
   IconButton button(WidgetTester tester, String key) =>
       tester.widget<IconButton>(find.byKey(ValueKey(key)));
 
-  testBothViewports('shows a loader while the first load is out', (
-    tester,
-    size,
-  ) async {
-    await pumpPanel(tester, size: size, items: const [], isLoading: true);
+  // Loading, empty and failed: one state each, never two at once. A failed
+  // load is not an empty history.
+  for (final (state, isLoading, error, loader, empty) in [
+    ('shows a loader while the first load is out', true, null, true, false),
+    ('says so when the file has no versions', false, null, false, true),
+    (
+      'renders the error the caller handed it',
+      false,
+      "Couldn't load the versions.",
+      false,
+      false,
+    ),
+  ]) {
+    testBothViewports(state, (tester, size) async {
+      await pumpPanel(
+        tester,
+        size: size,
+        items: const [],
+        isLoading: isLoading,
+        error: error,
+      );
 
-    expect(find.byKey(const ValueKey('file_versions_panel')), findsOneWidget);
-    expect(find.byType(QuarkLoader), findsOneWidget);
-    expect(find.textContaining('No earlier versions'), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  testBothViewports('says so when the file has no versions', (
-    tester,
-    size,
-  ) async {
-    await pumpPanel(tester, size: size, items: const []);
-
-    expect(find.textContaining('No earlier versions'), findsOneWidget);
-    expect(find.byType(QuarkLoader), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('renders the error the caller handed it', (tester) async {
-    await pumpPanel(
-      tester,
-      items: const [],
-      error: "Couldn't load the versions.",
-    );
-
-    expect(find.text("Couldn't load the versions."), findsOneWidget);
-    expect(
-      find.textContaining('No earlier versions'),
-      findsNothing,
-      reason: 'a failed load is not an empty history',
-    );
-    expect(find.byType(QuarkLoader), findsNothing);
-  });
+      expect(find.byKey(const ValueKey('file_versions_panel')), findsOneWidget);
+      expect(find.byType(QuarkLoader), loader ? findsOneWidget : findsNothing);
+      expect(
+        find.textContaining('No earlier versions'),
+        empty ? findsOneWidget : findsNothing,
+      );
+      if (error != null) expect(find.text(error), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testBothViewports('lists each version with its time, size and author', (
     tester,

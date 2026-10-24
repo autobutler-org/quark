@@ -50,46 +50,43 @@ void main() {
     }
   });
 
-  testWidgets('preparing works on the first step', (tester) async {
-    await pumpInSheet(
-      tester,
-      const RemoteAccessSetupView(stage: RemoteAccessSetupStage.preparing),
-    );
-    expect(find.text('Setting up remote access'), findsOneWidget);
-    expect(
-      stepSemantics(tester, 1).properties.label,
-      'Preparing a private connection, in progress',
-    );
-    expect(
-      stepSemantics(tester, 2).properties.label,
-      'Connecting your Quark, waiting',
-    );
-    expect(
-      find.byKey(const ValueKey('remote_access_setup_done')),
-      findsNothing,
-    );
-  });
-
-  testWidgets('connecting has finished the first step', (tester) async {
-    await pumpInSheet(
-      tester,
-      const RemoteAccessSetupView(stage: RemoteAccessSetupStage.connecting),
-    );
-    expect(
-      stepSemantics(tester, 1).properties.label,
-      'Preparing a private connection, done',
-    );
-    expect(
-      stepSemantics(tester, 2).properties.label,
-      'Connecting your Quark, in progress',
-    );
-    // Nothing the Quark reports marks a check after it joins, so there is
-    // no third step to sit idle beside a spinner (#2903).
-    expect(
-      find.byKey(const ValueKey('remote_access_setup_step_3')),
-      findsNothing,
-    );
-  });
+  for (final (description, stage, first, second) in [
+    (
+      'preparing works on the first step',
+      RemoteAccessSetupStage.preparing,
+      'in progress',
+      'waiting',
+    ),
+    (
+      'connecting has finished the first step',
+      RemoteAccessSetupStage.connecting,
+      'done',
+      'in progress',
+    ),
+  ]) {
+    testWidgets(description, (tester) async {
+      await pumpInSheet(tester, RemoteAccessSetupView(stage: stage));
+      expect(find.text('Setting up remote access'), findsOneWidget);
+      expect(
+        stepSemantics(tester, 1).properties.label,
+        'Preparing a private connection, $first',
+      );
+      expect(
+        stepSemantics(tester, 2).properties.label,
+        'Connecting your Quark, $second',
+      );
+      // Nothing the Quark reports marks a check after it joins, so there is
+      // no third step to sit idle beside a spinner (#2903).
+      expect(
+        find.byKey(const ValueKey('remote_access_setup_step_3')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('remote_access_setup_done')),
+        findsNothing,
+      );
+    });
+  }
 
   testBothViewports('done ticks every step and closes', (tester, size) async {
     var closes = 0;

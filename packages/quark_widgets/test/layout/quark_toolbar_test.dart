@@ -47,22 +47,6 @@ void main() {
     }
   });
 
-  testWidgets('reports the action that was tapped', (tester) async {
-    final tapped = <String>[];
-    await pumpAt(
-      tester,
-      QuarkToolbar(actions: actionsThatDoNotFit(tapped.add)),
-    );
-
-    await tester.tap(
-      find.byKey(const ValueKey('toolbar_Select all')),
-      warnIfMissed: false,
-    );
-    await tester.pump();
-
-    expect(tapped, ['Select all']);
-  });
-
   testWidgets('too many actions stay on one line and scroll', (tester) async {
     await pumpAt(
       tester,

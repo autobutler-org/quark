@@ -77,23 +77,6 @@ void main() {
     expect(find.byKey(const ValueKey('${prefix}_empty')), findsNothing);
   });
 
-  testWidgets('choosing Custom opens the checkboxes', (tester) async {
-    await pumpAt(
-      tester,
-      host(
-        QuarkChatPermissionPicker(
-          permissions: ChatPermissionPreset.member.permissions,
-          onChanged: (_) {},
-        ),
-      ),
-    );
-    expect(find.byKey(box(ChatPermission.sendMessages)), findsNothing);
-
-    await tap(tester, chip('custom'));
-
-    expect(find.byKey(box(ChatPermission.sendMessages)), findsOneWidget);
-  });
-
   testWidgets('clearing read_messages keeps only the management bits', (
     tester,
   ) async {
@@ -108,6 +91,7 @@ void main() {
       ),
     );
     // Owner is a preset, so open the checkboxes first.
+    expect(find.byKey(box(ChatPermission.readMessages)), findsNothing);
     await tap(tester, chip('custom'));
     await tap(tester, box(ChatPermission.readMessages));
 

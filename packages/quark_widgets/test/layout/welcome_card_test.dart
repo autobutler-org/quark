@@ -56,32 +56,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('shows the message and every action with its label', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      WelcomeCard(
-        headline: 'Welcome, ada',
-        message: 'Start by adding something.',
-        actions: chips([]),
-        onDismiss: () {},
-      ),
-      size: size,
-    );
-
-    expect(find.text('Welcome, ada'), findsOneWidget);
-    expect(find.text('Start by adding something.'), findsOneWidget);
-    for (final key in actionKeys) {
-      expect(find.byKey(key), findsOneWidget);
-    }
-    expect(find.text('Upload'), findsOneWidget);
-    expect(find.text('New folder'), findsOneWidget);
-    expect(find.text('Open Vault'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('reports each action and the dismissal exactly once', (
     tester,
   ) async {
@@ -137,23 +111,31 @@ void main() {
     });
   }
 
-  testBothViewports('survives a long headline and a long message', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      WelcomeCard(
-        headline: 'Welcome, ${'ada' * 60}',
-        message: 'Start here. ' * 40,
-        actions: chips([]),
-        onDismiss: () {},
-      ),
-      size: size,
-    );
+  testBothViewports(
+    'shows a long headline, a long message and every action label',
+    (tester, size) async {
+      await pumpAt(
+        tester,
+        WelcomeCard(
+          headline: 'Welcome, ${'ada' * 60}',
+          message: 'Start here. ' * 40,
+          actions: chips([]),
+          onDismiss: () {},
+        ),
+        size: size,
+      );
 
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.text('Welcome, ${'ada' * 60}'), findsOneWidget);
+      expect(find.text('Start here. ' * 40), findsOneWidget);
+      for (final key in actionKeys) {
+        expect(find.byKey(key), findsOneWidget);
+      }
+      expect(find.text('Upload'), findsOneWidget);
+      expect(find.text('New folder'), findsOneWidget);
+      expect(find.text('Open Vault'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testBothViewports('meets the tap target guidelines', (tester, size) async {
     await pumpAt(

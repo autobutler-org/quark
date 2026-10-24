@@ -12,33 +12,38 @@ void main() {
     UserAccountItem(username: 'cy', status: UserAccountStatus.pending),
   ];
 
-  testWidgets('shows a spinner while loading and no rows', (tester) async {
-    await pumpAt(
-      tester,
+  for (final (description, list, shown, hidden) in [
+    (
+      'shows a spinner while loading and no rows',
       const PendingRequestList(requests: requests, isLoading: true),
-    );
-
-    expect(find.byType(QuarkLoader), findsOneWidget);
-    expect(find.byKey(const ValueKey('request_row_bob')), findsNothing);
-    expect(find.text('No requests waiting'), findsNothing);
-  });
-
-  testWidgets('renders the error the caller handed it', (tester) async {
-    await pumpAt(
-      tester,
+      find.byType(QuarkLoader),
+      [
+        find.byKey(const ValueKey('request_row_bob')),
+        find.text('No requests waiting'),
+      ],
+    ),
+    (
+      'renders the error the caller handed it',
       const PendingRequestList(requests: requests, error: 'Nope.'),
-    );
+      find.text('Nope.'),
+      [find.byKey(const ValueKey('request_row_bob'))],
+    ),
+    (
+      'says so when nobody is waiting',
+      const PendingRequestList(requests: []),
+      find.text('No requests waiting'),
+      [find.byType(QuarkLoader)],
+    ),
+  ]) {
+    testWidgets(description, (tester) async {
+      await pumpAt(tester, list);
 
-    expect(find.text('Nope.'), findsOneWidget);
-    expect(find.byKey(const ValueKey('request_row_bob')), findsNothing);
-  });
-
-  testWidgets('says so when nobody is waiting', (tester) async {
-    await pumpAt(tester, const PendingRequestList(requests: []));
-
-    expect(find.text('No requests waiting'), findsOneWidget);
-    expect(find.byType(QuarkLoader), findsNothing);
-  });
+      expect(shown, findsOneWidget);
+      for (final finder in hidden) {
+        expect(finder, findsNothing);
+      }
+    });
+  }
 
   testBothViewports('approves and denies the request that was tapped', (
     tester,

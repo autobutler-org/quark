@@ -198,22 +198,18 @@ void main() {
     expect(find.text('Very strong'), findsOneWidget);
   });
 
-  testBothViewports('shows the refusal the caller handed it', (
-    tester,
-    size,
-  ) async {
-    await pumpDialog(tester, size: size, error: 'That username is taken.');
-
-    expect(find.text('That username is taken.'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
   for (final (label, brightness, tokens) in [
     ('dark', Brightness.dark, QuarkTokens.dark),
     ('light', Brightness.light, QuarkTokens.light),
   ]) {
     testWidgets('$label: the refusal reads in the error color', (tester) async {
-      await pumpDialog(tester, error: 'Nope.', brightness: brightness);
+      // Narrow, where a long refusal is likeliest to overflow.
+      await pumpDialog(
+        tester,
+        size: narrowViewport,
+        error: 'Nope.',
+        brightness: brightness,
+      );
 
       expect(tester.takeException(), isNull);
       expect(

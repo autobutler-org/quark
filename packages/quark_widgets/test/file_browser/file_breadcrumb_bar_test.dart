@@ -28,13 +28,18 @@ void main() {
     );
   }
 
-  testWidgets('renders one segment per directory in the path', (tester) async {
-    await pumpBar(tester, path: '/photos/2024/june');
+  testWidgets(
+    'renders one segment per directory, the leaf without a tap target',
+    (tester) async {
+      await pumpBar(tester, path: '/photos/2024/june');
 
-    expect(find.text('photos'), findsOneWidget);
-    expect(find.text('2024'), findsOneWidget);
-    expect(find.text('june'), findsOneWidget);
-  });
+      expect(find.text('photos'), findsOneWidget);
+      expect(find.text('2024'), findsOneWidget);
+      expect(find.text('june'), findsOneWidget);
+      // Only the two ancestors get a key; the leaf is plain text.
+      expect(find.byKey(const ValueKey('breadcrumb_segment_2')), findsNothing);
+    },
+  );
 
   testWidgets('navigates to the ancestor that was tapped', (tester) async {
     final events = <String>[];
@@ -47,15 +52,6 @@ void main() {
     expect(events, ['select:/photos', 'select:/photos/2024']);
   });
 
-  testWidgets('leaves the current directory without a tap target', (
-    tester,
-  ) async {
-    await pumpBar(tester, path: '/photos/2024/june');
-
-    // Only the two ancestors get a key; the leaf is plain text.
-    expect(find.byKey(const ValueKey('breadcrumb_segment_2')), findsNothing);
-  });
-
   testWidgets('goes home and up through its callbacks', (tester) async {
     final events = <String>[];
     await pumpBar(tester, path: '/photos', events: events);
@@ -65,6 +61,7 @@ void main() {
     await tester.pump();
 
     expect(events, ['home', 'up']);
+    expect(find.byTooltip('Go to the top folder'), findsOneWidget);
   });
 
   testWidgets('disables the up button at the root', (tester) async {
@@ -108,17 +105,6 @@ void main() {
 
     expect(events, isEmpty);
     expect(find.byTooltip('You are in the top folder'), findsOneWidget);
-  });
-
-  testWidgets('the home glyph still goes home from a folder', (tester) async {
-    final events = <String>[];
-    await pumpBar(tester, path: '/photos/2024', events: events);
-
-    await tester.tap(find.byKey(const ValueKey('breadcrumb_home')));
-    await tester.pump();
-
-    expect(events, ['home']);
-    expect(find.byTooltip('Go to the top folder'), findsOneWidget);
   });
 
   testBothViewports('home and every ancestor are 48dp buttons', (

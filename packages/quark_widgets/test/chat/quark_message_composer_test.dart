@@ -203,113 +203,76 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('shows why instead of a field when writing is off', (
-    tester,
-  ) async {
-    await pumpAt(
-      tester,
+  // Each composer shows its reason in place of the field, or the field
+  // itself when nothing stops the account from writing.
+  for (final (label, composer, reason, notShown) in [
+    (
+      'shows why instead of a field when writing is off',
       QuarkMessageComposer(
         onSend: (_) {},
         disabledReason: 'You can read this channel but not write in it',
       ),
-    );
-
-    expect(
-      find.byKey(const ValueKey('message_composer_disabled')),
-      findsOneWidget,
-    );
-    expect(
-      find.text('You can read this channel but not write in it'),
-      findsOneWidget,
-    );
-    expect(find.byKey(field), findsNothing);
-    expect(find.byKey(send), findsNothing);
-  });
-
-  testWidgets('a viewer sees why they cannot send, not a field', (
-    tester,
-  ) async {
-    await pumpAt(
-      tester,
+      'You can read this channel but not write in it',
+      const <String>[],
+    ),
+    (
+      'a viewer sees why they cannot send, not a field',
       QuarkMessageComposer(
         onSend: (_) {},
         permissions: ChatPermissionPreset.viewer.permissions,
         isWaitingForKey: true,
       ),
-    );
-
-    expect(find.text(QuarkMessageComposer.noSendReason), findsOneWidget);
-    expect(find.text(QuarkMessageComposer.waitingForKeyReason), findsNothing);
-    expect(find.byKey(field), findsNothing);
-  });
-
-  testWidgets('a member waiting for the key sees a different reason', (
-    tester,
-  ) async {
-    await pumpAt(
-      tester,
+      QuarkMessageComposer.noSendReason,
+      [QuarkMessageComposer.waitingForKeyReason],
+    ),
+    (
+      'a member waiting for the key sees a different reason',
       QuarkMessageComposer(
         onSend: (_) {},
         permissions: ChatPermissionPreset.member.permissions,
         isWaitingForKey: true,
       ),
-    );
-
-    expect(find.text(QuarkMessageComposer.waitingForKeyReason), findsOneWidget);
-    expect(find.byKey(field), findsNothing);
-    expect(
       QuarkMessageComposer.waitingForKeyReason,
-      isNot(QuarkMessageComposer.noSendReason),
-    );
-  });
-
-  testWidgets('a delegated manager is told they are not a member', (
-    tester,
-  ) async {
-    await pumpAt(
-      tester,
+      [QuarkMessageComposer.noSendReason],
+    ),
+    (
+      'a delegated manager is told they are not a member',
       QuarkMessageComposer(
         onSend: (_) {},
         permissions: const {ChatPermission.manageMembers},
         isWaitingForKey: true,
       ),
-    );
-
-    expect(find.text(QuarkMessageComposer.notMemberReason), findsOneWidget);
-    expect(find.text(QuarkMessageComposer.waitingForKeyReason), findsNothing);
-    expect(find.byKey(field), findsNothing);
-  });
-
-  testWidgets('a member with the full set gets the field', (tester) async {
-    await pumpAt(
-      tester,
+      QuarkMessageComposer.notMemberReason,
+      [QuarkMessageComposer.waitingForKeyReason],
+    ),
+    (
+      'a member with the full set gets the field',
       QuarkMessageComposer(
         onSend: (_) {},
         permissions: ChatPermissionPreset.owner.permissions,
       ),
-    );
+      null,
+      const <String>[],
+    ),
+  ]) {
+    testWidgets(label, (tester) async {
+      await pumpAt(tester, composer);
 
-    expect(find.byKey(field), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('message_composer_disabled')),
-      findsNothing,
-    );
-  });
-
-  testWidgets('shows the hint it is given', (tester) async {
-    await pumpAt(
-      tester,
-      QuarkMessageComposer(onSend: (_) {}, hintText: 'Message #general'),
-    );
-    expect(find.text('Message #general'), findsOneWidget);
-  });
-
-  testWidgets('the send button carries a tooltip', (tester) async {
-    await pumpAt(tester, QuarkMessageComposer(onSend: (_) {}));
-    await tester.enterText(find.byKey(field), 'hi');
-    await tester.pump();
-    expect(tester.widget<IconButton>(find.byKey(send)).tooltip, 'Send');
-  });
+      final disabled = find.byKey(const ValueKey('message_composer_disabled'));
+      if (reason == null) {
+        expect(find.byKey(field), findsOneWidget);
+        expect(disabled, findsNothing);
+        return;
+      }
+      expect(disabled, findsOneWidget);
+      expect(find.text(reason), findsOneWidget);
+      for (final text in notShown) {
+        expect(find.text(text), findsNothing);
+      }
+      expect(find.byKey(field), findsNothing);
+      expect(find.byKey(send), findsNothing);
+    });
+  }
 
   testBothViewports('survives a long unbroken word', (tester, size) async {
     await pumpAt(tester, QuarkMessageComposer(onSend: (_) {}), size: size);

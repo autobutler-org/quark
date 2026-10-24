@@ -83,13 +83,10 @@ void main() {
     ('another theme color', QuarkTheme.dark(themeColor: QuarkThemeColor.pink)),
   ]) {
     testWidgets('$label: the fallback color is the same', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: theme,
-          home: const Scaffold(
-            body: QuarkAvatar(id: 'u1', name: 'Ada'),
-          ),
-        ),
+      await pumpAt(
+        tester,
+        const QuarkAvatar(id: 'u1', name: 'Ada'),
+        theme: theme,
       );
 
       final box = tester.widget<DecoratedBox>(

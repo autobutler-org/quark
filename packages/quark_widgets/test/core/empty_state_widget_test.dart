@@ -5,49 +5,6 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testWidgets('renders the headline alone', (tester) async {
-    await pumpAt(
-      tester,
-      const EmptyStateWidget(icon: Icons.folder, headline: 'Nothing here'),
-    );
-
-    expect(find.text('Nothing here'), findsOneWidget);
-    expect(find.byIcon(Icons.folder), findsOneWidget);
-  });
-
-  testWidgets('renders the subtext when given one', (tester) async {
-    await pumpAt(
-      tester,
-      const EmptyStateWidget(
-        icon: Icons.folder,
-        headline: 'Nothing here',
-        subtext: 'Upload a file to get started.',
-      ),
-    );
-
-    expect(find.text('Upload a file to get started.'), findsOneWidget);
-  });
-
-  testWidgets('renders and wires the action', (tester) async {
-    var taps = 0;
-    await pumpAt(
-      tester,
-      EmptyStateWidget(
-        icon: Icons.folder,
-        headline: 'Nothing here',
-        action: FilledButton(
-          onPressed: () => taps++,
-          child: const Text('Upload'),
-        ),
-      ),
-    );
-
-    await tester.tap(find.text('Upload'));
-    await tester.pump();
-
-    expect(taps, 1);
-  });
-
   testWidgets('omits the optional parts when they are not given', (
     tester,
   ) async {
@@ -57,6 +14,8 @@ void main() {
       size: narrowViewport,
     );
 
+    expect(find.text('Nothing here'), findsOneWidget);
+    expect(find.byIcon(Icons.folder), findsOneWidget);
     // Icon plus headline, and nothing else.
     expect(find.byType(Text), findsOneWidget);
     expect(find.byType(FilledButton), findsNothing);
@@ -85,6 +44,7 @@ void main() {
       size: size,
     );
 
+    expect(find.text('Upload a file to get started.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

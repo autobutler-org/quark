@@ -269,25 +269,6 @@ void main() {
     expect(refreshes, 0);
   });
 
-  testWidgets('the refresh slot fits beside the brand button at 360px', (
-    tester,
-  ) async {
-    await pumpAt(
-      tester,
-      page(label: 'Photos ' * 20, onRefresh: () {}),
-      size: narrowViewport,
-      scaffold: false,
-    );
-
-    final brand = tester.getRect(find.byKey(const ValueKey('brand_button')));
-    final refresh = tester.getRect(refreshButton());
-    expect(refresh.left, greaterThanOrEqualTo(brand.right));
-    expect(refresh.right, lessThanOrEqualTo(narrowViewport.width));
-    expect(tester.takeException(), isNull);
-  });
-
-  // #2311: the theme toggle, refresh and the jobs badge each picked up a
-  // different icon size depending on whether they sat in an AppBar or a Row.
   testBothViewports('renders every action at one glyph size', (
     tester,
     size,

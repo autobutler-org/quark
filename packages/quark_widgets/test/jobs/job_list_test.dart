@@ -44,12 +44,6 @@ void main() {
     expect(find.text('No jobs yet'), findsNothing);
   });
 
-  testWidgets('shows the empty copy when there are no jobs', (tester) async {
-    await pumpAt(tester, const JobList(items: []));
-    expect(find.text('No jobs yet'), findsOneWidget);
-    expect(find.byType(QuarkLoader), findsNothing);
-  });
-
   testWidgets('renders the error the caller handed it', (tester) async {
     await pumpAt(tester, const JobList(items: [], error: 'Host unreachable'));
     expect(find.text('Host unreachable'), findsOneWidget);
@@ -183,5 +177,6 @@ void main() {
     expect(find.text('No jobs yet'), findsOneWidget);
     expect(find.textContaining('converting a video'), findsOneWidget);
     expect(find.textContaining('Conversions'), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
   });
 }

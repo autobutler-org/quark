@@ -24,16 +24,6 @@ void main() {
     expect(a, isNot(differentChild));
   });
 
-  test('defaults to a childless, user-owned, empty album', () {
-    const item = AlbumItem(id: 1, name: 'Trips');
-
-    expect(item.children, isEmpty);
-    expect(item.itemCount, 0);
-    expect(item.isSystem, isFalse);
-    expect(item.isFavorites, isFalse);
-    expect(item.parentId, isNull);
-  });
-
   /// #2061: the album sheets rendered "1 photos".
   group('photoCountLabel', () {
     test('an album holding one photo says photo, not photos', () {

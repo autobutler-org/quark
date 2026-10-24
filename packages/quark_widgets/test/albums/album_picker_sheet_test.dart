@@ -69,12 +69,6 @@ void main() {
     expect(events, ['retry']);
   });
 
-  testWidgets('says so when there are no albums', (tester) async {
-    await pumpSheet(tester, albums: const []);
-
-    expect(find.text('No albums yet'), findsOne);
-  });
-
   /// #2041, the other sheet: picking an album for a selection with no albums
   /// read "No albums — create one in the Photos view", which meant leaving
   /// the selection behind to go and make one.

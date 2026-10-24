@@ -62,14 +62,11 @@ void main() {
     tester,
     size,
   ) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: QuarkTheme.highContrastDark(themeColor: QuarkThemeColor.classic),
-        home: Scaffold(body: tappable(onTap: () {})),
-      ),
+    await pumpAt(
+      tester,
+      tappable(onTap: () {}),
+      size: size,
+      theme: QuarkTheme.highContrastDark(themeColor: QuarkThemeColor.classic),
     );
 
     await tabTo(tester, find.byKey(key));

@@ -41,26 +41,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a file it could not read has its own badge', (tester) async {
-    await pumpAt(
-      tester,
-      slot(
-        const QuarkThumbnailUnavailable(
-          name: 'truncated.mp4',
-          kind: QuarkFileKind.video,
-          issue: ThumbnailIssue.unreadable,
-          reason: "Couldn't read this file as a video.",
-        ),
-        40,
-      ),
-    );
-
-    expect(find.byIcon(QuarkIcons.video_file_outlined), findsOneWidget);
-    expect(find.byIcon(QuarkIcons.broken_image_outlined), findsOneWidget);
-    expect(find.byIcon(QuarkIcons.visibility_off_outlined), findsNothing);
-  });
-
   for (final (issue, badge) in [
+    (ThumbnailIssue.unreadable, QuarkIcons.broken_image_outlined),
     (ThumbnailIssue.missing, QuarkIcons.help_outline),
     (ThumbnailIssue.loadFailed, QuarkIcons.cloud_off_outlined),
   ]) {

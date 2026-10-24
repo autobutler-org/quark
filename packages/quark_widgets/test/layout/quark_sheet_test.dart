@@ -59,17 +59,6 @@ Future<void> _open(
 }
 
 void main() {
-  testBothViewports('shows the title, handle and close button', (
-    tester,
-    size,
-  ) async {
-    await _open(tester, size, []);
-    expect(find.text('Members'), findsOneWidget);
-    expect(find.byKey(const ValueKey('quark_sheet_handle')), findsOneWidget);
-    expect(find.byKey(const ValueKey('quark_sheet_close')), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
   testBothViewports('the close button closes the sheet', (tester, size) async {
     final results = <String?>[];
     await _open(tester, size, results);

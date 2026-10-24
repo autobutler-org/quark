@@ -191,11 +191,11 @@ void main() {
     await pumpAt(tester, page(leftHanded: false), scaffold: false);
     expect(centerX(tester, brand), lessThan(wideViewport.width / 2));
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
-        home: page(leftHanded: true),
-      ),
+    await pumpAt(
+      tester,
+      page(leftHanded: true),
+      scaffold: false,
+      theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
     );
     await tester.pumpAndSettle();
 

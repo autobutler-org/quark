@@ -150,16 +150,10 @@ void main() {
     expect(find.byType(QuarkLoader), findsOneWidget);
   });
 
-  testWidgets('keeps the list under a refresh error', (tester) async {
-    await pumpAt(tester, _list(error: "Couldn't load your calendar."));
-    expect(find.text("Couldn't load your calendar."), findsOneWidget);
-    expect(find.text('Vet'), findsOneWidget);
-  });
-
   // #2540: a failed load offers Try again, over events or in their place.
-  for (final (name, days) in [
-    ('with events on show', _days),
-    ('with nothing loaded', const <CalendarDayEvents>[]),
+  for (final (name, days, vet) in [
+    ('with events on show', _days, findsOneWidget),
+    ('with nothing loaded', const <CalendarDayEvents>[], findsNothing),
   ]) {
     testBothViewports('a load error $name offers Try again', (
       tester,
@@ -176,6 +170,7 @@ void main() {
         size: size,
       );
       expect(find.text("Couldn't load your calendar."), findsOneWidget);
+      expect(find.text('Vet'), vet);
       await tester.tap(find.byKey(const ValueKey('calendar_upcoming_retry')));
       expect(retries, 1);
       expect(tester.takeException(), isNull);

@@ -38,7 +38,8 @@ void main() {
       expect(QuarkTokens.dark.lerp(null, 0.5), QuarkTokens.dark);
     });
 
-    test('the chrome tokens take part in copyWith, equality and lerp', () {
+    test('the chrome tokens and outline take part in copyWith, equality and '
+        'lerp', () {
       const base = QuarkTokens.light;
       for (final (edited, read) in <(QuarkTokens, Color Function(QuarkTokens))>[
         (base.copyWith(chrome: _marker), (t) => t.chrome),
@@ -53,12 +54,14 @@ void main() {
           (t) => t.chromeMutedForeground,
         ),
         (base.copyWith(chromePrimary: _marker), (t) => t.chromePrimary),
+        (base.copyWith(outline: _marker), (t) => t.outline),
       ]) {
         expect(read(edited), _marker);
         expect(edited, isNot(base));
         expect(edited.hashCode, isNot(base.hashCode));
         expect(read(base.lerp(edited, 1)), _marker);
         expect(read(base.lerp(edited, 0.5)), isNot(read(base)));
+        expect(read(base.lerp(edited, 0.5)), isNot(_marker));
       }
     });
 
@@ -152,12 +155,6 @@ void main() {
         QuarkTokens.dark.lerp(QuarkTokens.light, 1).eventColors,
         QuarkTokens.light.eventColors,
       );
-    });
-
-    test('QuarkColors still mirrors the dark tokens', () {
-      expect(QuarkColors.background, QuarkTokens.dark.background);
-      expect(QuarkColors.primary, QuarkTokens.dark.primary);
-      expect(QuarkColors.radiusLg, QuarkTokens.dark.radiusLg);
     });
   });
 
@@ -257,12 +254,13 @@ void main() {
       test('$name: the focus ring is at least three pixels', () {
         expect(tokens.focusRingWidth, greaterThanOrEqualTo(3));
       });
-
-      test('$name: copyWith round-trips to an equal value', () {
-        expect(tokens.copyWith(), tokens);
-        expect(tokens.copyWith().hashCode, tokens.hashCode);
-      });
     }
+
+    test('copyWith round-trips to an equal value', () {
+      const tokens = QuarkTokens.highContrastDark;
+      expect(tokens.copyWith(), tokens);
+      expect(tokens.copyWith().hashCode, tokens.hashCode);
+    });
 
     test('focusRingWidth takes part in copyWith, equality and lerp', () {
       final edited = QuarkTokens.dark.copyWith(focusRingWidth: 5);

@@ -22,38 +22,30 @@ FeatureFlagTile _tile({
 
 /// One beta feature's switch on the Settings Features tab (#2542).
 void main() {
-  testBothViewports('on: shows the flag and reports turning it off', (
-    tester,
-    size,
-  ) async {
-    final changes = <bool>[];
-    await pumpAt(tester, _tile(onChanged: changes.add), size: size);
+  for (final (state, enabled) in [('on', true), ('off', false)]) {
+    testBothViewports('$state: shows the flag and reports turning it '
+        '${enabled ? 'off' : 'on'}', (tester, size) async {
+      final changes = <bool>[];
+      await pumpAt(
+        tester,
+        _tile(enabled: enabled, onChanged: changes.add),
+        size: size,
+      );
 
-    expect(find.text('Chat'), findsOneWidget);
-    expect(
-      find.text('Hides the feature; stored data is kept.'),
-      findsOneWidget,
-    );
-    expect(tester.widget<SwitchListTile>(find.byKey(_key)).value, isTrue);
+      expect(find.text('Chat'), findsOneWidget);
+      expect(
+        find.text('Hides the feature; stored data is kept.'),
+        findsOneWidget,
+      );
+      expect(tester.widget<SwitchListTile>(find.byKey(_key)).value, enabled);
 
-    await tester.tap(find.byKey(_key));
-    await tester.pump();
+      await tester.tap(find.byKey(_key));
+      await tester.pump();
 
-    expect(changes, [false]);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('off: reports turning it on', (tester) async {
-    final changes = <bool>[];
-    await pumpAt(tester, _tile(enabled: false, onChanged: changes.add));
-
-    expect(tester.widget<SwitchListTile>(find.byKey(_key)).value, isFalse);
-
-    await tester.tap(find.byKey(_key));
-    await tester.pump();
-
-    expect(changes, [true]);
-  });
+      expect(changes, [!enabled]);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('busy: holds still while a change is saving', (tester) async {
     final changes = <bool>[];

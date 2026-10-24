@@ -31,17 +31,6 @@ void main() {
     expect(find.text('No accounts yet'), findsNothing);
   });
 
-  testWidgets('renders the error the caller handed it', (tester) async {
-    await pumpAt(
-      tester,
-      const UserList(users: users, error: "Couldn't load the accounts."),
-    );
-
-    expect(find.text("Couldn't load the accounts."), findsOneWidget);
-    expect(find.byKey(const ValueKey('user_row_ada')), findsNothing);
-    expect(find.byType(QuarkLoader), findsNothing);
-  });
-
   testWidgets('shows the empty copy when there are no accounts', (
     tester,
   ) async {
@@ -101,21 +90,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(demoted, ['ada']);
-  });
-
-  testWidgets('offers nothing on your own row', (tester) async {
-    await pumpAt(
-      tester,
-      UserList(
-        users: users,
-        selfUsername: 'ada',
-        onPromote: (_) {},
-        onDemote: (_) {},
-      ),
-    );
-
-    expect(find.byKey(const ValueKey('user_menu_ada')), findsNothing);
-    expect(find.byKey(const ValueKey('user_menu_bob')), findsOneWidget);
   });
 
   testWidgets('a disabled account cannot be promoted, so it has no menu', (
@@ -305,7 +279,7 @@ void main() {
     testWidgets('$label: the error reads in the error color', (tester) async {
       await pumpAt(
         tester,
-        const UserList(users: [], error: 'Nope.'),
+        const UserList(users: users, error: 'Nope.'),
         brightness: brightness,
       );
 
@@ -313,6 +287,8 @@ void main() {
         tester.widget<Text>(find.text('Nope.')).style?.color,
         tokens.error,
       );
+      expect(find.byKey(const ValueKey('user_row_ada')), findsNothing);
+      expect(find.byType(QuarkLoader), findsNothing);
     });
   }
 

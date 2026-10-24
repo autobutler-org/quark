@@ -31,17 +31,6 @@ void main() {
     expect(find.text('No groups yet'), findsNothing);
   });
 
-  testWidgets('renders the error the caller handed it', (tester) async {
-    await pumpAt(
-      tester,
-      const GroupList(groups: groups, error: "Couldn't load groups."),
-    );
-
-    expect(find.text("Couldn't load groups."), findsOneWidget);
-    expect(find.byKey(const ValueKey('group_row_1')), findsNothing);
-    expect(find.byType(QuarkLoader), findsNothing);
-  });
-
   testWidgets('shows the empty copy when there are no groups', (tester) async {
     await pumpAt(tester, const GroupList(groups: []));
 
@@ -253,7 +242,7 @@ void main() {
     testWidgets('$label: the error reads in the error color', (tester) async {
       await pumpAt(
         tester,
-        const GroupList(groups: [], error: 'Nope.'),
+        const GroupList(groups: groups, error: 'Nope.'),
         brightness: brightness,
       );
 
@@ -261,6 +250,8 @@ void main() {
         tester.widget<Text>(find.text('Nope.')).style?.color,
         tokens.error,
       );
+      expect(find.byKey(const ValueKey('group_row_1')), findsNothing);
+      expect(find.byType(QuarkLoader), findsNothing);
     });
   }
 

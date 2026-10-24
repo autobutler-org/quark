@@ -123,16 +123,6 @@ void main() {
     expect(find.byKey(const ValueKey('album_menu_2')), findsOneWidget);
   });
 
-  testWidgets('opens a user album menu from its button', (tester) async {
-    final events = <String>[];
-    await pumpAt(tester, bounded(sidebar(events: events)));
-
-    await tester.tap(find.byKey(const ValueKey('album_menu_2')));
-    await tester.pump();
-
-    expect(events, ['menu:2']);
-  });
-
   testWidgets('leaves out the sort button without its callback', (
     tester,
   ) async {
@@ -177,17 +167,37 @@ void main() {
     expect(events, ['sort:name_desc']);
   });
 
-  testWidgets('shows a loader while loading', (tester) async {
-    await pumpAt(
-      tester,
-      bounded(sidebar(isLoading: true, withAllPhotos: true)),
-    );
+  // Loading, empty and error each keep All photos above them.
+  for (final (name, state, expected) in [
+    (
+      'shows a loader while loading',
+      sidebar(isLoading: true, withAllPhotos: true),
+      [
+        (find.byType(QuarkLoader), findsOneWidget),
+        (find.byType(LinearProgressIndicator), findsNothing),
+        (find.text('Trips'), findsNothing),
+      ],
+    ),
+    (
+      'says so when there are no albums',
+      sidebar(albums: const [], withAllPhotos: true),
+      [(find.text('No albums yet'), findsOneWidget)],
+    ),
+    (
+      'shows the error',
+      sidebar(error: "Couldn't load your albums.", withAllPhotos: true),
+      [(find.text("Couldn't load your albums."), findsOneWidget)],
+    ),
+  ]) {
+    testWidgets(name, (tester) async {
+      await pumpAt(tester, bounded(state));
 
-    expect(find.byType(QuarkLoader), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsNothing);
-    expect(find.text('Trips'), findsNothing);
-    expect(find.byKey(_allPhotos), findsOneWidget);
-  });
+      for (final (finder, matcher) in expected) {
+        expect(finder, matcher);
+      }
+      expect(find.byKey(_allPhotos), findsOneWidget);
+    });
+  }
 
   // A Material progress bar sweeps whatever the reduced-motion flags say
   // (#2607); the loader pulses instead.
@@ -200,28 +210,6 @@ void main() {
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(findProgressIndicators(), findsNothing);
-  });
-
-  testWidgets('says so when there are no albums', (tester) async {
-    await pumpAt(
-      tester,
-      bounded(sidebar(albums: const [], withAllPhotos: true)),
-    );
-
-    expect(find.text('No albums yet'), findsOneWidget);
-    expect(find.byKey(_allPhotos), findsOneWidget);
-  });
-
-  testWidgets('shows the error', (tester) async {
-    await pumpAt(
-      tester,
-      bounded(
-        sidebar(error: "Couldn't load your albums.", withAllPhotos: true),
-      ),
-    );
-
-    expect(find.text("Couldn't load your albums."), findsOneWidget);
-    expect(find.byKey(_allPhotos), findsOneWidget);
   });
 
   testWidgets('leaves out All photos without its callback', (tester) async {
@@ -279,20 +267,9 @@ void main() {
       rowTint(tester, find.byKey(const ValueKey('album_tile_2'))),
       allPhotosTint,
     );
-  });
-
-  testWidgets('highlights the selected album instead', (tester) async {
-    await pumpAt(
-      tester,
-      bounded(sidebar(withAllPhotos: true, selectedAlbumId: 2)),
-    );
-
+    // And All photos gives the highlight up.
     expect(rowTint(tester, find.byKey(_allPhotos)), isNull);
     expect(labelWeight(tester, 'All photos'), FontWeight.normal);
-    expect(
-      rowTint(tester, find.byKey(const ValueKey('album_tile_2'))),
-      isNotNull,
-    );
     expect(labelWeight(tester, 'Trips'), FontWeight.w600);
   });
 

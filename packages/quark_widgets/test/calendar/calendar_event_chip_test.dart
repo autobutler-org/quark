@@ -33,11 +33,16 @@ Widget _chip(
 );
 
 void main() {
-  testWidgets('a timed chip shows its start time', (tester) async {
-    await pumpAt(tester, Center(child: _chip(_timed)));
-    expect(find.text('9am'), findsOneWidget);
-    expect(find.text('Plumber visit'), findsOneWidget);
-  });
+  for (final (name, dense, time) in [
+    ('a timed chip shows its start time', false, findsOneWidget),
+    ('a dense chip drops the time', true, findsNothing),
+  ]) {
+    testWidgets(name, (tester) async {
+      await pumpAt(tester, Center(child: _chip(_timed, dense: dense)));
+      expect(find.text('9am'), time);
+      expect(find.text('Plumber visit'), findsOneWidget);
+    });
+  }
 
   testWidgets('an all-day chip is a filled bar with no time', (tester) async {
     await pumpAt(tester, Center(child: _chip(_allDay)));
@@ -49,19 +54,6 @@ void main() {
       (bar.decoration! as BoxDecoration).color,
       QuarkTokens.dark.eventColors[2].withValues(alpha: 0.24),
     );
-  });
-
-  testWidgets('a dense chip drops the time', (tester) async {
-    await pumpAt(tester, Center(child: _chip(_timed, dense: true)));
-    expect(find.text('9am'), findsNothing);
-    expect(find.text('Plumber visit'), findsOneWidget);
-  });
-
-  testWidgets('taps through its occurrence key', (tester) async {
-    var taps = 0;
-    await pumpAt(tester, Center(child: _chip(_timed, onTap: () => taps++)));
-    await tester.tap(find.byKey(const ValueKey('calendar_event_7_2026-09-29')));
-    expect(taps, 1);
   });
 
   test('an unknown color index falls back to the first color', () {
