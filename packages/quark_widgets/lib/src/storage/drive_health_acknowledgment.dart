@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/quark_tint_badge.dart';
 import '../theme/quark_tokens.dart';
-import 'drive_health_badge.dart';
 import 'drive_health_verdict.dart';
 
 /// Asks before a drive in poor health is committed to.
@@ -110,7 +110,16 @@ class DriveHealthAcknowledgment extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          DriveHealthBadge(verdict: verdict, id: id),
+          QuarkTintBadge(
+            key: ValueKey(
+              id?.isNotEmpty == true
+                  ? 'drive_health_badge_$id'
+                  : 'drive_health_badge',
+            ),
+            label: verdict.label,
+            color: driveHealthVerdictColor(tokens, verdict),
+            semanticLabel: '${verdict.label} drive health',
+          ),
           if (reason != null && reason.isNotEmpty) ...[
             SizedBox(height: tokens.spacingSm),
             Text(reason, key: ValueKey(_key('reason'))),

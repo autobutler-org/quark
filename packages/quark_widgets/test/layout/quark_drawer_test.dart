@@ -557,7 +557,7 @@ void main() {
       final row = find.byKey(ValueKey('drawer_${section.name}'));
       await tester.scrollUntilVisible(row, 50);
       expect(
-        find.descendant(of: row, matching: find.byType(QuarkBetaBadge)),
+        find.descendant(of: row, matching: find.byType(QuarkTintBadge)),
         findsNothing,
         reason: section.name,
       );
@@ -723,7 +723,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('drawer_chat')),
-        matching: find.byType(QuarkBetaBadge),
+        matching: find.byType(QuarkTintBadge),
       ),
       findsNothing,
     );

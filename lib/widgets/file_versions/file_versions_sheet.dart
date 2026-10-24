@@ -26,7 +26,7 @@ Future<void> showFileVersionsSheet(
 /// The body of the version history sheet: a [FileVersionsPanel] around a
 /// [FileVersionsController] that lives as long as the sheet is open.
 ///
-/// Restore asks first with a [RestoreVersionDialog], then reloads the list.
+/// Restore asks first with a [ConfirmDeleteDialog], then reloads the list.
 /// What a restore or a preview comes to is said in the sheet, where a snack
 /// bar would be hidden under it.
 ///
@@ -99,9 +99,16 @@ class _FileVersionsSheetState extends State<FileVersionsSheet>
     if (version == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => RestoreVersionDialog(
-        fileName: widget.name,
-        savedAt: version.createdAt,
+      builder: (dialogContext) => ConfirmDeleteDialog(
+        title: 'Restore this version?',
+        body:
+            '${widget.name} goes back to the version from '
+            '${formatVersionTime(dialogContext, version.createdAt)}. What it '
+            'holds now is saved first as "Before restore", so you can undo '
+            'this.',
+        keyPrefix: 'file_version_restore',
+        confirmLabel: 'Restore',
+        destructive: false,
         onConfirm: () => Navigator.of(dialogContext).pop(true),
         onCancel: () => Navigator.of(dialogContext).pop(false),
       ),

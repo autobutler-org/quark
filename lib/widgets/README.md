@@ -131,7 +131,7 @@ lib/widgets/
     notifications_list.dart     the sheet's rows, each opening its
                                 notification's route; reads the controller
   photos/
-    add_to_album_sheet.dart     AddToAlbumSheet host for a photo in an album
+    add_to_album_sheet.dart     AlbumPickerSheet host for a photo in an album
                                 view: calls AlbumService, shows snack bars
     photo_index_status_section.dart
                                 PhotoIndexStatusPanel host above duplicates:

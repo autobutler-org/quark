@@ -423,20 +423,36 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
-    name: 'QuarkBetaBadge',
+    name: 'QuarkTintBadge',
     group: 'Core',
-    build: (context, log) => const Wrap(
-      spacing: 16,
-      runSpacing: 16,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [Text('Chat'), SizedBox(width: 8), QuarkBetaBadge()],
-        ),
-        QuarkBetaBadge(label: 'Preview'),
-      ],
-    ),
+    build: (context, log) {
+      final tokens = QuarkTokens.of(context);
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [Text('Chat'), SizedBox(width: 8), QuarkTintBadge.beta()],
+          ),
+          for (final verdict in DriveHealthVerdict.values)
+            QuarkTintBadge(
+              key: ValueKey('drive_health_badge_${verdict.name}'),
+              label: verdict.label,
+              color: driveHealthVerdictColor(tokens, verdict),
+              semanticLabel: '${verdict.label} drive health',
+            ),
+          for (final level in DataProtectionLevel.values)
+            QuarkTintBadge(
+              key: ValueKey('data_protection_badge_${level.name}'),
+              label: level.label,
+              color: dataProtectionLevelColor(tokens, level),
+              semanticLabel: '${level.label} protection',
+            ),
+        ],
+      );
+    },
   ),
 
   // ── Layout ────────────────────────────────────────────────────────────────
@@ -1655,16 +1671,6 @@ final List<GalleryEntry> registry = [
       ],
     ),
   ),
-  GalleryEntry(
-    name: 'RestoreVersionDialog',
-    group: 'File versions',
-    build: (context, log) => RestoreVersionDialog(
-      fileName: 'notes.md',
-      savedAt: DateTime(2026, 10, 9, 8),
-      onConfirm: () => log('RestoreVersionDialog.onConfirm'),
-      onCancel: () => log('RestoreVersionDialog.onCancel'),
-    ),
-  ),
 
   // ── Jobs ──────────────────────────────────────────────────────────────────
   GalleryEntry(
@@ -2056,23 +2062,8 @@ final List<GalleryEntry> registry = [
           albums: _galleryAlbumList,
           onPicked: (a) => log('AlbumPickerSheet.onPicked(${a.name})'),
           onRetry: () => log('AlbumPickerSheet.onRetry'),
-        ),
-      ),
-    ),
-  ),
-  GalleryEntry(
-    name: 'AddToAlbumSheet',
-    group: 'Albums',
-    build: (context, log) => SizedBox(
-      height: 420,
-      child: QuarkSheet(
-        title: 'Add to album',
-        onClose: () => log('QuarkSheet.onClose'),
-        child: AddToAlbumSheet(
-          albums: _galleryAlbumList,
           memberAlbumIds: const {4},
-          onToggle: (a) => log('AddToAlbumSheet.onToggle(${a.name})'),
-          onDone: () => log('AddToAlbumSheet.onDone'),
+          onDone: () => log('AlbumPickerSheet.onDone'),
         ),
       ),
     ),
@@ -2681,18 +2672,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
-    name: 'DriveHealthBadge',
-    group: 'Storage',
-    build: (context, log) => Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final verdict in DriveHealthVerdict.values)
-          DriveHealthBadge(id: verdict.name, verdict: verdict),
-      ],
-    ),
-  ),
-  GalleryEntry(
     name: 'DriveHealthDetail',
     group: 'Storage',
     build: (context, log) {
@@ -2758,18 +2737,6 @@ final List<GalleryEntry> registry = [
   ),
 
   // ── System ────────────────────────────────────────────────────────────────
-  GalleryEntry(
-    name: 'DataProtectionBadge',
-    group: 'System',
-    build: (context, log) => Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final level in DataProtectionLevel.values)
-          DataProtectionBadge(id: level.name, level: level),
-      ],
-    ),
-  ),
   GalleryEntry(
     name: 'DataProtectionMeter',
     group: 'System',

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-import '../core/quark_beta_badge.dart';
+import '../core/quark_tint_badge.dart';
 import '../models/host_item.dart';
 import '../theme/quark_tokens.dart';
 import 'quark_chrome.dart';
@@ -53,7 +53,7 @@ enum QuarkDrawerSection {
   settings,
 }
 
-/// The sections still in beta, whose rows carry a [QuarkBetaBadge]. None
+/// The sections still in beta, whose rows carry a [QuarkTintBadge.beta]. None
 /// are, now that Slides has left beta (#2869).
 const _betaSections = <QuarkDrawerSection>{};
 
@@ -91,7 +91,7 @@ const _manageSections = {
 /// (#2230). Adding and editing Quarks stays in Settings, a row below. With
 /// one it is a plain label.
 ///
-/// A section still in beta carries a [QuarkBetaBadge] beside its label.
+/// A section still in beta carries a [QuarkTintBadge.beta] beside its label.
 /// None are, now that Slides has left beta (#2869).
 ///
 /// With [hasUnreadChat], the Chat row ends its label in a small dot that a
@@ -323,7 +323,7 @@ class QuarkDrawer extends StatelessWidget {
                               Flexible(child: Text(label)),
                               if (_betaSections.contains(section)) ...[
                                 SizedBox(width: tokens.spacingSm),
-                                const QuarkBetaBadge(),
+                                const QuarkTintBadge.beta(),
                               ],
                               if (section == QuarkDrawerSection.chat &&
                                   hasUnreadChat) ...[

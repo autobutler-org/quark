@@ -8,7 +8,6 @@
 /// See the "Widget package rules" section of `AGENTS.md` for the contract.
 library;
 
-export 'src/albums/add_to_album_sheet.dart';
 export 'src/albums/album_picker_sheet.dart';
 export 'src/albums/album_sidebar.dart';
 export 'src/albums/album_tree_tile.dart';
@@ -48,7 +47,7 @@ export 'src/core/copy_button.dart';
 export 'src/core/empty_state_widget.dart';
 export 'src/core/password_strength_bar.dart';
 export 'src/core/quark_avatar.dart';
-export 'src/core/quark_beta_badge.dart';
+export 'src/core/quark_tint_badge.dart';
 export 'src/core/quark_disconnected_state.dart';
 export 'src/core/quark_file_icon.dart';
 export 'src/core/quark_loader.dart';
@@ -73,7 +72,7 @@ export 'src/file_browser/new_file_dialog.dart';
 export 'src/file_browser/shared_roots_sheet.dart';
 export 'src/file_browser/upload_conflict_dialog.dart';
 export 'src/file_versions/file_versions_panel.dart';
-export 'src/file_versions/restore_version_dialog.dart';
+export 'src/file_versions/format_version_time.dart';
 export 'src/jobs/job_list.dart';
 export 'src/jobs/jobs_badge.dart';
 export 'src/layout/connection_indicator.dart';
@@ -176,11 +175,9 @@ export 'src/sharing/share_sheet.dart';
 export 'src/sheets/sheet_tab_strip.dart';
 export 'src/storage/drive_health.dart';
 export 'src/storage/drive_health_acknowledgment.dart';
-export 'src/storage/drive_health_badge.dart';
 export 'src/storage/drive_health_detail.dart';
 export 'src/storage/drive_health_verdict.dart';
 export 'src/storage/upload_target_picker.dart';
-export 'src/system/data_protection_badge.dart';
 export 'src/system/data_protection_drive.dart';
 export 'src/system/data_protection_explainer_sheet.dart';
 export 'src/system/data_protection_level.dart';
