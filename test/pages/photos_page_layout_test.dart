@@ -41,13 +41,6 @@ void main() {
       expect(find.byType(AlbumSidebar), findsOneWidget);
     });
 
-    testWidgets('desktop (>=900px) still lays out', (tester) async {
-      await pumpPhotos(tester, desktopSize);
-
-      expect(tester.takeException(), isNull);
-      expect(find.byType(AlbumSidebar), findsOneWidget);
-    });
-
     // The window can cross the breakpoint at runtime; both directions have to
     // survive it, since the sidebar swaps between Expanded and shrink-wrapped.
     testWidgets('resizing across the 900px breakpoint keeps laying out', (
@@ -55,6 +48,7 @@ void main() {
     ) async {
       await pumpPhotos(tester, desktopSize);
       expect(tester.takeException(), isNull);
+      expect(find.byType(AlbumSidebar), findsOneWidget);
 
       tester.view.physicalSize = compactSize;
       await tester.pump();

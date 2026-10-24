@@ -70,36 +70,6 @@ void main() {
     return deleted;
   }
 
-  testWidgets('opens with nothing selected and no delete bar', (tester) async {
-    await pumpPage(
-      tester,
-      groups: const [
-        DuplicateGroup(
-          isExact: true,
-          photos: [
-            (deviceSerial: '', relPath: 'Camera/beach.jpg'),
-            (deviceSerial: '', relPath: 'Backups/beach.jpg'),
-            (deviceSerial: '', relPath: 'beach copy.jpg'),
-          ],
-        ),
-        DuplicateGroup(
-          isExact: true,
-          photos: [
-            (deviceSerial: '', relPath: 'Camera/cat.jpg'),
-            (deviceSerial: '', relPath: 'cat copy.jpg'),
-          ],
-        ),
-      ],
-    );
-
-    expect(find.text('Identical copies · 3'), findsOneWidget);
-    expect(find.text('Identical copies · 2'), findsOneWidget);
-    expect(find.text('Keep'), findsNWidgets(5));
-    expect(find.text('Delete'), findsNothing);
-    expect(find.textContaining(RegExp(r'Delete \d+ photo')), findsNothing);
-    expect(find.byKey(const ValueKey('duplicates_delete')), findsNothing);
-  });
-
   testWidgets('the delete bar counts the copies the user selected', (
     tester,
   ) async {
@@ -298,7 +268,9 @@ void main() {
     ) async {
       await pumpPage(tester, groups: library, size: size);
 
+      expect(find.text('Identical copies · 3'), findsOneWidget);
       expect(find.text('Delete'), findsNothing);
+      expect(find.textContaining(RegExp(r'Delete \d+ photo')), findsNothing);
       expect(find.byKey(const ValueKey('duplicates_delete')), findsNothing);
       expect(
         find.byKey(const ValueKey('duplicates_select_suggested')),

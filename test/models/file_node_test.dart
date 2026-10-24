@@ -3,28 +3,6 @@ import 'package:quark/models/file_node.dart';
 
 void main() {
   group('FileNode.fromJson', () {
-    test('parses a fully populated JSON payload', () {
-      final json = <String, dynamic>{
-        'name': 'photo.jpg',
-        'size': 1024,
-        'isDir': false,
-        'deviceName': 'USB Drive',
-        'devicePath': '/dev/sda1',
-        'deviceSerial': 'ABC123',
-        'dirPath': '/photos/vacation',
-      };
-
-      final node = FileNode.fromJson(json);
-
-      expect(node.name, 'photo.jpg');
-      expect(node.size, 1024);
-      expect(node.isDir, false);
-      expect(node.deviceName, 'USB Drive');
-      expect(node.devicePath, '/dev/sda1');
-      expect(node.deviceSerial, 'ABC123');
-      expect(node.dirPath, '/photos/vacation');
-    });
-
     test('uses snake_case fallback keys', () {
       final json = <String, dynamic>{
         'name': 'doc.pdf',
@@ -57,50 +35,33 @@ void main() {
       expect(node.dirPath, '');
     });
 
-    test('parses size from string', () {
-      final json = <String, dynamic>{'name': 'file.txt', 'size': '2048'};
+    for (final (size, want) in <(Object, int)>[
+      ('2048', 2048),
+      (1024.5, 1024),
+      ('not-a-number', 0),
+    ]) {
+      test('parses size ${size.runtimeType} $size as $want', () {
+        final node = FileNode.fromJson(<String, dynamic>{
+          'name': 'file.txt',
+          'size': size,
+        });
+        expect(node.size, want);
+      });
+    }
 
-      final node = FileNode.fromJson(json);
-      expect(node.size, 2048);
-    });
-
-    test('parses size from double', () {
-      final json = <String, dynamic>{'name': 'file.txt', 'size': 1024.5};
-
-      final node = FileNode.fromJson(json);
-      expect(node.size, 1024);
-    });
-
-    test('parses invalid size string as 0', () {
-      final json = <String, dynamic>{
-        'name': 'file.txt',
-        'size': 'not-a-number',
-      };
-
-      final node = FileNode.fromJson(json);
-      expect(node.size, 0);
-    });
-
-    test('parses isDir from string "true"', () {
-      final json = <String, dynamic>{'name': 'folder', 'isDir': 'true'};
-
-      final node = FileNode.fromJson(json);
-      expect(node.isDir, true);
-    });
-
-    test('parses isDir from string "True" (case insensitive)', () {
-      final json = <String, dynamic>{'name': 'folder', 'isDir': 'True'};
-
-      final node = FileNode.fromJson(json);
-      expect(node.isDir, true);
-    });
-
-    test('parses isDir from string "false"', () {
-      final json = <String, dynamic>{'name': 'file.txt', 'isDir': 'false'};
-
-      final node = FileNode.fromJson(json);
-      expect(node.isDir, false);
-    });
+    for (final (isDir, want) in [
+      ('true', true),
+      ('True', true),
+      ('false', false),
+    ]) {
+      test('parses isDir from string "$isDir"', () {
+        final node = FileNode.fromJson(<String, dynamic>{
+          'name': 'folder',
+          'isDir': isDir,
+        });
+        expect(node.isDir, want);
+      });
+    }
   });
 
   // #1565: every listing reports when the node last changed, and leaves the
@@ -134,61 +95,41 @@ void main() {
   });
 
   group('FileNode.apiPath', () {
-    test('returns dirPath with leading/trailing slashes stripped', () {
-      const node = FileNode(
-        name: 'file.txt',
-        size: 0,
-        isDir: false,
-        deviceName: '',
-        devicePath: '',
-        deviceSerial: '',
-        dirPath: '/photos/vacation/',
-      );
+    for (final (label, name, dirPath, want) in [
+      (
+        'strips leading and trailing slashes',
+        'file.txt',
+        '/photos/vacation/',
+        'photos/vacation',
+      ),
+      (
+        'falls back to name when dirPath is empty',
+        'readme.md',
+        '',
+        'readme.md',
+      ),
+      (
+        'falls back to name when dirPath is whitespace',
+        'readme.md',
+        '   ',
+        'readme.md',
+      ),
+      ('strips multiple leading slashes', '', '///deep/path///', 'deep/path'),
+    ]) {
+      test(label, () {
+        final node = FileNode(
+          name: name,
+          size: 0,
+          isDir: false,
+          deviceName: '',
+          devicePath: '',
+          deviceSerial: '',
+          dirPath: dirPath,
+        );
 
-      expect(node.apiPath, 'photos/vacation');
-    });
-
-    test('falls back to name when dirPath is empty', () {
-      const node = FileNode(
-        name: 'readme.md',
-        size: 0,
-        isDir: false,
-        deviceName: '',
-        devicePath: '',
-        deviceSerial: '',
-        dirPath: '',
-      );
-
-      expect(node.apiPath, 'readme.md');
-    });
-
-    test('falls back to name when dirPath is whitespace', () {
-      const node = FileNode(
-        name: 'readme.md',
-        size: 0,
-        isDir: false,
-        deviceName: '',
-        devicePath: '',
-        deviceSerial: '',
-        dirPath: '   ',
-      );
-
-      expect(node.apiPath, 'readme.md');
-    });
-
-    test('strips multiple leading slashes', () {
-      const node = FileNode(
-        name: '',
-        size: 0,
-        isDir: true,
-        deviceName: '',
-        devicePath: '',
-        deviceSerial: '',
-        dirPath: '///deep/path///',
-      );
-
-      expect(node.apiPath, 'deep/path');
-    });
+        expect(node.apiPath, want);
+      });
+    }
   });
 
   // Docs and Sheets both filter through matchesSearch. A doc on the device

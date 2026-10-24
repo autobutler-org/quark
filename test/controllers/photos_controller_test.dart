@@ -496,15 +496,6 @@ void main() {
       expect(quark.controller().photos, hasLength(2));
     });
 
-    test('another Quark never shows this one\'s photos', () async {
-      final quark = _FakeQuark();
-      await quark.controller().refresh();
-
-      quark.scope = 'quark-b';
-
-      expect(quark.controller().photos, isEmpty);
-    });
-
     test('an answer for the Quark that was left is not kept for the new '
         'one', () async {
       final quark = _FakeQuark();

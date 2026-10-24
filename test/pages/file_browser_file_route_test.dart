@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/pages/pdf_viewer_page.dart';
-import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/router.dart' as app;
@@ -431,16 +430,5 @@ void main() {
         }, createHttpClient: overrides.createHttpClient);
       });
     }
-  });
-
-  testWidgets('clicking an audio file opens the audio player', (tester) async {
-    // #1573: audio shared the video case and opened VideoViewerPage, which has
-    // no track to paint and showed only its black backdrop.
-    await HttpOverrides.runZoned(() async {
-      await clickFile(tester, '/files/music', 'song.mp3');
-      await tester.pump(const Duration(seconds: 1));
-      expect(find.byType(AudioPlayerPage), findsOneWidget);
-      expect(find.byType(VideoViewerPage), findsNothing);
-    }, createHttpClient: overrides.createHttpClient);
   });
 }

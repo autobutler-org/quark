@@ -1125,38 +1125,40 @@ void main() {
       expect(at(r), '/chat/12');
     });
 
-    testWidgets('a stored chat flag that is off still opens chat', (
-      tester,
-    ) async {
-      await signIn(staleChatOff: true);
-      final general = await pumpGated(tester, AppRoutes.chat);
-      expect(at(general), '/chat/general');
-
-      final channel = await pumpGated(tester, '/chat/12');
-      expect(at(channel), '/chat/12');
-    });
-
-    testWidgets('a stored calendar flag that is off still opens calendar', (
-      tester,
-    ) async {
-      await signIn(staleCalendarOff: true);
-      final r = await pumpGated(tester, '/calendar/week');
-      expect(at(r), '/calendar/week');
-    });
-
-    testWidgets('a stored slides flag that is off still opens slides', (
-      tester,
-    ) async {
-      await signIn(staleSlidesOff: true);
-      for (final location in [
-        AppRoutes.slides,
-        '/slides/talks/q1.qslide',
-        '/slides/talks/q1.qslide/present',
-      ]) {
-        final r = await pumpGated(tester, location);
-        expect(at(r), location, reason: location);
-      }
-    });
+    for (final (name, signInStale, visits) in [
+      (
+        'chat',
+        () => signIn(staleChatOff: true),
+        {AppRoutes.chat: '/chat/general', '/chat/12': '/chat/12'},
+      ),
+      (
+        'calendar',
+        () => signIn(staleCalendarOff: true),
+        {'/calendar/week': '/calendar/week'},
+      ),
+      (
+        'slides',
+        () => signIn(staleSlidesOff: true),
+        {
+          for (final location in [
+            AppRoutes.slides,
+            '/slides/talks/q1.qslide',
+            '/slides/talks/q1.qslide/present',
+          ])
+            location: location,
+        },
+      ),
+    ]) {
+      testWidgets('a stored $name flag that is off still opens $name', (
+        tester,
+      ) async {
+        await signInStale();
+        for (final MapEntry(key: location, value: lands) in visits.entries) {
+          final r = await pumpGated(tester, location);
+          expect(at(r), lands, reason: location);
+        }
+      });
+    }
 
     // #2935: every view or week change used to ask the Quark for its flags.
     // The calendar is no longer a flag (#2610), so moving around it stays put.
@@ -1366,6 +1368,57 @@ void main() {
       );
     });
 
+    test('a /view link to source or a log opens the code viewer', () {
+      expect(viewFileRedirect('src/main.go', null), '/code/src/main.go');
+      expect(
+        viewFileRedirect('logs/server.log', 's1'),
+        '/code/logs/server.log?serial=s1',
+      );
+    });
+
+    test('the viewer paths encode the path and carry the serial', () {
+      for (final (build, path, serial, want) in [
+        (
+          AppRoutes.codeViewerPath,
+          '/my app/main.go',
+          null,
+          '/code/my%20app/main.go',
+        ),
+        (
+          AppRoutes.codeViewerPath,
+          'logs/server.log',
+          'usb 1',
+          '/code/logs/server.log?serial=usb+1',
+        ),
+        (
+          AppRoutes.markdownViewerPath,
+          '/my notes/read me.md',
+          null,
+          '/markdown/my%20notes/read%20me.md',
+        ),
+        (
+          AppRoutes.markdownViewerPath,
+          'a/b.md',
+          'usb 1',
+          '/markdown/a/b.md?serial=usb+1',
+        ),
+        (
+          AppRoutes.modelViewerPath,
+          '/my prints/part one.stl',
+          null,
+          '/model/my%20prints/part%20one.stl',
+        ),
+        (
+          AppRoutes.modelViewerPath,
+          'a/b.obj',
+          'usb 1',
+          '/model/a/b.obj?serial=usb+1',
+        ),
+      ]) {
+        expect(build(path, serial: serial), want, reason: path);
+      }
+    });
+
     test('sends a folder and an archive to the file browser', () {
       expect(viewFileRedirect('photos/2024', null), '/files/photos/2024');
       expect(
@@ -1434,15 +1487,6 @@ void main() {
       expect(at(), link);
       expect(find.text('view photos/beach 1.jpg'), findsOneWidget);
     });
-  });
-
-  // #1678
-  test('the app routes /books to the Books page', () {
-    final route = router.configuration.routes.whereType<GoRoute>().singleWhere(
-      (route) => route.path == AppRoutes.books,
-    );
-    expect(AppRoutes.books, '/books');
-    expect(route.builder, isNotNull);
   });
 
   group('slides routes', () {

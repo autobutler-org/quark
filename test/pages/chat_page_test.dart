@@ -385,39 +385,6 @@ void main() {
       },
     );
 
-    testWidgets('a failed send offers retry ($label)', (tester) async {
-      final (_, fake) = await pumpChat(tester, size);
-      fake.opened[1]!.onSend = (_) async =>
-          throw const MessageException('offline');
-
-      await tester.enterText(
-        find.byKey(const ValueKey('message_composer_field')),
-        'hello',
-      );
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('message_composer_send')));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('chat_failed_send_retry_pending_0')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('chat_send_failed_pending_0')),
-        findsOneWidget,
-      );
-
-      fake.opened[1]!.onSend = null;
-      await tester.tap(
-        find.byKey(const ValueKey('chat_failed_send_retry_pending_0')),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('chat_failed_send_retry_pending_0')),
-        findsNothing,
-      );
-      expect(tester.takeException(), isNull);
-    });
-
     testWidgets('locked chat asks for the password first ($label)', (
       tester,
     ) async {

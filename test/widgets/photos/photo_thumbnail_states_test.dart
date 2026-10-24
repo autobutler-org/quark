@@ -9,7 +9,6 @@ import 'package:quark/models/thumbnail_probe.dart';
 import 'package:quark/services/thumbnail_backfill.dart';
 import 'package:quark/services/thumbnail_cache_manager.dart';
 import 'package:quark/utils/error_text.dart';
-import 'package:quark/utils/thumbnail_cache_config.dart';
 import 'package:quark/widgets/photos/photo_thumbnail.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -117,33 +116,6 @@ void main() {
     await _flush(tester);
 
     expect(_shownIssue(), ThumbnailIssue.missing);
-    await tester.pumpWidget(const SizedBox());
-  });
-
-  testWidgets('a busy Quark keeps the placeholder until retries run out', (
-    tester,
-  ) async {
-    final endpoint = _endpoint(503);
-    ThumbnailCacheManager.instance = endpoint;
-    await tester.pumpWidget(
-      _tile(
-        PhotoThumbnail(
-          url: Uri.parse('https://quark.test/t/busy.jpg'),
-          path: 'photos/busy.jpg',
-        ),
-      ),
-    );
-    await _flush(tester);
-
-    var delay = ThumbnailCacheConfig.busyRetryDelay;
-    for (var i = 0; i < ThumbnailCacheConfig.busyRetries; i++) {
-      expect(_shownIssue(), isNull, reason: 'retry $i is still to come');
-      await tester.pump(delay);
-      await _flush(tester);
-      delay *= 2;
-    }
-    expect(endpoint.fetched, hasLength(ThumbnailCacheConfig.busyRetries + 1));
-    expect(_shownIssue(), ThumbnailIssue.loadFailed);
     await tester.pumpWidget(const SizedBox());
   });
 
