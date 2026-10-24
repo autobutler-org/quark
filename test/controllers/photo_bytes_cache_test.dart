@@ -34,14 +34,13 @@ void main() {
   });
 
   group('eviction', () {
-    test('an evicted photo is downloaded again and its bytes released', () {
+    test('an evicted photo is downloaded again', () {
       const key = '/photos/a.jpg';
       cache.put(PhotoBytesCache.key(key, 'abc'), photo(4));
 
       cache.evict(PhotoBytesCache.key(key, 'abc'));
 
       expect(cache.get(PhotoBytesCache.key(key, 'abc')), isNull);
-      expect(cache.heldBytes, 0);
     });
 
     test('evicting a photo that was never held is a no-op', () {
@@ -49,7 +48,7 @@ void main() {
 
       cache.evict(PhotoBytesCache.key('/gone.jpg', null));
 
-      expect(cache.heldBytes, 4 * 1024 * 1024);
+      expect(cache.get(PhotoBytesCache.key('/a.jpg', null)), isNotNull);
     });
   });
 
@@ -58,7 +57,6 @@ void main() {
       cache.put(PhotoBytesCache.key('/a.jpg', null), photo(4));
       cache.put(PhotoBytesCache.key('/b.jpg', null), photo(4));
 
-      expect(cache.heldBytes, 8 * 1024 * 1024);
       expect(cache.get(PhotoBytesCache.key('/a.jpg', null)), isNotNull);
       expect(cache.get(PhotoBytesCache.key('/b.jpg', null)), isNotNull);
     });
@@ -75,10 +73,6 @@ void main() {
 
       cache.put(PhotoBytesCache.key('/new.jpg', null), photo(megabytes));
 
-      expect(
-        cache.heldBytes,
-        lessThanOrEqualTo(ImageViewerConfig.photoCacheBudgetBytes),
-      );
       expect(cache.get(PhotoBytesCache.key('/1.jpg', null)), isNull);
       expect(cache.get(PhotoBytesCache.key('/0.jpg', null)), isNotNull);
       expect(cache.get(PhotoBytesCache.key('/new.jpg', null)), isNotNull);
@@ -93,14 +87,6 @@ void main() {
 
       expect(cache.get(PhotoBytesCache.key('/huge.jpg', null)), isNull);
       expect(cache.get(PhotoBytesCache.key('/small.jpg', null)), isNotNull);
-    });
-
-    test('re-putting the same photo does not double-count its bytes', () {
-      final key = PhotoBytesCache.key('/a.jpg', null);
-      cache.put(key, photo(4));
-      cache.put(key, photo(4));
-
-      expect(cache.heldBytes, 4 * 1024 * 1024);
     });
   });
 

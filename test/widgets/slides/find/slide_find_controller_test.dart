@@ -89,10 +89,9 @@ void main() {
     h.slide.value = 'b';
     h.find.open();
     h.find.query.text = 'cat';
-    expect(h.find.result.length, 3);
+    expect(h.find.highlights.length, 3);
     expect(h.at, 'b:text:0');
     expect(h.find.status, '2 of 3');
-    expect(h.find.highlights, h.find.result.matches);
   });
 
   test('next and previous wrap and move the canvas', () {
@@ -123,11 +122,11 @@ void main() {
     h.find.query.text = 'cat';
     h.find.next();
     h.find.toggleNotes();
-    expect(h.find.result.length, 4);
+    expect(h.find.highlights.length, 4);
     expect(h.at, 'b:text:0');
     h.find.toggleCurrentSlide();
     expect(h.find.scope, SlideFindScope.currentSlide);
-    expect(h.find.result.length, 3, reason: 'slide b, notes included');
+    expect(h.find.highlights.length, 3, reason: 'slide b, notes included');
     h.find.toggleWholeWord();
     h.find.toggleCaseSensitive();
     h.find.toggleRegex();
@@ -141,9 +140,9 @@ void main() {
     h.find.open();
     h.find.toggleCurrentSlide();
     h.find.query.text = 'cat';
-    expect(h.find.result.length, 1);
+    expect(h.find.highlights.length, 1);
     h.slide.value = 'b';
-    expect(h.find.result.length, 2);
+    expect(h.find.highlights.length, 2);
   });
 
   test('a bad pattern says so', () {
@@ -179,11 +178,11 @@ void main() {
     h.find.query.text = 'cat';
     h.find.replacement.text = 'dog';
     expect(h.find.replaceAll(), 4);
-    expect(h.find.result.isEmpty, isTrue);
+    expect(h.find.highlights.isEmpty, isTrue);
     expect(h.find.status, 'No results');
     h.doc.controller.undo();
     expect(h.doc.presentation, deck());
-    expect(h.find.result.length, 4, reason: 'undo found them again');
+    expect(h.find.highlights.length, 4, reason: 'undo found them again');
   });
 
   test('an edit elsewhere searches again and keeps the place', () {
@@ -191,7 +190,7 @@ void main() {
     h.find.query.text = 'cat';
     h.find.next();
     h.doc.controller.editText('a', 'ta', [TextParagraph.plain('cat cat')]);
-    expect(h.find.result.length, 4);
+    expect(h.find.highlights.length, 4);
     expect(h.at, 'b:text:0');
   });
 

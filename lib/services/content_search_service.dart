@@ -24,12 +24,6 @@ class ContentSearchResult {
   /// HTML fragment with matched terms wrapped in `<b>…</b>`.
   final String snippet;
 
-  /// The filename portion of [relPath].
-  String get filename {
-    final idx = relPath.lastIndexOf('/');
-    return idx < 0 ? relPath : relPath.substring(idx + 1);
-  }
-
   /// Strips HTML tags from [snippet] to produce plain text.
   String get plainSnippet => snippet.replaceAll(RegExp(r'<[^>]*>'), '');
 

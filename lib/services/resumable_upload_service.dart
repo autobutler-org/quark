@@ -34,7 +34,6 @@ abstract interface class ResumableUploadClient {
     required String fileName,
     required int totalSize,
     String? serial,
-    bool overwrite,
     UploadConflictChoice? conflict,
   });
 
@@ -80,7 +79,6 @@ class ResumableUploadService
     required String fileName,
     required int totalSize,
     String? serial,
-    bool overwrite = false,
     UploadConflictChoice? conflict,
   }) async {
     final response = await authenticatedPost(
@@ -91,7 +89,7 @@ class ResumableUploadService
         'fileName': fileName,
         'totalSize': totalSize,
         if (serial != null && serial.isNotEmpty) 'serial': serial,
-        'overwrite': overwrite || conflict == UploadConflictChoice.replace,
+        'overwrite': conflict == UploadConflictChoice.replace,
         'keepBoth': conflict == UploadConflictChoice.keepBoth,
       }),
     );

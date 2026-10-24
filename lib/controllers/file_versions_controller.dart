@@ -43,17 +43,10 @@ class FileVersionsController extends ChangeNotifier {
 
   List<FileVersion> _versions = const [];
   Map<int, String>? _usernames;
-  bool _hasLoaded = false;
   Object? _error;
   String? _busyId;
   int _generation = 0;
   bool _disposed = false;
-
-  /// The versions as the Quark listed them, newest first.
-  List<FileVersion> get versions => _versions;
-
-  /// Whether a listing has arrived. False while the first load is out.
-  bool get hasLoaded => _hasLoaded;
 
   /// What the last load failed with, null after one that worked. The page
   /// turns it into a sentence.
@@ -62,7 +55,8 @@ class FileVersionsController extends ChangeNotifier {
   /// The id of the version being restored or fetched, null when idle.
   String? get busyId => _busyId;
 
-  /// [versions] as the panel renders them.
+  /// The versions as the Quark listed them, newest first, as the panel renders
+  /// them.
   List<FileVersionItem> get items => [
     for (final version in _versions)
       FileVersionItem(
@@ -99,7 +93,6 @@ class FileVersionsController extends ChangeNotifier {
       if (_disposed || generation != _generation) return;
       _versions = versions;
       _error = null;
-      _hasLoaded = true;
     } catch (e) {
       if (_disposed || generation != _generation) return;
       _error = e;

@@ -138,7 +138,6 @@ void main() {
 
     unawaited(controller.load());
     await tester.pump();
-    expect(controller.isLoading, isTrue);
     expect(find.byType(QuarkLoader), findsNothing);
     expect(find.byKey(dueTile), findsOneWidget, reason: 'rows stay up');
     answers.last.complete(const [_due]);

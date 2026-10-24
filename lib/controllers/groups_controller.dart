@@ -42,7 +42,6 @@ class GroupsController extends ChangeNotifier {
 
   List<Group> _groups = const [];
   bool _hasLoaded = false;
-  bool _isLoading = false;
   Object? _error;
   bool _isSaving = false;
   Object? _saveError;
@@ -64,9 +63,6 @@ class GroupsController extends ChangeNotifier {
     }
     return null;
   }
-
-  /// Whether a load is in flight.
-  bool get isLoading => _isLoading;
 
   /// Whether any load has succeeded, so a refresh keeps the rows showing.
   bool get hasLoaded => _hasLoaded;
@@ -105,7 +101,6 @@ class GroupsController extends ChangeNotifier {
   /// Fetches the groups. A newer load supersedes this one.
   Future<void> load() async {
     final generation = ++_generation;
-    _isLoading = true;
     _notify();
     try {
       final groups = await _listGroups();
@@ -118,7 +113,6 @@ class GroupsController extends ChangeNotifier {
       _error = error;
     } finally {
       if (_isCurrent(generation)) {
-        _isLoading = false;
         notifyListeners();
       }
     }

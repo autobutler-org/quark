@@ -93,9 +93,7 @@ class CalendarController extends ChangeNotifier {
     this.listPeople = listCalendarPeople,
     this.canListPeople = _isAdmin,
     this.clock = DateTime.now,
-    int firstWeekday = CalendarDates.defaultFirstWeekday,
-  }) : _firstWeekday = firstWeekday,
-       _anchor = CalendarDates.dateOnly(clock()),
+  }) : _anchor = CalendarDates.dateOnly(clock()),
        _now = clock();
 
   final ListCalendarEventsFn listEvents;
@@ -112,7 +110,7 @@ class CalendarController extends ChangeNotifier {
 
   static bool _isAdmin() => AppSettings.instance.isAdmin.value;
 
-  int _firstWeekday;
+  int _firstWeekday = CalendarDates.defaultFirstWeekday;
 
   /// The weekday a week and a month row start on.
   int get firstWeekday => _firstWeekday;
@@ -678,8 +676,8 @@ class CalendarController extends ChangeNotifier {
 
   /// Starts advancing [now] every minute, so the now line and due reminders
   /// keep up with the clock.
-  void startClock({Duration every = const Duration(minutes: 1)}) {
-    _ticker ??= Timer.periodic(every, (_) {
+  void startClock() {
+    _ticker ??= Timer.periodic(const Duration(minutes: 1), (_) {
       _now = clock();
       notifyListeners();
     });

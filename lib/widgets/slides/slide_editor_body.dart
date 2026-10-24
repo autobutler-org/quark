@@ -144,7 +144,6 @@ class SlideEditorBody extends StatelessWidget {
           ),
           if (slideId != null)
             SlideNotesPanel(
-              slideId: slideId,
               notes: c.notes,
               open: c.notesOpen,
               onToggle: c.toggleNotes,

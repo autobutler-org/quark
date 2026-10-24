@@ -504,10 +504,7 @@ void main() {
       authStatusProbe = () async =>
           const AuthStatus(setupComplete: true, username: 'bob');
 
-      await pumpGatedRouter(
-        tester,
-        initialLocation: AppRoutes.usersTab(UsersTab.groups),
-      );
+      await pumpGatedRouter(tester, initialLocation: '/users/groups');
 
       expect(find.text('files'), findsOneWidget);
       expect(find.text('users'), findsNothing);
@@ -520,7 +517,7 @@ void main() {
 
       final router = await pumpGatedRouter(
         tester,
-        initialLocation: AppRoutes.usersTab(UsersTab.groups),
+        initialLocation: '/users/groups',
       );
 
       expect(find.text('users'), findsOneWidget);

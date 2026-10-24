@@ -30,7 +30,6 @@ void main() {
     await c.load();
 
     expect(c.hasLoaded, isTrue);
-    expect(c.isLoading, isFalse);
     expect(c.error, isNull);
     expect(c.decisions, [approved, denied]);
     expect(notified, 2, reason: 'once to start, once to finish');
@@ -45,7 +44,6 @@ void main() {
 
     expect(c.error, isA<ApiException>());
     expect(c.hasLoaded, isFalse);
-    expect(c.isLoading, isFalse);
     expect(c.decisions, isEmpty);
   });
 
@@ -91,7 +89,6 @@ void main() {
     await stale;
 
     expect(c.decisions, [approved, denied]);
-    expect(c.isLoading, isFalse);
   });
 
   test('a load that finishes after dispose notifies nobody', () async {

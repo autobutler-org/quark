@@ -107,7 +107,6 @@ void main() {
       final stored = server.key!;
       expect(stored.kdfParams.alg, KdfParams.phraseSplitAlgorithm);
       expect(stored.byPhrase!.salt, fakeVaultSalt);
-      expect(c.hasPhraseWrap, isTrue);
       final byPassword = crypto.deriveAuthKeys(
         _password,
         fakeVaultSalt,
@@ -163,7 +162,6 @@ void main() {
 
       expect(server.key!.byPhrase, isNull);
       expect(server.key!.kdfParams.alg, KdfParams.splitAlgorithm);
-      expect(c.hasPhraseWrap, isFalse);
     });
   });
 
@@ -448,12 +446,6 @@ void main() {
       c.filterFolder(null);
       expect(c.visibleEntries, hasLength(2));
 
-      expect(
-        c.entriesForUrl('https://login.mail.example.com/x').single.data.name,
-        'Mail',
-      );
-      expect(c.entriesForUrl('https://example.com'), isEmpty);
-      expect(c.entriesForUrl('not a url at all'), isEmpty);
       expect(server.sent, hasLength(sentBefore));
     });
 

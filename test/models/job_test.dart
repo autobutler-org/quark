@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/job.dart';
 
 void main() {
-  test('parses a finished job and times it from start to finish', () {
+  test('parses a finished job', () {
     final job = Job.fromJson({
       'id': 3,
       'kind': JobKinds.videoTranscode,
@@ -25,10 +25,11 @@ void main() {
     expect(job.progress, 1.0);
     expect(job.attempts, 2);
     expect(job.createdAt, DateTime.utc(2026, 9, 14, 10));
-    expect(job.elapsed, const Duration(seconds: 90));
+    expect(job.startedAt, DateTime.utc(2026, 9, 14, 10, 0, 5));
+    expect(job.finishedAt, DateTime.utc(2026, 9, 14, 10, 1, 35));
   });
 
-  test('a job that has not started has no timestamps and no elapsed', () {
+  test('a job that has not started has no timestamps', () {
     final job = Job.fromJson({
       'id': 1,
       'kind': JobKinds.videoTranscode,
@@ -40,19 +41,6 @@ void main() {
 
     expect(job.startedAt, isNull);
     expect(job.finishedAt, isNull);
-    expect(job.elapsed, isNull);
-  });
-
-  test('a running job counts up to now', () {
-    final started = DateTime.now().subtract(const Duration(minutes: 5));
-    final job = Job.fromJson({
-      'id': 2,
-      'status': 'running',
-      'createdAt': started.toIso8601String(),
-      'startedAt': started.toIso8601String(),
-    });
-
-    expect(job.elapsed, greaterThanOrEqualTo(const Duration(minutes: 5)));
   });
 
   test('an unknown kind and status parse rather than throw', () {

@@ -36,7 +36,6 @@ class ShareController extends ChangeNotifier {
 
   PathAccess? _access;
   SharePrincipals _principals = const SharePrincipals();
-  bool _isLoading = false;
   Object? _error;
   final Set<String> _busy = {};
 
@@ -47,9 +46,6 @@ class ShareController extends ChangeNotifier {
 
   /// Whether the access has loaded.
   bool get hasLoaded => _access != null;
-
-  /// Whether a load is in flight.
-  bool get isLoading => _isLoading;
 
   /// Why the last load failed, or null. Raw; the host composes the copy.
   Object? get error => _error;
@@ -203,7 +199,6 @@ class ShareController extends ChangeNotifier {
   /// a change the Quark answers, supersedes this one.
   Future<void> load() async {
     final generation = ++_generation;
-    _isLoading = true;
     _notify();
     try {
       final results = await Future.wait<Object>([
@@ -219,7 +214,6 @@ class ShareController extends ChangeNotifier {
       _error = error;
     } finally {
       if (_isCurrent(generation)) {
-        _isLoading = false;
         notifyListeners();
       }
     }
@@ -281,7 +275,6 @@ class ShareController extends ChangeNotifier {
         _generation++;
         _access = access;
         _error = null;
-        _isLoading = false;
       }
       return null;
     } catch (error) {

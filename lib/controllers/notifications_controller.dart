@@ -62,12 +62,10 @@ class NotificationsController extends ChangeNotifier {
 
   List<AppNotification> _notifications = const [];
   bool _hasLoaded = false;
-  bool _isLoading = false;
   String? _error;
 
   Set<String> _disabled = const {};
   bool _preferencesLoaded = false;
-  bool _isLoadingPreferences = false;
   bool _isSaving = false;
   String? _preferencesError;
 
@@ -78,9 +76,6 @@ class NotificationsController extends ChangeNotifier {
   /// list means there are none rather than that nobody has asked yet.
   bool get hasLoaded => _hasLoaded;
 
-  /// Whether a fetch of [notifications] is in flight.
-  bool get isLoading => _isLoading;
-
   /// Copy for the last failed fetch of [notifications], or null.
   String? get error => _error;
 
@@ -90,9 +85,6 @@ class NotificationsController extends ChangeNotifier {
   /// Whether [isEnabled] reflects what the Quark holds, which it does once
   /// [loadPreferences] has answered for this account.
   bool get preferencesLoaded => _preferencesLoaded;
-
-  /// Whether [loadPreferences] is in flight.
-  bool get isLoadingPreferences => _isLoadingPreferences;
 
   /// Whether [setEnabled] is saving. One save runs at a time, since each one
   /// reads the settings and writes them back whole.
@@ -122,7 +114,6 @@ class NotificationsController extends ChangeNotifier {
     _account++;
     _disabled = const {};
     _preferencesLoaded = false;
-    _isLoadingPreferences = false;
     _isSaving = false;
     _preferencesError = null;
     _notifications = const [];
@@ -133,7 +124,6 @@ class NotificationsController extends ChangeNotifier {
       return;
     }
     _generation++;
-    _isLoading = false;
     notifyListeners();
   }
 
@@ -158,7 +148,6 @@ class NotificationsController extends ChangeNotifier {
   /// keeps the list already shown.
   Future<void> load() async {
     final generation = ++_generation;
-    _isLoading = true;
     notifyListeners();
     try {
       final notifications = await _listNotifications();
@@ -171,7 +160,6 @@ class NotificationsController extends ChangeNotifier {
       debugPrint('[notifications_controller.dart] Failed to list: $e');
       _error = Errors.message(e, 'load your notifications');
     }
-    _isLoading = false;
     notifyListeners();
   }
 
@@ -179,7 +167,6 @@ class NotificationsController extends ChangeNotifier {
   /// lands in [preferencesError].
   Future<void> loadPreferences() async {
     final account = _account;
-    _isLoadingPreferences = true;
     _preferencesError = null;
     notifyListeners();
     try {
@@ -192,7 +179,6 @@ class NotificationsController extends ChangeNotifier {
       debugPrint('[notifications_controller.dart] Failed to read prefs: $e');
       _preferencesError = Errors.message(e, 'load your notification settings');
     }
-    _isLoadingPreferences = false;
     notifyListeners();
   }
 

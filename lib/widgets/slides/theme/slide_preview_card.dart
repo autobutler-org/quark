@@ -22,7 +22,6 @@ class SlidePreviewCard extends StatelessWidget {
     required this.selected,
     required this.onPressed,
     this.theme,
-    this.width = defaultWidth,
     super.key,
   });
 
@@ -44,11 +43,8 @@ class SlidePreviewCard extends StatelessWidget {
   /// The theme the preview is drawn in; null draws `SlideThemes.light`.
   final SlideTheme? theme;
 
-  /// How wide the card is.
-  final double width;
-
-  /// The width two cards side by side fit in a 280dp panel at.
-  static const double defaultWidth = 116;
+  /// How wide the card is: two side by side fit in a 280dp panel.
+  static const double width = 116;
 
   @override
   Widget build(BuildContext context) {

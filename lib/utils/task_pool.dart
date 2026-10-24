@@ -15,7 +15,7 @@ import 'dart:collection';
 ///
 /// ```dart
 /// final pool = TaskPool<Job>(concurrency: 4, worker: (job) => job.run());
-/// pool.addAll(jobs);
+/// jobs.forEach(pool.add);
 /// await pool.drain();
 /// ```
 class TaskPool<T> {
@@ -34,20 +34,11 @@ class TaskPool<T> {
 
   final Queue<T> _queue = Queue<T>();
 
-  bool _draining = false;
   Future<void>? _run;
   Object? _firstError;
   StackTrace? _firstStackTrace;
 
-  /// Items waiting to start. Excludes any already in flight.
-  int get pending => _queue.length;
-
-  /// True from the start of a [drain] until the queue empties.
-  bool get isDraining => _draining;
-
   void add(T item) => _queue.add(item);
-
-  void addAll(Iterable<T> items) => _queue.addAll(items);
 
   /// Drops everything not yet started.
   ///
@@ -69,12 +60,10 @@ class TaskPool<T> {
       return running;
     }
 
-    _draining = true;
     _firstError = null;
     _firstStackTrace = null;
 
     final run = _drainAll().whenComplete(() {
-      _draining = false;
       _run = null;
     });
     _run = run;

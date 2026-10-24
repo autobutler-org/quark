@@ -5,8 +5,8 @@
 ///
 /// The `@Native` functions resolve against the code asset the hook emits for
 /// this library, so there is no `DynamicLibrary.open` and no path per
-/// platform. [start] and [stop] run in a helper isolate: joining the tailnet
-/// blocks, and the UI isolate must not.
+/// platform. Starting and stopping the node run in a helper isolate: joining
+/// the tailnet blocks, and the UI isolate must not.
 ///
 /// iOS and Android call into the bridge. Every other `dart:io` host, including
 /// the Linux desktop build and the test runner, reports the tunnel
@@ -109,32 +109,6 @@ bool get _mobile => Platform.isAndroid || Platform.isIOS;
 
 /// Whether this platform joins the tailnet. False on desktop and in tests.
 bool get tunnelIsSupported => _mobile;
-
-Future<(int, String)> tunnelStart({
-  required String stateDir,
-  required String controlUrl,
-  required String authKey,
-  required String hostname,
-  required String upstream,
-}) async {
-  if (!_mobile) {
-    return (-1, 'embedded tailnet is unavailable on this platform');
-  }
-  return _serialized(
-    () => _startNative(
-      stateDir: stateDir,
-      controlUrl: controlUrl,
-      authKey: authKey,
-      hostname: hostname,
-      upstream: upstream,
-    ),
-  );
-}
-
-Future<void> tunnelStop() {
-  if (!_mobile) return Future<void>.value();
-  return _serialized(_stopNative);
-}
 
 Future<Map<String, dynamic>> tunnelStatusJson() async {
   if (!_mobile) {

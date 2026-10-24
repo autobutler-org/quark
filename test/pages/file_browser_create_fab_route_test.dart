@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -137,10 +136,8 @@ void main() {
     await AppSettings.instance.addHost(
       HostEntry(name: 'Test', hostAddress: 'http://localhost:8080'),
     );
-    FileBrowserCache.instance.clearOpenFile();
   });
 
-  tearDown(FileBrowserCache.instance.clearOpenFile);
   tearDown(resetSharedHttpClient);
 
   bool fabVisible(WidgetTester tester) => tester

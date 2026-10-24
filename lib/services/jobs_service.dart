@@ -38,16 +38,6 @@ class JobsService with AuthenticatedService {
         .replace(queryParameters: {'kind': kinds});
   }
 
-  /// One job by [id]. A 404 means the Quark no longer knows it.
-  static Future<Job> getJob(int id) async {
-    final uri = apiBaseUri.resolve('/api/v0/jobs/$id');
-    final response = await instance.authenticatedGet(uri);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to get job');
-    }
-    return Job.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
   /// Puts failed job [id] back to pending. The job keeps its id, so there is
   /// nothing to return. A 409 means it didn't fail, a 422 that its files are
   /// gone, and a 404 that the Quark doesn't know it. Show a failure with

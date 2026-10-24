@@ -54,9 +54,6 @@ abstract class LocalMediaProxy {
   /// The `http://127.0.0.1:<port>/<token>` URL to give the player.
   Uri get localUrl;
 
-  /// The upstream URL this proxy was pinned to.
-  Uri get upstreamUrl;
-
   /// The first non-2xx status seen from upstream, if any.
   ///
   /// The native player reports a load failure without telling us why, so the

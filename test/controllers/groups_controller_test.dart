@@ -62,7 +62,6 @@ void main() {
     await c.load();
 
     expect(c.hasLoaded, isTrue);
-    expect(c.isLoading, isFalse);
     expect(c.error, isNull);
     expect(c.groups, const [
       GroupItem(id: 1, name: 'everyone', isBuiltin: true),

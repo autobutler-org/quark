@@ -497,10 +497,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
 
-    if (newPath.isNotEmpty && FileBrowserCache.instance.isFileOpen(newPath)) {
-      return;
-    }
-
     setState(() {
       _applyIncomingRoutePath(widget.initialPath);
       _activeDevicePaths = _urlDrive(_allDevices) ?? _activeDevicePaths;
@@ -677,17 +673,16 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     //
     // Whether `_currentPath` itself is listed is decided by exact state, never
     // a guess about the name — a folder called `My.Folder` is listed normally.
-    // Three flags cover consecutive windows: `_pendingFileOpen` from mount
-    // until the open is dispatched, `_handlingPendingFile` across the
-    // `statFile` await, and `isFileOpen` for a viewer already on screen.
+    // Two flags cover consecutive windows: `_pendingFileOpen` from mount
+    // until the open is dispatched, and `_handlingPendingFile` across the
+    // `statFile` await.
     //
     // While the stat is in flight, a path that looks like a file shows the
     // folder it sits in rather than nothing (#1564). The name only picks that
     // placeholder. A folder route gets none: listing its parent would flash
     // the folder the user just left.
     final resolving = _pendingFileOpen != null || _handlingPendingFile;
-    if (FileBrowserCache.instance.isFileOpen(_currentPath) ||
-        (resolving && !isLikelyFilePath(_currentPath))) {
+    if (resolving && !isLikelyFilePath(_currentPath)) {
       return;
     }
     final listPath = resolving ? parentPath(_currentPath) : _currentPath;
@@ -1963,23 +1958,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
   Future<void> _openPendingFileInner(String filePath) async {
     if (!mounted) return;
-
-    // A URL update (SystemNavigator) causes go_router to rebuild this page in
-    // the background while the viewer is already on top. Guard against opening
-    // a second viewer by checking whether this file is already being shown.
-    if (FileBrowserCache.instance.isFileOpen(filePath)) {
-      // Navigate to the parent folder so the correct listing is shown when
-      // the viewer eventually closes.
-      final parent = filePath.contains('/')
-          ? filePath.substring(0, filePath.lastIndexOf('/'))
-          : '';
-      setState(() {
-        _currentPath = parent;
-        _cachedFiles = FileBrowserCache.instance.get(parent);
-        _reloadFiles();
-      });
-      return;
-    }
 
     // Stat the backend to learn whether the path is a folder.
     late final bool isDir;

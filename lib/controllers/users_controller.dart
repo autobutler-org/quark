@@ -71,7 +71,6 @@ class UsersController extends ChangeNotifier {
   bool _isCreating = false;
   Object? _createError;
   bool _hasLoaded = false;
-  bool _isLoading = false;
   Object? _error;
   final Set<String> _busy = {};
 
@@ -117,9 +116,6 @@ class UsersController extends ChangeNotifier {
   /// copy, and the open dialog shows it.
   Object? get createError => _createError;
 
-  /// Whether a load is in flight.
-  bool get isLoading => _isLoading;
-
   /// Whether any load has succeeded, so a refresh keeps the rows showing.
   bool get hasLoaded => _hasLoaded;
 
@@ -144,7 +140,6 @@ class UsersController extends ChangeNotifier {
   /// supersedes this one.
   Future<void> load() async {
     final generation = ++_generation;
-    _isLoading = true;
     _notify();
     try {
       final results = await Future.wait<Object>([
@@ -161,7 +156,6 @@ class UsersController extends ChangeNotifier {
       _error = error;
     } finally {
       if (_isCurrent(generation)) {
-        _isLoading = false;
         notifyListeners();
       }
     }

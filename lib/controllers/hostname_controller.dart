@@ -46,7 +46,6 @@ class HostnameController extends ChangeNotifier {
   late final StreamSubscription<FileEvent> _events;
 
   HostnameStatus? _status;
-  bool _isLoading = false;
   bool _isWorking = false;
   String? _error;
   String? _renamedTo;
@@ -62,9 +61,6 @@ class HostnameController extends ChangeNotifier {
   /// it could not be read. The field shows only while this says the Quark
   /// can be renamed.
   HostnameStatus? get status => _status;
-
-  /// Whether the status is being fetched.
-  bool get isLoading => _isLoading;
 
   /// Whether a rename is in flight. The field disables its button.
   bool get isWorking => _isWorking;
@@ -85,14 +81,12 @@ class HostnameController extends ChangeNotifier {
   /// Fetches the status. A failure leaves [status] null and sets no [error]:
   /// a Quark too old to have the endpoint just has no field.
   Future<void> load() async {
-    _isLoading = true;
     _notify();
     try {
       await _apply(await _getStatus());
     } catch (error) {
       debugPrint('[hostname_controller.dart] load failed: $error');
     } finally {
-      _isLoading = false;
       _notify();
     }
   }

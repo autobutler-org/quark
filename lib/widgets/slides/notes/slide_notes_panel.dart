@@ -20,7 +20,6 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// ```dart
 /// SlideNotesPanel(
-///   slideId: c.selectedSlideId!,
 ///   notes: c.notes,
 ///   open: c.notesOpen,
 ///   onToggle: c.toggleNotes,
@@ -28,9 +27,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// );
 /// ```
 class SlideNotesPanel extends StatefulWidget {
-  /// Creates the panel over the slide [slideId]'s [notes].
+  /// Creates the panel over a slide's [notes].
   const SlideNotesPanel({
-    required this.slideId,
     required this.notes,
     required this.open,
     required this.onToggle,
@@ -39,9 +37,6 @@ class SlideNotesPanel extends StatefulWidget {
     this.readOnly = false,
     super.key,
   });
-
-  /// The slide the notes belong to.
-  final String slideId;
 
   /// The notes, plain text.
   final String notes;

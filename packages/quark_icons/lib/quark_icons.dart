@@ -391,7 +391,6 @@ class QuarkIcons {
   static const IconData close = Icons.close;
   static const IconData close_rounded = Icons.close_rounded;
   static const IconData clear_rounded = Icons.clear_rounded;
-  static const IconData more_horiz = Icons.more_horiz;
   static const IconData more_horiz_rounded = Icons.more_horiz_rounded;
   static const IconData more_vert = Icons.more_vert;
   static const IconData home_filled = Icons.home_filled;
@@ -404,7 +403,6 @@ class QuarkIcons {
   static const IconData zoom_out = Icons.zoom_out;
   static const IconData fit_screen = Icons.fit_screen;
   static const IconData refresh = Icons.refresh;
-  static const IconData refresh_rounded = Icons.refresh_rounded;
 
   // ── Indicators & status ──────────────────────────────────────────────────────────
   static const IconData check = Icons.check;
@@ -474,10 +472,7 @@ class QuarkIcons {
   static const IconData add = Icons.add;
   static const IconData remove = Icons.remove;
   static const IconData add_rounded = Icons.add_rounded;
-  static const IconData add_link = Icons.add_link;
-  static const IconData edit = Icons.edit;
   static const IconData edit_outlined = Icons.edit_outlined;
-  static const IconData copy = Icons.copy;
   static const IconData casino = Icons.casino;
   static const IconData delete_outline = Icons.delete_outline;
   static const IconData delete_forever_outlined = Icons.delete_forever_outlined;
@@ -521,9 +516,6 @@ class QuarkIcons {
   static const IconData memory = Icons.memory;
   static const IconData disc_full = Icons.disc_full;
   static const IconData usb_outlined = Icons.usb_outlined;
-  static const IconData usb_rounded = Icons.usb_rounded;
-  static const IconData usb_off = Icons.usb_off;
-  static const IconData usb_off_rounded = Icons.usb_off_rounded;
   static const IconData radio_button_checked = Icons.radio_button_checked;
   static const IconData radio_button_unchecked = Icons.radio_button_unchecked;
   static const IconData device_hub_outlined = Icons.device_hub_outlined;
@@ -539,7 +531,6 @@ class QuarkIcons {
   static const IconData key_outlined = Icons.key_outlined;
   static const IconData key_rounded = Icons.key_rounded;
   static const IconData key_off_outlined = Icons.key_off_outlined;
-  static const IconData vpn_key_outlined = Icons.vpn_key_outlined;
   static const IconData lock_open = Icons.lock_open;
   static const IconData lock_outline = Icons.lock_outline;
   static const IconData shield_outlined = Icons.shield_outlined;

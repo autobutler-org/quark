@@ -42,7 +42,6 @@ class ThumbnailBackfill {
       required Uint8List thumbnail,
     })?
     putThumbnail,
-    this.maxConcurrent = 2,
     this.budget = ClientThumbnailConfig.renderTimeout,
   }) : _probe = probe ?? FilesService.probeThumbnail,
        _downloadOriginal =
@@ -56,7 +55,7 @@ class ThumbnailBackfill {
   static final ThumbnailBackfill instance = ThumbnailBackfill();
 
   /// How many files are probed, rendered and uploaded at once.
-  final int maxConcurrent;
+  static const maxConcurrent = 2;
 
   /// How long one file may take, download and render included.
   final Duration budget;

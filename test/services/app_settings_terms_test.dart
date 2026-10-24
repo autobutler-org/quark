@@ -57,7 +57,6 @@ void main() {
       await settings.acceptTerms();
 
       expect(settings.hasAcceptedTerms.value, isTrue);
-      expect(settings.hasAcceptedTermsFor('http://one.local'), isTrue);
     });
 
     test('switching to an unaccepted host un-accepts terms', () async {
@@ -171,7 +170,6 @@ void main() {
       });
 
       expect(settings.hasAcceptedTerms.value, isTrue);
-      expect(settings.hasAcceptedTermsFor('http://one.local'), isTrue);
     });
 
     test('it does not carry over to other hosts', () async {

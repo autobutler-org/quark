@@ -10,9 +10,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// selected slide's [currentLayoutId] marked; and, given [onReset], a
 /// "Reset slide to layout" button under them.
 ///
-/// Key prefixes: `<keyPrefix>_picker` on the picker, `<keyPrefix>_<id>` on
-/// each card and `<keyPrefix>_reset` on the reset button; [keyPrefix] is
-/// `slide_layout` unless the caller says otherwise.
+/// Key prefixes: `slide_layout_picker` on the picker, `slide_layout_<id>` on
+/// each card and `slide_layout_reset` on the reset button.
 class SlideLayoutPicker extends StatelessWidget {
   /// The picker over [layouts], [currentLayoutId] marked.
   const SlideLayoutPicker({
@@ -22,7 +21,6 @@ class SlideLayoutPicker extends StatelessWidget {
     required this.onSelected,
     this.theme,
     this.onReset,
-    this.keyPrefix = 'slide_layout',
     super.key,
   });
 
@@ -46,16 +44,13 @@ class SlideLayoutPicker extends StatelessWidget {
   /// leaves the button out.
   final VoidCallback? onReset;
 
-  /// What the picker's keys start with.
-  final String keyPrefix;
-
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final onSelected = this.onSelected;
     final onReset = this.onReset;
     return Column(
-      key: ValueKey('${keyPrefix}_picker'),
+      key: const ValueKey('slide_layout_picker'),
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: tokens.spacingSm,
@@ -66,7 +61,7 @@ class SlideLayoutPicker extends StatelessWidget {
           children: [
             for (final layout in layouts)
               SlidePreviewCard(
-                key: ValueKey('${keyPrefix}_${layout.id}'),
+                key: ValueKey('slide_layout_${layout.id}'),
                 slide: SlidePreviews.forLayout(layout, size),
                 size: size,
                 theme: theme,
@@ -80,7 +75,7 @@ class SlideLayoutPicker extends StatelessWidget {
         ),
         if (onReset != null)
           TextButton.icon(
-            key: ValueKey('${keyPrefix}_reset'),
+            key: const ValueKey('slide_layout_reset'),
             onPressed: onReset,
             icon: const Icon(QuarkIcons.reset_layout),
             label: const Text('Reset slide to layout'),

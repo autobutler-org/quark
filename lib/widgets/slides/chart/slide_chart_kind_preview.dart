@@ -11,12 +11,7 @@ import 'package:quark_slides/quark_slides.dart';
 /// out of the semantics tree.
 class SlideChartKindPreview extends StatelessWidget {
   /// A preview of a [kind] chart in [theme], [size] across.
-  const SlideChartKindPreview({
-    required this.kind,
-    this.theme,
-    this.size = const Size(96, 64),
-    super.key,
-  });
+  const SlideChartKindPreview({required this.kind, this.theme, super.key});
 
   /// What kind of chart it draws.
   final ChartKind kind;
@@ -25,7 +20,7 @@ class SlideChartKindPreview extends StatelessWidget {
   final SlideTheme? theme;
 
   /// How big it is drawn.
-  final Size size;
+  static const size = Size(96, 64);
 
   @override
   Widget build(BuildContext context) {

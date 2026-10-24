@@ -82,15 +82,6 @@ void main() {
       expect(items(1), isNotNull);
     });
 
-    test('moving an album forgets the tree', () async {
-      answer(200, _albumJson);
-
-      await AlbumService.moveAlbum(1, parentId: 2);
-
-      expect(cache.albums, isNull);
-      expect(items(1), isNotNull);
-    });
-
     test('deleting an album forgets the tree and its items', () async {
       answer(204);
 

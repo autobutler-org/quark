@@ -91,19 +91,6 @@ void main() {
       ],
     );
     expect(status.lastRunAt, DateTime.utc(2026, 10, 20, 12));
-    expect(status.isComplete, isFalse);
-  });
-
-  test('a finished pass with everything hashed is complete', () async {
-    answer(200, {
-      ...running,
-      'hashed': 5000,
-      'running': false,
-      'failures': const [],
-      'failed': 0,
-    });
-    final status = await PhotoIndexService.fetchStatus();
-    expect(status.isComplete, isTrue);
   });
 
   test('pause and resume post and read the new status', () async {

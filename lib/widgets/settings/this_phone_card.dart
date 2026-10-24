@@ -10,15 +10,12 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Key: `remote_access_on_this_phone`.
 class ThisPhoneCard extends StatelessWidget {
-  /// Creates the card for [controller], or the app's controller.
-  const ThisPhoneCard({this.controller, super.key});
-
-  /// Where the switch reads and writes. Null uses [ConnectionController.instance].
-  final ConnectionController? controller;
+  /// Creates the card over [ConnectionController.instance].
+  const ThisPhoneCard({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final connection = controller ?? ConnectionController.instance;
+    final connection = ConnectionController.instance;
     return ListenableBuilder(
       listenable: connection,
       builder: (context, _) {

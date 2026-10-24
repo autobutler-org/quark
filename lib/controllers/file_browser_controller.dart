@@ -51,13 +51,7 @@ class FileBrowserController {
     this.saveNode = downloadNode,
     this.saveArchiveFile = FilesService.saveArchiveFile,
     this.saveBytesToFile = FilesService.saveBytesToFile,
-    this.accountSettled = AuthService.accountSettled,
   });
-
-  /// Waits for `/auth/status` to settle and answers what it threw, null when
-  /// it answered — [AuthService.accountSettled], injectable so a test can
-  /// fake it.
-  final Future<Object?> Function() accountSettled;
 
   /// The saves behind Download, injectable so a test can fake them. Each
   /// answers null when the user canceled the save dialog (#3212).
@@ -108,7 +102,7 @@ class FileBrowserController {
   /// where a bare `/files` opens (#3211). Answers what went wrong, a
   /// [TimeoutException] when it took too long, or null when the admin flag is
   /// the Quark's answer.
-  Future<Object?> settleAccount() => accountSettled().timeout(
+  Future<Object?> settleAccount() => AuthService.accountSettled().timeout(
     FileBrowserLandingConfig.accountWait,
     onTimeout: () => TimeoutException(
       'auth status still pending',
@@ -194,30 +188,6 @@ class FileBrowserController {
     required String filename,
   }) {
     return http.MultipartFile.fromBytes('files', bytes, filename: filename);
-  }
-
-  Future<void> uploadFile({
-    required String currentPath,
-    required http.MultipartFile selectedFile,
-    String? serial,
-  }) {
-    return uploadFiles(
-      currentPath: currentPath,
-      selectedFiles: [selectedFile],
-      serial: serial,
-    );
-  }
-
-  Future<void> uploadFiles({
-    required String currentPath,
-    required List<http.MultipartFile> selectedFiles,
-    String? serial,
-  }) {
-    return uploadMultipartFilesToCurrentPath(
-      currentPath: currentPath,
-      selectedFiles: selectedFiles,
-      serial: serial,
-    );
   }
 
   Future<String?> promptFolderName(BuildContext context) {

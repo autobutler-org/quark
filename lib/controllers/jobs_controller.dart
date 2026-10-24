@@ -72,9 +72,6 @@ class JobsController extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
-  /// Every job of a kind in [JobKinds], newest first.
-  List<Job> get jobs => _jobs;
-
   /// Whether a fetch is in flight.
   bool get isLoading => _isLoading;
 
@@ -85,7 +82,8 @@ class JobsController extends ChangeNotifier {
   int get runningCount =>
       _jobs.where((j) => j.status == JobStatus.running).length;
 
-  /// [jobs] as the package's list renders them, with elapsed time as of now.
+  /// Every job of a kind in [JobKinds], newest first, as the package's list
+  /// renders them, with elapsed time as of now.
   List<JobItem> get items => [
     for (final job in _jobs)
       JobItem(

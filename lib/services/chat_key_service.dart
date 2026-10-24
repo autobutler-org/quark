@@ -47,17 +47,6 @@ class ChatKeyService with AuthenticatedService {
     _check(response, 'store chat keys');
   }
 
-  /// Account [userId]'s public keys, or null when it has none yet or isn't an
-  /// active account.
-  static Future<ChatPublicKeys?> fetchPublic(int userId) async {
-    final response = await instance.authenticatedGet(_uri('/$userId'));
-    if (response.statusCode == 404) return null;
-    _check(response, 'fetch chat keys of $userId');
-    return ChatPublicKeys.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
-  }
-
   static Map<String, String> _bearer(String? token) =>
       token == null ? const {} : {'Authorization': 'Bearer $token'};
 

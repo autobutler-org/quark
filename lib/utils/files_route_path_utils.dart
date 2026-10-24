@@ -27,11 +27,6 @@ bool isLikelyFilePath(String path) {
   return dotIndex > 0 && dotIndex < lastSegment.length - 1;
 }
 
-bool hasSupportedFilesEditorForPath(String path) {
-  final normalized = path.trim().toLowerCase();
-  return hasSupportedFilesEditorForType(fileKindForName(normalized));
-}
-
 bool hasSupportedFilesEditorForType(FileKind kind) =>
     kind == FileKind.qdoc || kind == FileKind.qsheet || kind == FileKind.qslide;
 

@@ -24,18 +24,14 @@ import 'slide_shortcut_section_view.dart';
 /// SlideShortcutsDialog.show(context);
 /// ```
 class SlideShortcutsDialog extends StatefulWidget {
-  /// A dialog spelled for [platform], or for the theme's platform when null.
-  const SlideShortcutsDialog({this.platform, super.key});
-
-  /// Whose key names to print; null follows the theme.
-  final TargetPlatform? platform;
+  /// A dialog spelled for the theme's platform.
+  const SlideShortcutsDialog({super.key});
 
   /// Shows the dialog and completes when it is closed.
-  static Future<void> show(BuildContext context, {TargetPlatform? platform}) =>
-      showDialog<void>(
-        context: context,
-        builder: (_) => SlideShortcutsDialog(platform: platform),
-      );
+  static Future<void> show(BuildContext context) => showDialog<void>(
+    context: context,
+    builder: (_) => const SlideShortcutsDialog(),
+  );
 
   @override
   State<SlideShortcutsDialog> createState() => _SlideShortcutsDialogState();
@@ -53,7 +49,7 @@ class _SlideShortcutsDialogState extends State<SlideShortcutsDialog> {
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
-    final platform = widget.platform ?? Theme.of(context).platform;
+    final platform = Theme.of(context).platform;
     final shown = SlideShortcuts.search(_search.text, platform);
     return Dialog(
       key: const ValueKey('slide_shortcuts_dialog'),

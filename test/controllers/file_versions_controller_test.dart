@@ -54,14 +54,12 @@ void main() {
     );
     var notified = 0;
     controller.addListener(() => notified++);
-    expect(controller.hasLoaded, isFalse);
 
     await controller.load();
 
     expect(paths, ['Docs/notes.md']);
-    expect(controller.hasLoaded, isTrue);
     expect(controller.error, isNull);
-    expect(controller.versions, [byAlice, bySystem]);
+    expect(controller.items.map((v) => v.id), [byAlice.id, bySystem.id]);
     expect(notified, 1);
   });
 
@@ -137,8 +135,7 @@ void main() {
     await controller.load();
 
     expect(controller.error, isA<ApiException>());
-    expect(controller.versions, [byAlice]);
-    expect(controller.hasLoaded, isTrue);
+    expect(controller.items.map((v) => v.id), [byAlice.id]);
   });
 
   test('a slow earlier load never overwrites a newer one', () async {
@@ -153,7 +150,7 @@ void main() {
     slow.complete([bySystem]);
     await first;
 
-    expect(controller.versions, [byAlice]);
+    expect(controller.items.map((v) => v.id), [byAlice.id]);
   });
 
   test('restore marks the version busy, then reloads the list', () async {

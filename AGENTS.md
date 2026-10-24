@@ -673,7 +673,7 @@ Every page's top bar looks like Files' (#2311): bordered, filled buttons at one 
 - If a new page requires auth gating, add the path to the `publicRoutes` set in `_authRedirect` in `lib/router.dart` if
   it should be accessible without login, or do nothing if it should be protected.
 - **Tabbed pages give each tab a URL, `/<page>/<tab>` (#2349).** Declare the tabs as an enum implementing `RouteTab`
-  (each with a `slug`) next to `AppRoutes`, add a builder like `AppRoutes.usersTab(UsersTab.groups)` for links, and
+  (each with a `slug`) next to `AppRoutes`, add a builder like `AppRoutes.settingsTab(SettingsTab.network)` for links, and
   spread `...tabbedRoutes(path:, tabs:, builder:)` into the router. It redirects the bare path and an unknown slug to
   the first tab with the query kept, and hands the page an `onTabSelected` that moves with `context.go`, never
   `push`. The page passes the tab and that callback to `QuarkTabView`'s `selectedIndex` and `onTabSelected`. Keep

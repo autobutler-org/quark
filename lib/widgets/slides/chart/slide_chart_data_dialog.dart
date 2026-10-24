@@ -80,10 +80,10 @@ class _SlideChartDataDialogState extends State<SlideChartDataDialog> {
   int _generation = 0;
   String? _error;
 
-  void _reshape(List<List<String>> grid, {String? error}) => setState(() {
+  void _reshape(List<List<String>> grid) => setState(() {
     _grid = grid;
     _generation++;
-    _error = error;
+    _error = null;
   });
 
   Future<void> _paste() async {

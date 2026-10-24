@@ -299,24 +299,6 @@ class StorageService with AuthenticatedService {
     invalidateDeviceCache();
   }
 
-  /// Sets a custom display name for a device identified by [devicePath].
-  static Future<void> renameDevice(String devicePath, String name) async {
-    // Device paths contain slashes (e.g. /dev/disk3s5) — pass as a query
-    // param so they don't get misinterpreted as URL path segments.
-    final uri = apiBaseUri
-        .resolve('/api/v0/storage/devices/rename')
-        .replace(queryParameters: {'devicePath': devicePath});
-    final response = await instance.authenticatedPatch(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name}),
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to rename device');
-    }
-    invalidateDeviceCache();
-  }
-
   static Future<void> setDeviceRole({
     required String serial,
     required String role,

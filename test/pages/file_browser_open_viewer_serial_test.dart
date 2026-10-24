@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/photos_controller.dart';
 import 'package:quark/models/paginated_photos_response.dart' as wire;
 import 'package:quark/models/photo_sort.dart';
@@ -110,13 +109,11 @@ void main() {
     await AppSettings.instance.addHost(
       HostEntry(name: 'Test', hostAddress: 'http://localhost:8080'),
     );
-    FileBrowserCache.instance.clearOpenFile();
     StorageService.invalidateDeviceCache();
   });
 
   tearDown(() {
     VideoPlayerPlatform.instance = realVideoPlatform;
-    FileBrowserCache.instance.clearOpenFile();
     StorageService.invalidateDeviceCache();
     resetSharedHttpClient();
     sharedHttpClientFactory = buildLocalTrustHttpClient;

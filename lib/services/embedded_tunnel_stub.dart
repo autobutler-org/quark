@@ -5,20 +5,6 @@ library;
 /// Whether this platform loads the native bridge. Always false here.
 const bool tunnelIsSupported = false;
 
-/// Always unavailable. The port is negative and [error] says why.
-Future<(int, String)> tunnelStart({
-  required String stateDir,
-  required String controlUrl,
-  required String authKey,
-  required String hostname,
-  required String upstream,
-}) async {
-  return (-1, 'embedded tailnet is unavailable on this platform');
-}
-
-/// Does nothing.
-Future<void> tunnelStop() async {}
-
 /// Always stopped.
 Future<Map<String, dynamic>> tunnelStatusJson() async => const {
   'state': 'Stopped',

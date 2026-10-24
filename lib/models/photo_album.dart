@@ -22,7 +22,6 @@ class PhotoAlbum {
   });
 
   bool get isFavorites => smartType == 'favorites';
-  bool get isInbox => smartType == 'inbox';
   bool get isSystemAlbum => smartType != null;
 
   factory PhotoAlbum.fromJson(Map<String, dynamic> json) {

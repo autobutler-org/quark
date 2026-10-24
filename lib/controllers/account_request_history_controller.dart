@@ -21,7 +21,6 @@ class AccountRequestHistoryController extends ChangeNotifier {
 
   List<AccountRequestDecision> _decisions = const [];
   bool _hasLoaded = false;
-  bool _isLoading = false;
   Object? _error;
 
   /// Bumped by every load, so a slow response cannot overwrite a newer one.
@@ -30,9 +29,6 @@ class AccountRequestHistoryController extends ChangeNotifier {
 
   /// The decisions, newest first.
   List<AccountRequestDecision> get decisions => _decisions;
-
-  /// Whether a load is in flight.
-  bool get isLoading => _isLoading;
 
   /// Whether any load has succeeded, so a refresh keeps the rows showing.
   bool get hasLoaded => _hasLoaded;
@@ -43,7 +39,6 @@ class AccountRequestHistoryController extends ChangeNotifier {
   /// Fetches the decisions. A newer load supersedes this one.
   Future<void> load() async {
     final generation = ++_generation;
-    _isLoading = true;
     if (!_disposed) notifyListeners();
     try {
       final decisions = await _listHistory();
@@ -56,7 +51,6 @@ class AccountRequestHistoryController extends ChangeNotifier {
       _error = error;
     } finally {
       if (_isCurrent(generation)) {
-        _isLoading = false;
         notifyListeners();
       }
     }

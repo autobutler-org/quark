@@ -72,21 +72,6 @@ class AlbumService with AuthenticatedService {
     );
   }
 
-  static Future<PhotoAlbum> moveAlbum(int id, {int? parentId}) async {
-    final response = await instance.authenticatedPatch(
-      _apiUri('/albums/$id/move'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({'parentId': parentId}),
-    );
-    if (response.statusCode != 200) {
-      throw ApiException(response.statusCode, 'Failed to move album');
-    }
-    AlbumsCache.instance.dropAlbums();
-    return PhotoAlbum.fromJson(
-      json.decode(response.body) as Map<String, dynamic>,
-    );
-  }
-
   static Future<void> deleteAlbum(int id) async {
     final response = await instance.authenticatedDelete(_apiUri('/albums/$id'));
     if (response.statusCode != 204) {

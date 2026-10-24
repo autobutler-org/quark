@@ -100,14 +100,14 @@ void main() {
     timeline.onSend = (_) => gate.future;
 
     final sending = chat.controller.send('hi');
-    expect(chat.controller.pending.single.text, 'hi');
-    expect(chat.controller.pending.single.failed, isFalse);
+    expect(chat.controller.outboundSends.single.text, 'hi');
+    expect(chat.controller.outboundSends.single.failed, isFalse);
     expect(chat.controller.messageItems, isEmpty);
 
     gate.complete();
     await sending;
     expect(timeline.sent, ['hi']);
-    expect(chat.controller.pending, isEmpty);
+    expect(chat.controller.outboundSends, isEmpty);
     chat.controller.dispose();
   });
 
@@ -190,7 +190,7 @@ void main() {
     timeline.onSend = (_) async => throw const MessageException('offline');
 
     await chat.controller.send('hi');
-    final failed = chat.controller.failedSends.single;
+    final failed = chat.controller.outboundSends.single;
     expect(failed.text, 'hi');
     expect(Errors.message(failed.error, 'send the message'), 'Offline.');
     expect(chat.controller.messageItems, isEmpty);
@@ -198,12 +198,12 @@ void main() {
     timeline.onSend = null;
     await chat.controller.retry(failed.id);
     expect(timeline.sent, ['hi', 'hi']);
-    expect(chat.controller.pending, isEmpty);
+    expect(chat.controller.outboundSends, isEmpty);
 
     timeline.onSend = (_) async => throw Exception('down');
     await chat.controller.send('again');
-    chat.controller.discard(chat.controller.failedSends.single.id);
-    expect(chat.controller.pending, isEmpty);
+    chat.controller.discard(chat.controller.outboundSends.single.id);
+    expect(chat.controller.outboundSends, isEmpty);
     chat.controller.dispose();
   });
 
@@ -219,7 +219,7 @@ void main() {
 
     await chat.controller.send('hi');
     await chat.controller.send('there');
-    final failed = chat.controller.failedSends;
+    final failed = chat.controller.outboundSends;
     timeline.onSend = null;
     await chat.controller.retry(failed.first.id);
 
@@ -243,7 +243,7 @@ void main() {
     timeline.onSend = (_) async => throw const MessageException('offline');
 
     await chat.controller.send('lost?');
-    expect(chat.controller.failedSends.single.text, 'lost?');
+    expect(chat.controller.outboundSends.single.text, 'lost?');
     expect(chat.controller.draftFor(1), isEmpty);
 
     chat.controller.setDraft(1, 'typed after');
@@ -271,7 +271,7 @@ void main() {
         chat.controller.send('three'),
       ]);
 
-      final failed = chat.controller.failedSends;
+      final failed = chat.controller.outboundSends;
       expect(failed.map((send) => send.text), ['one', 'two', 'three']);
       expect(failed.map((send) => send.id).toSet(), hasLength(3));
       expect(failed.every((send) => send.failed), isTrue);
@@ -289,11 +289,7 @@ void main() {
       expect(timeline.sent.skip(attempts.length), ['two']);
       expect(timeline.sent.where((text) => text == 'one'), ['one']);
       expect(timeline.sent.where((text) => text == 'three'), ['three']);
-      expect(chat.controller.failedSends.map((send) => send.text), [
-        'one',
-        'three',
-      ]);
-      expect(chat.controller.pending.map((send) => send.text), [
+      expect(chat.controller.outboundSends.map((send) => send.text), [
         'one',
         'three',
       ]);
@@ -338,7 +334,10 @@ void main() {
     chat.controller.select('general');
     await chat.controller.refresh();
     expect(chat.controller.selectedPermissions, memberSet);
-    expect(chat.controller.canSend, isTrue);
+    expect(
+      chat.controller.selectedPermissions.contains(ChatPermission.sendMessages),
+      isTrue,
+    );
     expect(chat.controller.composerDisabledReason, isNull);
 
     chat.waiting.add(1);
@@ -347,7 +346,10 @@ void main() {
 
     chat.controller.select('2');
     expect(chat.controller.selectedPermissions, {ChatPermission.readMessages});
-    expect(chat.controller.canSend, isFalse);
+    expect(
+      chat.controller.selectedPermissions.contains(ChatPermission.sendMessages),
+      isFalse,
+    );
     chat.controller.dispose();
   });
 
@@ -355,7 +357,10 @@ void main() {
     final chat = FakeChat();
     chat.controller.select('general');
     await chat.controller.refresh();
-    expect(chat.controller.canSend, isTrue);
+    expect(
+      chat.controller.selectedPermissions.contains(ChatPermission.sendMessages),
+      isTrue,
+    );
 
     chat.channels = [
       const ChatChannel(
@@ -376,7 +381,10 @@ void main() {
     await pumpEventQueue();
 
     expect(chat.controller.selectedChannel?.id, 1);
-    expect(chat.controller.canSend, isFalse);
+    expect(
+      chat.controller.selectedPermissions.contains(ChatPermission.sendMessages),
+      isFalse,
+    );
     expect(chat.opened[1]!.disposed, isFalse);
     chat.controller.dispose();
   });
@@ -422,7 +430,6 @@ void main() {
     await chat.controller.refresh();
 
     expect(chat.controller.selectedChannel?.name, 'ops');
-    expect(chat.controller.messages, isNull);
     expect(chat.opened.containsKey(3), isFalse);
     expect(chat.controller.isWaitingForKey, isFalse);
     expect(chat.controller.messageItems, isEmpty);
@@ -878,7 +885,12 @@ void main() {
         expect(chat.controller.selectedChannel?.id, 9);
         expect(chat.opened[9], isNull, reason: 'never opened for reading');
         expect(chat.controller.messageItems, isEmpty);
-        expect(chat.controller.canSend, isFalse);
+        expect(
+          chat.controller.selectedPermissions.contains(
+            ChatPermission.sendMessages,
+          ),
+          isFalse,
+        );
         expect(chat.controller.selectedPermissions, isEmpty);
         expect(chat.controller.canManageSelected, isTrue);
         expect(chat.controller.canLeaveSelected, isFalse);
@@ -1384,7 +1396,6 @@ void main() {
         ..search('  LUNCH ');
 
       expect(c.isSearching, isTrue);
-      expect(c.searchQuery, '  LUNCH ');
       expect(c.searchMatchCount, 2);
       expect(c.messageItems.map((i) => i.id), ['5', '1']);
       c.dispose();
@@ -1396,7 +1407,7 @@ void main() {
       final sending = Completer<void>();
       chat.opened[1]!.onSend = (_) => sending.future;
       unawaited(c.send('lunch is pending'));
-      expect(c.pending.single.text, 'lunch is pending');
+      expect(c.outboundSends.single.text, 'lunch is pending');
       expect(
         c.messageItems.map((item) => item.body),
         isNot(contains('lunch is pending')),
@@ -1492,7 +1503,6 @@ void main() {
         await pumpEventQueue();
 
         expect(c.isSearching, isTrue);
-        expect(c.searchQuery, 'lunch');
         expect(c.messageItems.map((i) => i.id), ['7']);
         c.dispose();
       },
@@ -1506,7 +1516,6 @@ void main() {
         ..toggleSearch();
 
       expect(c.isSearching, isFalse);
-      expect(c.searchQuery, isEmpty);
       expect(c.searchMatchCount, isNull);
       c.dispose();
     });
@@ -1520,7 +1529,6 @@ void main() {
 
       expect(c.selectedChannel?.id, 2);
       expect(c.isSearching, isFalse);
-      expect(c.searchQuery, isEmpty);
       c.dispose();
     });
 
@@ -1585,7 +1593,6 @@ void main() {
 
       expect(c.canSearch, isFalse);
       expect(c.isSearching, isFalse);
-      expect(c.searchQuery, isEmpty);
       c.toggleSearch();
       expect(c.isSearching, isFalse);
       c.dispose();

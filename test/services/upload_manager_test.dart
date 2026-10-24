@@ -1147,24 +1147,6 @@ void main() {
       },
     );
 
-    test('reports byte progress while a single file is in flight', () async {
-      // completed counts whole files, which reads as no movement at all for as
-      // long as one large file takes.
-      final manager = managerFor();
-      final seen = <int>[];
-      manager.addListener(() {
-        final progress = manager.chunkedProgress['/big.bin'];
-        if (progress != null) seen.add(progress.sent);
-      });
-
-      final done = manager.results.first;
-      manager.enqueue(uploads: [sized('big.bin', 20)], uploadPath: '');
-      await done;
-
-      expect(seen, containsAllInOrder([0, 8, 16, 20]));
-      expect(manager.chunkedProgress, isEmpty, reason: 'cleared when done');
-    });
-
     test('releases the chunk source however the file ends', () async {
       final sources = <_FakeChunkSource>[];
       server.intercept = (attempt, start, end) async =>
@@ -1681,7 +1663,6 @@ class _FakeUploadServer implements ResumableUploadClient {
     required String fileName,
     required int totalSize,
     String? serial,
-    bool overwrite = false,
     UploadConflictChoice? conflict,
   }) async {
     createdConflicts.add(conflict);

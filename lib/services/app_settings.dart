@@ -864,10 +864,6 @@ class AppSettings {
     );
   }
 
-  /// Whether the terms have been accepted for [hostAddress].
-  bool hasAcceptedTermsFor(String hostAddress) =>
-      _acceptedTermsHosts.contains(_hostKey(hostAddress));
-
   /// The `host:port` a TLS connection to [host] on [port] is pinned under.
   static String _certificateKey(String host, int port) =>
       '${host.toLowerCase()}:$port';

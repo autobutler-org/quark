@@ -118,12 +118,6 @@ class SlideFindController extends ChangeNotifier {
   /// Which slides are searched.
   SlideFindScope get scope => _scope;
 
-  /// What the last search found.
-  SlideSearchResult get result => _result;
-
-  /// The index in [result] of the match the bar is on, or `null`.
-  int? get index => _index;
-
   /// The match the bar is on, or `null`; `null` while closed.
   SlideMatch? get current {
     final i = _index;
