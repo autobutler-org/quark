@@ -4,7 +4,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:quark/controllers/change_password_controller.dart';
 import 'package:quark/controllers/feature_flags_controller.dart';
 import 'package:quark/controllers/notifications_controller.dart';
@@ -47,6 +46,14 @@ import 'package:quark/widgets/settings/settings_updates_tab.dart';
 /// drops the branch that reads it.
 const gitSha = String.fromEnvironment('GIT_SHA');
 
+/// This app's version, as `--build-name` stamped it, or empty when the build
+/// passed none. `flutter build` and `flutter run` define it, the same value
+/// the platform bundle carries.
+const appBuildName = String.fromEnvironment('FLUTTER_BUILD_NAME');
+
+/// This app's build number, as `--build-number` stamped it, or empty.
+const appBuildNumber = String.fromEnvironment('FLUTTER_BUILD_NUMBER');
+
 /// How one build identifies itself — this app's, or the Quark's (#1606).
 ///
 /// Both sit in Settings and a bug report quotes both, so they must not
@@ -56,9 +63,8 @@ const gitSha = String.fromEnvironment('GIT_SHA');
 /// [version] arrives empty more often than it looks like it would. On this
 /// app, `pubspec.yaml` deliberately carries no `version:` — the Makefile
 /// derives it from the git tag instead — so nothing is stamped unless the
-/// build passed `--build-name`; web is emptier still, its `version.json`
-/// omitting the keys outright rather than defaulting them. On the Quark, the
-/// `NOSEMVER` sentinel means the same thing.
+/// build passed `--build-name`. On the Quark, the `NOSEMVER` sentinel means
+/// the same thing.
 ///
 /// Which build the reader is holding decides what identifies it:
 ///
@@ -208,17 +214,6 @@ class _SettingsPageState extends State<SettingsPage> {
   late final FeatureFlagsController _features =
       widget.featureFlags ?? FeatureFlagsController();
 
-  /// How this app's own version reads, per [appVersionLabel] (#1606).
-  ///
-  /// Distinct from [_installedVersion], which is the Quark server's — a bug
-  /// report needs to name both. Null until read, and stays null where no
-  /// bundle answers at all (a unit test, a shell that was never packaged), in
-  /// which case the row simply doesn't render.
-  String? _appVersion;
-
-  /// Where [_appVersion]'s release notes live, or null for a dev build.
-  String? _appReleaseUrl;
-
   String? _installedVersion;
 
   /// Where [_installedVersion]'s release notes live, or null for a dev build.
@@ -313,29 +308,10 @@ class _SettingsPageState extends State<SettingsPage> {
     // host every loader below returns early and none would ever clear it.
     _disconnected = false;
     setState(() {});
-    _loadAppVersion();
     _loadVersionInfo();
     _loadSbom();
     _loadDevices();
     _loadRemoteAccess();
-  }
-
-  Future<void> _loadAppVersion() async {
-    try {
-      final info = await PackageInfo.fromPlatform();
-      if (!mounted) return;
-      setState(() {
-        _appVersion = appVersionLabel(
-          version: info.version,
-          buildNumber: info.buildNumber,
-        );
-        _appReleaseUrl = releaseNotesUrl(info.version);
-      });
-    } catch (_) {
-      // Nothing to report and nothing to retry: without a bundle to read there
-      // is no app version, so the row stays hidden rather than showing an error
-      // about a number the user cannot act on.
-    }
   }
 
   Future<void> _loadRemoteAccess() async {
@@ -788,8 +764,13 @@ class _SettingsPageState extends State<SettingsPage> {
             label: 'About',
             child: SettingsAboutTab(
               header: banner,
-              appVersion: _appVersion,
-              appReleaseUrl: _appReleaseUrl,
+              // Distinct from the Quark's own version: a bug report names
+              // both (#1606).
+              appVersion: appVersionLabel(
+                version: appBuildName,
+                buildNumber: appBuildNumber,
+              ),
+              appReleaseUrl: releaseNotesUrl(appBuildName),
               onOpenReleaseNotes: _openReleaseNotes,
               onOpenTerms: () => context.push(AppRoutes.terms),
               isLoadingSbom: _isLoadingSbom,

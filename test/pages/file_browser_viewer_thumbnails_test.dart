@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:quark/utils/cache_manager_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -131,7 +131,7 @@ void main() {
       expect(image.image, isA<DecodeOnceImage>());
       final cached =
           ((image.image as DecodeOnceImage).image as ResizeImage).imageProvider
-              as CachedNetworkImageProvider;
+              as CacheManagerImage;
       final url = Uri.parse(cached.url);
       expect(url.path, endsWith('/thumbnails/${item.apiPath}'));
       expect(url.queryParameters['serial'] ?? '', item.deviceSerial);

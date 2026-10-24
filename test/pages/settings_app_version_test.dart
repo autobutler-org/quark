@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -61,28 +60,20 @@ void main() {
     }
   }
 
-  // Order matters: PackageInfo caches the first answer in a static with no
-  // reset hook, so the no-bundle case has to run before anything seeds it.
-  testWidgets('stays silent when no bundle answers', (tester) async {
-    // What a unit test or a shell that was never packaged looks like: the
-    // plugin throws. A version the user cannot act on is worse than no row.
+  testWidgets('a build with no --build-name says it is a development build', (
+    tester,
+  ) async {
+    // What `flutter test` is: no tag stamped, so no release page to link.
     await pumpSettings(tester);
 
-    expect(find.textContaining('App version'), findsNothing);
-  });
-
-  testWidgets('shows the version stamped into the bundle', (tester) async {
-    PackageInfo.setMockInitialValues(
-      appName: 'Quark',
-      packageName: 'org.autobutler.quark',
-      version: '0.31.1',
-      buildNumber: '42',
-      buildSignature: '',
+    final label = find.text(
+      'App version: Development build — no version stamped',
     );
-
-    await pumpSettings(tester);
-
-    expect(find.text('App version: 0.31.1 (42)'), findsOneWidget);
+    expect(label, findsOneWidget);
+    final link = tester.widget<InkWell>(
+      find.ancestor(of: label, matching: find.byType(InkWell)),
+    );
+    expect(link.onTap, isNull);
   });
 
   // Nothing stamps a version unless the build passed --build-name, so the
@@ -102,8 +93,7 @@ void main() {
         appVersionLabel(version: '', buildNumber: '', sha: ''),
         'App version: Development build — no version stamped',
       );
-      // Web omits the version.json keys rather than defaulting them, so a
-      // build number can survive a missing version.
+      // A build number alone is not a version.
       expect(
         appVersionLabel(version: '', buildNumber: '42', sha: ''),
         'App version: Development build — no version stamped',
@@ -148,26 +138,6 @@ void main() {
       // What an untagged Quark answers with.
       expect(releaseNotesUrl('NOSEMVER'), isNull);
     });
-  });
-
-  testWidgets('links the app version at its release notes', (tester) async {
-    PackageInfo.setMockInitialValues(
-      appName: 'Quark',
-      packageName: 'org.autobutler.quark',
-      version: '0.31.1',
-      buildNumber: '42',
-      buildSignature: '',
-    );
-
-    await pumpSettings(tester);
-
-    final link = tester.widget<InkWell>(
-      find.ancestor(
-        of: find.text('App version: 0.31.1 (42)'),
-        matching: find.byType(InkWell),
-      ),
-    );
-    expect(link.onTap, isNotNull);
   });
 
   // The Quark's version renders through the same label as the app's, so the
