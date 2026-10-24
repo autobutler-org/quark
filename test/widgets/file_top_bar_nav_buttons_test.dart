@@ -36,17 +36,14 @@ void main() {
     expect(find.byTooltip('Back to Files'), findsOneWidget);
   });
 
-  testWidgets('has no tooltip at the top, where it is disabled', (
-    tester,
-  ) async {
-    await pumpButton(tester, '');
+  for (final (label, path, navEnabled) in [
+    ('at the top, where it is disabled', '', true),
+    ('while navigation is disabled', '/docs/reports', false),
+  ]) {
+    testWidgets('has no tooltip $label', (tester) async {
+      await pumpButton(tester, path, navEnabled: navEnabled);
 
-    expect(find.byType(Tooltip), findsNothing);
-  });
-
-  testWidgets('has no tooltip while navigation is disabled', (tester) async {
-    await pumpButton(tester, '/docs/reports', navEnabled: false);
-
-    expect(find.byType(Tooltip), findsNothing);
-  });
+      expect(find.byType(Tooltip), findsNothing);
+    });
+  }
 }

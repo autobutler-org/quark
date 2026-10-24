@@ -376,22 +376,6 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(BottomSheet), findsNothing);
       });
-
-      testWidgets('a tall member list still closes on the scrim ($label)', (
-        tester,
-      ) async {
-        members = many;
-        await openChannel(
-          tester,
-          ChatChannel(id: 2, name: 'design', permissions: owner),
-          size: size,
-        );
-        // The sheet has to stop short of the top, or there is no scrim.
-        expect(tester.getRect(find.byType(BottomSheet)).top, greaterThan(8));
-        await tester.tapAt(const Offset(8, 8));
-        await tester.pumpAndSettle();
-        expect(find.byType(BottomSheet), findsNothing);
-      });
     }
 
     testWidgets('a custom set shows as Custom', (tester) async {

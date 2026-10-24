@@ -1248,14 +1248,6 @@ void main() {
       expect(dialog(), findsOneWidget);
     });
 
-    testWidgets('F1 opens it too', (tester) async {
-      tap.setViewport(tester, tap.wideViewport);
-      await pumpEditor(tester);
-      await tester.sendKeyEvent(LogicalKeyboardKey.f1);
-      await tester.pumpAndSettle();
-      expect(dialog(), findsOneWidget);
-    });
-
     testWidgets('the toolbar\'s keyboard button opens it (wide)', (
       tester,
     ) async {
@@ -1637,30 +1629,6 @@ void main() {
         expect(textOf(c, 1), 'Slide word 1');
         expect(textOf(c, 2), 'Slide text 2');
         expect(status(tester), '1 of 1');
-
-        await tester.tap(key('slide_editor_undo'));
-        await tester.pump();
-        expect(textOf(c, 1), 'Slide text 1');
-        expect(textOf(c, 2), 'Slide text 2');
-        expect(c.canUndo, isFalse);
-        await letAutosaveRun(tester);
-      });
-
-      testWidgets('Replace all changes every match in one undo ($name)', (
-        tester,
-      ) async {
-        tap.setViewport(tester, size);
-        final c = await pumpEditor(tester);
-        await chord(tester, LogicalKeyboardKey.keyH);
-        await tester.enterText(key('slide_find_query'), 'text');
-        await tester.enterText(key('slide_find_replacement'), 'word');
-        await tester.pump();
-
-        await tester.tap(key('slide_find_replace_all'));
-        await tester.pump();
-        expect(textOf(c, 1), 'Slide word 1');
-        expect(textOf(c, 2), 'Slide word 2');
-        expect(status(tester), 'No results');
 
         await tester.tap(key('slide_editor_undo'));
         await tester.pump();

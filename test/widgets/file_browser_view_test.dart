@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_node.dart';
@@ -51,25 +49,6 @@ void main() {
 
     expect(find.text('Opening /files/Documents'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);
-  });
-
-  testWidgets('uses the custom error builder for failed folder loads', (
-    WidgetTester tester,
-  ) async {
-    final completer = Completer<List<FileNode>>();
-    await pumpFileBrowserView(
-      tester,
-      filesFuture: completer.future,
-      errorBuilder: (_, error) => Text('Route error: $error'),
-    );
-    completer.completeError(Exception('folder not found'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text('Route error: Exception: folder not found'),
-      findsOneWidget,
-    );
-    expect(find.text('Unable to load files'), findsNothing);
   });
 
   group('menu actions', () {

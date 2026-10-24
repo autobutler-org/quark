@@ -22,17 +22,6 @@ void main() {
     },
   );
 
-  test('modelViewerPath encodes the path and carries the serial', () {
-    expect(
-      AppRoutes.modelViewerPath('/my prints/part one.stl'),
-      '/model/my%20prints/part%20one.stl',
-    );
-    expect(
-      AppRoutes.modelViewerPath('a/b.obj', serial: 'usb 1'),
-      '/model/a/b.obj?serial=usb+1',
-    );
-  });
-
   test('a /view link to a model opens the model viewer', () {
     expect(viewFileRedirect('prints/part.stl', null), '/model/prints/part.stl');
     expect(

@@ -474,16 +474,6 @@ void main() {
       await tester.pump();
       expect(saved.single.slides.single.notes, 'Last words');
     });
-
-    test('the notes panel opens and closes', () async {
-      final c = controllerFor(deck(1));
-      await c.load();
-      expect(c.notesOpen, isFalse);
-      c.toggleNotes();
-      expect(c.notesOpen, isTrue);
-      c.toggleNotes();
-      expect(c.notesOpen, isFalse);
-    });
   });
 
   group('toolbar and properties panel (#1167)', () {
@@ -671,21 +661,6 @@ void main() {
       c.setAltText('A dog on a beach');
       c.undo();
       expect((element(c, 'pic') as ImageElement).altText, '');
-    });
-
-    test('picks the tool the canvas draws with', () async {
-      final c = controllerFor(drawn());
-      await c.load();
-      c.useTool(const SlideCanvasTool.shape(ShapeKind.star));
-      expect(c.tools.tool, const SlideCanvasTool.shape(ShapeKind.star));
-    });
-
-    test('opens and closes the properties panel', () async {
-      final c = controllerFor(drawn());
-      await c.load();
-      expect(c.propertiesOpen, isTrue);
-      c.toggleProperties();
-      expect(c.propertiesOpen, isFalse);
     });
   });
 

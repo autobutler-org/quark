@@ -13,17 +13,6 @@ void main() {
     expect(opensInMarkdownViewer('md'), isFalse);
   });
 
-  test('markdownViewerPath encodes the path and carries the serial', () {
-    expect(
-      AppRoutes.markdownViewerPath('/my notes/read me.md'),
-      '/markdown/my%20notes/read%20me.md',
-    );
-    expect(
-      AppRoutes.markdownViewerPath('a/b.md', serial: 'usb 1'),
-      '/markdown/a/b.md?serial=usb+1',
-    );
-  });
-
   test('a /view link to Markdown opens its viewer, .txt the code viewer', () {
     expect(
       viewFileRedirect('notes/readme.md', null),

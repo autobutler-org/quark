@@ -96,17 +96,12 @@ void main() {
 
     expect(find.byType(FileSelectionBar), findsNothing);
     expect(tester.widget<QuarkBarIconButton>(select).onPressed, isNotNull);
+    expect(tester.widget<QuarkBarIconButton>(emptyTrash).onPressed, isNotNull);
 
     await tester.tap(select);
     await tester.pump();
 
     expect(find.byType(FileSelectionBar), findsOneWidget);
-  });
-
-  testWidgets('an empty trash has nothing to select', (tester) async {
-    await pumpTrash(tester);
-
-    expect(tester.widget<QuarkBarIconButton>(select).onPressed, isNull);
   });
 
   // #2096: disabled, like select, until the root listing has items.
@@ -117,16 +112,6 @@ void main() {
 
     expect(tester.widget<QuarkBarIconButton>(emptyTrash).onPressed, isNull);
     expect(tester.widget<QuarkBarIconButton>(select).onPressed, isNull);
-  });
-
-  testWidgets('empty trash is enabled when the trash has items', (
-    tester,
-  ) async {
-    serve([trashedNote]);
-    await pumpTrash(tester);
-
-    expect(emptyTrash, findsOneWidget);
-    expect(tester.widget<QuarkBarIconButton>(emptyTrash).onPressed, isNotNull);
   });
 
   testWidgets('empty trash stays hidden inside a folder', (tester) async {

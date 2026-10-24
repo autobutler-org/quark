@@ -40,6 +40,10 @@ void main() {
         ),
       ),
     );
-    expect(find.byKey(const ValueKey('slide_editor_share')), findsOneWidget);
+    final button = find.descendant(
+      of: find.byKey(const ValueKey('slide_editor_share')),
+      matching: find.byType(QuarkBarIconButton),
+    );
+    expect(tester.widget<QuarkBarIconButton>(button).onPressed, isNull);
   });
 }

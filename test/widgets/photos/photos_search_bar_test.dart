@@ -62,4 +62,51 @@ void main() {
       await expectTapTargetGuidelines(tester);
     });
   }
+
+  // #3363: autofocus does nothing while something else in the scope has the
+  // focus, which the Photos page always does.
+  testWidgets('the field takes the focus from whatever held it', (
+    tester,
+  ) async {
+    final field = find.byKey(const ValueKey('photos_search_field'));
+    final holder = FocusNode();
+    addTearDown(holder.dispose);
+    final typed = <String>[];
+    Future<void> pumpBar({required bool open}) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Focus(
+            focusNode: holder,
+            autofocus: true,
+            child: Column(
+              children: [
+                if (open) PhotosSearchBar(onChanged: typed.add, onClose: () {}),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await pumpBar(open: false);
+    await tester.pump();
+    expect(holder.hasPrimaryFocus, isTrue);
+
+    await pumpBar(open: true);
+    await tester.pump();
+
+    final editable = tester.widget<EditableText>(
+      find.descendant(of: field, matching: find.byType(EditableText)),
+    );
+    expect(editable.focusNode.hasFocus, isTrue);
+
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'mp4',
+        selection: TextSelection.collapsed(offset: 3),
+      ),
+    );
+    await tester.pump();
+    expect(typed, ['mp4']);
+  });
 }
