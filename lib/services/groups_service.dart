@@ -68,7 +68,7 @@ class GroupsService with AuthenticatedService {
       _groupsUri('/$groupId/members/$userId'),
     );
     if (response.statusCode == 404 &&
-        _errorText(response.body) == _accountCannotJoin) {
+        serverErrorText(response.body) == _accountCannotJoin) {
       throw const MessageException(Errors.cannotJoinGroup);
     }
     _check(response, 'add member $userId to group $groupId');
@@ -86,19 +86,6 @@ class GroupsService with AuthenticatedService {
       apiBaseUri.resolve('/api/v0/admin/groups$suffix');
 
   /// Throws for a refused [response].
-  static void _check(http.Response response, String context) {
-    final status = response.statusCode;
-    if (status >= 200 && status < 300) return;
-    if (status == 403) throw ApiException(status, context);
-    throwApiError(status, _errorText(response.body), context);
-  }
-
-  static Object? _errorText(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      return decoded is Map ? decoded['error'] : null;
-    } on FormatException {
-      return null;
-    }
-  }
+  static void _check(http.Response response, String context) =>
+      throwUnlessOk(response, context, genericForbidden: true);
 }

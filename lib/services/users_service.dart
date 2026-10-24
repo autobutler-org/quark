@@ -227,21 +227,9 @@ class UsersService with AuthenticatedService {
     String context, {
     bool lastAdminGuard = false,
   }) {
-    final status = response.statusCode;
-    if (status >= 200 && status < 300) return;
-    if (status == 409 && lastAdminGuard) {
+    if (response.statusCode == 409 && lastAdminGuard) {
       throw MessageException(Errors.lastAdmin);
     }
-    if (status == 403) throw ApiException(status, context);
-    throwApiError(status, _errorText(response.body), context);
-  }
-
-  static Object? _errorText(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      return decoded is Map ? decoded['error'] : null;
-    } on FormatException {
-      return null;
-    }
+    throwUnlessOk(response, context, genericForbidden: true);
   }
 }

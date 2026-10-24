@@ -64,7 +64,7 @@ class ChatChannelsService with AuthenticatedService {
   /// Deletes channel [channelId] with its messages and keys.
   static Future<void> deleteChannel(int channelId) async {
     final response = await instance.authenticatedDelete(_uri('/$channelId'));
-    _check(response, 'delete chat channel $channelId');
+    throwUnlessOk(response, 'delete chat channel $channelId');
   }
 
   /// Channel [channelId]'s members: accounts, and groups with their accounts.
@@ -72,7 +72,7 @@ class ChatChannelsService with AuthenticatedService {
     final response = await instance.authenticatedGet(
       _uri('/$channelId/members'),
     );
-    _check(response, 'list members of channel $channelId');
+    throwUnlessOk(response, 'list members of channel $channelId');
     return _members(response).members;
   }
 
@@ -96,7 +96,7 @@ class ChatChannelsService with AuthenticatedService {
         ],
       }),
     );
-    _check(response, 'set a member of channel $channelId');
+    throwUnlessOk(response, 'set a member of channel $channelId');
     return _members(response);
   }
 
@@ -112,7 +112,7 @@ class ChatChannelsService with AuthenticatedService {
       headers: _jsonHeaders,
       body: jsonEncode({'userId': ?userId, 'groupId': ?groupId}),
     );
-    _check(response, 'remove a member of channel $channelId');
+    throwUnlessOk(response, 'remove a member of channel $channelId');
     return _members(response);
   }
 
@@ -125,7 +125,7 @@ class ChatChannelsService with AuthenticatedService {
       headers: _jsonHeaders,
       body: jsonEncode({'messageId': messageId}),
     );
-    _check(response, 'mark chat channel $channelId read');
+    throwUnlessOk(response, 'mark chat channel $channelId read');
     return ChatReadMarker.fromJson(_json(response));
   }
 
@@ -134,7 +134,7 @@ class ChatChannelsService with AuthenticatedService {
     final response = await instance.authenticatedGet(
       all ? uri.replace(queryParameters: {'all': '1'}) : uri,
     );
-    _check(response, 'list chat channels');
+    throwUnlessOk(response, 'list chat channels');
     return [
       for (final c in _json(response)['channels'] as List? ?? const [])
         ChatChannel.fromJson(c as Map<String, dynamic>),
@@ -167,19 +167,6 @@ class ChatChannelsService with AuthenticatedService {
   /// comes from `Errors`.
   static void _checkName(http.Response response, String context) {
     if (response.statusCode == 409) throw ApiException(409, context);
-    _check(response, context);
-  }
-
-  static void _check(http.Response response, String context) {
-    final status = response.statusCode;
-    if (status >= 200 && status < 300) return;
-    Object? error;
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map) error = decoded['error'];
-    } on FormatException {
-      error = null;
-    }
-    throwApiError(status, error, context);
+    throwUnlessOk(response, context);
   }
 }

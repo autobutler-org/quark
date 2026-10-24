@@ -121,9 +121,11 @@ class SlidesService {
     final fileName = fileNameFor(name);
     final title = fileName.substring(0, fileName.length - extension.length);
     final dir = landingFolder();
-    final landed = await FilesService.uploadFilesFromFormData(dir, [
-      _multipart(fileName, newPresentation(title)),
-    ]);
+    final landed = await FilesService.uploadBytes(
+      dir,
+      fileName,
+      _encode(newPresentation(title)),
+    );
     return landed.firstOrNull ?? joinPath(dir, fileName);
   }
 
@@ -148,22 +150,17 @@ class SlidesService {
     Presentation presentation, {
     String? serial,
   }) async {
-    await FilesService.uploadFilesFromFormData(
+    await FilesService.uploadBytes(
       parentPath(path),
-      [_multipart(path.split('/').last, presentation)],
+      path.split('/').last,
+      _encode(presentation),
       serial: serial,
       overwrite: true,
     );
   }
 
-  static http.MultipartFile _multipart(
-    String fileName,
-    Presentation presentation,
-  ) => http.MultipartFile.fromBytes(
-    'files',
-    utf8.encode(QslideCodec.encode(presentation)),
-    filename: fileName,
-  );
+  static List<int> _encode(Presentation presentation) =>
+      utf8.encode(QslideCodec.encode(presentation));
 
   /// Uploads the picture [name], [length] bytes read from [bytes], into the
   /// folder of the presentation at [presentationPath], under a free name if

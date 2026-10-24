@@ -88,8 +88,7 @@ class ContentSearchService with AuthenticatedService {
     _events ??= fileEvents().listen((e) {
       if (e.changesListing) forget();
     });
-    final key =
-        '$apiBaseUrl\u0000${AppSettings.instance.username ?? ''}\u0000$q';
+    final key = '$accountScope\u0000$q';
     final hit = _memo.remove(key);
     if (hit != null) {
       _memo[key] = hit;

@@ -184,15 +184,11 @@ class ResumableUploadService
     return decoded is Map<String, dynamic> ? decoded : const {};
   }
 
+  /// The Quark's `error` text, or else the raw body, which is the best detail
+  /// a log has.
   static String _errorOf(http.Response response) {
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map && decoded['error'] is String) {
-        return decoded['error'] as String;
-      }
-    } catch (_) {
-      // Not JSON. The body itself is the best message available.
-    }
+    final error = serverErrorText(response.body);
+    if (error is String) return error;
     return response.body.isEmpty ? 'no detail' : response.body;
   }
 }

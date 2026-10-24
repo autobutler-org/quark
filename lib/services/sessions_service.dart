@@ -45,8 +45,6 @@ class SessionsService with AuthenticatedService {
     _check(response, 'revoke the other sessions');
   }
 
-  static void _check(http.Response response, String context) {
-    final status = response.statusCode;
-    if (status < 200 || status >= 300) throw ApiException(status, context);
-  }
+  static void _check(http.Response response, String context) =>
+      throwUnlessOk(response, context, serverText: false);
 }

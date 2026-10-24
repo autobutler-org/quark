@@ -22,7 +22,7 @@ class FileTypeListingCache {
     Future<List<FileNode>> Function(String fileType)? fetcher,
     String Function()? scope,
   }) : _fetcher = fetcher ?? FilesService.getFilesByType,
-       _scope = scope ?? _activeScope;
+       _scope = scope ?? (() => accountScope);
 
   /// The cache every page shares.
   static final instance = FileTypeListingCache();
@@ -33,9 +33,6 @@ class FileTypeListingCache {
   /// A map literal keeps insertion order, so the first key is the least
   /// recently used.
   final _entries = <String, List<FileNode>>{};
-
-  static String _activeScope() =>
-      '$apiBaseUrl\u0000${AppSettings.instance.username ?? ''}';
 
   String _key(String fileType) => '${_scope()}\u0000$fileType';
 

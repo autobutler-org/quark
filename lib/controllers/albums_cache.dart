@@ -1,6 +1,7 @@
 import 'package:quark/controllers/photos_list_cache.dart';
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/models/photo_sort.dart';
+import 'package:quark/services/app_settings.dart';
 
 /// The album tree and the items of every album opened since the app started,
 /// so the Photos sidebar and an album opened a second time are there on the
@@ -22,7 +23,8 @@ import 'package:quark/models/photo_sort.dart';
 /// ```
 class AlbumsCache {
   /// [scope] defaults to the active Quark and account; a test passes its own.
-  AlbumsCache({String Function()? scope}) : _scope = scope ?? _activeScope;
+  AlbumsCache({String Function()? scope})
+    : _scope = scope ?? (() => accountScope);
 
   /// The cache every Photos page and `AlbumService` share.
   static final instance = AlbumsCache();
@@ -41,8 +43,6 @@ class AlbumsCache {
     ({PhotoSortField sort, PhotoSortOrder order, List<PhotoAlbumItem> items})
   >
   _items = {};
-
-  static String _activeScope() => PhotosListCache.instance.scope;
 
   /// The Quark and account in use right now. An answer asked for under one
   /// scope must not be kept once this has moved on.

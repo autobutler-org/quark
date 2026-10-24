@@ -77,19 +77,6 @@ class SshAccessService with AuthenticatedService {
     _check(response, 'clear the SSH password');
   }
 
-  static void _check(http.Response response, String context) {
-    final status = response.statusCode;
-    if (status >= 200 && status < 300) return;
-    if (status >= 400 && status < 500) {
-      Object? message;
-      try {
-        final body = jsonDecode(response.body);
-        if (body is Map<String, dynamic>) message = body['error'];
-      } on FormatException {
-        message = null;
-      }
-      throwApiError(status, message, context);
-    }
-    throw ApiException(status, context);
-  }
+  static void _check(http.Response response, String context) =>
+      throwUnlessOk(response, context, clientErrorsOnly: true);
 }

@@ -1,10 +1,8 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:quark/models/chat_keys.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
-import 'package:quark/utils/error_text.dart';
 
 /// The chat key routes (#2416): the caller's wrapped identity under
 /// `/api/v0/chat/keys/me` and anyone's public keys under
@@ -28,7 +26,7 @@ class ChatKeyService with AuthenticatedService {
       headers: _bearer(sessionToken),
     );
     if (response.statusCode == 404) return null;
-    _check(response, 'fetch chat keys');
+    throwUnlessOk(response, 'fetch chat keys');
     return WrappedChatKeys.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
@@ -44,7 +42,7 @@ class ChatKeyService with AuthenticatedService {
       headers: {'Content-Type': 'application/json', ..._bearer(sessionToken)},
       body: jsonEncode(keys.toJson()),
     );
-    _check(response, 'store chat keys');
+    throwUnlessOk(response, 'store chat keys');
   }
 
   static Map<String, String> _bearer(String? token) =>
@@ -52,17 +50,4 @@ class ChatKeyService with AuthenticatedService {
 
   static Uri _uri(String suffix) =>
       apiBaseUri.resolve('/api/v0/chat/keys$suffix');
-
-  static void _check(http.Response response, String context) {
-    final status = response.statusCode;
-    if (status >= 200 && status < 300) return;
-    Object? error;
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map) error = decoded['error'];
-    } on FormatException {
-      error = null;
-    }
-    throwApiError(status, error, context);
-  }
 }

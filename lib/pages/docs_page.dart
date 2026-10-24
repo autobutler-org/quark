@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:quark/controllers/file_type_listing_cache.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
@@ -162,17 +161,12 @@ class _DocsPageState extends State<DocsPage>
     try {
       final fileName = name.endsWith('.qdoc') ? name : '$name.qdoc';
       final bytes = '{"ops":[{"insert":"\\n"}]}'.codeUnits;
-      final file = http.MultipartFile.fromBytes(
-        'files',
-        bytes,
-        filename: fileName,
-      );
       // A member cannot write the device root, only their home (#2139).
       final dir = landingPath(
         isAdmin: AppSettings.instance.isAdmin.value,
         username: AppSettings.instance.username,
       );
-      final landed = await FilesService.uploadFilesFromFormData(dir, [file]);
+      final landed = await FilesService.uploadBytes(dir, fileName, bytes);
       if (!mounted) return;
       context.go(
         AppRoutes.docFile(

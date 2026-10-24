@@ -269,13 +269,7 @@ class StorageService with AuthenticatedService {
   static Future<void> mountDevice(String serial) async {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/usb/$serial');
     final response = await instance.authenticatedPost(uri);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throwApiError(
-        response.statusCode,
-        serverErrorText(response.body),
-        'Mount failed',
-      );
-    }
+    throwUnlessOk(response, 'Mount failed');
     // Device state changed — invalidate the cache so the next listDevices()
     // returns fresh data.
     invalidateDeviceCache();
@@ -289,13 +283,7 @@ class StorageService with AuthenticatedService {
   static Future<void> unmountDevice(String serial) async {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/usb/$serial');
     final response = await instance.authenticatedDelete(uri);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throwApiError(
-        response.statusCode,
-        serverErrorText(response.body),
-        'Unmount failed',
-      );
-    }
+    throwUnlessOk(response, 'Unmount failed');
     invalidateDeviceCache();
   }
 
@@ -323,13 +311,7 @@ class StorageService with AuthenticatedService {
         if (acknowledgeHealth) 'acknowledgeHealth': true,
       }),
     );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throwApiError(
-        response.statusCode,
-        serverErrorText(response.body),
-        'Failed to set role',
-      );
-    }
+    throwUnlessOk(response, 'Failed to set role');
     invalidateDeviceCache();
   }
 
@@ -349,13 +331,7 @@ class StorageService with AuthenticatedService {
         if (acknowledgeHealth) 'acknowledgeHealth': true,
       }),
     );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throwApiError(
-        response.statusCode,
-        serverErrorText(response.body),
-        'Failed to start backup',
-      );
-    }
+    throwUnlessOk(response, 'Failed to start backup');
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return data['jobId'] as String;
   }
@@ -384,13 +360,7 @@ class StorageService with AuthenticatedService {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'deviceSerial': deviceSerial, 'full': full}),
     );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throwApiError(
-        response.statusCode,
-        serverErrorText(response.body),
-        'Verify failed',
-      );
-    }
+    throwUnlessOk(response, 'Verify failed');
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return VerifyResult.fromJson(data);
   }

@@ -718,10 +718,7 @@ class AuthService {
     if (response.statusCode == 403) {
       _throwAccountRefusal(response.body, 'Login failed');
     }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final body = _tryDecodeError(response.body);
-      throwApiError(response.statusCode, body, 'Login failed');
-    }
+    throwUnlessOk(response, 'Login failed', orMessage: true);
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final token = body['token'] as String;
     final String? phrase;
@@ -924,10 +921,7 @@ class AuthService {
     if (response.statusCode == 403) {
       _throwAccountRefusal(response.body, 'Recovery failed');
     }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final body = _tryDecodeError(response.body);
-      throwApiError(response.statusCode, body, 'Recovery failed');
-    }
+    throwUnlessOk(response, 'Recovery failed', orMessage: true);
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final token = body['token'] as String;
     await AppSettings.instance.setSessionToken(token);
@@ -1010,10 +1004,7 @@ class AuthService {
     if (response.statusCode == 403) {
       _throwAccountRefusal(response.body, 'Recovery failed');
     }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final body = _tryDecodeError(response.body);
-      throwApiError(response.statusCode, body, 'Recovery failed');
-    }
+    throwUnlessOk(response, 'Recovery failed', orMessage: true);
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
@@ -1078,10 +1069,7 @@ class AuthService {
     if (response.statusCode == 404 && notFound != null) {
       throw MessageException(notFound);
     }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final body = _tryDecodeError(response.body);
-      throwApiError(response.statusCode, body, context);
-    }
+    throwUnlessOk(response, context, orMessage: true);
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
@@ -1184,7 +1172,7 @@ class AuthService {
         .timeout(kAuthRequestTimeout);
     if (response.statusCode == 401) throw const UnauthorizedException();
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final body = _tryDecodeError(response.body);
+      final body = serverErrorText(response.body, orMessage: true);
       // ErrIncorrectPassword in authutil, as [_deleteAspects] reads it.
       if (response.statusCode == 403 && body == 'incorrect password') {
         throw const MessageException(Errors.wrongCurrentPassword);
@@ -1335,7 +1323,7 @@ class AuthService {
       throw const MessageException(Errors.lastAdmin);
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final body = _tryDecodeError(response.body);
+      final body = serverErrorText(response.body, orMessage: true);
       // A wrong password is a 403 like a member asking for a reset, so the
       // Quark's error text is what tells them apart (ErrIncorrectPassword in
       // authutil). Nothing was deleted and the session stays.
@@ -1392,16 +1380,6 @@ class AuthService {
       case 'disabled':
         throw const MessageException(Errors.accountDisabled);
     }
-    throwApiError(403, _tryDecodeError(body), context);
-  }
-
-  static String? _tryDecodeError(String body) {
-    try {
-      final decoded = jsonDecode(body) as Map<String, dynamic>;
-      return decoded['error'] as String? ?? decoded['message'] as String?;
-    } catch (_) {
-      debugPrint('[auth_service.dart] Error in catch block');
-      return null;
-    }
+    throwApiError(403, serverErrorText(body, orMessage: true), context);
   }
 }

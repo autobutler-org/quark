@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:quark/models/chat_message.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
-import 'package:quark/utils/error_text.dart';
 
 /// The chat message routes (#2418): paging a channel's messages, posting
 /// one, and deleting one; and reacting to one and taking a reaction back
@@ -41,7 +40,7 @@ class ChatMessagesService with AuthenticatedService {
         if (limit != null) 'limit': '$limit',
       }),
     );
-    _check(response, 'fetch messages of channel $channelId');
+    throwUnlessOk(response, 'fetch messages of channel $channelId');
     return [
       for (final m in _json(response)['messages'] as List? ?? const [])
         ChatMessage.fromJson(m as Map<String, dynamic>),
@@ -66,7 +65,7 @@ class ChatMessagesService with AuthenticatedService {
         'clientMessageId': ?clientMessageId,
       }),
     );
-    _check(response, 'post to channel $channelId');
+    throwUnlessOk(response, 'post to channel $channelId');
     return ChatMessage.fromJson(_json(response));
   }
 
@@ -75,7 +74,7 @@ class ChatMessagesService with AuthenticatedService {
     final response = await instance.authenticatedDelete(
       apiBaseUri.resolve('/api/v0/chat/messages/$messageId'),
     );
-    _check(response, 'delete message $messageId');
+    throwUnlessOk(response, 'delete message $messageId');
     return ChatMessage.fromJson(_json(response));
   }
 
@@ -94,7 +93,7 @@ class ChatMessagesService with AuthenticatedService {
         'ciphertext': base64Encode(ciphertext),
       }),
     );
-    _check(response, 'react to message $messageId');
+    throwUnlessOk(response, 'react to message $messageId');
     return ChatReaction.fromJson(_json(response));
   }
 
@@ -103,7 +102,7 @@ class ChatMessagesService with AuthenticatedService {
     final response = await instance.authenticatedDelete(
       apiBaseUri.resolve('/api/v0/chat/reactions/$reactionId'),
     );
-    _check(response, 'remove reaction $reactionId');
+    throwUnlessOk(response, 'remove reaction $reactionId');
   }
 
   static Uri _channelUri(int channelId, [Map<String, String>? query]) =>
@@ -115,17 +114,4 @@ class ChatMessagesService with AuthenticatedService {
 
   static Map<String, dynamic> _json(http.Response response) =>
       jsonDecode(response.body) as Map<String, dynamic>;
-
-  static void _check(http.Response response, String context) {
-    final status = response.statusCode;
-    if (status >= 200 && status < 300) return;
-    Object? error;
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map) error = decoded['error'];
-    } on FormatException {
-      error = null;
-    }
-    throwApiError(status, error, context);
-  }
 }

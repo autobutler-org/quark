@@ -732,10 +732,14 @@ Never throwApiError(int statusCode, Object? serverMessage, String context) {
 /// null when the body is not a JSON object carrying one. A reverse proxy's HTML
 /// error page, an empty body or a bare JSON string is not an error to decode:
 /// the status alone is the answer (#3725).
-Object? serverErrorText(String body) {
+///
+/// [orMessage] also reads a `message` field when there is no `error`, which
+/// the auth routes send.
+Object? serverErrorText(String body, {bool orMessage = false}) {
   try {
     final decoded = jsonDecode(body);
-    return decoded is Map ? decoded['error'] : null;
+    if (decoded is! Map) return null;
+    return decoded['error'] ?? (orMessage ? decoded['message'] : null);
   } on FormatException {
     return null;
   }

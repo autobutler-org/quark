@@ -15,6 +15,39 @@ class UnauthorizedException implements Exception {
   String toString() => 'Session expired. Please log in again.';
 }
 
+/// Returns when [response] is a 2xx and throws for anything else, through
+/// [throwApiError]: the Quark's own `error` text ([serverErrorText]) when the
+/// route sends copy, the bare status otherwise. [context] is for logs only.
+///
+/// Each flag keeps one service's rule for when that text is copy:
+/// - [serverText] false: never show it (the status alone has a sentence).
+/// - [clientErrorsOnly]: show it only for a 4xx; a 5xx carries a diagnostic.
+/// - [genericForbidden]: a 403 is the generic error, never the Quark's text.
+/// - [orMessage]: fall back to a `message` field, which the auth routes send.
+///
+/// A caller with a status of its own to map (409, an account refusal) checks
+/// it before calling this.
+void throwUnlessOk(
+  http.Response response,
+  String context, {
+  bool serverText = true,
+  bool clientErrorsOnly = false,
+  bool genericForbidden = false,
+  bool orMessage = false,
+}) {
+  final status = response.statusCode;
+  if (status >= 200 && status < 300) return;
+  final showText =
+      serverText &&
+      !(clientErrorsOnly && (status < 400 || status >= 500)) &&
+      !(genericForbidden && status == 403);
+  throwApiError(
+    status,
+    showText ? serverErrorText(response.body, orMessage: orMessage) : null,
+    context,
+  );
+}
+
 /// How long to wait for a TCP connection before giving up on the Quark.
 ///
 /// Bounds only the connect phase, so it is safe on requests with a large body
@@ -146,14 +179,7 @@ mixin AuthenticatedService {
   Future<http.Response> authenticatedGet(
     Uri uri, {
     Map<String, String>? headers,
-  }) async {
-    final response = await httpClient.get(
-      uri,
-      headers: {...authHeaders, ...?headers},
-    );
-    checkUnauthorized(response);
-    return response;
-  }
+  }) => _checked(httpClient.get(uri, headers: {...authHeaders, ...?headers}));
 
   /// Authenticated GET streamed straight onto disk, returning where it landed.
   ///
@@ -210,57 +236,39 @@ mixin AuthenticatedService {
     Uri uri, {
     Map<String, String>? headers,
     Object? body,
-  }) async {
-    final response = await httpClient.post(
-      uri,
-      headers: {...authHeaders, ...?headers},
-      body: body,
-    );
-    checkUnauthorized(response);
-    return response;
-  }
+  }) => _checked(
+    httpClient.post(uri, headers: {...authHeaders, ...?headers}, body: body),
+  );
 
   /// Authenticated PATCH — injects auth headers and checks for 401 automatically.
   Future<http.Response> authenticatedPatch(
     Uri uri, {
     Map<String, String>? headers,
     Object? body,
-  }) async {
-    final response = await httpClient.patch(
-      uri,
-      headers: {...authHeaders, ...?headers},
-      body: body,
-    );
-    checkUnauthorized(response);
-    return response;
-  }
+  }) => _checked(
+    httpClient.patch(uri, headers: {...authHeaders, ...?headers}, body: body),
+  );
 
   /// Authenticated DELETE — injects auth headers and checks for 401 automatically.
   Future<http.Response> authenticatedDelete(
     Uri uri, {
     Map<String, String>? headers,
     Object? body,
-  }) async {
-    final response = await httpClient.delete(
-      uri,
-      headers: {...authHeaders, ...?headers},
-      body: body,
-    );
-    checkUnauthorized(response);
-    return response;
-  }
+  }) => _checked(
+    httpClient.delete(uri, headers: {...authHeaders, ...?headers}, body: body),
+  );
 
   /// Authenticated PUT — injects auth headers and checks for 401 automatically.
   Future<http.Response> authenticatedPut(
     Uri uri, {
     Map<String, String>? headers,
     Object? body,
-  }) async {
-    final response = await httpClient.put(
-      uri,
-      headers: {...authHeaders, ...?headers},
-      body: body,
-    );
+  }) => _checked(
+    httpClient.put(uri, headers: {...authHeaders, ...?headers}, body: body),
+  );
+
+  Future<http.Response> _checked(Future<http.Response> pending) async {
+    final response = await pending;
     checkUnauthorized(response);
     return response;
   }
