@@ -57,45 +57,6 @@ void main() {
       expect((power.right as NumberNode).value, 4);
     });
 
-    test('allows ranges only inside function argument context', () {
-      expect(
-        () => parseTokens(lex('=A1:B2')),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 2)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Range references are only allowed'),
-              ),
-        ),
-      );
-    });
-
-    test('rejects identifiers that are not function calls', () {
-      expect(
-        () => parseTokens(lex('=foo + 1')),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 0)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Expected "(" after identifier FOO'),
-              ),
-        ),
-      );
-    });
-
-    test('tracks nested function metadata in encounter order', () {
-      final parsed = parseTokens(lex('=IF(TRUE, SUM(A1:B2), A1)'));
-
-      expect(parsed.calledFunctions, orderedEquals(['IF', 'SUM']));
-      expect(parsed.rangeRefs, orderedEquals(['A1:B2']));
-      expect(parsed.cellRefs, orderedEquals(['A1']));
-      expect(parsed.hasRangeArgs, isTrue);
-    });
-
     test('parses literals and grouped expressions', () {
       final stringParsed = parseTokens(lex('="hello"'));
       expect(stringParsed.root, isA<StringNode>());
@@ -161,77 +122,25 @@ void main() {
       expect((left.right as NumberNode).value, 2);
     });
 
-    test('reports missing closing paren with precise offset', () {
-      expect(
-        () => parseTokens(lex('=SUM(A1, 2')),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 9)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Expected ")" after function arguments'),
-              ),
-        ),
-      );
-    });
-
-    test('reports missing cell ref after range colon', () {
-      expect(
-        () => parseTokens(lex('=SUM(A1:, 2)')),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 7)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Expected cell reference after'),
-              ),
-        ),
-      );
-    });
-
-    test('reports trailing comma in argument lists', () {
-      expect(
-        () => parseTokens(lex('=SUM(A1,)')),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 7)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Expected expression'),
-              ),
-        ),
-      );
-    });
-
-    test('rejects empty token streams and leftover tokens', () {
-      expect(
-        () => parseTokens(lex('')),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 0)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Expected expression'),
-              ),
-        ),
-      );
-
-      expect(
-        () => parseTokens(lex('=1 2')),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 2)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Expected end of formula'),
-              ),
-        ),
-      );
-    });
+    for (final (formula, offset, message) in const [
+      ('=A1:B2', 2, 'Range references are only allowed'),
+      ('=foo + 1', 0, 'Expected "(" after identifier FOO'),
+      ('=SUM(A1, 2', 9, 'Expected ")" after function arguments'),
+      ('=SUM(A1:, 2)', 7, 'Expected cell reference after'),
+      ('=SUM(A1,)', 7, 'Expected expression'),
+      ('', 0, 'Expected expression'),
+      ('=1 2', 2, 'Expected end of formula'),
+    ]) {
+      test('rejects "$formula" at $offset: $message', () {
+        expect(
+          () => parseTokens(lex(formula)),
+          throwsA(
+            isA<LexError>()
+                .having((error) => error.offset, 'offset', offset)
+                .having((error) => error.message, 'message', contains(message)),
+          ),
+        );
+      });
+    }
   });
 }

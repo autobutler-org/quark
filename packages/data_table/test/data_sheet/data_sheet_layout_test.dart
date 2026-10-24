@@ -4,12 +4,7 @@ import 'package:data_table/src/models/data_row.dart';
 import 'package:data_table/src/models/data_table.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-DataTable _table(int rows, int cols) => DataTable(
-  List.generate(
-    rows,
-    (r) => DataRow(List.generate(cols, (c) => DataCell('$r,$c'))),
-  ),
-);
+import '../support/sheet.dart';
 
 /// #2691: pixel sizes, auto-fit and frozen panes on the controller, and the
 /// layout keys a `.qsheet` tab saves them under.
@@ -17,7 +12,7 @@ void main() {
   group('fromTable normalizes saved sizes', () {
     test('pads missing widths and heights with the defaults', () {
       final c = DataSheetController.fromTable(
-        _table(3, 3),
+        gridTable(3, 3),
         columnWidths: [150],
         rowHeights: [60, 30],
       );
@@ -28,7 +23,7 @@ void main() {
 
     test('drops sizes past the last column and row', () {
       final c = DataSheetController.fromTable(
-        _table(1, 2),
+        gridTable(1, 2),
         columnWidths: [120, 80, 90, 70],
         rowHeights: [50, 50, 50],
       );
@@ -39,7 +34,7 @@ void main() {
 
     test('replaces unusable sizes with the default or the minimum', () {
       final c = DataSheetController.fromTable(
-        _table(2, 3),
+        gridTable(2, 3),
         columnWidths: [double.nan, 2, double.infinity],
         rowHeights: [-5, double.nan],
       );
@@ -50,7 +45,7 @@ void main() {
 
     test('migrates flex factors to pixel widths', () {
       final c = DataSheetController.fromTable(
-        _table(1, 3),
+        gridTable(1, 3),
         columnFlex: [1, 2, 3],
       );
       addTearDown(c.dispose);
@@ -59,7 +54,7 @@ void main() {
 
     test('pixel widths win over flex factors', () {
       final c = DataSheetController.fromTable(
-        _table(1, 2),
+        gridTable(1, 2),
         columnWidths: [70, 80],
         columnFlex: [3, 3],
       );
@@ -70,7 +65,7 @@ void main() {
 
   group('fromLayoutJson', () {
     test('a tab saved before sizes existed loads with defaults', () {
-      final c = DataSheetController.fromLayoutJson(_table(2, 2), {
+      final c = DataSheetController.fromLayoutJson(gridTable(2, 2), {
         'name': 'Sheet 1',
         'data': {'rows': []},
       });
@@ -82,7 +77,7 @@ void main() {
     });
 
     test('a tab saved before freezing existed keeps its sizes', () {
-      final c = DataSheetController.fromLayoutJson(_table(2, 2), {
+      final c = DataSheetController.fromLayoutJson(gridTable(2, 2), {
         'columnWidths': [120, 90.5],
         'rowHeights': [30, 50],
       });
@@ -93,7 +88,7 @@ void main() {
     });
 
     test('a legacy columnFlex key becomes pixel widths', () {
-      final c = DataSheetController.fromLayoutJson(_table(1, 2), {
+      final c = DataSheetController.fromLayoutJson(gridTable(1, 2), {
         'columnFlex': [2, 1],
       });
       addTearDown(c.dispose);
@@ -101,7 +96,7 @@ void main() {
     });
 
     test('malformed values fall back instead of throwing', () {
-      final c = DataSheetController.fromLayoutJson(_table(2, 2), {
+      final c = DataSheetController.fromLayoutJson(gridTable(2, 2), {
         'columnWidths': 'wide',
         'rowHeights': [null, 'tall'],
         'frozenRows': '1',
@@ -115,7 +110,7 @@ void main() {
     });
 
     test('round-trips through layoutToJson', () {
-      final a = DataSheetController.fromTable(_table(4, 3))
+      final a = DataSheetController.fromTable(gridTable(4, 3))
         ..setColumnWidth(1, 180)
         ..setRowHeight(2, 64)
         ..setFrozenRows(1)
@@ -125,7 +120,7 @@ void main() {
       expect(json['frozenRows'], 1);
       expect(json['frozenColumns'], 2);
 
-      final b = DataSheetController.fromLayoutJson(_table(4, 3), json);
+      final b = DataSheetController.fromLayoutJson(gridTable(4, 3), json);
       addTearDown(b.dispose);
       expect(b.columnWidths, a.columnWidths);
       expect(b.rowHeights, a.rowHeights);
@@ -136,7 +131,7 @@ void main() {
 
   group('freeze', () {
     test('clamps to the sheet and notifies', () {
-      final c = DataSheetController.fromTable(_table(3, 2));
+      final c = DataSheetController.fromTable(gridTable(3, 2));
       addTearDown(c.dispose);
       var notified = 0;
       c.addListener(() => notified++);
@@ -150,7 +145,8 @@ void main() {
     });
 
     test('can be undone', () {
-      final c = DataSheetController.fromTable(_table(3, 2))..setFrozenRows(1);
+      final c = DataSheetController.fromTable(gridTable(3, 2))
+        ..setFrozenRows(1);
       addTearDown(c.dispose);
       c.undo();
       expect(c.frozenRows, 0);
@@ -159,7 +155,8 @@ void main() {
     });
 
     test('rows inserted or deleted inside the frozen band move its edge', () {
-      final c = DataSheetController.fromTable(_table(5, 2))..setFrozenRows(2);
+      final c = DataSheetController.fromTable(gridTable(5, 2))
+        ..setFrozenRows(2);
       addTearDown(c.dispose);
 
       c.insertRowAt(1);
@@ -177,7 +174,7 @@ void main() {
     test(
       'columns inserted or deleted inside the frozen band move its edge',
       () {
-        final c = DataSheetController.fromTable(_table(2, 4))
+        final c = DataSheetController.fromTable(gridTable(2, 4))
           ..setFrozenColumns(1);
         addTearDown(c.dispose);
 
@@ -193,7 +190,7 @@ void main() {
     );
 
     test('a CSV import keeps the freeze inside the new sheet', () {
-      final c = DataSheetController.fromTable(_table(5, 5))
+      final c = DataSheetController.fromTable(gridTable(5, 5))
         ..setFrozenRows(4)
         ..setFrozenColumns(4);
       addTearDown(c.dispose);
@@ -205,7 +202,7 @@ void main() {
 
   group('resize and auto-fit undo', () {
     test('a drag is one undo step however many updates it sends', () {
-      final c = DataSheetController.fromTable(_table(1, 2));
+      final c = DataSheetController.fromTable(gridTable(1, 2));
       addTearDown(c.dispose);
 
       c.beginResize();

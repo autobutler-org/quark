@@ -37,13 +37,6 @@ void main() {
         expect(selection.hasHighlight, false);
         expect(selection.highlightedRow, -1);
       });
-
-      test('notifies listeners', () {
-        var notified = false;
-        selection.addListener(() => notified = true);
-        selection.setActive(0, 0);
-        expect(notified, true);
-      });
     });
 
     group('setHighlighted', () {
@@ -60,13 +53,6 @@ void main() {
         expect(selection.hasActiveCell, true);
         expect(selection.activeRow, 0);
       });
-
-      test('notifies listeners', () {
-        var notified = false;
-        selection.addListener(() => notified = true);
-        selection.setHighlighted(0, 0);
-        expect(notified, true);
-      });
     });
 
     group('goTo', () {
@@ -78,13 +64,6 @@ void main() {
         expect(selection.hasActiveCell, false);
         expect(selection.activeRow, -1);
       });
-
-      test('notifies listeners', () {
-        var notified = false;
-        selection.addListener(() => notified = true);
-        selection.goTo(2, 2);
-        expect(notified, true);
-      });
     });
 
     group('clear', () {
@@ -94,13 +73,6 @@ void main() {
         selection.clear();
         expect(selection.hasActiveCell, false);
         expect(selection.hasHighlight, false);
-      });
-
-      test('notifies listeners', () {
-        var notified = false;
-        selection.addListener(() => notified = true);
-        selection.clear();
-        expect(notified, true);
       });
     });
 
@@ -217,14 +189,33 @@ void main() {
       expect(selection.isInRange(0, 1), false);
       expect(selection.isInRange(1, 4), false);
     });
+  });
 
-    test('extendTo notifies listeners', () {
-      selection.setHighlighted(0, 0);
-      var notified = false;
-      selection.addListener(() => notified = true);
-      selection.extendTo(1, 1);
-      expect(notified, true);
-    });
+  group('notifies listeners', () {
+    for (final (name, before, act)
+        in <
+          (
+            String,
+            void Function(DataSheetSelectionModel),
+            void Function(DataSheetSelectionModel),
+          )
+        >[
+          ('setActive', (_) {}, (s) => s.setActive(0, 0)),
+          ('setHighlighted', (_) {}, (s) => s.setHighlighted(0, 0)),
+          ('goTo', (_) {}, (s) => s.goTo(2, 2)),
+          ('clear', (_) {}, (s) => s.clear()),
+          ('extendTo', (s) => s.setHighlighted(0, 0), (s) => s.extendTo(1, 1)),
+        ]) {
+      test(name, () {
+        final selection = DataSheetSelectionModel();
+        addTearDown(selection.dispose);
+        before(selection);
+        var notified = false;
+        selection.addListener(() => notified = true);
+        act(selection);
+        expect(notified, true);
+      });
+    }
   });
 
   group('CellRange', () {

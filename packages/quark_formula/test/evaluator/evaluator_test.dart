@@ -78,16 +78,6 @@ void main() {
       expect(value, refError('Circular reference'));
     });
 
-    test('evaluates logic and string functions via the registry', () {
-      final ifValue = evaluateFormula('=IF(2 > 1, "ok", "no")');
-      final trimValue = evaluateFormula('=TRIM("  hi   there  ")');
-      final findValue = evaluateFormula('=FIND("th", "hi there")');
-
-      expect(ifValue, const StringValue('ok'));
-      expect(trimValue, const StringValue('hi there'));
-      expect(findValue, const NumberValue(4));
-    });
-
     test(
       'returns a value error when a range is evaluated outside a function',
       () {

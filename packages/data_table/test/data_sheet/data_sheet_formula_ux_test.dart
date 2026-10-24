@@ -9,8 +9,7 @@ import 'package:flutter/material.dart' hide DataCell, DataRow, DataTable;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _narrow = Size(360, 640);
-const _wide = Size(1280, 800);
+import '../support/sheet.dart';
 
 /// A 6x4 sheet of numbers, with [cells] overriding some by (row, col).
 DataSheetController _makeController([
@@ -34,9 +33,7 @@ Future<DataSheetController> _pumpSheet(
   Map<(int, int), String> cells = const {},
   double textScale = 1,
 }) async {
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
+  setSheetSize(tester, size);
   final controller = _makeController(cells);
   addTearDown(controller.dispose);
   await tester.pumpWidget(
@@ -55,7 +52,7 @@ Future<DataSheetController> _pumpSheet(
   return controller;
 }
 
-Finder _cell(int r, int c) => find.byKey(ValueKey('r${r}c$c')).first;
+Finder _cell(int r, int c) => cellAt(r, c).first;
 
 Finder get _cellEditor => find.descendant(
   of: find.byType(EditableCell),
@@ -101,7 +98,7 @@ Future<void> _mouseDrag(
 }
 
 void main() {
-  for (final (name, size) in [('narrow', _narrow), ('wide', _wide)]) {
+  for (final (name, size) in [('narrow', narrow), ('wide', wide)]) {
     group('function autocomplete ($name)', () {
       testWidgets('typing a name lists matching functions', (tester) async {
         await _pumpSheet(tester, size);
@@ -364,7 +361,7 @@ void main() {
     testWidgets('suggestions and error chips survive 2x text on a phone', (
       tester,
     ) async {
-      await _pumpSheet(tester, _narrow, cells: {(0, 0): '=1/0'}, textScale: 2);
+      await _pumpSheet(tester, narrow, cells: {(0, 0): '=1/0'}, textScale: 2);
       expect(find.byKey(const ValueKey('r0c0_error')), findsOneWidget);
 
       await _editCell(tester, 0, 1, '=CO');
@@ -373,8 +370,8 @@ void main() {
       expect(_suggestion('CONCAT'), findsOneWidget);
       final list = tester.getRect(_suggestions);
       expect(list.left, greaterThanOrEqualTo(0));
-      expect(list.right, lessThanOrEqualTo(_narrow.width));
-      expect(list.bottom, lessThanOrEqualTo(_narrow.height));
+      expect(list.right, lessThanOrEqualTo(narrow.width));
+      expect(list.bottom, lessThanOrEqualTo(narrow.height));
       expect(
         tester.getSize(_suggestion('CONCAT')).height,
         greaterThanOrEqualTo(48),

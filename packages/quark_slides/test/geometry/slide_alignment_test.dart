@@ -1,14 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
 
-ElementFrame f(double x, double y, double w, double h, [double r = 0]) =>
-    ElementFrame(x: x, y: y, width: w, height: h, rotation: r);
+import '../support/canvas_harness.dart';
 
 void main() {
   final frames = {
-    'a': f(100, 100, 100, 50),
-    'b': f(300, 250, 200, 100),
-    'c': f(150, 500, 50, 50),
+    'a': frame(100, 100, 100, 50),
+    'b': frame(300, 250, 200, 100),
+    'c': frame(150, 500, 50, 50),
   };
   const slide = (left: 0.0, top: 0.0, right: 1920.0, bottom: 1080.0);
 
@@ -60,7 +59,7 @@ void main() {
         ElementAlignment.center,
         within: slide,
       );
-      expect(one['a'], f(910, 100, 100, 50));
+      expect(one['a'], frame(910, 100, 100, 50));
       final bottom = alignFrames(
         {'a': frames['a']!},
         ElementAlignment.bottom,
@@ -71,8 +70,8 @@ void main() {
 
     test('a rotated element lines up by what shows, and keeps its turn', () {
       final turned = alignFrames({
-        'r': f(0, 0, 100, 20, 90),
-        'a': f(200, 0, 50, 50),
+        'r': frame(0, 0, 100, 20, 90),
+        'a': frame(200, 0, 50, 50),
       }, ElementAlignment.left);
       // The upright bounds of the turned bar start at x 40.
       expect(turned['a']!.x, closeTo(40, 1e-9));
@@ -87,9 +86,9 @@ void main() {
   group('distributeFrames', () {
     test('leaves the outermost in place and evens the gaps between', () {
       final spread = distributeFrames({
-        'a': f(0, 0, 100, 10),
-        'b': f(150, 0, 100, 10),
-        'c': f(500, 0, 100, 10),
+        'a': frame(0, 0, 100, 10),
+        'b': frame(150, 0, 100, 10),
+        'c': frame(500, 0, 100, 10),
       }, DistributeAxis.horizontal);
       expect(spread['a']!.x, 0);
       expect(spread['b']!.x, 250);
@@ -98,9 +97,9 @@ void main() {
 
     test('orders by position, not by key, and returns keys as given', () {
       final spread = distributeFrames({
-        'c': f(0, 600, 10, 100),
-        'a': f(0, 0, 10, 100),
-        'b': f(0, 120, 10, 100),
+        'c': frame(0, 600, 10, 100),
+        'a': frame(0, 0, 10, 100),
+        'b': frame(0, 120, 10, 100),
       }, DistributeAxis.vertical);
       expect(spread.keys, ['c', 'a', 'b']);
       expect(spread['b']!.y, 300);
@@ -108,13 +107,13 @@ void main() {
     });
 
     test('fewer than three come back unchanged', () {
-      final two = {'a': f(0, 0, 10, 10), 'b': f(50, 0, 10, 10)};
+      final two = {'a': frame(0, 0, 10, 10), 'b': frame(50, 0, 10, 10)};
       expect(distributeFrames(two, DistributeAxis.horizontal), two);
     });
 
     test('across the slide the ends meet its edges', () {
       final spread = distributeFrames(
-        {'a': f(500, 0, 100, 10), 'b': f(700, 0, 100, 10)},
+        {'a': frame(500, 0, 100, 10), 'b': frame(700, 0, 100, 10)},
         DistributeAxis.horizontal,
         within: slide,
       );

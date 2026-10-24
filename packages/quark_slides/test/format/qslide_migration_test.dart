@@ -1,12 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
 
+import '../support/canvas_harness.dart';
 import '../support/sample_presentation.dart';
-
-String fixture(String name) => File('test/fixtures/$name').readAsStringSync();
 
 void main() {
   test('this version writes schema 6', () {
@@ -40,15 +37,6 @@ void main() {
         'slides': [],
       });
       expect(deck.theme, SlideThemes.dark);
-    });
-
-    test('fields version 1 did not know still survive the migration', () {
-      final deck = QslideCodec.fromJson({
-        'schemaVersion': 1,
-        'comments': ['kept'],
-        'slides': [],
-      });
-      expect(QslideCodec.toJson(deck)['comments'], ['kept']);
     });
   });
 
@@ -85,19 +73,6 @@ void main() {
         everyElement(isNot(contains('transition'))),
       );
       expect(QslideCodec.decode(jsonEncode(json)), v2Sample());
-    });
-
-    test('fields version 2 did not know still survive the migration', () {
-      final deck = QslideCodec.fromJson({
-        'schemaVersion': 2,
-        'comments': ['kept'],
-        'slides': [
-          {'id': 's1', 'reactions': 3},
-        ],
-      });
-      final json = QslideCodec.toJson(deck);
-      expect(json['comments'], ['kept']);
-      expect((json['slides'] as List).single['reactions'], 3);
     });
 
     test('a version 1 file with transitions reads them after migrating', () {
@@ -169,54 +144,53 @@ void main() {
     });
   });
 
-  group('from schema version 3', () {
-    test('the golden v3 file reads as the sample deck', () {
-      final json = jsonDecode(fixture('v3_sample.qslide')) as Map;
-      expect(json['schemaVersion'], 3);
-      expect(
-        QslideCodec.decode(fixture('v3_sample.qslide')),
-        samplePresentation(),
-      );
-    });
-
-    test('it saves as version 6 and otherwise byte for byte as before', () {
-      final saved = QslideCodec.encode(
-        QslideCodec.decode(fixture('v3_sample.qslide')),
-      );
-      expect(saved, fixture('sample.qslide'));
-      expect(
-        saved,
-        fixture(
-          'v3_sample.qslide',
-        ).replaceFirst('"schemaVersion": 3', '"schemaVersion": 6'),
-      );
-    });
-
-    test('fields version 3 did not know still survive the migration', () {
-      final deck = QslideCodec.fromJson({
-        'schemaVersion': 3,
-        'comments': ['kept'],
-        'slides': [
-          {
-            'id': 's1',
-            'elements': [
-              {
-                'id': 'c',
-                'type': 'diagram',
-                'frame': {'x': 0, 'y': 0, 'width': 10, 'height': 10},
-                'series': [1, 2],
-              },
-            ],
-          },
-        ],
+  group('from schema versions 3, 4 and 5', () {
+    for (final version in [3, 4, 5]) {
+      test('a version $version file reads as the sample deck and saves as '
+          'version 6, otherwise byte for byte', () {
+        final sample = fixture('sample.qslide');
+        final source = sample.replaceFirst(
+          '"schemaVersion": 6',
+          '"schemaVersion": $version',
+        );
+        expect((jsonDecode(source) as Map)['schemaVersion'], version);
+        final deck = QslideCodec.decode(source);
+        expect(deck, samplePresentation());
+        expect(QslideCodec.encode(deck), sample);
       });
-      final json = QslideCodec.toJson(deck);
-      expect(json['comments'], ['kept']);
-      final element =
-          ((json['slides'] as List).single['elements'] as List).single as Map;
-      expect(element['series'], [1, 2]);
-    });
+    }
   });
+
+  for (final version in [1, 2, 3]) {
+    test(
+      'fields version $version did not know still survive the migration',
+      () {
+        final deck = QslideCodec.fromJson({
+          'schemaVersion': version,
+          'comments': ['kept'],
+          'slides': [
+            {
+              'id': 's1',
+              'reactions': 3,
+              'elements': [
+                {
+                  'id': 'c',
+                  'type': 'diagram',
+                  'frame': {'x': 0, 'y': 0, 'width': 10, 'height': 10},
+                  'series': [1, 2],
+                },
+              ],
+            },
+          ],
+        });
+        final json = QslideCodec.toJson(deck);
+        expect(json['comments'], ['kept']);
+        final slide = (json['slides'] as List).single as Map;
+        expect(slide['reactions'], 3);
+        expect((slide['elements'] as List).single['series'], [1, 2]);
+      },
+    );
+  }
 
   group('schema version 2 features', () {
     test('the golden sample carries its theme, layouts and role colors', () {

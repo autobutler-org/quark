@@ -182,7 +182,7 @@ void main() {
         title.paragraphs.single.runs.last,
         const TextRun('?', bold: true, italic: true, fontSize: 72),
       );
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
       expect(doc.presentation, canvasDeck());
     });
 
@@ -237,7 +237,7 @@ void main() {
       final title = textBox(doc, 'title');
       expect(title.paragraphs.length, 2);
       expect(title.paragraphs[1].alignment, TextAlignment.center);
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testBothViewports('backspace at a paragraph start joins it to the last', (
@@ -358,7 +358,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();
       expect(textBox(doc, 'title').frame.height, greaterThan(200));
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testBothViewports('undoing the box away mid-session drops the session', (
@@ -402,7 +402,7 @@ void main() {
       expect(title.paragraphs.single.runs.single.bold, isTrue);
       expect(title.paragraphs.single.alignment, TextAlignment.end);
       expect(editing.selectionFormat.bold, isTrue);
-      expect(undoAll(doc), 2);
+      expect(undoAll(doc.controller), 2);
     });
 
     testBothViewports('nothing to format without a text box', (
@@ -456,7 +456,7 @@ void main() {
         TextRun(' ', fontSize: 72),
         TextRun('review', bold: true, fontSize: 72),
       ]);
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testBothViewports('Ctrl+A then Ctrl+B bolds every paragraph', (
@@ -517,7 +517,7 @@ void main() {
       );
       expect(title.paragraphs.map((p) => p.lineSpacing), everyElement(1.5));
       expect(find.text('2.', findRichText: true), findsOne);
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
       expect(tester.takeException(), isNull);
     });
   });
@@ -543,7 +543,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();
       expect(textBox(doc, 'new').plainText, 'Hello');
-      expect(undoAll(doc), 2, reason: 'inserting, then typing');
+      expect(undoAll(doc.controller), 2, reason: 'inserting, then typing');
     });
 
     testBothViewports('a drag draws the box', (tester, size) async {

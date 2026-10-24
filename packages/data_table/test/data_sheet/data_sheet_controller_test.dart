@@ -1,9 +1,9 @@
 import 'package:data_table/src/data_sheet/cell_range.dart';
 import 'package:data_table/src/data_sheet/data_sheet_controller.dart';
 import 'package:data_table/src/models/data_cell.dart';
-import 'package:data_table/src/models/data_row.dart';
-import 'package:data_table/src/models/data_table.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/sheet.dart';
 
 List<List<String>> _values(DataSheetController c) => [
   for (var r = 0; r < c.rowCount; r++)
@@ -11,76 +11,17 @@ List<List<String>> _values(DataSheetController c) => [
 ];
 
 /// A 3x3 sheet of `a`..`i`, row by row.
-DataSheetController _grid() => _makeController([
+DataSheetController _grid() => sheetOf([
   ['a', 'b', 'c'],
   ['d', 'e', 'f'],
   ['g', 'h', 'i'],
 ]);
 
-DataTable _makeTable(List<List<String>> values) {
-  return DataTable(
-    values.map((row) => DataRow(row.map((v) => DataCell(v)).toList())).toList(),
-  );
-}
-
-DataSheetController _makeController(List<List<String>> values) {
-  return DataSheetController.fromTable(_makeTable(values));
-}
-
 void main() {
   group('DataSheetController', () {
-    group('fromTable', () {
-      test('rowCount and colCount match the table', () {
-        final c = _makeController([
-          ['a', 'b', 'c'],
-          ['d', 'e', 'f'],
-        ]);
-        expect(c.rowCount, 2);
-        expect(c.colCount, 3);
-        c.dispose();
-      });
-
-      test('cellAt returns the correct value', () {
-        final c = _makeController([
-          ['x', 'y'],
-        ]);
-        expect(c.cellAt(0, 0).value, 'x');
-        expect(c.cellAt(0, 1).value, 'y');
-        c.dispose();
-      });
-
-      test('columnWidths defaults to kDefaultColumnWidth for each column', () {
-        final c = _makeController([
-          ['a', 'b', 'c'],
-        ]);
-        expect(c.columnWidths, [100.0, 100.0, 100.0]);
-        c.dispose();
-      });
-
-      test('columnWidths is growable (no fixed-length crash)', () {
-        final c = _makeController([
-          ['a', 'b'],
-        ]);
-        expect(() => c.columnWidths.add(100.0), returnsNormally);
-        c.dispose();
-      });
-
-      test('accepts custom columnWidths', () {
-        final table = _makeTable([
-          ['a', 'b'],
-        ]);
-        final c = DataSheetController.fromTable(
-          table,
-          columnWidths: [120.0, 80.0],
-        );
-        expect(c.columnWidths, [120.0, 80.0]);
-        c.dispose();
-      });
-    });
-
     group('updateCell', () {
       test('updates cell value', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['old', 'b'],
         ]);
         c.updateCell(0, 0, DataCell('new'));
@@ -89,7 +30,7 @@ void main() {
       });
 
       test('notifies listeners', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         var notified = false;
@@ -102,7 +43,7 @@ void main() {
 
     group('clearCell', () {
       test('clears a single cell value', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['hello', 'world'],
         ]);
         c.clearCell(0, 0);
@@ -112,7 +53,7 @@ void main() {
       });
 
       test('does nothing for out-of-bounds indices', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         expect(() => c.clearCell(5, 5), returnsNormally);
@@ -122,7 +63,7 @@ void main() {
 
     group('clearRow', () {
       test('clears all cells in the row', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a', 'b', 'c'],
           ['d', 'e', 'f'],
         ]);
@@ -137,7 +78,7 @@ void main() {
 
     group('clearColumn', () {
       test('clears all cells in the column', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a', 'b'],
           ['c', 'd'],
         ]);
@@ -151,7 +92,7 @@ void main() {
 
     group('addRow', () {
       test('appends an empty row', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a', 'b'],
         ]);
         c.addRow();
@@ -164,7 +105,7 @@ void main() {
 
     group('insertRowAt', () {
       test('inserts at the given index', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
           ['c'],
         ]);
@@ -176,7 +117,7 @@ void main() {
       });
 
       test('clamps to end when index exceeds rowCount', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         c.insertRowAt(99);
@@ -187,7 +128,7 @@ void main() {
 
     group('deleteRowAt', () {
       test('removes the row at index', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
           ['b'],
           ['c'],
@@ -200,7 +141,7 @@ void main() {
       });
 
       test('does nothing for out-of-bounds index', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         expect(() => c.deleteRowAt(5), returnsNormally);
@@ -211,7 +152,7 @@ void main() {
 
     group('duplicateRow', () {
       test('inserts copy immediately after source', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['x', 'y'],
           ['z', 'w'],
         ]);
@@ -226,7 +167,7 @@ void main() {
 
     group('addColumn', () {
       test('appends an empty column to all rows', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a', 'b'],
           ['c', 'd'],
         ]);
@@ -238,7 +179,7 @@ void main() {
       });
 
       test('grows columnWidths on addColumn', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         c.addColumn();
@@ -249,7 +190,7 @@ void main() {
 
     group('deleteColumnAt', () {
       test('removes the column at index', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a', 'b', 'c'],
         ]);
         c.deleteColumnAt(1);
@@ -262,7 +203,7 @@ void main() {
 
     group('duplicateColumn', () {
       test('inserts copy immediately after source', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['x', 'y'],
         ]);
         c.duplicateColumn(0);
@@ -274,18 +215,8 @@ void main() {
     });
 
     group('rowHeights', () {
-      test('rowHeights defaults to kDefaultRowHeight for each row', () {
-        final c = _makeController([
-          ['a'],
-          ['b'],
-          ['c'],
-        ]);
-        expect(c.rowHeights, [40.0, 40.0, 40.0]);
-        c.dispose();
-      });
-
       test('addRow appends a new rowHeight', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         c.addRow();
@@ -294,7 +225,7 @@ void main() {
       });
 
       test('insertRowAt inserts a rowHeight at the correct index', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
           ['b'],
         ]);
@@ -306,7 +237,7 @@ void main() {
       });
 
       test('deleteRowAt removes the corresponding rowHeight', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
           ['b'],
           ['c'],
@@ -319,7 +250,7 @@ void main() {
       });
 
       test('duplicateRow copies the source rowHeight', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
           ['b'],
         ]);
@@ -332,7 +263,7 @@ void main() {
 
     group('setColumnWidth', () {
       test('updates the width at the given index', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a', 'b'],
         ]);
         c.setColumnWidth(0, 150.0);
@@ -341,7 +272,7 @@ void main() {
       });
 
       test('clamps to kMinColumnWidth', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         c.setColumnWidth(0, 0.0);
@@ -350,7 +281,7 @@ void main() {
       });
 
       test('does nothing for out-of-range index', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         expect(() => c.setColumnWidth(5, 100.0), returnsNormally);
@@ -360,7 +291,7 @@ void main() {
 
     group('setRowHeight', () {
       test('updates the height at the given index', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
           ['b'],
         ]);
@@ -370,7 +301,7 @@ void main() {
       });
 
       test('clamps to kMinRowHeight', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         c.setRowHeight(0, 0.0);
@@ -381,7 +312,7 @@ void main() {
 
     group('autoSizeColumn', () {
       test('sets width >= kMinColumnWidth for non-empty column', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['Hello World'],
           ['Short'],
         ]);
@@ -391,7 +322,7 @@ void main() {
       });
 
       test('does nothing for out-of-range column', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         expect(() => c.autoSizeColumn(5), returnsNormally);
@@ -401,7 +332,7 @@ void main() {
 
     group('autoSizeRow', () {
       test('sets height >= kMinRowHeight', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['Hello World'],
         ]);
         c.autoSizeRow(0);
@@ -410,7 +341,7 @@ void main() {
       });
 
       test('does nothing for out-of-range row', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         expect(() => c.autoSizeRow(5), returnsNormally);
@@ -420,7 +351,7 @@ void main() {
 
     group('sortByColumn', () {
       test('sorts lexicographically ascending', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['banana'],
           ['apple'],
           ['cherry'],
@@ -433,7 +364,7 @@ void main() {
       });
 
       test('sorts descending', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['1'],
           ['3'],
           ['2'],
@@ -446,7 +377,7 @@ void main() {
       });
 
       test('sorts numerically when values are numbers', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['10'],
           ['9'],
           ['100'],
@@ -461,7 +392,7 @@ void main() {
 
     group('removeDuplicateRows', () {
       test('removes exact duplicates, keeping first occurrence', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a', 'b'],
           ['c', 'd'],
           ['a', 'b'],
@@ -474,7 +405,7 @@ void main() {
       });
 
       test('does nothing when there are no duplicates', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
           ['b'],
         ]);
@@ -486,7 +417,7 @@ void main() {
 
     group('fillDown', () {
       test('fills source value to all rows below', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['src', 'x'],
           ['', 'y'],
           ['', 'z'],
@@ -501,7 +432,7 @@ void main() {
 
     group('fillRight', () {
       test('fills source value to all columns to the right', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['src', '', ''],
         ]);
         c.fillRight(0, 0);
@@ -513,7 +444,7 @@ void main() {
 
     group('findCells', () {
       test('returns matching cell positions', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['hello', 'world'],
           ['foo', 'hello'],
         ]);
@@ -525,7 +456,7 @@ void main() {
       });
 
       test('is case-insensitive by default', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['Hello'],
         ]);
         expect(c.findCells('hello').length, 1);
@@ -533,7 +464,7 @@ void main() {
       });
 
       test('is case-sensitive when requested', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['Hello'],
         ]);
         expect(c.findCells('hello', caseSensitive: true).length, 0);
@@ -541,7 +472,7 @@ void main() {
       });
 
       test('returns empty list when no match', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['abc'],
         ]);
         expect(c.findCells('xyz'), isEmpty);
@@ -551,7 +482,7 @@ void main() {
 
     group('replaceCells', () {
       test('replaces all occurrences and returns count', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['foo', 'foobar'],
           ['baz', 'foo'],
         ]);
@@ -564,7 +495,7 @@ void main() {
       });
 
       test('returns 0 and does not modify when from is empty', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['abc'],
         ]);
         final count = c.replaceCells('', 'x');
@@ -574,49 +505,9 @@ void main() {
       });
     });
 
-    group('exportCsv / loadFromCsv', () {
-      test('exportCsv produces correct output', () {
-        final c = _makeController([
-          ['a', 'b'],
-          ['c', 'd'],
-        ]);
-        expect(c.exportCsv(), 'a,b\nc,d');
-        c.dispose();
-      });
-
-      test('exportCsv quotes cells containing commas', () {
-        final c = _makeController([
-          ['hello, world'],
-        ]);
-        expect(c.exportCsv(), '"hello, world"');
-        c.dispose();
-      });
-
-      test('exportCsv quotes cells containing double-quotes', () {
-        final c = _makeController([
-          ['say "hi"'],
-        ]);
-        expect(c.exportCsv(), '"say ""hi"""');
-        c.dispose();
-      });
-
-      test('loadFromCsv round-trips with exportCsv', () {
-        final c = _makeController([
-          ['x', 'y'],
-          ['1', '2'],
-        ]);
-        final csv = c.exportCsv();
-        c.loadFromCsv(csv);
-        expect(c.rowCount, 2);
-        expect(c.cellAt(0, 0).value, 'x');
-        expect(c.cellAt(1, 1).value, '2');
-        c.dispose();
-      });
-    });
-
     group('undo / redo', () {
       test('canUndo is false initially', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         expect(c.canUndo, false);
@@ -624,7 +515,7 @@ void main() {
       });
 
       test('canUndo becomes true after a mutating operation', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         c.clearCell(0, 0);
@@ -633,7 +524,7 @@ void main() {
       });
 
       test('undo reverses last change', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['original'],
         ]);
         c.clearCell(0, 0);
@@ -643,7 +534,7 @@ void main() {
       });
 
       test('redo reapplies undone change', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['original'],
         ]);
         c.clearCell(0, 0);
@@ -654,7 +545,7 @@ void main() {
       });
 
       test('redo stack is cleared after a new mutation', () {
-        final c = _makeController([
+        final c = sheetOf([
           ['a'],
         ]);
         c.clearCell(0, 0);
@@ -673,85 +564,6 @@ void main() {
         expect(c.valuesIn(topLeft), [
           ['a', 'b'],
           ['d', 'e'],
-        ]);
-        c.dispose();
-      });
-
-      test('clearRange empties every cell in one undo step', () {
-        final c = _grid();
-        c.clearRange(topLeft);
-        expect(_values(c), [
-          ['', '', 'c'],
-          ['', '', 'f'],
-          ['g', 'h', 'i'],
-        ]);
-        c.undo();
-        expect(c.valuesIn(topLeft), [
-          ['a', 'b'],
-          ['d', 'e'],
-        ]);
-        expect(c.canUndo, false);
-        c.dispose();
-      });
-
-      test('pasteValues lands a block at the top-left, growing the sheet', () {
-        final c = _grid();
-        c.pasteValues(const CellRange(top: 1, left: 1, bottom: 1, right: 1), [
-          ['1', '2', '3'],
-          ['4', '5', '6'],
-          ['7', '8', '9'],
-        ]);
-        expect(_values(c), [
-          ['a', 'b', 'c', ''],
-          ['d', '1', '2', '3'],
-          ['g', '4', '5', '6'],
-          ['', '7', '8', '9'],
-        ]);
-        c.dispose();
-      });
-
-      test('pasteValues fills the range with a single value', () {
-        final c = _grid();
-        c.pasteValues(topLeft, [
-          ['x'],
-        ]);
-        expect(c.valuesIn(topLeft), [
-          ['x', 'x'],
-          ['x', 'x'],
-        ]);
-        expect(c.cellAt(2, 2).value, 'i');
-        c.dispose();
-      });
-
-      test('fillDownRange copies the top row through the range', () {
-        final c = _grid();
-        c.fillDownRange(topLeft);
-        expect(_values(c), [
-          ['a', 'b', 'c'],
-          ['a', 'b', 'f'],
-          ['g', 'h', 'i'],
-        ]);
-        c.dispose();
-      });
-
-      test('fillDownRange on one row fills to the bottom', () {
-        final c = _grid();
-        c.fillDownRange(const CellRange(top: 0, left: 1, bottom: 0, right: 2));
-        expect(_values(c), [
-          ['a', 'b', 'c'],
-          ['d', 'b', 'c'],
-          ['g', 'b', 'c'],
-        ]);
-        c.dispose();
-      });
-
-      test('fillRightRange copies the left column through the range', () {
-        final c = _grid();
-        c.fillRightRange(topLeft);
-        expect(_values(c), [
-          ['a', 'a', 'c'],
-          ['d', 'd', 'f'],
-          ['g', 'h', 'i'],
         ]);
         c.dispose();
       });

@@ -44,27 +44,4 @@ void main() {
       const PackagePartImage('part:nested.png'),
     );
   });
-
-  test('a part: source survives a .qslide round trip', () {
-    const part = PackagePartImage('Pictures/photo.png');
-    final deck = Presentation(
-      slides: [
-        Slide(
-          id: 's1',
-          elements: [
-            ImageElement(
-              id: 'pic',
-              frame: ElementFrame(x: 0, y: 0, width: 100, height: 80),
-              source: part.ref,
-            ),
-          ],
-        ),
-      ],
-    );
-
-    final again = QslideCodec.decode(QslideCodec.encode(deck));
-    final image = again.slides.single.elementById('pic') as ImageElement;
-    expect(image.source, 'part:Pictures/photo.png');
-    expect(image.imageSource, part);
-  });
 }

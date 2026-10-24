@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
 
+import '../support/canvas_harness.dart';
 import '../support/chart_sample.dart';
 
 /// A 1920×1080 deck with one slide `s` holding [sampleChart] (`chart`) and
@@ -31,24 +32,10 @@ void main() {
   ChartElement chart([String id = 'chart']) =>
       doc.presentation.slideById('s')!.findElement(id)! as ChartElement;
 
-  /// Checks that [command] is one undo step that undo and redo replay.
-  void oneStep(void Function() command) {
-    final before = doc.presentation;
-    final couldUndo = doc.canUndo;
-    command();
-    final after = doc.presentation;
-    expect(after, isNot(before));
-    expect(doc.undo(), isTrue);
-    expect(doc.presentation, before);
-    expect(doc.canUndo, couldUndo);
-    expect(doc.redo(), isTrue);
-    expect(doc.presentation, after);
-  }
-
   group('insertChart', () {
     test('centers a sample chart of the kind on the slide, in front', () {
       late String id;
-      oneStep(() => id = doc.insertChart('s', ChartKind.line));
+      oneStep(doc, () => id = doc.insertChart('s', ChartKind.line));
       final c = chart(id);
       expect(c.kind, ChartKind.line);
       expect(c.data, SlideDocumentController.sampleChartData(ChartKind.line));
@@ -99,7 +86,7 @@ void main() {
       ['', 'A'],
       ['x', '5'],
     ]);
-    oneStep(() => doc.setChartData('s', 'chart', data));
+    oneStep(doc, () => doc.setChartData('s', 'chart', data));
     expect(chart().data, data);
     expect(chart().options.title, 'Sales');
   });
@@ -113,7 +100,7 @@ void main() {
   });
 
   test('setChartKind keeps the data', () {
-    oneStep(() => doc.setChartKind('s', 'chart', ChartKind.horizontalBar));
+    oneStep(doc, () => doc.setChartKind('s', 'chart', ChartKind.horizontalBar));
     expect(chart().kind, ChartKind.horizontalBar);
     expect(chart().data, sampleChart().data);
   });
@@ -125,6 +112,7 @@ void main() {
 
   test('setChartOptions changes what it is given and keeps the rest', () {
     oneStep(
+      doc,
       () => doc.setChartOptions(
         's',
         'chart',
@@ -144,6 +132,7 @@ void main() {
       ),
     );
     oneStep(
+      doc,
       () => doc.setChartOptions(
         's',
         'chart',
@@ -158,10 +147,11 @@ void main() {
 
   group('series', () {
     test('addChartSeries appends a named, zeroed series', () {
-      oneStep(() => doc.addChartSeries('s', 'chart'));
+      oneStep(doc, () => doc.addChartSeries('s', 'chart'));
       expect(chart().data.series.last.name, 'Series 3');
       expect(chart().data.series.last.values, [0, 0, 0]);
       oneStep(
+        doc,
         () => doc.addChartSeries('s', 'chart', name: 'Tax', values: [1, 2]),
       );
       expect(chart().data.series.last.values, [1, 2, 0]);
@@ -184,14 +174,14 @@ void main() {
         SlideColor(0xFF000001),
         SlideColor(0xFF000002),
       ]);
-      oneStep(() => doc.removeChartSeries('s', 'chart', 0));
+      oneStep(doc, () => doc.removeChartSeries('s', 'chart', 0));
       expect(chart().data.series.single.name, 'Costs');
       expect(chart().colors, const [SlideColor(0xFF000002)]);
       expect(chart().colorOf(0), const SlideColor(0xFF000002));
     });
 
     test('removing a series past the colors leaves them be', () {
-      oneStep(() => doc.removeChartSeries('s', 'chart', 1));
+      oneStep(doc, () => doc.removeChartSeries('s', 'chart', 1));
       expect(chart().colors, const [SlideColor(0xFF224488)]);
     });
 
@@ -204,12 +194,13 @@ void main() {
 
   test('setChartColors sets the colors and an empty list clears them', () {
     oneStep(
+      doc,
       () => doc.setChartColors('s', 'chart', const [
         SlideColor.theme(ThemeColor.accent5),
       ]),
     );
     expect(chart().colorOf(0), const SlideColor.theme(ThemeColor.accent5));
-    oneStep(() => doc.setChartColors('s', 'chart', const []));
+    oneStep(doc, () => doc.setChartColors('s', 'chart', const []));
     expect(chart().colorOf(0), ChartElement.defaultPalette.first);
   });
 

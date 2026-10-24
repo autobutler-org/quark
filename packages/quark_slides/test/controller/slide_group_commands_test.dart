@@ -1,8 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
 
-ElementFrame f(double x, double y, double w, double h, [double r = 0]) =>
-    ElementFrame(x: x, y: y, width: w, height: h, rotation: r);
+import '../support/canvas_harness.dart';
 
 /// A 1920×1080 deck with slide `s` holding shapes `a`, `b` and `c` and a
 /// text box `t`, back to front, and an empty slide `s2`.
@@ -11,12 +10,12 @@ Presentation deck() => Presentation(
     Slide(
       id: 's',
       elements: [
-        ShapeElement(id: 'a', frame: f(100, 100, 200, 100)),
-        ShapeElement(id: 'b', frame: f(400, 300, 100, 100)),
-        ShapeElement(id: 'c', frame: f(1000, 600, 300, 200)),
+        ShapeElement(id: 'a', frame: frame(100, 100, 200, 100)),
+        ShapeElement(id: 'b', frame: frame(400, 300, 100, 100)),
+        ShapeElement(id: 'c', frame: frame(1000, 600, 300, 200)),
         TextBox(
           id: 't',
-          frame: f(800, 100, 200, 50),
+          frame: frame(800, 100, 200, 50),
           paragraphs: const [
             TextParagraph([TextRun('Hi')]),
           ],
@@ -49,14 +48,6 @@ void main() {
   Slide slide() => doc.presentation.slideById('s')!;
   List<String> topIds() => [for (final e in slide().elements) e.id];
 
-  int undoAll() {
-    var steps = 0;
-    while (doc.undo()) {
-      steps++;
-    }
-    return steps;
-  }
-
   group('groupElements', () {
     test('groups as one step, in place of the frontmost member', () {
       final before = doc.presentation;
@@ -64,10 +55,10 @@ void main() {
       expect(topIds(), [id, 'c', 't']);
       final group = slide().elementById(id) as GroupElement;
       expect(group.children.map((e) => e.id), ['a', 'b']);
-      expect(group.frame, f(100, 100, 400, 300));
+      expect(group.frame, frame(100, 100, 400, 300));
       // Nothing moved on the slide.
-      expect(slide().frameOnSlide('b'), f(400, 300, 100, 100));
-      expect(undoAll(), 1);
+      expect(slide().frameOnSlide('b'), frame(400, 300, 100, 100));
+      expect(undoAll(doc), 1);
       expect(doc.presentation, before);
     });
 
@@ -92,7 +83,7 @@ void main() {
       final group = slide().elementById(outer) as GroupElement;
       expect(group.children.map((e) => e.id), [inner, 'c']);
       expect(slide().ancestorsOf('a')!.map((g) => g.id), [outer, inner]);
-      expect(slide().frameOnSlide('b'), frameNear(f(400, 300, 100, 100)));
+      expect(slide().frameOnSlide('b'), frameNear(frame(400, 300, 100, 100)));
     });
   });
 
@@ -134,21 +125,24 @@ void main() {
       final children = (slide().elementById(id) as GroupElement).children;
       doc.moveElements('s', {id}, 50, 10);
       final group = slide().elementById(id) as GroupElement;
-      expect(group.frame, f(150, 110, 400, 300));
+      expect(group.frame, frame(150, 110, 400, 300));
       expect(group.children, children);
-      expect(slide().frameOnSlide('a'), f(150, 110, 200, 100));
+      expect(slide().frameOnSlide('a'), frame(150, 110, 200, 100));
     });
 
     test('resizes scaling its children', () {
       doc.resizeElement('s', id, width: 800, height: 150);
-      expect(slide().frameOnSlide('a'), frameNear(f(100, 100, 400, 50)));
-      expect(slide().frameOnSlide('b'), frameNear(f(700, 200, 200, 50)));
+      expect(slide().frameOnSlide('a'), frameNear(frame(100, 100, 400, 50)));
+      expect(slide().frameOnSlide('b'), frameNear(frame(700, 200, 200, 50)));
     });
 
     test('rotates about its center, taking its children with it', () {
       doc.rotateElement('s', id, 180);
       // Turned half way, the top-left child lands bottom-right.
-      expect(slide().frameOnSlide('a'), frameNear(f(300, 300, 200, 100, 180)));
+      expect(
+        slide().frameOnSlide('a'),
+        frameNear(frame(300, 300, 200, 100, 180)),
+      );
     });
 
     test('duplicating the slide renews every id, inside groups too', () {
@@ -239,7 +233,7 @@ void main() {
         [100, 100, 100],
       );
       expect(slide().elementById('c')!.frame.width, 300);
-      expect(undoAll(), 1);
+      expect(undoAll(doc), 1);
     });
 
     test('a single element aligns to the slide', () {
@@ -259,7 +253,7 @@ void main() {
       doc.distributeElements('s', {'a', 'b', 'c'}, DistributeAxis.horizontal);
       // Spans 100–1300 with 600 wide of shapes: gaps of 300.
       expect(slide().elementById('b')!.frame.x, 600);
-      expect(undoAll(), 1);
+      expect(undoAll(doc), 1);
     });
 
     test('match size, one step; a group scales its children', () {

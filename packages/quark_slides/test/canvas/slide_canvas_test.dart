@@ -216,7 +216,7 @@ void main() {
       expect(frame.x, closeTo(200 + 30 / scale, 0.01));
       expect(frame.y, closeTo(400 + 20 / scale, 0.01));
       expect(frameOf(doc, 'ball').x, 1300);
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
       expect(
         frameOf(doc, 'box'),
         ElementFrame(x: 200, y: 400, width: 600, height: 450),
@@ -236,7 +236,7 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
       expect(frameOf(doc, 'box').y, closeTo(400 + 40 / scale, 0.01));
       expect(frameOf(doc, 'ball').y, closeTo(450 + 40 / scale, 0.01));
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testBothViewports('a drag snaps to the slide center', (tester, size) async {
@@ -254,7 +254,7 @@ void main() {
       expect(frame.y, closeTo(315, 1e-6));
       await gesture.up();
       await tester.pump();
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testBothViewports('the corner handle resizes as one undo step', (
@@ -276,7 +276,7 @@ void main() {
       expect(frame.width, closeTo(600 + 40 / scale, 0.01));
       expect(frame.height, closeTo(450 + 30 / scale, 0.01));
       expect(harness(tester).selection, {'box'});
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testBothViewports('the left handle keeps the right edge', (
@@ -307,7 +307,7 @@ void main() {
         await gesture.up();
         await tester.pump();
         expect(frameOf(doc, 'box').rotation, closeTo(90, 1e-6));
-        expect(undoAll(doc), 1);
+        expect(undoAll(doc.controller), 1);
       },
     );
 
@@ -347,7 +347,7 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
       expect(frameOf(doc, 'box').x, 201);
       expect(frameOf(doc, 'box').y, 410);
-      expect(undoAll(doc), 2);
+      expect(undoAll(doc.controller), 2);
     });
 
     testBothViewports('Delete removes the selection', (tester, size) async {

@@ -11,8 +11,7 @@ import 'package:flutter/material.dart' hide DataCell, DataRow, DataTable;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _narrow = Size(360, 640);
-const _wide = Size(1280, 800);
+import '../support/sheet.dart';
 
 /// A clipboard the test can read and seed, standing in for the system one.
 class _FakeClipboard {
@@ -28,17 +27,8 @@ Future<(DataSheetController, _FakeClipboard)> _pump(
   WidgetTester tester,
   Size size,
 ) async {
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-  final controller = DataSheetController.fromTable(
-    DataTable(
-      List.generate(
-        6,
-        (r) => DataRow(List.generate(4, (c) => DataCell('$r,$c'))),
-      ),
-    ),
-  );
+  setSheetSize(tester, size);
+  final controller = DataSheetController.fromTable(gridTable(6, 4));
   addTearDown(controller.dispose);
   final fake = _FakeClipboard();
   await tester.pumpWidget(
@@ -65,8 +55,6 @@ Future<(DataSheetController, _FakeClipboard)> _pump(
   return (controller, fake);
 }
 
-Finder _cell(int r, int c) => find.byKey(ValueKey('r${r}c$c'));
-
 Future<void> _ctrl(WidgetTester tester, LogicalKeyboardKey key) async {
   await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
   await tester.sendKeyEvent(key);
@@ -75,7 +63,7 @@ Future<void> _ctrl(WidgetTester tester, LogicalKeyboardKey key) async {
 }
 
 Future<void> _selectB2toC3(WidgetTester tester) async {
-  await tester.tap(_cell(1, 1));
+  await tester.tap(cellAt(1, 1));
   await tester.pump();
   await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
   await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
@@ -92,7 +80,7 @@ Future<void> _tapBar(WidgetTester tester, String key) async {
 }
 
 void main() {
-  for (final (name, size) in [('narrow', _narrow), ('wide', _wide)]) {
+  for (final (name, size) in [('narrow', narrow), ('wide', wide)]) {
     group('range clipboard ($name)', () {
       testWidgets('Ctrl+C copies the range as TSV, Ctrl+V pastes it', (
         tester,
@@ -103,7 +91,7 @@ void main() {
         await _ctrl(tester, LogicalKeyboardKey.keyC);
         expect(fake.text, '1,1\t1,2\n2,1\t2,2');
 
-        await tester.tap(_cell(4, 0));
+        await tester.tap(cellAt(4, 0));
         await tester.pump();
         await _ctrl(tester, LogicalKeyboardKey.keyV);
 
@@ -149,7 +137,7 @@ void main() {
         final (controller, fake) = await _pump(tester, size);
         fake.text = 'a\t"multi\nline"\r\nb\tc\r\n';
         // Tap first so the sheet has keyboard focus.
-        await tester.tap(_cell(0, 0));
+        await tester.tap(cellAt(0, 0));
         controller.selection.goTo(5, 3);
         await tester.pump();
 
@@ -224,10 +212,10 @@ void main() {
         ),
       ),
     );
-    await tester.tap(_cell(0, 0));
+    await tester.tap(cellAt(0, 0));
     await tester.pump();
     await _ctrl(tester, LogicalKeyboardKey.keyC);
-    await tester.tap(_cell(0, 1));
+    await tester.tap(cellAt(0, 1));
     await tester.pump();
     await _ctrl(tester, LogicalKeyboardKey.keyV);
     expect(controller.cellAt(0, 1).value, 'a');

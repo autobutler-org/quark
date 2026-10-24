@@ -5,14 +5,10 @@ import 'package:data_table/src/models/data_row.dart';
 import 'package:data_table/src/models/data_table.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/sheet.dart';
+
 DataSheetController _make(List<List<String>> values) {
-  final c = DataSheetController.fromTable(
-    DataTable(
-      values
-          .map((row) => DataRow(row.map((v) => DataCell(v)).toList()))
-          .toList(),
-    ),
-  );
+  final c = sheetOf(values);
   addTearDown(c.dispose);
   return c;
 }

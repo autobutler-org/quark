@@ -58,7 +58,7 @@ void main() {
       expect(harness(tester).selection, {shape.id});
       expect(harness(tester).tool, SlideCanvasTool.select);
       expect(frameOf(doc, 'box'), canvasDeck().slides.single.elements[1].frame);
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
       expect(tester.takeException(), isNull);
     });
 
@@ -77,7 +77,7 @@ void main() {
         const Offset(1000, 100) & const Size(side, side),
       );
       expect((added() as ShapeElement).kind, ShapeKind.ellipse);
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testBothViewports('Shift keeps it square', (tester, size) async {
@@ -157,7 +157,7 @@ void main() {
       expect(line.flipped, isTrue);
       expect((line.startCap, line.endCap), (LineCap.none, LineCap.none));
       expect(harness(tester).selection, {line.id});
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testBothViewports('an arrow points where the drag ended', (
@@ -317,7 +317,7 @@ void main() {
       expect(shape.frame.center, const Offset(960, 540));
       expect(harness(tester).selection, {shape.id});
       expect(harness(tester).tool, SlideCanvasTool.select);
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testWidgets('Enter with the text tool opens a centered box for typing', (

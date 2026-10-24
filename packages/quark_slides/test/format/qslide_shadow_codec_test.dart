@@ -1,10 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
-
-String fixture(String name) => File('test/fixtures/$name').readAsStringSync();
 
 Matcher throwsFormatAt(String path) =>
     throwsA(isA<QslideFormatException>().having((e) => e.path, 'path', path));
@@ -159,25 +156,6 @@ void main() {
   });
 
   group('migration', () {
-    test('this version writes schema 6', () {
-      expect(QslideCodec.schemaVersion, 6);
-    });
-
-    test('the golden v5 file reads as the sample deck', () {
-      final json = jsonDecode(fixture('v5_sample.qslide')) as Map;
-      expect(json['schemaVersion'], 5);
-      final saved = QslideCodec.encode(
-        QslideCodec.decode(fixture('v5_sample.qslide')),
-      );
-      expect(saved, fixture('sample.qslide'));
-      expect(
-        saved,
-        fixture(
-          'v5_sample.qslide',
-        ).replaceFirst('"schemaVersion": 5', '"schemaVersion": 6'),
-      );
-    });
-
     test('a shadow a version 5 file carried reads as a shadow', () {
       // A PowerPoint import writes version 1 with the shapes' shadows.
       for (final version in [1, 5]) {
@@ -210,13 +188,6 @@ void main() {
           reason: 'version $version',
         );
       }
-    });
-
-    test('a newer schema is refused', () {
-      expect(
-        () => QslideCodec.decode(fixture('newer_schema.qslide')),
-        throwsFormatAt(r'$.schemaVersion'),
-      );
     });
   });
 }

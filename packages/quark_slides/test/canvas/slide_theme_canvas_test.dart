@@ -110,30 +110,6 @@ void main() {
       expect(backgroundColor(tester), const Color(0xFFFFFFFF));
     });
 
-    testBothViewports('keeps slide type at 2.0 text scale', (
-      tester,
-      size,
-    ) async {
-      tester.platformDispatcher.textScaleFactorTestValue = 2;
-      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      await pumpCanvas(
-        tester,
-        SlideDocumentNotifier(themedDeck(SlideThemes.highContrast)),
-        size: size,
-      );
-      expect(tester.takeException(), isNull);
-      expect(textStyleOf(tester, 'title').fontSize, 64);
-      final paragraph = tester.renderObject<RenderParagraph>(
-        find
-            .descendant(
-              of: elementKey('title'),
-              matching: find.byType(RichText),
-            )
-            .first,
-      );
-      expect(paragraph.textScaler, TextScaler.noScaling);
-    });
-
     testBothViewports('placeholders announce their role', (tester, size) async {
       final semantics = tester.ensureSemantics();
       await pumpCanvas(
@@ -198,18 +174,13 @@ void main() {
 
   group('read-only', () {
     testBothViewports('draws in the theme it is given', (tester, size) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
       final deck = themedDeck(null);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SlideCanvas.readOnly(
-            slide: deck.slides.single,
-            size: deck.size,
-            theme: SlideThemes.dark,
-          ),
-        ),
+      await pumpReadOnly(
+        tester,
+        deck.slides.single,
+        deck.size,
+        size: size,
+        theme: SlideThemes.dark,
       );
       expect(tester.takeException(), isNull);
       expect(backgroundColor(tester), const Color(0xFF121318));
