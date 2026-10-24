@@ -10,7 +10,6 @@ import 'package:quark/widgets/slides/slide_image.dart';
 import 'package:quark/widgets/slides/slide_panel.dart';
 import 'package:quark/widgets/slides/slides_error_view.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar.dart';
-import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Everything under the slide editor's bar: the loader, the load error, or
@@ -95,12 +94,6 @@ class SlideEditorBody extends StatelessWidget {
     final find = SlideFindProvider.maybeOf(context);
     final collapsed = QuarkSplitView.isCollapsed(context);
     // The thumbnails hold an animated picture's first frame (#2866).
-    SlideImageBuilder imageBuilder({required bool animate}) =>
-        (context, image) => SlideImage(
-          image: NetworkImage(c.imageUrl(image.source).toString()),
-          fit: image.fit,
-          animate: animate,
-        );
     final panel = SlidePanel(
       slides: presentation.slides,
       size: presentation.size,
@@ -118,7 +111,7 @@ class SlideEditorBody extends StatelessWidget {
       onMove: c.moveSlide,
       onSelectPrevious: c.selectPreviousSlide,
       onSelectNext: c.selectNextSlide,
-      imageBuilder: imageBuilder(animate: false),
+      imageBuilder: SlideImage.builder(c.imageUrl, animate: false),
       onPresent: onPresent,
       readOnly: c.isReadOnly,
     );
@@ -138,7 +131,7 @@ class SlideEditorBody extends StatelessWidget {
               key: const ValueKey('slide_editor_stage'),
               child: SlideEditorCanvas(
                 controller: c,
-                imageBuilder: imageBuilder(animate: true),
+                imageBuilder: SlideImage.builder(c.imageUrl),
               ),
             ),
           ),

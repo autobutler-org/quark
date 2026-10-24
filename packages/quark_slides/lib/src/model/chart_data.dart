@@ -50,12 +50,24 @@ class ChartData {
   /// The series, in legend order.
   final List<ChartSeries> series;
 
+  /// Whether data of [series] series and [categories] categories is within
+  /// [maxSeries], [maxCategories] and [maxValues].
+  static bool fits(int series, int categories) =>
+      series <= maxSeries &&
+      categories <= maxCategories &&
+      series * categories <= maxValues;
+
+  /// The name of the series at [index] when it has none of its own:
+  /// "Series 1" for the first.
+  static String seriesName(int index) => 'Series ${index + 1}';
+
+  /// The name of the category at [index] when it has none of its own:
+  /// "Category 1" for the first.
+  static String categoryName(int index) => 'Category ${index + 1}';
+
   /// Whether the data is within [maxSeries], [maxCategories] and
   /// [maxValues].
-  bool get withinLimits =>
-      series.length <= maxSeries &&
-      categories.length <= maxCategories &&
-      series.length * categories.length <= maxValues;
+  bool get withinLimits => fits(series.length, categories.length);
 
   /// Every value of every series, series by series.
   Iterable<double> get values => series.expand((s) => s.values);
@@ -71,9 +83,7 @@ class ChartData {
   factory ChartData.fromJson(JsonMap json, String path) {
     final categories = optionalList(json, 'categories', path);
     final series = optionalList(json, 'series', path);
-    if (series.length > maxSeries ||
-        categories.length > maxCategories ||
-        series.length * categories.length > maxValues) {
+    if (!fits(series.length, categories.length)) {
       throw QslideFormatException(
         'a chart holds at most $maxSeries series, $maxCategories categories '
         'and $maxValues values',

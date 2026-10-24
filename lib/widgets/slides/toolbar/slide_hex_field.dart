@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/slides/properties/slide_commit_field.dart';
 import 'package:quark_slides/quark_slides.dart';
 
 /// A field for a custom color as `#RRGGBB` hex, under a slide color
@@ -43,68 +44,36 @@ class SlideHexField extends StatefulWidget {
 }
 
 class _SlideHexFieldState extends State<SlideHexField> {
-  late final _text = TextEditingController(text: _shown);
-  final _focus = FocusNode();
   bool _invalid = false;
 
-  /// The text last submitted, so Enter and the focus loss after it submit
-  /// once between them.
-  String? _submitted;
-
-  String get _shown {
+  @override
+  Widget build(BuildContext context) {
     final color = widget.color;
-    return color == null ? '' : SlideHexField.format(color);
+    final shown = color == null ? '' : SlideHexField.format(color);
+    return SlideCommitField(
+      text: shown,
+      onCommit: (typed) {
+        // Nothing typed, or the color already in use, sets nothing.
+        final unchanged = typed.trim().isEmpty || typed == shown;
+        final color = unchanged ? null : SlideHexField.parse(typed);
+        setState(() => _invalid = !unchanged && color == null);
+        if (color != null) widget.onChanged?.call(color);
+        return null;
+      },
+      builder: (context, controller, focusNode, commit) => TextField(
+        controller: controller,
+        focusNode: focusNode,
+        enabled: widget.onChanged != null,
+        maxLength: 7,
+        decoration: InputDecoration(
+          labelText: widget.label,
+          hintText: '#3366FF',
+          counterText: '',
+          errorText: _invalid ? 'Type a color as #RRGGBB' : null,
+          isDense: true,
+        ),
+        onSubmitted: (_) => commit(),
+      ),
+    );
   }
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() {
-      if (!_focus.hasFocus) _submit(_text.text);
-    });
-  }
-
-  @override
-  void didUpdateWidget(SlideHexField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_focus.hasFocus && oldWidget.color != widget.color) {
-      _text.text = _shown;
-      _submitted = null;
-    }
-  }
-
-  @override
-  void dispose() {
-    _text.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  void _submit(String text) {
-    if (text == _submitted) return;
-    _submitted = text;
-    if (text.trim().isEmpty || text == _shown) {
-      setState(() => _invalid = false);
-      return;
-    }
-    final color = SlideHexField.parse(text);
-    setState(() => _invalid = color == null);
-    if (color != null) widget.onChanged?.call(color);
-  }
-
-  @override
-  Widget build(BuildContext context) => TextField(
-    controller: _text,
-    focusNode: _focus,
-    enabled: widget.onChanged != null,
-    maxLength: 7,
-    decoration: InputDecoration(
-      labelText: widget.label,
-      hintText: '#3366FF',
-      counterText: '',
-      errorText: _invalid ? 'Type a color as #RRGGBB' : null,
-      isDense: true,
-    ),
-    onSubmitted: _submit,
-  );
 }

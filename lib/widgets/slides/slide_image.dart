@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/widgets/slides/slide_image_still.dart';
+import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// A picture on a slide: [image] fitted to its box with [fit], a muted box
@@ -51,6 +52,18 @@ class SlideImage extends StatefulWidget {
   /// Whether an animated picture plays; false holds its first frame, which
   /// is all a thumbnail needs and spares it a repaint every frame.
   final bool animate;
+
+  /// The slide canvas's builder: each picture from [url], its address for
+  /// a source, fitted as the slide says and [animate] as above.
+  static SlideImageBuilder builder(
+    Uri Function(String source) url, {
+    bool animate = true,
+  }) =>
+      (context, image) => SlideImage(
+        image: NetworkImage(url(image.source).toString()),
+        fit: image.fit,
+        animate: animate,
+      );
 
   @override
   State<SlideImage> createState() => _SlideImageState();

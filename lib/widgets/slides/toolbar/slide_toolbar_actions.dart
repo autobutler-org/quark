@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
+import 'package:quark/widgets/slides/properties/slide_number_field.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_choice.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_slides/quark_slides.dart';
@@ -179,10 +180,7 @@ class SlideToolbarActions {
   /// is mixed.
   String get fontSizeLabel {
     final size = controller.fontSize;
-    if (size == null) return '';
-    return size == size.roundToDouble()
-        ? '${size.round()}'
-        : size.toStringAsFixed(1);
+    return size == null ? '' : SlideNumberField.format(size);
   }
 
   /// One size smaller.
@@ -654,7 +652,7 @@ class SlideToolbarActions {
         SlideColorChoice(
           key: 'slide_chart_color_$i',
           label: entry.name.trim().isEmpty
-              ? 'Series ${i + 1}'
+              ? ChartData.seriesName(i)
               : entry.name.trim(),
           icon: QuarkIcons.chart_colors,
           current: entry.color,

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/widgets/slides/slide_image.dart';
-import 'package:quark/widgets/slides/transition/slide_transition_direction_field.dart';
+import 'package:quark/widgets/slides/transition/slide_enum_chips.dart';
 import 'package:quark/widgets/slides/transition/slide_transition_duration_field.dart';
-import 'package:quark/widgets/slides/transition/slide_transition_kind_field.dart';
+import 'package:quark/widgets/slides/transition/slide_transition_labels.dart';
 import 'package:quark/widgets/slides/transition/slide_transition_preview.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_slides/quark_slides.dart';
@@ -41,8 +41,11 @@ class SlideTransitionControl extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       spacing: tokens.spacingMd,
       children: [
-        SlideTransitionKindField(
-          kind: transition.kind,
+        SlideEnumChips<SlideTransitionKind>(
+          values: SlideTransitionKind.values,
+          selected: transition.kind,
+          label: SlideTransitionLabels.kind,
+          keyPrefix: 'slide_transition_kind',
           onChanged: editable
               ? (kind) => controller.setSlideTransition(
                   transition.copyWith(kind: kind),
@@ -50,8 +53,11 @@ class SlideTransitionControl extends StatelessWidget {
               : null,
         ),
         if (transition.kind.isDirectional)
-          SlideTransitionDirectionField(
-            direction: transition.direction,
+          SlideEnumChips<SlideTransitionDirection>(
+            values: SlideTransitionDirection.values,
+            selected: transition.direction,
+            label: SlideTransitionLabels.direction,
+            keyPrefix: 'slide_transition_direction',
             onChanged: editable
                 ? (direction) => controller.setSlideTransition(
                     transition.copyWith(direction: direction),
@@ -73,10 +79,7 @@ class SlideTransitionControl extends StatelessWidget {
           size: presentation.size,
           theme: presentation.theme,
           transition: transition,
-          imageBuilder: (context, image) => SlideImage(
-            image: NetworkImage(controller.imageUrl(image.source).toString()),
-            fit: image.fit,
-          ),
+          imageBuilder: SlideImage.builder(controller.imageUrl),
         ),
         if (editable)
           Align(

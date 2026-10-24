@@ -1299,7 +1299,7 @@ class SlideDocumentController {
           series: [
             ...series,
             ChartSeries(
-              name: name ?? 'Series ${series.length + 1}',
+              name: name ?? ChartData.seriesName(series.length),
               values: values ?? const [],
             ),
           ],

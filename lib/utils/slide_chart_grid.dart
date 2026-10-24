@@ -37,22 +37,17 @@ abstract final class SlideChartGrid {
   static int categoryCount(List<List<String>> grid) =>
       grid.isEmpty ? 0 : grid.length - 1;
 
-  static bool _fits(int series, int categories) =>
-      series <= ChartData.maxSeries &&
-      categories <= ChartData.maxCategories &&
-      series * categories <= ChartData.maxValues;
-
   /// Whether [grid] is within the `ChartData` limits.
   static bool withinLimits(List<List<String>> grid) =>
-      _fits(seriesCount(grid), categoryCount(grid));
+      ChartData.fits(seriesCount(grid), categoryCount(grid));
 
   /// Whether [addSeries] stays within the limits.
   static bool canAddSeries(List<List<String>> grid) =>
-      _fits(seriesCount(grid) + 1, categoryCount(grid));
+      ChartData.fits(seriesCount(grid) + 1, categoryCount(grid));
 
   /// Whether [addCategory] stays within the limits.
   static bool canAddCategory(List<List<String>> grid) =>
-      _fits(seriesCount(grid), categoryCount(grid) + 1);
+      ChartData.fits(seriesCount(grid), categoryCount(grid) + 1);
 
   /// Whether [grid] has a series to spare.
   static bool canRemoveSeries(List<List<String>> grid) => seriesCount(grid) > 1;
@@ -64,14 +59,14 @@ abstract final class SlideChartGrid {
   /// [grid] with a series "Series N" of zeros after the last.
   static List<List<String>> addSeries(List<List<String>> grid) => [
     for (final (r, row) in grid.indexed)
-      [...row, r == 0 ? 'Series ${seriesCount(grid) + 1}' : '0'],
+      [...row, r == 0 ? ChartData.seriesName(seriesCount(grid)) : '0'],
   ];
 
   /// [grid] with a category "Category N" of zeros after the last.
   static List<List<String>> addCategory(List<List<String>> grid) => [
     ...grid.map((row) => [...row]),
     [
-      'Category ${categoryCount(grid) + 1}',
+      ChartData.categoryName(categoryCount(grid)),
       for (var i = 0; i < seriesCount(grid); i++) '0',
     ],
   ];

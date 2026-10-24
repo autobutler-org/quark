@@ -44,6 +44,19 @@ void main() {
       expect(ChartData.fromGrid(const []), ChartData());
     });
 
+    test('fits holds each limit and their product', () {
+      expect(ChartData.fits(ChartData.maxSeries, 1), isTrue);
+      expect(ChartData.fits(ChartData.maxSeries + 1, 1), isFalse);
+      expect(ChartData.fits(1, ChartData.maxCategories + 1), isFalse);
+      expect(ChartData.fits(50, 100), isTrue);
+      expect(ChartData.fits(50, 101), isFalse);
+    });
+
+    test('an unnamed series or category is numbered from 1', () {
+      expect(ChartData.seriesName(0), 'Series 1');
+      expect(ChartData.categoryName(2), 'Category 3');
+    });
+
     test('tryParseValue flags what parseValue reads as 0', () {
       expect(ChartData.tryParseValue(' 1,200 '), 1200);
       expect(ChartData.tryParseValue('50%'), 50);

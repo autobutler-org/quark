@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/slides/slide_share_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_choice_menu_item.dart';
-import 'package:quark/widgets/slides/toolbar/slide_color_palette.dart';
+import 'package:quark/widgets/slides/toolbar/slide_color_submenu.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_choice.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_group.dart';
@@ -88,12 +88,6 @@ class SlidePhoneFormatMenu extends StatelessWidget {
       menuChildren: [for (final c in choices) SlideChoiceMenuItem(choice: c)],
       child: Text(label),
     );
-    QuarkSubmenuButton color(SlideColorChoice choice) => QuarkSubmenuButton(
-      key: ValueKey('${choice.key}_menu'),
-      leadingIcon: Icon(choice.icon),
-      menuChildren: [SlideColorPalette(choice: choice)],
-      child: Text(choice.label),
-    );
     List<Widget> controls(SlideToolbarGroup group) => switch (group) {
       SlideToolbarGroup.clipboard => [
         for (final c in [a.copy, a.cut, a.paste, a.duplicate])
@@ -109,7 +103,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
         SlideChoiceMenuItem(choice: a.fontLarger),
         SlideChoiceMenuItem(choice: a.fontSmaller),
         for (final c in a.textToggles) SlideChoiceMenuItem(choice: c),
-        color(a.textColor),
+        SlideColorSubmenu(choice: a.textColor),
       ],
       SlideToolbarGroup.paragraph => [
         for (final c in [...a.alignments, ...a.lists])
@@ -122,7 +116,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
           ...a.tableStyles,
         ])
           SlideChoiceMenuItem(choice: c),
-        color(a.cellFill),
+        SlideColorSubmenu(choice: a.cellFill),
         choices(
           'slide_table_borders',
           'Borders',
@@ -154,7 +148,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
           key: const ValueKey('slide_chart_colors_menu'),
           leadingIcon: const Icon(QuarkIcons.chart_colors),
           menuChildren: [
-            for (final c in a.chartColors) color(c),
+            for (final c in a.chartColors) SlideColorSubmenu(choice: c),
             SlideChoiceMenuItem(choice: a.chartThemeColors),
           ],
           child: const Text('Series colors'),
@@ -162,8 +156,8 @@ class SlidePhoneFormatMenu extends StatelessWidget {
         SlideChoiceMenuItem(choice: a.chartEditData),
       ],
       SlideToolbarGroup.shape => [
-        color(a.fill),
-        color(a.strokeColor),
+        SlideColorSubmenu(choice: a.fill),
+        SlideColorSubmenu(choice: a.strokeColor),
         choices(
           'slide_format_stroke_width',
           'Outline width',

@@ -4,6 +4,7 @@ import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/slide_chart_grid.dart';
 import 'package:quark/widgets/slides/chart/slide_chart_data_sheet.dart';
+import 'package:quark/widgets/slides/slide_dialog_header.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -127,21 +128,9 @@ class _SlideChartDataDialogState extends State<SlideChartDataDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: tokens.spacingSm,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text('Edit chart data', style: text.titleLarge),
-                    ),
-                  ),
-                  QuarkBarIconButton(
-                    key: const ValueKey('slide_chart_data_close'),
-                    icon: QuarkIcons.close,
-                    tooltip: 'Close',
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
+              const SlideDialogHeader(
+                title: 'Edit chart data',
+                closeKey: 'slide_chart_data_close',
               ),
               Text(
                 'Series go across the top and categories down the side. '
