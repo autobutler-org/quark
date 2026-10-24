@@ -20,8 +20,7 @@ void main() {
   /// The most faded foregrounds each file may hold, and why none is text.
   const allowed = {
     // Decorative empty-state illustrations above a readable message.
-    'lib/widgets/docs/docs_body.dart': 1,
-    'lib/widgets/sheets/sheets_body.dart': 1,
+    'lib/widgets/doc_sheet_body.dart': 1,
     'packages/quark_widgets/lib/src/core/empty_state_widget.dart': 1,
     'packages/quark_widgets/lib/src/core/quark_disconnected_state.dart': 1,
     // The home crumb is disabled at the top folder.

@@ -7,56 +7,79 @@ import 'package:quark/services/content_search_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/content_result_tile.dart';
+import 'package:quark/widgets/doc_sheet_kind.dart';
 import 'package:quark/widgets/doc_sheet_tile.dart';
 import 'package:quark/widgets/search_section_header.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// Everything under the sheets search bar: the load state, the sheets whose
-/// name matches, the sheets whose content matches, and then an "In Docs"
-/// section with the docs that match either way (#2259).
-class SheetsBody extends StatelessWidget {
+/// Everything under the Docs or Sheets search bar, as [kind] says: the load
+/// state, the files of that type whose name matches, those whose content
+/// matches, and then an "In Sheets" or "In Docs" section with the other
+/// type's files that match either way (#2259).
+///
+/// Key prefixes: `docs_create_cta` or `sheets_create_cta` on the empty
+/// state's create button, and [DocSheetTile]'s on each row.
+class DocSheetBody extends StatelessWidget {
+  /// Which page this is on.
+  final DocSheetKind kind;
+
+  /// Whether the first listing is still on its way, with nothing to show.
   final bool loading;
 
   /// The thrown object, not its message — the render decides whether it means
   /// "your Quark is unreachable" or "the request failed" (#1637).
   final Object? error;
+
+  /// The [kind] files whose name matches the search; all of them with none.
   final List<FileNode> files;
 
-  /// The docs whose name matches the search, for the "In Docs"
-  /// section. Only shown while searching.
-  final List<FileNode> docFiles;
+  /// The other type's files whose name matches the search, for its section.
+  /// Only shown while searching.
+  final List<FileNode> otherFiles;
 
   /// Every content hit, of any type. Each is sorted into this page's section
-  /// or the "In Docs" one by its extension; anything else is left out,
+  /// or the other type's by its extension; anything else is left out,
   /// since neither editor can open it.
   final List<ContentSearchResult> contentResults;
+
+  /// Whether the content search is still running.
   final bool contentSearching;
 
-  /// The raw search text, so the empty state can tell "no sheets yet" from
+  /// The raw search text, so the empty state can tell "none yet" from
   /// "nothing matched".
   final String searchQuery;
+
+  /// Called by the error view's retry button.
   final VoidCallback onRetry;
+
+  /// Called by the empty state's create button.
   final VoidCallback onCreateNew;
-  final ValueChanged<FileNode> onOpenSheet;
+
+  /// Called with a doc tapped, on either page.
   final ValueChanged<FileNode> onOpenDoc;
+
+  /// Called with a sheet tapped, on either page.
+  final ValueChanged<FileNode> onOpenSheet;
 
   /// Renames a listed file. Content-only hits carry no [FileNode], so their
   /// rows have no menu.
   final ValueChanged<FileNode>? onRename;
 
-  const SheetsBody({
+  /// Shows [files], [otherFiles] and [contentResults] for [searchQuery].
+  const DocSheetBody({
+    required this.kind,
     required this.loading,
     required this.error,
     required this.files,
-    required this.docFiles,
+    required this.otherFiles,
     required this.contentResults,
     required this.contentSearching,
     required this.searchQuery,
     required this.onRetry,
     required this.onCreateNew,
-    required this.onOpenSheet,
     required this.onOpenDoc,
+    required this.onOpenSheet,
     this.onRename,
     super.key,
   });
@@ -85,7 +108,7 @@ class SheetsBody extends StatelessWidget {
             Icon(QuarkIcons.error_outline, size: 40, color: colorScheme.error),
             const SizedBox(height: 12),
             Text(
-              Errors.message(error, 'load your sheets'),
+              Errors.message(error, kind.loadAction),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
@@ -97,12 +120,12 @@ class SheetsBody extends StatelessWidget {
     // Content matches are rendered by the list, so the empty state must
     // account for them too. Checking only the filename matches here would
     // short-circuit every content-only search — the common case, since a query
-    // that matches a sheet's contents usually does not also match its
-    // filename. The same goes for the other type's section (#2259). The guard
-    // and the list read the same lists so they cannot disagree about whether
-    // there is anything to show.
+    // that matches a file's text usually does not also match its filename.
+    // The same goes for the other type's section (#2259). The guard and the
+    // list read the same lists so they cannot disagree about whether there is
+    // anything to show.
     final isSearching = searchQuery.isNotEmpty;
-    final otherFiles = isSearching ? docFiles : const <FileNode>[];
+    final otherFiles = isSearching ? this.otherFiles : const <FileNode>[];
     // A file that matched by name and by content is listed once, in the
     // filename rows, carrying the content hit's snippet (#2272).
     final listed = {
@@ -120,11 +143,9 @@ class SheetsBody extends StatelessWidget {
               !listed.contains(DocSheetTile.fileKey(r.deviceSerial, r.relPath)),
         )
         .toList();
-    final ownContent = contentOnly
-        .where((r) => DocSheetTile.isSheet(r.relPath))
-        .toList();
+    final ownContent = contentOnly.where((r) => kind.owns(r.relPath)).toList();
     final otherContent = contentOnly
-        .where((r) => DocSheetTile.isDoc(r.relPath))
+        .where((r) => kind.other.owns(r.relPath))
         .toList();
     final hasOther = otherFiles.isNotEmpty || otherContent.isNotEmpty;
 
@@ -134,13 +155,15 @@ class SheetsBody extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              QuarkIcons.table_chart_outlined,
+              kind.icon,
               size: 48,
               color: colorScheme.onSurface.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 12),
             Text(
-              isSearching ? 'No sheets match your search.' : 'No sheets yet.',
+              isSearching
+                  ? 'No ${kind.noun}s match your search.'
+                  : 'No ${kind.noun}s yet.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: colorScheme.onSurface.withValues(alpha: 0.5),
@@ -156,11 +179,13 @@ class SheetsBody extends StatelessWidget {
             // and does not have it — sending them back to a toolbar icon to
             // start it is the long way round.
             FilledButton.icon(
-              key: const ValueKey('sheets_create_cta'),
+              key: ValueKey('${kind.name}_create_cta'),
               onPressed: onCreateNew,
               icon: const Icon(Icons.add),
               label: Text(
-                isSearching ? 'Create a new sheet instead' : 'Create new sheet',
+                isSearching
+                    ? 'Create a new ${kind.noun} instead'
+                    : 'Create new ${kind.noun}',
               ),
             ),
           ],
@@ -182,6 +207,8 @@ class SheetsBody extends StatelessWidget {
         node.deviceSerial: node.deviceName,
     };
     final onRename = this.onRename;
+    final openOwn = kind == DocSheetKind.docs ? onOpenDoc : onOpenSheet;
+    final openOther = kind == DocSheetKind.docs ? onOpenSheet : onOpenDoc;
     DocSheetTile nodeTile(FileNode node, VoidCallback onTap) => DocSheetTile(
       relPath: node.apiPath,
       deviceName: node.deviceName,
@@ -198,7 +225,7 @@ class SheetsBody extends StatelessWidget {
 
     // Built up front but laid out lazily by the builder.
     final items = <Widget>[
-      for (final node in files) nodeTile(node, () => onOpenSheet(node)),
+      for (final node in files) nodeTile(node, () => openOwn(node)),
       if (ownContent.isNotEmpty)
         const SearchSectionHeader(
           icon: QuarkIcons.search_rounded,
@@ -206,11 +233,11 @@ class SheetsBody extends StatelessWidget {
         ),
       for (final result in ownContent) hitTile(result),
       if (hasOther)
-        const SearchSectionHeader(
-          icon: QuarkIcons.description_outlined,
-          label: 'In Docs',
+        SearchSectionHeader(
+          icon: kind.other.icon,
+          label: kind.other.sectionLabel,
         ),
-      for (final node in otherFiles) nodeTile(node, () => onOpenDoc(node)),
+      for (final node in otherFiles) nodeTile(node, () => openOther(node)),
       for (final result in otherContent) hitTile(result),
     ];
 

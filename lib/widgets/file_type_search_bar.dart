@@ -2,16 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The filter strip above the presentations list.
+/// The filter strip above the Docs, Sheets and Slides lists.
 ///
-/// Key prefixes: `slides_search` on the field, `slides_search_clear` on its
-/// clear button.
-class SlidesSearchBar extends StatelessWidget {
+/// Key prefixes: `<keyPrefix>_search` on the field and
+/// `<keyPrefix>_search_clear` on its clear button, so `slides_search`,
+/// `docs_search` and `sheets_search`.
+class FileTypeSearchBar extends StatelessWidget {
   /// Filters as [controller]'s text changes.
-  const SlidesSearchBar({required this.controller, super.key});
+  const FileTypeSearchBar({
+    required this.controller,
+    required this.hintText,
+    required this.keyPrefix,
+    super.key,
+  });
 
   /// The search text, owned by the page.
   final TextEditingController controller;
+
+  /// The placeholder, such as "Search docs…".
+  final String hintText;
+
+  /// Starts the field's keys: `slides`, `docs` or `sheets`.
+  final String keyPrefix;
 
   @override
   Widget build(BuildContext context) {
@@ -33,15 +45,15 @@ class SlidesSearchBar extends StatelessWidget {
       child: ListenableBuilder(
         listenable: controller,
         builder: (context, _) => TextField(
-          key: const ValueKey('slides_search'),
+          key: ValueKey('${keyPrefix}_search'),
           controller: controller,
           decoration: InputDecoration(
-            hintText: 'Search presentations…',
+            hintText: hintText,
             prefixIcon: const Icon(QuarkIcons.search_rounded, size: 20),
             suffixIcon: controller.text.isEmpty
                 ? null
                 : IconButton(
-                    key: const ValueKey('slides_search_clear'),
+                    key: ValueKey('${keyPrefix}_search_clear'),
                     tooltip: 'Clear search',
                     icon: const Icon(QuarkIcons.clear_rounded, size: 18),
                     onPressed: controller.clear,

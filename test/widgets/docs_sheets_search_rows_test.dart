@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/content_search_service.dart';
-import 'package:quark/widgets/docs/docs_body.dart';
-import 'package:quark/widgets/sheets/sheets_body.dart';
+import 'package:quark/widgets/doc_sheet_body.dart';
+import 'package:quark/widgets/doc_sheet_kind.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 /// #2272: a filename match and a content match for the same kind of file
@@ -38,11 +38,12 @@ void main() {
     List<FileNode> files = const [],
     List<FileNode> sheetFiles = const [],
     List<ContentSearchResult> results = const [],
-  }) => DocsBody(
+  }) => DocSheetBody(
+    kind: DocSheetKind.docs,
     loading: false,
     error: null,
     files: files,
-    sheetFiles: sheetFiles,
+    otherFiles: sheetFiles,
     contentResults: results,
     contentSearching: false,
     searchQuery: 'budget',
@@ -56,11 +57,12 @@ void main() {
     List<FileNode> files = const [],
     List<FileNode> docFiles = const [],
     List<ContentSearchResult> results = const [],
-  }) => SheetsBody(
+  }) => DocSheetBody(
+    kind: DocSheetKind.sheets,
     loading: false,
     error: null,
     files: files,
-    docFiles: docFiles,
+    otherFiles: docFiles,
     contentResults: results,
     contentSearching: false,
     searchQuery: 'budget',

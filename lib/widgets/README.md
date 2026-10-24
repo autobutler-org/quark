@@ -188,14 +188,6 @@ lib/widgets/
                                 behind a confirmation
     ssh_access_section.dart     hosts SshAccessPanel around SshAccessController,
                                 with its confirmation, key and password dialogs
-  docs/
-    docs_body.dart              the Docs list and content search results:
-    docs_search_bar.dart        reads AppSettings, pushes editor routes, and
-                                uses ContentSearchService; the bar is its
-                                filter field
-  sheets/
-    sheets_body.dart            the same for Sheets
-    sheets_search_bar.dart
   pdf_viewer/
     browser_pdf_view.dart       the browser's own PDF viewer in an iframe, and
                                 whether the browser has one; web-only behind a
@@ -262,7 +254,6 @@ lib/widgets/
                                 callbacks out, app-side while it sizes itself
                                 to the editor's split and takes the app's
                                 image builder
-    slides_search_bar.dart      the list's filter field
   system/
     health_tab.dart             the System page's tabs: each loads and
     storage_tab.dart            refreshes itself through its service or
@@ -305,15 +296,24 @@ lib/widgets/
                                 formats loader
   content_result_tile.dart      one docs/sheets/slides content search hit; pushes the
                                 editor its extension names
+  doc_sheet_body.dart           the Docs or Sheets list and content search
+                                results, fed by DocSheetListingController:
+                                reads AppSettings and pushes Settings from the
+                                disconnected view
+  doc_sheet_kind.dart           the words, icons and keys that tell the Docs
+                                and Sheets bodies apart
   doc_sheet_tile.dart           one doc, sheet or slides row, shared by filename and
                                 content matches so they look alike (#2272)
+  file_type_search_bar.dart     the Docs, Sheets and Slides filter field, keyed
+                                by its keyPrefix; a package candidate, it only
+                                needs QuarkTokens
   host_dialog.dart              edits AppSettings hosts
   host_manager.dart             edits AppSettings hosts
   nearby_quarks.dart            hosts DiscoveredQuarkList around a
                                 QuarkDiscoveryController browsing mDNS
   quark_connect_form.dart       calls the connection services
   search_section_header.dart    labels a group of docs/sheets search results,
-                                shared by both pages' bodies
+                                shared by DocSheetBody
   text_controller_scope.dart    owns a dialog's TextEditingController, so it is
                                 disposed with the dialog rather than when the
                                 dialog's future completes (#2012)

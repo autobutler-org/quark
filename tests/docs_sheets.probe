@@ -1,0 +1,29 @@
+# Smoke test for the Docs and Sheets pages (#3752), driven by their key
+# prefixes. Needs a signed-in session; works on an empty library, since the
+# search bar and the new-file chip show either way.
+
+test "docs page searches and clears"
+  @smoke
+  open the app
+  tap #brand_button
+  wait until #drawer_docs appears
+  tap #drawer_docs
+  wait until #docs_search appears
+  see #docs_new
+  type "zzz-no-such-doc" into #docs_search
+  wait until #docs_search_clear appears
+  tap #docs_search_clear
+  see #docs_search
+
+test "sheets page searches and clears"
+  @smoke
+  open the app
+  tap #brand_button
+  wait until #drawer_sheets appears
+  tap #drawer_sheets
+  wait until #sheets_search appears
+  see #sheets_new
+  type "zzz-no-such-sheet" into #sheets_search
+  wait until #sheets_search_clear appears
+  tap #sheets_search_clear
+  see #sheets_search
