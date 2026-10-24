@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../core/quark_beta_badge.dart';
+import '../core/quark_tint_badge.dart';
 import '../theme/quark_tokens.dart';
 
-/// The switch for one beta feature flag: its label with a [QuarkBetaBadge],
+/// The switch for one beta feature flag: its label with a [QuarkTintBadge.beta],
 /// what turning it off does, and whether it is on.
 ///
 /// Whether the flag is on is the caller's state, [enabled] in and
@@ -65,7 +65,7 @@ class FeatureFlagTile extends StatelessWidget {
         spacing: tokens.spacingSm,
         children: [
           Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
-          const QuarkBetaBadge(),
+          const QuarkTintBadge.beta(),
         ],
       ),
       subtitle: Text(

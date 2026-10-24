@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../core/copy_button.dart';
+import '../core/quark_detail_row.dart';
 import '../models/vault_entry_item.dart';
 import '../theme/quark_tokens.dart';
-import 'vault_entry_details/vault_detail_row.dart';
 
 /// A saved login, read-only: username, password (masked until revealed),
 /// site, folder, whether it has a two-factor seed, and notes. Empty fields
@@ -66,12 +66,14 @@ class VaultEntryDetails extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          VaultDetailRow(
+          QuarkDetailRow(
+            selectable: true,
             label: 'Username',
             value: entry.username,
             actions: [copy('username', 'Username', entry.username)],
           ),
-          VaultDetailRow(
+          QuarkDetailRow(
+            selectable: true,
             label: 'Password',
             value: showPassword ? entry.password : '••••••••',
             actions: [
@@ -89,17 +91,30 @@ class VaultEntryDetails extends StatelessWidget {
             ],
           ),
           if (entry.url.isNotEmpty)
-            VaultDetailRow(
+            QuarkDetailRow(
+              selectable: true,
               label: 'Website',
               value: entry.url,
               actions: [copy('url', 'Website', entry.url)],
             ),
           if (folderName.isNotEmpty)
-            VaultDetailRow(label: 'Folder', value: folderName),
+            QuarkDetailRow(
+              label: 'Folder',
+              value: folderName,
+              selectable: true,
+            ),
           if (entry.totpSecret.isNotEmpty)
-            const VaultDetailRow(label: 'Two-factor', value: 'Set up'),
+            const QuarkDetailRow(
+              label: 'Two-factor',
+              value: 'Set up',
+              selectable: true,
+            ),
           if (entry.notes.isNotEmpty)
-            VaultDetailRow(label: 'Notes', value: entry.notes),
+            QuarkDetailRow(
+              label: 'Notes',
+              value: entry.notes,
+              selectable: true,
+            ),
         ],
       ),
     );

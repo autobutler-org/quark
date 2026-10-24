@@ -1,10 +1,10 @@
 // cspell:words reallocated
 import 'package:flutter/material.dart';
 
+import '../core/quark_detail_row.dart';
 import '../theme/quark_tokens.dart';
 import '../theme/reduce_motion.dart';
 import 'drive_health.dart';
-import 'drive_health_detail/drive_health_detail_row.dart';
 
 /// The sentence and the expandable readings for one drive's health.
 ///
@@ -148,52 +148,52 @@ class _DriveHealthDetailState extends State<DriveHealthDetail>
 
     return [
       if (smart != null)
-        DriveHealthDetailRow(
+        QuarkDetailRow(
+          key: ValueKey(rowKey('smart')),
           label: 'SMART status',
           value: smart,
-          rowKey: rowKey('smart'),
         ),
       if (reallocated != null)
-        DriveHealthDetailRow(
+        QuarkDetailRow(
+          key: ValueKey(rowKey('sectors')),
           label: 'Reallocated sectors',
           value: '$reallocated',
-          rowKey: rowKey('sectors'),
         ),
       if (pending != null)
-        DriveHealthDetailRow(
+        QuarkDetailRow(
+          key: ValueKey(rowKey('pending')),
           label: 'Pending sectors',
           value: '$pending',
-          rowKey: rowKey('pending'),
         ),
       if (hours != null)
-        DriveHealthDetailRow(
+        QuarkDetailRow(
+          key: ValueKey(rowKey('hours')),
           label: 'Power-on hours',
           value: hours,
-          rowKey: rowKey('hours'),
         ),
       if (temperature != null)
-        DriveHealthDetailRow(
+        QuarkDetailRow(
+          key: ValueKey(rowKey('temperature')),
           label: 'Temperature',
           value: temperature,
-          rowKey: rowKey('temperature'),
         ),
       if (media != null)
-        DriveHealthDetailRow(
+        QuarkDetailRow(
+          key: ValueKey(rowKey('media')),
           label: 'Drive type',
           value: media,
-          rowKey: rowKey('media'),
         ),
       if (link != null)
-        DriveHealthDetailRow(
+        QuarkDetailRow(
+          key: ValueKey(rowKey('link')),
           label: 'Link speed',
           value: link,
-          rowKey: rowKey('link'),
         ),
       if (speed != null)
-        DriveHealthDetailRow(
+        QuarkDetailRow(
+          key: ValueKey(rowKey('speed')),
           label: 'Speed class',
           value: speed,
-          rowKey: rowKey('speed'),
         ),
     ];
   }

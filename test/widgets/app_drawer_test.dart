@@ -109,21 +109,21 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('drawer_chat')),
-        matching: find.byType(QuarkBetaBadge),
+        matching: find.byType(QuarkTintBadge),
       ),
       findsNothing,
     );
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('drawer_calendar')),
-        matching: find.byType(QuarkBetaBadge),
+        matching: find.byType(QuarkTintBadge),
       ),
       findsNothing,
     );
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('drawer_slides')),
-        matching: find.byType(QuarkBetaBadge),
+        matching: find.byType(QuarkTintBadge),
       ),
       findsNothing,
     );
@@ -144,7 +144,7 @@ void main() {
     final row = find.byKey(const ValueKey('drawer_slides'));
     expect(row, findsOneWidget);
     expect(
-      find.descendant(of: row, matching: find.byType(QuarkBetaBadge)),
+      find.descendant(of: row, matching: find.byType(QuarkTintBadge)),
       findsNothing,
     );
   });

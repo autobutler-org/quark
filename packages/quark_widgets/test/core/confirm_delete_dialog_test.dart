@@ -115,4 +115,58 @@ void main() {
       );
     });
   }
+
+  testBothViewports('shows caller content in place of a sentence', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      ConfirmDeleteDialog(
+        title: 'Move 2 photos to Trash?',
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [Text('IMG_1.jpg'), Text('IMG_2.jpg')],
+        ),
+        keyPrefix: 'duplicates_delete',
+        confirmLabel: 'Move to Trash',
+        onConfirm: () {},
+        onCancel: () {},
+      ),
+      size: size,
+    );
+
+    expect(find.text('IMG_1.jpg'), findsOneWidget);
+    expect(find.text('IMG_2.jpg'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('duplicates_delete_confirm')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testBothViewports('a step that loses nothing draws a plain button', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      ConfirmDeleteDialog(
+        title: 'Restore this version?',
+        body: 'What it holds now is saved first.',
+        keyPrefix: 'file_version_restore',
+        confirmLabel: 'Restore',
+        destructive: false,
+        onConfirm: () {},
+        onCancel: () {},
+      ),
+      size: size,
+    );
+
+    final button = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('file_version_restore_confirm')),
+    );
+    expect(button.style, isNull);
+    expect(find.text('Restore'), findsOneWidget);
+  });
 }

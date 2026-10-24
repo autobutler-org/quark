@@ -426,7 +426,15 @@ class _StorageTabState extends State<StorageTab>
               : null,
           protectionBadge: level == null
               ? null
-              : DataProtectionBadge(level: level),
+              : QuarkTintBadge(
+                  key: const ValueKey('data_protection_badge'),
+                  label: level.label,
+                  color: dataProtectionLevelColor(
+                    QuarkTokens.of(context),
+                    level,
+                  ),
+                  semanticLabel: '${level.label} protection',
+                ),
         );
       },
     );

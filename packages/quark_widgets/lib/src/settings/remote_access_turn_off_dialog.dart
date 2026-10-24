@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/confirm_delete_dialog.dart';
 import '../theme/quark_tokens.dart';
 import 'remote_access_turn_off_dialog/remote_access_turn_off_consequence.dart';
 
@@ -40,11 +41,14 @@ class RemoteAccessTurnOffDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
-    return AlertDialog(
-      // Title and content scroll together, so the buttons stay reachable at
-      // a large text size on a short screen.
-      scrollable: true,
-      title: const Text('Turn off remote access for everyone?'),
+    // Title and content scroll together, so the buttons stay reachable at a
+    // large text size on a short screen.
+    return ConfirmDeleteDialog(
+      title: 'Turn off remote access for everyone?',
+      keyPrefix: 'remote_access_turn_off',
+      confirmLabel: 'Turn off',
+      onConfirm: onConfirm,
+      onCancel: onCancel,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         spacing: tokens.spacingMd,
@@ -70,22 +74,6 @@ class RemoteAccessTurnOffDialog extends StatelessWidget {
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          key: const ValueKey('remote_access_turn_off_cancel'),
-          onPressed: onCancel,
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          key: const ValueKey('remote_access_turn_off_confirm'),
-          style: FilledButton.styleFrom(
-            backgroundColor: tokens.error,
-            foregroundColor: tokens.errorForeground,
-          ),
-          onPressed: onConfirm,
-          child: const Text('Turn off'),
-        ),
-      ],
     );
   }
 }

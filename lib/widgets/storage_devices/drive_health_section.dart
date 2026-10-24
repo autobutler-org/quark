@@ -23,10 +23,20 @@ class _DriveHealthSectionState extends State<DriveHealthSection> {
 
   @override
   Widget build(BuildContext context) {
+    final verdict = widget.health.verdict;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DriveHealthBadge(verdict: widget.health.verdict, id: widget.id),
+        QuarkTintBadge(
+          key: ValueKey(
+            widget.id.isEmpty
+                ? 'drive_health_badge'
+                : 'drive_health_badge_${widget.id}',
+          ),
+          label: verdict.label,
+          color: driveHealthVerdictColor(QuarkTokens.of(context), verdict),
+          semanticLabel: '${verdict.label} drive health',
+        ),
         const SizedBox(height: 4),
         DriveHealthDetail(
           health: widget.health,

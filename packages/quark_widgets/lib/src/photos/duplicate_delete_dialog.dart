@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/confirm_delete_dialog.dart';
 import '../models/duplicate_photo_item.dart';
 import '../theme/quark_tokens.dart';
 
@@ -52,9 +53,12 @@ class DuplicateDeleteDialog extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
     final count = photos.length;
 
-    return AlertDialog(
-      scrollable: true,
-      title: Text('Move $count ${count == 1 ? 'photo' : 'photos'} to Trash?'),
+    return ConfirmDeleteDialog(
+      title: 'Move $count ${count == 1 ? 'photo' : 'photos'} to Trash?',
+      keyPrefix: 'duplicates_delete',
+      confirmLabel: 'Move to Trash',
+      onConfirm: onConfirm,
+      onCancel: onCancel,
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -88,22 +92,6 @@ class DuplicateDeleteDialog extends StatelessWidget {
             ),
         ],
       ),
-      actions: [
-        TextButton(
-          key: const ValueKey('duplicates_delete_cancel'),
-          onPressed: onCancel,
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          key: const ValueKey('duplicates_delete_confirm'),
-          style: FilledButton.styleFrom(
-            backgroundColor: tokens.error,
-            foregroundColor: tokens.errorForeground,
-          ),
-          onPressed: onConfirm,
-          child: const Text('Move to Trash'),
-        ),
-      ],
     );
   }
 }

@@ -103,7 +103,12 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('file_version_restore_v1')));
     await tester.pumpAndSettle();
-    expect(find.byType(RestoreVersionDialog), findsOneWidget);
+    expect(find.byType(ConfirmDeleteDialog), findsOneWidget);
+    expect(find.text('Restore this version?'), findsOneWidget);
+    expect(
+      find.textContaining('saved first as "Before restore", so you can undo'),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(const ValueKey('file_version_restore_cancel')));
     await tester.pumpAndSettle();
 
@@ -124,7 +129,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(restored, ['v1']);
-    expect(find.byType(RestoreVersionDialog), findsNothing);
+    expect(find.byType(ConfirmDeleteDialog), findsNothing);
     expect(find.text(FileVersionsSheet.restored), findsOneWidget);
     expect(find.byKey(const ValueKey('file_version_tile_v2')), findsOneWidget);
     expect(find.textContaining('Before restore · '), findsOneWidget);

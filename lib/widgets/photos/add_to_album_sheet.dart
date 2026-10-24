@@ -7,7 +7,7 @@ import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// Opens the package's [AddToAlbumSheet] for one photo, and adds it to or
+/// Opens the package's [AlbumPickerSheet] for one photo, and adds it to or
 /// takes it out of whichever album is tapped, until Done closes it. The
 /// albums the photo is already in open checked, from its metadata (#3361).
 ///
@@ -205,11 +205,12 @@ class _AddToAlbumSheetHostState extends State<AddToAlbumSheetHost> {
 
   @override
   Widget build(BuildContext context) {
-    return AddToAlbumSheet(
+    return AlbumPickerSheet(
       albums: _albums,
       memberAlbumIds: _memberIds,
+      keyPrefix: 'add_to_album',
       isLoading: _loading,
-      onToggle: _toggle,
+      onPicked: _toggle,
       onCreateAlbum: _createAndAdd,
       onDone: () => Navigator.of(context).pop(),
     );

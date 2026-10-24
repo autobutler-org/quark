@@ -86,7 +86,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(_key),
-        matching: find.byType(QuarkBetaBadge),
+        matching: find.byType(QuarkTintBadge),
       ),
       findsOneWidget,
     );
