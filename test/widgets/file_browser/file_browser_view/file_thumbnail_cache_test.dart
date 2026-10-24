@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:quark/utils/cache_manager_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_node.dart';
@@ -40,7 +40,7 @@ void main() {
       final image = tester.widget<Image>(find.byType(Image)).image;
       expect(image, isA<DecodeOnceImage>());
       final resized = (image as DecodeOnceImage).image as ResizeImage;
-      final cached = resized.imageProvider as CachedNetworkImageProvider;
+      final cached = resized.imageProvider as CacheManagerImage;
       expect(
         cached.cacheKey,
         ThumbnailCacheManager.keyFor(Uri.parse(cached.url)),

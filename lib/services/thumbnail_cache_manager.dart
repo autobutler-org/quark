@@ -1,7 +1,7 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/cache_manager_image.dart';
 import 'package:quark/utils/decode_once_image.dart';
 import 'package:quark/utils/thumbnail_cache_config.dart';
 import 'package:quark/utils/thumbnail_cache_key.dart';
@@ -37,7 +37,7 @@ abstract final class ThumbnailCacheManager {
   /// however often its tile is scrolled away and back (#3366).
   static ImageProvider image(Uri url) => DecodeOnceImage(
     ResizeImage(
-      CachedNetworkImageProvider(
+      CacheManagerImage(
         url.toString(),
         cacheKey: keyFor(url),
         cacheManager: instance,
@@ -49,9 +49,8 @@ abstract final class ThumbnailCacheManager {
   /// Forgets the thumbnail at [url], on disk in [manager] ([instance] when
   /// null) and decoded in memory, so its next load fetches it again.
   ///
-  /// `CachedNetworkImage.evictFromCache` is not enough: it drops the decoded
-  /// image filed under the URL, not the one under a cache key, and never the
-  /// width-bounded one a photo grid tile holds, nor the [image] around it.
+  /// Every decoded copy goes: the full-size one, the width-bounded one a
+  /// photo grid tile holds, and the [image] around it.
   static Future<void> evict(Uri url, {BaseCacheManager? manager}) async {
     final key = keyFor(url);
     try {
@@ -60,7 +59,11 @@ abstract final class ThumbnailCacheManager {
       // Best effort: bytes left behind are shown once more and then replaced,
       // since every load revalidates them by ETag.
     }
-    final image = CachedNetworkImageProvider(url.toString(), cacheKey: key);
+    final image = CacheManagerImage(
+      url.toString(),
+      cacheKey: key,
+      cacheManager: manager ?? instance,
+    );
     await image.evict();
     final resized = ResizeImage(
       image,

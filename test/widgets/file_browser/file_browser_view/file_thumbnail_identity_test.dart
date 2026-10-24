@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:quark/utils/cache_manager_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_node.dart';
@@ -50,7 +50,7 @@ Finder _imageKey(String path, {String serial = ''}) => find.byWidgetPredicate(
 /// The thumbnail URL an [Image] built by `ThumbnailCacheManager.image` loads.
 String _urlOf(Image image) =>
     (((image.image as DecodeOnceImage).image as ResizeImage).imageProvider
-            as CachedNetworkImageProvider)
+            as CacheManagerImage)
         .url;
 
 void main() {

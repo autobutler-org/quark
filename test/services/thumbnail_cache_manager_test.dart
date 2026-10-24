@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:quark/utils/cache_manager_image.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -85,7 +85,11 @@ void main() {
   test('evict drops the bytes on disk and every decoded image', () async {
     final url = thumbnail(size: 'sm');
     final key = ThumbnailCacheManager.keyFor(url);
-    final provider = CachedNetworkImageProvider(url.toString(), cacheKey: key);
+    final provider = CacheManagerImage(
+      url.toString(),
+      cacheKey: key,
+      cacheManager: _RecordingCacheManager(),
+    );
     final resized = ResizeImage(
       provider,
       width: ThumbnailCacheConfig.memCacheWidth,
@@ -114,9 +118,10 @@ void main() {
 
   test('evict still drops the decoded image when the disk fails', () async {
     final url = thumbnail();
-    final cacheKey = await CachedNetworkImageProvider(
+    final cacheKey = await CacheManagerImage(
       url.toString(),
       cacheKey: ThumbnailCacheManager.keyFor(url),
+      cacheManager: _BrokenCacheManager(),
     ).obtainKey(ImageConfiguration.empty);
     final imageCache = PaintingBinding.instance.imageCache;
     imageCache.putIfAbsent(cacheKey, _PendingImage.new);

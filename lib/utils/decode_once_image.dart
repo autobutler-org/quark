@@ -7,14 +7,15 @@ import 'package:flutter/painting.dart';
 /// showing it gets for as long as the image cache keeps it, never a frame
 /// decoded from it again (#3366).
 ///
-/// cached_network_image's stream completer asks its codec for a new frame
-/// each time a listener arrives after the last one has left, which is what a
-/// grid tile scrolled away and back does. The new frame replaces the picture
-/// already on screen. On the web both frames are drawn from one `<img>`
-/// element, and releasing the first clears that element, so the second
-/// painted solid black. This holds one listener on [image]'s completer for
-/// the whole life of its own, so that completer never sees its listeners
-/// come back. A load that fails is evicted, so the next resolve loads afresh.
+/// cached_network_image's stream completer, which thumbnails loaded through
+/// until it was dropped, asked its codec for a new frame each time a listener
+/// arrived after the last one had left, which is what a grid tile scrolled
+/// away and back does. The new frame replaced the picture already on screen.
+/// On the web both frames were drawn from one `<img>` element, and releasing
+/// the first cleared that element, so the second painted solid black. This
+/// holds one listener on [image]'s completer for the whole life of its own,
+/// so that completer never sees its listeners come back. A load that fails is
+/// evicted, so the next resolve loads afresh.
 ///
 /// ```dart
 /// Image(image: DecodeOnceImage(ResizeImage(provider, width: 400)))
