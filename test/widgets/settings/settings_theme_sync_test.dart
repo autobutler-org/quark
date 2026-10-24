@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/services/app_settings.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
 import '../../support/unreachable_quark.dart';
 import '../../support/secure_storage.dart';
 
@@ -30,9 +31,7 @@ void main() {
   });
 
   Future<void> pumpSettings(WidgetTester tester, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     // Settings overflows its own app bar at any viewport; ignore only that.
     final priorOnError = FlutterError.onError;

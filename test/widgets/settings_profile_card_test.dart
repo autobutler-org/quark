@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/settings/settings_profile_card.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2419: the Profile card on Settings → Account shows the user's picture or
 /// initials, lets them choose a new one, and offers Remove only when there
 /// is something to remove.
@@ -20,9 +22,7 @@ void main() {
     bool isBusy = false,
     String? error,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final calls = <String>[];
     await tester.pumpWidget(
       MaterialApp(

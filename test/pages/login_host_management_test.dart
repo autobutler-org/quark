@@ -10,6 +10,8 @@ import 'package:quark/widgets/host_dialog.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark/widgets/quark_connect_form.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #1639: pointing the app at a Quark you can't reach used to soft-lock the
 /// user on this page — every other route, Settings included, is behind the
 /// auth gate. The login page is the landing page now and owns host
@@ -41,9 +43,7 @@ void main() {
   /// The real gate over stub pages, so the test exercises the redirects the
   /// app actually runs.
   Future<GoRouter> pumpLogin(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1200, 2400));
 
     final router = GoRouter(
       initialLocation: AppRoutes.login,

@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_file_picker_platform.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #1172: the slide editor's bar exports the presentation as a PowerPoint
 /// file, built by the Quark from the saved presentation and handed to the save
@@ -93,9 +94,7 @@ void main() {
     late SlideEditorController controller;
 
     Future<void> pumpEditor(WidgetTester tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       controller = SlideEditorController(filePath: 'talks/Talk.qslide');
       addTearDown(controller.dispose);
       await tester.pumpWidget(

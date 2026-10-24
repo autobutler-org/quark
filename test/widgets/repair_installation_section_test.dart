@@ -4,6 +4,8 @@ import 'package:quark/controllers/repair_controller.dart';
 import 'package:quark/models/repair_status.dart';
 import 'package:quark/widgets/settings/repair_installation_section.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2121: repair restarts the Quark, so it asks first; an outdated unit gets
 /// the one-time install command; a Quark that can't repair shows nothing.
 void main() {
@@ -17,9 +19,7 @@ void main() {
     Size size,
     RepairStatus status,
   ) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     final calls = <String>[];
     final controller = RepairController(

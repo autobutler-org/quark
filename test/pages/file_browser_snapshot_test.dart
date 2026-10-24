@@ -15,123 +15,22 @@ import 'package:quark/utils/listing_snapshot_store.dart';
 import 'package:quark/widgets/file_browser/folder_route_error_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/fake_io_http.dart';
 import '../support/secure_storage.dart';
 
-/// How the Quark behind [_QuarkHttpOverrides] treats a request.
-enum _Quark {
-  /// Accepts nothing and refuses nothing: every request stays out.
-  asleep,
-
-  /// No route to it: every request fails at the socket.
-  unreachable,
-
-  /// Answers every request, and a folder listing with [_QuarkHttpOverrides.listing].
-  answering,
-}
-
-class _QuarkHttpOverrides extends HttpOverrides {
-  _Quark quark = _Quark.answering;
-
-  /// What a folder listing answers while the Quark is answering.
-  String listing = '[]';
-
-  @override
-  HttpClient createHttpClient(SecurityContext? context) => _QuarkClient(this);
-}
-
-class _QuarkClient implements HttpClient {
-  _QuarkClient(this.overrides);
-  final _QuarkHttpOverrides overrides;
-
-  @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) =>
-      switch (overrides.quark) {
-        _Quark.asleep => Completer<HttpClientRequest>().future,
-        _Quark.unreachable => Future.error(
-          const SocketException('No route to host'),
-        ),
-        _Quark.answering => Future.value(
-          _Request(
-            url,
-            url.path.endsWith('/api/v0/files')
-                ? overrides.listing
-                : url.path.endsWith('/api/v0/access/mine')
-                ? '{"items":[]}'
-                : url.path.endsWith('/api/v0/storage/devices/status')
-                ? '{"devices":[]}'
-                : '[]',
-          ),
-        ),
-      };
-
-  // The rest of the client surface is irrelevant here.
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _Request implements HttpClientRequest {
-  _Request(this.uri, this.body);
-  @override
-  final Uri uri;
-  final String body;
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  Future<HttpClientResponse> close() async => _Response(body);
-
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-
-  @override
-  Future<void> flush() async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _Response implements HttpClientResponse {
-  _Response(this.body);
-  final String body;
-
-  @override
-  int get statusCode => 200;
-  @override
-  int get contentLength => -1;
-  @override
-  bool get isRedirect => false;
-  @override
-  bool get persistentConnection => false;
-  @override
-  String get reasonPhrase => 'OK';
-  @override
-  List<Cookie> get cookies => const [];
-  @override
-  List<RedirectInfo> get redirects => const [];
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  StreamSubscription<List<int>> listen(
-    void Function(List<int>)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) => Stream<List<int>>.fromIterable([utf8.encode(body)]).listen(
-    onData,
-    onError: onError,
-    onDone: onDone,
-    cancelOnError: cancelOnError,
-  );
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _EmptyHeaders implements HttpHeaders {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
+/// A Quark that answers every request, and a folder listing with [listing].
+FakeIoQuark _answering({String listing = '[]'}) => FakeIoQuark(
+  (method, url) async => (
+    status: 200,
+    body: url.path.endsWith('/api/v0/files')
+        ? listing
+        : url.path.endsWith('/api/v0/access/mine')
+        ? '{"items":[]}'
+        : url.path.endsWith('/api/v0/storage/devices/status')
+        ? '{"devices":[]}'
+        : '[]',
+  ),
+);
 
 /// The disk a cold launch reads: one snapshot, handed over when the test
 /// says the read is done.
@@ -186,7 +85,6 @@ void main() {
   // alice is a member, so a bare /files opens her home.
   final landing = homePath('alice');
 
-  late _QuarkHttpOverrides overrides;
   late _SlowDisk disk;
   late FileBrowserCache appCache;
 
@@ -201,7 +99,6 @@ void main() {
     // The device list shares one in-flight request, and the listing waits on
     // it: a request left hanging by one test would hold up the next.
     StorageService.invalidateDeviceCache();
-    overrides = _QuarkHttpOverrides();
     disk = _SlowDisk({
       landing: [_file('last-launch.txt').toJson()],
     });
@@ -233,7 +130,8 @@ void main() {
   testWidgets('a cold launch shows the last listing before the Quark answers', (
     tester,
   ) async {
-    overrides.quark = _Quark.asleep;
+    // Accepts nothing and refuses nothing: every request stays out.
+    final quark = FakeIoQuark((method, url) => Completer<FakeIoReply>().future);
 
     await HttpOverrides.runZoned(() async {
       await coldLaunch(tester);
@@ -249,13 +147,16 @@ void main() {
 
       expect(find.text('last-launch.txt'), findsOneWidget);
       expect(find.byType(FolderRouteErrorState), findsNothing);
-    }, createHttpClient: overrides.createHttpClient);
+    }, createHttpClient: quark.createHttpClient);
   });
 
   testWidgets('an unreachable Quark leaves the last listing on screen', (
     tester,
   ) async {
-    overrides.quark = _Quark.unreachable;
+    // No route to it: every request fails at the socket.
+    final quark = FakeIoQuark(
+      (method, url) => Future.error(const SocketException('No route to host')),
+    );
     disk.readDone.complete();
 
     await HttpOverrides.runZoned(() async {
@@ -264,11 +165,13 @@ void main() {
 
       expect(find.text('last-launch.txt'), findsOneWidget);
       expect(find.byType(FolderRouteErrorState), findsNothing);
-    }, createHttpClient: overrides.createHttpClient);
+    }, createHttpClient: quark.createHttpClient);
   });
 
   testWidgets('the Quark\'s answer replaces the snapshot', (tester) async {
-    overrides.listing = jsonEncode([_file('fresh.txt').toJson()]);
+    final quark = _answering(
+      listing: jsonEncode([_file('fresh.txt').toJson()]),
+    );
     disk.readDone.complete();
 
     await HttpOverrides.runZoned(() async {
@@ -279,6 +182,6 @@ void main() {
       expect(find.text('last-launch.txt'), findsNothing);
       // And it is what the next launch will read.
       expect(jsonEncode(disk.written['files']), contains('fresh.txt'));
-    }, createHttpClient: overrides.createHttpClient);
+    }, createHttpClient: quark.createHttpClient);
   });
 }

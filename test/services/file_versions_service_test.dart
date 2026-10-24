@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -7,27 +5,14 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/file_versions_service.dart';
 import 'package:quark/utils/error_text.dart';
 
+import '../support/fake_quark_http.dart';
+
 /// The version history API client (#2992): the routes it calls, what it
 /// reads from them, and that a refusal surfaces as a status, not Go's text.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  final requests = <http.Request>[];
-
-  /// Answers every request with [status] and [body], recording it.
-  void answer(int status, Object body) {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = () => MockClient((request) async {
-      requests.add(request);
-      return http.Response(jsonEncode(body), status);
-    });
-  }
-
-  setUp(requests.clear);
-  tearDown(() {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = buildLocalTrustHttpClient;
-  });
+  useFakeQuark();
 
   const named = {
     'id': 'v2',

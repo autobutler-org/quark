@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,106 +11,38 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/widgets/file_browser/file_browser_create_fab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/fake_io_http.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// A folder of .qdoc files, for opening one the way a user does: by tapping
 /// its row, or by loading its `/files` URL.
-class _QdocListingClient implements HttpClient {
-  @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
-      _Request(url, _bodyFor(url));
+FakeIoQuark _listingQuark() =>
+    FakeIoQuark((method, url) async => (status: 200, body: _bodyFor(url)));
 
-  static String _bodyFor(Uri url) {
-    if (url.path.endsWith('/api/v0/files/stat')) {
-      final path = url.queryParameters['filePath'] ?? '';
-      final isFile = path.endsWith('.qdoc');
-      return jsonEncode({
-        'isDir': !isFile,
-        'fileType': isFile ? 'qdoc' : 'folder',
-        'name': path.split('/').last,
-      });
-    }
-    if (url.path.endsWith('/api/v0/files')) {
-      return jsonEncode([
-        for (var i = 0; i < 40; i++)
-          {
-            'name': 'doc$i.qdoc',
-            'size': 12,
-            'isDir': false,
-            'dirPath': '/doc$i.qdoc',
-            'fileType': 'qdoc',
-          },
-      ]);
-    }
-    return '[]';
+String _bodyFor(Uri url) {
+  if (url.path.endsWith('/api/v0/files/stat')) {
+    final path = url.queryParameters['filePath'] ?? '';
+    final isFile = path.endsWith('.qdoc');
+    return jsonEncode({
+      'isDir': !isFile,
+      'fileType': isFile ? 'qdoc' : 'folder',
+      'name': path.split('/').last,
+    });
   }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _Request implements HttpClientRequest {
-  _Request(this.uri, this.body);
-  @override
-  final Uri uri;
-  final String body;
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  Future<HttpClientResponse> close() async => _Response(body);
-
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-
-  @override
-  Future<void> flush() async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _Response implements HttpClientResponse {
-  _Response(this.body);
-  final String body;
-
-  @override
-  int get statusCode => 200;
-  @override
-  int get contentLength => -1;
-  @override
-  bool get isRedirect => false;
-  @override
-  bool get persistentConnection => false;
-  @override
-  String get reasonPhrase => 'OK';
-  @override
-  List<Cookie> get cookies => const [];
-  @override
-  List<RedirectInfo> get redirects => const [];
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  StreamSubscription<List<int>> listen(
-    void Function(List<int>)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) => Stream<List<int>>.fromIterable([utf8.encode(body)]).listen(
-    onData,
-    onError: onError,
-    onDone: onDone,
-    cancelOnError: cancelOnError,
-  );
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _EmptyHeaders implements HttpHeaders {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
+  if (url.path.endsWith('/api/v0/files')) {
+    return jsonEncode([
+      for (var i = 0; i < 40; i++)
+        {
+          'name': 'doc$i.qdoc',
+          'size': 12,
+          'isDir': false,
+          'dirPath': '/doc$i.qdoc',
+          'fileType': 'qdoc',
+        },
+    ]);
+  }
+  return '[]';
 }
 
 void main() {
@@ -164,9 +95,7 @@ void main() {
   testWidgets('the create FAB comes back after a routed qdoc open', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(600, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(600, 900));
 
     await HttpOverrides.runZoned(() async {
       final router = buildRouter(AppRoutes.files);
@@ -189,7 +118,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fabVisible(tester), isTrue, reason: 'back on the list (#1811)');
-    }, createHttpClient: (c) => _QdocListingClient());
+    }, createHttpClient: _listingQuark().createHttpClient);
   });
 
   testWidgets('a doc opened from the home folder is at its own URL (#2078)', (
@@ -208,7 +137,7 @@ void main() {
       // A reload reads the address bar; /files would reopen the folder.
       expect(location(router), AppRoutes.docFile('doc1.qdoc'));
       expect(find.text('doc editor doc1.qdoc'), findsOneWidget);
-    }, createHttpClient: (c) => _QdocListingClient());
+    }, createHttpClient: _listingQuark().createHttpClient);
   });
 
   testWidgets('a /files deep link to a doc lands on the doc URL', (
@@ -223,6 +152,6 @@ void main() {
 
       expect(location(router), AppRoutes.docFile('doc3.qdoc'));
       expect(find.text('doc editor doc3.qdoc'), findsOneWidget);
-    }, createHttpClient: (c) => _QdocListingClient());
+    }, createHttpClient: _listingQuark().createHttpClient);
   });
 }

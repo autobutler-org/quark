@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -14,39 +13,8 @@ import 'package:quark/services/thumbnail_cache_manager.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/thumbnail_cache_config.dart';
 
-/// Serves every thumbnail from memory, answering each one's first fetch 503
-/// the way a Quark does while its IO is saturated: a page of duplicates asks
-/// for every copy at once.
-class _BusyThumbnailStore extends Fake implements BaseCacheManager {
-  _BusyThumbnailStore(this.png);
-
-  final Uint8List png;
-  final _files = MemoryCacheSystem();
-  final _refused = <String>{};
-
-  @override
-  Stream<FileResponse> getFileStream(
-    String url, {
-    String? key,
-    Map<String, String>? headers,
-    bool withProgress = false,
-  }) async* {
-    if (_refused.add(url)) {
-      throw HttpExceptionWithStatus(503, 'busy', uri: Uri.parse(url));
-    }
-    final file = await _files.createFile('${_refused.length}.png');
-    await file.writeAsBytes(png);
-    yield FileInfo(
-      file,
-      FileSource.Online,
-      DateTime.now().add(const Duration(days: 1)),
-      url,
-    );
-  }
-
-  @override
-  Future<void> removeFile(String key) async {}
-}
+import '../support/fake_thumbnail_store.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #1666: the duplicates page lists groups, asks before deleting, and says
 /// when a copy could not be deleted.
@@ -82,9 +50,7 @@ void main() {
       thumbnailUrl: (path, {serial, size}) => Uri.parse('memory:$path'),
     );
     addTearDown(controller.dispose);
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         home: MediaQuery(
@@ -492,7 +458,15 @@ void main() {
       return bytes!.buffer.asUint8List();
     }))!;
     final previous = ThumbnailCacheManager.instance;
-    ThumbnailCacheManager.instance = _BusyThumbnailStore(png);
+    // Every thumbnail's first fetch answers 503, the way a Quark does while
+    // its IO is saturated: a page of duplicates asks for every copy at once.
+    final refused = <String>{};
+    ThumbnailCacheManager.instance = FakeThumbnailStore((url) {
+      if (refused.add(url)) {
+        throw HttpExceptionWithStatus(503, 'busy', uri: Uri.parse(url));
+      }
+      return png;
+    });
     addTearDown(() => ThumbnailCacheManager.instance = previous);
     imageCache
       ..clear()

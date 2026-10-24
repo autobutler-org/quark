@@ -9,6 +9,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// Every top-level page opens this one drawer, so what it offers and where
 /// each row goes is decided here once (#1662). Admin-only pages are offered to
@@ -34,9 +35,7 @@ void main() {
 
   Future<void> pumpDrawer(WidgetTester tester) async {
     // Tall enough that the drawer's lazy list builds every row.
-    tester.view.physicalSize = const Size(1280, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 1200));
 
     final router = GoRouter(
       initialLocation: AppRoutes.files,

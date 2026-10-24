@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/connected_devices_service.dart';
 import 'package:quark/widgets/settings/connected_devices_card.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2051: Connected devices listed `::1`, a raw User-Agent and a request
 /// count per row. Each row now names the client, the caller's own row reads
 /// "This browser", and removing a row asks first.
@@ -53,9 +55,7 @@ void main() {
     bool isAdmin = true,
     Size size = wideViewport,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final removed = <int>[];
     await tester.pumpWidget(
       MaterialApp(

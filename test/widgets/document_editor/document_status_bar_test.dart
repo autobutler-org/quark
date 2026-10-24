@@ -4,6 +4,8 @@ import 'package:quark/widgets/document_editor/document_status_bar.dart';
 import 'package:quark/widgets/document_editor/document_status_item.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 // #2602: the status bar's colors come from the theme's tokens. It used to
 // paint "Unsaved" and "Saved" with literal amber and green, which a theme
 // cannot move to a contrast-safe shade, and its labels with onSurface at
@@ -104,9 +106,7 @@ void main() {
     testWidgets('the page brightness toggle is a 48dp target ($label)', (
       tester,
     ) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       await pumpBar(
         tester,
         tokens: QuarkTokens.dark,

@@ -14,6 +14,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2107: the title of an open document renames the file, as a sheet's does.
 void main() {
@@ -65,9 +66,7 @@ void main() {
     WidgetTester tester, {
     String location = '/docs/reports/budget.qdoc',
   }) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
     final router = GoRouter(
       initialLocation: location,
       routes: [

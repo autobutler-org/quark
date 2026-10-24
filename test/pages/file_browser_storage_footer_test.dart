@@ -9,100 +9,28 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/fake_io_http.dart';
 import '../support/secure_storage.dart';
 
 /// Serves an empty folder and a health reading that the test controls, so it
 /// can change the disk usage between refreshes and hold a reading in flight.
-class _HealthClient implements HttpClient {
-  /// The health response each request gets, in order.
-  final List<Future<String>> readings = [];
-  var _served = 0;
-
-  /// Every path requested, in order.
-  final List<String> paths = [];
-
-  static String reading(int usedGiB) => jsonEncode({
-    'diskPercent': usedGiB,
-    'diskUsedBytes': usedGiB << 30,
-    'diskTotalBytes': 100 << 30,
-  });
-
-  @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) async {
-    paths.add(url.path);
-    if (url.path.endsWith('/api/v0/health')) {
-      return _Request(url, readings[_served++]);
-    }
-    return _Request(url, Future.value('[]'));
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _Request implements HttpClientRequest {
-  _Request(this.uri, this.body);
-  @override
-  final Uri uri;
-  final Future<String> body;
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  Future<HttpClientResponse> close() async => _Response(await body);
-
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-
-  @override
-  Future<void> flush() async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _Response implements HttpClientResponse {
-  _Response(this.body);
-  final String body;
-
-  @override
-  int get statusCode => 200;
-  @override
-  int get contentLength => -1;
-  @override
-  bool get isRedirect => false;
-  @override
-  bool get persistentConnection => false;
-  @override
-  String get reasonPhrase => 'OK';
-  @override
-  List<Cookie> get cookies => const [];
-  @override
-  List<RedirectInfo> get redirects => const [];
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  StreamSubscription<List<int>> listen(
-    void Function(List<int>)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) => Stream<List<int>>.fromIterable([utf8.encode(body)]).listen(
-    onData,
-    onError: onError,
-    onDone: onDone,
-    cancelOnError: cancelOnError,
+FakeIoQuark _healthQuark(List<Future<String>> readings) {
+  var served = 0;
+  return FakeIoQuark(
+    (method, url) async => (
+      status: 200,
+      body: url.path.endsWith('/api/v0/health')
+          ? readings[served++]
+          : Future.value('[]'),
+    ),
   );
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class _EmptyHeaders implements HttpHeaders {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
+String _reading(int usedGiB) => jsonEncode({
+  'diskPercent': usedGiB,
+  'diskUsedBytes': usedGiB << 30,
+  'diskTotalBytes': 100 << 30,
+});
 
 // The storage footer used to fetch health once, when it was first built, so
 // nothing the page did afterward ever changed it (#2151).
@@ -122,11 +50,8 @@ void main() {
   tearDown(resetSharedHttpClient);
 
   testWidgets('the refresh button updates the storage footer', (tester) async {
-    final client = _HealthClient();
     final second = Completer<String>();
-    client.readings
-      ..add(Future.value(_HealthClient.reading(10)))
-      ..add(second.future);
+    final quark = _healthQuark([Future.value(_reading(10)), second.future]);
 
     await HttpOverrides.runZoned(() async {
       await tester.pumpWidget(const MaterialApp(home: FileBrowserPage()));
@@ -146,10 +71,10 @@ void main() {
         reason: 'the last reading stays up while the refresh is in flight',
       );
 
-      second.complete(_HealthClient.reading(25));
+      second.complete(_reading(25));
       await tester.pumpAndSettle();
       expect(find.textContaining('25.0 GB / 100.0 GB'), findsOneWidget);
-    }, createHttpClient: (_) => client);
+    }, createHttpClient: quark.createHttpClient);
   });
 
   // Health is far slower than the listing on a real Quark, and waiting on it
@@ -157,20 +82,19 @@ void main() {
   testWidgets('a slow health reading does not hold up the file listing', (
     tester,
   ) async {
-    final client = _HealthClient();
     final health = Completer<String>();
-    client.readings.add(health.future);
+    final quark = _healthQuark([health.future]);
 
     await HttpOverrides.runZoned(() async {
       await tester.pumpWidget(const MaterialApp(home: FileBrowserPage()));
       await tester.pump();
       await tester.pump();
-      expect(client.paths, contains('/api/v0/files'));
+      expect(quark.requested.map((url) => url.path), contains('/api/v0/files'));
       expect(find.textContaining('10.0 GB / 100.0 GB'), findsNothing);
 
-      health.complete(_HealthClient.reading(10));
+      health.complete(_reading(10));
       await tester.pumpAndSettle();
       expect(find.textContaining('10.0 GB / 100.0 GB'), findsOneWidget);
-    }, createHttpClient: (_) => client);
+    }, createHttpClient: quark.createHttpClient);
   });
 }

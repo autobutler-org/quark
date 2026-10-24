@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/file_browser/folder_explainer.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2476: `users`, `groups` and `groups/everyone` say what they are, so a
 /// member browsing them learns the home / group / everyone model.
 void main() {
@@ -16,9 +18,7 @@ void main() {
     String serial = '',
     Size size = wideViewport,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

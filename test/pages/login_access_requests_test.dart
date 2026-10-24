@@ -14,6 +14,7 @@ import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/utils/error_text.dart';
 
 import '../support/auth_salt.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #1908: the sign-in form offers to request an account when the Quark takes
 /// requests, and a sign-in refused for the account's status says so rather
@@ -44,9 +45,7 @@ void main() {
   });
 
   Future<void> pumpLogin(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1200, 2400));
 
     final router = GoRouter(
       initialLocation: AppRoutes.login,

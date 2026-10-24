@@ -9,6 +9,8 @@ import 'package:quark/widgets/settings/hostname_section.dart';
 import 'package:quark/widgets/settings/settings_network_tab.dart';
 import 'package:quark/widgets/settings/ssh_access_section.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2344: the device name is an admin's to change, so the Network tab asks
 /// the Quark about it for an admin only, above SSH access.
 void main() {
@@ -33,9 +35,7 @@ void main() {
     required bool isAdmin,
     bool hasHost = true,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

@@ -11,6 +11,8 @@ import 'package:quark/router.dart';
 import 'package:quark/services/demo_photos_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3112: the Albums header folds the whole list away. The page keeps what
 /// was showing, and on a phone, where the list sits above the grid in one
 /// scroll view, the scroll stays somewhere the shorter content can hold
@@ -76,9 +78,7 @@ void main() {
     required Size size,
     TargetPlatform platform = TargetPlatform.iOS,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     final router = GoRouter(
       initialLocation: AppRoutes.photos,

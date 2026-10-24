@@ -12,6 +12,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #3191: a new folder on the Files page takes the destination an upload
 /// would. Each test presses New folder on the real page and reads the
@@ -75,9 +76,7 @@ void main() {
   });
 
   Future<void> pumpPage(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1600, 1000));
     await tester.pumpWidget(const MaterialApp(home: FileBrowserPage()));
     await tester.pumpAndSettle();
   }

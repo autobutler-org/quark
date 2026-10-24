@@ -4,6 +4,8 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/settings/change_password/change_password_dialog.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3022: the dialog collects the current password and the new one twice. It
 /// refuses to send a new password that is too short, unchanged or typed two
 /// different ways, and otherwise only reports what it was given: the Quark
@@ -32,9 +34,7 @@ void main() {
     bool isWorking = false,
     String? error,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

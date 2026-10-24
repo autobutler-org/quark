@@ -10,6 +10,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/demo_photos_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/unreachable_quark.dart';
 
 /// #1746: with Demo mode on, the Photos page shows the bundled sample library
@@ -75,9 +76,7 @@ void main() {
     Size size = desktopSize,
     String location = AppRoutes.photos,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final router = GoRouter(
       initialLocation: location,
       routes: [
@@ -96,9 +95,7 @@ void main() {
   }
 
   Future<void> pumpPhotos(WidgetTester tester) async {
-    tester.view.physicalSize = desktopSize;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, desktopSize);
     await tester.pumpWidget(const MaterialApp(home: PhotosPage()));
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 100));

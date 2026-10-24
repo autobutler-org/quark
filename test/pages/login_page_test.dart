@@ -8,6 +8,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/text_scale.dart';
 
 /// #2068: with the keyboard open on a phone, focusing a field scrolled only
@@ -40,9 +41,7 @@ void main() {
   });
 
   Future<void> pumpLogin(WidgetTester tester) async {
-    tester.view.physicalSize = screen;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, screen);
     await tester.pumpWidget(
       MaterialApp(
         home: LoginPage(

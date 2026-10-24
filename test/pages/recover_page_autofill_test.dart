@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/recover_page.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3591: on web, Flutter puts a real `<input>` in the DOM only for the
 /// focused field, plus one for every other field in that field's
 /// [AutofillGroup]. Without a group, a password manager found no password
@@ -23,9 +25,7 @@ void main() {
     testWidgets('$name: username and new passwords share one autofill group', (
       tester,
     ) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
 
       await tester.pumpWidget(const MaterialApp(home: RecoverPage()));
       await tester.pumpAndSettle();

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/settings/reset_quark_dialog.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #1762: the appliance-wide wipe is a different intent from deleting an
 /// account, so it is a different dialog. What it defaults to is the whole
 /// argument for splitting them — everything on the Quark, nothing on a drive
@@ -43,9 +45,7 @@ void main() {
     WidgetTester tester, {
     Size size = wideViewport,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     final confirmations = <(QuarkResetSelection, String)>[];
     await tester.pumpWidget(

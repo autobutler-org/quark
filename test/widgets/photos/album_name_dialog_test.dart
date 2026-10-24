@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/photos/album_name_dialog.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #1916: album names are unique among siblings, ignoring case, and cannot
 /// contain `/`. The dialog refuses both before the Quark has to.
 void main() {
@@ -22,9 +24,7 @@ void main() {
     String initial = '',
     bool Function(String name)? isNameTaken,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     final results = <String?>[];
     await tester.pumpWidget(

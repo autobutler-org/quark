@@ -13,6 +13,7 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/system/health_tab.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/text_scale.dart';
 
 /// The System page (#2351): Health, Storage and Jobs as tabs of one page, each
@@ -61,9 +62,7 @@ void main() {
     String location,
     Size size,
   ) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     final r = GoRouter(
       initialLocation: location,

@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
 
-import '../services/events_service_test.dart' show FakeChannel;
+import 'fake_events_channel.dart';
 import 'secure_storage.dart';
 
 /// Runs [EventsService] over fake sockets, so a test can drop the connection

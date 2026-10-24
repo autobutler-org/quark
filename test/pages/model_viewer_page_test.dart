@@ -14,6 +14,8 @@ import 'package:quark/utils/model_viewer_config.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// A binary STL of one right triangle, 10 by 20 in the XY plane.
 Uint8List triangleStl() {
   final data = ByteData(84 + 50)..setUint32(80, 1, Endian.little);
@@ -49,9 +51,7 @@ void main() {
     QuarkModelLimits? limits,
     Size size = const Size(1280, 800),
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final controller = ModelViewerController(
       path: filePath,
       readRange: readRange ?? serving(triangleStl()),

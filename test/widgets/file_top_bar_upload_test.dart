@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quark/widgets/file_browser/file_top_bar.dart';
+
+import '../support/file_top_bar.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// Folder upload gets no button of its own (#1615): to the user "upload" is
 /// one action, and whether they picked a file or a folder is a property of
@@ -23,37 +25,19 @@ void main() {
   }) async {
     // Wide enough that the bar lays out its full action row rather than a
     // compact variant.
-    tester.view.physicalSize = const Size(1400, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1400, 900));
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          appBar: FileTopBar(
-            currentPath: '/docs',
-            rootPath: '',
-            isGridView: false,
-            isUnifiedView: false,
-            onToggleUnifiedView: () {},
-            isSearchMode: false,
+          appBar: testFileTopBar(
             isUploading: isUploading,
             uploadTotal: uploadTotal,
             uploadCompleted: uploadCompleted,
-            isCreatingFolder: false,
-            isRefreshing: false,
-            onGoHome: () {},
-            onGoUp: () {},
-            onToggleView: () {},
-            onSearchChanged: (_) {},
-            onSearchClosed: () {},
-            onRefresh: () {},
             onUploadPressed: onUpload,
             onUploadPhotosPressed: onUploadPhotos,
             onUploadFolderPressed: onUploadFolder,
             onCancelUploadPressed: onCancelUpload,
-            onCreateFolderPressed: () {},
-            onNewFilePressed: () {},
           ),
         ),
       ),

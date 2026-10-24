@@ -9,6 +9,7 @@ import 'package:quark/pages/settings_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/unreachable_quark.dart';
 import '../support/secure_storage.dart';
 
@@ -65,9 +66,7 @@ void main() {
     Size size, {
     FeatureFlagsController? featureFlags,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     final selected = <SettingsTab>[];
     await tester.pumpWidget(

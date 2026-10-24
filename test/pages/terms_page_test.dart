@@ -5,6 +5,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/terms/agree_button.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2064: saving a new Quark replaced the flow with the full terms and an
 /// I Agree button, with nothing on the page tying them to the Quark that had
@@ -31,9 +32,7 @@ void main() {
   tearDown(clearHosts);
 
   Future<void> pumpTerms(WidgetTester tester, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     await tester.pumpWidget(const MaterialApp(home: TermsPage()));
     await tester.pumpAndSettle();

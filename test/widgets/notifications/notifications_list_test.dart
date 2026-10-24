@@ -9,6 +9,8 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/notifications/notifications_list.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 const _due = AppNotification(
   type: NotificationType.backupDue,
   link: '/system/storage',
@@ -39,9 +41,7 @@ void main() {
     ValueChanged<AppNotification>? onOpen,
     Size size = const Size(1280, 800),
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),

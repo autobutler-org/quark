@@ -12,6 +12,7 @@ import 'package:quark/utils/sheet_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2779: an empty sheet opens as a blank grid rather than a single cell, and
 /// a sheet that already has data keeps the size it was saved with.
@@ -45,9 +46,7 @@ void main() {
       return http.Response('{}', 200);
     });
     resetSharedHttpClient();
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
     await tester.pumpWidget(
       const MaterialApp(home: SpreadsheetEditorPage(filePath: 'budget.qsheet')),
     );

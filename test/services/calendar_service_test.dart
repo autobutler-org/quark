@@ -3,34 +3,19 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:quark/models/calendar_event.dart';
 import 'package:quark/models/calendar_move.dart';
-import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/calendar_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+
+import '../support/fake_quark_http.dart';
 
 /// The calendar routes and the event's wire shape (#1147).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  final requests = <http.Request>[];
-
-  void answer(int status, Object? body) {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = () => MockClient((request) async {
-      requests.add(request);
-      return http.Response(jsonEncode(body), status);
-    });
-  }
-
-  setUp(requests.clear);
-  tearDown(() {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = buildLocalTrustHttpClient;
-  });
+  useFakeQuark();
 
   const vet = {
     'id': 14,

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/setup/setup_form.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3591: on web, Flutter puts a real `<input>` in the DOM only for the
 /// focused field, plus one for every other field in that field's
 /// [AutofillGroup]. Without a group, a password manager found no password
@@ -23,9 +25,7 @@ void main() {
     testWidgets('$name: the account fields share one autofill group', (
       tester,
     ) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
 
       final controllers = List.generate(3, (_) => TextEditingController());
       final focuses = List.generate(3, (_) => FocusNode());

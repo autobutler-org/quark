@@ -7,6 +7,8 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/host_dialog.dart';
 import 'package:quark/widgets/quark_connect_form.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2070: on an Android emulator `localhost` is the emulator, and neither Add
 /// Quark form said to type `10.0.2.2` instead. Both now say so under the
 /// address field as soon as a loopback address is typed.
@@ -20,12 +22,6 @@ void main() {
 
   setUp(() => hostReachabilityProbe = (_) async => false);
   tearDown(() => hostReachabilityProbe = AuthService.isReachable);
-
-  void setViewport(WidgetTester tester, Size size) {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-  }
 
   Future<void> pumpConnectForm(WidgetTester tester) => tester.pumpWidget(
     MaterialApp(

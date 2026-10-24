@@ -1,26 +1,12 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/photo_index_service.dart';
 import 'package:quark/utils/error_text.dart';
+
+import '../support/fake_quark_http.dart';
 
 /// #3556: the admin-only photo library index routes, as the app reads them.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  final requests = <http.Request>[];
-
-  /// Answers every request with [status] and [body], recording it.
-  void answer(int status, Object body) {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = () => MockClient((request) async {
-      requests.add(request);
-      return http.Response(jsonEncode(body), status);
-    });
-  }
 
   const running = {
     'total': 5000,
@@ -40,11 +26,7 @@ void main() {
     'paused': false,
   };
 
-  setUp(requests.clear);
-  tearDown(() {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = buildLocalTrustHttpClient;
-  });
+  useFakeQuark();
 
   test('reads the status of a running pass', () async {
     answer(200, running);

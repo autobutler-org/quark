@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/setup/recovery_phrase_step.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2023: the step warned "don't store it digitally on this device" directly
 /// above a Copy button — a contradiction on the one screen where a user is
 /// deciding whether to trust what they just set up. The guidance and the
@@ -12,9 +14,7 @@ void main() {
     bool acknowledged = false,
     VoidCallback? onContinue,
   }) async {
-    tester.view.physicalSize = const Size(700, 1600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(700, 1600));
 
     await tester.pumpWidget(
       MaterialApp(

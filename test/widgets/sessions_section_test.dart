@@ -5,6 +5,8 @@ import 'package:quark/models/auth_session.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/settings/sessions_section.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #1663: the Sessions card marks the session in use, asks before signing
 /// anything out, and leaves the page once the session in use is gone.
 void main() {
@@ -31,9 +33,7 @@ void main() {
     Size size, {
     bool failList = false,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     final calls = <String>[];
     var sessions = [current, other];

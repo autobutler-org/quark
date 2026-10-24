@@ -11,6 +11,8 @@ import 'package:quark/widgets/layout/app_bar_trailing_host.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2493: the app-wide scope puts the notifications bell in every page's
 /// bar, and the bell opens a route through the root's `onNavigate`.
 void main() {
@@ -18,9 +20,7 @@ void main() {
     testWidgets('every bar gets the notifications bell (${size.width})', (
       tester,
     ) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       final session = ValueNotifier<String?>('token');
       final jobs = JobsController(
         listJobs: ({required kinds}) async => const [],

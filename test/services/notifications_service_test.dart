@@ -2,14 +2,13 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:quark/models/app_notification.dart';
 import 'package:quark/services/app_settings.dart';
-import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/notifications_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/fake_quark_http.dart';
 import '../support/secure_storage.dart';
 
 /// #2493: the notifications list, and the per-type switch saved in the
@@ -18,20 +17,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   final settings = AppSettings.instance;
-  final requests = <http.Request>[];
-
-  /// Answers each request with what [respond] returns for it, recording it.
-  void answerWith(http.Response Function(http.Request request) respond) {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = () => MockClient((request) async {
-      requests.add(request);
-      return respond(request);
-    });
-  }
-
-  /// Answers every request with [status] and [body], recording it.
-  void answer(int status, Object body) =>
-      answerWith((_) => http.Response(jsonEncode(body), status));
 
   /// Serves `/settings/me` from [stored] the way the Quark does: a GET reads
   /// it and a PUT replaces it whole.
@@ -55,10 +40,7 @@ void main() {
     await settings.load();
     await settings.setSessionToken('token');
   });
-  tearDown(() {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = buildLocalTrustHttpClient;
-  });
+  useFakeQuark();
 
   group('list', () {
     test('reads the notifications with the session', () async {

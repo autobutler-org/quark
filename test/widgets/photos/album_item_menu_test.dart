@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/photos/album_item_menu.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2260: a photo in an album has a visible menu button that opens the same
 /// entries a long press used to, and a system album offers no Remove.
 void main() {
@@ -22,9 +24,7 @@ void main() {
     bool systemAlbum = false,
     bool favorites = false,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     await tester.pumpWidget(
       MaterialApp(

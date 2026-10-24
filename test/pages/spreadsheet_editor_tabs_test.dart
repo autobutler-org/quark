@@ -17,6 +17,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #1745: the editor manages its tabs through the strip under the grid, and
 /// every change goes out through the autosave.
@@ -64,9 +65,7 @@ void main() {
   });
 
   Future<void> pumpEditor(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
     await tester.pumpWidget(
       const MaterialApp(home: SpreadsheetEditorPage(filePath: 'budget.qsheet')),
     );
@@ -153,9 +152,7 @@ void main() {
     WidgetTester tester, {
     String location = '/sheets/reports/budget.qsheet',
   }) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
     final router = GoRouter(
       initialLocation: location,
       routes: [

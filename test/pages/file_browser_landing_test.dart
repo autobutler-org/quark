@@ -18,136 +18,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/auth_salt.dart';
+import '../support/fake_io_http.dart';
 import '../support/secure_storage.dart';
-
-/// Records where every request went and answers each one with an empty JSON
-/// listing, so nothing under test hangs waiting for a Quark.
-class _RecordingHttpOverrides extends HttpOverrides {
-  final List<Uri> requested = [];
-
-  /// What a stat answers with. A member may list `groups` but not stat it:
-  /// their grant sits on the group's own folder, and stat asks for read on
-  /// the path itself.
-  int statStatus = 200;
-
-  /// What `/api/v0/access/mine` answers. Nothing is shared by default.
-  String sharedWithMe = '{"items":[]}';
-
-  /// What a folder listing answers. Empty by default.
-  String listing = '[]';
-
-  @override
-  HttpClient createHttpClient(SecurityContext? context) => _RecordingClient(
-    requested,
-    () => statStatus,
-    () => sharedWithMe,
-    () => listing,
-  );
-}
-
-class _RecordingClient implements HttpClient {
-  _RecordingClient(
-    this.requested,
-    this.statStatus,
-    this.sharedWithMe,
-    this.listing,
-  );
-  final List<Uri> requested;
-  final int Function() statStatus;
-  final String Function() sharedWithMe;
-  final String Function() listing;
-
-  @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) async {
-    requested.add(url);
-    final status = url.path.endsWith('/api/v0/files/stat') ? statStatus() : 200;
-    return _RecordingRequest(url, _bodyFor(url), status);
-  }
-
-  String _bodyFor(Uri url) {
-    if (url.path.endsWith('/api/v0/files/stat')) {
-      return jsonEncode({'isDir': true, 'fileType': 'folder', 'name': 'docs'});
-    }
-    if (url.path.endsWith('/api/v0/access/mine')) {
-      return sharedWithMe();
-    }
-    if (url.path.endsWith('/api/v0/files')) {
-      return listing();
-    }
-    return '[]';
-  }
-
-  // Everything else the client surface exposes is irrelevant here — swallow
-  // it rather than throwing, so unrelated setup calls do not masquerade as
-  // the behavior under test.
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _RecordingRequest implements HttpClientRequest {
-  _RecordingRequest(this.uri, this.body, this.status);
-  @override
-  final Uri uri;
-  final String body;
-  final int status;
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  Future<HttpClientResponse> close() async => _RecordingResponse(body, status);
-
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-
-  @override
-  Future<void> flush() async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _RecordingResponse implements HttpClientResponse {
-  _RecordingResponse(this.body, this.statusCode);
-  final String body;
-
-  @override
-  final int statusCode;
-  @override
-  int get contentLength => -1;
-  @override
-  bool get isRedirect => false;
-  @override
-  bool get persistentConnection => false;
-  @override
-  String get reasonPhrase => 'OK';
-  @override
-  List<Cookie> get cookies => const [];
-  @override
-  List<RedirectInfo> get redirects => const [];
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  StreamSubscription<List<int>> listen(
-    void Function(List<int>)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) => Stream<List<int>>.fromIterable([utf8.encode(body)]).listen(
-    onData,
-    onError: onError,
-    onDone: onDone,
-    cancelOnError: cancelOnError,
-  );
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _EmptyHeaders implements HttpHeaders {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2139: a member's grants are sparse, so the real root holds nothing but the
 /// `users` and `groups` scaffolding and their own files sit two clicks down.
@@ -161,7 +34,20 @@ void main() {
 
   setUpAll(mockSecureStorage);
 
-  late _RecordingHttpOverrides overrides;
+  /// What a stat answers with. A member may list `groups` but not stat it:
+  /// their grant sits on the group's own folder, and stat asks for read on
+  /// the path itself.
+  late int statStatus;
+
+  /// What `/api/v0/access/mine` answers. Nothing is shared by default.
+  late String sharedWithMe;
+
+  /// What a folder listing answers. Empty by default.
+  late String listing;
+
+  /// Records where every request went and answers each one, so nothing
+  /// under test hangs waiting for a Quark.
+  late FakeIoQuark overrides;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -171,7 +57,28 @@ void main() {
     );
     await AppSettings.instance.setUsername('alice');
     AppSettings.instance.isAdmin.value = false;
-    overrides = _RecordingHttpOverrides();
+    statStatus = 200;
+    sharedWithMe = '{"items":[]}';
+    listing = '[]';
+    overrides = FakeIoQuark((method, url) async {
+      if (url.path.endsWith('/api/v0/files/stat')) {
+        return (
+          status: statStatus,
+          body: jsonEncode({
+            'isDir': true,
+            'fileType': 'folder',
+            'name': 'docs',
+          }),
+        );
+      }
+      if (url.path.endsWith('/api/v0/access/mine')) {
+        return (status: 200, body: sharedWithMe);
+      }
+      if (url.path.endsWith('/api/v0/files')) {
+        return (status: 200, body: listing);
+      }
+      return (status: 200, body: '[]');
+    });
   });
 
   tearDown(() async {
@@ -241,9 +148,7 @@ void main() {
     testWidgets('finishing setup lands the owner on the card', (tester) async {
       // The real router, so the wizard's last button runs the real
       // onSetupComplete.
-      tester.view.physicalSize = const Size(1200, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, const Size(1200, 2400));
       await AppSettings.instance.setUsername(null);
       await AppSettings.instance.acceptTerms();
       authStatusProbe = () async => const AuthStatus(setupComplete: false);
@@ -292,9 +197,7 @@ void main() {
     });
 
     testWidgets('the card fits a phone, labels and all', (tester) async {
-      tester.view.physicalSize = const Size(360, 640);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, const Size(360, 640));
       AppSettings.instance.isAdmin.value = true;
       await AppSettings.instance.welcomeNewOwner();
 
@@ -427,7 +330,7 @@ void main() {
     // until the stat says what the path is. When the stat fails, the folder
     // has to be listed there and then — it used to wait for the refresh timer,
     // spinning for as long as fifteen seconds.
-    overrides.statStatus = 404;
+    statStatus = 404;
 
     await HttpOverrides.runZoned(() async {
       await pumpBrowser(tester, initialPath: '/groups');
@@ -674,7 +577,7 @@ void main() {
   testWidgets('Shared with me appears once something has been shared', (
     tester,
   ) async {
-    overrides.sharedWithMe = jsonEncode({
+    sharedWithMe = jsonEncode({
       'items': [
         {'relPath': 'users/bob/Trip', 'level': 'read', 'owner': 'bob'},
       ],
@@ -693,7 +596,7 @@ void main() {
   testWidgets('Shared with me lists a lone share rather than opening it', (
     tester,
   ) async {
-    overrides.sharedWithMe = jsonEncode({
+    sharedWithMe = jsonEncode({
       'items': [
         {'relPath': 'users/bob/Trip', 'level': 'read', 'owner': 'bob'},
       ],
@@ -716,7 +619,7 @@ void main() {
   testWidgets(
     'the list shows the chosen columns, and the picker changes them',
     (tester) async {
-      overrides.listing = jsonEncode([
+      listing = jsonEncode([
         {
           'name': 'budget.csv',
           'size': 2048,
@@ -766,7 +669,7 @@ void main() {
   testWidgets('Shared with me asks which one when there are several', (
     tester,
   ) async {
-    overrides.sharedWithMe = jsonEncode({
+    sharedWithMe = jsonEncode({
       'items': [
         {'relPath': 'users/bob/Trip', 'level': 'read', 'owner': 'bob'},
         {'relPath': 'Family', 'level': 'write', 'owner': 'carol'},

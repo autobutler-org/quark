@@ -16,6 +16,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/fake_chat.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// The chat page (#2421) composes the chat widgets over a [FakeChat], at a
 /// phone's size and a desktop's.
@@ -31,9 +32,7 @@ void main() {
   }) async {
     ChatController.clearSessionDrafts();
     addTearDown(ChatController.clearSessionDrafts);
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final fake = chat ?? FakeChat();
     final r = GoRouter(
       initialLocation: location,
@@ -263,9 +262,7 @@ void main() {
     ) async {
       ChatController.clearSessionDrafts();
       addTearDown(ChatController.clearSessionDrafts);
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
 
       Future<void> show(FakeChat fake) async {
         final router = GoRouter(

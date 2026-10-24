@@ -4,6 +4,8 @@ import 'package:quark/widgets/file_browser/file_storage_footer.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer_scope.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 // The footer is the last child of the file browser's Column, so it sits flush
 // against the physical bottom edge — the band where iOS draws the home
 // indicator and Android its gesture bar. It drew the storage readout and
@@ -203,9 +205,7 @@ void main() {
   testWidgets('survives a phone-width bar with the scope in the label', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(360, 640);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(360, 640));
 
     await pumpFooter(tester);
 
@@ -217,9 +217,7 @@ void main() {
   // the percentage. The bar has to take all of it, on a phone as well.
   for (final size in const [Size(1280, 800), Size(360, 640)]) {
     testWidgets('spans the row at ${size.width.toInt()} wide', (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
 
       await tester.pumpWidget(
         MaterialApp(

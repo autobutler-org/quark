@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/auth_salt.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2430: recovering an account the Quark marks `legacyRecovery` sends its
 /// old phrase once and gives it a new one the app made. The page shows that
@@ -93,9 +94,7 @@ void main() {
   for (final size in const [Size(360, 640), Size(1280, 800)]) {
     testWidgets('a legacy recovery shows the new phrase until it is '
         'acknowledged at $size', (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       var finished = 0;
 
       await tester.pumpWidget(

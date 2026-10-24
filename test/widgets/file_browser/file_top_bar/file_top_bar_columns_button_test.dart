@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_list_column.dart';
-import 'package:quark/widgets/file_browser/file_top_bar.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_columns_button.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_view_chips.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../../../support/text_scale.dart' show narrowViewport, wideViewport;
+
+import '../../../support/file_top_bar.dart';
+import '../../../support/tap_target_guidelines.dart' show setViewport;
 
 /// #1566: the wide bar's Columns button opens a checkbox per optional column
 /// of the list view.
@@ -16,9 +18,7 @@ void main() {
     Size size, {
     bool enabled = true,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final toggles = <(FileListColumn, bool)>[];
     await tester.pumpWidget(
       MaterialApp(
@@ -106,31 +106,13 @@ void main() {
   ]) {
     testWidgets('in the bar, grid $isGridView and unified $isUnifiedView '
         'leaves the picker ${live ? 'live' : 'disabled'}', (tester) async {
-      tester.view.physicalSize = wideViewport;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, wideViewport);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            appBar: FileTopBar(
-              currentPath: '/docs',
-              rootPath: '',
+            appBar: testFileTopBar(
               isGridView: isGridView,
               isUnifiedView: isUnifiedView,
-              onToggleUnifiedView: () {},
-              isSearchMode: false,
-              isUploading: false,
-              isCreatingFolder: false,
-              isRefreshing: false,
-              onGoHome: () {},
-              onGoUp: () {},
-              onToggleView: () {},
-              onSearchChanged: (_) {},
-              onSearchClosed: () {},
-              onRefresh: () {},
-              onUploadPressed: () {},
-              onCreateFolderPressed: () {},
-              onNewFilePressed: () {},
               columns: const {FileListColumn.size},
               onColumnToggled: (_, _) {},
             ),
@@ -152,9 +134,7 @@ void main() {
   testWidgets('the view chips carry it beside the layout and grouping', (
     tester,
   ) async {
-    tester.view.physicalSize = wideViewport;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, wideViewport);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

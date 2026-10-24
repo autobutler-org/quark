@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/settings/settings_account_tab.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2474: a member who opened Settings → Account found Sign out and a row
 /// that only led to deleting their account, with no word on who manages
 /// accounts. The tab now says an admin does, and gives an admin a row to the
@@ -22,9 +24,7 @@ void main() {
     bool signedIn = true,
     Size size = wideViewport,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final calls = <String>[];
     await tester.pumpWidget(
       MaterialApp(

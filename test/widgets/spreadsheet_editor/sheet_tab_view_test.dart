@@ -8,6 +8,8 @@ import 'package:quark/widgets/spreadsheet_editor/sheet_format_palette.dart';
 import 'package:quark/widgets/spreadsheet_editor/sheet_tab_view.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2692: a sheet tab copies and pastes through the system clipboard, so
 /// cells move to and from Google Sheets and Excel. #2693: it carries the
 /// formatting toolbar. #2695: its formulas autocomplete, pick references
@@ -36,9 +38,7 @@ void main() {
   });
 
   Future<DataSheetController> pumpTab(WidgetTester tester, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final table = DataTable([
       DataRow([DataCell('a'), DataCell('b')]),
       DataRow([DataCell(''), DataCell('')]),

@@ -8,6 +8,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/fake_vault.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/text_scale.dart';
 
 const _password = 'correct horse battery staple';
@@ -76,9 +77,7 @@ void main() {
   for (final size in const [Size(360, 640), Size(1280, 800)]) {
     group('at $size', () {
       void useSize(WidgetTester tester) {
-        tester.view.physicalSize = size;
-        tester.view.devicePixelRatio = 1.0;
-        addTearDown(tester.view.reset);
+        setViewport(tester, size);
       }
 
       testWidgets('a member sets up a vault with the login password', (

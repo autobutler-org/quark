@@ -6,6 +6,8 @@ import 'package:quark/utils/startup.dart';
 import 'package:quark/widgets/layout/startup_loader.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2066: nothing was painted until the saved settings had loaded, so a load
 /// that stalled left the blank native launch screen up.
 void main() {
@@ -73,9 +75,7 @@ void main() {
     ('wide', const Size(1280, 800)),
   ]) {
     testWidgets('the startup loader builds on its own ($name)', (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
 
       await tester.pumpWidget(const StartupLoader());
 

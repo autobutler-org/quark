@@ -8,6 +8,8 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// The login page says a Quark is unreachable as soon as its status check
 /// fails, not only after a sign-in attempt, and its retry repeats that check —
 /// the same as the setup page.
@@ -42,9 +44,7 @@ void main() {
   testWidgets('an unreachable Quark shows the banner and retry re-probes', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(700, 1600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(700, 1600));
 
     await tester.pumpWidget(
       MaterialApp(

@@ -10,6 +10,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// Share on a file or folder in Files (#1911): the menu action opens the
 /// share sheet for that item, on the device it is on.
 void main() {
@@ -52,9 +54,7 @@ void main() {
       deviceSerial: 'usb1',
       dirPath: 'Docs/Family',
     );
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
 
     await tester.pumpWidget(
       MaterialApp(

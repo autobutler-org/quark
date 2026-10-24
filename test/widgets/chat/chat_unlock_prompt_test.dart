@@ -11,9 +11,7 @@ void main() {
   final submit = find.byKey(const ValueKey('chat_unlock_submit'));
 
   Future<List<String>> pumpPrompt(WidgetTester tester, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final unlocks = <String>[];
     await tester.pumpWidget(
       MaterialApp(
@@ -79,9 +77,7 @@ void main() {
   }
 
   testWidgets('a failure says what to try next', (tester) async {
-    tester.view.physicalSize = const Size(360, 640);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(360, 640));
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

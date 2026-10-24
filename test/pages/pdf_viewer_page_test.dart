@@ -11,6 +11,7 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/fake_file_picker_platform.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 // These run off web, where the page uses pdfrx. The browser's own viewer is
 // an iframe in a platform view, which `flutter test` cannot build.
@@ -144,9 +145,7 @@ void main() {
     testWidgets('a long name fits the top bar on a $label screen', (
       tester,
     ) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       await tester.pumpWidget(
         MaterialApp(
           home: PdfViewerPage(

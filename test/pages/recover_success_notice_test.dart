@@ -5,6 +5,8 @@ import 'package:quark/pages/login_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2029: a successful password reset called `context.go(login)` and nothing
 /// else — no toast, no banner, no prefilled username. The most anxious step
 /// in the app ended in silence, which reads as "did that work?".
@@ -29,9 +31,7 @@ void main() {
   });
 
   Future<void> pumpLoginAt(WidgetTester tester, String location) async {
-    tester.view.physicalSize = const Size(600, 1400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(600, 1400));
 
     final router = GoRouter(
       initialLocation: location,

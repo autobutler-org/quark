@@ -8,6 +8,8 @@ import 'package:quark/widgets/image_viewer/current_photo.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2607: the viewer slides to the next photo and turns a rotated one, and
 /// under reduced motion it does neither: the page and the rotation land on
 /// the first frame.
@@ -33,9 +35,7 @@ void main() {
   /// Pumps the viewer wide, on photo 1 of 3. A [relPath] makes it a Quark
   /// photo, which is what offers rotation.
   Future<void> pumpViewer(WidgetTester tester, {String? relPath}) async {
-    tester.view.physicalSize = const Size(1400, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1400, 900));
     await tester.pumpWidget(
       MaterialApp(
         home: ImageViewerPage(

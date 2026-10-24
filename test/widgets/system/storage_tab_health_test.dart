@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/auth_salt.dart';
 import '../../support/secure_storage.dart';
+import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// Drive health on the Storage tab: the verdict the Quark sent, the stronger
 /// warning when default storage would move to a worse drive, and the
@@ -113,9 +114,7 @@ void main() {
   }
 
   Future<void> pumpTab(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: StorageTab())),
     );

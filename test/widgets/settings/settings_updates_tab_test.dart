@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/settings/settings_updates_tab.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
 import '../../support/text_scale.dart';
 
 /// #2792: the Updates tab says updates are manual and has no automatic
@@ -48,9 +49,7 @@ void main() {
     ('wide', wideViewport),
   ]) {
     testWidgets('every control is a 48dp target ($name)', (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       await tester.pumpWidget(
         MaterialApp(
           theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),
@@ -76,9 +75,7 @@ void main() {
   for (final MapEntry(key: name, value: size) in largeTextViewports.entries) {
     testWidgets('the focused release notes link has room inside its ring '
         '($name)', (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       await tester.pumpWidget(
         MaterialApp(
           theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),

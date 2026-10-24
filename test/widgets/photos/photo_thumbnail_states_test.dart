@@ -13,41 +13,17 @@ import 'package:quark/utils/thumbnail_cache_config.dart';
 import 'package:quark/widgets/photos/photo_thumbnail.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/fake_thumbnail_store.dart';
+
 /// A thumbnail endpoint that always gives the same answer: a status, or a 200
 /// with [body].
-class _Endpoint extends Fake implements BaseCacheManager {
-  _Endpoint(this.status, {this.body});
-
-  final int status;
-  final Uint8List? body;
-  final _files = MemoryCacheSystem();
-  int requests = 0;
-
-  @override
-  Stream<FileResponse> getFileStream(
-    String url, {
-    String? key,
-    Map<String, String>? headers,
-    bool withProgress = false,
-  }) async* {
-    requests++;
-    if (status != 200) {
-      throw HttpExceptionWithStatus(status, 'scripted', uri: Uri.parse(url));
-    }
-    final file = await _files.createFile('thumbnail-$requests.png');
-    await file.writeAsBytes(body!);
-    yield FileInfo(
-      file,
-      FileSource.Online,
-      DateTime.now().add(const Duration(days: 1)),
-      url,
-      statusCode: status,
-    );
-  }
-
-  @override
-  Future<void> removeFile(String key) async {}
-}
+FakeThumbnailStore _endpoint(int status, {Uint8List? body}) =>
+    FakeThumbnailStore((url) {
+      if (status != 200) {
+        throw HttpExceptionWithStatus(status, 'scripted', uri: Uri.parse(url));
+      }
+      return body!;
+    });
 
 Future<void> _flush(WidgetTester tester) async {
   for (var i = 0; i < 10; i++) {
@@ -86,14 +62,14 @@ void main() {
   /// #3509: a gone thumbnail, a corrupt one and one the Quark would not send
   /// all drew the same anonymous gray box.
   for (final (label, endpoint, issue) in [
-    ('a 404', () => _Endpoint(404), ThumbnailIssue.missing),
-    ('a 410', () => _Endpoint(410), ThumbnailIssue.missing),
+    ('a 404', () => _endpoint(404), ThumbnailIssue.missing),
+    ('a 410', () => _endpoint(410), ThumbnailIssue.missing),
     (
       'a 200 that is not an image',
-      () => _Endpoint(200, body: Uint8List.fromList([0, 1, 2, 3])),
+      () => _endpoint(200, body: Uint8List.fromList([0, 1, 2, 3])),
       ThumbnailIssue.unreadable,
     ),
-    ('a 500', () => _Endpoint(500), ThumbnailIssue.loadFailed),
+    ('a 500', () => _endpoint(500), ThumbnailIssue.loadFailed),
   ]) {
     testWidgets('$label settles to the ${issue.name} state', (tester) async {
       final handle = tester.ensureSemantics();
@@ -134,7 +110,7 @@ void main() {
   });
 
   testWidgets('a tile with no path to backfill still says why', (tester) async {
-    ThumbnailCacheManager.instance = _Endpoint(404);
+    ThumbnailCacheManager.instance = _endpoint(404);
     await tester.pumpWidget(
       _tile(PhotoThumbnail(url: Uri.parse('https://quark.test/t/a.jpg'))),
     );
@@ -147,7 +123,7 @@ void main() {
   testWidgets('a busy Quark keeps the placeholder until retries run out', (
     tester,
   ) async {
-    final endpoint = _Endpoint(503);
+    final endpoint = _endpoint(503);
     ThumbnailCacheManager.instance = endpoint;
     await tester.pumpWidget(
       _tile(
@@ -166,7 +142,7 @@ void main() {
       await _flush(tester);
       delay *= 2;
     }
-    expect(endpoint.requests, ThumbnailCacheConfig.busyRetries + 1);
+    expect(endpoint.fetched, hasLength(ThumbnailCacheConfig.busyRetries + 1));
     expect(_shownIssue(), ThumbnailIssue.loadFailed);
     await tester.pumpWidget(const SizedBox());
   });
@@ -175,7 +151,7 @@ void main() {
     tester,
   ) async {
     final gate = Completer<void>();
-    ThumbnailCacheManager.instance = _Endpoint(404);
+    ThumbnailCacheManager.instance = _endpoint(404);
     await tester.pumpWidget(
       _tile(
         PhotoThumbnail(
@@ -200,7 +176,7 @@ void main() {
   });
 
   testWidgets('a photo the backfill could not read says so', (tester) async {
-    ThumbnailCacheManager.instance = _Endpoint(404);
+    ThumbnailCacheManager.instance = _endpoint(404);
     await tester.pumpWidget(
       _tile(
         PhotoThumbnail(

@@ -1,33 +1,17 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/playback_position_service.dart';
 import 'package:quark/utils/error_text.dart';
+
+import '../support/fake_quark_http.dart';
 
 /// The video resume API client (#2985): the routes it calls, what it sends,
 /// and what it reads back.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  final requests = <http.Request>[];
-
-  /// Answers every request with [status] and [body], recording it.
-  void answer(int status, Object body) {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = () => MockClient((request) async {
-      requests.add(request);
-      return http.Response(jsonEncode(body), status);
-    });
-  }
-
-  setUp(requests.clear);
-  tearDown(() {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = buildLocalTrustHttpClient;
-  });
+  useFakeQuark();
 
   test('get asks for one file on one device and reads its state', () async {
     answer(200, {

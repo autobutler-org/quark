@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quark/widgets/file_browser/file_top_bar.dart';
+
+import '../support/file_top_bar.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// The search field reports the query being typed before the debounced search
 /// runs, so the result banner can follow the field (#2098).
@@ -11,33 +13,15 @@ void main() {
     ValueChanged<String>? onSearchDraft,
     VoidCallback? onSearchClosed,
   }) async {
-    tester.view.physicalSize = const Size(1400, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1400, 900));
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          appBar: FileTopBar(
-            currentPath: '/docs',
-            rootPath: '',
-            isGridView: false,
-            isUnifiedView: false,
-            onToggleUnifiedView: () {},
-            isSearchMode: false,
-            isUploading: false,
-            isCreatingFolder: false,
-            isRefreshing: false,
-            onGoHome: () {},
-            onGoUp: () {},
-            onToggleView: () {},
+          appBar: testFileTopBar(
             onSearchChanged: onSearchChanged,
             onSearchDraft: onSearchDraft,
-            onSearchClosed: onSearchClosed ?? () {},
-            onRefresh: () {},
-            onUploadPressed: () {},
-            onCreateFolderPressed: () {},
-            onNewFilePressed: () {},
+            onSearchClosed: onSearchClosed,
           ),
         ),
       ),

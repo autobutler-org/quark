@@ -8,6 +8,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/secure_storage.dart';
+import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2601: the General tab's high-contrast switch, for a platform with no
 /// contrast setting of its own, and the setting it saves.
@@ -34,9 +35,7 @@ void main() {
     bool highContrast = false,
     ValueChanged<bool>? onHighContrastChanged,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),

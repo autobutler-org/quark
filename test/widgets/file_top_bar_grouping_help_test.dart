@@ -3,13 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_view_chips.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/view_grouping_copy.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2037: Files offers List / Grid / **Unified** and never says what Unified
 /// means. The word names the mode; nothing named what it does.
 void main() {
   Future<void> pumpChips(WidgetTester tester, {required bool unified}) async {
-    tester.view.physicalSize = const Size(1200, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1200, 800));
 
     await tester.pumpWidget(
       MaterialApp(

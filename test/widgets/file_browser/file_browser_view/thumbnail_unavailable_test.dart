@@ -14,28 +14,25 @@ import 'package:quark/widgets/file_browser/file_browser_view/file_list_leading.d
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// A Quark with no thumbnail for any file: every load is a 404.
-class _MissingThumbnails extends Fake implements BaseCacheManager {
-  @override
-  Stream<FileResponse> getFileStream(
-    String url, {
-    String? key,
-    Map<String, String>? headers,
-    bool withProgress = false,
-  }) async* {
-    throw HttpExceptionWithStatus(404, 'missing', uri: Uri.parse(url));
-  }
-
-  @override
-  Future<void> removeFile(String key) async {}
-}
+import '../../../support/fake_thumbnail_store.dart';
 
 /// #3559: a video whose thumbnail no one could make showed the same generic
 /// icon as a file with no thumbnail at all, and said nothing about why.
 void main() {
   // Set, never read: reading builds the real store, which needs a platform
   // channel. Each test file runs in its own isolate.
-  setUpAll(() => ThumbnailCacheManager.instance = _MissingThumbnails());
+  setUpAll(
+    () =>
+        ThumbnailCacheManager
+            .instance = // A Quark with no thumbnail for any file: every load is a 404.
+        FakeThumbnailStore(
+          (url) => throw HttpExceptionWithStatus(
+            404,
+            'missing',
+            uri: Uri.parse(url),
+          ),
+        ),
+  );
 
   FileNode video(String name) => FileNode(
     name: name,
