@@ -15,6 +15,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// The Calendar page (#1148, #2519): its views at their own URLs, Week by
 /// default or the view chosen in Settings (#2521), the date kept across
 /// switches, the event form, and weeks that start where the device's locale
@@ -167,9 +169,7 @@ void main() {
     Size size, {
     GoRouterRedirect? redirect,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     final r = GoRouter(
       initialLocation: location,

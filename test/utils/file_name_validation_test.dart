@@ -7,6 +7,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2076 and #2074: a blank or overlong name closed the rename and new
 /// folder dialogs and did nothing, with no word about why. The dialogs now
 /// keep the name, say what is wrong with it, and only offer the button for a
@@ -108,9 +110,7 @@ void main() {
 
     Future<void> open(WidgetTester tester) async {
       outcome = _Outcome();
-      tester.view.physicalSize = const Size(1280, 1600);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, const Size(1280, 1600));
       await tester.pumpWidget(
         MaterialApp(
           home: Builder(

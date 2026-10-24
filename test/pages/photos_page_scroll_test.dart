@@ -13,6 +13,8 @@ import 'package:quark/router.dart';
 import 'package:quark/services/demo_photos_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3111: on a phone, picking an album scrolls the grid into view once, to a
 /// position the new layout can hold. Every case here watches the scroll
 /// position frame by frame: the defect was a scroll past the end that sprang
@@ -88,9 +90,7 @@ void main() {
     TargetPlatform platform = TargetPlatform.iOS,
     Size size = phone,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     final router = GoRouter(
       initialLocation: AppRoutes.photos,

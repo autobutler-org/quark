@@ -8,6 +8,8 @@ import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #1709: the app bar carried a close button plus eight more icons, so on a
 /// phone the close X sat on top of the prev chevron. Narrow layouts now fold
 /// the secondary actions into the more menu.
@@ -30,9 +32,7 @@ void main() {
   /// Pumps the viewer on photo 1 of 3. `relPath` stays null so no metadata
   /// fetch is attempted.
   Future<void> pumpViewer(WidgetTester tester, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         home: ImageViewerPage(

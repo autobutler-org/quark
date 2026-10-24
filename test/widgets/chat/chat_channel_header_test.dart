@@ -16,9 +16,7 @@ void main() {
     Size size,
     ChatChannelHeader header,
   ) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),

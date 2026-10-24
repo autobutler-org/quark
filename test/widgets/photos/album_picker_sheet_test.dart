@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/photos/album_picker_sheet.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// The album picker host (#2585): it shows the package picker in the shared
 /// sheet, titled with how many photos are going in, and its close button
 /// answers null without picking.
@@ -14,9 +16,7 @@ void main() {
     testWidgets('titles the sheet for $count and closes without a pick', (
       tester,
     ) async {
-      tester.view.physicalSize = const Size(360, 640);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, const Size(360, 640));
       final picks = <AlbumItem?>[];
 
       await tester.pumpWidget(

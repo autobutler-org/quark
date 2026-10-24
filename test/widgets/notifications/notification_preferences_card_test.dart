@@ -9,6 +9,8 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/notifications/notification_preferences_card.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2493: the Settings switches that turn each notification type on or off.
 void main() {
   const dueToggle = ValueKey('notification_toggle_backup_due');
@@ -56,9 +58,7 @@ void main() {
     NotificationsController controller, {
     Size size = const Size(1280, 800),
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
@@ -150,9 +150,7 @@ void main() {
   testWidgets('shows a loader until the choices arrive', (tester) async {
     final answer = Completer<Set<String>>();
     final controller = build(read: () => answer.future);
-    tester.view.physicalSize = const Size(360, 640);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(360, 640));
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),

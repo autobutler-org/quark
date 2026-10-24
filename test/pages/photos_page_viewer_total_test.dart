@@ -13,6 +13,8 @@ import 'package:quark/pages/photos_page.dart';
 import 'package:quark/services/demo_photos_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3357: opened from a 364-photo library with one page of 50 loaded, the
 /// viewer read "41 / 50" and stopped at photo 50, because Photos passed it
 /// the loaded count and no way to load more.
@@ -39,9 +41,7 @@ void main() {
 
   testWidgets('the viewer counts the whole library and pages past the first '
       '50', (tester) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
 
     final pages = <int>[];
     final controller = PhotosController(

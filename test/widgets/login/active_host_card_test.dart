@@ -7,6 +7,7 @@ import 'package:quark/widgets/login/active_host_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/secure_storage.dart';
+import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2069: opening Change host showed the active Quark on the summary card
 /// and again as the selected radio, so the address appeared twice. While
@@ -34,9 +35,7 @@ void main() {
     Size size, {
     required bool managingHosts,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     await tester.pumpWidget(
       MaterialApp(

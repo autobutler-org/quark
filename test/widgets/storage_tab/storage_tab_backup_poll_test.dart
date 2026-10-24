@@ -11,6 +11,7 @@ import 'package:quark/widgets/system/storage_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/secure_storage.dart';
+import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// #3084: the Storage tab polls a snapshot backup's status every two seconds.
 /// A 404 means the job is gone for good, so the poll stops and the tab drops
@@ -76,9 +77,7 @@ void main() {
 
   /// Starts a backup from the tab and confirms it, leaving the job polling.
   Future<void> startBackup(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: StorageTab())),
     );

@@ -7,6 +7,7 @@ import 'package:quark/pages/settings_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/unreachable_quark.dart';
 
 /// #1606: a bug report needs the client build, not just the Quark's. Settings
@@ -39,9 +40,7 @@ void main() {
   /// Settings never settles — its SBOM section keeps a spinner turning — so
   /// pump far enough for the bundle read and every Quark-bound load to finish.
   Future<void> pumpSettings(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1200, 2400));
 
     // Settings overflows its own app bar by 28px at any viewport — the brand
     // button against a fixed `leadingWidth` — with or without this change.

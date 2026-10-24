@@ -6,6 +6,8 @@ import 'package:quark/widgets/file_browser/file_browser_view.dart';
 
 import '../../../support/text_scale.dart' show narrowViewport, wideViewport;
 
+import '../../../support/tap_target_guidelines.dart' show setViewport;
+
 FileNode _node(
   String name, {
   DateTime? modifiedAt,
@@ -38,9 +40,7 @@ void main() {
     Set<FileListColumn>? columns,
     bool showFileSizeAndMenu = true,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

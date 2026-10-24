@@ -12,6 +12,7 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2691: column widths, row heights and frozen panes live in the `.qsheet`
 /// tab beside its data, and sheets saved before them still open. #2694: so do
@@ -59,9 +60,7 @@ void main() {
       return http.Response('{}', 200);
     });
     resetSharedHttpClient();
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       const MaterialApp(home: SpreadsheetEditorPage(filePath: 'budget.qsheet')),
     );

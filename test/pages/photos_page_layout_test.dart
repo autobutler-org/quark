@@ -4,6 +4,8 @@ import 'package:quark/pages/photos_page.dart';
 import 'package:quark/widgets/photos/photos_bar_bottom.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 // The photos view rendered nothing below 900px: the compact branch puts the
 // sidebar in a SliverToBoxAdapter, which hands its child unbounded height, and
 // the sidebar ended in an `Expanded`. That combination throws during
@@ -17,9 +19,7 @@ void main() {
   const desktopSize = Size(1400, 900);
 
   Future<PhotosPageState> pumpPhotos(WidgetTester tester, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(const MaterialApp(home: PhotosPage()));
     await tester.pump();
     return tester.state<PhotosPageState>(find.byType(PhotosPage));

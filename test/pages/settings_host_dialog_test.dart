@@ -8,6 +8,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// Saving a Quark from the Settings dialog changes the active host, which
 /// re-runs the router's terms gate and replaces the Settings page (#1623).
@@ -59,9 +60,7 @@ void main() {
   const seedAddress = 'http://127.0.0.1:1';
 
   Future<void> pumpSettings(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1200, 2400));
 
     await settings.addHost(HostEntry(name: 'Seed', hostAddress: seedAddress));
     await settings.acceptTerms();

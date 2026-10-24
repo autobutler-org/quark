@@ -15,6 +15,8 @@ import 'package:quark/services/auth_service.dart';
 import 'support/fake_chat.dart';
 import 'support/secure_storage.dart';
 
+import 'support/tap_target_guidelines.dart' show setViewport;
+
 void main() {
   group('AppRoutes.encodeFilePath', () {
     test('leaves an ordinary path untouched', () {
@@ -536,9 +538,7 @@ void main() {
     testWidgets('Forgot password is a history entry browser Back leaves', (
       tester,
     ) async {
-      tester.view.physicalSize = const Size(1200, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, const Size(1200, 2400));
 
       final r = GoRouter(
         initialLocation: AppRoutes.login,

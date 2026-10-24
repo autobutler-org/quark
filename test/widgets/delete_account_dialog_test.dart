@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/settings/delete_account_dialog.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #1762: App Store Review Guideline 5.1.1(v) needs deletion initiated in the
 /// app, and a destructive action needs friction in front of it. These pin the
 /// friction — the account's password (#2346) — and the two things the dialog must not
@@ -30,9 +32,7 @@ void main() {
     String? username = 'ada',
     List<String>? events,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     final confirmations = <String>[];
     await tester.pumpWidget(

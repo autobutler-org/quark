@@ -1,33 +1,17 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/groups_service.dart';
 import 'package:quark/utils/error_text.dart';
+
+import '../support/fake_quark_http.dart';
 
 /// The admin group routes the Groups tab calls (#1910), and which refusals
 /// get the app's copy rather than the Quark's.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  final requests = <http.Request>[];
-
-  /// Answers every request with [status] and [body], recording it.
-  void answer(int status, Object? body) {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = () => MockClient((request) async {
-      requests.add(request);
-      return http.Response(jsonEncode(body), status);
-    });
-  }
-
-  setUp(requests.clear);
-  tearDown(() {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = buildLocalTrustHttpClient;
-  });
+  useFakeQuark();
 
   Matcher throwsMessage(String message) => throwsA(
     isA<MessageException>().having((e) => e.message, 'message', message),

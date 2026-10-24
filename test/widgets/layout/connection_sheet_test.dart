@@ -8,6 +8,8 @@ import 'package:quark/widgets/layout/connection_sheet.dart';
 import 'package:quark/widgets/layout/connection_sheet_button.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2857: tapping the app bar's connection indicator opens a sheet that
 /// says how the app reaches its Quark and links to remote access settings.
 void main() {
@@ -18,9 +20,7 @@ void main() {
     required ValueChanged<String> onNavigate,
     Size size = const Size(1280, 800),
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.dark(themeColor: QuarkThemeColor.classic),

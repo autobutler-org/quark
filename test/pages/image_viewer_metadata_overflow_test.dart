@@ -7,6 +7,8 @@ import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/widgets/image_viewer/metadata_drawer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3364: a RenderFlex overflow showed up in the console on a phone, from a
 /// layout squeezed during a transition. Every frame of opening the viewer,
 /// hiding and showing the info sheet, dragging it and closing the viewer is
@@ -35,9 +37,7 @@ void main() {
     testWidgets('no overflow at ${size.width.toInt()}x${size.height.toInt()}', (
       tester,
     ) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
 
       final overflows = <String>[];
       final previous = FlutterError.onError;

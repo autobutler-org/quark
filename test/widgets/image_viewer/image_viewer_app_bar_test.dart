@@ -5,6 +5,8 @@ import 'package:quark/widgets/image_viewer/image_viewer_more_menu.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// Share in the photo viewer's more menu (#1911): offered for a photo on the
 /// Quark at any width, and never for a photo from the device.
 void main() {
@@ -16,11 +18,10 @@ void main() {
     String? relPath,
   }) async {
     final events = <String>[];
-    tester.view.physicalSize = isDesktop
-        ? const Size(1400, 900)
-        : const Size(390, 844);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(
+      tester,
+      isDesktop ? const Size(1400, 900) : const Size(390, 844),
+    );
 
     await tester.pumpWidget(
       MaterialApp(

@@ -8,6 +8,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/secure_storage.dart';
+import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// #1812: the General tab's left-handed switch and the setting it saves.
 void main() {
@@ -33,9 +34,7 @@ void main() {
     bool leftHanded = false,
     ValueChanged<bool>? onLeftHandedChanged,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),

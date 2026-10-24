@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/recover_page.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2031: setup shows a strength meter while a password is chosen; the
 /// recovery form asked for a new password with nothing but "At least 8
 /// characters". The two screens ask for the same thing and should help the
@@ -10,9 +12,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// weak.
 void main() {
   Future<void> pumpRecover(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(700, 1600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(700, 1600));
 
     await tester.pumpWidget(
       const MaterialApp(home: RecoverPage(onRecoverSuccess: null)),

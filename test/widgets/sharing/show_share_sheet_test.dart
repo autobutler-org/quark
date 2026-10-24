@@ -10,6 +10,7 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
 import '../../support/text_scale.dart';
 
 /// The share sheet host (#1911). Removing or demoting an owner can leave an
@@ -90,9 +91,7 @@ void main() {
 
   Future<void> openSheet(WidgetTester tester, {bool setView = true}) async {
     if (setView) {
-      tester.view.physicalSize = const Size(1280, 800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, const Size(1280, 800));
     }
 
     await tester.pumpWidget(
@@ -258,9 +257,7 @@ void main() {
       Size size = const Size(1280, 800),
     }) async {
       calls = [];
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       final target = ChatChannelShareTarget(
         channel: channel,
         selfUserId: 7,

@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/storage_devices/device_card.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2047: the Devices page led with "Root Volume" and `/ · overlay`, which
 /// reads like a Linux admin panel rather than a household's own storage. The
 /// backend stopped saying "Root Volume" (see `rootDeviceName`); the card now
@@ -26,9 +28,7 @@ void main() {
   }
 
   Future<void> pumpCard(WidgetTester tester, StorageDevice d) async {
-    tester.view.physicalSize = const Size(700, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(700, 1200));
 
     await tester.pumpWidget(
       MaterialApp(

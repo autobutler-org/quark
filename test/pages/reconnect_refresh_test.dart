@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -11,8 +9,8 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../support/fake_events_channel.dart';
 import '../support/secure_storage.dart';
 
 /// Events published while the event socket is down never arrive, and the
@@ -25,7 +23,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   final connectChannelDefault = EventsService.connectChannel;
-  final channels = <ControlledChannel>[];
+  final channels = <FakeChannel>[];
   var requests = 0;
 
   setUpAll(mockSecureStorage);
@@ -44,7 +42,7 @@ void main() {
     });
     channels.clear();
     EventsService.connectChannel = (uri, {headers}) {
-      final channel = ControlledChannel();
+      final channel = FakeChannel(opened: false);
       channels.add(channel);
       return channel;
     };
@@ -149,37 +147,4 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     EventsService.instance.stop();
   });
-}
-
-/// A socket that opens when the test says so and closes when the test says
-/// the Quark closed it.
-class ControlledChannel implements WebSocketChannel {
-  final _ready = Completer<void>();
-  final _incoming = StreamController<dynamic>();
-
-  @override
-  Future<void> get ready => _ready.future;
-
-  @override
-  Stream<dynamic> get stream => _incoming.stream;
-
-  @override
-  WebSocketSink get sink => _Sink();
-
-  void open() => _ready.complete();
-
-  void closeFromServer() => _incoming.close();
-
-  void send(String data) => _incoming.add(data);
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _Sink implements WebSocketSink {
-  @override
-  Future<void> close([int? closeCode, String? closeReason]) async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/router.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2607: on a phone, picking a sidebar row brings the grid back into view.
 /// Under reduced motion it jumps there instead of scrolling.
 void main() {
@@ -29,9 +31,7 @@ void main() {
   /// top so the sidebar shows, and returns its scroll position.
   Future<ScrollPosition> pumpAtSidebar(WidgetTester tester) async {
     // Short enough that the sidebar and the grid scroll as one.
-    tester.view.physicalSize = const Size(390, 400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(390, 400));
 
     final router = GoRouter(
       initialLocation: AppRoutes.photos,

@@ -13,6 +13,7 @@ import 'package:quark/services/storage_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #3727: a share on a USB drive opens on that drive. Picking it in Shared
 /// with me used to keep only its path, so the stat asked the internal drive,
@@ -98,9 +99,7 @@ void main() {
   /// Pumps the app's real `/files` routes beside a stub viewer, opens Shared
   /// with me and picks [relPath].
   Future<GoRouter> pickShare(WidgetTester tester, String relPath) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1600, 1000));
     final router = GoRouter(
       initialLocation: '/files',
       routes: [

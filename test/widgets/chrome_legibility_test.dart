@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/calendar/calendar_bar_bottom.dart';
-import 'package:quark/widgets/file_browser/file_top_bar.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
@@ -12,7 +11,9 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/file_top_bar.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2740: under a picked theme color the app bar and the drawer are a
 /// saturated surface of their own, so every text and icon the app draws on
@@ -96,9 +97,7 @@ void main() {
     ThemeData theme,
     PreferredSizeWidget appBar,
   ) async {
-    tester.view.physicalSize = const Size(1280, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 1200));
     await tester.pumpWidget(
       MaterialApp(
         theme: theme,
@@ -113,25 +112,8 @@ void main() {
   }
 
   final bars = <String, PreferredSizeWidget Function()>{
-    'Files': () => FileTopBar(
+    'Files': () => testFileTopBar(
       currentPath: '/docs/reports/2026',
-      rootPath: '',
-      isGridView: false,
-      isUnifiedView: false,
-      onToggleUnifiedView: () {},
-      isSearchMode: false,
-      isUploading: false,
-      isCreatingFolder: false,
-      isRefreshing: false,
-      onGoHome: () {},
-      onGoUp: () {},
-      onToggleView: () {},
-      onSearchChanged: (_) {},
-      onSearchClosed: () {},
-      onRefresh: () {},
-      onUploadPressed: () {},
-      onCreateFolderPressed: () {},
-      onNewFilePressed: () {},
       onPathSelected: (_) {},
       onStartSelection: () {},
     ),

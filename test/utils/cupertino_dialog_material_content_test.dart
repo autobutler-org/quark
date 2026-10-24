@@ -4,6 +4,8 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// On iOS, [QuarkWidget.alertDialog] builds a CupertinoAlertDialog, which puts
 /// no Material in the tree. Callers hand the same content to both branches, so
 /// any Material widget in that content — a dropdown, an InkWell, a list tile —
@@ -129,9 +131,7 @@ void main() {
     // A dialog on a phone leaves the dropdown ~174 logical pixels. The device
     // name is arbitrary length, so the button has to give way rather than size
     // to its label and overflow its own row.
-    tester.view.physicalSize = const Size(320, 640);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(320, 640));
 
     await openMoveRename(
       tester,

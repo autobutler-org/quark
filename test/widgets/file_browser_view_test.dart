@@ -7,6 +7,8 @@ import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_grid_preview.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 void main() {
   Future<void> pumpFileBrowserView(
     WidgetTester tester, {
@@ -259,9 +261,7 @@ void main() {
     for (final size in const [Size(360, 640), Size(1280, 800)]) {
       final label = '${size.width.toInt()}x${size.height.toInt()}';
       testWidgets('are square at $label, with no overflow', (tester) async {
-        tester.view.physicalSize = size;
-        tester.view.devicePixelRatio = 1.0;
-        addTearDown(tester.view.reset);
+        setViewport(tester, size);
 
         await tester.pumpWidget(
           MaterialApp(

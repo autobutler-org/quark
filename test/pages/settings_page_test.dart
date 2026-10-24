@@ -10,6 +10,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/text_scale.dart';
 import '../support/unreachable_quark.dart';
 import '../support/secure_storage.dart';
@@ -116,9 +117,7 @@ void main() {
   Finder updateButton() => find.byKey(const ValueKey('settings_start_update'));
 
   Future<void> pumpUpdates(WidgetTester tester, SettingsPage page) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),

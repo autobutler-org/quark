@@ -10,6 +10,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3193: the Move / Rename dialog could not reliably move a file to another
 /// storage device. Each test drives the Files page's move action through the
 /// real dialog and reads the `PUT /api/v0/files` body it sends, if any.
@@ -111,9 +113,7 @@ void main() {
     WidgetTester tester,
     FileNode moved,
   ) async {
-    tester.view.physicalSize = const Size(1280, 1600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 1600));
     late Future<FileMenuActionOutcome?> outcome;
     await tester.pumpWidget(
       MaterialApp(

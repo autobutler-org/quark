@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/vault/vault_start_over_dialog.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3615: starting the vault over erases every saved login, so the dialog
 /// asks for the login password and sends nothing until one is typed.
 void main() {
@@ -22,9 +24,7 @@ void main() {
     List<String> confirmed,
     List<bool> canceled,
   ) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

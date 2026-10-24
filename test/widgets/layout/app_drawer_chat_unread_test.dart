@@ -10,6 +10,7 @@ import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../../support/secure_storage.dart';
+import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2424: the drawer's Chat row carries a dot while any channel holds an
 /// unread message, read as the drawer opens and cleared live.
@@ -27,9 +28,7 @@ void main() {
     Size size,
     ChatUnreadController unread,
   ) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),

@@ -8,6 +8,7 @@ import 'package:quark/pages/system_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/unreachable_quark.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -66,9 +67,7 @@ void main() {
     Widget Function(BuildContext) page, {
     bool settle = true,
   }) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1200, 2400));
 
     // Installed here, not in setUp: testWidgets replaces FlutterError.onError
     // when the test body starts, so an earlier hook would be overwritten.

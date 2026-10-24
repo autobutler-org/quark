@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -12,9 +11,9 @@ import 'package:quark/services/events_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../support/text_scale.dart';
+import '../support/fake_events_channel.dart';
 import '../support/secure_storage.dart';
 
 /// #2606, #2603, #2605: the trash survives 200% text on a phone and a desktop,
@@ -57,7 +56,8 @@ void main() {
     await AppSettings.instance.setSessionToken('a-token');
     // The device listing is cached across calls, and so across tests.
     StorageService.invalidateDeviceCache();
-    EventsService.connectChannel = (uri, {headers}) => _SilentChannel();
+    EventsService.connectChannel = (uri, {headers}) =>
+        FakeChannel(opened: false);
     serve([]);
   });
 
@@ -88,28 +88,4 @@ void main() {
     expect(tester.takeException(), isNull);
     await expectTapTargetGuidelines(tester);
   });
-}
-
-class _SilentChannel implements WebSocketChannel {
-  final _incoming = StreamController<dynamic>();
-
-  @override
-  Future<void> get ready => Completer<void>().future;
-
-  @override
-  Stream<dynamic> get stream => _incoming.stream;
-
-  @override
-  WebSocketSink get sink => _SilentSink();
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _SilentSink implements WebSocketSink {
-  @override
-  Future<void> close([int? closeCode, String? closeReason]) async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

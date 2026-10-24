@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/photos/album_actions_menu.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2267: an album's menu opens at the pointer, like every other item's, from
 /// its button, a long press and a right-click alike.
 void main() {
@@ -21,9 +23,7 @@ void main() {
     required Size size,
     required List<String> events,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     await tester.pumpWidget(
       MaterialApp(

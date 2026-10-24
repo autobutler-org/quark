@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/setup/setup_form.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2021: rebuilding the password field on every keystroke restarts the
 /// decorator's helper/error fade, so "At least 8 characters" overlaps the
 /// length error while a password is typed. The length error is a different
@@ -28,9 +30,7 @@ void main() {
   });
 
   Future<void> pumpForm(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(600, 1600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(600, 1600));
 
     final usernameFocus = FocusNode();
     final passwordFocus = FocusNode();

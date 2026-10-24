@@ -12,6 +12,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/widgets/login/host_switcher.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// The setup page carries the login page's host switcher, and every Quark it
 /// lands on is asked whether it has been claimed: a claimed one sends the user
 /// to login, an unreachable one shows the disconnected banner.
@@ -49,9 +51,7 @@ void main() {
   });
 
   Future<void> pumpSetup(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(700, 1600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(700, 1600));
 
     final router = GoRouter(
       initialLocation: AppRoutes.setup,

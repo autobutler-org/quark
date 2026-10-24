@@ -5,6 +5,8 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/widgets/login/sign_in_form.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3591: on web, Flutter puts a real `<input>` in the DOM only for the
 /// focused field, plus one for every other field in that field's
 /// [AutofillGroup]. With no group, focusing Username left no password input
@@ -45,9 +47,7 @@ void main() {
     testWidgets('$name: username and password share one autofill group', (
       tester,
     ) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       await tester.pumpWidget(
         MaterialApp(
           home: LoginPage(

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/login/sign_in_form.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2030: the sign-in screen always offered "First time here? Set up this
 /// Quark", including on a Quark that already has an owner, where it leads to
 /// a wizard that will refuse. #1827 put it there because a slow or failed
@@ -10,9 +12,7 @@ import 'package:quark/widgets/login/sign_in_form.dart';
 /// an owner".
 void main() {
   Future<void> pumpForm(WidgetTester tester, {bool? setupComplete}) async {
-    tester.view.physicalSize = const Size(600, 1400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(600, 1400));
 
     final formKey = GlobalKey<FormState>();
     final username = TextEditingController();

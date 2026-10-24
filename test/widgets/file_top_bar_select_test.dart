@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quark/widgets/file_browser/file_top_bar.dart';
+
+import '../support/file_top_bar.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2057: Files has had multi-select and batch delete since #986, entered by
 /// long-pressing a row. A mouse does not long-press, so on the web the whole
@@ -11,34 +13,12 @@ void main() {
     WidgetTester tester, {
     VoidCallback? onStartSelection,
   }) async {
-    tester.view.physicalSize = const Size(1400, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1400, 900));
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          appBar: FileTopBar(
-            currentPath: '/docs',
-            rootPath: '',
-            isGridView: false,
-            isUnifiedView: false,
-            onToggleUnifiedView: () {},
-            isSearchMode: false,
-            isUploading: false,
-            isCreatingFolder: false,
-            isRefreshing: false,
-            onGoHome: () {},
-            onGoUp: () {},
-            onToggleView: () {},
-            onSearchChanged: (_) {},
-            onSearchClosed: () {},
-            onRefresh: () {},
-            onUploadPressed: () {},
-            onCreateFolderPressed: () {},
-            onNewFilePressed: () {},
-            onStartSelection: onStartSelection,
-          ),
+          appBar: testFileTopBar(onStartSelection: onStartSelection),
         ),
       ),
     );

@@ -3,15 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/terms_page.dart';
 import 'package:quark/widgets/terms/agree_button.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2007: on a phone the terms stopped flush against the fixed I Agree bar,
 /// which reads as text cut off rather than text that has ended — and the bar
 /// had no surface of its own, so it looked like part of the page it was
 /// covering.
 void main() {
   Future<void> pumpTerms(WidgetTester tester, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     await tester.pumpWidget(const MaterialApp(home: TermsPage()));
     await tester.pumpAndSettle();

@@ -2,40 +2,11 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/thumbnail_cache_manager.dart';
 import 'package:quark/widgets/photos/photo_thumbnail.dart';
 
-/// Serves one PNG for every thumbnail and counts the fetches.
-class _FakeThumbnailStore extends Fake implements BaseCacheManager {
-  _FakeThumbnailStore(this.png);
-
-  final Uint8List png;
-  final _files = MemoryCacheSystem();
-  var fetches = 0;
-
-  @override
-  Stream<FileResponse> getFileStream(
-    String url, {
-    String? key,
-    Map<String, String>? headers,
-    bool withProgress = false,
-  }) async* {
-    fetches++;
-    final file = await _files.createFile(Uri.parse(url).pathSegments.last);
-    await file.writeAsBytes(png);
-    yield FileInfo(
-      file,
-      FileSource.Online,
-      DateTime.now().add(const Duration(days: 1)),
-      url,
-    );
-  }
-
-  @override
-  Future<void> removeFile(String key) async {}
-}
+import '../../support/fake_thumbnail_store.dart';
 
 Future<Uint8List> _png() async {
   final recorder = ui.PictureRecorder();
@@ -77,7 +48,7 @@ void main() {
 
   testWidgets('a tile shown again reuses its decoded picture', (tester) async {
     final png = (await tester.runAsync(_png))!;
-    final store = _FakeThumbnailStore(png);
+    final store = FakeThumbnailStore.of(png);
     ThumbnailCacheManager.instance = store;
     final tile = MaterialApp(
       home: Center(
@@ -109,7 +80,7 @@ void main() {
       isTrue,
       reason: 'the picture was decoded again and replaced the cached one',
     );
-    expect(store.fetches, 1);
+    expect(store.fetched, hasLength(1));
     expect(tester.takeException(), isNull);
   });
 }

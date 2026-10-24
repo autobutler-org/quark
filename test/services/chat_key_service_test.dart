@@ -2,26 +2,15 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:quark/models/account_keys.dart';
 import 'package:quark/models/chat_keys.dart';
-import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/chat_key_service.dart';
+
+import '../support/fake_quark_http.dart';
 
 /// The chat key routes' wire shapes (#2416).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  final requests = <http.Request>[];
-
-  void answer(int status, Object? body) {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = () => MockClient((request) async {
-      requests.add(request);
-      return http.Response(jsonEncode(body), status);
-    });
-  }
 
   final keys = WrappedChatKeys(
     publicKeys: ChatPublicKeys(
@@ -33,11 +22,7 @@ void main() {
     kdfParams: KdfParams.standard,
   );
 
-  setUp(requests.clear);
-  tearDown(() {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = buildLocalTrustHttpClient;
-  });
+  useFakeQuark();
 
   test('no keys yet reads as null, not an error', () async {
     answer(404, {'error': 'no chat keys for that account'});

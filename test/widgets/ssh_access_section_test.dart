@@ -4,6 +4,8 @@ import 'package:quark/controllers/ssh_access_controller.dart';
 import 'package:quark/models/ssh_access_status.dart';
 import 'package:quark/widgets/settings/ssh_access_section.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2131: turning SSH on opens a shell to the network, so it asks first; and
 /// the password dialog will not submit a short or mistyped password.
 void main() {
@@ -13,9 +15,7 @@ void main() {
   final toggle = find.byKey(const ValueKey('ssh_enabled_switch'));
 
   Future<List<String>> pumpSection(WidgetTester tester, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     final calls = <String>[];
     final controller = SshAccessController(

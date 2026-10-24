@@ -12,6 +12,8 @@ import 'package:quark/utils/file_viewer_actions.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3728: Download in the photo viewer says it downloaded, as the PDF and
 /// generic viewers do (#3160).
 void main() {
@@ -44,9 +46,7 @@ void main() {
       saves.add((path, serial, fileName));
       return '/home/me/$fileName';
     };
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(390, 844));
     await tester.pumpWidget(
       MaterialApp(
         home: ImageViewerPage(

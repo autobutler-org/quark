@@ -4,6 +4,8 @@ import 'package:quark/models/account_request_decision.dart';
 import 'package:quark/widgets/users/recent_decisions/recent_decisions_list.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../../support/tap_target_guidelines.dart' show setViewport;
+
 /// The Recent decisions list on the Users page (#2730): loading, the error,
 /// the empty list and the rows, on a phone and a desktop.
 void main() {
@@ -24,9 +26,7 @@ void main() {
 
   /// Pumps [list] at [size] in a scroll view, as the page holds it.
   Future<void> pumpAt(WidgetTester tester, Size size, Widget list) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),

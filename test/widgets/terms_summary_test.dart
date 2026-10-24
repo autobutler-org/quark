@@ -3,14 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/terms_page.dart';
 import 'package:quark/widgets/terms/terms_summary.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2027: the first thing a new owner read was a full legal document, with no
 /// short statement of the three things that actually shape how they use a
 /// Quark. The summary sits above the terms, and says it is a summary.
 void main() {
   Future<void> pumpTerms(WidgetTester tester, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     await tester.pumpWidget(const MaterialApp(home: TermsPage()));
     await tester.pumpAndSettle();

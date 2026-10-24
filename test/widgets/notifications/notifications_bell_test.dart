@@ -8,6 +8,8 @@ import 'package:quark/services/events_service.dart';
 import 'package:quark/widgets/notifications/notifications_bell.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2493: the app bar's bell counts the account's notifications and opens
 /// them in a sheet, where tapping one goes to its page.
 void main() {
@@ -45,9 +47,7 @@ void main() {
     ValueChanged<String>? onNavigate,
     Size size = const Size(1280, 800),
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.dark(themeColor: QuarkThemeColor.classic),

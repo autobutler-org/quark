@@ -5,6 +5,8 @@ import 'package:quark/models/photo_metadata.dart';
 import 'package:quark/widgets/image_viewer/metadata_drawer.dart';
 import 'package:quark/widgets/image_viewer/mobile_body.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #3359: on a phone the info sheet peeked with File info and Albums below
 /// the screen edge, and neither its handle nor its rows dragged it up.
 void main() {
@@ -36,9 +38,7 @@ void main() {
     WidgetTester tester,
     Size size,
   ) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final controller = DraggableScrollableController();
     addTearDown(controller.dispose);
     await tester.pumpWidget(

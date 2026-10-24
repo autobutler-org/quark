@@ -11,6 +11,8 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// The code viewer page (#2991): what it shows for a file, a file too large
 /// for one page, and a failed read, and where its bar's buttons go.
 void main() {
@@ -88,9 +90,7 @@ void main() {
     testWidgets('shows the file under its name at ${size.width}', (
       tester,
     ) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
 
       await pumpViewer(
         tester,

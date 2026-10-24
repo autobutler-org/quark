@@ -8,6 +8,7 @@ import 'package:quark/widgets/host_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2721: a saved Quark with a pinned certificate offers Forget certificate,
 /// and one that presented a different certificate says so in its row.
@@ -29,9 +30,7 @@ void main() {
   setUpAll(mockSecureStorage);
 
   Future<void> pumpManager(WidgetTester tester, Size viewport) async {
-    tester.view.physicalSize = viewport;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, viewport);
     SharedPreferences.setMockInitialValues({
       'hosts': jsonEncode([
         {'name': 'Home', 'hostAddress': home},

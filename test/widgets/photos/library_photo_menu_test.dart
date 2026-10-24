@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/photos/library_photo_menu.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2276: a photo in the library has a menu from its button and a
 /// right-click, while a long press still selects it.
 void main() {
@@ -25,9 +27,7 @@ void main() {
     required List<String> events,
     bool isFavorite = false,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     await tester.pumpWidget(
       MaterialApp(

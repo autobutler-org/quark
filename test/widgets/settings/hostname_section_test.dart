@@ -7,6 +7,8 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/settings/hostname_field.dart';
 import 'package:quark/widgets/settings/hostname_section.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2344: the device name section is there only on a Quark that can be
 /// renamed, and a rename made in it moves the app's saved address.
 void main() {
@@ -25,9 +27,7 @@ void main() {
     Future<HostnameStatus> Function(String name)? setHostname,
     String title = 'Device name',
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final moves = <String>[];
     final controller = HostnameController(
       getStatus: getStatus,

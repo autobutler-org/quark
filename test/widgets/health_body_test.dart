@@ -4,15 +4,15 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/health_service.dart';
 import 'package:quark/widgets/health/health_body.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2011: the disk line has to say it is the whole disk, including system
 /// software, the same scope the Files footer already names.
 void main() {
   testWidgets('the disk card names the whole disk, not a percent change', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(800, 1200));
 
     await AppSettings.instance.addHost(
       HostEntry(name: 'Local', hostAddress: 'http://localhost:8080'),

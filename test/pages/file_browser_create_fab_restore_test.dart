@@ -12,105 +12,37 @@ import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/fake_io_http.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// Answers every call with just enough of a backend for the listing to render:
 /// a folder of PDFs, long enough to scroll.
-class _ListingClient implements HttpClient {
-  @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
-      _Request(url, _bodyFor(url));
+FakeIoQuark _listingQuark() =>
+    FakeIoQuark((method, url) async => (status: 200, body: _bodyFor(url)));
 
-  static String _bodyFor(Uri url) {
-    if (url.path.endsWith('/api/v0/files/stat')) {
-      final path = url.queryParameters['filePath'] ?? '';
-      return jsonEncode({
-        'isDir': false,
-        'fileType': 'pdf',
-        'name': path.split('/').last,
-      });
-    }
-    if (url.path.endsWith('/api/v0/files')) {
-      return jsonEncode([
-        for (var i = 0; i < 40; i++)
-          {
-            'name': 'file$i.pdf',
-            'size': 12,
-            'isDir': false,
-            'dirPath': '/file$i.pdf',
-            'fileType': 'pdf',
-          },
-      ]);
-    }
-    return '[]';
+String _bodyFor(Uri url) {
+  if (url.path.endsWith('/api/v0/files/stat')) {
+    final path = url.queryParameters['filePath'] ?? '';
+    return jsonEncode({
+      'isDir': false,
+      'fileType': 'pdf',
+      'name': path.split('/').last,
+    });
   }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _Request implements HttpClientRequest {
-  _Request(this.uri, this.body);
-  @override
-  final Uri uri;
-  final String body;
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  Future<HttpClientResponse> close() async => _Response(body);
-
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-
-  @override
-  Future<void> flush() async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _Response implements HttpClientResponse {
-  _Response(this.body);
-  final String body;
-
-  @override
-  int get statusCode => 200;
-  @override
-  int get contentLength => -1;
-  @override
-  bool get isRedirect => false;
-  @override
-  bool get persistentConnection => false;
-  @override
-  String get reasonPhrase => 'OK';
-  @override
-  List<Cookie> get cookies => const [];
-  @override
-  List<RedirectInfo> get redirects => const [];
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  StreamSubscription<List<int>> listen(
-    void Function(List<int>)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) => Stream<List<int>>.fromIterable([utf8.encode(body)]).listen(
-    onData,
-    onError: onError,
-    onDone: onDone,
-    cancelOnError: cancelOnError,
-  );
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _EmptyHeaders implements HttpHeaders {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
+  if (url.path.endsWith('/api/v0/files')) {
+    return jsonEncode([
+      for (var i = 0; i < 40; i++)
+        {
+          'name': 'file$i.pdf',
+          'size': 12,
+          'isDir': false,
+          'dirPath': '/file$i.pdf',
+          'fileType': 'pdf',
+        },
+    ]);
+  }
+  return '[]';
 }
 
 void main() {
@@ -137,9 +69,7 @@ void main() {
   testWidgets('the create FAB comes back after a pushed viewer pops', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(600, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(600, 900));
 
     await HttpOverrides.runZoned(() async {
       await tester.pumpWidget(
@@ -167,7 +97,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fabVisible(tester), isTrue, reason: 'back on the list (#1811)');
-    }, createHttpClient: (c) => _ListingClient());
+    }, createHttpClient: _listingQuark().createHttpClient);
   });
 
   // #1812: Files builds its own Scaffold, so it mirrors by reading the scope
@@ -176,9 +106,7 @@ void main() {
     testWidgets('left-handed $leftHanded puts the create FAB and the drawer '
         'on the matching edges', (tester) async {
       const size = Size(360, 640);
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
 
       await HttpOverrides.runZoned(() async {
         await tester.pumpWidget(
@@ -207,7 +135,7 @@ void main() {
           leftHanded ? size.width : 0,
         );
         expect(tester.takeException(), isNull);
-      }, createHttpClient: (c) => _ListingClient());
+      }, createHttpClient: _listingQuark().createHttpClient);
     });
   }
 }

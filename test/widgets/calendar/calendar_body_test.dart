@@ -34,9 +34,7 @@ void main() {
     onEventReschedule,
   }) async {
     final start = from ?? today;
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     var retries = 0;
     await tester.pumpWidget(
       MaterialApp(

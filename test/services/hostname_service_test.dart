@@ -1,26 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/hostname_service.dart';
 import 'package:quark/utils/error_text.dart';
+
+import '../support/fake_quark_http.dart';
 
 /// #2344: the admin-only `/api/v0/hostname` routes, as the app reads them.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  final requests = <http.Request>[];
-
-  /// Answers every request with [status] and [body], recording it.
-  void answer(int status, Object body) {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = () => MockClient((request) async {
-      requests.add(request);
-      return http.Response(jsonEncode(body), status);
-    });
-  }
 
   /// The sentence a user would read for what [request] throws.
   Future<String> failure(Future<Object?> request) async {
@@ -32,11 +20,7 @@ void main() {
     fail('the request did not throw');
   }
 
-  setUp(requests.clear);
-  tearDown(() {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = buildLocalTrustHttpClient;
-  });
+  useFakeQuark();
 
   test('reads a Quark that can be renamed', () async {
     answer(200, {

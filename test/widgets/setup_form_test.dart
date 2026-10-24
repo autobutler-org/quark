@@ -4,6 +4,8 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/username_rules.dart';
 import 'package:quark/widgets/setup/setup_form.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// #1946: the Quark refuses a new username outside its rule with 400, so the
 /// setup and request-account forms check the same rule before sending, and
 /// never rewrite what was typed.
@@ -48,9 +50,7 @@ void main() {
       String? title,
       String? submitLabel,
     }) async {
-      tester.view.physicalSize = const Size(360, 1200);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, const Size(360, 1200));
 
       final focus = [FocusNode(), FocusNode(), FocusNode()];
       addTearDown(() {

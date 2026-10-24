@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/services/app_settings.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/unreachable_quark.dart';
 
 /// #1746: the Demo mode switch lives on Settings, needs no Quark to be
@@ -33,9 +34,7 @@ void main() {
   });
 
   Future<void> pumpSettings(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1200, 2400));
 
     final priorOnError = FlutterError.onError;
     addTearDown(() => FlutterError.onError = priorOnError);

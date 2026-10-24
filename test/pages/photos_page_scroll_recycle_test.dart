@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -12,53 +11,32 @@ import 'package:quark/pages/photos_page.dart';
 import 'package:quark/services/thumbnail_cache_manager.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/fake_thumbnail_store.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// Serves every thumbnail from memory: a distinct, decodable PNG per photo,
 /// filled with that photo's own color, so a tile showing a neighbor's picture
 /// is as visible as one showing none.
-class _FakeThumbnailStore extends Fake implements BaseCacheManager {
-  _FakeThumbnailStore(this.images);
-
-  /// The PNG for each photo's file name.
-  final Map<String, Uint8List> images;
-
-  final _files = MemoryCacheSystem();
-
-  /// File names whose next fetch answers 503, as the Quark does when its IO
-  /// semaphore times out.
-  final failNext = <String>{};
-
-  /// Every fetch, by file name, in order.
-  final fetched = <String>[];
-
-  @override
-  Stream<FileResponse> getFileStream(
-    String url, {
-    String? key,
-    Map<String, String>? headers,
-    bool withProgress = false,
-  }) async* {
-    final name = Uri.parse(url).pathSegments.last;
-    fetched.add(name);
-    if (failNext.remove(name)) {
-      throw HttpExceptionWithStatus(
-        503,
-        'Service Unavailable',
-        uri: Uri.parse(url),
-      );
-    }
-    final file = await _files.createFile(name);
-    await file.writeAsBytes(images[name]!);
-    yield FileInfo(
-      file,
-      FileSource.Online,
-      DateTime.now().add(const Duration(days: 1)),
-      url,
+///
+/// A file name in [failNext] has its next fetch answer 503, as the Quark does
+/// when its IO semaphore times out.
+FakeThumbnailStore _store(
+  Map<String, Uint8List> images, {
+  Set<String>? failNext,
+}) => FakeThumbnailStore((url) {
+  final name = _nameOf(url);
+  if (failNext?.remove(name) ?? false) {
+    throw HttpExceptionWithStatus(
+      503,
+      'Service Unavailable',
+      uri: Uri.parse(url),
     );
   }
+  return images[name]!;
+});
 
-  @override
-  Future<void> removeFile(String key) async {}
-}
+/// The photo file name a thumbnail [url] asks for.
+String _nameOf(String url) => Uri.parse(url).pathSegments.last;
 
 const _count = 300;
 
@@ -201,7 +179,7 @@ void main() {
 
   Future<ScrollPosition> pumpPage(
     WidgetTester tester,
-    _FakeThumbnailStore store,
+    FakeThumbnailStore store,
     Size size,
   ) async {
     if (images.isEmpty) {
@@ -212,9 +190,7 @@ void main() {
       });
     }
     ThumbnailCacheManager.instance = store;
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     final cacheSize = imageCache.maximumSize;
     imageCache
       ..clear()
@@ -248,7 +224,7 @@ void main() {
   ]) {
     testWidgets('$label: tiles reload their thumbnails after scrolling away '
         'and back', (tester) async {
-      final store = _FakeThumbnailStore(images);
+      final store = _store(images);
       final position = await pumpPage(tester, store, size);
 
       final first = onScreen(tester);
@@ -274,7 +250,7 @@ void main() {
 
       for (final name in first) {
         // Fetched again: its decoded picture really was evicted.
-        expect(store.fetched.where((n) => n == name).length, 2);
+        expect(store.fetched.map(_nameOf).where((n) => n == name).length, 2);
         await expectShowsOwnThumbnail(tester, name);
       }
       expect(tester.takeException(), isNull);
@@ -282,7 +258,8 @@ void main() {
 
     testWidgets('$label: a tile whose reload answers 503 retries and ends on '
         'its thumbnail', (tester) async {
-      final store = _FakeThumbnailStore(images);
+      final failNext = <String>{};
+      final store = _store(images, failNext: failNext);
       final position = await pumpPage(tester, store, size);
       final first = onScreen(tester);
       final victim = first.first;
@@ -293,7 +270,7 @@ void main() {
       }
       expect(tileOf(victim), findsNothing);
 
-      store.failNext.add(victim);
+      failNext.add(victim);
       position.jumpTo(0);
       await settle(tester);
       // Long enough for any retry to come round.
@@ -303,7 +280,7 @@ void main() {
       }
 
       // Loaded, refused while busy, then loaded again.
-      expect(store.fetched.where((n) => n == victim).length, 3);
+      expect(store.fetched.map(_nameOf).where((n) => n == victim).length, 3);
       await expectShowsOwnThumbnail(tester, victim);
       expect(tester.takeException(), isNull);
     });

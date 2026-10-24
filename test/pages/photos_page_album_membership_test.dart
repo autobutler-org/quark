@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/albums_cache.dart';
@@ -18,33 +17,8 @@ import 'package:quark/router.dart';
 import 'package:quark/services/thumbnail_cache_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Serves one PNG for every thumbnail, the way the Quark's cache does.
-class _FakeThumbnailStore extends Fake implements BaseCacheManager {
-  _FakeThumbnailStore(this.png);
-
-  final Uint8List png;
-  final _files = MemoryCacheSystem();
-
-  @override
-  Stream<FileResponse> getFileStream(
-    String url, {
-    String? key,
-    Map<String, String>? headers,
-    bool withProgress = false,
-  }) async* {
-    final file = await _files.createFile(Uri.parse(url).pathSegments.last);
-    await file.writeAsBytes(png);
-    yield FileInfo(
-      file,
-      FileSource.Online,
-      DateTime.now().add(const Duration(days: 1)),
-      url,
-    );
-  }
-
-  @override
-  Future<void> removeFile(String key) async {}
-}
+import '../support/fake_thumbnail_store.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// A Quark with three photos and one album, "Trips", whose count is the
 /// number of photos in it, as the Quark counts.
@@ -138,7 +112,7 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    ThumbnailCacheManager.instance = _FakeThumbnailStore(png);
+    ThumbnailCacheManager.instance = FakeThumbnailStore.of(png);
   });
 
   tearDown(() {
@@ -164,9 +138,7 @@ void main() {
     _FakeQuark quark, {
     String location = AppRoutes.photos,
   }) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
 
     final controller = quark.controller(png);
     final router = GoRouter(

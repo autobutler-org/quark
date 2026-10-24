@@ -3,14 +3,13 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:quark/services/app_settings.dart';
-import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/settings_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/fake_quark_http.dart';
 import '../support/secure_storage.dart';
 
 /// #2740: the theme color calls, and the refresh that feeds [AppSettings.themeColor].
@@ -18,20 +17,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   final settings = AppSettings.instance;
-  final requests = <http.Request>[];
-
-  /// Answers each request with what [respond] returns for it, recording it.
-  void answerWith(http.Response Function(http.Request request) respond) {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = () => MockClient((request) async {
-      requests.add(request);
-      return respond(request);
-    });
-  }
-
-  /// Answers every request with [status] and [body], recording it.
-  void answer(int status, Object body) =>
-      answerWith((_) => http.Response(jsonEncode(body), status));
 
   /// Boots [AppSettings] on one host, signed in when [signedIn].
   Future<void> load({bool signedIn = true}) async {
@@ -45,11 +30,7 @@ void main() {
   }
 
   setUpAll(mockSecureStorage);
-  setUp(requests.clear);
-  tearDown(() {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = buildLocalTrustHttpClient;
-  });
+  useFakeQuark();
 
   group('the calls', () {
     setUp(load);

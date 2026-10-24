@@ -8,6 +8,7 @@ import 'package:quark/pages/users_page.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/text_scale.dart';
 
 /// The Users page in two tabs (#1910): the accounts with the recent decisions
@@ -58,9 +59,7 @@ void main() {
   testWidgets('opens on the accounts, with the groups on their own tab', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
 
     await tester.pumpWidget(
       MaterialApp(
@@ -88,9 +87,7 @@ void main() {
   });
   // #2730: who was let in or turned away, by whom and when.
   testWidgets('lists the recent decisions under the accounts', (tester) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
 
     await tester.pumpWidget(
       MaterialApp(
@@ -170,9 +167,7 @@ void main() {
             ? http.Response('', 404)
             : http.Response(jsonEncode(body), 200);
       });
-      tester.view.physicalSize = const Size(1280, 800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, const Size(1280, 800));
 
       await tester.pumpWidget(
         MaterialApp(

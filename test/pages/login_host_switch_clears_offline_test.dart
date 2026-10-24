@@ -13,6 +13,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/auth_salt.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// A Quark that never answers, which is what an address with nothing behind
 /// it looks like to the app.
@@ -58,9 +59,7 @@ void main() {
   });
 
   Future<void> pumpLogin(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(700, 1600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(700, 1600));
 
     await tester.pumpWidget(
       MaterialApp(home: LoginPage(onLoginSuccess: () {})),

@@ -13,6 +13,8 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/widgets/login/back_to_sign_in.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 /// #2067: setup, recovery, requesting an account and the terms gate are each
 /// alone on the navigator, so Android's Back closed the app from all of them.
 void main() {
@@ -53,9 +55,7 @@ void main() {
     String location,
     Widget page,
   ) async {
-    tester.view.physicalSize = const Size(700, 1600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(700, 1600));
     final router = GoRouter(
       initialLocation: location,
       routes: [

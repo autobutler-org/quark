@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quark/widgets/file_browser/file_top_bar.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+
+import '../support/file_top_bar.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2311: Files wears the shared QuarkAppBar, with its actions in the package
 /// bar buttons, and on a phone its secondary actions collapse into the bar's
@@ -12,33 +14,14 @@ void main() {
     Size size, {
     bool isSearchMode = false,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.dark(themeColor: QuarkThemeColor.classic),
         home: Scaffold(
-          appBar: FileTopBar(
-            currentPath: '/docs',
-            rootPath: '',
-            isGridView: false,
-            isUnifiedView: false,
-            onToggleUnifiedView: () {},
+          appBar: testFileTopBar(
             isSearchMode: isSearchMode,
-            isUploading: false,
-            isCreatingFolder: false,
-            isRefreshing: false,
-            onGoHome: () {},
-            onGoUp: () {},
-            onToggleView: () {},
-            onSearchChanged: (_) {},
-            onSearchClosed: () {},
-            onRefresh: () {},
-            onUploadPressed: () {},
-            onCreateFolderPressed: () {},
-            onNewFilePressed: () {},
             onStartSelection: () {},
           ),
           body: const SizedBox.shrink(),

@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_file_picker_platform.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2696: the control bar exports every tab of the spreadsheet as one Excel
 /// workbook, built by the Quark from the saved sheet and handed to the save
@@ -93,9 +94,7 @@ void main() {
     ('wide', Size(1280, 800)),
   ]) {
     Future<void> pumpEditor(WidgetTester tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       await tester.pumpWidget(
         const MaterialApp(
           home: SpreadsheetEditorPage(filePath: 'money/budget.qsheet'),

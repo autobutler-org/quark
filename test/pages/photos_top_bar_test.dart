@@ -13,6 +13,8 @@ import 'package:quark/widgets/notifications/notifications_bell.dart';
 import 'package:quark/widgets/photos/photos_bar_bottom.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 // The real Photos page under the real app-wide controls, at its most crowded:
 // the device paused (a labeled chip), jobs running and a three-digit
 // notification count. On a phone the page's actions used to paint over the
@@ -70,9 +72,7 @@ void main() {
     double textScale,
   ) async {
     final theme = QuarkTheme.dark(themeColor: QuarkThemeColor.classic);
-    tester.view.physicalSize = Size(width, 844);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, Size(width, 844));
     await tester.pumpWidget(
       MaterialApp(
         theme: theme.copyWith(

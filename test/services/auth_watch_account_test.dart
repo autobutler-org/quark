@@ -9,7 +9,7 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'events_service_test.dart' show FakeChannel, connectLocalTrustWsDefault;
+import '../support/fake_events_channel.dart';
 import '../support/secure_storage.dart';
 
 /// #3209: every app load asked the Quark for `/auth/status` and the account's

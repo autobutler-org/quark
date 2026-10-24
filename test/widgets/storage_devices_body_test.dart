@@ -8,6 +8,7 @@ import 'package:quark/widgets/storage_devices/storage_devices_body.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #1928: every drive action on the Devices page is admin-only on the Quark,
 /// so a non-admin was offered buttons that could only answer with a refusal.
@@ -74,9 +75,7 @@ void main() {
     ValueChanged<StorageDevice>? onBackup,
     ValueChanged<StorageDevice>? onVerify,
   }) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
 
     await tester.pumpWidget(
       MaterialApp(

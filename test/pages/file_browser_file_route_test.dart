@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -17,179 +16,83 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
+import '../support/fake_io_http.dart';
 import '../support/fake_video_player_platform.dart';
 import '../support/secure_storage.dart';
 
 /// Records the paths every outgoing request is sent to, and answers each one
-/// with an empty JSON listing so nothing under test hangs waiting.
-class _RecordingHttpOverrides extends HttpOverrides {
-  final List<Uri> requested = [];
-
-  @override
-  HttpClient createHttpClient(SecurityContext? context) =>
-      _RecordingClient(requested);
-}
-
-class _RecordingClient implements HttpClient {
-  _RecordingClient(this.requested);
-  final List<Uri> requested;
-
-  @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) async {
-    requested.add(url);
-    // A directory listing is the slow call in the real app — a folder with a
-    // lot of files is exactly when the empty-state flash was visible — so hold
-    // it open long enough for a test to pump inside the window. Recorded first,
-    // so a test asserting the request was issued does not have to wait for it.
-    if (url.path.endsWith('/api/v0/files')) {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    }
-    return _RecordingRequest(url, _bodyFor(url), _statusFor(url));
+/// with enough of a Quark that nothing under test hangs waiting.
+FakeIoQuark _recordingQuark() => FakeIoQuark((method, url) async {
+  // A directory listing is the slow call in the real app — a folder with a
+  // lot of files is exactly when the empty-state flash was visible — so hold
+  // it open long enough for a test to pump inside the window. Recorded first,
+  // so a test asserting the request was issued does not have to wait for it.
+  if (url.path.endsWith('/api/v0/files')) {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
   }
+  return (status: _statusFor(url), body: _bodyFor(url));
+});
 
-  /// A path under `missing` does not exist: stat and listing both 404, as the
-  /// Quark answers for a deep link to a folder that is not there.
-  static int _statusFor(Uri url) {
-    final path =
-        url.queryParameters['filePath'] ?? url.queryParameters['rootDir'] ?? '';
-    return path.startsWith('missing') || path.startsWith('/missing')
-        ? 404
-        : 200;
+/// A path under `missing` does not exist: stat and listing both 404, as the
+/// Quark answers for a deep link to a folder that is not there.
+int _statusFor(Uri url) {
+  final path =
+      url.queryParameters['filePath'] ?? url.queryParameters['rootDir'] ?? '';
+  return path.startsWith('missing') || path.startsWith('/missing') ? 404 : 200;
+}
+
+/// Enough of a backend for the deep-link flow to run for real: the page has
+/// to reach the qsheet branch and push the editor itself.
+String _bodyFor(Uri url) {
+  if (url.path.endsWith('/api/v0/files/stat')) {
+    final path = url.queryParameters['filePath'] ?? '';
+    final isFile = path.endsWith('.pdf') || path.endsWith('.qslide');
+    return jsonEncode({
+      'isDir': !isFile,
+      'fileType': isFile ? path.split('.').last : 'folder',
+      'name': path.split('/').last,
+    });
   }
-
-  /// Enough of a backend for the deep-link flow to run for real: the page has
-  /// to reach the qsheet branch and push the editor itself.
-  static String _bodyFor(Uri url) {
-    if (url.path.endsWith('/api/v0/files/stat')) {
-      final path = url.queryParameters['filePath'] ?? '';
-      final isFile = path.endsWith('.pdf') || path.endsWith('.qslide');
-      return jsonEncode({
-        'isDir': !isFile,
-        'fileType': isFile ? path.split('.').last : 'folder',
-        'name': path.split('/').last,
-      });
-    }
-    if (url.path.endsWith('/api/v0/files')) {
-      return jsonEncode([
-        {
-          'name': 'notes.txt',
-          'size': 12,
-          'isDir': false,
-          'dirPath': '${url.queryParameters['rootDir'] ?? ''}/notes.txt',
-          'fileType': 'txt',
-        },
-        {
-          'name': 'beach.jpg',
-          'size': 12,
-          'isDir': false,
-          'dirPath': '${url.queryParameters['rootDir'] ?? ''}/beach.jpg',
-          'fileType': 'image',
-        },
-        {
-          'name': 'song.mp3',
-          'size': 12,
-          'isDir': false,
-          'dirPath': '${url.queryParameters['rootDir'] ?? ''}/song.mp3',
-          'fileType': 'audio',
-        },
-        {
-          'name': 'report.pdf',
-          'size': 12,
-          'isDir': false,
-          'dirPath': '${url.queryParameters['rootDir'] ?? ''}/report.pdf',
-          'fileType': 'pdf',
-        },
-        {
-          'name': 'clip.mp4',
-          'size': 12,
-          'isDir': false,
-          'dirPath': '${url.queryParameters['rootDir'] ?? ''}/clip.mp4',
-          'fileType': 'video',
-        },
-      ]);
-    }
-    return '[]';
+  if (url.path.endsWith('/api/v0/files')) {
+    return jsonEncode([
+      {
+        'name': 'notes.txt',
+        'size': 12,
+        'isDir': false,
+        'dirPath': '${url.queryParameters['rootDir'] ?? ''}/notes.txt',
+        'fileType': 'txt',
+      },
+      {
+        'name': 'beach.jpg',
+        'size': 12,
+        'isDir': false,
+        'dirPath': '${url.queryParameters['rootDir'] ?? ''}/beach.jpg',
+        'fileType': 'image',
+      },
+      {
+        'name': 'song.mp3',
+        'size': 12,
+        'isDir': false,
+        'dirPath': '${url.queryParameters['rootDir'] ?? ''}/song.mp3',
+        'fileType': 'audio',
+      },
+      {
+        'name': 'report.pdf',
+        'size': 12,
+        'isDir': false,
+        'dirPath': '${url.queryParameters['rootDir'] ?? ''}/report.pdf',
+        'fileType': 'pdf',
+      },
+      {
+        'name': 'clip.mp4',
+        'size': 12,
+        'isDir': false,
+        'dirPath': '${url.queryParameters['rootDir'] ?? ''}/clip.mp4',
+        'fileType': 'video',
+      },
+    ]);
   }
-
-  // Everything else the client surface exposes is irrelevant here — swallow
-  // it rather than throwing, so unrelated setup calls (connectionTimeout=,
-  // close(force:)) do not masquerade as the behavior under test.
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _RecordingRequest implements HttpClientRequest {
-  _RecordingRequest(this.uri, this.body, this.status);
-  @override
-  final Uri uri;
-  final String body;
-  final int status;
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  Future<HttpClientResponse> close() async => _RecordingResponse(body, status);
-
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-
-  @override
-  Future<void> flush() async {}
-
-  // Everything else the client surface exposes is irrelevant here — swallow
-  // it rather than throwing, so unrelated setup calls (connectionTimeout=,
-  // close(force:)) do not masquerade as the behavior under test.
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _RecordingResponse implements HttpClientResponse {
-  _RecordingResponse(this.body, this.statusCode);
-  final String body;
-
-  @override
-  final int statusCode;
-  @override
-  int get contentLength => -1;
-  @override
-  bool get isRedirect => false;
-  @override
-  bool get persistentConnection => false;
-  @override
-  String get reasonPhrase => 'OK';
-  @override
-  List<Cookie> get cookies => const [];
-  @override
-  List<RedirectInfo> get redirects => const [];
-  @override
-  final HttpHeaders headers = _EmptyHeaders();
-
-  @override
-  StreamSubscription<List<int>> listen(
-    void Function(List<int>)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) => Stream<List<int>>.fromIterable([utf8.encode(body)]).listen(
-    onData,
-    onError: onError,
-    onDone: onDone,
-    cancelOnError: cancelOnError,
-  );
-
-  // Everything else the client surface exposes is irrelevant here — swallow
-  // it rather than throwing, so unrelated setup calls (connectionTimeout=,
-  // close(force:)) do not masquerade as the behavior under test.
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _EmptyHeaders implements HttpHeaders {
-  // Everything else the client surface exposes is irrelevant here — swallow
-  // it rather than throwing, so unrelated setup calls (connectionTimeout=,
-  // close(force:)) do not masquerade as the behavior under test.
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
+  return '[]';
 }
 
 void main() {
@@ -201,7 +104,7 @@ void main() {
     mockSecureStorage();
   });
 
-  late _RecordingHttpOverrides overrides;
+  late FakeIoQuark overrides;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -209,7 +112,7 @@ void main() {
     await AppSettings.instance.addHost(
       HostEntry(name: 'Test', hostAddress: 'http://localhost:8080'),
     );
-    overrides = _RecordingHttpOverrides();
+    overrides = _recordingQuark();
   });
 
   // The shared client is built once and kept (#1782), so a client built inside
@@ -313,7 +216,7 @@ void main() {
     // handed to `_setPath` — which does nothing when the route already points
     // there, as a deep link's does. No listing was ever issued, so the page
     // sat on "Opening folder" forever with no way out but the browser's back.
-    final overrides = _RecordingHttpOverrides();
+    final overrides = _recordingQuark();
     await HttpOverrides.runZoned(() async {
       await tester.pumpWidget(
         const MaterialApp(home: FileBrowserPage(initialPath: 'missing')),

@@ -1,27 +1,15 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
+
+import '../support/fake_quark_http.dart';
 
 /// A delete or move the Quark refuses has to reach the user as a reason, not
 /// a bare status (#2178).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  void answer(int status, Map<String, Object?> body) {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = () =>
-        MockClient((_) async => http.Response(jsonEncode(body), status));
-  }
-
-  tearDown(() {
-    resetSharedHttpClient();
-    sharedHttpClientFactory = buildLocalTrustHttpClient;
-  });
+  useFakeQuark();
 
   const homeRefusal = "a home folder can't be deleted or moved";
 

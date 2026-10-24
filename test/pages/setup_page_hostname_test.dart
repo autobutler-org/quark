@@ -15,6 +15,7 @@ import 'package:quark/widgets/setup/theme_step.dart';
 
 import '../support/auth_salt.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2344: the last step of first-boot setup offers to name the Quark, once
 /// there is an owner to ask as, and only on a Quark that can be renamed.
@@ -105,9 +106,7 @@ void main() {
 
   /// Walks setup from the account form to the theme step.
   Future<void> reachThemeStep(WidgetTester tester, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     await tester.pumpWidget(
       MaterialApp(home: SetupPage(onSetupComplete: () {})),

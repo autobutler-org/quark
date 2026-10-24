@@ -5,6 +5,8 @@ import 'package:quark/widgets/photos/add_to_album_sheet.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 PhotoAlbum _album(int id, String name) => PhotoAlbum(
   id: id,
   name: name,
@@ -23,9 +25,7 @@ void main() {
   ]) {
     testWidgets('checks the albums the photo is in, and a tap on one takes '
         'it out ($name)', (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       final calls = <String>[];
       var changes = 0;
 

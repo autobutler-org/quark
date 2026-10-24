@@ -15,6 +15,7 @@ import 'package:quark/widgets/setup/recovery_phrase_step.dart';
 
 import '../support/auth_salt.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #1873, #2430: a sign-in to an account with no recovery key, as an admin
 /// created one's first is, gives it a phrase the app makes and shows it once.
@@ -73,9 +74,7 @@ void main() {
     Map<String, Object?> loginBody, {
     int rotation = 204,
   }) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1200, 2400));
     authHttpClientFactory = () => AuthSaltClient(
       MockClient(
         (request) async => request.url.path == '/api/v0/auth/recovery-key'

@@ -6,10 +6,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/models/app_notification.dart';
 import 'package:quark/services/events_service.dart';
-import 'package:quark/widgets/file_browser/file_top_bar.dart';
 import 'package:quark/widgets/layout/connection_sheet_button.dart';
 import 'package:quark/widgets/notifications/notifications_bell.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+
+import '../../../support/file_top_bar.dart';
+import '../../../support/tap_target_guidelines.dart' show setViewport;
 
 // #3454: on a phone the open search field shared the bar's middle slot with
 // the back button, so it got a few pixels and could not be typed into, and
@@ -51,9 +53,7 @@ void main() {
   Future<List<String>> pumpBar(WidgetTester tester, Size size) async {
     final drafts = <String>[];
     final theme = QuarkTheme.dark(themeColor: QuarkThemeColor.classic);
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -70,27 +70,10 @@ void main() {
           ],
           child: StatefulBuilder(
             builder: (context, setState) => Scaffold(
-              appBar: FileTopBar(
-                currentPath: '/docs',
-                rootPath: '',
-                isGridView: false,
-                isUnifiedView: false,
-                onToggleUnifiedView: () {},
+              appBar: testFileTopBar(
                 // As the page does: a draft in the field is a search.
                 isSearchMode: drafts.isNotEmpty && drafts.last.isNotEmpty,
-                isUploading: false,
-                isCreatingFolder: false,
-                isRefreshing: false,
-                onGoHome: () {},
-                onGoUp: () {},
-                onToggleView: () {},
-                onSearchChanged: (_) {},
                 onSearchDraft: (draft) => setState(() => drafts.add(draft)),
-                onSearchClosed: () {},
-                onRefresh: () {},
-                onUploadPressed: () {},
-                onCreateFolderPressed: () {},
-                onNewFilePressed: () {},
                 onStartSelection: () {},
               ),
               body: const SizedBox.shrink(),

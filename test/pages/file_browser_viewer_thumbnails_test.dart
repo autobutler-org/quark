@@ -18,6 +18,7 @@ import 'package:quark/widgets/file_browser/file_browser_view/file_browser_list_t
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #3355: after a photo was opened from Files and the viewer closed, the
 /// list's thumbnails sat one row off — the 0004 row showed 0005's picture.
@@ -84,9 +85,7 @@ void main() {
   });
 
   Future<GoRouter> pumpRouted(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1600, 1000));
     final router = GoRouter(
       initialLocation: '/files/users/me',
       routes: [

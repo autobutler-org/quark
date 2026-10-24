@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/document_editor/document_editor_toolbar.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart' show setViewport;
+
 // flutter_quill's toolbar draws increase indent before decrease. Every other
 // document editor reads the pair left to right as less indent, then more
 // (#2463).
@@ -21,9 +23,7 @@ void main() {
     Size size, {
     ThemeData? theme,
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(
       MaterialApp(
         theme: theme,

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/setup/setup_form.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// Regression coverage for #2008: the setup form carried
 /// `AutovalidateMode.onUserInteraction` on the `Form` itself, and a Form-level
 /// mode validates every field as soon as any one of them is touched. Typing a
@@ -28,9 +30,7 @@ void main() {
   });
 
   Future<void> pumpForm(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(600, 1600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(600, 1600));
 
     final usernameFocus = FocusNode();
     final passwordFocus = FocusNode();

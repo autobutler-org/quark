@@ -25,6 +25,7 @@ import 'package:video_player_platform_interface/video_player_platform_interface.
 
 import '../support/fake_video_player_platform.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #3337: tapping a file in Files opened its viewer on the first *selected*
 /// device rather than the device the file is on, so every file on a second
@@ -110,9 +111,7 @@ void main() {
 
   /// Pumps the browser at /files/trip beside the app's real `/view` route.
   Future<GoRouter> pumpRouted(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1600, 1000));
     final router = GoRouter(
       initialLocation: '/files/trip',
       routes: [

@@ -17,6 +17,8 @@ import 'package:quark/widgets/markdown_viewer/markdown_viewer_image.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
+
 /// The Markdown viewer page (#2987): the rendered file, its source toggle,
 /// where links go, and that nothing off the Quark loads unasked.
 void main() {
@@ -147,9 +149,7 @@ void main() {
     testWidgets('renders the file under its name at ${size.width}', (
       tester,
     ) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
 
       await pumpViewer(tester);
 

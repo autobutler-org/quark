@@ -9,6 +9,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/settings/reset_quark_dialog.dart';
 
+import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/unreachable_quark.dart';
 import '../support/secure_storage.dart';
 
@@ -64,9 +65,7 @@ void main() {
   /// Settings never settles — its SBOM section keeps a spinner turning — so
   /// pump far enough for every Quark-bound load to finish.
   Future<void> pumpSettings(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1200, 2400));
 
     // Settings overflows its own app bar by 28px at any viewport — the brand
     // button against a fixed `leadingWidth` — with or without this change.
@@ -105,9 +104,7 @@ void main() {
     WidgetTester tester, {
     Size size = const Size(1280, 800),
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, size);
     await tester.pumpWidget(const MaterialApp(home: AccountAndDataPage()));
     await tester.pump();
   }

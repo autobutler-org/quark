@@ -16,6 +16,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/auth_salt.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2026: first-boot setup is three steps, and every one of them says which
 /// it is and how many there are, so the user can see the end from the start.
@@ -83,9 +84,7 @@ void main() {
     testWidgets('every setup step names its place in the three ($name)', (
       tester,
     ) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
 
       await tester.pumpWidget(
         MaterialApp(home: SetupPage(onSetupComplete: () {})),

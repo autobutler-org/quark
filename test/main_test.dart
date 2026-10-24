@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/secure_storage.dart';
 
+import 'support/tap_target_guidelines.dart' show setViewport;
+
 /// #3071: turning on high contrast used to discard the theme color. All four
 /// of the app's theme slots follow it now, so the Settings switch and the
 /// platform's contrast setting give the same themed result.
@@ -32,9 +34,7 @@ void main() {
     testWidgets('high contrast follows the theme color ($name)', (
       tester,
     ) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
+      setViewport(tester, size);
       MaterialApp app() => tester.widget<MaterialApp>(find.byType(MaterialApp));
       QuarkTokens tokens(ThemeData? theme) => theme!.extension<QuarkTokens>()!;
       QuarkTokens high(QuarkThemeColor themeColor, Brightness brightness) =>

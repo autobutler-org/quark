@@ -30,6 +30,7 @@ import 'package:quark/widgets/photos/photos_search_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/secure_storage.dart';
+import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// #3486: one acceptance matrix for "tapping a photo opens that photo", from
 /// every place the viewer opens: the Photos grid, a Photos search result, an
@@ -252,9 +253,7 @@ void main() {
     WidgetTester tester, {
     String? album,
   }) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
     final controller = PhotosController(
       isWeb: true,
       listCache: PhotosListCache(),
@@ -350,9 +349,7 @@ void main() {
   Future<GoRouter> pumpRouted(WidgetTester tester, String location) async {
     realAsync = false;
     addTearDown(() => realAsync = true);
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1600, 1000));
     final router = GoRouter(
       initialLocation: location,
       routes: [

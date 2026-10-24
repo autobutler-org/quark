@@ -8,6 +8,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/secure_storage.dart';
+import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// #2740: the General tab offers every signed-in user an theme color of their own
 /// and an admin the Quark's default.
@@ -36,9 +37,7 @@ void main() {
     ValueChanged<String>? onQuarkThemeColorChanged,
     Widget? notifications,
   }) async {
-    tester.view.physicalSize = const Size(800, 2400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(800, 2400));
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),

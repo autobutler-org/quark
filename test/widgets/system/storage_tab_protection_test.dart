@@ -13,6 +13,7 @@ import 'package:quark/widgets/system/storage_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/secure_storage.dart';
+import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// The Storage tab shows the protection status the Quark reported and follows
 /// its next step into the existing drive dialogs.
@@ -78,9 +79,7 @@ void main() {
   }
 
   Future<void> pumpTab(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    setViewport(tester, const Size(1280, 800));
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: StorageTab())),
     );
