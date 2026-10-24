@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/services/app_settings.dart';
@@ -10,6 +9,8 @@ import 'package:quark/services/files_service.dart';
 import 'package:quark/services/users_service.dart';
 import 'package:quark/utils/session_cookie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/secure_storage.dart';
 
 /// A Quark that answers every request with an empty 200, and remembers what
 /// it was asked.
@@ -35,35 +36,11 @@ class _Service with AuthenticatedService {}
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
   /// Where the token store lands under `flutter test`, which is never web.
   final stored = <String, String>{};
 
   setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (call) async {
-          final key = call.arguments['key'] as String?;
-          switch (call.method) {
-            case 'read':
-              return stored[key];
-            case 'write':
-              stored[key!] = call.arguments['value'] as String;
-              return null;
-            case 'delete':
-              stored.remove(key);
-              return null;
-            default:
-              return null;
-          }
-        });
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage(stored);
   });
 
   final settings = AppSettings.instance;

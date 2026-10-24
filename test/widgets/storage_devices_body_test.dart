@@ -1,12 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/storage_devices/storage_devices_body.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/secure_storage.dart';
 
 /// #1928: every drive action on the Devices page is admin-only on the Quark,
 /// so a non-admin was offered buttons that could only answer with a refusal.
@@ -15,19 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({

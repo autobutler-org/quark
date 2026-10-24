@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -15,6 +14,7 @@ import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/widgets/setup/recovery_phrase_step.dart';
 
 import '../support/auth_salt.dart';
+import '../support/secure_storage.dart';
 
 /// #1873, #2430: a sign-in to an account with no recovery key, as an admin
 /// created one's first is, gives it a phrase the app makes and shows it once.
@@ -24,9 +24,6 @@ import '../support/auth_salt.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final stored = <String, String>{};
 
   setUpAll(() async {
@@ -41,27 +38,7 @@ void main() {
         }) async => null;
     // An account with no vault (#3461).
     vaultKeyFetch = ({sessionToken}) async => null;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (call) async {
-          final key = call.arguments['key'] as String?;
-          switch (call.method) {
-            case 'read':
-              return stored[key];
-            case 'write':
-              stored[key!] = call.arguments['value'] as String;
-              return null;
-            case 'delete':
-              stored.remove(key);
-              return null;
-            default:
-              return null;
-          }
-        });
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage(stored);
   });
 
   final settings = AppSettings.instance;

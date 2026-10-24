@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -12,6 +11,7 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/unreachable_quark.dart';
+import '../support/secure_storage.dart';
 
 /// #2740: Settings saves the user's own theme color and, for an admin, the
 /// Quark's default, applying each at once and putting it back when the Quark
@@ -19,19 +19,7 @@ import '../support/unreachable_quark.dart';
 void main() {
   final settings = AppSettings.instance;
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   late HttpOverrides? priorOverrides;
   final saves = <http.Request>[];

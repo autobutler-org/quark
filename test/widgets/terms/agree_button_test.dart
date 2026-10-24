@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
@@ -10,6 +9,8 @@ import 'package:quark/services/auth_service.dart';
 import 'package:quark/widgets/terms/agree_button.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/secure_storage.dart';
+
 /// #2071: while terms acceptance was in flight the button's `onPressed` went
 /// null, so [FilledButton] painted the disabled gray, and the label was
 /// replaced by a loader alone. The control read as a blank gray button for
@@ -17,20 +18,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
   setUpAll(() {
     // The session token lives in secure storage on native platforms, and
     // there's no plugin behind it in a unit test.
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage();
   });
 
   final settings = AppSettings.instance;

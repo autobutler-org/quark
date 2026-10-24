@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/secure_storage.dart';
 
 /// Serves an empty folder and a health reading that the test controls, so it
 /// can change the disk usage between refreshes and hold a reading in flight.
@@ -108,19 +109,7 @@ class _EmptyHeaders implements HttpHeaders {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});

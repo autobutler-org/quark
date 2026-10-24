@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:data_table/data_sheet.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -12,24 +11,14 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/sheet_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// #2779: an empty sheet opens as a blank grid rather than a single cell, and
 /// a sheet that already has data keeps the size it was saved with.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});

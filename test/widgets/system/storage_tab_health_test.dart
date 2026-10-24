@@ -2,7 +2,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -16,16 +15,13 @@ import 'package:quark/widgets/system/storage_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/auth_salt.dart';
+import '../../support/secure_storage.dart';
 
 /// Drive health on the Storage tab: the verdict the Quark sent, the stronger
 /// warning when default storage would move to a worse drive, and the
 /// acknowledgment a Replace soon drive requires.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
 
   final sent = <http.Request>[];
 
@@ -65,13 +61,7 @@ void main() {
     // Complete libsodium outside the tester's fake clock. A load that finishes
     // inside pump's zone leaves the next test waiting on that future forever.
     await ChatCrypto.load();
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage();
   });
 
   setUp(() async {

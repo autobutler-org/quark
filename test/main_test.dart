@@ -1,24 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/main.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/secure_storage.dart';
+
 /// #3071: turning on high contrast used to discard the theme color. All four
 /// of the app's theme slots follow it now, so the Settings switch and the
 /// platform's contrast setting give the same themed result.
 void main() {
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final settings = AppSettings.instance;
 
   setUp(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
+    mockSecureStorage();
     SharedPreferences.setMockInitialValues({});
     await settings.load();
   });
@@ -26,8 +23,6 @@ void main() {
   tearDown(() {
     settings.themeColor.value = QuarkThemeColor.classic;
     settings.highContrast.value = false;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
   });
 
   for (final (name, size) in [

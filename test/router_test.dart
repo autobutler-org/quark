@@ -13,6 +13,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 
 import 'support/fake_chat.dart';
+import 'support/secure_storage.dart';
 
 void main() {
   group('AppRoutes.encodeFilePath', () {
@@ -300,20 +301,10 @@ void main() {
   group('the terms gate reacts to connecting a host', () {
     final settings = AppSettings.instance;
 
-    const secureStorage = MethodChannel(
-      'plugins.it_nomads.com/flutter_secure_storage',
-    );
-
     setUpAll(() {
       // The session token lives in secure storage on native platforms, and
       // there's no plugin behind it in a unit test.
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(secureStorage, (_) async => null);
-    });
-
-    tearDownAll(() {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(secureStorage, null);
+      mockSecureStorage();
     });
 
     Future<void> reset() async {
@@ -452,24 +443,12 @@ void main() {
   group('browser history', () {
     final settings = AppSettings.instance;
 
-    const secureStorage = MethodChannel(
-      'plugins.it_nomads.com/flutter_secure_storage',
-    );
-
     /// The browser's history stack, built from what the router reports to
     /// the engine: on web each report is a pushState, or a replaceState when
     /// it says `replace`.
     final history = <String>[];
 
-    setUpAll(() {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(secureStorage, (_) async => null);
-    });
-
-    tearDownAll(() {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(secureStorage, null);
-    });
+    setUpAll(mockSecureStorage);
 
     Future<void> reset() async {
       while (settings.hosts.isNotEmpty) {
@@ -1016,9 +995,6 @@ void main() {
   // #2421: chat lives at /chat/:channelId, and an admin can switch it off.
   group('chat routes', () {
     final settings = AppSettings.instance;
-    const secureStorage = MethodChannel(
-      'plugins.it_nomads.com/flutter_secure_storage',
-    );
 
     Future<void> reset() async {
       while (settings.hosts.isNotEmpty) {
@@ -1029,15 +1005,7 @@ void main() {
       settings.featureFlags.value = const [];
     }
 
-    setUpAll(() {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(secureStorage, (_) async => null);
-    });
-
-    tearDownAll(() {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(secureStorage, null);
-    });
+    setUpAll(mockSecureStorage);
 
     tearDown(reset);
 
@@ -1421,19 +1389,13 @@ void main() {
       tester,
     ) async {
       final settings = AppSettings.instance;
-      const secureStorage = MethodChannel(
-        'plugins.it_nomads.com/flutter_secure_storage',
-      );
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(secureStorage, (_) async => null);
+      mockSecureStorage();
       addTearDown(() async {
         while (settings.hosts.isNotEmpty) {
           await settings.removeHost(settings.hosts.length - 1);
         }
         await settings.setSessionToken(null);
         authStatusProbe = AuthService.checkStatus;
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(secureStorage, null);
       });
       await settings.addHost(
         HostEntry(name: 'Home', hostAddress: 'http://view.local'),
@@ -1577,19 +1539,13 @@ void main() {
       tester,
     ) async {
       final settings = AppSettings.instance;
-      const secureStorage = MethodChannel(
-        'plugins.it_nomads.com/flutter_secure_storage',
-      );
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(secureStorage, (_) async => null);
+      mockSecureStorage();
       addTearDown(() async {
         while (settings.hosts.isNotEmpty) {
           await settings.removeHost(settings.hosts.length - 1);
         }
         await settings.setSessionToken(null);
         authStatusProbe = AuthService.checkStatus;
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(secureStorage, null);
       });
       await settings.addHost(
         HostEntry(name: 'Home', hostAddress: 'http://slides.local'),

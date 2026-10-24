@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -14,6 +13,8 @@ import 'package:quark/services/events_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../support/secure_storage.dart';
+
 /// Events published while the event socket is down never arrive, and the
 /// Quark closes an account's socket on purpose when its role or status
 /// changes. Files, Trash and Photos reload their listing when the socket comes
@@ -23,22 +24,11 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final connectChannelDefault = EventsService.connectChannel;
   final channels = <ControlledChannel>[];
   var requests = 0;
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});

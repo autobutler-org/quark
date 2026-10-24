@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/auth_salt.dart';
 import '../support/fake_vault.dart';
+import '../support/secure_storage.dart';
 
 /// A Quark that answers every request with one canned response, and remembers
 /// what it was asked.
@@ -46,33 +47,10 @@ class _RecordingClient extends http.BaseClient {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final stored = <String, String>{};
 
   setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (call) async {
-          final key = call.arguments['key'] as String?;
-          switch (call.method) {
-            case 'read':
-              return stored[key];
-            case 'write':
-              stored[key!] = call.arguments['value'] as String;
-              return null;
-            case 'delete':
-              stored.remove(key);
-              return null;
-            default:
-              return null;
-          }
-        });
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage(stored);
   });
 
   /// What the fake re-wrap hands back: recognizable bytes, not real crypto,

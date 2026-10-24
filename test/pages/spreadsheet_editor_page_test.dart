@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:data_table/data_sheet.dart';
 import 'package:data_table/data_table.dart' show CellFormat;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -12,25 +11,15 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// #2691: column widths, row heights and frozen panes live in the `.qsheet`
 /// tab beside its data, and sheets saved before them still open. #2694: so do
 /// column filters. #2693: and cell formats.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});

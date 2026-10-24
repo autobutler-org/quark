@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -11,6 +10,7 @@ import 'package:quark/services/events_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'events_service_test.dart' show FakeChannel, connectLocalTrustWsDefault;
+import '../support/secure_storage.dart';
 
 /// #3209: every app load asked the Quark for `/auth/status` and the account's
 /// settings twice, once from [AuthService.watchAccount] itself and once more
@@ -35,11 +35,7 @@ void main() {
   testWidgets('loads the account once per start, again per reconnect', (
     tester,
   ) async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-          (_) async => null,
-        );
+    mockSecureStorage();
     SharedPreferences.setMockInitialValues({});
     final settings = AppSettings.instance;
     await settings.load();
@@ -82,11 +78,7 @@ void main() {
   testWidgets('a failed start-up status call retries without a reconnect', (
     tester,
   ) async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-          (_) async => null,
-        );
+    mockSecureStorage();
     SharedPreferences.setMockInitialValues({});
     final settings = AppSettings.instance;
     await settings.load();

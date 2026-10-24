@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -14,6 +13,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/remote_access_config.dart';
 
 import '../support/unreachable_quark.dart';
+import '../support/secure_storage.dart';
 
 /// #1815: remote access being switched on and the node being on the tailnet
 /// are separate facts, and the section shows which one the Quark is in.
@@ -21,19 +21,7 @@ import '../support/unreachable_quark.dart';
 void main() {
   final settings = AppSettings.instance;
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   late HttpOverrides? priorOverrides;
 

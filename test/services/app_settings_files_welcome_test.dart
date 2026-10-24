@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -11,6 +10,7 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/auth_salt.dart';
+import '../support/secure_storage.dart';
 
 /// #2022: Files greets a new owner with a card that stays until dismissed,
 /// and greets an explicit sign-in once. The first is a persisted per-host
@@ -19,20 +19,10 @@ import '../support/auth_salt.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
   setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
+    mockSecureStorage();
     // An account with no vault (#3461).
     vaultKeyFetch = ({sessionToken}) async => null;
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
   });
 
   final settings = AppSettings.instance;

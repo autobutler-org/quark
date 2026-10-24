@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
@@ -8,6 +7,7 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../../support/text_scale.dart';
+import '../../support/secure_storage.dart';
 
 /// #2606, #2603, #2605: the drawer every page opens, and the bar controls
 /// every page carries, survive 200% text on a phone and a desktop with every
@@ -15,19 +15,7 @@ import '../../support/text_scale.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final settings = AppSettings.instance;
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() {
     // An admin, so the drawer holds every row it can.

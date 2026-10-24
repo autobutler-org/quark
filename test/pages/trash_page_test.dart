@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -16,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../support/text_scale.dart';
+import '../support/secure_storage.dart';
 
 /// #2606, #2603, #2605: the trash survives 200% text on a phone and a desktop,
 /// and every control on it is labeled and big enough to hit. A listing is the
@@ -23,20 +23,9 @@ import '../support/text_scale.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final connectChannelDefault = EventsService.connectChannel;
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   /// Answers the calls a trash listing makes, with [items] at the trash root.
   /// [contents] is what a folder listing returns, when the page is inside one.

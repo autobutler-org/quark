@@ -29,6 +29,8 @@ import 'package:quark/widgets/image_viewer/current_photo.dart';
 import 'package:quark/widgets/photos/photos_search_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/secure_storage.dart';
+
 /// #3486: one acceptance matrix for "tapping a photo opens that photo", from
 /// every place the viewer opens: the Photos grid, a Photos search result, an
 /// album, Files, and a `/view` deep link (#2328).
@@ -46,10 +48,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// returns images only, so a video that shares the name never reaches the grid.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
 
   /// Each photo the viewer can land on, as `serial:path`, with its color.
   const colors = <String, Color>{
@@ -125,15 +123,7 @@ void main() {
     'fileType': 'image',
   };
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     downloads = [];

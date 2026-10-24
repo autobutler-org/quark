@@ -2,32 +2,20 @@ import 'dart:convert';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/text_scale.dart';
+import '../support/secure_storage.dart';
 
 /// #2276: a right-click on a saved Quark in Settings opens the menu its
 /// three-dot button does.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   List<String> entries(WidgetTester tester) => tester
       .widgetList<Text>(

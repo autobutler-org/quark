@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -12,15 +11,13 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// #3191: a new folder on the Files page takes the destination an upload
 /// would. Each test presses New folder on the real page and reads the
 /// `POST /api/v0/files/folder` it sends, if any.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
 
   Map<String, Object?> device(String name, {String serial = ''}) => {
     'name': name,
@@ -35,15 +32,7 @@ void main() {
   late bool devicesListable;
   late List<Uri> created;
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     devicesListable = true;

@@ -1,12 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/secure_storage.dart';
 
 /// #2721: a saved Quark with a pinned certificate offers Forget certificate,
 /// and one that presented a different certificate says so in its row.
@@ -15,9 +16,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   const home = 'https://home.local';
   const forget = ValueKey('host_action_forget_certificate_0');
   const changed = ValueKey('host_certificate_changed_0');
@@ -28,15 +26,7 @@ void main() {
   const viewports = {'narrow': Size(360, 640), 'wide': Size(1280, 800)};
   final settings = AppSettings.instance;
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   Future<void> pumpManager(WidgetTester tester, Size viewport) async {
     tester.view.physicalSize = viewport;

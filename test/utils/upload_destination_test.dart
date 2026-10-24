@@ -1,4 +1,3 @@
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/storage_service.dart';
@@ -6,23 +5,13 @@ import 'package:quark/utils/upload_destination.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// #3191: which device an upload or a new folder goes to.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   StorageDevice device(
     String name, {

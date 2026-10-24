@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/pages/account_and_data_page.dart';
@@ -13,6 +12,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/text_scale.dart';
 import '../support/unreachable_quark.dart';
+import '../support/secure_storage.dart';
 
 /// #2606, #2603, #2605: every Settings tab, and the account and data page it
 /// drills into, survives 200% text on a phone and a desktop, top to bottom,
@@ -20,19 +20,7 @@ import '../support/unreachable_quark.dart';
 void main() {
   final settings = AppSettings.instance;
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   late HttpOverrides? priorOverrides;
 

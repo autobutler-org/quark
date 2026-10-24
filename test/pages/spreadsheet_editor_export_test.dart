@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -14,6 +13,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_file_picker_platform.dart';
+import '../support/secure_storage.dart';
 
 /// #2696: the control bar exports every tab of the spreadsheet as one Excel
 /// workbook, built by the Quark from the saved sheet and handed to the save
@@ -21,9 +21,6 @@ import '../support/fake_file_picker_platform.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   const exportButton = ValueKey('data_sheet_export_xlsx');
 
   /// Every request the editor made, as `METHOD path`, in order.
@@ -40,9 +37,9 @@ void main() {
   late FakeFilePickerPlatform picker;
   late Directory saveDir;
 
+  setUpAll(mockSecureStorage);
+
   setUp(() async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
     saveDir = Directory.systemTemp.createTempSync('export_save');
     picker = FakeFilePickerPlatform(saveDir);
     FilePickerPlatform.instance = picker;
@@ -88,8 +85,6 @@ void main() {
     sharedHttpClientFactory = buildLocalTrustHttpClient;
     resetSharedHttpClient();
     await AppSettings.instance.setSessionToken(null);
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
     saveDir.deleteSync(recursive: true);
   });
 

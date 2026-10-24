@@ -1,10 +1,11 @@
 import 'dart:convert';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/secure_storage.dart';
 
 /// #2740: the theme color is the user's own when they picked one, otherwise the
 /// Quark's, and what it resolved to is remembered per host so the sign-in
@@ -12,19 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   final settings = AppSettings.instance;
 

@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -11,30 +10,21 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/system/storage_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/secure_storage.dart';
+
 /// #3084: the Storage tab polls a snapshot backup's status every two seconds.
 /// A 404 means the job is gone for good, so the poll stops and the tab drops
 /// the job; any other error is one bad moment, so the poll keeps going.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   const statusPath = '/api/v0/storage/devices/snapshot-backup/status/job-1';
   const pollEvery = Duration(seconds: 2);
 
   late int statusCalls;
   late int statusCode;
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({

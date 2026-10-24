@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -13,15 +12,13 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// #3727: a share on a USB drive opens on that drive. Picking it in Shared
 /// with me used to keep only its path, so the stat asked the internal drive,
 /// which has no such file.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
 
   Map<String, Object?> device(String name, {String serial = ''}) => {
     'name': name,
@@ -34,15 +31,7 @@ void main() {
 
   late List<Uri> requested;
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     requested = [];

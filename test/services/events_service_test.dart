@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+import '../support/secure_storage.dart';
 
 /// The Quark closes an account's event socket, without sending the event,
 /// when that account is promoted, demoted, turned off or deleted (#1911). The
@@ -14,22 +15,10 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
   final settings = AppSettings.instance;
   final channels = <FakeChannel>[];
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() {
     channels.clear();

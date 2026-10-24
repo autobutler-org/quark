@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -12,13 +11,11 @@ import 'package:quark/utils/image_header_size.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// Reading and writing `.qslide` files through the files API (#1161).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
 
   late List<http.BaseRequest> requests;
   late List<String> uploads;
@@ -52,15 +49,7 @@ void main() {
   Future<T> withQuark<T>(Future<T> Function() body) =>
       http.runWithClient(body, quark);
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});

@@ -11,40 +11,19 @@ import 'package:quark/services/remote_access_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// #3724: a 401 signs the user out on every authenticated path, not only the
 /// ones that went through the mixin's verbs, and every request goes out on the
 /// shared client.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final stored = <String, String>{};
   final requests = <http.BaseRequest>[];
 
   setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (call) async {
-          final key = call.arguments['key'] as String?;
-          switch (call.method) {
-            case 'read':
-              return stored[key];
-            case 'write':
-              stored[key!] = call.arguments['value'] as String;
-              return null;
-            case 'delete':
-              stored.remove(key);
-              return null;
-            default:
-              return null;
-          }
-        });
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage(stored);
   });
 
   setUp(() async {

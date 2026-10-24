@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/terms_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/terms/agree_button.dart';
+
+import '../support/secure_storage.dart';
 
 /// #2064: saving a new Quark replaced the flow with the full terms and an
 /// I Agree button, with nothing on the page tying them to the Quark that had
@@ -11,20 +12,10 @@ import 'package:quark/widgets/terms/agree_button.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
   setUpAll(() {
     // The session token lives in secure storage on native platforms, and
     // there's no plugin behind it in a unit test.
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage();
   });
 
   final settings = AppSettings.instance;
