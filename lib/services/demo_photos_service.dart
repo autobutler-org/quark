@@ -70,8 +70,6 @@ class DemoPhotosService {
   /// reaches a Quark, and a restart brings back the defaults.
   static final Set<String> _favorites = favoriteKeys();
 
-  // ── Stand-ins for the real services ──────────────────────────────────────
-
   /// One page of the sample library.
   ///
   /// [q] keeps the photos whose file name contains it, ignoring case, and the
@@ -160,8 +158,6 @@ class DemoPhotosService {
     required String deviceSerial,
     required String relPath,
   }) => _refuse();
-
-  // ── Catalog ──────────────────────────────────────────────────────────────
 
   static Future<Uint8List> loadBytes(String relPath) async {
     final data = await rootBundle.load(relPath);

@@ -170,10 +170,6 @@ class SlideTextEditingController extends ChangeNotifier {
   /// Flips [toggle] for the selection: on unless all of it has it already.
   void toggle(TextToggle toggle) => format(toggle.changeFrom(selectionFormat));
 
-  // ---------------------------------------------------------------------------
-  // Sessions
-  // ---------------------------------------------------------------------------
-
   /// Opens a session on the text box [elementId] of the attached slide,
   /// committing any session already open, with [selection] (a caret at the
   /// end by default) selected.
@@ -352,10 +348,6 @@ class SlideTextEditingController extends ChangeNotifier {
     return true;
   }
 
-  // ---------------------------------------------------------------------------
-  // In-session history
-  // ---------------------------------------------------------------------------
-
   /// Whether [undo] would do anything.
   bool get canUndo => _undo.isNotEmpty;
 
@@ -389,10 +381,6 @@ class SlideTextEditingController extends ChangeNotifier {
     _redo.clear();
     _typingAt = null;
   }
-
-  // ---------------------------------------------------------------------------
-  // The editor's fields
-  // ---------------------------------------------------------------------------
 
   /// One controller per paragraph of the [draft], for the editor's fields.
   List<SlideParagraphEditingController> get paragraphControllers =>
@@ -616,10 +604,6 @@ class SlideTextEditingController extends ChangeNotifier {
       );
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
 
   List<TextBox> _selectedBoxes() {
     final slide = _doc?.presentation.slideById(_slideId ?? '');

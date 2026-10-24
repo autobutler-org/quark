@@ -56,7 +56,6 @@ class DeviceCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row: name + status badge
             Row(
               children: [
                 Icon(
@@ -122,7 +121,6 @@ class DeviceCard extends StatelessWidget {
             ),
             const SizedBox(height: 2),
 
-            // Mount point + filesystem
             Text(
               '${device.mountPoint}  ·  ${device.fileSystem}',
               style: theme.textTheme.bodySmall?.copyWith(
@@ -145,7 +143,6 @@ class DeviceCard extends StatelessWidget {
               id: DriveHealthController.idFor(device),
             ),
 
-            // Storage bar (only when totalBytes is known)
             if (device.totalBytes > 0) ...[
               const SizedBox(height: 12),
               QuarkStorageBar(usedFraction: usedPct),
@@ -168,7 +165,6 @@ class DeviceCard extends StatelessWidget {
               ),
             ],
 
-            // Category chips
             if (device.categories.isNotEmpty) ...[
               const SizedBox(height: 10),
               Wrap(
@@ -193,7 +189,6 @@ class DeviceCard extends StatelessWidget {
               ),
             ],
 
-            // Mount button for unmounted USB devices
             if (!device.isEnabled && onMount != null) ...[
               const SizedBox(height: 12),
               OutlinedButton.icon(

@@ -470,8 +470,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     return _saveError != null ? SlideSaveState.failed : SlideSaveState.dirty;
   }
 
-  // ── Load ──────────────────────────────────────────────────────────────────
-
   /// Fetches the presentation, replacing whatever was open.
   Future<void> load() async {
     _isLoading = true;
@@ -497,8 +495,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     _isLoading = false;
     notifyListeners();
   }
-
-  // ── Slide panel ───────────────────────────────────────────────────────────
 
   /// Shows the slide [slideId] on the canvas.
   void selectSlide(String slideId) {
@@ -623,8 +619,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     doc.controller.moveSlide(slideId, toIndex.clamp(0, slides.length - 1));
   }
 
-  // ── History ───────────────────────────────────────────────────────────────
-
   /// Takes back the last edit.
   void undo() {
     if (_readOnly) return;
@@ -650,8 +644,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     _showSlide(slides[previousIndex.clamp(0, slides.length - 1)].id);
     notifyListeners();
   }
-
-  // ── Canvas ────────────────────────────────────────────────────────────────
 
   /// Selects the elements [ids] on the selected slide.
   void selectElements(Set<String> ids) {
@@ -686,8 +678,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
   /// the files root of the device the presentation is on.
   Uri imageUrl(String source) =>
       mediaUrl(source.trim().replaceAll(RegExp(r'^/+'), ''), serial: _serial);
-
-  // ── Toolbar and properties ────────────────────────────────────────────────
 
   /// Makes [tool] the one the canvas draws with.
   void useTool(SlideCanvasTool tool) => tools.use(tool);
@@ -779,8 +769,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     ),
   );
 
-  // ── Arrange ───────────────────────────────────────────────────────────────
-
   bool _selectionAllows(
     bool Function(SlideDocumentController doc, String slideId) test,
   ) {
@@ -856,8 +844,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     );
   }
 
-  // ── Clipboard ─────────────────────────────────────────────────────────────
-
   /// Writes the selection to [clipboard].
   Future<void> copySelection() async {
     final doc = _doc;
@@ -889,8 +875,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     if (isDisposed || ids.isEmpty || slideId != _selectedSlideId) return;
     selectElements(ids.toSet());
   }
-
-  // ── Theme and layouts ─────────────────────────────────────────────────────
 
   /// The presentation's theme; null for a deck with none, which the canvas
   /// draws in `SlideThemes.light`.
@@ -930,8 +914,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     doc.controller.resetSlideToLayout(slideId);
   }
 
-  // ── Transitions ───────────────────────────────────────────────────────────
-
   /// The transition the selected slide plays: its own, or the deck's.
   SlideTransitionSpec get effectiveTransition {
     final slide = selectedSlide;
@@ -957,8 +939,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     textEditing.commit();
     _doc?.controller.applyTransitionToAll(spec);
   }
-
-  // ── Slide background ──────────────────────────────────────────────────────
 
   /// The selected slide's own background color; null when it uses the
   /// theme's.
@@ -1021,8 +1001,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     _propertiesOpen = !_propertiesOpen;
     notifyListeners();
   }
-
-  // ── Tables ────────────────────────────────────────────────────────────────
 
   /// The table the table commands act on: the one element selected, when
   /// it is a table (a table whose cells are selected is selected itself);
@@ -1212,8 +1190,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     });
   });
 
-  // ── Charts ────────────────────────────────────────────────────────────────
-
   /// The one element selected, when it is a chart; null otherwise.
   ChartElement? get selectedChart {
     final element = singleSelected;
@@ -1296,8 +1272,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
   void setChartDataGrid(List<List<String>> grid) =>
       _onChart((c) => c.setDataGrid(grid));
 
-  // ── Pictures ──────────────────────────────────────────────────────────────
-
   /// Asks for a picture on this device, uploads it beside the presentation
   /// and puts it on the selected slide — in [within], the box the image tool
   /// drew, or centered — selected. Nothing happens when the user cancels.
@@ -1365,8 +1339,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     }
   }
 
-  // ── Speaker notes ─────────────────────────────────────────────────────────
-
   /// Replaces the selected slide's speaker notes with [text], written to the
   /// slide once typing pauses for [notesDelay].
   void editNotes(String text) {
@@ -1406,8 +1378,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     notifyListeners();
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────
-
   void _onDocumentChanged() {
     // An edit or an undo may have taken selected elements off the slide.
     final onSlide = {...?selectedSlide?.elements.map((e) => e.id)};
@@ -1421,8 +1391,6 @@ class SlideEditorController extends ChangeNotifier with SafeNotifier {
     if (isDirty && !_readOnly) _autosaveTimer = Timer(autosaveDelay, save);
     notifyListeners();
   }
-
-  // ── Export ────────────────────────────────────────────────────────────────
 
   /// Saves the presentation as a PowerPoint file named after it.
   ///

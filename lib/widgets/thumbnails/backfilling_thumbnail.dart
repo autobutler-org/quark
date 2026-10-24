@@ -34,12 +34,10 @@ import 'package:quark_widgets/quark_widgets.dart' show ThumbnailIssue;
 /// BackfillingThumbnail(
 ///   path: node.apiPath,
 ///   serial: node.deviceSerial,
-///   builder: (context, generation, onFailed) => CachedNetworkImage(
+///   builder: (context, generation, onFailed) => Image(
 ///     key: ValueKey(generation),
-///     imageUrl: url.toString(),
-///     cacheKey: ThumbnailCacheManager.keyFor(url),
-///     cacheManager: ThumbnailCacheManager.instance,
-///     errorWidget: (context, url, error) {
+///     image: ThumbnailCacheManager.image(url),
+///     errorBuilder: (context, error, stack) {
 ///       onFailed(error);
 ///       return icon;
 ///     },

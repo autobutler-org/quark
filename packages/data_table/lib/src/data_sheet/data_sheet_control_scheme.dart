@@ -101,7 +101,6 @@ class KeyboardShortcut {
 /// deserialize. The scheme carries no Flutter widget state, so it can be
 /// stored in `SharedPreferences`, a file, or sent over the network as JSON.
 class DataSheetControlScheme {
-  // --- Navigation ---
   final List<KeyboardShortcut> moveUp;
   final List<KeyboardShortcut> moveDown;
   final List<KeyboardShortcut> moveLeft;
@@ -118,8 +117,6 @@ class DataSheetControlScheme {
 
   /// Jump to the last column of the current row (End).
   final List<KeyboardShortcut> jumpRowEnd;
-
-  // --- Selection ---
 
   /// Grow or shrink the range one row up from its far corner (Shift+Up).
   final List<KeyboardShortcut> extendUp;
@@ -142,7 +139,6 @@ class DataSheetControlScheme {
   /// Jump to the last row and column (Ctrl+End).
   final List<KeyboardShortcut> jumpToLast;
 
-  // --- Editing ---
   final List<KeyboardShortcut> confirmEdit;
   final List<KeyboardShortcut> enterEditMode;
   final List<KeyboardShortcut> cancelEdit;
@@ -150,16 +146,12 @@ class DataSheetControlScheme {
   final List<KeyboardShortcut> undo;
   final List<KeyboardShortcut> redo;
 
-  // --- Clipboard ---
   final List<KeyboardShortcut> copy;
   final List<KeyboardShortcut> cut;
   final List<KeyboardShortcut> paste;
 
-  // --- Data Operations ---
   final List<KeyboardShortcut> fillDown;
   final List<KeyboardShortcut> fillRight;
-
-  // --- Structural ---
 
   /// Insert a row above the highlighted cell.
   final List<KeyboardShortcut> insertRow;
@@ -223,7 +215,6 @@ class DataSheetControlScheme {
   /// actions are also bound to the regular `=` and `-` keys with the same
   /// modifiers.
   factory DataSheetControlScheme.defaults() => const DataSheetControlScheme(
-    // Navigation
     moveUp: [KeyboardShortcut(LogicalKeyboardKey.arrowUp)],
     moveDown: [KeyboardShortcut(LogicalKeyboardKey.arrowDown)],
     moveLeft: [KeyboardShortcut(LogicalKeyboardKey.arrowLeft)],
@@ -234,13 +225,11 @@ class DataSheetControlScheme {
     jumpRowEnd: [KeyboardShortcut(LogicalKeyboardKey.end)],
     jumpToFirst: [KeyboardShortcut(LogicalKeyboardKey.home, ctrl: true)],
     jumpToLast: [KeyboardShortcut(LogicalKeyboardKey.end, ctrl: true)],
-    // Selection
     extendUp: [KeyboardShortcut(LogicalKeyboardKey.arrowUp, shift: true)],
     extendDown: [KeyboardShortcut(LogicalKeyboardKey.arrowDown, shift: true)],
     extendLeft: [KeyboardShortcut(LogicalKeyboardKey.arrowLeft, shift: true)],
     extendRight: [KeyboardShortcut(LogicalKeyboardKey.arrowRight, shift: true)],
     selectAll: [KeyboardShortcut(LogicalKeyboardKey.keyA, ctrl: true)],
-    // Editing
     confirmEdit: [KeyboardShortcut(LogicalKeyboardKey.enter)],
     enterEditMode: [KeyboardShortcut(LogicalKeyboardKey.f2)],
     cancelEdit: [KeyboardShortcut(LogicalKeyboardKey.escape)],
@@ -253,11 +242,9 @@ class DataSheetControlScheme {
       KeyboardShortcut(LogicalKeyboardKey.keyY, ctrl: true),
       KeyboardShortcut(LogicalKeyboardKey.keyZ, ctrl: true, shift: true),
     ],
-    // Clipboard
     copy: [KeyboardShortcut(LogicalKeyboardKey.keyC, ctrl: true)],
     cut: [KeyboardShortcut(LogicalKeyboardKey.keyX, ctrl: true)],
     paste: [KeyboardShortcut(LogicalKeyboardKey.keyV, ctrl: true)],
-    // Data operations
     fillDown: [KeyboardShortcut(LogicalKeyboardKey.keyD, ctrl: true)],
     fillRight: [KeyboardShortcut(LogicalKeyboardKey.keyR, ctrl: true)],
     // Structural (numpad + regular keyboard fallbacks)

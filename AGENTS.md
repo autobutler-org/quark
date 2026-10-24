@@ -530,13 +530,13 @@ dropped into a shared file compiles fine right up until `make build/frontend/web
 
 Presentational widgets belong in `packages/quark_widgets` — see Widget package rules below. What stays in
 `lib/widgets/` is what is still coupled to the app: it calls a service, pushes a route, shows a snack bar, or
-reads `AppSettings`. Each one is waiting on its page's decoupling issue (#1600), and
+reads `AppSettings`. Each one moves to the package when its page is decoupled, and
 [`lib/widgets/README.md`](lib/widgets/README.md) is the live inventory — keep it current when a widget moves.
 The shape to aim for is a package widget for the visuals wrapped by a thin app widget that supplies the data;
 `lib/widgets/layout/theme_toggle_button.dart` is the smallest example.
 
-The migration is early — three controllers against twenty-odd pages — so a fat page is code that has not been migrated
-yet rather than a rule violation. Decouple it with the `page-decoupler` agent instead of patching around it.
+Most pages have a controller now, but a fat page is code that has not been migrated yet rather than a rule
+violation. Decouple it with the `page-decoupler` agent instead of patching around it.
 
 ### Code organization rules
 
@@ -696,7 +696,7 @@ The package is a separate pub package with no dependency on the app, so it canno
 - **Loading, empty, and error are explicit inputs.** A widget that lists things takes `isLoading` and `error` (or a
   sealed state) and renders each case. It never decides when to load.
 - **Anything that needs the network is a builder.** `thumbnailBuilder(BuildContext, PhotoItem)` and friends. The app
-  supplies `CachedNetworkImage`; the gallery supplies a placeholder.
+  supplies `ThumbnailCacheManager.image`; the gallery supplies a placeholder.
 - **The package owns its value types.** Small immutable classes in `lib/src/models/` (`AlbumItem`, `PhotoItem`, ...).
   Controllers in the app map `lib/models` into them. The package never imports app models.
 - **Keys for Flutter Probe.** Every widget takes `super.key`. Every tappable part gets a deterministic `ValueKey` built

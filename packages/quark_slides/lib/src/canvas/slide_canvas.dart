@@ -632,10 +632,6 @@ class _SlideCanvasState extends State<SlideCanvas> {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Text editing
-  // ---------------------------------------------------------------------------
-
   void _onEditingChanged() {
     final editing = _editing.isEditing;
     if (editing != _wasEditing) {
@@ -802,10 +798,6 @@ class _SlideCanvasState extends State<SlideCanvas> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Selection
-  // ---------------------------------------------------------------------------
-
   /// The selected ids that are on [slide], at any depth, back to front;
   /// none when the canvas does not select.
   Set<String> _validSelection(Slide slide) => {
@@ -928,10 +920,6 @@ class _SlideCanvasState extends State<SlideCanvas> {
     }
     return null;
   }
-
-  // ---------------------------------------------------------------------------
-  // Pointer gestures
-  // ---------------------------------------------------------------------------
 
   bool get _additive {
     final keys = HardwareKeyboard.instance;
@@ -1531,10 +1519,6 @@ class _SlideCanvasState extends State<SlideCanvas> {
     if (revert && batch.presentation != gesture!.before) batch.undo();
   }
 
-  // ---------------------------------------------------------------------------
-  // Pan and zoom
-  // ---------------------------------------------------------------------------
-
   /// Pans to [pan] (clamped) at [zoom], reporting a zoom change.
   void _viewTo(Offset pan, double zoom) {
     final viewport = _viewport;
@@ -1629,10 +1613,6 @@ class _SlideCanvasState extends State<SlideCanvas> {
         : SystemMouseCursors.click;
     if (cursor != _cursor) setState(() => _cursor = cursor);
   }
-
-  // ---------------------------------------------------------------------------
-  // Keyboard
-  // ---------------------------------------------------------------------------
 
   static final _nudges = {
     LogicalKeyboardKey.arrowLeft: const Offset(-1, 0),
@@ -1881,10 +1861,6 @@ class _SlideCanvasState extends State<SlideCanvas> {
     _select({ids[next]});
     return KeyEventResult.handled;
   }
-
-  // ---------------------------------------------------------------------------
-  // Build
-  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {

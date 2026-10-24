@@ -207,7 +207,6 @@ class StorageService with AuthenticatedService {
   StorageService._();
   static StorageService get instance => _instance;
 
-  // ── Client-side device-list cache ─────────────────────────────────────────
   // A 10-second TTL prevents hammering the expensive /storage/devices/status
   // endpoint. Simultaneous callers share a single in-flight Future so only one
   // HTTP request is ever in flight at a time (#1022).

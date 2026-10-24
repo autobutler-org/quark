@@ -46,8 +46,6 @@ library;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
-// ── Custom block shortcuts ────────────────────────────────────────────────────
-
 const _orderedList = '1.';
 const _bullets = ['-', '*', '+'];
 const _blockQuote = '>';
@@ -122,8 +120,6 @@ final CharacterShortcutEvent _formatFenceToCodeBlock = CharacterShortcutEvent(
     return true;
   },
 );
-
-// ── The lists the editor is configured with ───────────────────────────────────
 
 /// Block shortcuts that fire on the space key.
 ///

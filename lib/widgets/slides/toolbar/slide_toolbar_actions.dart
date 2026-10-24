@@ -62,8 +62,6 @@ class SlideToolbarActions {
 
   SlideCanvasTool get _tool => controller.tools.tool;
 
-  // ── Tools ─────────────────────────────────────────────────────────────────
-
   SlideToolbarChoice _toolChoice(
     String key,
     SlideCanvasTool tool,
@@ -141,8 +139,6 @@ class SlideToolbarActions {
             : () => controller.addSlide(layoutId: layout.id),
       ),
   ];
-
-  // ── Text ──────────────────────────────────────────────────────────────────
 
   /// Whether a text box or table is selected, or text is being edited.
   bool get canFormatText => controller.canFormatText;
@@ -252,8 +248,6 @@ class SlideToolbarActions {
         : null,
   );
 
-  // ── Paragraph ─────────────────────────────────────────────────────────────
-
   /// Left, center, right and justified.
   List<SlideToolbarChoice> get alignments => [
     for (final (alignment, label, icon) in [
@@ -286,8 +280,6 @@ class SlideToolbarActions {
       QuarkIcons.format_list_numbered,
     ),
   ];
-
-  // ── Shape ─────────────────────────────────────────────────────────────────
 
   /// Whether a shape or line is selected.
   bool get canStyle => controller.hasShapesOrLines;
@@ -397,8 +389,6 @@ class SlideToolbarActions {
         onSelected: _styling(ElementStyle(opacity: opacity)),
       ),
   ];
-
-  // ── Table ─────────────────────────────────────────────────────────────────
 
   /// Whether a table is selected in an editable presentation.
   bool get canEditTable => controller.canEditTable;
@@ -566,8 +556,6 @@ class SlideToolbarActions {
     ),
   ];
 
-  // ── Chart ─────────────────────────────────────────────────────────────────
-
   /// Whether a chart is selected in an editable presentation.
   bool get canEditChart => controller.canEditChart;
 
@@ -680,8 +668,6 @@ class SlideToolbarActions {
     icon: QuarkIcons.chart_data,
     onSelected: canEditChart ? onEditChartData : null,
   );
-
-  // ── Arrange ───────────────────────────────────────────────────────────────
 
   /// Whether anything is selected.
   bool get hasSelection => controller.selectedElementIds.isNotEmpty;
@@ -825,8 +811,6 @@ class SlideToolbarActions {
     onSelected: _whenSelected(controller.deleteSelection),
   );
 
-  // ── Clipboard ───────────────────────────────────────────────────────────
-
   /// Copy the selection to the clipboard.
   SlideToolbarChoice get copy => SlideToolbarChoice(
     key: 'slide_copy',
@@ -861,8 +845,6 @@ class SlideToolbarActions {
     icon: QuarkIcons.duplicate,
     onSelected: _whenSelected(controller.duplicateSelection),
   );
-
-  // ── Zoom (the phone's Format menu) ──────────────────────────────────────
 
   /// Zoom out, fit the slide (reading the zoom) and zoom in, for the phone,
   /// whose bar has no room for the wide row's zoom buttons.

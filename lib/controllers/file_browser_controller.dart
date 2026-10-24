@@ -301,7 +301,6 @@ class FileBrowserController {
           final normalizedTarget = normalizePath(targetPath);
           if (normalizedTarget == normalizedOld ||
               normalizedTarget.startsWith('$normalizedOld/')) {
-            // show an error dialog
             await QuarkWidget.showDialog<void>(
               context,
               useRootNavigator: true,

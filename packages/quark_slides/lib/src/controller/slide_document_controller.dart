@@ -122,10 +122,6 @@ class SlideDocumentController {
   /// Whether a batch is open.
   bool get isBatching => _batchDepth > 0;
 
-  // ---------------------------------------------------------------------------
-  // History
-  // ---------------------------------------------------------------------------
-
   /// Reverts the last step; returns whether there was one to revert.
   /// Throws a [StateError] inside a batch.
   bool undo() => _travel(_undoStack, _redoStack);
@@ -196,10 +192,6 @@ class SlideDocumentController {
     onChanged?.call();
   }
 
-  // ---------------------------------------------------------------------------
-  // Ids
-  // ---------------------------------------------------------------------------
-
   /// An id no slide or element in [presentation] uses yet, for building an
   /// element to pass to [addElement].
   String newId() => _freshIds(1).single;
@@ -245,10 +237,6 @@ class SlideDocumentController {
 
   static String _randomId() =>
       List.generate(10, (_) => _random.nextInt(36).toRadixString(36)).join();
-
-  // ---------------------------------------------------------------------------
-  // Slides
-  // ---------------------------------------------------------------------------
 
   /// Inserts a blank slide at [index] (at the end by default) and returns
   /// its id.
@@ -365,10 +353,6 @@ class SlideDocumentController {
   void setSlideBackground(String slideId, SlideBackground? background) =>
       _updateSlide(slideId, (slide) => slide.copyWith(background: background));
 
-  // ---------------------------------------------------------------------------
-  // Transitions
-  // ---------------------------------------------------------------------------
-
   /// Gives the slide [slideId] its own [transition], or with `null` lets it
   /// follow the deck's `Presentation.defaultTransition`, as one step.
   ///
@@ -393,10 +377,6 @@ class SlideDocumentController {
       ],
     ),
   );
-
-  // ---------------------------------------------------------------------------
-  // Themes and layouts
-  // ---------------------------------------------------------------------------
 
   /// Gives the presentation [theme], or none with `null`, as one step.
   ///
@@ -510,10 +490,6 @@ class SlideDocumentController {
 
   Slide _fittedSlide(Slide slide) =>
       slide.copyWith(elements: [for (final e in slide.elements) _fitted(e)]);
-
-  // ---------------------------------------------------------------------------
-  // Elements
-  // ---------------------------------------------------------------------------
 
   /// Inserts [element] on the slide [slideId] at stacking position [index]
   /// (in front of everything by default). Its id must not be in use; take
@@ -755,10 +731,6 @@ class SlideDocumentController {
   /// unable to measure text.
   static const defaultTextBoxHeight = 80.0;
 
-  // ---------------------------------------------------------------------------
-  // Shapes, lines and images
-  // ---------------------------------------------------------------------------
-
   /// Inserts a [kind] of shape on the slide [slideId] and returns its id.
   ///
   /// It fills [frame], or — left out — a [defaultShapeSize] square centered
@@ -970,10 +942,6 @@ class SlideDocumentController {
     return element.withFrame(element.frame.copyWith(height: height)) as T;
   }
 
-  // ---------------------------------------------------------------------------
-  // Tables
-  // ---------------------------------------------------------------------------
-
   /// Inserts a [rows] × [columns] table on the slide [slideId] and returns
   /// its id.
   ///
@@ -1181,10 +1149,6 @@ class SlideDocumentController {
     TableElement Function(TableElement table) update,
   ) => _updateTree(slideId, [tableId], (e, _) => _fitted(update(_table(e))));
 
-  // ---------------------------------------------------------------------------
-  // Charts
-  // ---------------------------------------------------------------------------
-
   /// The width of the chart [insertChart] makes with no frame, narrowed to
   /// fit 80% of the slide.
   static const defaultChartWidth = 1200.0;
@@ -1358,10 +1322,6 @@ class SlideDocumentController {
         : throw ArgumentError.value(chartId, 'chartId', 'is not a chart'),
   );
 
-  // ---------------------------------------------------------------------------
-  // Grouping
-  // ---------------------------------------------------------------------------
-
   /// Whether [groupElements] can group [elementIds] on the slide [slideId]:
   /// at least two of them, all directly in the same stacking list — on the
   /// slide itself, or in one group.
@@ -1452,10 +1412,6 @@ class SlideDocumentController {
     return freed;
   }
 
-  // ---------------------------------------------------------------------------
-  // Alignment
-  // ---------------------------------------------------------------------------
-
   /// Lines up [elementIds] on the slide [slideId] by [alignment], as one
   /// step, moving them along the slide's axes (see [alignFrames]).
   ///
@@ -1545,10 +1501,6 @@ class SlideDocumentController {
         );
       });
 
-  // ---------------------------------------------------------------------------
-  // Copy and paste
-  // ---------------------------------------------------------------------------
-
   /// How far each paste or duplicate of the same elements onto the same
   /// slide lands from the last, in slide units, right and down.
   static const pasteOffset = 16.0;
@@ -1637,10 +1589,6 @@ class SlideDocumentController {
       ],
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Lookup
-  // ---------------------------------------------------------------------------
 
   Slide _slideOf(String slideId) => _presentation.slides[_slideIndex(slideId)];
 

@@ -1,17 +1,5 @@
-// Custom icon font for Quark.
-//
-// Sections:
-//   1. Custom icons — generated from SVGs in svgs/. Run `make generate/icons`
-//      to rebuild the font + update codepoints.
-//   2. Material aliases — re-exports of Icons.* under semantic names so the
-//      rest of the app never imports package:flutter/material.dart for icons
-//      directly. To swap a Material icon for a custom one in the future,
-//      change the alias here and nowhere else.
-//
-// Usage:
-//   import 'package:quark_icons/quark_icons.dart';
-//   Icon(QuarkIcons.insert_row_above)
-//   Icon(QuarkIcons.undo)
+// The custom icons are generated from svgs/: `make generate/icons` rebuilds the
+// font and its codepoints.
 
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';

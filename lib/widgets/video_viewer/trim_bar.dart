@@ -75,7 +75,6 @@ class TrimBar extends StatelessWidget {
             height: centerY + _handleSize / 2,
             child: Stack(
               children: [
-                // Track background
                 Positioned(
                   left: 0,
                   right: 0,
@@ -88,7 +87,6 @@ class TrimBar extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Selected region highlight
                 Positioned(
                   left: startX,
                   width: (endX - startX).clamp(0.0, width),
@@ -98,7 +96,6 @@ class TrimBar extends StatelessWidget {
                     color: primary.withValues(alpha: 0.7),
                   ),
                 ),
-                // Start handle + label
                 ..._buildHandle(
                   centerX: startX,
                   width: width,
@@ -111,7 +108,6 @@ class TrimBar extends StatelessWidget {
                     ((startX + dx) / width).clamp(0.0, end - 0.01),
                   ),
                 ),
-                // End handle + label
                 ..._buildHandle(
                   centerX: endX,
                   width: width,

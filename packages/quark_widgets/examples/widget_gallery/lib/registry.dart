@@ -51,7 +51,6 @@ final List<GalleryEntry> registry = [
     build: (context, log) => const TokenSwatches(),
   ),
 
-  // ── Core ──────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'EmptyStateWidget',
     group: 'Core',
@@ -455,7 +454,6 @@ final List<GalleryEntry> registry = [
     },
   ),
 
-  // ── Layout ────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'ConnectionIndicator',
     group: 'Layout',
@@ -1216,7 +1214,6 @@ final List<GalleryEntry> registry = [
     },
   ),
 
-  // ── Code ──────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'QuarkCodeViewer',
     group: 'Code',
@@ -1324,7 +1321,6 @@ final List<GalleryEntry> registry = [
     },
   ),
 
-  // ── Markdown ──────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'QuarkMarkdownView',
     group: 'Markdown',
@@ -1380,7 +1376,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Documents ─────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'QuarkDocumentView',
     group: 'Documents',
@@ -1464,7 +1459,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── 3D models ─────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'QuarkModelViewer',
     group: '3D models',
@@ -1493,7 +1487,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── File browser ──────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'FileBreadcrumbBar',
     group: 'File browser',
@@ -1611,7 +1604,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── File versions ─────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'FileVersionsPanel',
     group: 'File versions',
@@ -1672,7 +1664,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Jobs ──────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'JobsBadge',
     group: 'Jobs',
@@ -1697,7 +1688,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Photos ────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'PhotoSelectionBar',
     group: 'Photos',
@@ -2035,7 +2025,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Albums ────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'AlbumTreeTile',
     group: 'Albums',
@@ -2084,7 +2073,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Music ─────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'MusicCoverArt',
     group: 'Music',
@@ -2208,7 +2196,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Chat ──────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'QuarkChatLayout',
     group: 'Chat',
@@ -2503,7 +2490,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Settings ──────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'DiscoveredQuarkList',
     group: 'Settings',
@@ -2655,7 +2641,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Storage ───────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'UploadTargetPicker',
     group: 'Storage',
@@ -2736,7 +2721,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── System ────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'DataProtectionMeter',
     group: 'System',
@@ -2809,7 +2793,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Users ─────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'UserList',
     group: 'Users',
@@ -2944,7 +2927,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Sharing ───────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'ShareSheet',
     group: 'Sharing',
@@ -3070,7 +3052,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Sheets ────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'SheetTabStrip',
     group: 'Sheets',
@@ -3109,7 +3090,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Video─────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'TranscodeDialog',
     group: 'Video',
@@ -3128,7 +3108,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Vault ─────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'VaultPasswordForm',
     group: 'Vault',
@@ -3204,7 +3183,6 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Calendar ──────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'CalendarEmptyNotice',
     group: 'Calendar',

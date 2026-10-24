@@ -166,7 +166,6 @@ class FileTopBarBreadcrumb extends StatelessWidget {
     const maxSegmentPx = 140.0;
     // The least of the current folder's name worth keeping over "⋯".
     const minLastPx = 24.0;
-    // Text style used for segment labels.
     const segStyle = TextStyle(fontSize: 13);
 
     final budget = availableWidth - homeIconPx;

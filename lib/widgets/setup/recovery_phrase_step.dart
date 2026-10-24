@@ -59,7 +59,6 @@ class RecoveryPhraseStep extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // Phrase display box
         Semantics(
           label: 'Recovery phrase: $phrase',
           child: Container(
@@ -110,7 +109,6 @@ class RecoveryPhraseStep extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // Acknowledgement checkbox
         CheckboxListTile(
           value: acknowledged,
           onChanged: onAcknowledgedChanged,

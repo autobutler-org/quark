@@ -255,8 +255,6 @@ class _FileBrowserViewState extends State<FileBrowserView> {
     });
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -328,7 +326,6 @@ class _FileBrowserViewState extends State<FileBrowserView> {
               column,
         ];
 
-        // ── Segmented view ────────────────────────────────────────────────
         if (!widget.isUnifiedView && !widget.isSearchMode) {
           final groups = <String, List<FileNode>>{};
           for (final f in files) {
@@ -398,7 +395,6 @@ class _FileBrowserViewState extends State<FileBrowserView> {
           );
         }
 
-        // ── Grid view ─────────────────────────────────────────────────────
         if (widget.isGridView) {
           final screenWidth = MediaQuery.sizeOf(context).width;
           const horizontalPadding = 16.0;
@@ -554,7 +550,6 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                                     ],
                                   ),
                                 ),
-                                // Checkbox overlay in selection mode.
                                 if (widget.selectionMode)
                                   Positioned(
                                     top: 4,
@@ -599,7 +594,6 @@ class _FileBrowserViewState extends State<FileBrowserView> {
           );
         }
 
-        // ── List view ─────────────────────────────────────────────────────
         return Column(
           children: [
             FileSortHeader(

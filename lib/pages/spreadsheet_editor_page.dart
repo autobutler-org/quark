@@ -24,10 +24,6 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/services/app_settings.dart';
 
-// ---------------------------------------------------------------------------
-// Per-tab state
-// ---------------------------------------------------------------------------
-
 class _SheetTab {
   String name;
   final DataTable table;
@@ -47,10 +43,6 @@ class _SheetTab {
     ...controller.layoutToJson(),
   };
 }
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
 
 /// The editor for one spreadsheet: a tab per sheet, which can be added, renamed or deleted, all saved back to the
 /// Quark. Once the sheet has loaded, the title renames the file itself, and the control bar exports every tab as one
@@ -120,8 +112,6 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     super.dispose();
   }
 
-  // ── Load ──────────────────────────────────────────────────────────────────
-
   Future<void> _loadFile() async {
     setState(() {
       _loading = true;
@@ -190,8 +180,6 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   }
 
   _SheetTab _makeEmptyTab(String name) => _tabFromJson({'name': name});
-
-  // ── Tabs ──────────────────────────────────────────────────────────────────
 
   List<String> get _tabNames => [for (final tab in _tabs) tab.name];
 
@@ -271,8 +259,6 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => tab.dispose());
     _onSheetChanged();
   }
-
-  // ── Save ──────────────────────────────────────────────────────────────────
 
   void _onSheetChanged() {
     if (!_dirty && mounted) setState(() => _dirty = true);
@@ -405,8 +391,6 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       _renaming = false;
     }
   }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {

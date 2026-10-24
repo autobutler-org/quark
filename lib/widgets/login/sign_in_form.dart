@@ -99,7 +99,6 @@ class SignInForm extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Logo / title
           Icon(
             QuarkIcons.home_filled,
             size: 56,
@@ -159,7 +158,6 @@ class SignInForm extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Username
                 TextFormField(
                   controller: usernameController,
                   focusNode: usernameFocus,
@@ -185,7 +183,6 @@ class SignInForm extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-                // Password
                 TextFormField(
                   controller: passwordController,
                   focusNode: passwordFocus,
@@ -226,7 +223,6 @@ class SignInForm extends StatelessWidget {
             key: actionsKey,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Sign in button
               FilledButton(
                 key: const ValueKey('login_submit'),
                 onPressed: loading ? null : onSubmit,
@@ -236,7 +232,6 @@ class SignInForm extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // Forgot password
               TextButton(
                 onPressed: loading ? null : onForgotPassword,
                 child: const Text('Forgot password?'),

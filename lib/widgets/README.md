@@ -8,8 +8,8 @@ package's README is where you go to read a widget's API, and its
 you can edit while it runs.
 
 What is left here is the widgets that are still coupled to the app: they call
-services, push routes, show snack bars, or read `AppSettings`. Each is waiting
-on its page's decoupling issue (see #1600), after which it moves too.
+services, push routes, show snack bars, or read `AppSettings`. Each moves to
+the package when its page is decoupled.
 
 ```text
 lib/widgets/

@@ -18,10 +18,7 @@ import 'format/format_cell_value.dart';
 import 'formula/formula_references.dart';
 import 'formula/formula_text_editing_controller.dart';
 
-// ---------------------------------------------------------------------------
-// Internal snapshot used for undo / redo.
-// ---------------------------------------------------------------------------
-
+/// The sheet state one undo or redo step restores.
 class _TableSnapshot {
   final List<List<String>> cells; // [row][col] as strings
   final List<double> columnWidths;
@@ -81,10 +78,6 @@ class _TableSnapshot {
     c._formats = Map<(int, int), CellFormat>.from(formats);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Controller
-// ---------------------------------------------------------------------------
 
 /// The state behind a `DataSheet`: the table, column widths and row heights, the frozen header rows and columns,
 /// the column filters and the rows they hide, the evaluated value of each cell, and undo and redo.
@@ -181,10 +174,6 @@ class DataSheetController extends ChangeNotifier {
   }
 
   void _onSelectionChanged() => notifyListeners();
-
-  // -------------------------------------------------------------------------
-  // Formula evaluation
-  // -------------------------------------------------------------------------
 
   /// Re-evaluates all formula cells in the sheet and updates [_computedValues].
   /// Called automatically after every mutation.
@@ -380,10 +369,6 @@ class DataSheetController extends ChangeNotifier {
     return size.isFinite ? size.clamp(min, double.infinity) : fallback;
   }, growable: true);
 
-  // -------------------------------------------------------------------------
-  // Read-only accessors
-  // -------------------------------------------------------------------------
-
   int get rowCount => _rows.length;
 
   int get colCount => _rows.isNotEmpty ? _rows[0].value.length : 0;
@@ -391,10 +376,6 @@ class DataSheetController extends ChangeNotifier {
   ValueNotifier<List<DataCell>> rowNotifier(int row) => _rows[row];
 
   DataCell cellAt(int row, int col) => _rows[row].value[col];
-
-  // -------------------------------------------------------------------------
-  // Undo / Redo
-  // -------------------------------------------------------------------------
 
   bool get canUndo => _undoStack.isNotEmpty;
   bool get canRedo => _redoStack.isNotEmpty;
@@ -420,10 +401,6 @@ class DataSheetController extends ChangeNotifier {
     _recompute();
     notifyListeners();
   }
-
-  // -------------------------------------------------------------------------
-  // Cell mutation
-  // -------------------------------------------------------------------------
 
   void updateCell(int row, int col, DataCell newCell) {
     table.rows[row].cells[col] = newCell;
@@ -616,10 +593,6 @@ class DataSheetController extends ChangeNotifier {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Row operations
-  // -------------------------------------------------------------------------
-
   /// Append an empty row at the end.
   void addRow() {
     _pushSnapshot();
@@ -706,10 +679,6 @@ class DataSheetController extends ChangeNotifier {
     _recompute();
     notifyListeners();
   }
-
-  // -------------------------------------------------------------------------
-  // Column operations
-  // -------------------------------------------------------------------------
 
   /// Append an empty column to every row.
   void addColumn() {
@@ -820,10 +789,6 @@ class DataSheetController extends ChangeNotifier {
     };
   }
 
-  // -------------------------------------------------------------------------
-  // Column width configuration
-  // -------------------------------------------------------------------------
-
   /// Marks the start of a drag resize, so the whole drag undoes as one step.
   ///
   /// [setColumnWidth] and [setRowHeight] do not record undo history
@@ -872,10 +837,6 @@ class DataSheetController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // -------------------------------------------------------------------------
-  // Row height configuration
-  // -------------------------------------------------------------------------
-
   void setRowHeights(List<double> heights) {
     rowHeights = List<double>.from(heights, growable: true);
     notifyListeners();
@@ -917,10 +878,6 @@ class DataSheetController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // -------------------------------------------------------------------------
-  // Frozen panes
-  // -------------------------------------------------------------------------
-
   /// Freezes the top [count] rows, clamped to the sheet; 0 unfreezes them.
   void setFrozenRows(int count) {
     final clamped = count.clamp(0, rowCount);
@@ -940,10 +897,6 @@ class DataSheetController extends ChangeNotifier {
     _frozenColumns = clamped;
     notifyListeners();
   }
-
-  // -------------------------------------------------------------------------
-  // Filters
-  // -------------------------------------------------------------------------
 
   /// The active filter on each filtered column, by column index.
   Map<int, ColumnFilter> get filters => Map.unmodifiable(_filters);
@@ -1037,10 +990,6 @@ class DataSheetController extends ChangeNotifier {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Fill operations
-  // -------------------------------------------------------------------------
-
   /// Copy the value of cell `(fromRow, col)` to all rows below it in the same
   /// column.
   void fillDown(int fromRow, int col) => fillDownRange(
@@ -1091,9 +1040,7 @@ class DataSheetController extends ChangeNotifier {
     ]);
   }
 
-  // -------------------------------------------------------------------------
-  // TSV: the clipboard format Google Sheets and Excel share
-  // -------------------------------------------------------------------------
+  // TSV: the clipboard format Google Sheets and Excel share.
 
   /// [range], or the selected range when omitted, as tab-separated text.
   ///
@@ -1235,10 +1182,6 @@ class DataSheetController extends ChangeNotifier {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Cell formats
-  // -------------------------------------------------------------------------
-
   /// Every formatted cell's format, by (row, col). Cells absent from it are
   /// [CellFormat.plain].
   Map<(int, int), CellFormat> get formats => Map.unmodifiable(_formats);
@@ -1309,10 +1252,6 @@ class DataSheetController extends ChangeNotifier {
 
   static int? _same(int index) => index;
 
-  // -------------------------------------------------------------------------
-  // Sort / deduplication
-  // -------------------------------------------------------------------------
-
   /// Sort all rows by the values in [col] (0-based). Numeric values are sorted
   /// numerically; anything else is sorted lexicographically.
   void sortByColumn(int col, {bool ascending = true}) {
@@ -1372,10 +1311,6 @@ class DataSheetController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // -------------------------------------------------------------------------
-  // Find / Replace
-  // -------------------------------------------------------------------------
-
   /// Return all `(row, col)` pairs whose cell value contains [query].
   List<({int row, int col})> findCells(
     String query, {
@@ -1426,10 +1361,6 @@ class DataSheetController extends ChangeNotifier {
     }
     return count;
   }
-
-  // -------------------------------------------------------------------------
-  // CSV export / import
-  // -------------------------------------------------------------------------
 
   /// Return the table as a RFC-4180-compliant CSV string.
   String exportCsv() {
@@ -1593,10 +1524,6 @@ class DataSheetController extends ChangeNotifier {
 
     return rows;
   }
-
-  // -------------------------------------------------------------------------
-  // Dispose
-  // -------------------------------------------------------------------------
 
   @override
   void dispose() {

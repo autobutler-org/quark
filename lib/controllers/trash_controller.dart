@@ -279,8 +279,6 @@ class TrashController extends ChangeNotifier {
     return '$from · $left';
   }
 
-  // ── Selection ────────────────────────────────────────────────────────────
-
   /// Starts a selection with nothing in it, from the app bar — the only way
   /// in, since a long press opens the row's menu instead (#2245).
   void enterSelection() {
@@ -310,8 +308,6 @@ class TrashController extends ChangeNotifier {
     _selectedPaths.clear();
     notifyListeners();
   }
-
-  // ── Mutations ────────────────────────────────────────────────────────────
 
   /// Restores [nodes], one request per device, and returns how many came back.
   Future<int> restore(List<FileNode> nodes) async {

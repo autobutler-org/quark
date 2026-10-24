@@ -57,7 +57,6 @@ class FileTopBarViewsMenu extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── Device filter section ──
         if (hasDeviceFilter) ...[
           const TopBarMenuSectionHeader(title: 'Filter devices'),
           ...devices!.map((device) {
@@ -79,7 +78,6 @@ class FileTopBarViewsMenu extends StatelessWidget {
           const Divider(height: 1, indent: 16, endIndent: 16),
         ],
 
-        // ── Layout section ──
         const TopBarMenuSectionHeader(title: 'Layout'),
         TopBarMenuRadioItem(
           key: const ValueKey('file_top_bar_views_list'),
@@ -101,7 +99,6 @@ class FileTopBarViewsMenu extends StatelessWidget {
         ),
         const Divider(height: 1, indent: 16, endIndent: 16),
 
-        // ── Columns section ──
         const TopBarMenuSectionHeader(title: 'Columns'),
         for (final column in FileListColumn.values)
           CheckboxListTile(
@@ -116,7 +113,6 @@ class FileTopBarViewsMenu extends StatelessWidget {
           ),
         const Divider(height: 1, indent: 16, endIndent: 16),
 
-        // ── Device grouping section ──
         const TopBarMenuSectionHeader(title: 'Grouping'),
         // One toggle with the row's text as its label, rather than a row and
         // an unlabeled switch inside it (#2603).
