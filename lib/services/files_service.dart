@@ -15,6 +15,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/file_save.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/web_download_stub.dart'
     if (dart.library.html) 'package:quark/utils/web_download_web.dart'
@@ -186,14 +187,12 @@ class FilesService with AuthenticatedService {
     String path, {
     List<String>? serials,
   }) async {
-    final normalizedPath = _normalizePath(path);
+    final rootDir = toRootDir(path);
     final serialValues = _serialFilter(serials);
 
     final querySegments = <String>[];
-    if (normalizedPath.isNotEmpty) {
-      querySegments.add(
-        'rootDir=${Uri.encodeQueryComponent(_toRootDir(normalizedPath))}',
-      );
+    if (rootDir.isNotEmpty) {
+      querySegments.add('rootDir=${Uri.encodeQueryComponent(rootDir)}');
     }
     for (final serial in serialValues) {
       querySegments.add('serial=${Uri.encodeQueryComponent(serial)}');
@@ -611,6 +610,24 @@ class FilesService with AuthenticatedService {
     final paths = decoded is Map<String, dynamic> ? decoded['paths'] : null;
     return paths is List ? paths.whereType<String>().toList() : const [];
   }
+
+  /// Uploads [bytes] as one file called [name] into [folder], with the same
+  /// [serial], [overwrite] and [keepBoth] as [uploadFilesFromFormData], and
+  /// returns where it landed (empty from a Quark too old to say).
+  static Future<List<String>> uploadBytes(
+    String folder,
+    String name,
+    List<int> bytes, {
+    String? serial,
+    bool overwrite = false,
+    bool keepBoth = false,
+  }) => uploadFilesFromFormData(
+    folder,
+    [http.MultipartFile.fromBytes('files', bytes, filename: name)],
+    serial: serial,
+    overwrite: overwrite,
+    keepBoth: keepBoth,
+  );
 
   /// Uploads a photo or video's client-rendered [thumbnail] for the file at
   /// [path] (#2379): `PUT /api/v0/thumbnails/{path}`. Used after a resumable
@@ -1101,26 +1118,6 @@ class FilesService with AuthenticatedService {
     }
 
     return null;
-  }
-
-  static String _normalizePath(String path) {
-    final trimmed = path.trim();
-    if (trimmed.isEmpty || trimmed == '/') {
-      return '';
-    }
-
-    final withLeadingSlash = trimmed.startsWith('/') ? trimmed : '/$trimmed';
-    if (withLeadingSlash.endsWith('/') && withLeadingSlash.length > 1) {
-      return withLeadingSlash.substring(0, withLeadingSlash.length - 1);
-    }
-    return withLeadingSlash;
-  }
-
-  static String _toRootDir(String normalizedPath) {
-    if (normalizedPath.isEmpty) {
-      return '';
-    }
-    return normalizedPath.substring(1);
   }
 
   static String _joinPaths(String basePath, String appendPath) {

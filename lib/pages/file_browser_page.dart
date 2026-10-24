@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/file_browser_controller.dart';
 import 'package:quark/controllers/file_browser_events_controller.dart';
@@ -1212,13 +1211,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       };
       final bytes = utf8.encode(emptyContent);
 
-      final file = http.MultipartFile.fromBytes(
-        'files',
-        bytes,
-        filename: fileName,
-      );
-
-      await FilesService.uploadFilesFromFormData(_currentPath, [file]);
+      await FilesService.uploadBytes(_currentPath, fileName, bytes);
 
       if (!mounted) return;
 
@@ -1405,14 +1398,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       );
       final qsheetName = '$baseName.qsheet';
       final folder = parentPath(node.apiPath);
-      final uploadFile = http.MultipartFile.fromBytes(
-        'files',
-        utf8.encode(qsheetJson),
-        filename: qsheetName,
-      );
-      await FilesService.uploadFilesFromFormData(
+      await FilesService.uploadBytes(
         folder,
-        [uploadFile],
+        qsheetName,
+        utf8.encode(qsheetJson),
         serial: serialOrNull(node.deviceSerial),
         overwrite: true,
       );

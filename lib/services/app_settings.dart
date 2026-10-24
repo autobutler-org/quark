@@ -72,6 +72,11 @@ String get apiBaseUrl =>
       defaultValue: defaultApiBaseUrl,
     );
 
+/// The Quark and account in use: [apiBaseUrl] and the signed-in username. A
+/// cache keyed by it forgets what another Quark or account left.
+String get accountScope =>
+    '$apiBaseUrl\u0000${AppSettings.instance.username ?? ''}';
+
 /// [apiBaseUrl] as a [Uri], with the Android emulator's loopback alias applied.
 ///
 /// The emulator reaches the host machine at 10.0.2.2 rather than localhost, so

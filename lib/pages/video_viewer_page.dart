@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:quark/utils/file_viewer_actions.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
-import 'package:http/http.dart' as http;
 import 'package:quark/controllers/video_playback_controller.dart';
 import 'package:quark/services/playback_position_service.dart';
 import 'package:quark/services/files_service.dart';
@@ -484,9 +483,10 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
       // other new file beside the video: the Quark decodes no video (#2380).
       final bytes = await captureVideoFrame(controller, _frameKey);
       final name = videoFrameFileName(widget.name, position);
-      final landed = await FilesService.uploadFilesFromFormData(
+      final landed = await FilesService.uploadBytes(
         parentPath(relPath),
-        [http.MultipartFile.fromBytes('files', bytes, filename: name)],
+        name,
+        bytes,
         serial: serial,
         keepBoth: true,
       );

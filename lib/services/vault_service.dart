@@ -5,7 +5,6 @@ import 'package:quark/models/vault_item.dart';
 import 'package:quark/models/vault_key.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
-import 'package:quark/utils/error_text.dart';
 
 /// The signed-in account's own vault under `/api/v0/vault` (#3459): its
 /// wrapped vault key and its items.
@@ -109,11 +108,8 @@ class VaultService with AuthenticatedService {
 
   static Uri _uri(String suffix) => apiBaseUri.resolve('/api/v0/vault$suffix');
 
-  static void _check(http.Response response, String context) {
-    final status = response.statusCode;
-    if (status >= 200 && status < 300) return;
-    // The Quark's text for a refused vault request is not copy: every status
-    // it sends has a sentence of its own in Errors.
-    throw ApiException(status, context);
-  }
+  // The Quark's text for a refused vault request is not copy: every status it
+  // sends has a sentence of its own in Errors.
+  static void _check(http.Response response, String context) =>
+      throwUnlessOk(response, context, serverText: false);
 }

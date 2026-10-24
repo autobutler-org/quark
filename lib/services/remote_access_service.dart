@@ -119,13 +119,7 @@ class RemoteAccessService with AuthenticatedService {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(<String, dynamic>{}),
     );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throwApiError(
-        response.statusCode,
-        serverErrorText(response.body),
-        'Failed to enable remote access',
-      );
-    }
+    throwUnlessOk(response, 'Failed to enable remote access');
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return RemoteAccessStatus.fromJson(json);
   }
@@ -133,13 +127,7 @@ class RemoteAccessService with AuthenticatedService {
   static Future<RemoteAccessStatus> disable() async {
     final uri = apiBaseUri.resolve('/api/v0/settings/remote-access');
     final response = await instance.authenticatedDelete(uri);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throwApiError(
-        response.statusCode,
-        serverErrorText(response.body),
-        'Failed to disable remote access',
-      );
-    }
+    throwUnlessOk(response, 'Failed to disable remote access');
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return RemoteAccessStatus.fromJson(json);
   }

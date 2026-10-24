@@ -37,22 +37,9 @@ class HostnameService with AuthenticatedService {
   }
 
   static HostnameStatus _read(http.Response response, String context) {
-    final status = response.statusCode;
-    if (status >= 200 && status < 300) {
-      return HostnameStatus.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
-      );
-    }
-    if (status >= 400 && status < 500) {
-      Object? message;
-      try {
-        final body = jsonDecode(response.body);
-        if (body is Map<String, dynamic>) message = body['error'];
-      } on FormatException {
-        message = null;
-      }
-      throwApiError(status, message, context);
-    }
-    throw ApiException(status, context);
+    throwUnlessOk(response, context, clientErrorsOnly: true);
+    return HostnameStatus.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 }

@@ -6,7 +6,6 @@ import 'package:data_table/data_table.dart';
 import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
@@ -297,14 +296,10 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       final bytes = utf8.encode(jsonStr);
       final fileName = '$_displayName.qsheet';
       final parentDir = parentPath(widget.filePath);
-      final file = http.MultipartFile.fromBytes(
-        'files',
-        bytes,
-        filename: fileName,
-      );
-      await FilesService.uploadFilesFromFormData(
+      await FilesService.uploadBytes(
         parentDir,
-        [file],
+        fileName,
+        bytes,
         serial: serialOrNull(widget.deviceSerial),
         overwrite: true,
       );

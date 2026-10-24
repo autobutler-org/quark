@@ -81,7 +81,7 @@ class SharingService with AuthenticatedService {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/access/principals'),
     );
-    _check(response, 'list principals');
+    throwUnlessOk(response, 'list principals');
     return SharePrincipals.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
@@ -94,7 +94,7 @@ class SharingService with AuthenticatedService {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/access/mine'),
     );
-    _check(response, 'list what is shared with you');
+    throwUnlessOk(response, 'list what is shared with you');
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     return [
       for (final item
@@ -107,7 +107,7 @@ class SharingService with AuthenticatedService {
   static Uri get _accessUri => apiBaseUri.resolve('/api/v0/access');
 
   static PathAccess _access(http.Response response, String context) {
-    _check(response, context);
+    throwUnlessOk(response, context);
     return PathAccess.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
@@ -115,18 +115,4 @@ class SharingService with AuthenticatedService {
 
   /// Throws for a refused [response], with the Quark's own words when it
   /// sent them.
-  static void _check(http.Response response, String context) {
-    final status = response.statusCode;
-    if (status >= 200 && status < 300) return;
-    throwApiError(status, _errorText(response.body), context);
-  }
-
-  static Object? _errorText(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      return decoded is Map ? decoded['error'] : null;
-    } on FormatException {
-      return null;
-    }
-  }
 }

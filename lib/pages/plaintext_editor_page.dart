@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -101,14 +100,10 @@ class _PlaintextEditorPageState extends State<PlaintextEditorPage> {
       final fileName = _displayName;
       final parentDir = parentPath(widget.filePath);
       final serial = serialOrNull(widget.deviceSerial);
-      final file = http.MultipartFile.fromBytes(
-        'files',
-        bytes,
-        filename: fileName,
-      );
-      await FilesService.uploadFilesFromFormData(
+      await FilesService.uploadBytes(
         parentDir,
-        [file],
+        fileName,
+        bytes,
         serial: serial,
         overwrite: true,
       );

@@ -33,7 +33,8 @@ typedef CachedPhotoPage = ({
 /// ```
 class PhotosListCache {
   /// [scope] defaults to the active Quark and account; a test passes its own.
-  PhotosListCache({String Function()? scope}) : _scope = scope ?? _activeScope;
+  PhotosListCache({String Function()? scope})
+    : _scope = scope ?? (() => accountScope);
 
   /// The cache every Photos page shares.
   static final instance = PhotosListCache();
@@ -45,9 +46,6 @@ class PhotosListCache {
   (PhotoSortField, PhotoSortOrder)? _sort;
   CachedPhotoPage? _page;
   Set<String>? _favoriteKeys;
-
-  static String _activeScope() =>
-      '$apiBaseUrl\u0000${AppSettings.instance.username ?? ''}';
 
   /// The Quark and account in use right now. An answer asked for under one
   /// scope must not be kept once this has moved on.

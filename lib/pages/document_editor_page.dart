@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill_to_pdf/flutter_quill_to_pdf.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:printing/printing.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
@@ -393,14 +392,10 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
       final fileName = '$_displayName.qdoc';
       final parentDir = parentPath(widget.filePath);
       final serial = serialOrNull(widget.deviceSerial);
-      final file = http.MultipartFile.fromBytes(
-        'files',
-        bytes,
-        filename: fileName,
-      );
-      await FilesService.uploadFilesFromFormData(
+      await FilesService.uploadBytes(
         parentDir,
-        [file],
+        fileName,
+        bytes,
         serial: serial,
         overwrite: true,
       );

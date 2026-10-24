@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
-import 'package:quark/utils/error_text.dart';
 
 /// The channel key and event routes under `/api/v0/chat/channels/:id` (#2417):
 /// key versions and this account's grants, the grants it can fill, uploading
@@ -23,7 +22,7 @@ class ChatChannelKeysService with AuthenticatedService {
   /// Channel [channelId]'s key versions and this account's grants.
   static Future<ChatChannelKeys> fetchKeys(int channelId) async {
     final response = await instance.authenticatedGet(_uri(channelId, '/keys'));
-    _check(response, 'fetch keys of channel $channelId');
+    throwUnlessOk(response, 'fetch keys of channel $channelId');
     return ChatChannelKeys.fromJson(_json(response));
   }
 
@@ -45,7 +44,7 @@ class ChatChannelKeysService with AuthenticatedService {
       }),
     );
     if (response.statusCode == 409) return null;
-    _check(response, 'create key $version of channel $channelId');
+    throwUnlessOk(response, 'create key $version of channel $channelId');
     return ChatChannelEvent.fromJson(
       _json(response)['event'] as Map<String, dynamic>,
     );
@@ -56,7 +55,7 @@ class ChatChannelKeysService with AuthenticatedService {
     final response = await instance.authenticatedGet(
       _uri(channelId, '/keys/pending'),
     );
-    _check(response, 'fetch pending grants of channel $channelId');
+    throwUnlessOk(response, 'fetch pending grants of channel $channelId');
     return ChatPendingGrants.fromJson(_json(response));
   }
 
@@ -73,7 +72,7 @@ class ChatChannelKeysService with AuthenticatedService {
         'grants': [for (final g in grants) g.toJson()],
       }),
     );
-    _check(response, 'upload grants of channel $channelId');
+    throwUnlessOk(response, 'upload grants of channel $channelId');
   }
 
   /// Deletes this account's own grant of [version], one it couldn't open or
@@ -82,7 +81,7 @@ class ChatChannelKeysService with AuthenticatedService {
     final response = await instance.authenticatedDelete(
       _uri(channelId, '/keys/grants/$version'),
     );
-    _check(response, 'reject grant $version of channel $channelId');
+    throwUnlessOk(response, 'reject grant $version of channel $channelId');
   }
 
   /// The channel's events after [after], oldest first, at most 200.
@@ -93,7 +92,7 @@ class ChatChannelKeysService with AuthenticatedService {
     final response = await instance.authenticatedGet(
       _uri(channelId, '/events', {'after': '$after'}),
     );
-    _check(response, 'fetch events of channel $channelId');
+    throwUnlessOk(response, 'fetch events of channel $channelId');
     return [
       for (final e in _json(response)['events'] as List? ?? const [])
         ChatChannelEvent.fromJson(e as Map<String, dynamic>),
@@ -111,7 +110,7 @@ class ChatChannelKeysService with AuthenticatedService {
       headers: const {'Content-Type': 'application/json'},
       body: jsonEncode({'signature': base64Encode(signature)}),
     );
-    _check(response, 'sign event $eventId of channel $channelId');
+    throwUnlessOk(response, 'sign event $eventId of channel $channelId');
   }
 
   static Uri _uri(int channelId, String suffix, [Map<String, String>? query]) =>
@@ -121,17 +120,4 @@ class ChatChannelKeysService with AuthenticatedService {
 
   static Map<String, dynamic> _json(http.Response response) =>
       jsonDecode(response.body) as Map<String, dynamic>;
-
-  static void _check(http.Response response, String context) {
-    final status = response.statusCode;
-    if (status >= 200 && status < 300) return;
-    Object? error;
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map) error = decoded['error'];
-    } on FormatException {
-      error = null;
-    }
-    throwApiError(status, error, context);
-  }
 }

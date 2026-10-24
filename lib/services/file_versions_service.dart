@@ -58,9 +58,6 @@ class FileVersionsService with AuthenticatedService {
     queryParameters: {'path': path},
   );
 
-  static void _check(http.Response response, String context) {
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to $context');
-    }
-  }
+  static void _check(http.Response response, String context) =>
+      throwUnlessOk(response, context, serverText: false);
 }
