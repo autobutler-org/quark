@@ -13,6 +13,7 @@ import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/chat_messages_service.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:sodium/sodium_sumo.dart';
 
 /// One open channel's timeline (#2418): its messages, decrypted in memory,
@@ -40,7 +41,7 @@ import 'package:sodium/sodium_sumo.dart';
 ///
 /// Plaintext is never written anywhere; [dispose] drops it. The chat page
 /// makes one per open channel and disposes it on leaving.
-class ChatMessagesController extends ChangeNotifier {
+class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   /// Builds a controller for [channelId]. Every collaborator has a real
   /// default; tests pass fakes.
   ChatMessagesController({
@@ -130,7 +131,6 @@ class ChatMessagesController extends ChangeNotifier {
   List<ChatTimelineSystem> _system = const [];
   final List<StreamSubscription<Object?>> _subs = [];
   Future<void>? _catchingUp;
-  bool _disposed = false;
 
   /// Whether older messages may exist before the oldest one loaded.
   bool hasOlder = true;
@@ -179,7 +179,7 @@ class ChatMessagesController extends ChangeNotifier {
       _keys.addListener(_onKeysChanged);
     }
     isLoading = true;
-    _notify();
+    notifyListeners();
     try {
       await _keys.ensureKeys(channelId);
       final page = await _fetchMessages(channelId, limit: pageSize);
@@ -191,7 +191,7 @@ class ChatMessagesController extends ChangeNotifier {
       error = e;
     } finally {
       isLoading = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -218,7 +218,7 @@ class ChatMessagesController extends ChangeNotifier {
     } catch (e) {
       error = e;
     }
-    _notify();
+    notifyListeners();
   }
 
   /// Encrypts [text] under the channel's current key and posts it. Throws a
@@ -248,14 +248,14 @@ class ChatMessagesController extends ChangeNotifier {
       clientMessageId: clientMessageId,
     );
     _put(stored, text: text);
-    _notify();
+    notifyListeners();
   }
 
   /// Deletes message [messageId]: this account's own, or anyone's in a
   /// channel it owns.
   Future<void> delete(int messageId) async {
     _put(await _deleteMessage(messageId));
-    _notify();
+    notifyListeners();
   }
 
   /// Adds this account's [emoji] reaction to message [messageId], or takes
@@ -294,7 +294,6 @@ class ChatMessagesController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _disposed = true;
     for (final sub in _subs) {
       sub.cancel();
     }
@@ -337,7 +336,7 @@ class ChatMessagesController extends ChangeNotifier {
           after: after,
           limit: ChatMessagesService.maxPage,
         );
-        if (_disposed) return;
+        if (isDisposed) return;
         page.forEach(_put);
         if (page.length < ChatMessagesService.maxPage) break;
         after = page.last.id;
@@ -347,7 +346,7 @@ class ChatMessagesController extends ChangeNotifier {
     } catch (e) {
       error = e;
     }
-    _notify();
+    notifyListeners();
   }
 
   /// Fetches every event again, since a signature can land on an old one.
@@ -363,7 +362,7 @@ class ChatMessagesController extends ChangeNotifier {
       events.addAll(page);
       if (page.length < _eventsPage) break;
     }
-    if (_disposed) return;
+    if (isDisposed) return;
     _system = [
       for (final e in events)
         ChatTimelineSystem(event: e, isVerified: _keys.verifyEvent(e)),
@@ -403,7 +402,7 @@ class ChatMessagesController extends ChangeNotifier {
       text: held.text,
       reactions: _openReactions(message),
     );
-    _notify();
+    notifyListeners();
   }
 
   /// Decrypts [message]'s reactions; one without its key, or that won't
@@ -500,7 +499,7 @@ class ChatMessagesController extends ChangeNotifier {
       _messages[entry.message.id] = _open(entry.message);
       changed = true;
     }
-    if (changed) _notify();
+    if (changed) notifyListeners();
   }
 
   void _onEvent(FileEvent event) {
@@ -513,13 +512,13 @@ class ChatMessagesController extends ChangeNotifier {
         final message = data['message'];
         if (message is! Map<String, dynamic>) return;
         _put(ChatMessage.fromJson(message));
-        _notify();
+        notifyListeners();
       case 'chat_message_deleted':
         final id = (data['messageId'] as num?)?.toInt();
         final held = _messages[id];
         if (held == null) return;
         _put(held.message.tombstone(DateTime.now().toUtc()));
-        _notify();
+        notifyListeners();
       case 'chat_reaction_changed':
         final messageId = (data['messageId'] as num?)?.toInt();
         final reactionId = (data['reactionId'] as num?)?.toInt();
@@ -533,14 +532,10 @@ class ChatMessagesController extends ChangeNotifier {
           remove: {reactionId},
         );
       case 'chat_channel_changed':
-        _reloadEvents().then((_) => _notify()).catchError((Object e) {
+        _reloadEvents().then((_) => notifyListeners()).catchError((Object e) {
           debugPrint('[chat_messages_controller.dart] channel $channelId: $e');
         });
     }
-  }
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
   }
 
   static int _idOf(ChatTimelineEntry entry) => switch (entry) {

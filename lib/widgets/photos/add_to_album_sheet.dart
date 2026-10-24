@@ -3,6 +3,7 @@ import 'package:quark/models/photo_album.dart';
 import 'package:quark/services/album_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -165,9 +166,7 @@ class _AddToAlbumSheetHostState extends State<AddToAlbumSheetHost> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'update the album'))),
-      );
+      showMessage(context, Errors.message(e, 'update the album'));
     }
   }
 
@@ -197,9 +196,7 @@ class _AddToAlbumSheetHostState extends State<AddToAlbumSheetHost> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.album(e, 'create the album'))),
-      );
+      showMessage(context, Errors.album(e, 'create the album'));
     }
   }
 

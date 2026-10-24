@@ -9,6 +9,7 @@ import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_slides/quark_slides.dart';
 
 /// Downloads and decodes the presentation at a path.
@@ -166,7 +167,7 @@ enum SlideSaveState {
 ///
 /// Service calls are parameters defaulting to [SlidesService], so a test
 /// passes fakes.
-class SlideEditorController extends ChangeNotifier {
+class SlideEditorController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller for the presentation at [filePath] on the device
   /// [deviceSerial] (empty for the Quark's own storage). Call [load] to open it.
   SlideEditorController({
@@ -186,8 +187,8 @@ class SlideEditorController extends ChangeNotifier {
     bool readOnly = false,
   }) : _readOnly = readOnly,
        clipboard = clipboard ?? systemClipboard {
-    tables.addListener(_notify);
-    charts.addListener(_notify);
+    tables.addListener(notifyListeners);
+    charts.addListener(notifyListeners);
   }
 
   /// The presentation's path, relative to the device's files root.
@@ -321,7 +322,6 @@ class SlideEditorController extends ChangeNotifier {
   Set<String> _selectedElementIds = const {};
   double _zoom = 1;
   Timer? _autosaveTimer;
-  bool _disposed = false;
   bool _notesOpen = false;
   ({String slideId, String text})? _pendingNotes;
 
@@ -476,10 +476,10 @@ class SlideEditorController extends ChangeNotifier {
   Future<void> load() async {
     _isLoading = true;
     _loadError = null;
-    _notify();
+    notifyListeners();
     try {
       final loaded = await loadPresentation(filePath, serial: _serial);
-      if (_disposed) return;
+      if (isDisposed) return;
       _doc?.dispose();
       _doc = SlideDocumentNotifier(loaded, newId: newId)
         ..addListener(_onDocumentChanged);
@@ -495,7 +495,7 @@ class SlideEditorController extends ChangeNotifier {
       _loadError = e;
     }
     _isLoading = false;
-    _notify();
+    notifyListeners();
   }
 
   // ── Slide panel ───────────────────────────────────────────────────────────
@@ -505,7 +505,7 @@ class SlideEditorController extends ChangeNotifier {
     if (slideId == _selectedSlideId) return;
     _commitNotes();
     _showSlide(slideId);
-    _notify();
+    notifyListeners();
   }
 
   /// Shows the slide before the selected one; nothing at the first.
@@ -568,7 +568,7 @@ class SlideEditorController extends ChangeNotifier {
         index: at == 0 ? slides.length : at,
       ),
     );
-    _notify();
+    notifyListeners();
   }
 
   /// Copies the slide [slideId] in after itself and selects the copy.
@@ -577,7 +577,7 @@ class SlideEditorController extends ChangeNotifier {
     if (doc == null || _readOnly) return;
     _commitNotes();
     _showSlide(doc.controller.duplicateSlide(slideId));
-    _notify();
+    notifyListeners();
   }
 
   /// Deletes the slide [slideId], unless it is the last one. The selection
@@ -593,7 +593,7 @@ class SlideEditorController extends ChangeNotifier {
     if (slideId == _selectedSlideId) {
       _showSlide(slides[index.clamp(0, slides.length - 1)].id);
     }
-    _notify();
+    notifyListeners();
   }
 
   /// Whether [undoDeleteSlide] would put back the last deleted slide: true
@@ -648,7 +648,7 @@ class SlideEditorController extends ChangeNotifier {
   void _keepSelection(int previousIndex) {
     if (selectedSlide != null || slides.isEmpty) return;
     _showSlide(slides[previousIndex.clamp(0, slides.length - 1)].id);
-    _notify();
+    notifyListeners();
   }
 
   // ── Canvas ────────────────────────────────────────────────────────────────
@@ -659,7 +659,7 @@ class SlideEditorController extends ChangeNotifier {
     _selectedElementIds = Set.unmodifiable(ids);
     if (!setEquals(ids, {tables.tableId})) tables.clear();
     _attachText();
-    _notify();
+    notifyListeners();
   }
 
   /// Sets the canvas zoom, kept within [SlideCanvas.minZoom] and
@@ -668,7 +668,7 @@ class SlideEditorController extends ChangeNotifier {
     final next = zoom.clamp(SlideCanvas.minZoom, SlideCanvas.maxZoom);
     if (next == _zoom) return;
     _zoom = next;
-    _notify();
+    notifyListeners();
   }
 
   /// Zooms to the next of [zoomLevels] above the current zoom.
@@ -886,7 +886,7 @@ class SlideEditorController extends ChangeNotifier {
     final slideId = _selectedSlideId;
     if (_readOnly || doc == null || slideId == null) return;
     final ids = await clipboard.paste(doc.controller, slideId);
-    if (_disposed || ids.isEmpty || slideId != _selectedSlideId) return;
+    if (isDisposed || ids.isEmpty || slideId != _selectedSlideId) return;
     selectElements(ids.toSet());
   }
 
@@ -1019,7 +1019,7 @@ class SlideEditorController extends ChangeNotifier {
   /// Shows or hides the properties panel beside the canvas.
   void toggleProperties() {
     _propertiesOpen = !_propertiesOpen;
-    _notify();
+    notifyListeners();
   }
 
   // ── Tables ────────────────────────────────────────────────────────────────
@@ -1306,7 +1306,7 @@ class SlideEditorController extends ChangeNotifier {
         final pick = await pickImageFile();
         if (pick == null) return null;
         _imageUpload = (name: pick.name, progress: 0);
-        _notify();
+        notifyListeners();
         return uploadImage(
           filePath,
           name: pick.name,
@@ -1315,7 +1315,7 @@ class SlideEditorController extends ChangeNotifier {
           serial: _serial,
           onProgress: (sent) {
             _imageUpload = (name: pick.name, progress: sent);
-            _notify();
+            notifyListeners();
           },
         );
       });
@@ -1347,7 +1347,7 @@ class SlideEditorController extends ChangeNotifier {
     try {
       final picture = await fetch();
       final doc = _doc;
-      if (picture == null || doc == null || _disposed) return;
+      if (picture == null || doc == null || isDisposed) return;
       // The slide it was picked for may have gone while it uploaded.
       if (presentation?.slideById(slideId) == null) return;
       final id = doc.controller.insertImage(
@@ -1358,10 +1358,10 @@ class SlideEditorController extends ChangeNotifier {
       );
       if (slideId == _selectedSlideId) selectElements({id});
     } catch (e) {
-      if (!_disposed) onImageInsertFailed?.call(e);
+      if (!isDisposed) onImageInsertFailed?.call(e);
     } finally {
       _imageUpload = null;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -1379,7 +1379,7 @@ class SlideEditorController extends ChangeNotifier {
     // The save chip and undo change once, not on every key.
     if (!wasPending) {
       _autosaveTimer?.cancel();
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -1403,7 +1403,7 @@ class SlideEditorController extends ChangeNotifier {
   /// Opens or closes the notes panel under the canvas.
   void toggleNotes() {
     _notesOpen = !_notesOpen;
-    _notify();
+    notifyListeners();
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -1419,7 +1419,7 @@ class SlideEditorController extends ChangeNotifier {
     }
     _autosaveTimer?.cancel();
     if (isDirty && !_readOnly) _autosaveTimer = Timer(autosaveDelay, save);
-    _notify();
+    notifyListeners();
   }
 
   // ── Export ────────────────────────────────────────────────────────────────
@@ -1433,9 +1433,9 @@ class SlideEditorController extends ChangeNotifier {
   Future<void> exportPptx() async {
     if (_exporting || presentation == null) return;
     _exporting = true;
-    _notify();
+    notifyListeners();
     try {
-      if (!await save() || _disposed) return;
+      if (!await save() || isDisposed) return;
       await exportPresentation(
         filePath,
         serial: _serial,
@@ -1444,10 +1444,10 @@ class SlideEditorController extends ChangeNotifier {
             '.pptx',
       );
     } catch (e) {
-      if (!_disposed) onExportFailed?.call(e);
+      if (!isDisposed) onExportFailed?.call(e);
     } finally {
       _exporting = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -1460,7 +1460,7 @@ class SlideEditorController extends ChangeNotifier {
     final current = presentation;
     if (current == null || _saving || !isDirty || _readOnly) return !isDirty;
     _saving = true;
-    _notify();
+    notifyListeners();
     try {
       await savePresentation(filePath, current, serial: _serial);
       _saved = current;
@@ -1478,16 +1478,12 @@ class SlideEditorController extends ChangeNotifier {
       }
     }
     _saving = false;
-    _notify();
+    notifyListeners();
     // Edits made while that save was in flight wait for the next one.
-    if (_saveError == null && isDirty && !_disposed) {
+    if (_saveError == null && isDirty && !isDisposed) {
       _autosaveTimer = Timer(autosaveDelay, save);
     }
     return !isDirty;
-  }
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
   }
 
   /// Stops the autosave. Edits still waiting for it are saved on the way
@@ -1507,7 +1503,6 @@ class SlideEditorController extends ChangeNotifier {
         ).catchError((Object _) {}),
       );
     }
-    _disposed = true;
     _doc?.dispose();
     tools.dispose();
     textEditing.dispose();

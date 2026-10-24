@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/services/auth_service.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 
 typedef RequestAccountFn =
     Future<String> Function({
@@ -25,7 +26,7 @@ enum RequestAccountStep {
 /// The request call arrives as a parameter defaulting to
 /// [AuthService.requestAccount], so a test passes a fake. Failures stay raw;
 /// the page turns them into a sentence with `Errors`.
-class RequestAccountController extends ChangeNotifier {
+class RequestAccountController extends ChangeNotifier with SafeNotifier {
   RequestAccountController({
     RequestAccountFn requestAccount = AuthService.requestAccount,
   }) : _requestAccount = requestAccount;
@@ -37,7 +38,6 @@ class RequestAccountController extends ChangeNotifier {
   Object? _error;
   String? _recoveryPhrase;
   bool _acknowledged = false;
-  bool _disposed = false;
 
   RequestAccountStep get step => _step;
 
@@ -67,14 +67,14 @@ class RequestAccountController extends ChangeNotifier {
         username: username,
         password: password,
       );
-      if (_disposed) return;
+      if (isDisposed) return;
       _recoveryPhrase = phrase;
       _step = RequestAccountStep.phrase;
     } catch (error) {
-      if (_disposed) return;
+      if (isDisposed) return;
       _error = error;
     } finally {
-      if (!_disposed) {
+      if (!isDisposed) {
         _isSubmitting = false;
         notifyListeners();
       }
@@ -93,11 +93,5 @@ class RequestAccountController extends ChangeNotifier {
     if (_step != RequestAccountStep.phrase || !_acknowledged) return;
     _step = RequestAccountStep.sent;
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 }

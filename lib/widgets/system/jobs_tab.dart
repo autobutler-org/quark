@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The System page's Jobs tab: long-running jobs on the Quark, conversions
@@ -29,9 +30,7 @@ class _JobsTabState extends State<JobsTab>
   Future<void> _report(Future<String?> action) async {
     final message = await action;
     if (message == null || !mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showMessage(context, message);
   }
 
   @override

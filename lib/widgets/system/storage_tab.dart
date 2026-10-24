@@ -10,6 +10,7 @@ import 'package:quark/services/data_protection_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/widgets/storage_devices/credentials_dialog.dart';
 import 'package:quark/widgets/storage_devices/role_dialog.dart';
@@ -96,15 +97,11 @@ class _StorageTabState extends State<StorageTab>
     try {
       await StorageService.mountDevice(device.serial);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${device.name} mounted successfully')),
-      );
+      showMessage(context, '${device.name} mounted successfully');
       await refresh();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'mount the drive'))),
-      );
+      showMessage(context, Errors.message(e, 'mount the drive'));
     } finally {
       if (mounted) setState(() => _mounting.remove(device.serial));
     }
@@ -145,15 +142,11 @@ class _StorageTabState extends State<StorageTab>
         acknowledgeHealth: gate.acknowledgeHealth,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Role set to ${_roleLabel(result)}')),
-      );
+      showMessage(context, 'Role set to ${_roleLabel(result)}');
       await refresh();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'set the drive role'))),
-      );
+      showMessage(context, Errors.message(e, 'set the drive role'));
     }
   }
 
@@ -222,9 +215,7 @@ class _StorageTabState extends State<StorageTab>
       _startPolling();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'start the backup'))),
-      );
+      showMessage(context, Errors.message(e, 'start the backup'));
     }
   }
 
@@ -247,16 +238,11 @@ class _StorageTabState extends State<StorageTab>
         _pollTimer?.cancel();
         _pollTimer = null;
         if (status.isComplete) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Backup completed successfully')),
-          );
+          showMessage(context, 'Backup completed successfully');
         } else if (status.isFailed) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Backup failed: ${status.errorMsg ?? "unknown error"}',
-              ),
-            ),
+          showMessage(
+            context,
+            'Backup failed: ${status.errorMsg ?? "unknown error"}',
           );
         }
         await refresh();
@@ -273,37 +259,27 @@ class _StorageTabState extends State<StorageTab>
         _activeBackupJobId = null;
         _backupStatus = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'check the backup'))),
-      );
+      showMessage(context, Errors.message(e, 'check the backup'));
     }
   }
 
   Future<void> _verifyBackup(StorageDevice device) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Verifying backup integrity...')),
-    );
+    showMessage(context, 'Verifying backup integrity...');
     try {
       final result = await StorageService.verifySnapshotBackup(
         deviceSerial: device.serial,
         full: true,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.isHealthy
-                ? 'Backup verified: ${result.ok} files OK'
-                : 'Issues found: ${result.missing.length} missing, ${result.corrupted.length} corrupted',
-          ),
-          duration: const Duration(seconds: 4),
-        ),
+      showMessage(
+        context,
+        result.isHealthy
+            ? 'Backup verified: ${result.ok} files OK'
+            : 'Issues found: ${result.missing.length} missing, ${result.corrupted.length} corrupted',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'verify the backup'))),
-      );
+      showMessage(context, Errors.message(e, 'verify the backup'));
     }
   }
 

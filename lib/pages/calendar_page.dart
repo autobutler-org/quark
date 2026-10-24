@@ -10,6 +10,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/calendar/calendar_bar_bottom.dart';
 import 'package:quark/widgets/calendar/calendar_body.dart';
 import 'package:quark/widgets/calendar/show_calendar_event_editor.dart';
@@ -192,9 +193,7 @@ class _CalendarPageState extends State<CalendarPage>
       return true;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.message(e, 'move the event'))),
-        );
+        showMessage(context, Errors.message(e, 'move the event'));
       }
       return false;
     }
@@ -210,9 +209,7 @@ class _CalendarPageState extends State<CalendarPage>
       await _calendar.undo();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.message(e, 'undo the move'))),
-        );
+        showMessage(context, Errors.message(e, 'undo the move'));
       }
     }
   }

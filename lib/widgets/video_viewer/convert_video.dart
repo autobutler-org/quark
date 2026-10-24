@@ -4,6 +4,7 @@ import 'package:quark/models/transcode_format.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/video_viewer/transcode_dialog_host.dart';
 
 /// Queues a conversion of [relPath] — [FilesService.transcodeVideo].
@@ -44,22 +45,19 @@ Future<void> convertVideo(
   try {
     await transcode(relPath, serial: serial, format: format);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Conversion started'),
-        action: SnackBarAction(
-          label: 'View',
-          onPressed: () {
-            if (!context.mounted) return;
-            context.go(AppRoutes.systemTab(SystemTab.jobs));
-          },
-        ),
+    showMessage(
+      context,
+      'Conversion started',
+      action: SnackBarAction(
+        label: 'View',
+        onPressed: () {
+          if (!context.mounted) return;
+          context.go(AppRoutes.systemTab(SystemTab.jobs));
+        },
       ),
     );
   } catch (e) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(Errors.transcode(e))));
+    showMessage(context, Errors.transcode(e));
   }
 }

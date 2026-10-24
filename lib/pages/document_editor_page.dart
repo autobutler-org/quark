@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -358,11 +359,10 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
       await _doSave();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(Errors.message(e, 'auto-save')),
-          duration: const Duration(seconds: 3),
-        ),
+      showMessage(
+        context,
+        Errors.message(e, 'auto-save'),
+        duration: const Duration(seconds: 3),
       );
     }
   }
@@ -372,14 +372,10 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     try {
       await _doSave();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Saved')));
+      showMessage(context, 'Saved');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'save the document'))),
-      );
+      showMessage(context, Errors.message(e, 'save the document'));
     }
   }
 
@@ -425,9 +421,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
           await _doSave();
         } catch (e) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(Errors.message(e, 'save the document'))),
-          );
+          showMessage(context, Errors.message(e, 'save the document'));
           return;
         }
         if (!mounted || _dirty) return;
@@ -442,9 +436,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
         );
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.message(e, 'rename the document'))),
-        );
+        showMessage(context, Errors.message(e, 'rename the document'));
         return;
       }
       if (!mounted) return;
@@ -498,17 +490,13 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
       final bytes = await _buildPdfBytes();
       if (!mounted) return;
       if (bytes == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.couldNot('export the document'))),
-        );
+        showMessage(context, Errors.couldNot('export the document'));
         return;
       }
       await Printing.sharePdf(bytes: bytes, filename: '$_displayName.pdf');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'export the document'))),
-      );
+      showMessage(context, Errors.message(e, 'export the document'));
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -521,17 +509,13 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
       final bytes = await _buildPdfBytes();
       if (!mounted) return;
       if (bytes == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.couldNot('print the document'))),
-        );
+        showMessage(context, Errors.couldNot('print the document'));
         return;
       }
       await Printing.layoutPdf(onLayout: (_) => bytes);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'print the document'))),
-      );
+      showMessage(context, Errors.message(e, 'print the document'));
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -762,22 +746,11 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   }
 
   Future<bool> _confirmDiscard(BuildContext context) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Unsaved changes'),
-        content: const Text('You have unsaved changes. Leave without saving?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Stay'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Leave'),
-          ),
-        ],
-      ),
+    final result = await confirmAction(
+      context,
+      title: 'Unsaved changes',
+      message: 'You have unsaved changes. Leave without saving?',
+      confirmLabel: 'Leave',
     );
     return result ?? false;
   }

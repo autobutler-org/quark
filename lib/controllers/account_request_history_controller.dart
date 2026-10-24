@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/models/account_request_decision.dart';
 import 'package:quark/services/account_request_history_service.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 
 typedef ListAccountRequestHistoryFn =
     Future<List<AccountRequestDecision>> Function();
@@ -12,7 +13,7 @@ typedef ListAccountRequestHistoryFn =
 /// [AccountRequestHistoryService], so a test passes a fake without a mocking
 /// library. A failure comes back raw; the page turns it into a sentence with
 /// `Errors`.
-class AccountRequestHistoryController extends ChangeNotifier {
+class AccountRequestHistoryController extends ChangeNotifier with SafeNotifier {
   AccountRequestHistoryController({
     ListAccountRequestHistoryFn listHistory = AccountRequestHistoryService.list,
   }) : _listHistory = listHistory;
@@ -25,7 +26,6 @@ class AccountRequestHistoryController extends ChangeNotifier {
 
   /// Bumped by every load, so a slow response cannot overwrite a newer one.
   int _generation = 0;
-  bool _disposed = false;
 
   /// The decisions, newest first.
   List<AccountRequestDecision> get decisions => _decisions;
@@ -39,7 +39,7 @@ class AccountRequestHistoryController extends ChangeNotifier {
   /// Fetches the decisions. A newer load supersedes this one.
   Future<void> load() async {
     final generation = ++_generation;
-    if (!_disposed) notifyListeners();
+    notifyListeners();
     try {
       final decisions = await _listHistory();
       if (!_isCurrent(generation)) return;
@@ -56,11 +56,5 @@ class AccountRequestHistoryController extends ChangeNotifier {
     }
   }
 
-  bool _isCurrent(int generation) => !_disposed && generation == _generation;
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
-  }
+  bool _isCurrent(int generation) => !isDisposed && generation == _generation;
 }

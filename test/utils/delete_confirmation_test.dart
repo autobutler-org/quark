@@ -11,12 +11,14 @@ import 'package:quark/utils/trash_config.dart';
 /// The invariant these tests pin: the confirmation names the trash and the
 /// window the backend actually keeps the item for.
 void main() {
-  Future<void> openConfirm(WidgetTester tester) async {
+  Future<void> openConfirm(WidgetTester tester, {int count = 1}) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
           builder: (context) => ElevatedButton(
-            onPressed: () => confirmDelete(context, 'budget.xlsx'),
+            onPressed: () => count == 1
+                ? confirmDelete(context, 'budget.xlsx')
+                : confirmDelete(context, '$count items', count: count),
             child: const Text('open'),
           ),
         ),
@@ -53,5 +55,19 @@ void main() {
 
     expect(find.textContaining('permanently'), findsNothing);
     expect(find.textContaining('cannot be undone'), findsNothing);
+  });
+
+  testWidgets('a multi-select says how many move to the trash', (tester) async {
+    await openConfirm(tester, count: 3);
+
+    expect(find.text('Move 3 items to Trash?'), findsOneWidget);
+    expect(
+      find.text(
+        '3 items move to Trash. You can restore them for '
+        '${TrashConfig.retentionDays} days.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(TextButton, 'Move to Trash'), findsOneWidget);
   });
 }

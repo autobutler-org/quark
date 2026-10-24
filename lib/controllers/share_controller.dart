@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/controllers/share_target.dart';
 import 'package:quark/models/path_grant.dart';
 import 'package:quark/services/sharing_service.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 typedef LoadPrincipalsFn = Future<SharePrincipals> Function();
@@ -14,7 +15,7 @@ typedef LoadPrincipalsFn = Future<SharePrincipals> Function();
 /// [SharingService] unless a test passes a fake. Every change is answered
 /// with the whole access list, which replaces the state. Failures come back
 /// raw; the host turns them into copy with `Errors`.
-class ShareController extends ChangeNotifier {
+class ShareController extends ChangeNotifier with SafeNotifier {
   ShareController({
     required this.target,
     this.selfUsername,
@@ -42,7 +43,6 @@ class ShareController extends ChangeNotifier {
   /// Bumped by every load and every answered change, so a slow load cannot
   /// overwrite a newer answer.
   int _generation = 0;
-  bool _disposed = false;
 
   /// Whether the access has loaded.
   bool get hasLoaded => _access != null;
@@ -199,7 +199,7 @@ class ShareController extends ChangeNotifier {
   /// a change the Quark answers, supersedes this one.
   Future<void> load() async {
     final generation = ++_generation;
-    _notify();
+    notifyListeners();
     try {
       final results = await Future.wait<Object>([
         target.load(),
@@ -267,10 +267,10 @@ class ShareController extends ChangeNotifier {
     final key = principal.keySuffix;
     if (_busy.contains(key)) return null;
     _busy.add(key);
-    _notify();
+    notifyListeners();
     try {
       final access = await request();
-      if (!_disposed) {
+      if (!isDisposed) {
         // The answer is the whole list, newer than any load still out.
         _generation++;
         _access = access;
@@ -281,19 +281,9 @@ class ShareController extends ChangeNotifier {
       return error;
     } finally {
       _busy.remove(key);
-      _notify();
+      notifyListeners();
     }
   }
 
-  bool _isCurrent(int generation) => !_disposed && generation == _generation;
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
-  }
+  bool _isCurrent(int generation) => !isDisposed && generation == _generation;
 }

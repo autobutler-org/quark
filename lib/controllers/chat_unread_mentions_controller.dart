@@ -10,6 +10,7 @@ import 'package:quark/models/chat_message.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_channels_service.dart';
 import 'package:quark/services/chat_messages_service.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// How many of each channel's unread messages mention the signed-in account
@@ -32,7 +33,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///   channel is read again once one of them opens.
 /// - A channel that fails to load keeps the count it had until its unread
 ///   count next changes.
-class ChatUnreadMentionsController extends ChangeNotifier {
+class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
   /// Builds a controller following [unread]. Every other collaborator has a
   /// real default; tests pass fakes. [openMessage] is a message's text, or
   /// null when it won't open.
@@ -86,7 +87,6 @@ class ChatUnreadMentionsController extends ChangeNotifier {
 
   /// The unread messages of each channel that would not open.
   final Map<int, List<ChatMessage>> _unopened = {};
-  bool _disposed = false;
 
   /// How many unread messages in channel [channelId] mention the signed-in
   /// account; zero for one not read yet.
@@ -94,7 +94,6 @@ class ChatUnreadMentionsController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _disposed = true;
     _unread.removeListener(_sync);
     _keyChanges.removeListener(_sync);
     super.dispose();
@@ -138,7 +137,7 @@ class ChatUnreadMentionsController extends ChangeNotifier {
         _listMembers(channelId),
         _fetchMessages(channelId, limit: ChatMessagesService.maxPage),
       ).wait;
-      if (_disposed || _readAt[channelId] != count) return;
+      if (isDisposed || _readAt[channelId] != count) return;
       final me = _currentUserId();
       final name = members.nameOfUser(me);
       final names = members.mentionNames;

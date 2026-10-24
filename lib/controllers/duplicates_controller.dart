@@ -4,6 +4,7 @@ import 'package:quark/services/files_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/duplicates_config.dart';
 import 'package:quark/utils/photo_location.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Everything the duplicates page shows and does (#1666): the groups, which
@@ -30,7 +31,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
-class DuplicatesController extends ChangeNotifier {
+class DuplicatesController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller talking to the real services unless overridden.
   DuplicatesController({
     Future<List<DuplicateGroup>> Function() getDuplicates =
@@ -69,7 +70,6 @@ class DuplicatesController extends ChangeNotifier {
   bool _isLoading = false;
   bool _isDeleting = false;
   Object? _error;
-  bool _disposed = false;
   String? _preferredFormat;
 
   /// The groups, as the package list shows them.
@@ -133,7 +133,7 @@ class DuplicatesController extends ChangeNotifier {
   Future<void> load() async {
     _isLoading = true;
     _error = null;
-    _notify();
+    notifyListeners();
     try {
       final groups = await _getDuplicates();
       final devices = await _deviceNames(groups);
@@ -174,7 +174,7 @@ class DuplicatesController extends ChangeNotifier {
       _error = e;
     } finally {
       _isLoading = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -182,7 +182,7 @@ class DuplicatesController extends ChangeNotifier {
   /// kept copy.
   void toggle(String id) {
     if (_selected.remove(id)) {
-      _notify();
+      notifyListeners();
       return;
     }
     final group = _groups.where((g) => g.photos.any((p) => p.id == id));
@@ -190,7 +190,7 @@ class DuplicatesController extends ChangeNotifier {
     final kept = group.first.photos.where((p) => !_selected.contains(p.id));
     if (kept.length <= 1) return;
     _selected.add(id);
-    _notify();
+    notifyListeners();
   }
 
   /// Marks the suggested copies: in each identical group, every copy but
@@ -200,14 +200,14 @@ class DuplicatesController extends ChangeNotifier {
     for (final group in _groups.where((g) => g.isExact)) {
       _selected.addAll(_suggested(group));
     }
-    _notify();
+    notifyListeners();
   }
 
   /// Clears every mark.
   void clearSelection() {
     if (_selected.isEmpty) return;
     _selected.clear();
-    _notify();
+    notifyListeners();
   }
 
   /// Keeps [format]'s copy in each same-picture group that has one, marking
@@ -225,7 +225,7 @@ class DuplicatesController extends ChangeNotifier {
         _applyPreference(group);
       }
     }
-    _notify();
+    notifyListeners();
   }
 
   /// Moves every marked copy to the trash, then reloads. Returns how many
@@ -233,7 +233,7 @@ class DuplicatesController extends ChangeNotifier {
   Future<int> deleteSelected() async {
     if (_selected.isEmpty || _isDeleting) return 0;
     _isDeleting = true;
-    _notify();
+    notifyListeners();
     var failed = 0;
     for (final id in [..._selected]) {
       final path = _paths[id];
@@ -343,15 +343,5 @@ class DuplicatesController extends ChangeNotifier {
   String _name(String id) {
     final relPath = _paths[id]?.relPath ?? '';
     return relPath.substring(relPath.lastIndexOf('/') + 1);
-  }
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 }

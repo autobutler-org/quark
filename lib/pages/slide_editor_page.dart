@@ -6,6 +6,7 @@ import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
@@ -163,9 +164,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
   /// A failure handler that says, in a snack bar, the app couldn't [action].
   void Function(Object error) _reportFailure(String action) => (error) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(Errors.message(error, action))));
+    showMessage(context, Errors.message(error, action));
   };
 
   void _leave() =>

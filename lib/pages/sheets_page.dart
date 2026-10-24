@@ -178,9 +178,7 @@ class _SheetsPageState extends State<SheetsPage>
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.upload(e, 'create the sheet'))),
-        );
+        showMessage(context, Errors.upload(e, 'create the sheet'));
       }
     }
   }

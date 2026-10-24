@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/models/playback_position.dart';
 import 'package:quark/services/playback_position_service.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 
 /// Reads the stored playback state of a video; see
 /// [PlaybackPositionService.get].
@@ -32,7 +33,7 @@ typedef SetPlaybackWatched =
 /// [report] and seeks to what [load] returns. Loading and the periodic saves
 /// fail silently, because a resume position is never worth interrupting
 /// playback for; only [toggleWatched], which the user asked for, throws.
-class VideoPlaybackController extends ChangeNotifier {
+class VideoPlaybackController extends ChangeNotifier with SafeNotifier {
   VideoPlaybackController({
     required this.relPath,
     this.serial,
@@ -61,7 +62,6 @@ class VideoPlaybackController extends ChangeNotifier {
   final DateTime Function() _now;
 
   bool _watched = false;
-  bool _disposed = false;
   bool _wasPlaying = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
@@ -139,14 +139,8 @@ class VideoPlaybackController extends ChangeNotifier {
   }
 
   void _adopt(PlaybackPosition state) {
-    if (_disposed || state.watched == _watched) return;
+    if (isDisposed || state.watched == _watched) return;
     _watched = state.watched;
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 }

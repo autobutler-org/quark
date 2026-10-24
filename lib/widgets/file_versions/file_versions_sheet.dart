@@ -7,6 +7,7 @@ import 'package:quark/pages/svg_viewer_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/widgets/file_browser/archive_text_preview.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -97,23 +98,19 @@ class _FileVersionsSheetState extends State<FileVersionsSheet>
   Future<void> _restore(String id) async {
     final version = _controller.versionFor(id);
     if (version == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ConfirmDeleteDialog(
-        title: 'Restore this version?',
-        body:
-            '${widget.name} goes back to the version from '
-            '${formatVersionTime(dialogContext, version.createdAt)}. What it '
-            'holds now is saved first as "Before restore", so you can undo '
-            'this.',
-        keyPrefix: 'file_version_restore',
-        confirmLabel: 'Restore',
-        destructive: false,
-        onConfirm: () => Navigator.of(dialogContext).pop(true),
-        onCancel: () => Navigator.of(dialogContext).pop(false),
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Restore this version?',
+      body:
+          '${widget.name} goes back to the version from '
+          '${formatVersionTime(context, version.createdAt)}. What it '
+          'holds now is saved first as "Before restore", so you can undo '
+          'this.',
+      keyPrefix: 'file_version_restore',
+      confirmLabel: 'Restore',
+      destructive: false,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     _say();
     final error = await _controller.restore(id);
     if (!mounted) return;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/calendar_editor_controller.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The event form wired to its [CalendarEditorController]: the package's
@@ -17,19 +18,15 @@ class CalendarEventEditorHost extends StatelessWidget {
 
   Future<void> _delete(BuildContext context) async {
     final title = editor.draft.title.trim();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => ConfirmDeleteDialog(
-        title: title.isEmpty ? 'Delete this event?' : 'Delete $title?',
-        body: editor.editsSeries
-            ? 'Every time it repeats is deleted too.'
-            : 'It is removed from the calendar for everyone.',
-        keyPrefix: 'delete_event',
-        onConfirm: () => Navigator.of(ctx).pop(true),
-        onCancel: () => Navigator.of(ctx).pop(false),
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: title.isEmpty ? 'Delete this event?' : 'Delete $title?',
+      body: editor.editsSeries
+          ? 'Every time it repeats is deleted too.'
+          : 'It is removed from the calendar for everyone.',
+      keyPrefix: 'delete_event',
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     if (await editor.remove() && context.mounted) Navigator.of(context).pop();
   }
 

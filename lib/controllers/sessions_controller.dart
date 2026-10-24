@@ -3,13 +3,14 @@ import 'package:quark/models/auth_session.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/sessions_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 
 /// The Sessions section of the Account tab (#1663): the account's signed-in
 /// sessions, and signing them out.
 ///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
-class SessionsController extends ChangeNotifier {
+class SessionsController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller talking to the real [SessionsService] and
   /// [AuthService.logout] unless overridden.
   SessionsController({
@@ -31,7 +32,6 @@ class SessionsController extends ChangeNotifier {
   bool _isLoading = false;
   bool _isWorking = false;
   String? _error;
-  bool _disposed = false;
 
   /// The sessions the Quark last listed; empty before the first load.
   List<AuthSession> get sessions => _sessions;
@@ -51,7 +51,7 @@ class SessionsController extends ChangeNotifier {
   /// Fetches the list.
   Future<void> load() async {
     _isLoading = true;
-    _notify();
+    notifyListeners();
     try {
       _sessions = await _list();
       _error = null;
@@ -59,7 +59,7 @@ class SessionsController extends ChangeNotifier {
       _error = Errors.message(error, 'load your sessions');
     } finally {
       _isLoading = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -87,7 +87,7 @@ class SessionsController extends ChangeNotifier {
   }) async {
     _isWorking = true;
     _error = null;
-    _notify();
+    notifyListeners();
     try {
       await request();
       if (reload) _sessions = await _list();
@@ -97,17 +97,7 @@ class SessionsController extends ChangeNotifier {
       return false;
     } finally {
       _isWorking = false;
-      _notify();
+      notifyListeners();
     }
-  }
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 }

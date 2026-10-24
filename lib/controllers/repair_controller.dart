@@ -2,12 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/models/repair_status.dart';
 import 'package:quark/services/repair_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 
 /// The repair installation section of the settings page (#2121).
 ///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
-class RepairController extends ChangeNotifier {
+class RepairController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller talking to the real [RepairService] unless
   /// overridden.
   RepairController({
@@ -23,7 +24,6 @@ class RepairController extends ChangeNotifier {
   bool _isLoading = false;
   bool _isWorking = false;
   String? _error;
-  bool _disposed = false;
 
   /// The last status the Quark sent, or null before the first load.
   RepairStatus? get status => _status;
@@ -51,7 +51,7 @@ class RepairController extends ChangeNotifier {
   /// Fetches the status.
   Future<void> load() async {
     _isLoading = true;
-    _notify();
+    notifyListeners();
     try {
       _status = await _getStatus();
       _error = null;
@@ -62,7 +62,7 @@ class RepairController extends ChangeNotifier {
       );
     } finally {
       _isLoading = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -70,7 +70,7 @@ class RepairController extends ChangeNotifier {
   Future<bool> repair() async {
     _isWorking = true;
     _error = null;
-    _notify();
+    notifyListeners();
     try {
       await _repair();
       return true;
@@ -79,17 +79,7 @@ class RepairController extends ChangeNotifier {
       return false;
     } finally {
       _isWorking = false;
-      _notify();
+      notifyListeners();
     }
-  }
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 }

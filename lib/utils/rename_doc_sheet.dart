@@ -51,9 +51,7 @@ Future<String?> renameDocOrSheet(
         normalizePath(other.apiPath).toLowerCase() == newPath,
   );
   if (taken) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text(Errors.fileNameTaken)));
+    showMessage(context, Errors.fileNameTaken);
     return null;
   }
 
@@ -61,9 +59,7 @@ Future<String?> renameDocOrSheet(
     await moveRenameNode(node: node, targetInput: newFileName);
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'rename the $shortNoun'))),
-      );
+      showMessage(context, Errors.message(e, 'rename the $shortNoun'));
     }
     return null;
   }

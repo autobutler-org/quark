@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/controllers/code_viewer_controller.dart';
 import 'package:quark/services/code_viewer_service.dart';
 import 'package:quark/utils/markdown_viewer_config.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// State behind the Markdown viewer for the file at [path]: the parsed
@@ -12,7 +13,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Markdown is parsed whole, so at most [maxBytes] of the file is read; a
 /// longer file is rendered up to there and [isTruncated] says so.
-class MarkdownViewerController extends ChangeNotifier {
+class MarkdownViewerController extends ChangeNotifier with SafeNotifier {
   MarkdownViewerController({
     required this.path,
     this.serial,
@@ -39,7 +40,6 @@ class MarkdownViewerController extends ChangeNotifier {
   bool _showSource = false;
   Set<String> _allowedRemoteImages = const {};
   int _generation = 0;
-  bool _disposed = false;
 
   /// What was read of the file, parsed.
   QuarkMarkdownDocument get document => _document;
@@ -75,7 +75,7 @@ class MarkdownViewerController extends ChangeNotifier {
     final generation = ++_generation;
     _isLoading = true;
     _error = null;
-    _notify();
+    notifyListeners();
     try {
       final page = await readRange(
         path,
@@ -94,30 +94,25 @@ class MarkdownViewerController extends ChangeNotifier {
       _error = e;
     }
     _isLoading = false;
-    _notify();
+    notifyListeners();
   }
 
   /// Shows the source or the rendered view.
   void setShowSource(bool showSource) {
     if (_showSource == showSource) return;
     _showSource = showSource;
-    _notify();
+    notifyListeners();
   }
 
   /// Lets the remote image at [src] load, because the reader asked for it.
   void allowRemoteImage(String src) {
     if (_allowedRemoteImages.contains(src)) return;
     _allowedRemoteImages = {..._allowedRemoteImages, src};
-    _notify();
-  }
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
+    notifyListeners();
   }
 
   @override
   void dispose() {
-    _disposed = true;
     _generation++;
     super.dispose();
   }

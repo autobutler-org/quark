@@ -2,13 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/models/ssh_access_status.dart';
 import 'package:quark/services/ssh_access_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 
 /// The SSH access section of the settings page (#2131): its status and every
 /// change an admin can make.
 ///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
-class SshAccessController extends ChangeNotifier {
+class SshAccessController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller talking to the real [SshAccessService] unless
   /// overridden.
   SshAccessController({
@@ -39,7 +40,6 @@ class SshAccessController extends ChangeNotifier {
   bool _isLoading = false;
   bool _isWorking = false;
   String? _error;
-  bool _disposed = false;
 
   /// The last status the Quark sent, or null before the first load.
   SshAccessStatus? get status => _status;
@@ -64,7 +64,7 @@ class SshAccessController extends ChangeNotifier {
   /// Fetches the status.
   Future<void> load() async {
     _isLoading = true;
-    _notify();
+    notifyListeners();
     try {
       _status = await _getStatus();
       _error = null;
@@ -72,7 +72,7 @@ class SshAccessController extends ChangeNotifier {
       _error = Errors.message(error, 'load SSH access');
     } finally {
       _isLoading = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -106,7 +106,7 @@ class SshAccessController extends ChangeNotifier {
   }) async {
     _isWorking = true;
     _error = null;
-    _notify();
+    notifyListeners();
     try {
       await request();
       if (reload) _status = await _getStatus();
@@ -116,17 +116,7 @@ class SshAccessController extends ChangeNotifier {
       return false;
     } finally {
       _isWorking = false;
-      _notify();
+      notifyListeners();
     }
-  }
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 }

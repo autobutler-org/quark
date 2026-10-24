@@ -11,6 +11,7 @@ import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/chat_config.dart';
 import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/chat/chat_channel_header.dart';
 import 'package:quark/widgets/chat/chat_channel_not_found.dart';
 import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
@@ -152,24 +153,18 @@ class _ChatPageState extends State<ChatPage>
   }
 
   Future<void> _deleteMessage(String id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ConfirmDeleteDialog(
-        title: 'Delete this message?',
-        body:
-            "It's removed for everyone in this channel. Deleting can't "
-            'reach a copy someone already saved.',
-        keyPrefix: 'delete_message',
-        onConfirm: () => Navigator.of(dialogContext).pop(true),
-        onCancel: () => Navigator.of(dialogContext).pop(false),
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete this message?',
+      body:
+          "It's removed for everyone in this channel. Deleting can't "
+          'reach a copy someone already saved.',
+      keyPrefix: 'delete_message',
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     final error = await _controller.deleteMessage(id);
     if (error == null || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(Errors.message(error, 'delete the message'))),
-    );
+    showMessage(context, Errors.message(error, 'delete the message'));
   }
 
   Future<void> _explainEncryption() => showDialog<void>(
@@ -188,9 +183,7 @@ class _ChatPageState extends State<ChatPage>
   Future<void> _react(String id, String emoji) async {
     final error = await _controller.toggleReaction(id, emoji);
     if (error == null || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(Errors.message(error, 'react to the message'))),
-    );
+    showMessage(context, Errors.message(error, 'react to the message'));
   }
 
   void _openChannel(String id) {
@@ -304,9 +297,7 @@ class _ChatPageState extends State<ChatPage>
     if (!mounted) return;
     final error = _controller.saveError;
     if (error != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(Errors.message(error, action))));
+      showMessage(context, Errors.message(error, action));
     }
     context.go(AppRoutes.chatChannel('$id'));
   }
@@ -357,27 +348,21 @@ class _ChatPageState extends State<ChatPage>
   Future<void> _removeMember(String id) async {
     final member = _controller.memberItems.where((m) => m.id == id).firstOrNull;
     if (member == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ConfirmDeleteDialog(
-        title: 'Remove ${member.name}?',
-        body: _controller.memberReads(id)
-            ? "The channel's key will change, so ${member.name} can't read "
-                  'anything posted from now on. They keep whatever they '
-                  'already downloaded.'
-            : '${member.name} will no longer be able to manage this channel.',
-        keyPrefix: 'remove_member',
-        confirmLabel: 'Remove',
-        onConfirm: () => Navigator.of(dialogContext).pop(true),
-        onCancel: () => Navigator.of(dialogContext).pop(false),
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Remove ${member.name}?',
+      body: _controller.memberReads(id)
+          ? "The channel's key will change, so ${member.name} can't read "
+                'anything posted from now on. They keep whatever they '
+                'already downloaded.'
+          : '${member.name} will no longer be able to manage this channel.',
+      keyPrefix: 'remove_member',
+      confirmLabel: 'Remove',
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     final error = await _controller.removeMember(id);
     if (error == null || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(Errors.message(error, 'remove them'))),
-    );
+    showMessage(context, Errors.message(error, 'remove them'));
   }
 
   Future<void> _deleteChannel() async {
@@ -407,28 +392,21 @@ class _ChatPageState extends State<ChatPage>
   Future<void> _leaveChannel() async {
     final channel = _controller.selectedChannel;
     if (channel == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ConfirmDeleteDialog(
-        title: 'Leave ${_controller.titleOf(channel)}?',
-        body:
-            "You'll stop seeing its messages. To come back, someone who "
-            'manages its members has to add you again.',
-        keyPrefix: 'leave_channel',
-        confirmLabel: 'Leave',
-        onConfirm: () => Navigator.of(dialogContext).pop(true),
-        onCancel: () => Navigator.of(dialogContext).pop(false),
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Leave ${_controller.titleOf(channel)}?',
+      body:
+          "You'll stop seeing its messages. To come back, someone who "
+          'manages its members has to add you again.',
+      keyPrefix: 'leave_channel',
+      confirmLabel: 'Leave',
     );
-    if (confirmed != true || await _controller.leaveChannel() || !mounted) {
+    if (!confirmed || await _controller.leaveChannel() || !mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          Errors.message(_controller.saveError, 'leave the channel'),
-        ),
-      ),
+    showMessage(
+      context,
+      Errors.message(_controller.saveError, 'leave the channel'),
     );
   }
 

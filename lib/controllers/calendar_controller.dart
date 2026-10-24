@@ -11,6 +11,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/calendar_service.dart';
 import 'package:quark/services/users_service.dart';
 import 'package:quark/utils/calendar_recurrence.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 typedef ListCalendarEventsFn =
@@ -84,7 +85,7 @@ int firstWeekdayForLocale(Locale locale) {
 /// Weeks and month rows start on [firstWeekday], which the page sets from the
 /// device locale through [show]; the span it loads and the grid it draws both
 /// come from [days], so they always agree (#2539).
-class CalendarController extends ChangeNotifier {
+class CalendarController extends ChangeNotifier with SafeNotifier {
   CalendarController({
     this.listEvents = CalendarService.listEvents,
     this.saveEvent = CalendarService.saveEvent,
@@ -130,7 +131,6 @@ class CalendarController extends ChangeNotifier {
   Object? _error;
   int _generation = 0;
   final Set<String> _dismissed = {};
-  bool _disposed = false;
   bool _mineOnly = false;
   String? _person;
   List<String> _people = const [];
@@ -684,14 +684,9 @@ class CalendarController extends ChangeNotifier {
   }
 
   // A load that finishes after the page has gone must not notify it.
-  @override
-  void notifyListeners() {
-    if (!_disposed) super.notifyListeners();
-  }
 
   @override
   void dispose() {
-    _disposed = true;
     _ticker?.cancel();
     super.dispose();
   }

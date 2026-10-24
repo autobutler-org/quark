@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/local_trust.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/widgets/host_dialog.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -146,28 +147,15 @@ class _HostManagerState extends State<HostManager> {
   }
 
   Future<void> _forgetCertificate(int index) async {
-    final confirm = await QuarkWidget.showDialog<bool>(
+    final confirm = await confirmAction(
       context,
-      builder: (context) => QuarkWidget.alertDialog(
-        title: const Text('Forget certificate'),
-        content: const Text(
-          "Only do this if you reset or reinstalled your Quark. The app will "
+      title: 'Forget certificate',
+      message:
+          'Only do this if you reset or reinstalled your Quark. The app will '
           'show you the next certificate it presents, so you can check it '
           'before the app trusts it.',
-        ),
-        actions: [
-          TextButton(
-            key: const ValueKey('forget_certificate_cancel'),
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            key: const ValueKey('forget_certificate_confirm'),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Forget'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Forget',
+      keyPrefix: 'forget_certificate',
     );
     if (confirm != true) return;
     await AppSettings.instance.forgetCertificate(_address(index));
@@ -224,22 +212,11 @@ class _HostManagerState extends State<HostManager> {
   }
 
   Future<void> _remove(int index) async {
-    final confirm = await QuarkWidget.showDialog<bool>(
+    final confirm = await confirmAction(
       context,
-      builder: (context) => QuarkWidget.alertDialog(
-        title: const Text('Remove host'),
-        content: const Text('Are you sure you want to remove this host?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+      title: 'Remove host',
+      message: 'Are you sure you want to remove this host?',
+      confirmLabel: 'Remove',
     );
     if (confirm != true) return;
 

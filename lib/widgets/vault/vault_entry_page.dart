@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/controllers/vault_controller.dart';
 import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -76,36 +77,28 @@ class _VaultEntryPageState extends State<VaultEntryPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.vault(e, 'save the entry'))),
-      );
+      showMessage(context, Errors.vault(e, 'save the entry'));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
   Future<void> _delete(int id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ConfirmDeleteDialog(
-        title: 'Delete ${widget.controller.draftOf(id).name}?',
-        body:
-            "It's removed from your vault on every device. This can't be "
-            'undone.',
-        keyPrefix: 'delete_vault_entry',
-        onConfirm: () => Navigator.of(dialogContext).pop(true),
-        onCancel: () => Navigator.of(dialogContext).pop(false),
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete ${widget.controller.draftOf(id).name}?',
+      body:
+          "It's removed from your vault on every device. This can't be "
+          'undone.',
+      keyPrefix: 'delete_vault_entry',
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     try {
       // The controller's change pops this page.
       await widget.controller.delete(id);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.vault(e, 'delete the entry'))),
-      );
+      showMessage(context, Errors.vault(e, 'delete the entry'));
     }
   }
 
@@ -113,9 +106,7 @@ class _VaultEntryPageState extends State<VaultEntryPage> {
     try {
       return widget.controller.generate();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'generate a password'))),
-      );
+      showMessage(context, Errors.message(e, 'generate a password'));
       return '';
     }
   }

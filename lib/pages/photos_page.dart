@@ -258,12 +258,6 @@ class PhotosPageState extends State<PhotosPage>
     if (!_searchOpen) _controller.setSearchQuery('');
   }
 
-  void _snack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
   // ── Photos ─────────────────────────────────────────────────────────────────
 
   void _onPhotoTap(List<PhotoItem> photos, int index) {
@@ -278,7 +272,9 @@ class PhotosPageState extends State<PhotosPage>
     try {
       await _controller.toggleFavorite(id);
     } catch (e) {
-      if (mounted) _snack(Errors.message(e, 'update the favorite'));
+      if (mounted) {
+        showMessage(context, Errors.message(e, 'update the favorite'));
+      }
     }
   }
 
@@ -366,26 +362,34 @@ class PhotosPageState extends State<PhotosPage>
         final uploaded =
             'Uploaded ${picked.length == 1 ? picked.first.name : '${picked.length} photos'}';
         if (outcome == null || album == null) {
-          _snack(uploaded);
+          showMessage(context, uploaded);
         } else if (outcome.failed == 0) {
-          _snack('$uploaded to "${album.name}"');
+          showMessage(context, '$uploaded to "${album.name}"');
         } else {
           final which = outcome.failed < picked.length
               ? '${outcome.failed} of them'
               : picked.length == 1
               ? 'it'
               : 'them';
-          _snack(
+          showMessage(
+            context,
             '$uploaded. '
             '${Errors.message(outcome.error, 'add $which to "${album.name}"')}',
           );
         }
         await manualRefresh();
       } catch (e) {
-        if (mounted) _snack(Errors.message(e, 'upload your photos'));
+        if (mounted) {
+          showMessage(context, Errors.message(e, 'upload your photos'));
+        }
       }
     } on MissingPluginException {
-      if (mounted) _snack('File picker not available. Fully restart the app.');
+      if (mounted) {
+        showMessage(
+          context,
+          'File picker not available. Fully restart the app.',
+        );
+      }
     }
   }
 
@@ -396,7 +400,7 @@ class PhotosPageState extends State<PhotosPage>
     if (_controller.isUploading) return;
     final (:photos, :notPhotos) = _controller.sortDroppedFiles(items);
     if (photos.isEmpty) {
-      if (notPhotos > 0) _snack(Errors.notPhotos(notPhotos));
+      if (notPhotos > 0) showMessage(context, Errors.notPhotos(notPhotos));
       return;
     }
 
@@ -409,12 +413,15 @@ class PhotosPageState extends State<PhotosPage>
       );
       if (!mounted) return;
       final skipped = notPhotos > 0 ? ' ${Errors.notPhotos(notPhotos)}' : '';
-      _snack(
+      showMessage(
+        context,
         'Uploaded ${uploaded == 1 ? '1 photo' : '$uploaded photos'}.$skipped',
       );
       await manualRefresh();
     } catch (e) {
-      if (mounted) _snack(Errors.message(e, 'upload your photos'));
+      if (mounted) {
+        showMessage(context, Errors.message(e, 'upload your photos'));
+      }
     }
   }
 
@@ -455,7 +462,7 @@ class PhotosPageState extends State<PhotosPage>
     try {
       return await _controller.createAlbum(name);
     } catch (e) {
-      if (mounted) _snack(Errors.album(e, 'create the album'));
+      if (mounted) showMessage(context, Errors.album(e, 'create the album'));
       return null;
     }
   }
@@ -466,10 +473,14 @@ class PhotosPageState extends State<PhotosPage>
 
     final added = outcome.added;
     if (added == 0 && outcome.skipped > 0) {
-      _snack('No photos added — device photos cannot be added to albums yet');
+      showMessage(
+        context,
+        'No photos added — device photos cannot be added to albums yet',
+      );
     } else if (added == 0 && outcome.alreadyIn > 0 && outcome.failed == 0) {
       // Nothing changed, so nothing was added (#3361).
-      _snack(
+      showMessage(
+        context,
         outcome.alreadyIn == 1
             ? 'Already in "${album.name}"'
             : '${outcome.alreadyIn} photos already in "${album.name}"',
@@ -479,12 +490,16 @@ class PhotosPageState extends State<PhotosPage>
         if (outcome.alreadyIn > 0) '${outcome.alreadyIn} already in it',
         if (outcome.failed > 0) '${outcome.failed} failed',
       ];
-      _snack(
+      showMessage(
+        context,
         '$added ${added == 1 ? 'photo' : 'photos'} added to "${album.name}"'
         '${notes.isEmpty ? '' : ' (${notes.join(', ')})'}',
       );
     } else {
-      _snack(Errors.message(outcome.error, 'add photos to "${album.name}"'));
+      showMessage(
+        context,
+        Errors.message(outcome.error, 'add photos to "${album.name}"'),
+      );
     }
   }
 
@@ -627,16 +642,18 @@ class PhotosPageState extends State<PhotosPage>
     try {
       await _controller.downloadPhoto(id);
     } catch (e) {
-      if (mounted) _snack(Errors.message(e, 'download the photo'));
+      if (mounted) {
+        showMessage(context, Errors.message(e, 'download the photo'));
+      }
     }
   }
 
   Future<void> _copyPhoto(String id) async {
     try {
       final name = await _controller.copyPhoto(id);
-      if (mounted && name != null) _snack('Copy saved as $name');
+      if (mounted && name != null) showMessage(context, 'Copy saved as $name');
     } catch (e) {
-      if (mounted) _snack(Errors.message(e, 'copy the photo'));
+      if (mounted) showMessage(context, Errors.message(e, 'copy the photo'));
     }
   }
 
@@ -647,7 +664,7 @@ class PhotosPageState extends State<PhotosPage>
     try {
       await _controller.deletePhoto(photo.id);
     } catch (e) {
-      if (mounted) _snack(Errors.message(e, 'delete the photo'));
+      if (mounted) showMessage(context, Errors.message(e, 'delete the photo'));
     }
   }
 
@@ -656,7 +673,12 @@ class PhotosPageState extends State<PhotosPage>
     try {
       await _controller.removeFromSelectedAlbum(id);
     } catch (e) {
-      if (mounted) _snack(Errors.message(e, 'remove the photo from the album'));
+      if (mounted) {
+        showMessage(
+          context,
+          Errors.message(e, 'remove the photo from the album'),
+        );
+      }
     }
   }
 
@@ -671,7 +693,7 @@ class PhotosPageState extends State<PhotosPage>
     try {
       await _controller.createAlbum(name, parentId: parentId);
     } catch (e) {
-      if (mounted) _snack(Errors.album(e, 'create the album'));
+      if (mounted) showMessage(context, Errors.album(e, 'create the album'));
     }
   }
 
@@ -690,7 +712,7 @@ class PhotosPageState extends State<PhotosPage>
     try {
       await _controller.renameAlbum(album.id, name);
     } catch (e) {
-      if (mounted) _snack(Errors.album(e, 'rename the album'));
+      if (mounted) showMessage(context, Errors.album(e, 'rename the album'));
     }
   }
 
@@ -699,7 +721,7 @@ class PhotosPageState extends State<PhotosPage>
     try {
       await _controller.deleteAlbum(album.id);
     } catch (e) {
-      if (mounted) _snack(Errors.message(e, 'delete the album'));
+      if (mounted) showMessage(context, Errors.message(e, 'delete the album'));
     }
   }
 
