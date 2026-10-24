@@ -5,6 +5,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark/widgets/video_viewer/transcode_dialog_host.dart';
 
 /// Queues a conversion of [relPath] — [FilesService.transcodeVideo].
@@ -34,12 +35,11 @@ Future<void> convertVideo(
   LoadTranscodeFormatsFn loadFormats = FilesService.listTranscodeFormats,
   TranscodeVideoFn transcode = FilesService.transcodeVideo,
 }) async {
-  final fileName = relPath.split('/').last;
-  final dot = fileName.lastIndexOf('.');
+  final extension = fileExtension(relPath.split('/').last);
   final format = await TranscodeDialogHost.show(
     context,
     loadFormats: () => loadFormats(relPath, serial: serial),
-    sourceFormat: dot <= 0 ? null : fileName.substring(dot + 1),
+    sourceFormat: extension.length < 2 ? null : extension.substring(1),
   );
   if (format == null || !context.mounted) return;
   try {

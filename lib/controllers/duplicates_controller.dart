@@ -3,6 +3,7 @@ import 'package:quark/models/duplicate_group.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/duplicates_config.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/photo_location.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -330,8 +331,7 @@ class DuplicatesController extends ChangeNotifier with SafeNotifier {
   /// extension in capitals.
   String _format(String id) {
     final name = _name(id);
-    final dot = name.lastIndexOf('.');
-    final ext = dot < 0 ? '' : name.substring(dot + 1).toUpperCase();
+    final ext = fileExtension(name).replaceFirst('.', '').toUpperCase();
     return switch (ext) {
       'JPG' => 'JPEG',
       'TIF' => 'TIFF',

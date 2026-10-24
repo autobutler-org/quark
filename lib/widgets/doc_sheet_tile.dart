@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark_icons/quark_icons.dart';
 
@@ -43,14 +44,15 @@ class DocSheetTile extends StatelessWidget {
 
   /// Whether [relPath] names a spreadsheet rather than a document.
   static bool isSheet(String relPath) =>
-      relPath.toLowerCase().endsWith('.qsheet');
+      fileKindForName(relPath) == FileKind.qsheet;
 
   /// Whether [relPath] names a document.
-  static bool isDoc(String relPath) => relPath.toLowerCase().endsWith('.qdoc');
+  static bool isDoc(String relPath) =>
+      fileKindForName(relPath) == FileKind.qdoc;
 
   /// Whether [relPath] names a presentation.
   static bool isSlides(String relPath) =>
-      relPath.toLowerCase().endsWith('.qslide');
+      fileKindForName(relPath) == FileKind.qslide;
 
   /// Identifies a file across a filename listing and a content search, which
   /// spell the same path with and without a leading slash.

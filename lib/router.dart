@@ -425,6 +425,15 @@ class AppRoutes {
   /// non-empty the way the editor routes carry it.
   static String containingFolder(String filePath, {String serial = ''}) =>
       _withSerial(filesPath(parentPath(filePath)), serial);
+
+  /// Where a page showing [filePath] goes when it is closed with nothing
+  /// underneath it: back where it was opened from ([editorOrigin]), and
+  /// otherwise to the folder that holds the file ([containingFolder]).
+  static String leaveFile(
+    BuildContext context,
+    String filePath, {
+    String serial = '',
+  }) => editorOrigin(context) ?? containingFolder(filePath, serial: serial);
 }
 
 /// A tab of a page whose tabs have their own URLs, `/<page>/<slug>`. Each such
@@ -931,20 +940,32 @@ final router = GoRouter(
 String? viewFileRedirect(String path, String? serial) {
   final folder = AppRoutes.filesPath(path);
   if (!isLikelyFilePath(path)) return _withSerial(folder, serial);
-  if (opensInCodeViewer(path)) {
+  if (fileKindForName(path) == FileKind.archive) {
+    return _withSerial(folder, serial);
+  }
+  return viewerRouteFor(path, serial: serial);
+}
+
+/// The URL of the page of its own that opens the file at [path], or null for
+/// a kind [FileViewerPage] shows at `/view`. Source and plain text open in the
+/// code viewer, Markdown rendered, 3D models in the model viewer, and docs,
+/// sheets and presentations in their editors. [from] is where a presentation
+/// is opened from, for [AppRoutes.editorOrigin].
+String? viewerRouteFor(String path, {String? serial, String? from}) {
+  final name = path.substring(path.lastIndexOf('/') + 1);
+  if (opensInCodeViewer(name)) {
     return AppRoutes.codeViewerPath(path, serial: serial);
   }
-  if (opensInMarkdownViewer(path)) {
+  if (opensInMarkdownViewer(name)) {
     return AppRoutes.markdownViewerPath(path, serial: serial);
   }
-  if (opensInModelViewer(path)) {
+  if (opensInModelViewer(name)) {
     return AppRoutes.modelViewerPath(path, serial: serial);
   }
-  return switch (fileKindForName(path)) {
+  return switch (fileKindForName(name)) {
     FileKind.qdoc => AppRoutes.docFile(path, serial: serial),
     FileKind.qsheet => AppRoutes.sheetFile(path, serial: serial),
-    FileKind.qslide => AppRoutes.slideFile(path, serial: serial),
-    FileKind.archive => _withSerial(folder, serial),
+    FileKind.qslide => AppRoutes.slideFile(path, serial: serial, from: from),
     _ => null,
   };
 }

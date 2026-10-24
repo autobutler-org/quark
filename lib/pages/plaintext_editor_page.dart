@@ -9,6 +9,7 @@ import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/file_kind.dart';
+import 'package:quark/widgets/layout/leave_pop_scope.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/plaintext_editor/plaintext_editor_body.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -124,25 +125,18 @@ class _PlaintextEditorPageState extends State<PlaintextEditorPage> {
   @override
   Widget build(BuildContext context) {
     final title = _dirty ? '$_displayName •' : _displayName;
-    // Nothing underneath is the usual case: every entry point opens the
-    // editor at its own URL (#2078). Leaving goes back where it was opened
-    // from — a viewer's Edit says so (#3186) — and otherwise to the folder
-    // that holds the file, not the home folder (#1749).
+    // A viewer's Edit says where it was opened from (#3186).
     final canPop = context.canPop();
     void leave() => context.go(
-      AppRoutes.editorOrigin(context) ??
-          AppRoutes.containingFolder(
-            widget.filePath,
-            serial: widget.deviceSerial,
-          ),
+      AppRoutes.leaveFile(
+        context,
+        widget.filePath,
+        serial: widget.deviceSerial,
+      ),
     );
 
-    return PopScope(
-      // A system back with nothing underneath would close the app.
-      canPop: canPop,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && !canPop) leave();
-      },
+    return LeavePopScope(
+      onLeave: leave,
       child: Scaffold(
         appBar: ChromeAppBar(
           title: Text(title),

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/models/file_node.dart';
@@ -26,16 +27,11 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
   bool _downloading = false;
   bool _opening = false;
 
-  String get _extension {
-    final name = widget.node.name;
-    final idx = name.lastIndexOf('.');
-    if (idx < 0 || idx == name.length - 1) return '';
-    return name.substring(idx).toLowerCase();
-  }
-
   String get _typeLabel {
-    if (_extension.isEmpty) return 'Unknown file';
-    return '${_extension.substring(1).toUpperCase()} file';
+    final extension = fileExtension(widget.node.name);
+    // `report.` has a dot and no extension.
+    if (extension.length < 2) return 'Unknown file';
+    return '${extension.substring(1).toUpperCase()} file';
   }
 
   String? get _serial =>
@@ -98,7 +94,7 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
               const SizedBox(height: 8),
               Text(
                 widget.node.size > 0
-                    ? '$_typeLabel  ·  ${_formatSize(widget.node.size)}'
+                    ? '$_typeLabel  ·  ${StorageDevice.formatBytes(widget.node.size)}'
                     : _typeLabel,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
@@ -132,14 +128,5 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
         ),
       ),
     );
-  }
-
-  static String _formatSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 }

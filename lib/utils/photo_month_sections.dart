@@ -1,20 +1,5 @@
 import 'package:quark_widgets/quark_widgets.dart';
 
-const _months = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
 /// Splits photos, given as their dates in grid order, into runs of the same
 /// month and year, each headed like "March 2025" (#979).
 ///
@@ -47,9 +32,7 @@ List<PhotoGridSection> photoMonthSections(Iterable<DateTime?> dates) {
       close();
       runKey = key;
       count = 0;
-      label = local == null
-          ? 'Unknown date'
-          : '${_months[local.month - 1]} ${local.year}';
+      label = local == null ? 'Unknown date' : CalendarLabels.monthTitle(local);
     }
     count++;
   }

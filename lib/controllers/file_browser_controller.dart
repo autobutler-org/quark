@@ -331,19 +331,6 @@ class FileBrowserController {
           message: 'Move/Rename complete',
           shouldRefresh: true,
         );
-      case FileMenuAction.delete:
-        final shouldDelete = await confirmDelete(
-          context,
-          trimTrailingSlashes(node.name),
-        );
-        if (shouldDelete != true) {
-          return null;
-        }
-        await deleteNode(node: node);
-        return const FileMenuActionOutcome(
-          message: 'Deleted',
-          shouldRefresh: true,
-        );
       case FileMenuAction.extractHere:
         await extractNode(node: node);
         return const FileMenuActionOutcome(
@@ -382,6 +369,9 @@ class FileBrowserController {
           run: () => importPowerPoint(node.apiPath, serial: serial),
           serial: serial,
         );
+        return null;
+      case FileMenuAction.delete:
+        // The page deletes, optimistically, before calling handleFileAction.
         return null;
       case FileMenuAction.restore:
       case FileMenuAction.deletePermanently:

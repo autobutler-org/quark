@@ -160,8 +160,7 @@ class _FileViewerPageState extends State<FileViewerPage> {
     Router.neglect(
       context,
       () => context.go(
-        AppRoutes.editorOrigin(context) ??
-            AppRoutes.containingFolder(widget.filePath, serial: widget.serial),
+        AppRoutes.leaveFile(context, widget.filePath, serial: widget.serial),
       ),
     );
   }

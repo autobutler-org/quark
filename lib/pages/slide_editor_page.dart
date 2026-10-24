@@ -8,6 +8,7 @@ import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
+import 'package:quark/widgets/layout/leave_pop_scope.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/slides/find/slide_find_controller.dart';
@@ -292,13 +293,8 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.of(context).canPop();
-    return PopScope(
-      // With nothing underneath, a system back would close the app; it
-      // leaves as the bar's back button does.
-      canPop: canPop,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && !canPop) _leave();
-      },
+    return LeavePopScope(
+      onLeave: _leave,
       child: ListenableBuilder(
         listenable: _controller,
         builder: (context, _) => Scaffold(

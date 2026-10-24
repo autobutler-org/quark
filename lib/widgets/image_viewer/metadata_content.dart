@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/models/photo_metadata.dart';
+import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/photo_location.dart';
 import 'package:quark/widgets/image_viewer/info_row.dart';
 import 'package:quark/widgets/image_viewer/section.dart';
@@ -34,7 +35,7 @@ class MetadataContent {
     final exif = metadata?.exif;
     final dateTaken = exif?.dateTaken;
     final mtime = metadata?.mtime;
-    final displayDate = dateTaken ?? mtime;
+    final displayDate = (dateTaken ?? mtime)?.toLocal();
     if (displayDate != null) {
       sections.add(
         Section(
@@ -42,11 +43,12 @@ class MetadataContent {
           children: [
             InfoRow(
               icon: QuarkIcons.calendar_today_outlined,
-              value: _formatDate(displayDate.toLocal()),
+              value:
+                  '${CalendarLabels.dayTitle(displayDate)}, ${displayDate.year}',
             ),
             InfoRow(
               icon: QuarkIcons.access_time_outlined,
-              value: _formatTime(displayDate.toLocal()),
+              value: CalendarLabels.time(displayDate),
             ),
             if (dateTaken == null && mtime != null)
               const Padding(
@@ -148,7 +150,7 @@ class MetadataContent {
             InfoRow(icon: QuarkIcons.image_outlined, value: ext),
             InfoRow(
               icon: QuarkIcons.storage_outlined,
-              value: _formatBytes(m.fileSize),
+              value: StorageDevice.formatBytes(m.fileSize),
             ),
             if (m.width > 0 && m.height > 0)
               InfoRow(
@@ -195,45 +197,5 @@ class MetadataContent {
     }
 
     return sections;
-  }
-
-  static const _weekdays = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
-  ];
-  static const _months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-
-  static String _formatDate(DateTime d) =>
-      '${_weekdays[d.weekday - 1]}, ${_months[d.month - 1]} ${d.day}, ${d.year}';
-
-  static String _formatTime(DateTime d) {
-    final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
-    final m = d.minute.toString().padLeft(2, '0');
-    final ampm = d.hour < 12 ? 'AM' : 'PM';
-    return '$h:$m $ampm';
-  }
-
-  static String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 }
