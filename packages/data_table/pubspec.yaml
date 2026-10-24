@@ -1,5 +1,5 @@
 name: data_table
-description: Pure Dart data table engine (headless) for Flutter.
+description: A spreadsheet engine for Flutter, with the sheet, control bar and formula bar widgets.
 version: 0.0.1
 environment:
   sdk: ^3.11.0
@@ -19,13 +19,4 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^6.0.0
-
-flutter:
-  plugin:
-    platforms: {}
