@@ -77,11 +77,8 @@ void main() {
       .widget<PopupMenuButton<AccessLevel>>(key('share_level_$suffix'))
       .enabled;
 
-  testBothViewports('shows a spinner while loading and nothing else', (
-    tester,
-    size,
-  ) async {
-    await pumpInSheet(tester, sheet(isLoading: true), size: size);
+  testWidgets('shows a spinner while loading and nothing else', (tester) async {
+    await pumpInSheet(tester, sheet(isLoading: true));
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(key('share_grant_user_1'), findsNothing);
@@ -155,12 +152,11 @@ void main() {
     expect(key('share_level_group_2'), findsNothing);
   });
 
-  testBothViewports('reports a level change and a removal with who for', (
+  testWidgets('reports a level change and a removal with who for', (
     tester,
-    size,
   ) async {
     final events = <String>[];
-    await pumpInSheet(tester, sheet(events: events), size: size);
+    await pumpInSheet(tester, sheet(events: events));
 
     await tapKey(tester, 'share_level_user_2');
     await tester.tap(key('share_level_user_2_read'));
@@ -223,12 +219,11 @@ void main() {
     );
   });
 
-  testBothViewports('shares with the picked group at the chosen level', (
+  testWidgets('shares with the picked group at the chosen level', (
     tester,
-    size,
   ) async {
     final events = <String>[];
-    await pumpInSheet(tester, sheet(events: events), size: size);
+    await pumpInSheet(tester, sheet(events: events));
 
     expect(
       tester.widget<FilledButton>(key('share_add_submit')).onPressed,
@@ -507,12 +502,11 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testBothViewports('a preset change sets, clearing the last box revokes', (
+    testWidgets('a preset change sets, clearing the last box revokes', (
       tester,
-      size,
     ) async {
       final events = <String>[];
-      await pumpInSheet(tester, channelSheet(events: events), size: size);
+      await pumpInSheet(tester, channelSheet(events: events));
 
       await tapKey(tester, 'share_perms_group_1_preset_viewer');
       await tapKey(tester, 'share_perms_user_2_manage_members');
@@ -520,12 +514,9 @@ void main() {
       expect(events, ['set group_1 read_messages', 'revoke user_2']);
     });
 
-    testBothViewports('the form adds a Member unless told otherwise', (
-      tester,
-      size,
-    ) async {
+    testWidgets('the form adds a Member unless told otherwise', (tester) async {
       final events = <String>[];
-      await pumpInSheet(tester, channelSheet(events: events), size: size);
+      await pumpInSheet(tester, channelSheet(events: events));
 
       await tester.enterText(key('principal_search'), 'Family');
       await tester.pumpAndSettle();
@@ -541,15 +532,8 @@ void main() {
       ]);
     });
 
-    testBothViewports('a locked row gets no picker and no remove', (
-      tester,
-      size,
-    ) async {
-      await pumpInSheet(
-        tester,
-        channelSheet(lockedKeys: const {'user_1'}),
-        size: size,
-      );
+    testWidgets('a locked row gets no picker and no remove', (tester) async {
+      await pumpInSheet(tester, channelSheet(lockedKeys: const {'user_1'}));
 
       expect(key('share_perms_user_1_preset_custom'), findsNothing);
       expect(revokeOf(tester, 'user_1'), isNull);

@@ -194,10 +194,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('highlights a fence that names its language', (
-    tester,
-    size,
-  ) async {
+  testWidgets('highlights a fence that names its language', (tester) async {
     await pumpAt(
       tester,
       QuarkMarkdownView(
@@ -205,7 +202,6 @@ void main() {
           '```dart\nfinal x = 1;\n```\n\n```\nfinal y = 2;\n```',
         ),
       ),
-      size: size,
     );
     final keyword = _runs(tester, 'final x = 1;').first;
     expect(keyword.text, 'final');
@@ -216,7 +212,7 @@ void main() {
     expect(_runs(tester, 'final y = 2;'), hasLength(1));
   });
 
-  testBothViewports('shows raw HTML as text', (tester, size) async {
+  testWidgets('shows raw HTML as text', (tester) async {
     await pumpAt(
       tester,
       QuarkMarkdownView(
@@ -228,7 +224,6 @@ void main() {
         onLinkTap: (_) => fail('raw HTML is not a link'),
         imageBuilder: (_, _, _) => fail('raw HTML is not an image'),
       ),
-      size: size,
     );
     final text = _allText(tester);
     expect(text, contains('<script>alert(1)</script>'));
@@ -238,15 +233,11 @@ void main() {
     expect(find.byKey(const ValueKey('markdown_image_0')), findsNothing);
   });
 
-  testBothViewports('reports the raw href of a tapped link', (
-    tester,
-    size,
-  ) async {
+  testWidgets('reports the raw href of a tapped link', (tester) async {
     final taps = <String>[];
     await pumpAt(
       tester,
       QuarkMarkdownView(document: document, onLinkTap: taps.add),
-      size: size,
     );
     await tester.tap(find.byKey(const ValueKey('markdown_link_0')));
     expect(taps, ['https://example.com/one']);
@@ -302,16 +293,14 @@ void main() {
     expect(find.byType(Image), findsNothing);
   });
 
-  testBothViewports('shows the alt text when no imageBuilder is given', (
+  testWidgets('shows the alt text when no imageBuilder is given', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
       QuarkMarkdownView(
         document: QuarkMarkdownDocument.parse('![A cat](cat.png)'),
       ),
-      size: size,
     );
     expect(
       find.descendant(
@@ -374,29 +363,27 @@ void main() {
     }
   });
 
-  testBothViewports('keeps a plain quote a quote', (tester, size) async {
+  testWidgets('keeps a plain quote a quote', (tester) async {
     await pumpAt(
       tester,
       QuarkMarkdownView(
         document: QuarkMarkdownDocument.parse('> [!NOPE]\n> Just a quote'),
       ),
-      size: size,
     );
     expect(find.byKey(const ValueKey('markdown_alert_0')), findsNothing);
     expect(find.textContaining('[!NOPE]', findRichText: true), findsOneWidget);
   });
 
-  testBothViewports('shows a loader while loading', (tester, size) async {
+  testWidgets('shows a loader while loading', (tester) async {
     await pumpAt(
       tester,
       QuarkMarkdownView(document: document, isLoading: true),
-      size: size,
     );
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byType(ListView), findsNothing);
   });
 
-  testBothViewports('shows the error and retries', (tester, size) async {
+  testWidgets('shows the error and retries', (tester) async {
     var retries = 0;
     await pumpAt(
       tester,
@@ -405,7 +392,6 @@ void main() {
         error: "Couldn't load the file.",
         onRetry: () => retries++,
       ),
-      size: size,
     );
     expect(find.text("Couldn't load the file."), findsOneWidget);
     expect(find.byType(ListView), findsNothing);
@@ -418,20 +404,15 @@ void main() {
         document: QuarkMarkdownDocument.empty(),
         error: 'Nope',
       ),
-      size: size,
     );
     expect(find.text('Nope'), findsOneWidget);
     expect(find.byKey(const ValueKey('markdown_view_retry')), findsNothing);
   });
 
-  testBothViewports('shows Empty file for an empty document', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows Empty file for an empty document', (tester) async {
     await pumpAt(
       tester,
       const QuarkMarkdownView(document: QuarkMarkdownDocument.empty()),
-      size: size,
     );
     expect(find.text('Empty file'), findsOneWidget);
     expect(find.byKey(const ValueKey('markdown_view_status')), findsNothing);

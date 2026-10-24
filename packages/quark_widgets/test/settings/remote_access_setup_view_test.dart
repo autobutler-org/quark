@@ -42,26 +42,18 @@ void main() {
     expect(taps, ['on', 'later']);
   });
 
-  testBothViewports('never names the networking underneath', (
-    tester,
-    size,
-  ) async {
+  testWidgets('never names the networking underneath', (tester) async {
     for (final stage in RemoteAccessSetupStage.values) {
-      await pumpInSheet(
-        tester,
-        RemoteAccessSetupView(stage: stage),
-        size: size,
-      );
+      await pumpInSheet(tester, RemoteAccessSetupView(stage: stage));
       expect(find.textContaining('Tailscale'), findsNothing);
       expect(find.textContaining('tailnet'), findsNothing);
     }
   });
 
-  testBothViewports('preparing works on the first step', (tester, size) async {
+  testWidgets('preparing works on the first step', (tester) async {
     await pumpInSheet(
       tester,
       const RemoteAccessSetupView(stage: RemoteAccessSetupStage.preparing),
-      size: size,
     );
     expect(find.text('Setting up remote access'), findsOneWidget);
     expect(
@@ -78,14 +70,10 @@ void main() {
     );
   });
 
-  testBothViewports('connecting has finished the first step', (
-    tester,
-    size,
-  ) async {
+  testWidgets('connecting has finished the first step', (tester) async {
     await pumpInSheet(
       tester,
       const RemoteAccessSetupView(stage: RemoteAccessSetupStage.connecting),
-      size: size,
     );
     expect(
       stepSemantics(tester, 1).properties.label,

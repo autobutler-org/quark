@@ -30,15 +30,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('holds still while a change is saving', (
-    tester,
-    size,
-  ) async {
+  testWidgets('holds still while a change is saving', (tester) async {
     final changes = <bool>[];
     await pumpAt(
       tester,
       AccessRequestsTile(enabled: false, isBusy: true, onChanged: changes.add),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('access_requests_toggle')));
@@ -48,12 +44,8 @@ void main() {
   });
 
   // #2482: the state is written out, not left to the switch's color.
-  testBothViewports('says On while requests are on', (tester, size) async {
-    await pumpAt(
-      tester,
-      AccessRequestsTile(enabled: true, onChanged: (_) {}),
-      size: size,
-    );
+  testWidgets('says On while requests are on', (tester) async {
+    await pumpAt(tester, AccessRequestsTile(enabled: true, onChanged: (_) {}));
 
     expect(find.textContaining('On · ', findRichText: true), findsOneWidget);
     expect(
@@ -63,12 +55,8 @@ void main() {
     expect(find.textContaining('Off · ', findRichText: true), findsNothing);
   });
 
-  testBothViewports('says Off while requests are off', (tester, size) async {
-    await pumpAt(
-      tester,
-      AccessRequestsTile(enabled: false, onChanged: (_) {}),
-      size: size,
-    );
+  testWidgets('says Off while requests are off', (tester) async {
+    await pumpAt(tester, AccessRequestsTile(enabled: false, onChanged: (_) {}));
 
     expect(find.textContaining('Off · ', findRichText: true), findsOneWidget);
     expect(

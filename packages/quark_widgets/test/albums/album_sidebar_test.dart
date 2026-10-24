@@ -112,11 +112,8 @@ void main() {
     expect(find.text('Trips'), findsOneWidget);
   });
 
-  testBothViewports('gives system albums their glyph and no menu', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, bounded(sidebar()), size: size);
+  testWidgets('gives system albums their glyph and no menu', (tester) async {
+    await pumpAt(tester, bounded(sidebar()));
 
     expect(find.byIcon(QuarkIcons.star_rounded), findsOneWidget);
     final tiles = tester.widgetList<AlbumTreeTile>(find.byType(AlbumTreeTile));
@@ -126,12 +123,9 @@ void main() {
     expect(find.byKey(const ValueKey('album_menu_2')), findsOneWidget);
   });
 
-  testBothViewports('opens a user album menu from its button', (
-    tester,
-    size,
-  ) async {
+  testWidgets('opens a user album menu from its button', (tester) async {
     final events = <String>[];
-    await pumpAt(tester, bounded(sidebar(events: events)), size: size);
+    await pumpAt(tester, bounded(sidebar(events: events)));
 
     await tester.tap(find.byKey(const ValueKey('album_menu_2')));
     await tester.pump();
@@ -139,11 +133,10 @@ void main() {
     expect(events, ['menu:2']);
   });
 
-  testBothViewports('leaves out the sort button without its callback', (
+  testWidgets('leaves out the sort button without its callback', (
     tester,
-    size,
   ) async {
-    await pumpAt(tester, bounded(sidebar()), size: size);
+    await pumpAt(tester, bounded(sidebar()));
 
     expect(find.byKey(const ValueKey('album_sort')), findsNothing);
   });
@@ -184,11 +177,10 @@ void main() {
     expect(events, ['sort:name_desc']);
   });
 
-  testBothViewports('shows a loader while loading', (tester, size) async {
+  testWidgets('shows a loader while loading', (tester) async {
     await pumpAt(
       tester,
       bounded(sidebar(isLoading: true, withAllPhotos: true)),
-      size: size,
     );
 
     expect(find.byType(QuarkLoader), findsOneWidget);
@@ -210,35 +202,30 @@ void main() {
     expect(findProgressIndicators(), findsNothing);
   });
 
-  testBothViewports('says so when there are no albums', (tester, size) async {
+  testWidgets('says so when there are no albums', (tester) async {
     await pumpAt(
       tester,
       bounded(sidebar(albums: const [], withAllPhotos: true)),
-      size: size,
     );
 
     expect(find.text('No albums yet'), findsOneWidget);
     expect(find.byKey(_allPhotos), findsOneWidget);
   });
 
-  testBothViewports('shows the error', (tester, size) async {
+  testWidgets('shows the error', (tester) async {
     await pumpAt(
       tester,
       bounded(
         sidebar(error: "Couldn't load your albums.", withAllPhotos: true),
       ),
-      size: size,
     );
 
     expect(find.text("Couldn't load your albums."), findsOneWidget);
     expect(find.byKey(_allPhotos), findsOneWidget);
   });
 
-  testBothViewports('leaves out All photos without its callback', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, bounded(sidebar()), size: size);
+  testWidgets('leaves out All photos without its callback', (tester) async {
+    await pumpAt(tester, bounded(sidebar()));
 
     expect(find.byKey(_allPhotos), findsNothing);
     expect(find.text('All photos'), findsNothing);
@@ -273,11 +260,10 @@ void main() {
     expect(events, ['all']);
   });
 
-  testBothViewports('highlights All photos when no album is selected', (
+  testWidgets('highlights All photos when no album is selected', (
     tester,
-    size,
   ) async {
-    await pumpAt(tester, bounded(sidebar(withAllPhotos: true)), size: size);
+    await pumpAt(tester, bounded(sidebar(withAllPhotos: true)));
 
     final allPhotosTint = rowTint(tester, find.byKey(_allPhotos));
     expect(allPhotosTint, isNotNull);
@@ -288,7 +274,6 @@ void main() {
     await pumpAt(
       tester,
       bounded(sidebar(withAllPhotos: true, selectedAlbumId: 2)),
-      size: size,
     );
     expect(
       rowTint(tester, find.byKey(const ValueKey('album_tile_2'))),
@@ -296,14 +281,10 @@ void main() {
     );
   });
 
-  testBothViewports('highlights the selected album instead', (
-    tester,
-    size,
-  ) async {
+  testWidgets('highlights the selected album instead', (tester) async {
     await pumpAt(
       tester,
       bounded(sidebar(withAllPhotos: true, selectedAlbumId: 2)),
-      size: size,
     );
 
     expect(rowTint(tester, find.byKey(_allPhotos)), isNull);
@@ -340,25 +321,18 @@ void main() {
   group('whole-section collapse (#3112)', () {
     const toggle = ValueKey('album_section_toggle');
 
-    testBothViewports('leaves the label plain without its callback', (
-      tester,
-      size,
-    ) async {
-      await pumpAt(tester, bounded(sidebar()), size: size);
+    testWidgets('leaves the label plain without its callback', (tester) async {
+      await pumpAt(tester, bounded(sidebar()));
 
       expect(find.byKey(toggle), findsNothing);
       expect(find.text('Albums'), findsOneWidget);
     });
 
-    testBothViewports('reports a tap, and Enter from the keyboard', (
-      tester,
-      size,
-    ) async {
+    testWidgets('reports a tap, and Enter from the keyboard', (tester) async {
       final events = <String>[];
       await pumpAt(
         tester,
         bounded(sidebar(withSectionToggle: true, events: events)),
-        size: size,
       );
 
       expect(find.byTooltip('Collapse albums'), findsOneWidget);
@@ -456,14 +430,14 @@ void main() {
       });
     }
 
-    testBothViewports('collapsed, hides the loader, the error and the empty '
-        'hint too', (tester, size) async {
+    testWidgets('collapsed, hides the loader, the error and the empty '
+        'hint too', (tester) async {
       for (final collapsed in [
         sidebar(isSectionExpanded: false, isLoading: true),
         sidebar(isSectionExpanded: false, error: 'Nope'),
         sidebar(isSectionExpanded: false, albums: const []),
       ]) {
-        await pumpAt(tester, bounded(collapsed), size: size);
+        await pumpAt(tester, bounded(collapsed));
         expect(find.byType(QuarkLoader), findsNothing);
         expect(find.text('Nope'), findsNothing);
         expect(find.text('No albums yet'), findsNothing);

@@ -42,10 +42,7 @@ void main() {
     expect(bodies.toSet(), hasLength(ChatEncryptionStatus.values.length));
   });
 
-  testBothViewports('waiting offers check again and learn more', (
-    tester,
-    size,
-  ) async {
+  testWidgets('waiting offers check again and learn more', (tester) async {
     final log = <String>[];
     await pumpAt(
       tester,
@@ -54,7 +51,6 @@ void main() {
         onCheckAgain: () => log.add('check'),
         onLearnMore: () => log.add('learn'),
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(checkAgain));
@@ -62,10 +58,7 @@ void main() {
     expect(log, ['check', 'learn']);
   });
 
-  testBothViewports('checking holds the button still with a loader', (
-    tester,
-    size,
-  ) async {
+  testWidgets('checking holds the button still with a loader', (tester) async {
     final log = <String>[];
     await pumpAt(
       tester,
@@ -74,7 +67,6 @@ void main() {
         isChecking: true,
         onCheckAgain: () => log.add('check'),
       ),
-      size: size,
     );
 
     expect(find.byType(QuarkLoader), findsOneWidget);
@@ -82,14 +74,13 @@ void main() {
     expect(log, isEmpty);
   });
 
-  testBothViewports('check again is only for waiting', (tester, size) async {
+  testWidgets('check again is only for waiting', (tester) async {
     await pumpAt(
       tester,
       QuarkEncryptionNotice(
         status: ChatEncryptionStatus.unverifiedKey,
         onCheckAgain: () {},
       ),
-      size: size,
     );
 
     expect(find.byKey(checkAgain), findsNothing);

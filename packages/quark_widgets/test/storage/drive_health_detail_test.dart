@@ -120,9 +120,8 @@ void main() {
     expectNoClippedText(tester);
   });
 
-  testBothViewports('a healthy drive can still have an unknown speed class', (
+  testWidgets('a healthy drive can still have an unknown speed class', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
@@ -135,7 +134,6 @@ void main() {
         expanded: true,
         onExpandedChanged: _ignore,
       ),
-      size: size,
     );
 
     expect(find.text('Nothing needs attention.'), findsOneWidget);
@@ -144,10 +142,7 @@ void main() {
     expect(find.text('Healthy'), findsNothing);
   });
 
-  testBothViewports('a solid-state drive says solid-state', (
-    tester,
-    size,
-  ) async {
+  testWidgets('a solid-state drive says solid-state', (tester) async {
     await pumpAt(
       tester,
       const DriveHealthDetail(
@@ -159,7 +154,6 @@ void main() {
         expanded: true,
         onExpandedChanged: _ignore,
       ),
-      size: size,
     );
 
     expect(find.text('Solid-state'), findsOneWidget);

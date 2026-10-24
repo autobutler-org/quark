@@ -52,12 +52,11 @@ void main() {
     );
   }
 
-  testBothViewports('summarizes the selected category when collapsed', (
+  testWidgets('summarizes the selected category when collapsed', (
     tester,
-    size,
   ) async {
     final events = <String>[];
-    await pumpList(tester, size: size, events: events);
+    await pumpList(tester, events: events);
 
     expect(find.text('Showing'), findsOneWidget);
     expect(find.text('Quark: 10'), findsOneWidget);

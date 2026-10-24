@@ -50,17 +50,16 @@ void main() {
     expect(events, ['pick:2']);
   });
 
-  testBothViewports('shows a spinner while loading', (tester, size) async {
-    await pumpSheet(tester, size: size, isLoading: true);
+  testWidgets('shows a spinner while loading', (tester) async {
+    await pumpSheet(tester, isLoading: true);
 
     expect(find.byType(QuarkLoader), findsOneWidget);
   });
 
-  testBothViewports('offers a retry under an error', (tester, size) async {
+  testWidgets('offers a retry under an error', (tester) async {
     final events = <String>[];
     await pumpSheet(
       tester,
-      size: size,
       error: "Couldn't load your albums.",
       events: events,
     );
@@ -70,8 +69,8 @@ void main() {
     expect(events, ['retry']);
   });
 
-  testBothViewports('says so when there are no albums', (tester, size) async {
-    await pumpSheet(tester, size: size, albums: const []);
+  testWidgets('says so when there are no albums', (tester) async {
+    await pumpSheet(tester, albums: const []);
 
     expect(find.text('No albums yet'), findsOne);
   });
@@ -79,10 +78,7 @@ void main() {
   /// #2041, the other sheet: picking an album for a selection with no albums
   /// read "No albums — create one in the Photos view", which meant leaving
   /// the selection behind to go and make one.
-  testBothViewports('an empty picker offers to create an album', (
-    tester,
-    size,
-  ) async {
+  testWidgets('an empty picker offers to create an album', (tester) async {
     var creates = 0;
     await pumpInSheet(
       tester,
@@ -92,7 +88,6 @@ void main() {
         onRetry: () {},
         onCreateAlbum: () => creates++,
       ),
-      size: size,
     );
 
     expect(find.text('No albums yet'), findsOneWidget);
@@ -106,9 +101,8 @@ void main() {
   /// selection away. A second button with the same word, dismissing only the
   /// sheet, is how someone ends up believing they backed out of a selection
   /// they are still in. The sheet's own close button says Close.
-  testBothViewports('the sheet closes with Close, not a second Cancel', (
+  testWidgets('the sheet closes with Close, not a second Cancel', (
     tester,
-    size,
   ) async {
     await pumpInSheet(
       tester,
@@ -117,7 +111,6 @@ void main() {
         onPicked: (_) {},
         onRetry: () {},
       ),
-      size: size,
     );
 
     expect(find.text('Cancel'), findsNothing);

@@ -65,22 +65,15 @@ void main() {
     expect(find.byKey(counter), findsNothing);
   });
 
-  testBothViewports('shows a loader while loading', (tester, size) async {
-    await pumpAt(
-      tester,
-      const QuarkCodeViewer(lines: [], isLoading: true),
-      size: size,
-    );
+  testWidgets('shows a loader while loading', (tester) async {
+    await pumpAt(tester, const QuarkCodeViewer(lines: [], isLoading: true));
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.text('Empty file'), findsNothing);
     expect(find.byKey(search), findsOneWidget);
   });
 
-  testBothViewports('shows the error as given, and retries', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows the error as given, and retries', (tester) async {
     final events = <String>[];
     await pumpAt(
       tester,
@@ -89,7 +82,6 @@ void main() {
         error: "Couldn't load the file.",
         onRetry: () => events.add('retry'),
       ),
-      size: size,
     );
 
     expect(find.text("Couldn't load the file."), findsOneWidget);
@@ -97,17 +89,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('code_viewer_retry')));
     expect(events, ['retry']);
 
-    await pumpAt(
-      tester,
-      const QuarkCodeViewer(lines: [], error: 'Gone.'),
-      size: size,
-    );
+    await pumpAt(tester, const QuarkCodeViewer(lines: [], error: 'Gone.'));
     expect(find.text('Gone.'), findsOneWidget);
     expect(find.byKey(const ValueKey('code_viewer_retry')), findsNothing);
   });
 
-  testBothViewports('says an empty file is empty', (tester, size) async {
-    await pumpAt(tester, const QuarkCodeViewer(lines: []), size: size);
+  testWidgets('says an empty file is empty', (tester) async {
+    await pumpAt(tester, const QuarkCodeViewer(lines: []));
 
     expect(find.text('Empty file'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);
@@ -175,15 +163,11 @@ void main() {
     expectNoClippedText(tester);
   });
 
-  testBothViewports('typing in the search field reports the query', (
-    tester,
-    size,
-  ) async {
+  testWidgets('typing in the search field reports the query', (tester) async {
     final queries = <String>[];
     await pumpAt(
       tester,
       QuarkCodeViewer(lines: numbered(3), onSearchChanged: queries.add),
-      size: size,
     );
 
     await tester.enterText(find.byKey(search), 'number');
@@ -230,10 +214,7 @@ void main() {
     expect(fieldText(), '');
   });
 
-  testBothViewports('next, previous and Enter step through the hits', (
-    tester,
-    size,
-  ) async {
+  testWidgets('next, previous and Enter step through the hits', (tester) async {
     final events = <String>[];
     final lines = numbered(3);
     await pumpAt(
@@ -247,7 +228,6 @@ void main() {
         onNextMatch: () => events.add('next'),
         onPreviousMatch: () => events.add('previous'),
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(next));

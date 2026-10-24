@@ -149,10 +149,9 @@ void main() {
     expect(find.byKey(const ValueKey('photo_index_resume')), findsNothing);
   });
 
-  testBothViewports('a complete index says so', (tester, size) async {
+  testWidgets('a complete index says so', (tester) async {
     await pumpPanel(
       tester,
-      size: size,
       hashed: 5000,
       datesRead: 5000,
       isRunning: false,

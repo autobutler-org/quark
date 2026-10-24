@@ -73,6 +73,11 @@ that forces `flutter_test` into the package's real `dependencies`, where it
 lands in every consuming app's dependency graph. Copy the helper into your own
 package's `test/support/` instead of importing it from here.
 
+`testBothViewports` is for a case that checks layout: an overflow, a size or a
+position, text that wraps or is cut short, what a breakpoint shows or hides. A
+case that only checks a callback or a state does not care how wide the screen
+is, so it is a plain `testWidgets` and runs once. When unsure, run both.
+
 ## The checklist
 
 Each item is one or more cases in the test file. The assertion patterns are
@@ -86,32 +91,32 @@ populated list, and a selection. Each is a case, and each asserts what the
 fails.
 
 ```dart
-testBothViewports('shows a spinner while loading', (tester, size) async {
-  await pumpAt(tester, const ThingList(items: [], isLoading: true), size: size);
+testWidgets('shows a spinner while loading', (tester) async {
+  await pumpAt(tester, const ThingList(items: [], isLoading: true));
   expect(find.byType(QuarkLoader), findsOneWidget);
   expect(find.text('Nothing here yet'), findsNothing);
 });
 
-testBothViewports('shows the empty copy when there is nothing', (tester, size) async {
-  await pumpAt(tester, const ThingList(items: []), size: size);
+testWidgets('shows the empty copy when there is nothing', (tester) async {
+  await pumpAt(tester, const ThingList(items: []));
   expect(find.text('Nothing here yet'), findsOneWidget);
   expect(find.byType(QuarkLoader), findsNothing);
 });
 
-testBothViewports('renders the error the caller handed it', (tester, size) async {
-  await pumpAt(tester, const ThingList(items: [], error: 'Host unreachable'), size: size);
+testWidgets('renders the error the caller handed it', (tester) async {
+  await pumpAt(tester, const ThingList(items: [], error: 'Host unreachable'));
   // The package never composes error copy. It renders the caller's string.
   expect(find.text('Host unreachable'), findsOneWidget);
 });
 
-testBothViewports('renders one row per item', (tester, size) async {
-  await pumpAt(tester, ThingList(items: threeThings), size: size);
+testWidgets('renders one row per item', (tester) async {
+  await pumpAt(tester, ThingList(items: threeThings));
   expect(find.byKey(const ValueKey('thing_row_a')), findsOneWidget);
   expect(find.text('Beta'), findsOneWidget);
 });
 
-testBothViewports('marks the selected item', (tester, size) async {
-  await pumpAt(tester, ThingList(items: threeThings, selectedIds: const {'b'}), size: size);
+testWidgets('marks the selected item', (tester) async {
+  await pumpAt(tester, ThingList(items: threeThings, selectedIds: const {'b'}));
   expect(find.byIcon(Icons.check), findsOneWidget);
 });
 ```
@@ -135,13 +140,9 @@ it. Tap the keyed element, not the label, so a failure names the part that was
 hit.
 
 ```dart
-testBothViewports('reports the item that was tapped', (tester, size) async {
+testWidgets('reports the item that was tapped', (tester) async {
   final selected = <String>[];
-  await pumpAt(
-    tester,
-    ThingList(items: threeThings, onSelect: selected.add),
-    size: size,
-  );
+  await pumpAt(tester, ThingList(items: threeThings, onSelect: selected.add));
 
   await tester.tap(find.byKey(const ValueKey('thing_row_b')));
   await tester.pump();

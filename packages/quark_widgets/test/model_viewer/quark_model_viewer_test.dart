@@ -51,20 +51,13 @@ void main() {
     return (paint.painter! as ModelViewerPainter).camera;
   }
 
-  testBothViewports('shows a loader while loading', (tester, size) async {
-    await pumpAt(
-      tester,
-      const QuarkModelViewer(mesh: null, isLoading: true),
-      size: size,
-    );
+  testWidgets('shows a loader while loading', (tester) async {
+    await pumpAt(tester, const QuarkModelViewer(mesh: null, isLoading: true));
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byKey(canvas), findsNothing);
   });
 
-  testBothViewports('shows the error with a Retry button', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows the error with a Retry button', (tester) async {
     var retried = 0;
     await pumpAt(
       tester,
@@ -73,15 +66,14 @@ void main() {
         error: "Couldn't load the model.",
         onRetry: () => retried++,
       ),
-      size: size,
     );
     expect(find.text("Couldn't load the model."), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('model_viewer_retry')));
     expect(retried, 1);
   });
 
-  testBothViewports('says when there is nothing to draw', (tester, size) async {
-    await pumpAt(tester, const QuarkModelViewer(mesh: null), size: size);
+  testWidgets('says when there is nothing to draw', (tester) async {
+    await pumpAt(tester, const QuarkModelViewer(mesh: null));
     expect(find.text('Nothing to show'), findsOneWidget);
   });
 

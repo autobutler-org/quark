@@ -63,16 +63,16 @@ void main() {
     expect(events, ['tap', 'long']);
   });
 
-  testBothViewports('has no menu button without onMenu', (tester, size) async {
-    await pumpTile(tester, size: size);
+  testWidgets('has no menu button without onMenu', (tester) async {
+    await pumpTile(tester);
 
     expect(find.byKey(const ValueKey('photo_tile_menu_p1')), findsNothing);
   });
 
-  testBothViewports('opens the menu from its button, a right-click and a '
-      'long press', (tester, size) async {
+  testWidgets('opens the menu from its button, a right-click and a '
+      'long press', (tester) async {
     final events = <String>[];
-    await pumpTile(tester, size: size, events: events, withMenu: true);
+    await pumpTile(tester, events: events, withMenu: true);
 
     await tester.tap(find.byKey(const ValueKey('photo_tile_menu_p1')));
     await tester.tap(
@@ -86,14 +86,10 @@ void main() {
     expect(events, ['menu', 'menu', 'menu']);
   });
 
-  testBothViewports('can keep the long press for selection (#2276)', (
-    tester,
-    size,
-  ) async {
+  testWidgets('can keep the long press for selection (#2276)', (tester) async {
     final events = <String>[];
     await pumpTile(
       tester,
-      size: size,
       events: events,
       withMenu: true,
       longPressOpensMenu: false,
@@ -123,12 +119,9 @@ void main() {
     expect(target.height, greaterThanOrEqualTo(40));
   });
 
-  testBothViewports('reports a double tap when one is offered', (
-    tester,
-    size,
-  ) async {
+  testWidgets('reports a double tap when one is offered', (tester) async {
     final events = <String>[];
-    await pumpTile(tester, size: size, events: events, withDoubleTap: true);
+    await pumpTile(tester, events: events, withDoubleTap: true);
 
     final tile = find.byKey(const ValueKey('photo_tile_p1'));
     await tester.tap(tile);
@@ -139,13 +132,11 @@ void main() {
     expect(events, ['double']);
   });
 
-  testBothViewports('draws the star and live badge outside selection mode', (
+  testWidgets('draws the star and live badge outside selection mode', (
     tester,
-    size,
   ) async {
     await pumpTile(
       tester,
-      size: size,
       item: const PhotoItem(
         id: 'p1',
         name: 'beach.jpg',
@@ -159,13 +150,11 @@ void main() {
     expect(find.byKey(const ValueKey('photo_tile_check_p1')), findsNothing);
   });
 
-  testBothViewports('selection mode hides the star and shows a checkbox', (
+  testWidgets('selection mode hides the star and shows a checkbox', (
     tester,
-    size,
   ) async {
     await pumpTile(
       tester,
-      size: size,
       selectionMode: true,
       item: const PhotoItem(id: 'p1', name: 'beach.jpg', isFavorite: true),
     );
@@ -209,11 +198,8 @@ void main() {
     await expectTapTargetGuidelines(tester);
   });
 
-  testBothViewports('says whether it is selected while selecting', (
-    tester,
-    size,
-  ) async {
-    await pumpTile(tester, size: size, selectionMode: true, isSelected: true);
+  testWidgets('says whether it is selected while selecting', (tester) async {
+    await pumpTile(tester, selectionMode: true, isSelected: true);
     final handle = tester.ensureSemantics();
 
     expect(
@@ -227,12 +213,11 @@ void main() {
   });
 
   // #2604: the tile was a bare gesture detector a keyboard could not reach.
-  testBothViewports('opens from the keyboard and shows where focus is', (
+  testWidgets('opens from the keyboard and shows where focus is', (
     tester,
-    size,
   ) async {
     final events = <String>[];
-    await pumpTile(tester, size: size, events: events, withMenu: true);
+    await pumpTile(tester, events: events, withMenu: true);
 
     final tile = find.byKey(const ValueKey('photo_tile_p1'));
     await tabTo(tester, tile);

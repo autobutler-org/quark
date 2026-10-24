@@ -35,12 +35,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('hands back the id of the chip that was tapped', (
-    tester,
-    size,
-  ) async {
+  testWidgets('hands back the id of the chip that was tapped', (tester) async {
     final tapped = <String>[];
-    await pumpBar(tester, size: size, onSelected: tapped.add);
+    await pumpBar(tester, onSelected: tapped.add);
 
     await tester.tap(find.byKey(const ValueKey('file_shortcut_groups')));
     await tester.pump();

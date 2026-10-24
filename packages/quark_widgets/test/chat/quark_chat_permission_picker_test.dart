@@ -57,10 +57,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('a set matching no preset shows as Custom, open', (
-    tester,
-    size,
-  ) async {
+  testWidgets('a set matching no preset shows as Custom, open', (tester) async {
     await pumpAt(
       tester,
       host(
@@ -69,7 +66,6 @@ void main() {
           onChanged: (_) {},
         ),
       ),
-      size: size,
     );
 
     expect(selected(tester, 'custom'), isTrue);
@@ -81,10 +77,7 @@ void main() {
     expect(find.byKey(const ValueKey('${prefix}_empty')), findsNothing);
   });
 
-  testBothViewports('choosing Custom opens the checkboxes', (
-    tester,
-    size,
-  ) async {
+  testWidgets('choosing Custom opens the checkboxes', (tester) async {
     await pumpAt(
       tester,
       host(
@@ -93,7 +86,6 @@ void main() {
           onChanged: (_) {},
         ),
       ),
-      size: size,
     );
     expect(find.byKey(box(ChatPermission.sendMessages)), findsNothing);
 
@@ -102,9 +94,8 @@ void main() {
     expect(find.byKey(box(ChatPermission.sendMessages)), findsOneWidget);
   });
 
-  testBothViewports('clearing read_messages keeps only the management bits', (
+  testWidgets('clearing read_messages keeps only the management bits', (
     tester,
-    size,
   ) async {
     final changes = <Set<ChatPermission>>[];
     await pumpAt(
@@ -115,7 +106,6 @@ void main() {
           onChanged: changes.add,
         ),
       ),
-      size: size,
     );
     // Owner is a preset, so open the checkboxes first.
     await tap(tester, chip('custom'));
@@ -127,10 +117,7 @@ void main() {
     });
   });
 
-  testBothViewports('ticking send_messages ticks what it needs', (
-    tester,
-    size,
-  ) async {
+  testWidgets('ticking send_messages ticks what it needs', (tester) async {
     final changes = <Set<ChatPermission>>[];
     await pumpAt(
       tester,
@@ -140,7 +127,6 @@ void main() {
           onChanged: changes.add,
         ),
       ),
-      size: size,
     );
 
     await tap(tester, box(ChatPermission.sendMessages));
@@ -152,10 +138,7 @@ void main() {
     });
   });
 
-  testBothViewports('an empty set says it removes rather than saves', (
-    tester,
-    size,
-  ) async {
+  testWidgets('an empty set says it removes rather than saves', (tester) async {
     final changes = <Set<ChatPermission>>[];
     await pumpAt(
       tester,
@@ -165,7 +148,6 @@ void main() {
           onChanged: changes.add,
         ),
       ),
-      size: size,
     );
     expect(find.byKey(const ValueKey('${prefix}_empty')), findsNothing);
     await tap(tester, chip('custom'));
@@ -180,14 +162,12 @@ void main() {
           onChanged: changes.add,
         ),
       ),
-      size: size,
     );
     expect(find.text(QuarkChatPermissionPicker.emptyHint), findsOneWidget);
   });
 
-  testBothViewports('what the caller does not hold is disabled, with why', (
+  testWidgets('what the caller does not hold is disabled, with why', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
@@ -198,7 +178,6 @@ void main() {
           onChanged: (_) {},
         ),
       ),
-      size: size,
     );
     await tap(tester, chip('custom'));
 
@@ -217,10 +196,7 @@ void main() {
     );
   });
 
-  testBothViewports('without onChanged nothing can be changed', (
-    tester,
-    size,
-  ) async {
+  testWidgets('without onChanged nothing can be changed', (tester) async {
     await pumpAt(
       tester,
       host(
@@ -228,7 +204,6 @@ void main() {
           permissions: {ChatPermission.manageChannel},
         ),
       ),
-      size: size,
     );
 
     expect(

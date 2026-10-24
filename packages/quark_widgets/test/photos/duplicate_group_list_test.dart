@@ -61,28 +61,22 @@ void main() {
     find.byKey(const ValueKey('duplicates_delete')),
   );
 
-  testBothViewports('shows a loader while loading and nothing else', (
-    tester,
-    size,
-  ) async {
-    await pumpList(tester, size: size, groups: const [], isLoading: true);
+  testWidgets('shows a loader while loading and nothing else', (tester) async {
+    await pumpList(tester, groups: const [], isLoading: true);
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.text('No duplicates found'), findsNothing);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
-    await pumpList(tester, size: size, error: "Couldn't find duplicates.");
+  testWidgets('renders the error the caller handed it', (tester) async {
+    await pumpList(tester, error: "Couldn't find duplicates.");
 
     expect(find.text("Couldn't find duplicates."), findsOneWidget);
     expect(find.byKey(const ValueKey('duplicate_group_g1')), findsNothing);
   });
 
-  testBothViewports('says so when there are none', (tester, size) async {
-    await pumpList(tester, size: size, groups: const []);
+  testWidgets('says so when there are none', (tester) async {
+    await pumpList(tester, groups: const []);
 
     expect(find.text('No duplicates found'), findsOneWidget);
     expect(find.byKey(const ValueKey('duplicates_delete')), findsNothing);
@@ -106,11 +100,10 @@ void main() {
     }
   });
 
-  testBothViewports('marks every copy Keep until one is marked Delete', (
+  testWidgets('marks every copy Keep until one is marked Delete', (
     tester,
-    size,
   ) async {
-    await pumpList(tester, size: size, selectedIds: const {'b'});
+    await pumpList(tester, selectedIds: const {'b'});
 
     expect(find.text('Keep'), findsNWidgets(4));
     expect(find.text('Delete'), findsOneWidget);
@@ -166,17 +159,9 @@ void main() {
     expect(events, ['clear']);
   });
 
-  testBothViewports('reports taps and the delete, once each', (
-    tester,
-    size,
-  ) async {
+  testWidgets('reports taps and the delete, once each', (tester) async {
     final events = <String>[];
-    await pumpList(
-      tester,
-      size: size,
-      selectedIds: const {'b'},
-      events: events,
-    );
+    await pumpList(tester, selectedIds: const {'b'}, events: events);
 
     await tester.tap(find.byKey(const ValueKey('duplicate_photo_d')));
     await tester.tap(find.byKey(const ValueKey('duplicate_photo_b')));
@@ -197,8 +182,8 @@ void main() {
     expect(events, isEmpty);
   });
 
-  testBothViewports('nothing marked shows no delete bar', (tester, size) async {
-    await pumpList(tester, size: size);
+  testWidgets('nothing marked shows no delete bar', (tester) async {
+    await pumpList(tester);
 
     expect(find.byKey(const ValueKey('duplicates_delete')), findsNothing);
     expect(

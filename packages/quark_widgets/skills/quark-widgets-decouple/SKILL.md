@@ -214,9 +214,9 @@ differently.
 - **Controller:** plain `test()`, no `WidgetTester`. Construct it with fake
   functions and cover the load path, each action, and the error path. Assert
   that `notifyListeners` fired by counting through `addListener`.
-- **Widgets:** widget tests at a narrow (360x640) and a wide (1280x800)
-  viewport, with `tester.takeException()` null, every callback fired through
-  its keyed element, and both light and dark. Use the
+- **Widgets:** layout tests at a narrow (360x640) and a wide (1280x800)
+  viewport with `tester.takeException()` null, every callback fired once
+  through its keyed element, and both light and dark. Use the
   `quark-widgets-widget-tests` skill; it has the full checklist and a template.
 
 **Why in that order:** the controller test is where the logic lives and it

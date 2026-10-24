@@ -13,32 +13,25 @@ import '../support/pump.dart';
 /// used to read the host address out of `AppSettings` instead of taking it in.
 void main() {
   group('QuarkDisconnectedView', () {
-    testBothViewports('states plainly that the app is not connected', (
-      tester,
-      size,
-    ) async {
-      await pumpAt(tester, const QuarkDisconnectedView(), size: size);
+    testWidgets('states plainly that the app is not connected', (tester) async {
+      await pumpAt(tester, const QuarkDisconnectedView());
 
       expect(find.text(quarkDisconnectedHeadline), findsOneWidget);
       expect(find.text(quarkDisconnectedBody), findsOneWidget);
     });
 
-    testBothViewports('lists every troubleshooting step', (tester, size) async {
-      await pumpAt(tester, const QuarkDisconnectedView(), size: size);
+    testWidgets('lists every troubleshooting step', (tester) async {
+      await pumpAt(tester, const QuarkDisconnectedView());
 
       for (final step in quarkTroubleshootingSteps) {
         expect(find.text(step), findsOneWidget);
       }
     });
 
-    testBothViewports('shows the address it could not reach', (
-      tester,
-      size,
-    ) async {
+    testWidgets('shows the address it could not reach', (tester) async {
       await pumpAt(
         tester,
         const QuarkDisconnectedView(hostAddress: 'https://quark.local'),
-        size: size,
       );
 
       expect(find.text('https://quark.local'), findsOneWidget);
@@ -70,16 +63,11 @@ void main() {
       expect(find.text('Check the address'), findsNothing);
     });
 
-    testBothViewports('retries through the callback the page supplied', (
+    testWidgets('retries through the callback the page supplied', (
       tester,
-      size,
     ) async {
       var retries = 0;
-      await pumpAt(
-        tester,
-        QuarkDisconnectedView(onRetry: () => retries++),
-        size: size,
-      );
+      await pumpAt(tester, QuarkDisconnectedView(onRetry: () => retries++));
 
       await tester.tap(find.byKey(const ValueKey('disconnected_retry')));
       await tester.pumpAndSettle();
@@ -87,15 +75,13 @@ void main() {
       expect(retries, 1);
     });
 
-    testBothViewports('routes to host management through its callback', (
+    testWidgets('routes to host management through its callback', (
       tester,
-      size,
     ) async {
       var opened = 0;
       await pumpAt(
         tester,
         QuarkDisconnectedView(onManageHosts: () => opened++),
-        size: size,
       );
 
       await tester.tap(find.byKey(const ValueKey('disconnected_manage_hosts')));
@@ -119,11 +105,10 @@ void main() {
   });
 
   group('QuarkDisconnectedBanner', () {
-    testBothViewports('carries the same message in the compact shape', (
+    testWidgets('carries the same message in the compact shape', (
       tester,
-      size,
     ) async {
-      await pumpAt(tester, const QuarkDisconnectedBanner(), size: size);
+      await pumpAt(tester, const QuarkDisconnectedBanner());
 
       expect(find.text(quarkDisconnectedHeadline), findsOneWidget);
       expect(find.text(quarkDisconnectedBody), findsOneWidget);
@@ -158,16 +143,11 @@ void main() {
       }
     });
 
-    testBothViewports('retries through the callback the page supplied', (
+    testWidgets('retries through the callback the page supplied', (
       tester,
-      size,
     ) async {
       var retries = 0;
-      await pumpAt(
-        tester,
-        QuarkDisconnectedBanner(onRetry: () => retries++),
-        size: size,
-      );
+      await pumpAt(tester, QuarkDisconnectedBanner(onRetry: () => retries++));
 
       await tester.tap(find.byKey(const ValueKey('disconnected_banner_retry')));
       await tester.pumpAndSettle();

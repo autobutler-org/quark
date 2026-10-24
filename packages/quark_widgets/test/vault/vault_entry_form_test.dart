@@ -49,9 +49,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('hides the folder field without folders, and save '
-      'without a name', (tester, size) async {
-    await pumpAt(tester, form(), size: size);
+  testWidgets('hides the folder field without folders, and save '
+      'without a name', (tester) async {
+    await pumpAt(tester, form());
 
     expect(find.byKey(const ValueKey('vault_entry_folder')), findsNothing);
     expect(saveButton(tester).onPressed, isNull);
@@ -113,11 +113,10 @@ void main() {
     );
   });
 
-  testBothViewports('holds save still while saving', (tester, size) async {
+  testWidgets('holds save still while saving', (tester) async {
     await pumpAt(
       tester,
       form(initial: const VaultEntryDraft(name: 'GitHub'), isSaving: true),
-      size: size,
     );
 
     expect(saveButton(tester).onPressed, isNull);

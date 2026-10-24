@@ -139,14 +139,12 @@ void main() {
     await expectTapTargetGuidelines(tester);
   });
 
-  testBothViewports('offers "Select all" until everything is selected', (
+  testWidgets('offers "Select all" until everything is selected', (
     tester,
-    size,
   ) async {
     final events = <String>[];
     await pumpSelectionBar(
       tester,
-      size: size,
       selectedCount: 1,
       totalCount: 3,
       log: events.add,
@@ -161,9 +159,9 @@ void main() {
     expect(events, ['selectAll']);
   });
 
-  testBothViewports('emits every action it offers', (tester, size) async {
+  testWidgets('emits every action it offers', (tester) async {
     final events = <String>[];
-    await pumpSelectionBar(tester, size: size, log: events.add);
+    await pumpSelectionBar(tester, log: events.add);
 
     await tester.tap(find.byKey(const ValueKey('file_selection_toggle_all')));
     await tester.tap(find.byKey(const ValueKey('file_selection_delete')));
@@ -190,14 +188,12 @@ void main() {
     expect(find.byKey(const ValueKey('file_selection_restore')), findsNothing);
   });
 
-  testBothViewports('offers restore and a permanent delete in the trash', (
+  testWidgets('offers restore and a permanent delete in the trash', (
     tester,
-    size,
   ) async {
     final events = <String>[];
     await pumpSelectionBar(
       tester,
-      size: size,
       insets: notchInsets,
       canRestore: true,
       log: events.add,

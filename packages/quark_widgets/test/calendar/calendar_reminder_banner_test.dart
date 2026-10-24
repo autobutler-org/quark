@@ -25,29 +25,18 @@ final _rent = CalendarEventItem(
 );
 
 void main() {
-  testBothViewports('says when a timed event starts', (tester, size) async {
-    await pumpAt(
-      tester,
-      CalendarReminderBanner(item: _vet, now: _now),
-      size: size,
-    );
+  testWidgets('says when a timed event starts', (tester) async {
+    await pumpAt(tester, CalendarReminderBanner(item: _vet, now: _now));
     expect(find.text('Vet starts at 4:00 PM · in 20 min'), findsOneWidget);
     expect(find.text('Open'), findsNothing);
   });
 
-  testBothViewports('says which day an all-day event falls on', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      CalendarReminderBanner(item: _rent, now: _now),
-      size: size,
-    );
+  testWidgets('says which day an all-day event falls on', (tester) async {
+    await pumpAt(tester, CalendarReminderBanner(item: _rent, now: _now));
     expect(find.text('Rent due is tomorrow'), findsOneWidget);
   });
 
-  testBothViewports('opens and dismisses', (tester, size) async {
+  testWidgets('opens and dismisses', (tester) async {
     var opens = 0;
     var dismissals = 0;
     await pumpAt(
@@ -58,7 +47,6 @@ void main() {
         onOpen: () => opens++,
         onDismiss: () => dismissals++,
       ),
-      size: size,
     );
     await tester.tap(
       find.byKey(const ValueKey('calendar_reminder_open_14_2026-09-29')),

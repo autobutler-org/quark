@@ -27,14 +27,10 @@ void main() {
     ),
   ];
 
-  testBothViewports('shows only a loader while searching', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows only a loader while searching', (tester) async {
     await pumpAt(
       tester,
       const MusicSearchResults(results: results, isLoading: true),
-      size: size,
     );
 
     expect(find.byType(QuarkLoader), findsOneWidget);
@@ -45,17 +41,13 @@ void main() {
     expect(find.text('No matches'), findsNothing);
   });
 
-  testBothViewports('renders only the caller-provided error', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders only the caller-provided error', (tester) async {
     await pumpAt(
       tester,
       const MusicSearchResults(
         results: results,
         error: 'The library is unavailable.',
       ),
-      size: size,
     );
 
     expect(find.text('The library is unavailable.'), findsOneWidget);
@@ -66,10 +58,7 @@ void main() {
     );
   });
 
-  testBothViewports('prompts before a query and explains no matches', (
-    tester,
-    size,
-  ) async {
+  testWidgets('prompts before a query and explains no matches', (tester) async {
     await pumpAt(
       tester,
       const Column(
@@ -80,7 +69,6 @@ void main() {
           ),
         ],
       ),
-      size: size,
     );
 
     expect(find.text('Search your music'), findsOneWidget);

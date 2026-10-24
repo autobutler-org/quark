@@ -16,15 +16,11 @@ Widget _notice({VoidCallback? onAdd, String? subtext}) => Center(
 );
 
 void main() {
-  testBothViewports('shows its copy and calls back from its button', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows its copy and calls back from its button', (tester) async {
     var added = 0;
     await pumpAt(
       tester,
       _notice(onAdd: () => added++, subtext: 'Nothing scheduled'),
-      size: size,
     );
     expect(find.text('Nothing planned this month'), findsOneWidget);
     expect(find.text('Nothing scheduled'), findsOneWidget);

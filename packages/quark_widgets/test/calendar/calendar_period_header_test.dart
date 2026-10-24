@@ -6,10 +6,7 @@ import '../support/pump.dart';
 
 /// The previous / title / next lead of the calendar's second bar row.
 void main() {
-  testBothViewports('shows the title and moves both ways', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows the title and moves both ways', (tester) async {
     var previous = 0;
     var next = 0;
     await pumpAt(
@@ -21,7 +18,6 @@ void main() {
         onPrevious: () => previous++,
         onNext: () => next++,
       ),
-      size: size,
     );
     expect(find.text('September 2026'), findsOneWidget);
     expect(find.byTooltip('Previous month'), findsOneWidget);

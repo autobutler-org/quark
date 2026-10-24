@@ -47,12 +47,11 @@ void main() {
     }
   });
 
-  testBothViewports('reports the action that was tapped', (tester, size) async {
+  testWidgets('reports the action that was tapped', (tester) async {
     final tapped = <String>[];
     await pumpAt(
       tester,
       QuarkToolbar(actions: actionsThatDoNotFit(tapped.add)),
-      size: size,
     );
 
     await tester.tap(

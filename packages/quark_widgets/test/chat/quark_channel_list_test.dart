@@ -14,10 +14,7 @@ void main() {
     ChatChannelItem(id: 'books', name: 'books'),
   ];
 
-  testBothViewports('shows a spinner while loading and no channels', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows a spinner while loading and no channels', (tester) async {
     await pumpAt(
       tester,
       const QuarkChannelList(
@@ -25,7 +22,6 @@ void main() {
         channels: channels,
         isLoading: true,
       ),
-      size: size,
     );
 
     expect(find.byType(QuarkLoader), findsOneWidget);
@@ -34,10 +30,7 @@ void main() {
     expect(find.text('No channels yet'), findsNothing);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the error the caller handed it', (tester) async {
     await pumpAt(
       tester,
       const QuarkChannelList(
@@ -45,7 +38,6 @@ void main() {
         channels: channels,
         error: "Couldn't load the channels.",
       ),
-      size: size,
     );
 
     expect(find.text("Couldn't load the channels."), findsOneWidget);
@@ -53,14 +45,12 @@ void main() {
     expect(find.byType(QuarkLoader), findsNothing);
   });
 
-  testBothViewports('shows the empty copy when there are no channels', (
+  testWidgets('shows the empty copy when there are no channels', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
       const QuarkChannelList(serverName: 'Home', channels: []),
-      size: size,
     );
 
     expect(find.text('No channels yet'), findsOneWidget);
@@ -87,11 +77,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('locks only the private channels', (tester, size) async {
+  testWidgets('locks only the private channels', (tester) async {
     await pumpAt(
       tester,
       const QuarkChannelList(serverName: 'Home', channels: channels),
-      size: size,
     );
 
     expect(find.byIcon(QuarkIcons.lock_outline), findsOneWidget);
@@ -105,7 +94,7 @@ void main() {
   });
 
   // #3257: a conversation is a person, not a `#`.
-  testBothViewports('draws a conversation with a person', (tester, size) async {
+  testWidgets('draws a conversation with a person', (tester) async {
     await pumpAt(
       tester,
       const QuarkChannelList(
@@ -120,7 +109,6 @@ void main() {
           ),
         ],
       ),
-      size: size,
     );
 
     Finder iconIn(String id, IconData icon) => find.descendant(
@@ -132,7 +120,7 @@ void main() {
     expect(iconIn('1', QuarkIcons.tag), findsOneWidget);
   });
 
-  testBothViewports('highlights the open channel', (tester, size) async {
+  testWidgets('highlights the open channel', (tester) async {
     await pumpAt(
       tester,
       const QuarkChannelList(
@@ -140,7 +128,6 @@ void main() {
         channels: channels,
         selectedChannelId: 'books',
       ),
-      size: size,
     );
 
     bool selected(String id) => tester
@@ -151,10 +138,7 @@ void main() {
     expect(selected('family'), isFalse);
   });
 
-  testBothViewports('reports the channel that was tapped', (
-    tester,
-    size,
-  ) async {
+  testWidgets('reports the channel that was tapped', (tester) async {
     final selected = <String>[];
     await pumpAt(
       tester,
@@ -163,7 +147,6 @@ void main() {
         channels: channels,
         onSelect: selected.add,
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('channel_tile_family')));
@@ -365,7 +348,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('caps the unread count at 99+', (tester, size) async {
+  testWidgets('caps the unread count at 99+', (tester) async {
     await pumpAt(
       tester,
       const QuarkChannelList(
@@ -375,7 +358,6 @@ void main() {
           ChatChannelItem(id: 'b', name: 'b', unreadCount: 100),
         ],
       ),
-      size: size,
     );
 
     expect(find.text('99'), findsOneWidget);

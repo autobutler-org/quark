@@ -36,12 +36,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('ignores a tap on the segment already on', (
-    tester,
-    size,
-  ) async {
+  testWidgets('ignores a tap on the segment already on', (tester) async {
     final chosen = <String>[];
-    await pumpAt(tester, toggle('list', chosen.add), size: size);
+    await pumpAt(tester, toggle('list', chosen.add));
 
     await tester.tap(find.byKey(const ValueKey('bar_segment_list')));
     await tester.pump();

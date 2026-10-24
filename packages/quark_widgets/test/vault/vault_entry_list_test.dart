@@ -60,19 +60,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('says a search matched nothing', (tester, size) async {
-    await pumpAt(tester, list(entries: const []), size: size);
+  testWidgets('says a search matched nothing', (tester) async {
+    await pumpAt(tester, list(entries: const []));
 
     expect(find.text('No matching entries'), findsOneWidget);
     expect(find.text('No passwords yet'), findsNothing);
   });
 
-  testBothViewports('reports the search, the folder and the entry', (
-    tester,
-    size,
-  ) async {
+  testWidgets('reports the search, the folder and the entry', (tester) async {
     final log = <String>[];
-    await pumpAt(tester, list(selectedFolderId: 10, log: log), size: size);
+    await pumpAt(tester, list(selectedFolderId: 10, log: log));
 
     await tester.enterText(find.byKey(const ValueKey('vault_search')), 'git');
     await tester.tap(find.byKey(const ValueKey('vault_folder_11')));
@@ -100,8 +97,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('marks the chosen folder', (tester, size) async {
-    await pumpAt(tester, list(selectedFolderId: 10), size: size);
+  testWidgets('marks the chosen folder', (tester) async {
+    await pumpAt(tester, list(selectedFolderId: 10));
 
     expect(
       tester

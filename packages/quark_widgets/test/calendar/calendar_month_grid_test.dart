@@ -83,8 +83,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('marks today with the accent', (tester, size) async {
-    await pumpAt(tester, _grid(events: const []), size: size);
+  testWidgets('marks today with the accent', (tester) async {
+    await pumpAt(tester, _grid(events: const []));
     final number = find.descendant(
       of: find.byKey(const ValueKey('calendar_day_2026-09-29')),
       matching: find.text('29'),

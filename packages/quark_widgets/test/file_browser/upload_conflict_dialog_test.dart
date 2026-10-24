@@ -33,12 +33,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('reports each choice through its own callback', (
-    tester,
-    size,
-  ) async {
+  testWidgets('reports each choice through its own callback', (tester) async {
     final events = <String>[];
-    await pumpAt(tester, dialog(events), size: size);
+    await pumpAt(tester, dialog(events));
 
     await tester.tap(find.byKey(const ValueKey('upload_conflict_cancel')));
     await tester.tap(find.byKey(const ValueKey('upload_conflict_replace')));
@@ -64,12 +61,9 @@ void main() {
     );
   });
 
-  testBothViewports('ticking the offer reports the new value', (
-    tester,
-    size,
-  ) async {
+  testWidgets('ticking the offer reports the new value', (tester) async {
     final events = <String>[];
-    await pumpAt(tester, dialog(events, showApplyToAll: true), size: size);
+    await pumpAt(tester, dialog(events, showApplyToAll: true));
 
     await tester.tap(
       find.byKey(const ValueKey('upload_conflict_apply_to_all')),

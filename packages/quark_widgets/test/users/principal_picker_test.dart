@@ -44,15 +44,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('narrows the options as a name is typed, ignoring case', (
+  testWidgets('narrows the options as a name is typed, ignoring case', (
     tester,
-    size,
   ) async {
-    await pumpAt(
-      tester,
-      PrincipalPicker(options: options, onSelected: (_) {}),
-      size: size,
-    );
+    await pumpAt(tester, PrincipalPicker(options: options, onSelected: (_) {}));
 
     await tester.enterText(
       find.byKey(const ValueKey('principal_search')),
@@ -82,12 +77,11 @@ void main() {
     expect(find.text('No one to pick'), findsOneWidget);
   });
 
-  testBothViewports('reports the option that was tapped', (tester, size) async {
+  testWidgets('reports the option that was tapped', (tester) async {
     final picked = <PrincipalItem>[];
     await pumpAt(
       tester,
       PrincipalPicker(options: options, onSelected: picked.add),
-      size: size,
     );
 
     await tester.tap(option(bob));

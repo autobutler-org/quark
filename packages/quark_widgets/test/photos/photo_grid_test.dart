@@ -76,11 +76,8 @@ void main() {
     expect(events, ['tap:1', 'long:2']);
   });
 
-  testBothViewports('offers double tap on remote photos only', (
-    tester,
-    size,
-  ) async {
-    await pumpGrid(tester, size: size);
+  testWidgets('offers double tap on remote photos only', (tester) async {
+    await pumpGrid(tester);
 
     PhotoGridTile tile(String id) => tester.widget<PhotoGridTile>(
       find.ancestor(
@@ -92,11 +89,8 @@ void main() {
     expect(tile('b').onDoubleTap, isNull);
   });
 
-  testBothViewports('offers no double tap in selection mode', (
-    tester,
-    size,
-  ) async {
-    await pumpGrid(tester, size: size, selectionMode: true, selectedIds: {'a'});
+  testWidgets('offers no double tap in selection mode', (tester) async {
+    await pumpGrid(tester, selectionMode: true, selectedIds: {'a'});
 
     expect(find.byKey(const ValueKey('photo_tile_check_a')), findsOneWidget);
     final tiles = tester.widgetList<PhotoGridTile>(find.byType(PhotoGridTile));
@@ -104,12 +98,9 @@ void main() {
     expect(tiles.first.isSelected, isTrue);
   });
 
-  testBothViewports('gives every tile a menu outside selection mode', (
-    tester,
-    size,
-  ) async {
+  testWidgets('gives every tile a menu outside selection mode', (tester) async {
     final events = <String>[];
-    await pumpGrid(tester, size: size, events: events, withMenu: true);
+    await pumpGrid(tester, events: events, withMenu: true);
 
     await tester.tap(find.byKey(const ValueKey('photo_tile_menu_c')));
     // c is remote, so the tile's double tap holds the tap until it times out.
@@ -117,21 +108,15 @@ void main() {
     expect(events, ['menu:2']);
   });
 
-  testBothViewports('offers no menu on a device photo (#2276)', (
-    tester,
-    size,
-  ) async {
-    await pumpGrid(tester, size: size, withMenu: true);
+  testWidgets('offers no menu on a device photo (#2276)', (tester) async {
+    await pumpGrid(tester, withMenu: true);
 
     // b is a device photo: nothing on the Quark to act on.
     expect(find.byKey(const ValueKey('photo_tile_menu_a')), findsOneWidget);
     expect(find.byKey(const ValueKey('photo_tile_menu_b')), findsNothing);
   });
 
-  testBothViewports('a long press can stay selection with a menu', (
-    tester,
-    size,
-  ) async {
+  testWidgets('a long press can stay selection with a menu', (tester) async {
     final events = <String>[];
     await pumpAt(
       tester,
@@ -150,7 +135,6 @@ void main() {
           ),
         ],
       ),
-      size: size,
     );
 
     await tester.longPress(find.byKey(const ValueKey('photo_tile_a')));
@@ -159,49 +143,44 @@ void main() {
     expect(events, ['long:0']);
   });
 
-  testBothViewports('offers no menu in selection mode', (tester, size) async {
-    await pumpGrid(tester, size: size, withMenu: true, selectionMode: true);
+  testWidgets('offers no menu in selection mode', (tester) async {
+    await pumpGrid(tester, withMenu: true, selectionMode: true);
 
     expect(find.byKey(const ValueKey('photo_tile_menu_a')), findsNothing);
   });
 
-  testBothViewports('shows a spinner while the first load has no photos', (
+  testWidgets('shows a spinner while the first load has no photos', (
     tester,
-    size,
   ) async {
-    await pumpGrid(tester, size: size, photos: const [], isLoading: true);
+    await pumpGrid(tester, photos: const [], isLoading: true);
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.text('No photos yet'), findsNothing);
   });
 
-  testBothViewports('keeps the photos on screen while refreshing', (
-    tester,
-    size,
-  ) async {
-    await pumpGrid(tester, size: size, isLoading: true);
+  testWidgets('keeps the photos on screen while refreshing', (tester) async {
+    await pumpGrid(tester, isLoading: true);
 
     expect(find.byKey(const ValueKey('photo_grid')), findsOneWidget);
   });
 
-  testBothViewports('shows the error', (tester, size) async {
-    await pumpGrid(tester, size: size, error: "Couldn't load your photos.");
+  testWidgets('shows the error', (tester) async {
+    await pumpGrid(tester, error: "Couldn't load your photos.");
 
     expect(find.text("Couldn't load your photos."), findsOneWidget);
     expect(find.byKey(const ValueKey('photo_grid')), findsNothing);
   });
 
-  testBothViewports('shows the caller empty state', (tester, size) async {
-    await pumpGrid(tester, size: size, photos: const []);
+  testWidgets('shows the caller empty state', (tester) async {
+    await pumpGrid(tester, photos: const []);
 
     expect(find.text('No photos yet'), findsOneWidget);
   });
 
-  testBothViewports('appends a spinner cell while there is another page', (
+  testWidgets('appends a spinner cell while there is another page', (
     tester,
-    size,
   ) async {
-    await pumpGrid(tester, size: size, hasMore: true);
+    await pumpGrid(tester, hasMore: true);
 
     expect(
       find.byKey(const ValueKey('photo_grid_loading_more')),
@@ -282,10 +261,9 @@ void main() {
       );
     });
 
-    testBothViewports('draws no header for an empty run', (tester, size) async {
+    testWidgets('draws no header for an empty run', (tester) async {
       await pumpGrid(
         tester,
-        size: size,
         sections: const [
           PhotoGridSection(id: 'none', label: 'January 2025', count: 0),
           PhotoGridSection(id: 'all', label: 'December 2024', count: 3),
@@ -296,13 +274,9 @@ void main() {
       expect(find.text('December 2024'), findsOneWidget);
     });
 
-    testBothViewports('appends the spinner after the last run', (
-      tester,
-      size,
-    ) async {
+    testWidgets('appends the spinner after the last run', (tester) async {
       await pumpGrid(
         tester,
-        size: size,
         hasMore: true,
         sections: const [
           PhotoGridSection(id: 'mar', label: 'March 2025', count: 3),

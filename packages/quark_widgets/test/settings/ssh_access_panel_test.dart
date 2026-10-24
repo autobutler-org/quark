@@ -13,20 +13,18 @@ const _withComment = SshKeyItem(
 const _bare = SshKeyItem(fingerprint: 'SHA256:xyz', type: 'ssh-rsa');
 
 void main() {
-  testBothViewports('shows a spinner while loading', (tester, size) async {
-    await pumpAt(tester, const SshAccessPanel(isLoading: true), size: size);
+  testWidgets('shows a spinner while loading', (tester) async {
+    await pumpAt(tester, const SshAccessPanel(isLoading: true));
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byKey(const ValueKey('ssh_enabled_switch')), findsNothing);
   });
 
-  testBothViewports('replaces every control with the unavailable reason', (
+  testWidgets('replaces every control with the unavailable reason', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
       const SshAccessPanel(unavailableReason: 'Run sudo quark install.'),
-      size: size,
     );
     expect(find.byKey(const ValueKey('ssh_unavailable')), findsOneWidget);
     expect(find.text('Run sudo quark install.'), findsOneWidget);
@@ -35,16 +33,12 @@ void main() {
     expect(find.byKey(const ValueKey('ssh_set_password')), findsNothing);
   });
 
-  testBothViewports('lists keys by comment, or type without one', (
-    tester,
-    size,
-  ) async {
+  testWidgets('lists keys by comment, or type without one', (tester) async {
     await pumpAt(
       tester,
       const SingleChildScrollView(
         child: SshAccessPanel(enabled: true, keys: [_withComment, _bare]),
       ),
-      size: size,
     );
     expect(find.text('me@laptop'), findsOneWidget);
     expect(find.text('ssh-rsa'), findsOneWidget);
@@ -56,25 +50,17 @@ void main() {
     expect(toggle.value, isTrue);
   });
 
-  testBothViewports('says there are no keys', (tester, size) async {
-    await pumpAt(
-      tester,
-      const SingleChildScrollView(child: SshAccessPanel()),
-      size: size,
-    );
+  testWidgets('says there are no keys', (tester) async {
+    await pumpAt(tester, const SingleChildScrollView(child: SshAccessPanel()));
     expect(find.textContaining('No keys yet'), findsOneWidget);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the error the caller handed it', (tester) async {
     await pumpAt(
       tester,
       const SingleChildScrollView(
         child: SshAccessPanel(error: "Couldn't add the key."),
       ),
-      size: size,
     );
     expect(find.text("Couldn't add the key."), findsOneWidget);
   });

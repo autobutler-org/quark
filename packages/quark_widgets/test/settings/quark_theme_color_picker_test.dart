@@ -57,11 +57,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('classic comes first, and each swatch hints at its theme', (
+  testWidgets('classic comes first, and each swatch hints at its theme', (
     tester,
-    size,
   ) async {
-    await pumpAt(tester, _picker(), size: size, brightness: Brightness.light);
+    await pumpAt(tester, _picker(), brightness: Brightness.light);
 
     final swatches = tester
         .widgetList<ThemeColorSwatch>(find.byType(ThemeColorSwatch))
@@ -90,9 +89,9 @@ void main() {
     expect(_selected(tester), ['Classic']);
   });
 
-  testBothViewports('reports the preset tapped', (tester, size) async {
+  testWidgets('reports the preset tapped', (tester) async {
     final picked = <QuarkThemeColor>[];
-    await pumpAt(tester, _picker(onChanged: picked.add), size: size);
+    await pumpAt(tester, _picker(onChanged: picked.add));
 
     for (final preset in QuarkThemeColor.presets) {
       await tester.tap(find.byKey(_swatch(preset)));
@@ -111,34 +110,29 @@ void main() {
     ]);
   });
 
-  testBothViewports(
-    'a custom color marks the custom swatch and previews its theme',
-    (tester, size) async {
-      final value = QuarkThemeColor.fromSeed(const Color(0xFF22AA44));
-      final picked = <QuarkThemeColor>[];
-      await pumpAt(
-        tester,
-        _picker(value: value, onChanged: picked.add),
-        size: size,
-      );
+  testWidgets('a custom color marks the custom swatch and previews its theme', (
+    tester,
+  ) async {
+    final value = QuarkThemeColor.fromSeed(const Color(0xFF22AA44));
+    final picked = <QuarkThemeColor>[];
+    await pumpAt(tester, _picker(value: value, onChanged: picked.add));
 
-      expect(_selected(tester), ['Custom']);
-      final swatch = tester.widget<ThemeColorSwatch>(find.byKey(_custom));
-      // Dark is pumpAt's default: the swatch previews the derived theme, not
-      // the seed.
-      final dark = value.tokensFor(Brightness.dark);
-      expect(swatch.chrome, dark.chrome);
-      expect(swatch.accent, dark.primary);
-      expect(swatch.checkColor, dark.primaryForeground);
-      expect(
-        tester.widget<Slider>(find.byKey(_slider)).value,
-        closeTo(HSLColor.fromColor(const Color(0xFF22AA44)).hue, 0.01),
-      );
+    expect(_selected(tester), ['Custom']);
+    final swatch = tester.widget<ThemeColorSwatch>(find.byKey(_custom));
+    // Dark is pumpAt's default: the swatch previews the derived theme, not
+    // the seed.
+    final dark = value.tokensFor(Brightness.dark);
+    expect(swatch.chrome, dark.chrome);
+    expect(swatch.accent, dark.primary);
+    expect(swatch.checkColor, dark.primaryForeground);
+    expect(
+      tester.widget<Slider>(find.byKey(_slider)).value,
+      closeTo(HSLColor.fromColor(const Color(0xFF22AA44)).hue, 0.01),
+    );
 
-      await tester.tap(find.byKey(_custom));
-      expect(picked, [value]);
-    },
-  );
+    await tester.tap(find.byKey(_custom));
+    expect(picked, [value]);
+  });
 
   testWidgets('the custom swatch previews the mode on screen', (tester) async {
     final value = QuarkThemeColor.fromSeed(const Color(0xFF22AA44));
@@ -213,9 +207,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('following the Quark marks that choice and no swatch', (
+  testWidgets('following the Quark marks that choice and no swatch', (
     tester,
-    size,
   ) async {
     final picked = <QuarkThemeColor>[];
     await pumpAt(
@@ -226,7 +219,6 @@ void main() {
         onChanged: picked.add,
         onUseDefault: () {},
       ),
-      size: size,
     );
 
     expect(tester.widget<ChoiceChip>(find.byKey(_useDefault)).selected, isTrue);

@@ -98,11 +98,10 @@ void main() {
     });
   }
 
-  testBothViewports('refuses a short password and a mismatched confirm', (
+  testWidgets('refuses a short password and a mismatched confirm', (
     tester,
-    size,
   ) async {
-    final submitted = await pumpDialog(tester, size: size);
+    final submitted = await pumpDialog(tester);
 
     await fill(tester, password: 'short', confirm: 'shirt');
     await submit(tester);
@@ -154,9 +153,9 @@ void main() {
     expect(find.text('Password is required'), findsOneWidget);
   });
 
-  testBothViewports('cancels through its key', (tester, size) async {
+  testWidgets('cancels through its key', (tester) async {
     final events = <String>[];
-    await pumpDialog(tester, size: size, events: events);
+    await pumpDialog(tester, events: events);
 
     await tester.tap(find.byKey(const ValueKey('create_user_cancel')));
     await tester.pump();

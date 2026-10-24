@@ -7,10 +7,13 @@ import '../support/pump.dart';
 /// The remote access panel (#2857): every state, who may change it, its
 /// callbacks, and its keys.
 void main() {
-  Future<void> pump(WidgetTester tester, Widget panel, Size size) =>
-      pumpAt(tester, SingleChildScrollView(child: panel), size: size);
+  Future<void> pump(
+    WidgetTester tester,
+    Widget panel, {
+    Size size = wideViewport,
+  }) => pumpAt(tester, SingleChildScrollView(child: panel), size: size);
 
-  testBothViewports('shows a loader while loading', (tester, size) async {
+  testWidgets('shows a loader while loading', (tester) async {
     await pump(
       tester,
       const RemoteAccessPanel(
@@ -18,13 +21,12 @@ void main() {
         isAdmin: true,
         isLoading: true,
       ),
-      size,
     );
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byKey(const ValueKey('remote_access_set_up')), findsNothing);
   });
 
-  testBothViewports('shows the error with Retry', (tester, size) async {
+  testWidgets('shows the error with Retry', (tester) async {
     var retries = 0;
     await pump(
       tester,
@@ -34,7 +36,6 @@ void main() {
         error: "Couldn't load remote access.",
         onRetry: () => retries++,
       ),
-      size,
     );
     expect(find.text("Couldn't load remote access."), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('remote_access_retry')));
@@ -50,7 +51,7 @@ void main() {
         isAdmin: true,
         onSetUp: () => setUps++,
       ),
-      size,
+      size: size,
     );
     expect(tester.takeException(), isNull);
     expect(find.text('Reach your Quark from anywhere'), findsOneWidget);
@@ -66,11 +67,10 @@ void main() {
     );
   });
 
-  testBothViewports('tells a member who can turn it on', (tester, size) async {
+  testWidgets('tells a member who can turn it on', (tester) async {
     await pump(
       tester,
       const RemoteAccessPanel(state: RemoteAccessState.off, isAdmin: false),
-      size,
     );
     expect(
       find.byKey(const ValueKey('remote_access_member_note')),
@@ -87,10 +87,7 @@ void main() {
     expect(note.data, contains('Ask an admin'));
   });
 
-  testBothViewports('turning the switch off asks to turn off', (
-    tester,
-    size,
-  ) async {
+  testWidgets('turning the switch off asks to turn off', (tester) async {
     var turnOffs = 0;
     await pump(
       tester,
@@ -99,7 +96,6 @@ void main() {
         isAdmin: true,
         onTurnOff: () => turnOffs++,
       ),
-      size,
     );
     expect(
       find.byKey(const ValueKey('remote_access_status_on')),
@@ -110,14 +106,10 @@ void main() {
     expect(turnOffs, 1);
   });
 
-  testBothViewports('gives a member a switch they cannot move', (
-    tester,
-    size,
-  ) async {
+  testWidgets('gives a member a switch they cannot move', (tester) async {
     await pump(
       tester,
       const RemoteAccessPanel(state: RemoteAccessState.on, isAdmin: false),
-      size,
     );
     final toggle = tester.widget<Switch>(
       find.byKey(const ValueKey('remote_access_switch')),
@@ -126,14 +118,13 @@ void main() {
     expect(toggle.onChanged, isNull);
   });
 
-  testBothViewports('shows connecting with a loader', (tester, size) async {
+  testWidgets('shows connecting with a loader', (tester) async {
     await pump(
       tester,
       const RemoteAccessPanel(
         state: RemoteAccessState.connecting,
         isAdmin: true,
       ),
-      size,
     );
     expect(
       find.byKey(const ValueKey('remote_access_status_connecting')),
@@ -159,7 +150,7 @@ void main() {
         onTurnOff: () => taps.add('off'),
         onGetHelp: () => taps.add('help'),
       ),
-      size,
+      size: size,
     );
     expect(tester.takeException(), isNull);
     expect(find.text("Couldn't connect"), findsOneWidget);
@@ -172,10 +163,7 @@ void main() {
     expect(taps, ['again', 'off', 'help']);
   });
 
-  testBothViewports('a failure offers a member no buttons', (
-    tester,
-    size,
-  ) async {
+  testWidgets('a failure offers a member no buttons', (tester) async {
     await pump(
       tester,
       const RemoteAccessPanel(
@@ -183,16 +171,12 @@ void main() {
         isAdmin: false,
         failure: 'It could not connect.',
       ),
-      size,
     );
     expect(find.byKey(const ValueKey('remote_access_try_again')), findsNothing);
     expect(find.byKey(const ValueKey('remote_access_turn_off')), findsNothing);
   });
 
-  testBothViewports('disables every control while working', (
-    tester,
-    size,
-  ) async {
+  testWidgets('disables every control while working', (tester) async {
     await pump(
       tester,
       const RemoteAccessPanel(
@@ -201,7 +185,6 @@ void main() {
         isWorking: true,
         failure: 'It could not connect.',
       ),
-      size,
     );
     expect(
       tester
@@ -228,7 +211,7 @@ void main() {
         failure: 'It could not connect.',
         failureSteps: ['Make sure your home internet is working.'],
       ),
-      size,
+      size: size,
     );
     expect(tester.takeException(), isNull);
   });

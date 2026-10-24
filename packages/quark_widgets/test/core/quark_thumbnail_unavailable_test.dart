@@ -41,10 +41,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('a file it could not read has its own badge', (
-    tester,
-    size,
-  ) async {
+  testWidgets('a file it could not read has its own badge', (tester) async {
     await pumpAt(
       tester,
       slot(
@@ -56,7 +53,6 @@ void main() {
         ),
         40,
       ),
-      size: size,
     );
 
     expect(find.byIcon(QuarkIcons.video_file_outlined), findsOneWidget);

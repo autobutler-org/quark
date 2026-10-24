@@ -6,28 +6,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('renders the glyph for the kind it is given', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      const QuarkFileIcon(kind: QuarkFileKind.image),
-      size: size,
-    );
+  testWidgets('renders the glyph for the kind it is given', (tester) async {
+    await pumpAt(tester, const QuarkFileIcon(kind: QuarkFileKind.image));
 
     expect(find.byIcon(QuarkIcons.image_outlined), findsOneWidget);
   });
 
-  testBothViewports('renders a folder glyph for a folder', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      const QuarkFileIcon(kind: QuarkFileKind.folder),
-      size: size,
-    );
+  testWidgets('renders a folder glyph for a folder', (tester) async {
+    await pumpAt(tester, const QuarkFileIcon(kind: QuarkFileKind.folder));
 
     expect(find.byIcon(QuarkIcons.folder_outlined), findsOneWidget);
   });

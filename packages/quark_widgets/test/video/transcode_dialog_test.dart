@@ -94,9 +94,9 @@ void main() {
     }
   });
 
-  testBothViewports('reports the chosen format', (tester, size) async {
+  testWidgets('reports the chosen format', (tester) async {
     final events = <String>[];
-    await pumpDialog(tester, size: size, events: events);
+    await pumpDialog(tester, events: events);
 
     await tester.tap(format('mkv'));
     await tester.pump();
@@ -118,14 +118,12 @@ void main() {
     expect(convertEnabled(tester), isFalse);
   });
 
-  testBothViewports('shows a failed load with a retry, and the cancel', (
+  testWidgets('shows a failed load with a retry, and the cancel', (
     tester,
-    size,
   ) async {
     final events = <String>[];
     await pumpDialog(
       tester,
-      size: size,
       events: events,
       formats: const [],
       error: "Couldn't convert the video.",

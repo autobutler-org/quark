@@ -41,12 +41,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('hands back the path of the entry that was tapped', (
+  testWidgets('hands back the path of the entry that was tapped', (
     tester,
-    size,
   ) async {
     final picked = <String>[];
-    await pumpSheet(tester, size: size, onPicked: picked.add);
+    await pumpSheet(tester, onPicked: picked.add);
 
     await tester.tap(find.byKey(const ValueKey('shared_root_Family')));
     await tester.pump();

@@ -21,21 +21,20 @@ void main() {
     ),
   );
 
-  testBothViewports('runs on a tap', (tester, size) async {
+  testWidgets('runs on a tap', (tester) async {
     var taps = 0;
-    await pumpAt(tester, tappable(onTap: () => taps++), size: size);
+    await pumpAt(tester, tappable(onTap: () => taps++));
 
     await tester.tap(find.byKey(key));
     expect(taps, 1);
     await expectTapTargetGuidelines(tester);
   });
 
-  testBothViewports('is reachable by Tab and runs on Enter and Space', (
+  testWidgets('is reachable by Tab and runs on Enter and Space', (
     tester,
-    size,
   ) async {
     var taps = 0;
-    await pumpAt(tester, tappable(onTap: () => taps++), size: size);
+    await pumpAt(tester, tappable(onTap: () => taps++));
 
     await tabTo(tester, find.byKey(key));
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -45,11 +44,10 @@ void main() {
     expect(taps, 2);
   });
 
-  testBothViewports('draws a ring in the primary color while focused', (
+  testWidgets('draws a ring in the primary color while focused', (
     tester,
-    size,
   ) async {
-    await pumpAt(tester, tappable(onTap: () {}), size: size);
+    await pumpAt(tester, tappable(onTap: () {}));
     expect(findFocusRing(find.byKey(key)), findsNothing);
 
     await tabTo(tester, find.byKey(key));

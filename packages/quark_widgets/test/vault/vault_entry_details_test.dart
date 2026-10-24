@@ -48,20 +48,19 @@ void main() {
     await expectTapTargetGuidelines(tester);
   });
 
-  testBothViewports('shows the password when asked', (tester, size) async {
-    await pumpAt(tester, details(showPassword: true), size: size);
+  testWidgets('shows the password when asked', (tester) async {
+    await pumpAt(tester, details(showPassword: true));
 
     expect(find.text('hunter22'), findsOneWidget);
   });
 
-  testBothViewports('leaves out empty optional fields', (tester, size) async {
+  testWidgets('leaves out empty optional fields', (tester) async {
     await pumpAt(
       tester,
       details(
         entry: const VaultEntryDraft(name: 'Bare', password: 'x'),
         folderName: '',
       ),
-      size: size,
     );
 
     expect(find.text('Website'), findsNothing);
@@ -71,9 +70,9 @@ void main() {
     expect(find.byKey(const ValueKey('vault_detail_copy_url')), findsNothing);
   });
 
-  testBothViewports('reports copies and the reveal', (tester, size) async {
+  testWidgets('reports copies and the reveal', (tester) async {
     final log = <String>[];
-    await pumpAt(tester, details(log: log), size: size);
+    await pumpAt(tester, details(log: log));
 
     await tester.tap(find.byKey(const ValueKey('vault_detail_copy_username')));
     await tester.tap(find.byKey(const ValueKey('vault_detail_copy_password')));

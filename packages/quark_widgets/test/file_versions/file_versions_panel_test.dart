@@ -85,13 +85,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the error the caller handed it', (tester) async {
     await pumpPanel(
       tester,
-      size: size,
       items: const [],
       error: "Couldn't load the versions.",
     );
@@ -137,24 +133,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('keeps the rows on screen through a refresh', (
-    tester,
-    size,
-  ) async {
-    await pumpPanel(tester, size: size, isLoading: true, error: 'Offline.');
+  testWidgets('keeps the rows on screen through a refresh', (tester) async {
+    await pumpPanel(tester, isLoading: true, error: 'Offline.');
 
     expect(find.byKey(const ValueKey('file_version_tile_v2')), findsOneWidget);
     expect(find.text('Offline.'), findsOneWidget);
   });
 
-  testBothViewports('reports the version whose button was tapped', (
-    tester,
-    size,
-  ) async {
+  testWidgets('reports the version whose button was tapped', (tester) async {
     final events = <String>[];
     await pumpPanel(
       tester,
-      size: size,
       onPreview: (id) => events.add('preview $id'),
       onRestore: (id) => events.add('restore $id'),
       onRefresh: () => events.add('refresh'),
@@ -168,14 +157,10 @@ void main() {
     expect(events, ['preview v2', 'restore v1', 'refresh']);
   });
 
-  testBothViewports('shows the busy row loading and dims the others', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows the busy row loading and dims the others', (tester) async {
     final events = <String>[];
     await pumpPanel(
       tester,
-      size: size,
       busyId: 'v2',
       onPreview: events.add,
       onRestore: events.add,

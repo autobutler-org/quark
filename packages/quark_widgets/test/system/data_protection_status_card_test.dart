@@ -103,10 +103,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('shows when each drive was last backed up', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows when each drive was last backed up', (tester) async {
     await pumpAt(
       tester,
       card(
@@ -124,7 +121,6 @@ void main() {
           ),
         ],
       ),
-      size: size,
     );
     await tester.pumpAndSettle();
 
@@ -143,10 +139,7 @@ void main() {
     );
   });
 
-  testBothViewports('reports the next step and the explainer once', (
-    tester,
-    size,
-  ) async {
+  testWidgets('reports the next step and the explainer once', (tester) async {
     final events = <String>[];
     await pumpAt(
       tester,
@@ -156,7 +149,6 @@ void main() {
         onNextStep: () => events.add('next'),
         onExplain: () => events.add('explain'),
       ),
-      size: size,
     );
     await tester.pumpAndSettle();
 
@@ -168,10 +160,7 @@ void main() {
     expect(events, ['next', 'explain']);
   });
 
-  testBothViewports('hides the next step when it is not offered', (
-    tester,
-    size,
-  ) async {
+  testWidgets('hides the next step when it is not offered', (tester) async {
     await pumpAt(
       tester,
       card(
@@ -179,7 +168,6 @@ void main() {
         nextStepLabel: 'Assign the backup role',
         onExplain: () {},
       ),
-      size: size,
     );
     await tester.pumpAndSettle();
 
@@ -207,11 +195,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('renders the error it was given', (tester, size) async {
+  testWidgets('renders the error it was given', (tester) async {
     await pumpAt(
       tester,
       const DataProtectionStatusCard(error: "Couldn't check the backup."),
-      size: size,
     );
 
     expect(find.text("Couldn't check the backup."), findsOneWidget);
@@ -219,10 +206,7 @@ void main() {
     expect(find.byType(DataProtectionMeter), findsNothing);
   });
 
-  testBothViewports('keeps the level visible beside a refresh error', (
-    tester,
-    size,
-  ) async {
+  testWidgets('keeps the level visible beside a refresh error', (tester) async {
     await pumpAt(
       tester,
       card(
@@ -230,7 +214,6 @@ void main() {
         error: "Couldn't check the backup.",
         onExplain: () {},
       ),
-      size: size,
     );
     await tester.pumpAndSettle();
 

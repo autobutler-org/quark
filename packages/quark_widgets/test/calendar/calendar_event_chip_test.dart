@@ -33,17 +33,14 @@ Widget _chip(
 );
 
 void main() {
-  testBothViewports('a timed chip shows its start time', (tester, size) async {
-    await pumpAt(tester, Center(child: _chip(_timed)), size: size);
+  testWidgets('a timed chip shows its start time', (tester) async {
+    await pumpAt(tester, Center(child: _chip(_timed)));
     expect(find.text('9am'), findsOneWidget);
     expect(find.text('Plumber visit'), findsOneWidget);
   });
 
-  testBothViewports('an all-day chip is a filled bar with no time', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, Center(child: _chip(_allDay)), size: size);
+  testWidgets('an all-day chip is a filled bar with no time', (tester) async {
+    await pumpAt(tester, Center(child: _chip(_allDay)));
     expect(find.text('Rent due'), findsOneWidget);
     final bar = tester.widget<Ink>(
       find.ancestor(of: find.text('Rent due'), matching: find.byType(Ink)),
@@ -54,19 +51,15 @@ void main() {
     );
   });
 
-  testBothViewports('a dense chip drops the time', (tester, size) async {
-    await pumpAt(tester, Center(child: _chip(_timed, dense: true)), size: size);
+  testWidgets('a dense chip drops the time', (tester) async {
+    await pumpAt(tester, Center(child: _chip(_timed, dense: true)));
     expect(find.text('9am'), findsNothing);
     expect(find.text('Plumber visit'), findsOneWidget);
   });
 
-  testBothViewports('taps through its occurrence key', (tester, size) async {
+  testWidgets('taps through its occurrence key', (tester) async {
     var taps = 0;
-    await pumpAt(
-      tester,
-      Center(child: _chip(_timed, onTap: () => taps++)),
-      size: size,
-    );
+    await pumpAt(tester, Center(child: _chip(_timed, onTap: () => taps++)));
     await tester.tap(find.byKey(const ValueKey('calendar_event_7_2026-09-29')));
     expect(taps, 1);
   });

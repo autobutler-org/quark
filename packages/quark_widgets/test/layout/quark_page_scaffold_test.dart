@@ -42,10 +42,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('opens the drawer from the brand button', (
-    tester,
-    size,
-  ) async {
+  testWidgets('opens the drawer from the brand button', (tester) async {
     await pumpAt(
       tester,
       QuarkPageScaffold(
@@ -54,7 +51,6 @@ void main() {
         drawer: const Drawer(child: Text('navigation')),
         body: const Text('the grid'),
       ),
-      size: size,
       scaffold: false,
     );
 
@@ -88,10 +84,7 @@ void main() {
     expect(find.byType(Drawer), findsNothing);
   });
 
-  testBothViewports('swaps in the app bar a page hands it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('swaps in the app bar a page hands it', (tester) async {
     await pumpAt(
       tester,
       QuarkPageScaffold(
@@ -100,7 +93,6 @@ void main() {
         appBar: AppBar(title: const Text('3 selected')),
         body: const Text('the grid'),
       ),
-      size: size,
       scaffold: false,
     );
 
@@ -138,10 +130,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('leaves the bottom bar out when there is none', (
-    tester,
-    size,
-  ) async {
+  testWidgets('leaves the bottom bar out when there is none', (tester) async {
     await pumpAt(
       tester,
       const QuarkPageScaffold(
@@ -149,7 +138,6 @@ void main() {
         icon: QuarkIcons.photo_library_outlined,
         body: Text('the grid'),
       ),
-      size: size,
       scaffold: false,
     );
 
@@ -249,10 +237,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('shows the spinner while the refresh runs', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows the spinner while the refresh runs', (tester) async {
     await pumpAt(
       tester,
       QuarkPageScaffold(
@@ -262,7 +247,6 @@ void main() {
         isRefreshing: true,
         body: const Text('the grid'),
       ),
-      size: size,
       scaffold: false,
     );
 
@@ -280,10 +264,7 @@ void main() {
     );
   });
 
-  testBothViewports('has no refresh button without onRefresh', (
-    tester,
-    size,
-  ) async {
+  testWidgets('has no refresh button without onRefresh', (tester) async {
     await pumpAt(
       tester,
       const QuarkPageScaffold(
@@ -291,7 +272,6 @@ void main() {
         icon: QuarkIcons.photo_library_outlined,
         body: Text('the grid'),
       ),
-      size: size,
       scaffold: false,
     );
 

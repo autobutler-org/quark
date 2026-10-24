@@ -47,24 +47,17 @@ void main() {
     expect(findProgressIndicators(), findsNothing);
   });
 
-  testBothViewports('says so when the search found nothing', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, const DiscoveredQuarkList(quarks: []), size: size);
+  testWidgets('says so when the search found nothing', (tester) async {
+    await pumpAt(tester, const DiscoveredQuarkList(quarks: []));
 
     expect(find.byKey(const ValueKey('discovered_quark_none')), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the error the caller handed it', (tester) async {
     await pumpAt(
       tester,
       const DiscoveredQuarkList(quarks: [], isLoading: true, error: 'Nope.'),
-      size: size,
     );
 
     expect(find.text('Nope.'), findsOneWidget);
@@ -74,14 +67,10 @@ void main() {
     );
   });
 
-  testBothViewports('rows show while the search is still going', (
-    tester,
-    size,
-  ) async {
+  testWidgets('rows show while the search is still going', (tester) async {
     await pumpAt(
       tester,
       const DiscoveredQuarkList(quarks: quarks, isLoading: true),
-      size: size,
     );
 
     expect(find.text('https://quark-2.local'), findsOneWidget);

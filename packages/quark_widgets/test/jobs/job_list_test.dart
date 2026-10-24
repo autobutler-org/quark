@@ -38,45 +38,28 @@ const _completed = JobItem(
 const _jobs = [_running, _pending, _failed, _completed];
 
 void main() {
-  testBothViewports('shows a spinner while loading with nothing yet', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, const JobList(items: [], isLoading: true), size: size);
+  testWidgets('shows a spinner while loading with nothing yet', (tester) async {
+    await pumpAt(tester, const JobList(items: [], isLoading: true));
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.text('No jobs yet'), findsNothing);
   });
 
-  testBothViewports('shows the empty copy when there are no jobs', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, const JobList(items: []), size: size);
+  testWidgets('shows the empty copy when there are no jobs', (tester) async {
+    await pumpAt(tester, const JobList(items: []));
     expect(find.text('No jobs yet'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      const JobList(items: [], error: 'Host unreachable'),
-      size: size,
-    );
+  testWidgets('renders the error the caller handed it', (tester) async {
+    await pumpAt(tester, const JobList(items: [], error: 'Host unreachable'));
     expect(find.text('Host unreachable'), findsOneWidget);
     expect(find.text('No jobs yet'), findsNothing);
   });
 
-  testBothViewports('keeps the rows on screen under a refresh error', (
-    tester,
-    size,
-  ) async {
+  testWidgets('keeps the rows on screen under a refresh error', (tester) async {
     await pumpAt(
       tester,
       const JobList(items: _jobs, isLoading: true, error: 'Host unreachable'),
-      size: size,
     );
     expect(find.text('Host unreachable'), findsOneWidget);
     expect(find.byKey(const ValueKey('job_row_3')), findsOneWidget);
@@ -102,11 +85,10 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 
-  testBothViewports('offers Cancel and Retry only where the item does', (
+  testWidgets('offers Cancel and Retry only where the item does', (
     tester,
-    size,
   ) async {
-    await pumpAt(tester, const JobList(items: _jobs), size: size);
+    await pumpAt(tester, const JobList(items: _jobs));
     for (final job in _jobs) {
       expect(find.byKey(ValueKey('job_row_${job.id}')), findsOneWidget);
       expect(
@@ -120,10 +102,7 @@ void main() {
     }
   });
 
-  testBothViewports('reports the job whose action was tapped', (
-    tester,
-    size,
-  ) async {
+  testWidgets('reports the job whose action was tapped', (tester) async {
     final events = <String>[];
     await pumpAt(
       tester,
@@ -132,7 +111,6 @@ void main() {
         onCancel: (id) => events.add('cancel $id'),
         onRetry: (id) => events.add('retry $id'),
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('job_cancel_3')));

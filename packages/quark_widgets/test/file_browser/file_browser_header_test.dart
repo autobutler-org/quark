@@ -5,7 +5,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('summarizes the search results', (tester, size) async {
+  testWidgets('summarizes the search results', (tester) async {
     await pumpAt(
       tester,
       const FileBrowserHeader(
@@ -13,7 +13,6 @@ void main() {
         searchQuery: 'invoice',
         resultCount: 4,
       ),
-      size: size,
     );
 
     expect(find.text("4 results for 'invoice'"), findsOneWidget);
@@ -43,9 +42,8 @@ void main() {
     expect(find.text("0 results for 'invoice'"), findsOneWidget);
   });
 
-  testBothViewports('says it is searching while the query is pending', (
+  testWidgets('says it is searching while the query is pending', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
@@ -55,7 +53,6 @@ void main() {
         searchQuery: 'mountain',
         resultCount: 4,
       ),
-      size: size,
     );
 
     expect(find.text("Searching for 'mountain'…"), findsOneWidget);
@@ -66,7 +63,7 @@ void main() {
     );
   });
 
-  testBothViewports('leaves search through its callback', (tester, size) async {
+  testWidgets('leaves search through its callback', (tester) async {
     var closes = 0;
     await pumpAt(
       tester,
@@ -76,7 +73,6 @@ void main() {
         resultCount: 0,
         onClose: () => closes++,
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('file_header_close_search')));
@@ -85,15 +81,8 @@ void main() {
     expect(closes, 1);
   });
 
-  testBothViewports('renders nothing outside search mode', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      const FileBrowserHeader(isSearchMode: false),
-      size: size,
-    );
+  testWidgets('renders nothing outside search mode', (tester) async {
+    await pumpAt(tester, const FileBrowserHeader(isSearchMode: false));
 
     expect(find.byType(Text), findsNothing);
     expect(find.byType(IconButton), findsNothing);

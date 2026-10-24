@@ -6,8 +6,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('reads LIVE', (tester, size) async {
-    await pumpAt(tester, const LiveBadge(), size: size);
+  testWidgets('reads LIVE', (tester) async {
+    await pumpAt(tester, const LiveBadge());
 
     expect(find.text('LIVE'), findsOneWidget);
   });
@@ -41,8 +41,8 @@ void main() {
     expect(tester.getSize(find.byType(LiveBadge)).height, lessThan(24));
   });
 
-  testBothViewports('shows a dot in the viewer form', (tester, size) async {
-    await pumpAt(tester, const LiveBadge(ready: true), size: size);
+  testWidgets('shows a dot in the viewer form', (tester) async {
+    await pumpAt(tester, const LiveBadge(ready: true));
 
     expect(find.text('LIVE'), findsOneWidget);
     expect(find.byIcon(QuarkIcons.circle), findsOneWidget);
@@ -79,9 +79,9 @@ void main() {
   });
 
   // #2606: no text in the badge starts below 11 points.
-  testBothViewports('never sets type smaller than 11', (tester, size) async {
+  testWidgets('never sets type smaller than 11', (tester) async {
     for (final ready in [null, false, true]) {
-      await pumpAt(tester, LiveBadge(ready: ready), size: size);
+      await pumpAt(tester, LiveBadge(ready: ready));
 
       final style = tester.widget<Text>(find.text('LIVE')).style!;
       expect(style.fontSize, greaterThanOrEqualTo(11));

@@ -42,10 +42,7 @@ void main() {
     });
   }
 
-  testBothViewports('a replace soon backup asks, and files stay', (
-    tester,
-    size,
-  ) async {
+  testWidgets('a replace soon backup asks, and files stay', (tester) async {
     final events = <String>[];
     await pumpAt(
       tester,
@@ -58,7 +55,6 @@ void main() {
         onConfirm: () => events.add('confirm'),
         onCancel: () => events.add('cancel'),
       ),
-      size: size,
     );
 
     expect(find.text('Replace this drive soon?'), findsOneWidget);
@@ -116,10 +112,7 @@ void main() {
     expectNoClippedText(tester);
   });
 
-  testBothViewports('replace soon and worse stack both warnings', (
-    tester,
-    size,
-  ) async {
+  testWidgets('replace soon and worse stack both warnings', (tester) async {
     await pumpAt(
       tester,
       const DriveHealthAcknowledgment(
@@ -132,7 +125,6 @@ void main() {
         onConfirm: _ignore,
         onCancel: _ignore,
       ),
-      size: size,
     );
 
     expect(find.text('This drive is in worse shape'), findsOneWidget);
@@ -151,7 +143,7 @@ void main() {
     expect(find.text('Use this drive anyway'), findsOneWidget);
   });
 
-  testBothViewports('unknown never reads as healthy', (tester, size) async {
+  testWidgets('unknown never reads as healthy', (tester) async {
     await pumpAt(
       tester,
       const DriveHealthAcknowledgment(
@@ -161,7 +153,6 @@ void main() {
         onConfirm: _ignore,
         onCancel: _ignore,
       ),
-      size: size,
     );
 
     expect(find.text('Unknown'), findsOneWidget);

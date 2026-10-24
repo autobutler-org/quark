@@ -41,24 +41,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('asks for the password once', (tester, size) async {
-    await pumpAt(
-      tester,
-      form(phraseHelp: 'Lets a recovery keep the vault.'),
-      size: size,
-    );
+  testWidgets('asks for the password once', (tester) async {
+    await pumpAt(tester, form(phraseHelp: 'Lets a recovery keep the vault.'));
 
     expect(find.byKey(const ValueKey('vault_password_field')), findsOneWidget);
     expect(find.byKey(const ValueKey('vault_password_confirm')), findsNothing);
     expect(find.byType(TextField), findsNWidgets(2));
   });
 
-  testBothViewports('submits the password once and clears the field', (
-    tester,
-    size,
-  ) async {
+  testWidgets('submits the password once and clears the field', (tester) async {
     final submits = <String>[];
-    await pumpAt(tester, form(submits: submits), size: size);
+    await pumpAt(tester, form(submits: submits));
 
     await tester.enterText(
       find.byKey(const ValueKey('vault_password_field')),
@@ -99,18 +92,15 @@ void main() {
     expect(find.text('apple-bread'), findsNothing);
   });
 
-  testBothViewports('without phraseHelp, has no phrase field', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, form(), size: size);
+  testWidgets('without phraseHelp, has no phrase field', (tester) async {
+    await pumpAt(tester, form());
 
     expect(find.byKey(const ValueKey('vault_password_phrase')), findsNothing);
   });
 
-  testBothViewports('an empty password submits nothing', (tester, size) async {
+  testWidgets('an empty password submits nothing', (tester) async {
     final submits = <String>[];
-    await pumpAt(tester, form(submits: submits), size: size);
+    await pumpAt(tester, form(submits: submits));
 
     await tester.tap(find.byKey(const ValueKey('vault_password_submit')));
     await tester.pump();
@@ -118,15 +108,11 @@ void main() {
     expect(submits, isEmpty);
   });
 
-  testBothViewports('renders the error and holds still while busy', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the error and holds still while busy', (tester) async {
     final secondary = <String>[];
     await pumpAt(
       tester,
       form(isBusy: true, error: 'Wrong password.', secondary: secondary),
-      size: size,
     );
 
     expect(find.text('Wrong password.'), findsOneWidget);
@@ -143,9 +129,9 @@ void main() {
     expect(secondary, isEmpty);
   });
 
-  testBothViewports('reports the secondary action', (tester, size) async {
+  testWidgets('reports the secondary action', (tester) async {
     final secondary = <String>[];
-    await pumpAt(tester, form(secondary: secondary), size: size);
+    await pumpAt(tester, form(secondary: secondary));
 
     await tester.tap(find.byKey(const ValueKey('vault_password_secondary')));
     await tester.pump();

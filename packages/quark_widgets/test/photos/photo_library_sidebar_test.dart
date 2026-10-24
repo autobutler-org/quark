@@ -40,12 +40,9 @@ void main() {
     expect(find.byKey(const ValueKey('photo_columns_slider')), findsOneWidget);
   });
 
-  testBothViewports('steps the column count within its bounds', (
-    tester,
-    size,
-  ) async {
+  testWidgets('steps the column count within its bounds', (tester) async {
     final changes = <int>[];
-    await pumpAt(tester, inSplitView(sidebar(changes: changes)), size: size);
+    await pumpAt(tester, inSplitView(sidebar(changes: changes)));
 
     await tester.tap(find.byKey(const ValueKey('photo_columns_less')));
     await tester.tap(find.byKey(const ValueKey('photo_columns_more')));
@@ -53,14 +50,10 @@ void main() {
     expect(changes, [3, 5]);
   });
 
-  testBothViewports('disables the step past either bound', (
-    tester,
-    size,
-  ) async {
+  testWidgets('disables the step past either bound', (tester) async {
     await pumpAt(
       tester,
       inSplitView(sidebar(columns: 12, minColumns: 3, maxColumns: 3)),
-      size: size,
     );
 
     IconButton button(String key) =>
