@@ -297,7 +297,7 @@ void main() {
       await tester.pump();
       expect(table().plainText.split('\n').first, '\t\t');
       expect(doc.presentation.slides.single.elements, hasLength(1));
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testWidgets('selecting something else lets go of the cells', (
@@ -328,7 +328,7 @@ void main() {
       expect(editing.isEditing, isFalse);
       expect(table().cell(1, 1).plainText, 'North east');
       expect(cells.range, const CellRange.single(1, 1));
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
       expect(tester.takeException(), isNull);
     });
 
@@ -355,7 +355,7 @@ void main() {
       expect(editing.cell, (row: 0, column: 0));
       expect(table().cell(0, 1).plainText, 'Q3?');
       editing.commit();
-      expect(undoAll(doc), 2);
+      expect(undoAll(doc.controller), 2);
     });
 
     testWidgets('formatting while editing a cell writes its runs', (
@@ -425,7 +425,7 @@ void main() {
       expect(table().columnWidths[0], closeTo(500, 1));
       expect(table().columnWidths[1], closeTo(300, 1));
       expect(table().frame.width, closeTo(1200, 1e-6));
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testWidgets('dragging a row grip makes the row and table taller', (
@@ -487,7 +487,7 @@ void main() {
       expect(drawn.frame.x, closeTo(100, 4));
       expect(drawn.frame.width, closeTo(800, 8));
       expect(harness(tester).tool, SlideCanvasTool.select);
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testWidgets('a click places a default-size table', (tester) async {
@@ -542,7 +542,7 @@ void main() {
       expect(table().columnCount, 1);
       cells.format(const CellFormat(fill: SlideColor(0xFF00FF00)));
       expect(table().fillAt(cells.range!.top, 0), const SlideColor(0xFF00FF00));
-      expect(undoAll(doc), 4);
+      expect(undoAll(doc.controller), 4);
     });
   });
 }

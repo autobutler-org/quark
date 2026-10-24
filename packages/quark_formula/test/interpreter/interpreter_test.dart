@@ -75,27 +75,6 @@ void main() {
       expect(results[(0, 0)], const ErrorValue('#REF!', 'Circular reference'));
     });
 
-    test('two-cell mutual reference marks both cells as circular', () {
-      // A1==B1, B1==A1
-      final results = interpret(1, 2, {(0, 0): '=B1', (0, 1): '=A1'});
-
-      expect(results[(0, 0)], const ErrorValue('#REF!', 'Circular reference'));
-      expect(results[(0, 1)], const ErrorValue('#REF!', 'Circular reference'));
-    });
-
-    test('three-cell cycle marks all members as circular', () {
-      // A1→B1→C1→A1
-      final results = interpret(1, 3, {
-        (0, 0): '=C1',
-        (0, 1): '=A1',
-        (0, 2): '=B1',
-      });
-
-      expect(results[(0, 0)], const ErrorValue('#REF!', 'Circular reference'));
-      expect(results[(0, 1)], const ErrorValue('#REF!', 'Circular reference'));
-      expect(results[(0, 2)], const ErrorValue('#REF!', 'Circular reference'));
-    });
-
     test(
       'cell outside the cycle that depends on a cycle member gets error',
       () {

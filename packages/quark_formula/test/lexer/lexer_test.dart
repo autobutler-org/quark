@@ -59,62 +59,6 @@ void main() {
       );
     });
 
-    test('rejects standalone equals', () {
-      expect(
-        () => lex('=').toList(),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 0)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Standalone ='),
-              ),
-        ),
-      );
-
-      expect(
-        () => lex('A1 = 2').toList(),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 3)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Standalone ='),
-              ),
-        ),
-      );
-    });
-
-    test('rejects invalid cell refs and unterminated strings', () {
-      expect(
-        () => lex(r'$foo').toList(),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 0)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Invalid cell reference'),
-              ),
-        ),
-      );
-
-      expect(
-        () => lex('"abc').toList(),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 0)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Unterminated string'),
-              ),
-        ),
-      );
-    });
-
     test('tokenizes each operator and delimiter with exact offsets', () {
       final tokens = lex(
         'A1:B2+3-4*5/6%7^8,(9)<=10<>11!=12==13<14>15>=16',
@@ -203,67 +147,25 @@ void main() {
       );
     });
 
-    test('rejects malformed scientific notation and unknown punctuation', () {
-      expect(
-        () => lex('1e+').toList(),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 1)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Invalid scientific notation'),
-              ),
-        ),
-      );
-
-      expect(
-        () => lex('A1 ? B2').toList(),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 3)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Unexpected character: ?'),
-              ),
-        ),
-      );
-
-      expect(
-        () => lex('!TRUE').toList(),
-        throwsA(
-          isA<LexError>()
-              .having((error) => error.offset, 'offset', 0)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('Unexpected character: !'),
-              ),
-        ),
-      );
-    });
-
-    test('lexes repeated comparison operators without ambiguity', () {
-      final tokens = lex('=A1<=B2>=C3<>D4==E5!=F6').toList();
-
-      expect(
-        tokens.map((token) => token.kind).toList(),
-        equals([
-          TokenKind.cellRef,
-          TokenKind.lte,
-          TokenKind.cellRef,
-          TokenKind.gte,
-          TokenKind.cellRef,
-          TokenKind.neq,
-          TokenKind.cellRef,
-          TokenKind.eqEq,
-          TokenKind.cellRef,
-          TokenKind.neq,
-          TokenKind.cellRef,
-          TokenKind.eof,
-        ]),
-      );
-    });
+    for (final (input, offset, message) in const [
+      ('=', 0, 'Standalone ='),
+      ('A1 = 2', 3, 'Standalone ='),
+      (r'$foo', 0, 'Invalid cell reference'),
+      ('"abc', 0, 'Unterminated string'),
+      ('1e+', 1, 'Invalid scientific notation'),
+      ('A1 ? B2', 3, 'Unexpected character: ?'),
+      ('!TRUE', 0, 'Unexpected character: !'),
+    ]) {
+      test('rejects $input at $offset: $message', () {
+        expect(
+          () => lex(input).toList(),
+          throwsA(
+            isA<LexError>()
+                .having((error) => error.offset, 'offset', offset)
+                .having((error) => error.message, 'message', contains(message)),
+          ),
+        );
+      });
+    }
   });
 }

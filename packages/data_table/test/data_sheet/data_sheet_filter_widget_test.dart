@@ -5,16 +5,13 @@ import 'package:flutter/material.dart' hide DataCell, DataRow, DataTable;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _narrow = Size(360, 640);
-const _wide = Size(1280, 800);
+import '../support/sheet.dart';
 
 /// Column B of rows 1–6, under a frozen header row.
 const _fruit = ['apple', 'pear', 'apple', '', 'fig', '12'];
 
 Future<DataSheetController> _pump(WidgetTester tester, Size size) async {
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
+  setSheetSize(tester, size);
   final controller = DataSheetController.fromTable(
     DataTable([
       DataRow([DataCell('#'), DataCell('Fruit')]),
@@ -50,7 +47,7 @@ Future<void> _tap(WidgetTester tester, String key) async {
 }
 
 void main() {
-  for (final (name, size) in [('narrow', _narrow), ('wide', _wide)]) {
+  for (final (name, size) in [('narrow', narrow), ('wide', wide)]) {
     group('$name viewport', () {
       testWidgets('the header funnel filters rows by value', (tester) async {
         final c = await _pump(tester, size);

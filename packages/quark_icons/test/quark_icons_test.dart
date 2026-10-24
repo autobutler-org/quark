@@ -1,35 +1,26 @@
-import 'package:quark_icons/quark_icons.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark_icons/quark_icons.dart';
 
 void main() {
-  group('QuarkIcons', () {
-    test('all icon codepoints are unique', () {
-      final all = [
-        QuarkIcons.insert_row_above,
-        QuarkIcons.insert_row_below,
-        QuarkIcons.delete_row,
-        QuarkIcons.duplicate_row,
-        QuarkIcons.clear_row,
-        QuarkIcons.insert_column_left,
-        QuarkIcons.insert_column_right,
-        QuarkIcons.delete_column,
-        QuarkIcons.duplicate_column,
-        QuarkIcons.clear_column,
-      ];
-      final codepoints = all.map((i) => i.codePoint).toSet();
-      expect(codepoints.length, equals(all.length));
-    });
-
-    test('all icons use the QuarkIcons font family', () {
-      const icons = [
-        QuarkIcons.insert_row_above,
-        QuarkIcons.insert_column_left,
-        QuarkIcons.delete_row,
-      ];
-      for (final icon in icons) {
-        expect(icon.fontFamily, equals('QuarkIcons'));
-        expect(icon.fontPackage, equals('quark_icons'));
-      }
-    });
+  // Every glyph drawn from the QuarkIcons font; the rest of QuarkIcons are
+  // Material aliases. Two glyphs on one codepoint would draw the same icon.
+  test('each font glyph has its own codepoint in the QuarkIcons font', () {
+    const glyphs = [
+      QuarkIcons.insert_row_above,
+      QuarkIcons.insert_row_below,
+      QuarkIcons.delete_row,
+      QuarkIcons.duplicate_row,
+      QuarkIcons.clear_row,
+      QuarkIcons.insert_column_left,
+      QuarkIcons.insert_column_right,
+      QuarkIcons.delete_column,
+      QuarkIcons.duplicate_column,
+      QuarkIcons.clear_column,
+    ];
+    expect(glyphs.map((icon) => icon.codePoint).toSet(), hasLength(10));
+    for (final icon in glyphs) {
+      expect(icon.fontFamily, 'QuarkIcons');
+      expect(icon.fontPackage, 'quark_icons');
+    }
   });
 }

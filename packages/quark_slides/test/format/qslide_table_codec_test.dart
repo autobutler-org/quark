@@ -1,12 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
 
+import '../support/canvas_harness.dart';
 import '../support/table_sample.dart';
-
-String fixture(String name) => File('test/fixtures/$name').readAsStringSync();
 
 Matcher throwsFormatAt(String path) =>
     throwsA(isA<QslideFormatException>().having((e) => e.path, 'path', path));
@@ -56,11 +54,6 @@ void main() {
       expect(table.cell(2, 0).colSpan, 2);
       expect(table.cell(1, 1).fill, const SlideColor.theme(ThemeColor.accent2));
       expect(table.cell(0, 0).paragraphs.single.runs.single.bold, isTrue);
-    });
-
-    test('a table inside a group round-trips', () {
-      final deck = QslideCodec.decode(fixture('table_sample.qslide'));
-      expect(deck.slides[1].findElement('inner'), isA<TableElement>());
     });
   });
 

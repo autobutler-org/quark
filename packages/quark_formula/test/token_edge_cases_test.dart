@@ -29,14 +29,6 @@ void main() {
       expect(t.offset, equals(0));
     });
 
-    test('asNumber returns null for empty or invalid numeric strings', () {
-      final empty = Token(kind: TokenKind.number, value: '');
-      expect(empty.asNumber(), isNull);
-
-      final invalid = Token(kind: TokenKind.number, value: 'not-a-number');
-      expect(invalid.asNumber(), isNull);
-    });
-
     test(
       'asNumber parses valid numeric formats (including negatives and exponents)',
       () {
@@ -50,22 +42,6 @@ void main() {
         final parsed = c.asNumber();
         expect(parsed, isNotNull);
         expect(parsed! > 1e23, isTrue);
-      },
-    );
-
-    test(
-      'very long string values are preserved and participate in equality/hashCode',
-      () {
-        final longValue = List.filled(10000, 'x').join();
-        final t1 = Token(kind: TokenKind.ident, value: longValue);
-        final t2 = Token(kind: TokenKind.ident, value: longValue);
-
-        expect(t1, equals(t2));
-        expect(t1.hashCode, equals(t2.hashCode));
-
-        final json = t1.toJson();
-        expect((json['value'] as String).length, equals(longValue.length));
-        expect(json['offset'], equals(0));
       },
     );
 

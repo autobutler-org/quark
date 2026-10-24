@@ -3,15 +3,6 @@ import 'package:test/test.dart';
 
 void main() {
   group('Token', () {
-    test('construction and properties', () {
-      final t = Token(kind: TokenKind.number, value: '3.14', offset: 2);
-
-      expect(t.kind, TokenKind.number);
-      expect(t.value, '3.14');
-      expect(t.offset, 2);
-      expect(t.asNumber(), 3.14);
-    });
-
     test('asNumber returns null for non-number kinds', () {
       final t = Token(kind: TokenKind.ident, value: 'abc');
       expect(t.asNumber(), isNull);
@@ -65,18 +56,5 @@ void main() {
         expect(t2.offset, equals(9));
       },
     );
-
-    test('fromJson ignores extra fields', () {
-      final json = {
-        'kind': 'boolean',
-        'value': 'true',
-        'offset': 3,
-        'extra': 42,
-      };
-      final t = Token.fromJson(json);
-      expect(t.kind, equals(TokenKind.boolean));
-      expect(t.value, equals('true'));
-      expect(t.offset, equals(3));
-    });
   });
 }

@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
 
+import '../support/canvas_harness.dart';
+
 /// A 1920×1080 deck with one slide `s` holding a text box `t`, a shape
 /// `box`, a line `l` and an image `pic`.
 Presentation deck() => Presentation(
@@ -42,15 +44,6 @@ void main() {
   SlideElement element(String id) =>
       doc.presentation.slideById('s')!.elementById(id)!;
 
-  /// Undoes everything and returns how many steps there were.
-  int undoAll() {
-    var steps = 0;
-    while (doc.undo()) {
-      steps++;
-    }
-    return steps;
-  }
-
   group('insertShape', () {
     test('centers a default square on the slide, in front, as one step', () {
       final id = doc.insertShape('s', ShapeKind.star);
@@ -63,7 +56,7 @@ void main() {
       expect(shape.fill, SlideDocumentController.defaultShapeFill);
       expect(shape.stroke, isNull);
       expect(doc.presentation.slideById('s')!.elements.last.id, id);
-      expect(undoAll(), 1);
+      expect(undoAll(doc), 1);
     });
 
     test('takes a frame, a fill or none, a stroke and a stacking index', () {
@@ -92,7 +85,7 @@ void main() {
       expect(line.endCap, LineCap.arrow);
       expect(line.startCap, LineCap.none);
       expect(line.stroke.width, SlideDocumentController.defaultLineWidth);
-      expect(undoAll(), 1);
+      expect(undoAll(doc), 1);
     });
 
     test('takes a frame and a direction', () {
@@ -123,7 +116,7 @@ void main() {
       expect(image.source, 'photos/dog.jpg');
       expect(image.imageSource, const QuarkFileImage('photos/dog.jpg'));
       expect(image.altText, 'A dog');
-      expect(undoAll(), 1);
+      expect(undoAll(doc), 1);
     });
 
     test('a wide picture is held by the slide width', () {
@@ -194,7 +187,7 @@ void main() {
       expect(line.opacity, 0.5);
       expect(element('t'), deck().slides.single.elementById('t'));
       expect(element('pic'), deck().slides.single.elementById('pic'));
-      expect(undoAll(), 1);
+      expect(undoAll(doc), 1);
     });
 
     test('a field left out is left alone; null clears what can be cleared', () {
@@ -256,7 +249,7 @@ void main() {
     test('sets an image description as one step', () {
       doc.setAltText('s', 'pic', 'A cat');
       expect((element('pic') as ImageElement).altText, 'A cat');
-      expect(undoAll(), 1);
+      expect(undoAll(doc), 1);
     });
 
     test('refuses an element that is not an image', () {

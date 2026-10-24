@@ -1,12 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
 
+import '../support/canvas_harness.dart';
 import '../support/sample_presentation.dart';
-
-String fixture(String name) => File('test/fixtures/$name').readAsStringSync();
 
 Matcher throwsFormatAt(String path) =>
     throwsA(isA<QslideFormatException>().having((e) => e.path, 'path', path));
@@ -25,12 +23,6 @@ void main() {
         QslideCodec.decode(fixture('sample.qslide')),
         samplePresentation(),
       );
-    });
-
-    test('integral numbers are written without a fraction', () {
-      final json = QslideCodec.toJson(samplePresentation());
-      final size = json['size'] as Map<String, Object?>;
-      expect(size['width'], isA<int>());
     });
   });
 

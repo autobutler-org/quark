@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -234,11 +236,52 @@ Finder handleKey(SlideHandle handle) => find.byKey(ValueKey(handle.keyName));
 ElementFrame frameOf(SlideDocumentNotifier doc, String id) =>
     doc.presentation.slideById('s')!.elementById(id)!.frame;
 
-/// Undoes everything and returns how many steps there were.
-int undoAll(SlideDocumentNotifier doc) {
+/// Undoes everything on [controller] and returns how many steps there were.
+int undoAll(SlideDocumentController controller) {
   var steps = 0;
-  while (doc.controller.undo()) {
+  while (controller.undo()) {
     steps++;
   }
   return steps;
+}
+
+/// Checks that [command] is one undo step on [doc] that undo and redo
+/// replay, leaving the undo history as it found it.
+void oneStep(SlideDocumentController doc, void Function() command) {
+  final before = doc.presentation;
+  final couldUndo = doc.canUndo;
+  command();
+  final after = doc.presentation;
+  expect(after, isNot(before));
+  expect(doc.undo(), isTrue);
+  expect(doc.presentation, before);
+  expect(doc.canUndo, couldUndo);
+  expect(doc.redo(), isTrue);
+  expect(doc.presentation, after);
+}
+
+/// The text of `test/fixtures/[name]`.
+String fixture(String name) => File('test/fixtures/$name').readAsStringSync();
+
+/// A frame at ([x], [y]), [w] by [h], turned [r] degrees.
+ElementFrame frame(double x, double y, double w, double h, [double r = 0]) =>
+    ElementFrame(x: x, y: y, width: w, height: h, rotation: r);
+
+/// Pumps a [SlideCanvas.readOnly] drawing [slide] at [slideSize], in
+/// [theme] when given, filling a [size] screen.
+Future<void> pumpReadOnly(
+  WidgetTester tester,
+  Slide slide,
+  SlideSize slideSize, {
+  Size size = wideViewport,
+  SlideTheme? theme,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    MaterialApp(
+      home: SlideCanvas.readOnly(slide: slide, size: slideSize, theme: theme),
+    ),
+  );
 }

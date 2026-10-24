@@ -3,8 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
 
-ElementFrame f(double x, double y, double w, double h, [double r = 0]) =>
-    ElementFrame(x: x, y: y, width: w, height: h, rotation: r);
+import '../support/canvas_harness.dart';
 
 /// Slide `s` holds a shape `a`, an image `pic` and a group `g` of shapes
 /// `g1` and `g2`; slide `s2` is empty.
@@ -15,21 +14,21 @@ Presentation deck() => Presentation(
       elements: [
         ShapeElement(
           id: 'a',
-          frame: f(100, 100, 200, 100),
+          frame: frame(100, 100, 200, 100),
           fill: const SlideColor(0xFF3366FF),
         ),
         ImageElement(
           id: 'pic',
-          frame: f(500, 100, 300, 200),
+          frame: frame(500, 100, 300, 200),
           source: 'asset:logo-1',
           altText: 'Logo',
         ),
         GroupElement(
           id: 'g',
-          frame: f(1000, 500, 300, 300),
+          frame: frame(1000, 500, 300, 300),
           children: [
-            ShapeElement(id: 'g1', frame: f(0, 0, 100, 100)),
-            ShapeElement(id: 'g2', frame: f(200, 200, 100, 100)),
+            ShapeElement(id: 'g1', frame: frame(0, 0, 100, 100)),
+            ShapeElement(id: 'g2', frame: frame(200, 200, 100, 100)),
           ],
         ),
       ],
@@ -56,14 +55,6 @@ void main() {
   });
 
   Slide slide([String id = 's']) => doc.presentation.slideById(id)!;
-
-  int undoAll() {
-    var steps = 0;
-    while (doc.undo()) {
-      steps++;
-    }
-    return steps;
-  }
 
   group('SlideClipboardCodec', () {
     test('round-trips elements, groups and all', () {
@@ -112,17 +103,26 @@ void main() {
       await clipboard.copy(doc, 's', {'a'});
       final first = await clipboard.paste(doc, 's');
       final second = await clipboard.paste(doc, 's');
-      expect(slide().elementById(first.single)!.frame, f(116, 116, 200, 100));
-      expect(slide().elementById(second.single)!.frame, f(132, 132, 200, 100));
+      expect(
+        slide().elementById(first.single)!.frame,
+        frame(116, 116, 200, 100),
+      );
+      expect(
+        slide().elementById(second.single)!.frame,
+        frame(132, 132, 200, 100),
+      );
       expect(first.single, isNot('a'));
-      expect(undoAll(), 2);
+      expect(undoAll(doc), 2);
     });
 
     test('pasting onto another slide keeps the place', () async {
       await clipboard.copy(doc, 's', {'a', 'pic'});
       final ids = await clipboard.paste(doc, 's2');
       expect(ids, hasLength(2));
-      expect(slide('s2').elementById(ids.first)!.frame, f(100, 100, 200, 100));
+      expect(
+        slide('s2').elementById(ids.first)!.frame,
+        frame(100, 100, 200, 100),
+      );
       final image = slide('s2').elementById(ids.last) as ImageElement;
       expect(image.source, 'asset:logo-1');
       expect(image.altText, 'Logo');
@@ -134,8 +134,8 @@ void main() {
       final copy = slide().elementById(ids.single) as GroupElement;
       expect(copy.children.map((e) => e.id), isNot(contains('g1')));
       expect(copy.children.map((e) => e.id).toSet(), hasLength(2));
-      expect(copy.frame, f(1016, 516, 300, 300));
-      expect(copy.children.first.frame, f(0, 0, 100, 100));
+      expect(copy.frame, frame(1016, 516, 300, 300));
+      expect(copy.children.first.frame, frame(0, 0, 100, 100));
     });
 
     test('a child copied out of its group pastes where it showed', () async {
@@ -169,7 +169,7 @@ void main() {
     test('cut copies then deletes as one step', () async {
       await clipboard.cut(doc, 's', {'a', 'pic'});
       expect(slide().elements.map((e) => e.id), ['g']);
-      expect(undoAll(), 1);
+      expect(undoAll(doc), 1);
       expect(slide().elements, hasLength(3));
       final ids = await clipboard.paste(doc, 's');
       expect(ids, hasLength(2));
@@ -183,7 +183,7 @@ void main() {
         final box = slide().elementById(ids.single) as TextBox;
         expect(box.plainText, 'Hello\nworld');
         expect(box.frame.x, (1920 - 600) / 2);
-        expect(undoAll(), 1);
+        expect(undoAll(doc), 1);
       },
     );
 
@@ -209,14 +209,17 @@ void main() {
     test('duplicates in place, 16 past each time, one step each', () {
       final first = doc.duplicateElements('s', {'a', 'pic'});
       final second = doc.duplicateElements('s', {'a'});
-      expect(slide().elementById(first.first)!.frame, f(116, 116, 200, 100));
+      expect(
+        slide().elementById(first.first)!.frame,
+        frame(116, 116, 200, 100),
+      );
       expect(slide().elementById(first.last)!.frame.x, 516);
       expect(
         slide().elementById(second.single)!.frame,
-        f(116, 116, 200, 100).translate(16, 16),
+        frame(116, 116, 200, 100).translate(16, 16),
       );
       expect(slide().elements.map((e) => e.id).skip(3), [...first, ...second]);
-      expect(undoAll(), 2);
+      expect(undoAll(doc), 2);
     });
 
     test('an element and its group copy once, with the group', () {

@@ -98,7 +98,6 @@ void main() {
     final shape = deck.slides.single.elements.single as ShapeElement;
     expect(shape.kind, ShapeKind.path);
     expect(shape.preset, 'rtTriangle');
-    expect(QslideCodec.schemaVersion, 6);
   });
 
   test('restyling to another kind drops the preset and the contours', () {

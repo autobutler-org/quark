@@ -2,7 +2,6 @@ import 'package:data_table/src/data_sheet/control_bar.dart';
 import 'package:data_table/src/data_sheet/data_sheet.dart';
 import 'package:data_table/src/data_sheet/data_sheet_controller.dart';
 import 'package:data_table/src/models/data_cell.dart';
-import 'package:data_table/src/models/data_row.dart';
 import 'package:data_table/src/models/data_table.dart';
 import 'package:flutter/gestures.dart';
 // Material ships its own DataTable/DataRow/DataCell — this package's models
@@ -10,8 +9,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide DataCell, DataRow, DataTable;
 import 'package:flutter_test/flutter_test.dart';
 
-const _narrow = Size(360, 640);
-const _wide = Size(1280, 800);
+import '../support/sheet.dart';
 
 Future<DataSheetController> _pumpSheet(
   WidgetTester tester,
@@ -20,17 +18,8 @@ Future<DataSheetController> _pumpSheet(
   int cols = 20,
   bool controlBar = false,
 }) async {
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-  final controller = DataSheetController.fromTable(
-    DataTable(
-      List.generate(
-        rows,
-        (r) => DataRow(List.generate(cols, (c) => DataCell('$r,$c'))),
-      ),
-    ),
-  );
+  setSheetSize(tester, size);
+  final controller = DataSheetController.fromTable(gridTable(rows, cols));
   addTearDown(controller.dispose);
   await tester.pumpWidget(
     MaterialApp(
@@ -50,8 +39,6 @@ Future<DataSheetController> _pumpSheet(
 }
 
 Finder _key(String key) => find.byKey(ValueKey(key));
-
-Finder _cell(int r, int c) => _key('r${r}c$c');
 
 /// A drag that moves past the touch slop before it counts, so the whole
 /// [offset] reaches the handle.
@@ -83,18 +70,18 @@ Future<void> _doubleTap(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
-  for (final (name, size) in [('narrow', _narrow), ('wide', _wide)]) {
+  for (final (name, size) in [('narrow', narrow), ('wide', wide)]) {
     group('resize ($name)', () {
       testWidgets('dragging a column edge resizes it as one undo step', (
         tester,
       ) async {
         final controller = await _pumpSheet(tester, size);
-        final before = tester.getSize(_cell(0, 0)).width;
+        final before = tester.getSize(cellAt(0, 0)).width;
 
         await _drag(tester, _key('col_resize_0'), const Offset(60, 0));
 
         expect(controller.columnWidths[0], closeTo(before + 60, 1));
-        expect(tester.getSize(_cell(0, 0)).width, closeTo(before + 60, 1));
+        expect(tester.getSize(cellAt(0, 0)).width, closeTo(before + 60, 1));
         controller.undo();
         await tester.pump();
         expect(controller.columnWidths[0], before);
@@ -106,7 +93,7 @@ void main() {
         await _drag(tester, _key('row_resize_1'), const Offset(0, 30));
 
         expect(controller.rowHeights[1], closeTo(70, 1));
-        expect(tester.getSize(_cell(1, 0)).height, closeTo(70, 1));
+        expect(tester.getSize(cellAt(1, 0)).height, closeTo(70, 1));
       });
 
       testWidgets('double-clicking an edge fits the content', (tester) async {
@@ -180,17 +167,17 @@ void main() {
         final controller = await _pumpSheet(tester, size);
         controller.setFrozenRows(1);
         await tester.pump();
-        final frozenTop = tester.getTopLeft(_cell(0, 1)).dy;
-        final bodyTop = tester.getTopLeft(_cell(8, 1)).dy;
+        final frozenTop = tester.getTopLeft(cellAt(0, 1)).dy;
+        final bodyTop = tester.getTopLeft(cellAt(8, 1)).dy;
 
-        await tester.drag(_cell(8, 1), const Offset(0, -200));
+        await tester.drag(cellAt(8, 1), const Offset(0, -200));
         await tester.pumpAndSettle();
 
-        expect(tester.getTopLeft(_cell(0, 1)).dy, frozenTop);
-        expect(tester.getTopLeft(_cell(8, 1)).dy, lessThan(bodyTop));
+        expect(tester.getTopLeft(cellAt(0, 1)).dy, frozenTop);
+        expect(tester.getTopLeft(cellAt(8, 1)).dy, lessThan(bodyTop));
         expect(
           tester.getTopLeft(_key('row_num_9')).dy,
-          tester.getTopLeft(_cell(9, 1)).dy,
+          tester.getTopLeft(cellAt(9, 1)).dy,
           reason: 'the row numbers scroll with the body',
         );
         expect(_key('frozen_rows_divider'), findsOneWidget);
@@ -203,17 +190,17 @@ void main() {
         final controller = await _pumpSheet(tester, size);
         controller.setFrozenColumns(1);
         await tester.pump();
-        final frozenLeft = tester.getTopLeft(_cell(1, 0)).dx;
-        final bodyLeft = tester.getTopLeft(_cell(1, 2)).dx;
+        final frozenLeft = tester.getTopLeft(cellAt(1, 0)).dx;
+        final bodyLeft = tester.getTopLeft(cellAt(1, 2)).dx;
 
-        await tester.drag(_cell(1, 2), const Offset(-150, 0));
+        await tester.drag(cellAt(1, 2), const Offset(-150, 0));
         await tester.pumpAndSettle();
 
-        expect(tester.getTopLeft(_cell(1, 0)).dx, frozenLeft);
-        expect(tester.getTopLeft(_cell(1, 2)).dx, lessThan(bodyLeft));
+        expect(tester.getTopLeft(cellAt(1, 0)).dx, frozenLeft);
+        expect(tester.getTopLeft(cellAt(1, 2)).dx, lessThan(bodyLeft));
         expect(
           tester.getTopLeft(_key('col_header_2')).dx,
-          tester.getTopLeft(_cell(1, 2)).dx,
+          tester.getTopLeft(cellAt(1, 2)).dx,
           reason: 'the column headers scroll with the body',
         );
         expect(_key('frozen_columns_divider'), findsOneWidget);
@@ -226,12 +213,12 @@ void main() {
         controller.setFrozenColumns(1);
         await tester.pump();
 
-        await tester.drag(_cell(5, 0), const Offset(0, -120));
+        await tester.drag(cellAt(5, 0), const Offset(0, -120));
         await tester.pumpAndSettle();
 
         expect(
-          tester.getTopLeft(_cell(5, 0)).dy,
-          tester.getTopLeft(_cell(5, 3)).dy,
+          tester.getTopLeft(cellAt(5, 0)).dy,
+          tester.getTopLeft(cellAt(5, 3)).dy,
         );
       });
 
@@ -243,14 +230,14 @@ void main() {
           ..setFrozenRows(1)
           ..setFrozenColumns(1);
         await tester.pump();
-        await tester.drag(_cell(6, 2), const Offset(-100, -150));
+        await tester.drag(cellAt(6, 2), const Offset(-100, -150));
         await tester.pumpAndSettle();
 
         final gesture = await tester.startGesture(
-          tester.getCenter(_cell(0, 0)),
+          tester.getCenter(cellAt(0, 0)),
           kind: PointerDeviceKind.mouse,
         );
-        await gesture.moveTo(tester.getCenter(_cell(8, 3)));
+        await gesture.moveTo(tester.getCenter(cellAt(8, 3)));
         await tester.pump();
         await gesture.up();
         await tester.pump();
@@ -265,7 +252,7 @@ void main() {
         tester,
       ) async {
         final controller = await _pumpSheet(tester, size, controlBar: true);
-        await tester.tap(_cell(1, 1));
+        await tester.tap(cellAt(1, 1));
         await tester.pump();
 
         await tester.ensureVisible(_key('data_sheet_freeze'));

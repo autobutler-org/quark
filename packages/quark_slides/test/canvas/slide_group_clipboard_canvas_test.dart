@@ -76,7 +76,7 @@ void main() {
       await press(tester, LogicalKeyboardKey.keyG, shift: true);
       expect(harness(tester).selection, {'box', 'ball'});
       expect(topIds(), ['title', 'box', 'ball', 'pic']);
-      expect(undoAll(doc), 2);
+      expect(undoAll(doc.controller), 2);
       expect(tester.takeException(), isNull);
     });
 
@@ -91,7 +91,7 @@ void main() {
       expect(slide().frameOnSlide('ball')!.x, closeTo(1400, 1));
       expect(slide().frameOnSlide('box')!.y, closeTo(450, 1));
       expect(harness(tester).selection, {id});
-      expect(undoAll(doc), 2);
+      expect(undoAll(doc.controller), 2);
     });
 
     testBothViewports('a group resizes as one, scaling its children', (
@@ -113,7 +113,7 @@ void main() {
       // The ball keeps its share of the group.
       final ball = slide().frameOnSlide('ball')!;
       expect(ball.width, closeTo(400 * after.width / before.width, 1));
-      expect(undoAll(doc), 2);
+      expect(undoAll(doc.controller), 2);
     });
 
     testBothViewports('double tap enters, Escape leaves, a child drags alone', (
@@ -198,7 +198,7 @@ void main() {
       final second = harness(tester).selection.single;
       expect(frameOf(doc, second), frameOf(doc, 'box').translate(32, 32));
       expect(elementKey(second), findsOneWidget);
-      expect(undoAll(doc), 2);
+      expect(undoAll(doc.controller), 2);
     });
 
     testBothViewports('Ctrl+X cuts in one step and Ctrl+V puts it back', (
@@ -221,7 +221,7 @@ void main() {
         pasted.frame,
         ElementFrame(x: 900, y: 900, width: 200, height: 150),
       );
-      expect(undoAll(doc), 2);
+      expect(undoAll(doc.controller), 2);
     });
 
     testBothViewports('Ctrl+D duplicates a group, one step', (
@@ -234,7 +234,7 @@ void main() {
       final copy = harness(tester).selection.single;
       expect(slide().elementById(copy), isA<GroupElement>());
       expect(frameOf(doc, copy), frameOf(doc, id).translate(16, 16));
-      expect(undoAll(doc), 2);
+      expect(undoAll(doc.controller), 2);
     });
 
     testBothViewports('text from another app pastes as a text box', (
@@ -253,7 +253,7 @@ void main() {
       final box = slide().elementById(harness(tester).selection.single);
       expect((box! as TextBox).plainText, 'From the web');
       expect(find.text('From the web', findRichText: true), findsOne);
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
   });
 }

@@ -5,13 +5,10 @@ import 'package:data_table/data_table.dart';
 import 'package:flutter/material.dart' hide DataCell, DataRow, DataTable;
 import 'package:flutter_test/flutter_test.dart';
 
-const _narrow = Size(360, 640);
-const _wide = Size(1280, 800);
+import '../support/sheet.dart';
 
 Future<DataSheetController> _pump(WidgetTester tester, Size size) async {
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
+  setSheetSize(tester, size);
   final controller = DataSheetController.fromTable(
     DataTable([
       DataRow([DataCell('1234.5'), DataCell('text'), DataCell('=A1*2')]),
@@ -46,7 +43,7 @@ Text _cellText(WidgetTester tester, int r, int c) => tester.widget<Text>(
 
 /// Opens the format menu on a narrow screen; a no-op on a wide one.
 Future<void> _openMenuIfNarrow(WidgetTester tester, Size size) async {
-  if (size != _narrow) return;
+  if (size != narrow) return;
   await tester.tap(_key('format_menu'));
   await tester.pumpAndSettle();
 }
@@ -64,11 +61,11 @@ Future<void> _openSubmenu(
 }
 
 void main() {
-  for (final (name, size) in [('narrow', _narrow), ('wide', _wide)]) {
+  for (final (name, size) in [('narrow', narrow), ('wide', wide)]) {
     group('DataSheetFormatBar ($name)', () {
       testWidgets('is disabled until a cell is selected', (tester) async {
         final c = await _pump(tester, size);
-        final control = size == _narrow
+        final control = size == narrow
             ? _key('format_menu')
             : _key('format_bold');
         expect(control, findsOneWidget);
@@ -128,7 +125,7 @@ void main() {
         c.selection.setHighlighted(0, 1);
         await tester.pump();
         Future<void> center() async {
-          if (size == _narrow) await _openSubmenu(tester, size, 'format_align');
+          if (size == narrow) await _openSubmenu(tester, size, 'format_align');
           await tester.tap(_key('format_align_center'));
           await tester.pumpAndSettle();
         }
@@ -194,7 +191,7 @@ void main() {
         final c = await _pump(tester, size);
         c.selection.setHighlighted(0, 0);
         await tester.pump();
-        final keys = size == _narrow
+        final keys = size == narrow
             ? ['format_menu']
             : [
                 'format_bold',
@@ -222,7 +219,7 @@ void main() {
   }
 
   testWidgets('a fill shows under the cell text', (tester) async {
-    final c = await _pump(tester, _wide);
+    final c = await _pump(tester, wide);
     c.applyFormat(
       const CellRange(top: 1, left: 1, bottom: 1, right: 1),
       (f) => f.withFillColor(0xFF10B981),
@@ -235,7 +232,7 @@ void main() {
   });
 
   testWidgets('a toggle shows the highlighted cell\'s state', (tester) async {
-    final c = await _pump(tester, _wide);
+    final c = await _pump(tester, wide);
     c.applyFormat(
       const CellRange(top: 0, left: 0, bottom: 0, right: 0),
       (f) => f.withItalic(true),
@@ -254,7 +251,7 @@ void main() {
   testWidgets('decimal steps are disabled for automatic and date', (
     tester,
   ) async {
-    final c = await _pump(tester, _wide);
+    final c = await _pump(tester, wide);
     c.selection.setHighlighted(0, 0);
     await tester.pump();
     expect(

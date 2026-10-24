@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
 
+import '../support/canvas_harness.dart';
 import '../support/table_sample.dart';
 
 /// A 1920×1080 deck with one slide `s` holding [sampleTable] (`tbl`) and a
@@ -33,23 +34,10 @@ void main() {
 
   String text(int row, int column) => table().cell(row, column).plainText;
 
-  /// Checks that [command] is one undo step that undo and redo replay.
-  void oneStep(void Function() command) {
-    final before = doc.presentation;
-    command();
-    final after = doc.presentation;
-    expect(after, isNot(before));
-    expect(doc.undo(), isTrue);
-    expect(doc.presentation, before);
-    expect(doc.canUndo, isFalse);
-    expect(doc.redo(), isTrue);
-    expect(doc.presentation, after);
-  }
-
   group('insertTable', () {
     test('centers a header-and-banded table on the slide, in front', () {
       late String id;
-      oneStep(() => id = doc.insertTable('s', 3, 4));
+      oneStep(doc, () => id = doc.insertTable('s', 3, 4));
       final t = table(id);
       expect(t.rowCount, 3);
       expect(t.columnCount, 4);
@@ -94,7 +82,7 @@ void main() {
 
   group('rows and columns', () {
     test('insertTableRow above and below, growing the table', () {
-      oneStep(() => doc.insertTableRow('s', 'tbl', 1));
+      oneStep(doc, () => doc.insertTableRow('s', 'tbl', 1));
       expect(table().rowCount, 4);
       expect(text(1, 0), '');
       expect(text(2, 0), 'North');
@@ -117,7 +105,7 @@ void main() {
     });
 
     test('insertTableColumn left and right, growing the table', () {
-      oneStep(() => doc.insertTableColumn('s', 'tbl', 0));
+      oneStep(doc, () => doc.insertTableColumn('s', 'tbl', 0));
       expect(table().columnCount, 4);
       expect(text(0, 1), 'Region');
       expect(table().frame.width, 400);
@@ -130,7 +118,7 @@ void main() {
     });
 
     test('deleteTableRow shrinks the table and keeps a merge anchored', () {
-      oneStep(() => doc.deleteTableRow('s', 'tbl', 0));
+      oneStep(doc, () => doc.deleteTableRow('s', 'tbl', 0));
       expect(table().rowCount, 2);
       expect(text(0, 0), 'North');
       expect(table().frame.height, 80);
@@ -149,7 +137,7 @@ void main() {
     });
 
     test('deleteTableColumn through a merge narrows it', () {
-      oneStep(() => doc.deleteTableColumn('s', 'tbl', 1));
+      oneStep(doc, () => doc.deleteTableColumn('s', 'tbl', 1));
       expect(table().columnCount, 2);
       expect(table().columnWidths, [100, 80]);
       expect(table().cell(2, 0).isMerged, isFalse);
@@ -164,7 +152,7 @@ void main() {
     });
 
     test('deleting every row or column deletes the table', () {
-      oneStep(() => doc.deleteTableRow('s', 'tbl', 0, count: 3));
+      oneStep(doc, () => doc.deleteTableRow('s', 'tbl', 0, count: 3));
       expect(doc.presentation.slides.single.findElement('tbl'), isNull);
       doc.undo();
       doc.deleteTableColumn('s', 'tbl', 0, count: 3);
@@ -174,7 +162,7 @@ void main() {
 
   group('sizes', () {
     test('a column takes its width from its right-hand neighbor', () {
-      oneStep(() => doc.setTableColumnWidth('s', 'tbl', 0, 150));
+      oneStep(doc, () => doc.setTableColumnWidth('s', 'tbl', 0, 150));
       expect(table().columnWidths, [150, 70, 80]);
       expect(table().frame.width, 300);
     });
@@ -197,7 +185,7 @@ void main() {
     });
 
     test('a row changes the table height', () {
-      oneStep(() => doc.setTableRowHeight('s', 'tbl', 1, 90));
+      oneStep(doc, () => doc.setTableRowHeight('s', 'tbl', 1, 90));
       expect(table().rowHeights, [40, 90, 40]);
       expect(table().frame.height, 170);
       doc.setTableRowHeight('s', 'tbl', 1, 1);
@@ -214,6 +202,7 @@ void main() {
   group('text', () {
     test('setCellText replaces a cell as one step', () {
       oneStep(
+        doc,
         () => doc.setCellText('s', 'tbl', 1, 2, const [
           TextParagraph([TextRun('7', italic: true)]),
         ]),
@@ -268,6 +257,7 @@ void main() {
 
     test('bolds, colors and aligns every cell of a range as one step', () {
       oneStep(
+        doc,
         () => doc.formatCells(
           's',
           'tbl',
@@ -396,7 +386,7 @@ void main() {
   group('merging', () {
     test('mergeCells joins the text into the anchor as one step', () {
       const range = CellRange(top: 0, left: 1, bottom: 1, right: 2);
-      oneStep(() => doc.mergeCells('s', 'tbl', range));
+      oneStep(doc, () => doc.mergeCells('s', 'tbl', range));
       final t = table();
       expect(t.cell(0, 1).rowSpan, 2);
       expect(t.cell(0, 1).colSpan, 2);
@@ -425,7 +415,10 @@ void main() {
     });
 
     test('unmergeCells splits every merge it touches as one step', () {
-      oneStep(() => doc.unmergeCells('s', 'tbl', const CellRange.single(2, 1)));
+      oneStep(
+        doc,
+        () => doc.unmergeCells('s', 'tbl', const CellRange.single(2, 1)),
+      );
       expect(table().cell(2, 0).isMerged, isFalse);
       expect(text(2, 0), 'Total');
       expect(text(2, 1), '');
@@ -450,6 +443,7 @@ void main() {
   group('setTableStyle', () {
     test('turns the header and bands off and changes the accent', () {
       oneStep(
+        doc,
         () => doc.setTableStyle(
           's',
           'tbl',

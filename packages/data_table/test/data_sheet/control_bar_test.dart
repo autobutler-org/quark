@@ -1,22 +1,11 @@
 import 'package:data_table/src/data_sheet/control_bar.dart';
 import 'package:data_table/src/data_sheet/data_sheet_controller.dart';
-import 'package:data_table/src/models/data_cell.dart';
-import 'package:data_table/src/models/data_row.dart';
-import 'package:data_table/src/models/data_table.dart';
 // Material ships its own DataTable/DataRow/DataCell — this package's models
 // win here.
 import 'package:flutter/material.dart' hide DataCell, DataRow, DataTable;
 import 'package:flutter_test/flutter_test.dart';
 
-DataSheetController _makeController(List<List<String>> values) {
-  return DataSheetController.fromTable(
-    DataTable(
-      values
-          .map((row) => DataRow(row.map((v) => DataCell(v)).toList()))
-          .toList(),
-    ),
-  );
-}
+import '../support/sheet.dart';
 
 /// The toolbar has no separate append button, so the insert buttons have to
 /// stay usable with nothing selected — otherwise a freshly opened sheet can't
@@ -44,7 +33,7 @@ void main() {
   testWidgets('the Excel export shows only when the host handles it', (
     tester,
   ) async {
-    final controller = _makeController([
+    final controller = sheetOf([
       ['a'],
     ]);
     addTearDown(controller.dispose);
@@ -63,7 +52,7 @@ void main() {
   testWidgets('with no selection, row inserts anchor to the sheet edges', (
     tester,
   ) async {
-    final controller = _makeController([
+    final controller = sheetOf([
       ['a'],
       ['b'],
     ]);
@@ -91,7 +80,7 @@ void main() {
   testWidgets('with no selection, column inserts anchor to the sheet edges', (
     tester,
   ) async {
-    final controller = _makeController([
+    final controller = sheetOf([
       ['a', 'b'],
     ]);
     addTearDown(controller.dispose);
@@ -117,7 +106,7 @@ void main() {
   testWidgets('a selection restores the relative insert behavior', (
     tester,
   ) async {
-    final controller = _makeController([
+    final controller = sheetOf([
       ['a'],
       ['b'],
       ['c'],
@@ -139,7 +128,7 @@ void main() {
   testWidgets('column inserts stay disabled while the sheet has no rows', (
     tester,
   ) async {
-    final controller = _makeController([]);
+    final controller = sheetOf([]);
     addTearDown(controller.dispose);
 
     await pumpBar(tester, controller);

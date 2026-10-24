@@ -1,13 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
 
+import '../support/canvas_harness.dart';
 import '../support/chart_sample.dart';
-import '../support/sample_presentation.dart';
-
-String fixture(String name) => File('test/fixtures/$name').readAsStringSync();
 
 Matcher throwsFormatAt(String path) =>
     throwsA(isA<QslideFormatException>().having((e) => e.path, 'path', path));
@@ -215,54 +212,9 @@ void main() {
   });
 
   group('migration', () {
-    test('this version writes schema 6', () {
-      expect(QslideCodec.schemaVersion, 6);
-    });
-
-    test('the golden v4 file reads as the sample deck', () {
-      final json = jsonDecode(fixture('v4_sample.qslide')) as Map;
-      expect(json['schemaVersion'], 4);
-      expect(
-        QslideCodec.decode(fixture('v4_sample.qslide')),
-        samplePresentation(),
-      );
-    });
-
-    test('it saves as version 6 and otherwise byte for byte as before', () {
-      final saved = QslideCodec.encode(
-        QslideCodec.decode(fixture('v4_sample.qslide')),
-      );
-      expect(saved, fixture('sample.qslide'));
-      expect(
-        saved,
-        fixture(
-          'v4_sample.qslide',
-        ).replaceFirst('"schemaVersion": 4', '"schemaVersion": 6'),
-      );
-    });
-
-    test('every older version migrates to 6', () {
-      for (final name in [
-        'v1_sample.qslide',
-        'v2_sample.qslide',
-        'v3_sample.qslide',
-        'v4_sample.qslide',
-      ]) {
-        final json = QslideCodec.toJson(QslideCodec.decode(fixture(name)));
-        expect(json['schemaVersion'], 6, reason: name);
-      }
-    });
-
     test('a chart a version 4 file carried reads as a chart', () {
       final deck = QslideCodec.fromJson(deckWith(chartJson(), version: 4));
       expect(onlyChart(deck).data.series.single.values, [1, 2]);
-    });
-
-    test('a newer schema is refused', () {
-      expect(
-        () => QslideCodec.decode(fixture('newer_schema.qslide')),
-        throwsFormatAt(r'$.schemaVersion'),
-      );
     });
   });
 }

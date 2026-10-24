@@ -161,15 +161,8 @@ void main() {
   });
 
   testBothViewports('presenting draws the shadows too', (tester, size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
     final deck = shadowDeck(shadow);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SlideCanvas.readOnly(slide: deck.slides.single, size: deck.size),
-      ),
-    );
+    await pumpReadOnly(tester, deck.slides.single, deck.size, size: size);
     expect(
       painterOf(tester, 'box'),
       castsShadow(const Color(0x7F000000), 5, 3, 4),

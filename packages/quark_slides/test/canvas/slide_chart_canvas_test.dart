@@ -187,7 +187,7 @@ void main() {
       await tester.pump();
       expect(chart().frame.width, lessThan(moved.width));
       expect(chart().data, sampleChart().data);
-      expect(undoAll(doc), 2);
+      expect(undoAll(doc.controller), 2);
     });
 
     testWidgets('Delete removes it and undo brings it back', (tester) async {
@@ -245,7 +245,7 @@ void main() {
       expect(inserted.frame.width, doc.controller.defaultChartSize.width);
       expect(harness(tester).selection, {inserted.id});
       expect(harness(tester).tool, SlideCanvasTool.select);
-      expect(undoAll(doc), 1);
+      expect(undoAll(doc.controller), 1);
     });
 
     testWidgets('a drag sizes it', (tester) async {
@@ -299,7 +299,7 @@ void main() {
         ['x', '3'],
       ]);
       expect(chart().colors, const [SlideColor.theme(ThemeColor.accent6)]);
-      expect(undoAll(doc), 6);
+      expect(undoAll(doc.controller), 6);
 
       // Deselecting lets go of the chart.
       await tester.tapAt(slideToGlobal(tester, const Offset(50, 1000)));
