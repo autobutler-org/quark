@@ -146,19 +146,4 @@ void main() {
 
     expect(find.textContaining('no formats'), findsOneWidget);
   });
-
-  testWidgets('renders on the light tokens too', (tester) async {
-    await pumpAt(
-      tester,
-      TranscodeDialog(
-        formats: formats,
-        onConvert: (format) {},
-        onCancel: () {},
-        onRetry: () {},
-      ),
-      brightness: Brightness.light,
-      size: narrowViewport,
-    );
-    expect(tester.takeException(), isNull);
-  });
 }

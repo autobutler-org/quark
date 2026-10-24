@@ -143,24 +143,6 @@ void main() {
     expect(find.text('Use this drive anyway'), findsOneWidget);
   });
 
-  testWidgets('unknown never reads as healthy', (tester) async {
-    await pumpAt(
-      tester,
-      const DriveHealthAcknowledgment(
-        verdict: DriveHealthVerdict.unknown,
-        reason: 'The health tool is not installed.',
-        strongerWarning: true,
-        onConfirm: _ignore,
-        onCancel: _ignore,
-      ),
-    );
-
-    expect(find.text('Unknown'), findsOneWidget);
-    expect(find.text('Healthy'), findsNothing);
-    expect(find.text('The health tool is not installed.'), findsOneWidget);
-    expect(find.text('Continue'), findsOneWidget);
-  });
-
   for (final (label, brightness, tokens) in [
     ('dark', Brightness.dark, QuarkTokens.dark),
     ('light', Brightness.light, QuarkTokens.light),

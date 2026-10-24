@@ -57,26 +57,6 @@ void main() {
     expect(find.byType(QuarkLoader), findsNothing);
   });
 
-  testBothViewports('renders every channel under the server name', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      const QuarkChannelList(serverName: 'Home', channels: channels),
-      size: size,
-    );
-
-    expect(find.byKey(const ValueKey('channel_list_header')), findsOneWidget);
-    for (final channel in channels) {
-      expect(
-        find.byKey(ValueKey('channel_tile_${channel.id}')),
-        findsOneWidget,
-      );
-    }
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('locks only the private channels', (tester) async {
     await pumpAt(
       tester,
@@ -136,6 +116,7 @@ void main() {
     expect(selected('books'), isTrue);
     expect(selected('general'), isFalse);
     expect(selected('family'), isFalse);
+    expect(find.byKey(const ValueKey('channel_list_header')), findsOneWidget);
   });
 
   testWidgets('reports the channel that was tapped', (tester) async {

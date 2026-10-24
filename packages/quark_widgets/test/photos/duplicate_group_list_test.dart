@@ -61,26 +61,44 @@ void main() {
     find.byKey(const ValueKey('duplicates_delete')),
   );
 
-  testWidgets('shows a loader while loading and nothing else', (tester) async {
-    await pumpList(tester, groups: const [], isLoading: true);
+  for (final (description, groups, isLoading, error, shown, hidden) in [
+    (
+      'shows a loader while loading and nothing else',
+      const <DuplicateGroupItem>[],
+      true,
+      null,
+      find.byType(QuarkLoader),
+      find.text('No duplicates found'),
+    ),
+    (
+      'renders the error the caller handed it',
+      groups,
+      false,
+      "Couldn't find duplicates.",
+      find.text("Couldn't find duplicates."),
+      find.byKey(const ValueKey('duplicate_group_g1')),
+    ),
+    (
+      'says so when there are none',
+      const <DuplicateGroupItem>[],
+      false,
+      null,
+      find.text('No duplicates found'),
+      find.byKey(const ValueKey('duplicates_delete')),
+    ),
+  ]) {
+    testWidgets(description, (tester) async {
+      await pumpList(
+        tester,
+        groups: groups,
+        isLoading: isLoading,
+        error: error,
+      );
 
-    expect(find.byType(QuarkLoader), findsOneWidget);
-    expect(find.text('No duplicates found'), findsNothing);
-  });
-
-  testWidgets('renders the error the caller handed it', (tester) async {
-    await pumpList(tester, error: "Couldn't find duplicates.");
-
-    expect(find.text("Couldn't find duplicates."), findsOneWidget);
-    expect(find.byKey(const ValueKey('duplicate_group_g1')), findsNothing);
-  });
-
-  testWidgets('says so when there are none', (tester) async {
-    await pumpList(tester, groups: const []);
-
-    expect(find.text('No duplicates found'), findsOneWidget);
-    expect(find.byKey(const ValueKey('duplicates_delete')), findsNothing);
-  });
+      expect(shown, findsOneWidget);
+      expect(hidden, findsNothing);
+    });
+  }
 
   testBothViewports('names each group and every copy, with where it is', (
     tester,
@@ -121,22 +139,28 @@ void main() {
     expect(find.text('3 copies in 2 groups'), findsOneWidget);
   });
 
-  testBothViewports('offers the suggestion without marking anything', (
-    tester,
-    size,
-  ) async {
-    final events = <String>[];
-    await pumpList(tester, size: size, suggestions: true, events: events);
+  testBothViewports(
+    'offers the suggestion without marking anything or a delete bar',
+    (tester, size) async {
+      final events = <String>[];
+      await pumpList(tester, size: size, suggestions: true, events: events);
 
-    expect(tester.takeException(), isNull);
-    expect(find.text('Delete'), findsNothing);
-    expect(find.byKey(const ValueKey('duplicates_delete')), findsNothing);
+      expect(tester.takeException(), isNull);
+      expect(find.text('Delete'), findsNothing);
+      expect(find.byKey(const ValueKey('duplicates_delete')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('duplicates_selection_summary')),
+        findsNothing,
+      );
 
-    await tester.tap(find.byKey(const ValueKey('duplicates_select_suggested')));
-    await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('duplicates_select_suggested')),
+      );
+      await tester.pump();
 
-    expect(events, ['suggest']);
-  });
+      expect(events, ['suggest']);
+    },
+  );
 
   testWidgets('hides the suggestion when there is none to make', (
     tester,
@@ -180,16 +204,6 @@ void main() {
     await tester.pump();
 
     expect(events, isEmpty);
-  });
-
-  testWidgets('nothing marked shows no delete bar', (tester) async {
-    await pumpList(tester);
-
-    expect(find.byKey(const ValueKey('duplicates_delete')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('duplicates_selection_summary')),
-      findsNothing,
-    );
   });
 
   testWidgets('a running delete busies the button', (tester) async {

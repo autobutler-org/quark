@@ -79,20 +79,13 @@ void main() {
     expect(find.byIcon(QuarkIcons.chevron_right_rounded), findsOneWidget);
   });
 
-  testWidgets('renders the children of an expanded album', (tester) async {
-    await pumpTile(tester, expandedIds: const {1});
+  testBothViewports('renders the children of an expanded album, each level '
+      'indented further than the last', (tester, size) async {
+    await pumpTile(tester, size: size, expandedIds: const {1});
 
     expect(find.text('Iceland'), findsOneWidget);
     expect(find.text('Japan'), findsOneWidget);
     expect(find.byIcon(QuarkIcons.expand_more_rounded), findsOneWidget);
-  });
-
-  testBothViewports('indents each level further than the last', (
-    tester,
-    size,
-  ) async {
-    await pumpTile(tester, size: size, expandedIds: const {1});
-
     expect(
       tester.getRect(find.text('Iceland')).left,
       greaterThan(tester.getRect(find.text('Trips')).left),
@@ -184,25 +177,19 @@ void main() {
     expect(events, ['menu:1', 'menu:3']);
   });
 
-  testWidgets('right-click opens the same menu', (tester) async {
-    final events = <String>[];
-    await pumpTile(tester, withMenu: true, events: events);
-
-    await tester.tap(
-      find.byKey(const ValueKey('album_tile_1')),
-      buttons: kSecondaryButton,
-    );
-    await tester.pump();
-
-    expect(events, ['menu:1']);
-  });
-
   testBothViewports('opens at the right-click, and under the button', (
     tester,
     size,
   ) async {
     final positions = <Offset>[];
-    await pumpTile(tester, size: size, withMenu: true, positions: positions);
+    final events = <String>[];
+    await pumpTile(
+      tester,
+      size: size,
+      withMenu: true,
+      positions: positions,
+      events: events,
+    );
 
     final row = tester.getCenter(find.byKey(const ValueKey('album_tile_1')));
     await tester.tapAt(row, buttons: kSecondaryButton);
@@ -212,6 +199,7 @@ void main() {
     await tester.pump();
 
     expect(positions, [row, button.bottomLeft]);
+    expect(events, ['menu:1', 'menu:1']);
   });
 
   testWidgets('offers no menu without a handler', (tester) async {

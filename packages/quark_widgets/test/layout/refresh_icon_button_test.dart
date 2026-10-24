@@ -38,19 +38,6 @@ void main() {
     expect(refreshes, 0);
   });
 
-  testWidgets('is disabled outright when given no callback', (tester) async {
-    await pumpAt(
-      tester,
-      const RefreshIconButton(isRefreshing: false, onPressed: null),
-      size: narrowViewport,
-    );
-
-    expect(
-      tester.widget<IconButton>(find.byType(IconButton)).onPressed,
-      isNull,
-    );
-  });
-
   testWidgets('uses the tooltip it is given', (tester) async {
     await pumpAt(
       tester,

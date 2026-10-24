@@ -229,18 +229,6 @@ void main() {
     expect(mesh.min, [0, 0, 2]);
   });
 
-  test('a part outside the package is malformed, never fetched', () {
-    final bytes = package(
-      model('''
-    <object id="1" type="model">
-      <components>
-        <component p:path="https://example.com/a.model" objectid="1"/>
-      </components>
-    </object>''', '<item objectid="1"/>'),
-    );
-    expect(issueOf(bytes), QuarkModelParseIssue.malformed);
-  });
-
   test('a package with nothing built has no surfaces', () {
     expect(
       issueOf(package(model(squareObject(1), ''))),
@@ -265,13 +253,6 @@ void main() {
       issueOf(square, limits: QuarkModelLimits(maxBytes: square.length + 10)),
       QuarkModelParseIssue.tooLarge,
     );
-  });
-
-  test('more entries than a package could need is malformed', () {
-    final bytes = zip({
-      for (var i = 0; i < 10001; i++) 'f$i': Uint8List(0),
-    }, stored: true);
-    expect(issueOf(bytes), QuarkModelParseIssue.malformed);
   });
 
   test('the triangle and time caps hold', () {
@@ -338,6 +319,18 @@ void main() {
     </object>''', '<item objectid="1"/>'),
       ),
       'an unclosed tag': package('<model><resources><object id="1"'),
+      // Never fetched.
+      'a part outside the package': package(
+        model('''
+    <object id="1" type="model">
+      <components>
+        <component p:path="https://example.com/a.model" objectid="1"/>
+      </components>
+    </object>''', '<item objectid="1"/>'),
+      ),
+      'more entries than a package could need': zip({
+        for (var i = 0; i < 10001; i++) 'f$i': Uint8List(0),
+      }, stored: true),
       'corrupt deflate': () {
         final bytes = Uint8List.fromList(square);
         // Overwrite the start of the model's compressed data: block type 3.

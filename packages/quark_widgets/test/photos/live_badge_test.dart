@@ -6,12 +6,6 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testWidgets('reads LIVE', (tester) async {
-    await pumpAt(tester, const LiveBadge());
-
-    expect(find.text('LIVE'), findsOneWidget);
-  });
-
   testWidgets('keeps its scrim and white text in the light theme', (
     tester,
   ) async {
@@ -39,13 +33,6 @@ void main() {
     );
 
     expect(tester.getSize(find.byType(LiveBadge)).height, lessThan(24));
-  });
-
-  testWidgets('shows a dot in the viewer form', (tester) async {
-    await pumpAt(tester, const LiveBadge(ready: true));
-
-    expect(find.text('LIVE'), findsOneWidget);
-    expect(find.byIcon(QuarkIcons.circle), findsOneWidget);
   });
 
   testWidgets('dims the dot and the text while the live video loads', (

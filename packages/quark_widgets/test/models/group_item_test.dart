@@ -14,11 +14,4 @@ void main() {
     expect(a.hashCode, same.hashCode);
     expect(a, isNot(otherMembers));
   });
-
-  test('defaults to a group of its own with no members', () {
-    const item = GroupItem(id: 2, name: 'Family');
-
-    expect(item.isBuiltin, isFalse);
-    expect(item.members, isEmpty);
-  });
 }

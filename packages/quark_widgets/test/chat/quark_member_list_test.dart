@@ -78,16 +78,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('lists a group\'s accounts when it is expanded', (tester) async {
-    await pumpAt(
-      tester,
-      QuarkMemberList(members: members, expandedIds: const {'family'}),
-    );
-
-    expect(find.byKey(const ValueKey('member_row_family_bob')), findsOneWidget);
-    expect(find.byKey(const ValueKey('member_row_family_cy')), findsOneWidget);
-  });
-
   testWidgets('reports the group that was tapped, not accounts', (
     tester,
   ) async {
@@ -124,6 +114,8 @@ void main() {
     );
 
     expect(ids, ['ada', 'bob', 'cy', 'dee', 'eve']);
+    expect(find.byKey(const ValueKey('member_row_family_bob')), findsOneWidget);
+    expect(find.byKey(const ValueKey('member_row_family_cy')), findsOneWidget);
   });
 
   testBothViewports('offers add and remove to a member manager', (

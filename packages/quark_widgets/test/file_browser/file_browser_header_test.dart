@@ -5,42 +5,26 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testWidgets('summarizes the search results', (tester) async {
-    await pumpAt(
+  for (final (count, summary) in [
+    (4, "4 results for 'invoice'"),
+    (1, "1 result for 'invoice'"),
+    (null, "0 results for 'invoice'"),
+  ]) {
+    testWidgets('summarizes ${count ?? 'an unknown number of'} results', (
       tester,
-      const FileBrowserHeader(
-        isSearchMode: true,
-        searchQuery: 'invoice',
-        resultCount: 4,
-      ),
-    );
+    ) async {
+      await pumpAt(
+        tester,
+        FileBrowserHeader(
+          isSearchMode: true,
+          searchQuery: 'invoice',
+          resultCount: count,
+        ),
+      );
 
-    expect(find.text("4 results for 'invoice'"), findsOneWidget);
-  });
-
-  testWidgets('says "result" for exactly one', (tester) async {
-    await pumpAt(
-      tester,
-      const FileBrowserHeader(
-        isSearchMode: true,
-        searchQuery: 'invoice',
-        resultCount: 1,
-      ),
-      size: narrowViewport,
-    );
-
-    expect(find.text("1 result for 'invoice'"), findsOneWidget);
-  });
-
-  testWidgets('reads as zero while the count is unknown', (tester) async {
-    await pumpAt(
-      tester,
-      const FileBrowserHeader(isSearchMode: true, searchQuery: 'invoice'),
-      size: wideViewport,
-    );
-
-    expect(find.text("0 results for 'invoice'"), findsOneWidget);
-  });
+      expect(find.text(summary), findsOneWidget);
+    });
+  }
 
   testWidgets('says it is searching while the query is pending', (
     tester,

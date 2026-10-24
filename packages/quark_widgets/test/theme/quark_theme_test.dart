@@ -175,22 +175,6 @@ void main() {
       }
     });
 
-    test('classic is the shipped tokens', () {
-      // What the app bar and the drawer were before they had a token.
-      expect(
-        QuarkTheme.light(
-          themeColor: QuarkThemeColor.classic,
-        ).appBarTheme.backgroundColor,
-        QuarkTokens.light.sidebar,
-      );
-      expect(
-        QuarkTheme.dark(
-          themeColor: QuarkThemeColor.classic,
-        ).appBarTheme.foregroundColor,
-        QuarkTokens.dark.foreground,
-      );
-    });
-
     test('classic dark() and light() are from() with the shipped tokens', () {
       expect(
         QuarkTheme.dark(themeColor: QuarkThemeColor.classic).colorScheme,

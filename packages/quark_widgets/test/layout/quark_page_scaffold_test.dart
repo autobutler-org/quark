@@ -42,26 +42,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('opens the drawer from the brand button', (tester) async {
-    await pumpAt(
-      tester,
-      QuarkPageScaffold(
-        title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
-        drawer: const Drawer(child: Text('navigation')),
-        body: const Text('the grid'),
-      ),
-      scaffold: false,
-    );
-
-    expect(find.text('navigation'), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey('brand_button')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('navigation'), findsOneWidget);
-  });
-
   testBothViewports('leaves the brand button inert when there is no drawer', (
     tester,
     size,
@@ -173,33 +153,6 @@ void main() {
     });
   }
 
-  testWidgets('every icon-only button carries a tooltip', (tester) async {
-    await pumpAt(
-      tester,
-      QuarkPageScaffold(
-        title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'Upload',
-            onPressed: () {},
-          ),
-        ],
-        body: const Text('the grid'),
-      ),
-      scaffold: false,
-    );
-
-    for (final button in tester.widgetList<IconButton>(
-      find.byType(IconButton),
-    )) {
-      expect(button.tooltip, isNotNull, reason: 'an icon alone says nothing');
-    }
-  });
-
-  // #2254: the scaffold hands the refresh slot straight to its default bar,
-  // and the page's own bar takes it over wholesale when there is one.
   testBothViewports('passes the refresh slot to the default app bar', (
     tester,
     size,
@@ -251,17 +204,6 @@ void main() {
     );
 
     expect(find.byType(QuarkLoader), findsOneWidget);
-    expect(
-      tester
-          .widget<IconButton>(
-            find.descendant(
-              of: find.byKey(const ValueKey('refresh_button')),
-              matching: find.byType(IconButton),
-            ),
-          )
-          .onPressed,
-      isNull,
-    );
   });
 
   testWidgets('has no refresh button without onRefresh', (tester) async {

@@ -84,27 +84,17 @@ void main() {
     _expectFraction(tester, PasswordStrength.weak.fraction);
   });
 
-  group('scorePassword', () {
-    test('rates an empty password as empty', () {
-      expect(scorePassword(''), PasswordStrength.empty);
-    });
-
-    test('rates a short password as weak', () {
-      expect(scorePassword('abc'), PasswordStrength.weak);
-      expect(scorePassword('abcdefgh'), PasswordStrength.weak);
-    });
-
-    test('rates a mixed-case password of length as fair', () {
-      expect(scorePassword('abcdEfgh'), PasswordStrength.fair);
-    });
-
-    test('rates length plus a digit as strong', () {
-      expect(scorePassword('abcdEfgh1'), PasswordStrength.strong);
-    });
-
-    test('rates everything at once as very strong', () {
-      expect(scorePassword('abcdEfghijkl1!'), PasswordStrength.veryStrong);
-    });
+  test('scorePassword rates each password by what it mixes', () {
+    for (final (password, level) in [
+      ('', PasswordStrength.empty),
+      ('abc', PasswordStrength.weak),
+      ('abcdefgh', PasswordStrength.weak),
+      ('abcdEfgh', PasswordStrength.fair),
+      ('abcdEfgh1', PasswordStrength.strong),
+      ('abcdEfghijkl1!', PasswordStrength.veryStrong),
+    ]) {
+      expect(scorePassword(password), level, reason: "'$password'");
+    }
   });
 
   test('every level has a fraction, a label, and a token color', () {

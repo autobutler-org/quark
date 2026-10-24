@@ -41,6 +41,49 @@ QuarkModelParseIssue? issueOf(
   }
 }
 
+/// A PLY header past the format line: a quad with extra properties and an
+/// extra element to read past.
+const plyHeader =
+    'element vertex 4\n'
+    'property float x\n'
+    'property float y\n'
+    'property float z\n'
+    'property uchar red\n'
+    'element face 1\n'
+    'property list uchar int vertex_indices\n'
+    'property int flags\n'
+    'element edge 1\n'
+    'property int vertex1\n'
+    'property int vertex2\n'
+    'end_header\n';
+
+/// The [plyHeader] quad in binary, in [endian] byte order.
+Uint8List binaryPly(Endian endian) {
+  final head = ascii.encode(
+    'ply\nformat binary_${endian == Endian.little ? 'little' : 'big'}'
+    '_endian 1.0\ncomment made by hand\n$plyHeader',
+  );
+  final body = ByteData(4 * 13 + 1 + 16 + 4 + 8);
+  var at = 0;
+  for (final (x, y, z) in [(0, 0, 0), (2, 0, 0), (2, 1, 0), (0, 1, 5)]) {
+    body.setFloat32(at, x.toDouble(), endian);
+    body.setFloat32(at + 4, y.toDouble(), endian);
+    body.setFloat32(at + 8, z.toDouble(), endian);
+    body.setUint8(at + 12, 255);
+    at += 13;
+  }
+  body.setUint8(at++, 4);
+  for (final index in [0, 1, 2, 3]) {
+    body.setInt32(at, index, endian);
+    at += 4;
+  }
+  body.setInt32(at, 7, endian);
+  at += 4;
+  body.setInt32(at, 0, endian);
+  body.setInt32(at + 4, 1, endian);
+  return Uint8List.fromList([...head, ...body.buffer.asUint8List()]);
+}
+
 /// `parseQuarkModel` (#2988): STL in both encodings, OBJ and PLY in all
 /// three, and every cap a file can run into.
 void main() {
@@ -87,86 +130,6 @@ void main() {
       expect(mesh.vertexCount, 6);
       expect(mesh.size, (x: 10.0, y: 3.5, z: 1.0));
     });
-
-    test('a binary file shorter than its triangle count is malformed', () {
-      final bytes = binaryStl(square);
-      expect(
-        issueOf(
-          Uint8List.sublistView(bytes, 0, bytes.length - 10),
-          QuarkModelFormat.stl,
-        ),
-        QuarkModelParseIssue.malformed,
-      );
-      expect(
-        issueOf(text('hello'), QuarkModelFormat.stl),
-        QuarkModelParseIssue.malformed,
-      );
-    });
-
-    test('a vertex that is not a number is malformed', () {
-      expect(
-        issueOf(
-          text('solid x\nouter loop\nvertex 0 zero 0\n endloop\n endsolid'),
-          QuarkModelFormat.stl,
-        ),
-        QuarkModelParseIssue.malformed,
-      );
-    });
-
-    test('an empty solid has no surfaces', () {
-      expect(
-        issueOf(text('solid empty\n endsolid empty\n'), QuarkModelFormat.stl),
-        QuarkModelParseIssue.noSurfaces,
-      );
-    });
-
-    test('a binary count over the cap is refused before it is read', () {
-      expect(
-        issueOf(
-          binaryStl(square),
-          QuarkModelFormat.stl,
-          const QuarkModelLimits(maxTriangles: 1),
-        ),
-        QuarkModelParseIssue.tooManyTriangles,
-      );
-    });
-
-    test('an ASCII file over the triangle cap stops there', () {
-      final facet =
-          'outer loop vertex 0 0 0 vertex 1 0 0 vertex 0 1 0 endloop\n';
-      expect(
-        issueOf(
-          text('solid x\n${facet * 3}endsolid'),
-          QuarkModelFormat.stl,
-          const QuarkModelLimits(maxTriangles: 2),
-        ),
-        QuarkModelParseIssue.tooManyTriangles,
-      );
-    });
-
-    test('reading past the time cap gives up', () {
-      final facet =
-          'outer loop vertex 0 0 0 vertex 1 0 0 vertex 0 1 0 endloop\n';
-      expect(
-        issueOf(
-          text('solid x\n${facet * 5000}endsolid'),
-          QuarkModelFormat.stl,
-          const QuarkModelLimits(maxDuration: Duration.zero),
-        ),
-        QuarkModelParseIssue.tooSlow,
-      );
-    });
-  });
-
-  test('a file over the size cap is refused before it is parsed', () {
-    expect(
-      issueOf(
-        binaryStl(square),
-        QuarkModelFormat.stl,
-        const QuarkModelLimits(maxBytes: 100),
-      ),
-      QuarkModelParseIssue.tooLarge,
-    );
   });
 
   group('OBJ', () {
@@ -213,67 +176,9 @@ void main() {
         );
       }
     });
-
-    test('vertices without faces have no surfaces', () {
-      expect(
-        issueOf(text('v 0 0 0\nv 1 1 1\n'), QuarkModelFormat.obj),
-        QuarkModelParseIssue.noSurfaces,
-      );
-    });
-
-    test('more vertices than the cap allows stops there', () {
-      expect(
-        issueOf(
-          text('v 0 0 0\n' * 10),
-          QuarkModelFormat.obj,
-          const QuarkModelLimits(maxTriangles: 2),
-        ),
-        QuarkModelParseIssue.tooManyTriangles,
-      );
-    });
   });
 
   group('PLY', () {
-    const header =
-        'element vertex 4\n'
-        'property float x\n'
-        'property float y\n'
-        'property float z\n'
-        'property uchar red\n'
-        'element face 1\n'
-        'property list uchar int vertex_indices\n'
-        'property int flags\n'
-        'element edge 1\n'
-        'property int vertex1\n'
-        'property int vertex2\n'
-        'end_header\n';
-
-    Uint8List binaryPly(Endian endian) {
-      final head = ascii.encode(
-        'ply\nformat binary_${endian == Endian.little ? 'little' : 'big'}'
-        '_endian 1.0\ncomment made by hand\n$header',
-      );
-      final body = ByteData(4 * 13 + 1 + 16 + 4 + 8);
-      var at = 0;
-      for (final (x, y, z) in [(0, 0, 0), (2, 0, 0), (2, 1, 0), (0, 1, 5)]) {
-        body.setFloat32(at, x.toDouble(), endian);
-        body.setFloat32(at + 4, y.toDouble(), endian);
-        body.setFloat32(at + 8, z.toDouble(), endian);
-        body.setUint8(at + 12, 255);
-        at += 13;
-      }
-      body.setUint8(at++, 4);
-      for (final index in [0, 1, 2, 3]) {
-        body.setInt32(at, index, endian);
-        at += 4;
-      }
-      body.setInt32(at, 7, endian);
-      at += 4;
-      body.setInt32(at, 0, endian);
-      body.setInt32(at + 4, 1, endian);
-      return Uint8List.fromList([...head, ...body.buffer.asUint8List()]);
-    }
-
     void expectQuad(QuarkModelMesh mesh) {
       expect(mesh.triangleCount, 2);
       expect(mesh.vertexCount, 4);
@@ -286,7 +191,7 @@ void main() {
         parseQuarkModel(
           text(
             'ply\r\nformat ascii 1.0\r\n'
-            '${header.replaceAll('\n', '\r\n')}'
+            '${plyHeader.replaceAll('\n', '\r\n')}'
             '0 0 0 255\n2 0 0 255\n2 1 0 255\n0 1 5 255\n'
             '4 0 1 2 3 7\n'
             '0 1\n',
@@ -296,26 +201,11 @@ void main() {
       );
     });
 
-    test('binary little-endian', () {
-      expectQuad(
-        parseQuarkModel(binaryPly(Endian.little), QuarkModelFormat.ply),
-      );
-    });
-
-    test('binary big-endian', () {
-      expectQuad(parseQuarkModel(binaryPly(Endian.big), QuarkModelFormat.ply));
-    });
-
-    test('a body shorter than the header promises is malformed', () {
-      final bytes = binaryPly(Endian.little);
-      expect(
-        issueOf(
-          Uint8List.sublistView(bytes, 0, bytes.length - 20),
-          QuarkModelFormat.ply,
-        ),
-        QuarkModelParseIssue.malformed,
-      );
-    });
+    for (final endian in [Endian.little, Endian.big]) {
+      test('binary ${endian == Endian.little ? 'little' : 'big'}-endian', () {
+        expectQuad(parseQuarkModel(binaryPly(endian), QuarkModelFormat.ply));
+      });
+    }
 
     test('no magic, no format, or an unknown type is malformed', () {
       for (final source in [
@@ -333,29 +223,120 @@ void main() {
         );
       }
     });
+  });
 
-    test('a point cloud has no surfaces', () {
-      expect(
-        issueOf(
-          text(
-            'ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\n'
-            'property float y\nproperty float z\nend_header\n1 2 3\n',
+  group('bytes and limits give an issue', () {
+    final stl = binaryStl(square);
+    final ply = binaryPly(Endian.little);
+    const facet = 'outer loop vertex 0 0 0 vertex 1 0 0 vertex 0 1 0 endloop\n';
+    for (final (description, bytes, format, limits, issue)
+        in <
+          (
+            String,
+            Uint8List,
+            QuarkModelFormat,
+            QuarkModelLimits,
+            QuarkModelParseIssue,
+          )
+        >[
+          (
+            'STL: a binary file shorter than its triangle count is malformed',
+            Uint8List.sublistView(stl, 0, stl.length - 10),
+            QuarkModelFormat.stl,
+            const QuarkModelLimits(),
+            QuarkModelParseIssue.malformed,
           ),
-          QuarkModelFormat.ply,
-        ),
-        QuarkModelParseIssue.noSurfaces,
-      );
-    });
-
-    test('a declared face count over the cap is refused up front', () {
-      expect(
-        issueOf(
-          binaryPly(Endian.little),
-          QuarkModelFormat.ply,
-          const QuarkModelLimits(maxTriangles: 0),
-        ),
-        QuarkModelParseIssue.tooManyTriangles,
-      );
-    });
+          (
+            'STL: text that is no solid is malformed',
+            text('hello'),
+            QuarkModelFormat.stl,
+            const QuarkModelLimits(),
+            QuarkModelParseIssue.malformed,
+          ),
+          (
+            'STL: a vertex that is not a number is malformed',
+            text('solid x\nouter loop\nvertex 0 zero 0\n endloop\n endsolid'),
+            QuarkModelFormat.stl,
+            const QuarkModelLimits(),
+            QuarkModelParseIssue.malformed,
+          ),
+          (
+            'STL: an empty solid has no surfaces',
+            text('solid empty\n endsolid empty\n'),
+            QuarkModelFormat.stl,
+            const QuarkModelLimits(),
+            QuarkModelParseIssue.noSurfaces,
+          ),
+          (
+            'STL: a binary count over the cap is refused before it is read',
+            stl,
+            QuarkModelFormat.stl,
+            const QuarkModelLimits(maxTriangles: 1),
+            QuarkModelParseIssue.tooManyTriangles,
+          ),
+          (
+            'STL: an ASCII file over the triangle cap stops there',
+            text('solid x\n${facet * 3}endsolid'),
+            QuarkModelFormat.stl,
+            const QuarkModelLimits(maxTriangles: 2),
+            QuarkModelParseIssue.tooManyTriangles,
+          ),
+          (
+            'STL: reading past the time cap gives up',
+            text('solid x\n${facet * 5000}endsolid'),
+            QuarkModelFormat.stl,
+            const QuarkModelLimits(maxDuration: Duration.zero),
+            QuarkModelParseIssue.tooSlow,
+          ),
+          (
+            'a file over the size cap is refused before it is parsed',
+            stl,
+            QuarkModelFormat.stl,
+            const QuarkModelLimits(maxBytes: 100),
+            QuarkModelParseIssue.tooLarge,
+          ),
+          (
+            'OBJ: vertices without faces have no surfaces',
+            text('v 0 0 0\nv 1 1 1\n'),
+            QuarkModelFormat.obj,
+            const QuarkModelLimits(),
+            QuarkModelParseIssue.noSurfaces,
+          ),
+          (
+            'OBJ: more vertices than the cap allows stops there',
+            text('v 0 0 0\n' * 10),
+            QuarkModelFormat.obj,
+            const QuarkModelLimits(maxTriangles: 2),
+            QuarkModelParseIssue.tooManyTriangles,
+          ),
+          (
+            'PLY: a body shorter than the header promises is malformed',
+            Uint8List.sublistView(ply, 0, ply.length - 20),
+            QuarkModelFormat.ply,
+            const QuarkModelLimits(),
+            QuarkModelParseIssue.malformed,
+          ),
+          (
+            'PLY: a point cloud has no surfaces',
+            text(
+              'ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\n'
+              'property float y\nproperty float z\nend_header\n1 2 3\n',
+            ),
+            QuarkModelFormat.ply,
+            const QuarkModelLimits(),
+            QuarkModelParseIssue.noSurfaces,
+          ),
+          (
+            'PLY: a declared face count over the cap is refused up front',
+            ply,
+            QuarkModelFormat.ply,
+            const QuarkModelLimits(maxTriangles: 0),
+            QuarkModelParseIssue.tooManyTriangles,
+          ),
+        ]) {
+      test(description, () {
+        expect(issueOf(bytes, format, limits), issue);
+      });
+    }
   });
 }

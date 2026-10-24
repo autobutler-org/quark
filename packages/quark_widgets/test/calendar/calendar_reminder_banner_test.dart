@@ -25,16 +25,20 @@ final _rent = CalendarEventItem(
 );
 
 void main() {
-  testWidgets('says when a timed event starts', (tester) async {
-    await pumpAt(tester, CalendarReminderBanner(item: _vet, now: _now));
-    expect(find.text('Vet starts at 4:00 PM · in 20 min'), findsOneWidget);
-    expect(find.text('Open'), findsNothing);
-  });
-
-  testWidgets('says which day an all-day event falls on', (tester) async {
-    await pumpAt(tester, CalendarReminderBanner(item: _rent, now: _now));
-    expect(find.text('Rent due is tomorrow'), findsOneWidget);
-  });
+  for (final (name, item, text) in [
+    (
+      'says when a timed event starts',
+      _vet,
+      'Vet starts at 4:00 PM · in 20 min',
+    ),
+    ('says which day an all-day event falls on', _rent, 'Rent due is tomorrow'),
+  ]) {
+    testWidgets(name, (tester) async {
+      await pumpAt(tester, CalendarReminderBanner(item: item, now: _now));
+      expect(find.text(text), findsOneWidget);
+      expect(find.text('Open'), findsNothing);
+    });
+  }
 
   testWidgets('opens and dismisses', (tester) async {
     var opens = 0;

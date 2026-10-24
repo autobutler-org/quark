@@ -31,17 +31,6 @@ void main() {
     find.descendant(of: find.byKey(key), matching: find.byType(RichText)),
   );
 
-  testWidgets('runs its action and explains itself', (tester) async {
-    var presses = 0;
-    await pumpAt(tester, button(onPressed: () => presses++));
-
-    expect(find.byTooltip('Select'), findsOneWidget);
-    await tester.tap(find.byKey(key));
-    await tester.pump();
-
-    expect(presses, 1);
-  });
-
   testBothViewports('is one fixed square with an 18px glyph', (
     tester,
     size,
@@ -109,6 +98,7 @@ void main() {
     var presses = 0;
     await pumpAt(tester, button(onPressed: () => presses++), size: size);
 
+    expect(find.byTooltip('Select'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(key)),
       const Size.square(QuarkBarIconButton.tapTargetSize),

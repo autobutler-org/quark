@@ -14,6 +14,9 @@ const Size wideViewport = Size(1280, 800);
 
 /// Pumps [child] inside Quark's theme at [size].
 ///
+/// [theme] replaces the theme built from [brightness] and [themeColor], for a
+/// test that needs a high-contrast or other prebuilt Quark theme.
+///
 /// Both viewports go through here so a layout that only works on one of them
 /// fails the same way in every test file.
 Future<void> pumpAt(
@@ -23,6 +26,7 @@ Future<void> pumpAt(
   Brightness brightness = Brightness.dark,
   QuarkThemeColor themeColor = QuarkThemeColor.classic,
   bool scaffold = true,
+  ThemeData? theme,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -30,7 +34,9 @@ Future<void> pumpAt(
 
   await tester.pumpWidget(
     MaterialApp(
-      theme: QuarkTheme.from(themeColor.tokensFor(brightness), brightness),
+      theme:
+          theme ??
+          QuarkTheme.from(themeColor.tokensFor(brightness), brightness),
       home: scaffold ? Scaffold(body: child) : child,
     ),
   );

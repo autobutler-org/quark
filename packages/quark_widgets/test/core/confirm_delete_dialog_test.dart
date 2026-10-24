@@ -18,14 +18,14 @@ void main() {
       );
 
   testBothViewports('shows the caller copy', (tester, size) async {
-    await pumpAt(tester, dialog([]), size: size);
+    await pumpAt(tester, dialog([], confirmLabel: 'Delete group'), size: size);
 
     expect(find.text('Delete bob?'), findsOneWidget);
     expect(
       find.text('Their files stay on this Quark and become yours.'),
       findsOneWidget,
     );
-    expect(find.text('Delete'), findsOneWidget);
+    expect(find.text('Delete group'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -38,12 +38,6 @@ void main() {
     await tester.pump();
 
     expect(events, ['cancel', 'confirm']);
-  });
-
-  testWidgets('takes its own confirm label', (tester) async {
-    await pumpAt(tester, dialog([], confirmLabel: 'Delete group'));
-
-    expect(find.text('Delete group'), findsOneWidget);
   });
 
   testBothViewports('survives long copy', (tester, size) async {

@@ -184,17 +184,28 @@ void main() {
     expect(events, [_weekend]);
   });
 
-  testWidgets('goes dense on a phone: no times, narrow weekday names', (
-    tester,
-  ) async {
-    await pumpAt(
-      tester,
-      _grid(events: [_timed(3, 'Dentist', 22, 9)]),
-      size: narrowViewport,
-    );
-    expect(find.text('9am'), findsNothing);
-    expect(find.text('SUN'), findsNothing);
-  });
+  for (final (name, size, shown) in [
+    (
+      'goes dense on a phone: no times, narrow weekday names',
+      narrowViewport,
+      findsNothing,
+    ),
+    (
+      'shows times and full weekday names on a desktop',
+      wideViewport,
+      findsOneWidget,
+    ),
+  ]) {
+    testWidgets(name, (tester) async {
+      await pumpAt(
+        tester,
+        _grid(events: [_timed(3, 'Dentist', 22, 9)]),
+        size: size,
+      );
+      expect(find.text('9am'), shown);
+      expect(find.text('SUN'), shown);
+    });
+  }
 
   group('a phone marks events instead of truncating them (#2541)', () {
     testWidgets('a date shows a dot per event, not a clipped title', (
@@ -403,18 +414,6 @@ void main() {
       );
       await expectTapTargetGuidelines(tester);
     });
-  });
-
-  testWidgets('shows times and full weekday names on a desktop', (
-    tester,
-  ) async {
-    await pumpAt(
-      tester,
-      _grid(events: [_timed(3, 'Dentist', 22, 9)]),
-      size: wideViewport,
-    );
-    expect(find.text('9am'), findsOneWidget);
-    expect(find.text('SUN'), findsOneWidget);
   });
 
   testWidgets('hovering a date on desktop offers an add button', (

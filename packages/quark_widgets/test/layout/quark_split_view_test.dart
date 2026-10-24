@@ -40,23 +40,13 @@ Widget buildSplitView({
 }
 
 void main() {
-  testBothViewports('shows the sidebar and the content in both layouts', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, buildSplitView(), size: size);
-
-    expect(tester.takeException(), isNull);
-    expect(find.text('Albums'), findsOneWidget);
-    expect(find.byKey(const ValueKey('split_view_sidebar')), findsOneWidget);
-    expect(find.text('row 0'), findsOneWidget);
-  });
-
   testWidgets('wide lays the sidebar out as a pane beside the content', (
     tester,
   ) async {
     await pumpAt(tester, buildSplitView(), size: wideViewport);
 
+    expect(tester.takeException(), isNull);
+    expect(find.text('Albums'), findsOneWidget);
     final pane = tester.getRect(
       find.byKey(const ValueKey('split_view_sidebar')),
     );
@@ -74,6 +64,8 @@ void main() {
   ) async {
     await pumpAt(tester, buildSplitView(), size: narrowViewport);
 
+    expect(tester.takeException(), isNull);
+    expect(find.text('Albums'), findsOneWidget);
     final sidebar = tester.getRect(
       find.byKey(const ValueKey('split_view_sidebar')),
     );
@@ -247,11 +239,6 @@ void main() {
       isA<AlwaysScrollableScrollPhysics>(),
       reason: 'the physics the caller passed have to reach the scroll view',
     );
-  });
-
-  test('the breakpoint and the pane width are written down once', () {
-    expect(QuarkSplitView.collapseBreakpoint, 900);
-    expect(QuarkSplitView.defaultSidebarWidth, 280);
   });
 
   testWidgets('isCollapsed answers for the window it is asked about', (

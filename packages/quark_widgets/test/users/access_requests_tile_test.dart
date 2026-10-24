@@ -44,27 +44,29 @@ void main() {
   });
 
   // #2482: the state is written out, not left to the switch's color.
-  testWidgets('says On while requests are on', (tester) async {
-    await pumpAt(tester, AccessRequestsTile(enabled: true, onChanged: (_) {}));
+  for (final (state, enabled, sentence, other) in [
+    ('On', true, 'People can ask', 'Off'),
+    ('Off', false, "doesn't offer", 'On'),
+  ]) {
+    testWidgets('says $state while requests are ${state.toLowerCase()}', (
+      tester,
+    ) async {
+      await pumpAt(
+        tester,
+        AccessRequestsTile(enabled: enabled, onChanged: (_) {}),
+      );
 
-    expect(find.textContaining('On · ', findRichText: true), findsOneWidget);
-    expect(
-      find.textContaining('People can ask', findRichText: true),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Off · ', findRichText: true), findsNothing);
-  });
-
-  testWidgets('says Off while requests are off', (tester) async {
-    await pumpAt(tester, AccessRequestsTile(enabled: false, onChanged: (_) {}));
-
-    expect(find.textContaining('Off · ', findRichText: true), findsOneWidget);
-    expect(
-      find.textContaining("doesn't offer", findRichText: true),
-      findsOneWidget,
-    );
-    expect(find.textContaining('On · ', findRichText: true), findsNothing);
-  });
+      expect(
+        find.textContaining('$state · ', findRichText: true),
+        findsOneWidget,
+      );
+      expect(find.textContaining(sentence, findRichText: true), findsOneWidget);
+      expect(
+        find.textContaining('$other · ', findRichText: true),
+        findsNothing,
+      );
+    });
+  }
 
   testWidgets('a screen reader hears the state with the label', (tester) async {
     final handle = tester.ensureSemantics();

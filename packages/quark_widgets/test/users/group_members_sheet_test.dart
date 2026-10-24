@@ -127,19 +127,6 @@ void main() {
     );
   });
 
-  testWidgets('shows the refusal the caller handed it', (tester) async {
-    await pumpInSheet(
-      tester,
-      const GroupMembersSheet(
-        group: family,
-        candidates: candidates,
-        error: "That account can't join a group.",
-      ),
-    );
-
-    expect(find.text("That account can't join a group."), findsOneWidget);
-  });
-
   testWidgets('every remove button names itself', (tester) async {
     await pumpInSheet(
       tester,

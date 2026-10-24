@@ -39,18 +39,27 @@ void main() {
     expect(find.text('.qdoc'), findsOneWidget);
   });
 
-  testWidgets('appends the selected extension to the name', (tester) async {
-    final created = await pumpDialog(tester);
+  for (final (type, name, expected) in [
+    (null, 'notes', 'notes.qdoc'),
+    ('qsheet', 'budget', 'budget.qsheet'),
+    ('generic', 'readme.txt', 'readme.txt'),
+  ]) {
+    testWidgets('creates $expected from $name as ${type ?? 'the default'}', (
+      tester,
+    ) async {
+      final created = await pumpDialog(tester);
 
-    await tester.enterText(
-      find.byKey(const ValueKey('new_file_name')),
-      'notes',
-    );
-    await tester.tap(find.byKey(const ValueKey('new_file_create')));
-    await tester.pump();
+      if (type != null) {
+        await tester.tap(find.byKey(ValueKey('new_file_type_$type')));
+        await tester.pump();
+      }
+      await tester.enterText(find.byKey(const ValueKey('new_file_name')), name);
+      await tester.tap(find.byKey(const ValueKey('new_file_create')));
+      await tester.pump();
 
-    expect(created, ['notes.qdoc']);
-  });
+      expect(created, [expected]);
+    });
+  }
 
   testWidgets('hints a name that matches the selected type', (tester) async {
     await pumpDialog(tester);
@@ -76,56 +85,26 @@ void main() {
     expect(find.text('Untitled document'), findsNothing);
   });
 
-  testWidgets('switches the extension with the type', (tester) async {
-    final created = await pumpDialog(tester);
+  for (final (name, refusal) in [
+    ('', 'Name cannot be empty'),
+    ('a/b', 'Name cannot contain slashes'),
+  ]) {
+    testWidgets('refuses "$name": $refusal', (tester) async {
+      final created = await pumpDialog(tester);
 
-    await tester.tap(find.byKey(const ValueKey('new_file_type_qsheet')));
-    await tester.pump();
-    await tester.enterText(
-      find.byKey(const ValueKey('new_file_name')),
-      'budget',
-    );
-    await tester.tap(find.byKey(const ValueKey('new_file_create')));
-    await tester.pump();
+      if (name.isNotEmpty) {
+        await tester.enterText(
+          find.byKey(const ValueKey('new_file_name')),
+          name,
+        );
+      }
+      await tester.tap(find.byKey(const ValueKey('new_file_create')));
+      await tester.pump();
 
-    expect(created, ['budget.qsheet']);
-  });
-
-  testWidgets('leaves a generic filename exactly as typed', (tester) async {
-    final created = await pumpDialog(tester, size: narrowViewport);
-
-    await tester.tap(find.byKey(const ValueKey('new_file_type_generic')));
-    await tester.pump();
-    await tester.enterText(
-      find.byKey(const ValueKey('new_file_name')),
-      'readme.txt',
-    );
-    await tester.tap(find.byKey(const ValueKey('new_file_create')));
-    await tester.pump();
-
-    expect(created, ['readme.txt']);
-  });
-
-  testWidgets('refuses an empty name', (tester) async {
-    final created = await pumpDialog(tester, size: wideViewport);
-
-    await tester.tap(find.byKey(const ValueKey('new_file_create')));
-    await tester.pump();
-
-    expect(created, isEmpty);
-    expect(find.text('Name cannot be empty'), findsOneWidget);
-  });
-
-  testWidgets('refuses a name with a slash in it', (tester) async {
-    final created = await pumpDialog(tester, size: wideViewport);
-
-    await tester.enterText(find.byKey(const ValueKey('new_file_name')), 'a/b');
-    await tester.tap(find.byKey(const ValueKey('new_file_create')));
-    await tester.pump();
-
-    expect(created, isEmpty);
-    expect(find.text('Name cannot contain slashes'), findsOneWidget);
-  });
+      expect(created, isEmpty);
+      expect(find.text(refusal), findsOneWidget);
+    });
+  }
 
   testWidgets('cancels through its callback rather than popping itself', (
     tester,

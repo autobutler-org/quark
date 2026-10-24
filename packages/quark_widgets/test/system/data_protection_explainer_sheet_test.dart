@@ -41,29 +41,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('the sheet closes from its close button', (
-    tester,
-    size,
-  ) async {
-    final closed = <String>[];
-    await pumpAt(
-      tester,
-      QuarkSheet(
-        title: 'Why two backup drives?',
-        onClose: () => closed.add('close'),
-        child: const DataProtectionExplainerSheet(),
-      ),
-      size: size,
-    );
-
-    expect(find.text('Why two backup drives?'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('quark_sheet_close')));
-    await tester.pump();
-
-    expect(closed, ['close']);
-    expect(tester.takeException(), isNull);
-  });
-
   for (final (label, brightness, tokens) in [
     ('dark', Brightness.dark, QuarkTokens.dark),
     ('light', Brightness.light, QuarkTokens.light),

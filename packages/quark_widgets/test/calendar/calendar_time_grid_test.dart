@@ -94,6 +94,8 @@ void main() {
       expect(placed[_vet]!.lanes, 1);
       expect(placed[_vet]!.startMinute, 16 * 60);
       expect(placed[_vet]!.endMinute, 16 * 60 + 45);
+      expect(placed[_call]!.group, placed[_lunch]!.group);
+      expect(placed[_vet]!.group, isNot(placed[_call]!.group));
     });
 
     test('clips an event across midnight to each day', () {
@@ -129,14 +131,6 @@ void main() {
       expect((placed.startMinute, placed.endMinute), (24 * 60 - 48, 24 * 60));
     });
 
-    test('numbers each group of overlapping events', () {
-      final placed = {
-        for (final p in layoutDay(_today, [_vet, _lunch, _call])) p.item: p,
-      };
-      expect(placed[_call]!.group, placed[_lunch]!.group);
-      expect(placed[_vet]!.group, isNot(placed[_call]!.group));
-    });
-
     test('skips all-day events and other dates', () {
       final tomorrow = CalendarEventItem(
         eventId: 7,
@@ -168,12 +162,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('an empty day says it has no all-day events', (tester) async {
-    await pumpAt(tester, _grid(days: [_today], events: const []));
-    expect(find.text('No all-day events'), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar_now_line')), findsNothing);
-  });
-
   testBothViewports('a week heads each column and taps through to a day', (
     tester,
     size,
@@ -196,23 +184,6 @@ void main() {
     );
     expect(opened, DateTime(2026, 10, 1));
     expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('an empty hour creates at that hour', (tester) async {
-    DateTime? start;
-    await pumpAt(
-      tester,
-      _grid(days: [_today], events: const [], onSlotTap: (s) => start = s),
-    );
-    await tester.tap(find.byKey(const ValueKey('calendar_slot_2026-09-29_13')));
-    expect(start, DateTime(2026, 9, 29, 13));
-  });
-
-  testWidgets('an event block calls back with its occurrence', (tester) async {
-    CalendarEventItem? tapped;
-    await pumpAt(tester, _grid(days: [_today], onEventTap: (e) => tapped = e));
-    await tester.tap(find.byKey(const ValueKey('calendar_event_2_2026-09-29')));
-    expect(tapped, _lunch);
   });
 
   // #3251: the web semantics tree is on for every user, and a node with a tap
@@ -559,6 +530,7 @@ void main() {
       expect(find.text('Free day'), findsOneWidget);
       expect(find.text('Nothing scheduled'), findsOneWidget);
       expect(find.text('No all-day events'), findsOneWidget);
+      expect(find.byKey(const ValueKey('calendar_now_line')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('calendar_day_add')));
       expect(added, 1);
       // The hours around the notice still create at their hour.
@@ -677,30 +649,6 @@ void main() {
       final next = [for (final d in week) CalendarDates.addDays(d, 7)];
       await pumpAt(tester, _grid(days: next, onSlotTap: (_) {}));
       expect(ghosts(), 0);
-    });
-
-    testBothViewports('stays off while a button is held', (tester, size) async {
-      await pumpAt(
-        tester,
-        _grid(days: CalendarDates.weekOf(_today), onSlotTap: (_) {}),
-        size: size,
-      );
-      final start = slot(tester, DateTime(2026, 9, 27), 13);
-      final mouse = await mouseAt(tester, start);
-      await mouse.down(start);
-      for (var i = 0; i < 8; i++) {
-        await mouse.moveBy(Offset(size.width / 40, 0));
-        await tester.pump();
-        expect(ghosts(), 0);
-      }
-      await mouse.up();
-      await tester.pump();
-      expect(ghosts(), 0);
-
-      // Moving again is a hover again.
-      await mouse.moveBy(const Offset(0, 2));
-      await tester.pump();
-      expect(ghosts(), 1);
     });
 
     testWidgets('clears when its slot is tapped', (tester) async {
@@ -827,6 +775,14 @@ void main() {
         expect(ghosts(), 0);
         expect(hintsOn(sunday, 13), 0);
         expect(hintsOn(saturday, 15), 0);
+
+        // Moving again is a hover again (#2886).
+        await mouse.moveBy(
+          const Offset(0, 2),
+          timeStamp: const Duration(seconds: 3),
+        );
+        await tester.pump();
+        expect(ghosts(), 1);
 
         final next = [for (final day in week) CalendarDates.addDays(day, 7)];
         await pumpAt(

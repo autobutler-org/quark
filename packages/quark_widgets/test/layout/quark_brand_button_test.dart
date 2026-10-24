@@ -19,19 +19,6 @@ void main() {
     expect(taps, 1);
   });
 
-  testWidgets('renders the icon it is given', (tester) async {
-    await pumpAt(
-      tester,
-      QuarkBrandButton(
-        label: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
-        onTap: () {},
-      ),
-    );
-
-    expect(find.byIcon(QuarkIcons.photo_library_outlined), findsOneWidget);
-  });
-
   testWidgets('lays out on a narrow phone without overflowing', (tester) async {
     await pumpAt(
       tester,

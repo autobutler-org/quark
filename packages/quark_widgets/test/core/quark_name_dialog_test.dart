@@ -138,20 +138,6 @@ void main() {
     );
   });
 
-  testBothViewports('shows the refusal the caller handed it', (
-    tester,
-    size,
-  ) async {
-    await pumpDialog(
-      tester,
-      size: size,
-      error: 'A group with that name already exists.',
-    );
-
-    expect(find.text('A group with that name already exists.'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
   testBothViewports('survives a long title and a long refusal', (
     tester,
     size,

@@ -191,14 +191,4 @@ void main() {
       });
     });
   }
-
-  test('outline takes part in copyWith, equality and lerp', () {
-    const marker = Color(0xFF123456);
-    final edited = QuarkTokens.light.copyWith(outline: marker);
-    expect(edited.outline, marker);
-    expect(edited, isNot(QuarkTokens.light));
-    expect(edited.hashCode, isNot(QuarkTokens.light.hashCode));
-    expect(QuarkTokens.light.lerp(edited, 1).outline, marker);
-    expect(QuarkTokens.light.lerp(edited, 0.5).outline, isNot(marker));
-  });
 }

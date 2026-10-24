@@ -120,15 +120,6 @@ void main() {
     expect(find.byType(QuarkLoader), findsNothing);
   });
 
-  testBothViewports('renders every message with its key', (tester, size) async {
-    await pumpAt(tester, QuarkMessageList(messages: messages), size: size);
-
-    for (final message in messages) {
-      expect(find.byKey(ValueKey('message_${message.id}')), findsOneWidget);
-    }
-    expect(tester.takeException(), isNull);
-  });
-
   testBothViewports('draws the newest message at the bottom', (
     tester,
     size,
@@ -167,6 +158,9 @@ void main() {
     expect(inMessage('m1', find.text('September 23, 2026')), findsOneWidget);
     expect(inMessage('m3', find.text('September 24, 2026')), findsOneWidget);
     expect(find.byType(Divider), findsNWidgets(4));
+    for (final message in messages) {
+      expect(find.byKey(ValueKey('message_${message.id}')), findsOneWidget);
+    }
   });
 
   testWidgets('starts a new header after five quiet minutes', (tester) async {
