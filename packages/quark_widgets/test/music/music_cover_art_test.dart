@@ -27,9 +27,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('renders coverBuilder instead of the placeholder', (
+  testWidgets('renders coverBuilder instead of the placeholder', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
@@ -42,7 +41,6 @@ void main() {
           ),
         ),
       ),
-      size: size,
     );
 
     expect(find.text('painted cover'), findsOneWidget);

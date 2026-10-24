@@ -82,9 +82,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('reports each action and the dismissal exactly once', (
+  testWidgets('reports each action and the dismissal exactly once', (
     tester,
-    size,
   ) async {
     final events = <String>[];
     await pumpAt(
@@ -94,7 +93,6 @@ void main() {
         actions: chips(events),
         onDismiss: () => events.add('dismiss'),
       ),
-      size: size,
     );
 
     for (final key in actionKeys) {

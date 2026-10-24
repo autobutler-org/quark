@@ -94,9 +94,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('never sends a blank message', (tester, size) async {
+  testWidgets('never sends a blank message', (tester) async {
     final sent = <String>[];
-    await pumpAt(tester, QuarkMessageComposer(onSend: sent.add), size: size);
+    await pumpAt(tester, QuarkMessageComposer(onSend: sent.add));
 
     expect(tester.widget<IconButton>(find.byKey(send)).onPressed, isNull);
     await tester.enterText(find.byKey(field), '   ');
@@ -110,14 +110,11 @@ void main() {
   for (final platform in const [TargetPlatform.macOS, TargetPlatform.android]) {
     final where = platform == TargetPlatform.macOS ? 'desktop' : 'phone';
 
-    testBothViewports('a hardware Enter sends on a $where', (
-      tester,
-      size,
-    ) async {
+    testWidgets('a hardware Enter sends on a $where', (tester) async {
       debugDefaultTargetPlatformOverride = platform;
       addTearDown(() => debugDefaultTargetPlatformOverride = null);
       final sent = <String>[];
-      await pumpAt(tester, QuarkMessageComposer(onSend: sent.add), size: size);
+      await pumpAt(tester, QuarkMessageComposer(onSend: sent.add));
 
       await tester.enterText(find.byKey(field), 'hi');
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -127,14 +124,11 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     });
 
-    testBothViewports('Shift+Enter inserts a newline on a $where', (
-      tester,
-      size,
-    ) async {
+    testWidgets('Shift+Enter inserts a newline on a $where', (tester) async {
       debugDefaultTargetPlatformOverride = platform;
       addTearDown(() => debugDefaultTargetPlatformOverride = null);
       final sent = <String>[];
-      await pumpAt(tester, QuarkMessageComposer(onSend: sent.add), size: size);
+      await pumpAt(tester, QuarkMessageComposer(onSend: sent.add));
 
       await tester.enterText(find.byKey(field), 'hi');
       await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
@@ -152,12 +146,9 @@ void main() {
     });
   }
 
-  testBothViewports('the on-screen keyboard shows Send and sends', (
-    tester,
-    size,
-  ) async {
+  testWidgets('the on-screen keyboard shows Send and sends', (tester) async {
     final sent = <String>[];
-    await pumpAt(tester, QuarkMessageComposer(onSend: sent.add), size: size);
+    await pumpAt(tester, QuarkMessageComposer(onSend: sent.add));
 
     expect(
       tester.widget<TextField>(find.byKey(field)).textInputAction,
@@ -177,14 +168,13 @@ void main() {
     expect(sent, ['hi']);
   });
 
-  testBothViewports('Enter confirms an input method, it does not send', (
+  testWidgets('Enter confirms an input method, it does not send', (
     tester,
-    size,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
     final sent = <String>[];
-    await pumpAt(tester, QuarkMessageComposer(onSend: sent.add), size: size);
+    await pumpAt(tester, QuarkMessageComposer(onSend: sent.add));
 
     await tester.showKeyboard(find.byKey(field));
     tester.testTextInput.updateEditingValue(
@@ -213,9 +203,8 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testBothViewports('shows why instead of a field when writing is off', (
+  testWidgets('shows why instead of a field when writing is off', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
@@ -223,7 +212,6 @@ void main() {
         onSend: (_) {},
         disabledReason: 'You can read this channel but not write in it',
       ),
-      size: size,
     );
 
     expect(
@@ -238,9 +226,8 @@ void main() {
     expect(find.byKey(send), findsNothing);
   });
 
-  testBothViewports('a viewer sees why they cannot send, not a field', (
+  testWidgets('a viewer sees why they cannot send, not a field', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
@@ -249,7 +236,6 @@ void main() {
         permissions: ChatPermissionPreset.viewer.permissions,
         isWaitingForKey: true,
       ),
-      size: size,
     );
 
     expect(find.text(QuarkMessageComposer.noSendReason), findsOneWidget);
@@ -257,9 +243,8 @@ void main() {
     expect(find.byKey(field), findsNothing);
   });
 
-  testBothViewports('a member waiting for the key sees a different reason', (
+  testWidgets('a member waiting for the key sees a different reason', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
@@ -268,7 +253,6 @@ void main() {
         permissions: ChatPermissionPreset.member.permissions,
         isWaitingForKey: true,
       ),
-      size: size,
     );
 
     expect(find.text(QuarkMessageComposer.waitingForKeyReason), findsOneWidget);
@@ -279,9 +263,8 @@ void main() {
     );
   });
 
-  testBothViewports('a delegated manager is told they are not a member', (
+  testWidgets('a delegated manager is told they are not a member', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
@@ -290,7 +273,6 @@ void main() {
         permissions: const {ChatPermission.manageMembers},
         isWaitingForKey: true,
       ),
-      size: size,
     );
 
     expect(find.text(QuarkMessageComposer.notMemberReason), findsOneWidget);
@@ -298,17 +280,13 @@ void main() {
     expect(find.byKey(field), findsNothing);
   });
 
-  testBothViewports('a member with the full set gets the field', (
-    tester,
-    size,
-  ) async {
+  testWidgets('a member with the full set gets the field', (tester) async {
     await pumpAt(
       tester,
       QuarkMessageComposer(
         onSend: (_) {},
         permissions: ChatPermissionPreset.owner.permissions,
       ),
-      size: size,
     );
 
     expect(find.byKey(field), findsOneWidget);
@@ -341,14 +319,11 @@ void main() {
   });
 
   // #2502: Enter on a blank message did nothing, with nothing to say why.
-  testBothViewports('Enter on a blank message says what is missing', (
-    tester,
-    size,
-  ) async {
+  testWidgets('Enter on a blank message says what is missing', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
     final sent = <String>[];
-    await pumpAt(tester, QuarkMessageComposer(onSend: sent.add), size: size);
+    await pumpAt(tester, QuarkMessageComposer(onSend: sent.add));
 
     expect(
       tester.widget<IconButton>(find.byKey(send)).tooltip,
@@ -454,9 +429,8 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testBothViewports('a tap writes the mention and sends it as text', (
+    testWidgets('a tap writes the mention and sends it as text', (
       tester,
-      size,
     ) async {
       final sent = <String>[];
       await pumpAt(
@@ -465,7 +439,6 @@ void main() {
           alignment: Alignment.bottomCenter,
           child: QuarkMessageComposer(onSend: sent.add, mentionNames: names),
         ),
-        size: size,
       );
 
       await tester.enterText(find.byKey(field), 'hi @b');
@@ -483,10 +456,7 @@ void main() {
       expect(sent, ['hi @bob']);
     });
 
-    testBothViewports('the keyboard moves, picks and closes', (
-      tester,
-      size,
-    ) async {
+    testWidgets('the keyboard moves, picks and closes', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       addTearDown(() => debugDefaultTargetPlatformOverride = null);
       final sent = <String>[];
@@ -496,7 +466,6 @@ void main() {
           alignment: Alignment.bottomCenter,
           child: QuarkMessageComposer(onSend: sent.add, mentionNames: names),
         ),
-        size: size,
       );
       String highlighted() => tester
           .widget<QuarkMentionSuggestions>(find.byType(QuarkMentionSuggestions))
@@ -574,8 +543,8 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testBothViewports('no names suggests nothing', (tester, size) async {
-      await pumpAt(tester, QuarkMessageComposer(onSend: (_) {}), size: size);
+    testWidgets('no names suggests nothing', (tester) async {
+      await pumpAt(tester, QuarkMessageComposer(onSend: (_) {}));
 
       await tester.enterText(find.byKey(field), '@a');
       await tester.pump();

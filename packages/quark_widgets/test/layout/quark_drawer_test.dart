@@ -123,10 +123,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('draws the users row once it is offered', (
-    tester,
-    size,
-  ) async {
+  testWidgets('draws the users row once it is offered', (tester) async {
     final tapped = <String>[];
     await pumpAt(
       tester,
@@ -134,7 +131,6 @@ void main() {
         activeSection: QuarkDrawerSection.files,
         onTapUsers: () => tapped.add('users'),
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('drawer_users')));
@@ -377,7 +373,7 @@ void main() {
   /// #2033: with more than one Quark saved, nothing in the signed-in app said
   /// which one was on screen, so an upload could land on the wrong device
   /// without a single hint beforehand.
-  testBothViewports('names the Quark it is signed in to', (tester, size) async {
+  testWidgets('names the Quark it is signed in to', (tester) async {
     await pumpAt(
       tester,
       const QuarkDrawer(
@@ -385,7 +381,6 @@ void main() {
         hosts: [HostItem(name: 'Cabin', address: 'cabin.local:8443')],
         activeHostIndex: 0,
       ),
-      size: size,
     );
 
     expect(find.text('Cabin'), findsOneWidget);
@@ -434,10 +429,7 @@ void main() {
     HostItem(name: 'Cabin', address: 'cabin.local:8443'),
   ];
 
-  testBothViewports('a single Quark is a label, not a menu', (
-    tester,
-    size,
-  ) async {
+  testWidgets('a single Quark is a label, not a menu', (tester) async {
     await pumpAt(
       tester,
       QuarkDrawer(
@@ -446,7 +438,6 @@ void main() {
         activeHostIndex: 0,
         onSelectHost: (_) => fail('no menu to select from'),
       ),
-      size: size,
     );
 
     expect(find.text('Home'), findsOneWidget);
@@ -484,10 +475,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('picking a Quark calls back with its index', (
-    tester,
-    size,
-  ) async {
+  testWidgets('picking a Quark calls back with its index', (tester) async {
     final picked = <int>[];
     await pumpAt(
       tester,
@@ -497,7 +485,6 @@ void main() {
         activeHostIndex: 0,
         onSelectHost: picked.add,
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('drawer_host_header')));

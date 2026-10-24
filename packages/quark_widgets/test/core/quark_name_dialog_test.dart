@@ -103,9 +103,9 @@ void main() {
     expect(find.text('64/64'), findsOneWidget);
   });
 
-  testBothViewports('cancels through its key', (tester, size) async {
+  testWidgets('cancels through its key', (tester) async {
     final events = <String>[];
-    await pumpDialog(tester, size: size, events: events);
+    await pumpDialog(tester, events: events);
 
     await tester.tap(find.byKey(const ValueKey('name_dialog_cancel')));
     await tester.pump();

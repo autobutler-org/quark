@@ -125,17 +125,16 @@ void main() {
     );
   });
 
-  testBothViewports('shows a loader while loading', (tester, size) async {
+  testWidgets('shows a loader while loading', (tester) async {
     await pumpAt(
       tester,
       QuarkDocumentView(document: _document, isLoading: true),
-      size: size,
     );
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byType(ListView), findsNothing);
   });
 
-  testBothViewports('shows the caller error and retries', (tester, size) async {
+  testWidgets('shows the caller error and retries', (tester) async {
     final events = <String>[];
     await pumpAt(
       tester,
@@ -144,7 +143,6 @@ void main() {
         error: "Couldn't open the document.",
         onRetry: () => events.add('retry'),
       ),
-      size: size,
     );
     expect(find.text("Couldn't open the document."), findsOneWidget);
     expect(find.byType(ListView), findsNothing);
@@ -157,16 +155,14 @@ void main() {
         document: QuarkDocument.empty(),
         error: 'Offline',
       ),
-      size: size,
     );
     expect(find.byKey(const ValueKey('document_view_retry')), findsNothing);
   });
 
-  testBothViewports('shows the empty document state', (tester, size) async {
+  testWidgets('shows the empty document state', (tester) async {
     await pumpAt(
       tester,
       const QuarkDocumentView(document: QuarkDocument.empty()),
-      size: size,
     );
     expect(find.text('Empty document'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);

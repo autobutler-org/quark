@@ -69,28 +69,17 @@ void main() {
     matching: matching,
   );
 
-  testBothViewports('shows a spinner while the first page loads', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      const QuarkMessageList(messages: [], isLoading: true),
-      size: size,
-    );
+  testWidgets('shows a spinner while the first page loads', (tester) async {
+    await pumpAt(tester, const QuarkMessageList(messages: [], isLoading: true));
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.text('No messages yet'), findsNothing);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the error the caller handed it', (tester) async {
     await pumpAt(
       tester,
       const QuarkMessageList(messages: [], error: "Couldn't load messages."),
-      size: size,
     );
 
     expect(find.text("Couldn't load messages."), findsOneWidget);
@@ -98,10 +87,7 @@ void main() {
     expect(find.text('No messages yet'), findsNothing);
   });
 
-  testBothViewports('retries the first page after it fails', (
-    tester,
-    size,
-  ) async {
+  testWidgets('retries the first page after it fails', (tester) async {
     final events = <String>[];
     await pumpAt(
       tester,
@@ -110,7 +96,6 @@ void main() {
         error: "Couldn't load messages.",
         onLoadOlder: () => events.add('load'),
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('message_list_retry')));
@@ -128,8 +113,8 @@ void main() {
     expect(find.byKey(const ValueKey('message_list_retry')), findsNothing);
   });
 
-  testBothViewports('says so when the channel is empty', (tester, size) async {
-    await pumpAt(tester, const QuarkMessageList(messages: []), size: size);
+  testWidgets('says so when the channel is empty', (tester) async {
+    await pumpAt(tester, const QuarkMessageList(messages: []));
 
     expect(find.text('No messages yet'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);
@@ -155,9 +140,8 @@ void main() {
     expect(newest.dy, greaterThan(oldest.dy));
   });
 
-  testBothViewports('groups one author under one header and splits days', (
+  testWidgets('groups one author under one header and splits days', (
     tester,
-    size,
   ) async {
     final avatars = <String>[];
     await pumpAt(
@@ -169,7 +153,6 @@ void main() {
           return const SizedBox();
         },
       ),
-      size: size,
     );
 
     // m1 starts ada's run, m2 joins it. The system line m3 breaks runs, so
@@ -298,10 +281,7 @@ void main() {
     expect(text.style?.color, QuarkTokens.dark.warning);
   });
 
-  testBothViewports('asks for older messages from the load button', (
-    tester,
-    size,
-  ) async {
+  testWidgets('asks for older messages from the load button', (tester) async {
     final events = <String>[];
     await pumpAt(
       tester,
@@ -310,7 +290,6 @@ void main() {
         hasMore: true,
         onLoadOlder: () => events.add('older'),
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('message_list_load_older')));
@@ -319,14 +298,12 @@ void main() {
     expect(events, ['older']);
   });
 
-  testBothViewports('shows progress at the top while older ones load', (
+  testWidgets('shows progress at the top while older ones load', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
       QuarkMessageList(messages: messages, hasMore: true, isLoading: true),
-      size: size,
     );
 
     expect(find.byType(QuarkLoader), findsOneWidget);
@@ -334,10 +311,7 @@ void main() {
     expect(find.byKey(const ValueKey('message_m1')), findsOneWidget);
   });
 
-  testBothViewports('retries older messages after an error', (
-    tester,
-    size,
-  ) async {
+  testWidgets('retries older messages after an error', (tester) async {
     final events = <String>[];
     await pumpAt(
       tester,
@@ -347,7 +321,6 @@ void main() {
         error: "Couldn't load older messages.",
         onLoadOlder: () => events.add('older'),
       ),
-      size: size,
     );
 
     expect(find.text("Couldn't load older messages."), findsOneWidget);
@@ -457,15 +430,11 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testBothViewports('the menu button opens it from the keyboard', (
-      tester,
-      size,
-    ) async {
+    testWidgets('the menu button opens it from the keyboard', (tester) async {
       final copied = <String>[];
       await pumpAt(
         tester,
         QuarkMessageList(messages: messages, onCopy: copied.add),
-        size: size,
       );
 
       Focus.of(
@@ -538,9 +507,8 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testBothViewports('a viewer without add_reactions gets no Add reaction', (
+    testWidgets('a viewer without add_reactions gets no Add reaction', (
       tester,
-      size,
     ) async {
       await pumpAt(
         tester,
@@ -550,7 +518,6 @@ void main() {
           onCopy: (_) {},
           onReact: (_, _) {},
         ),
-        size: size,
       );
 
       await tester.tap(key('message_menu_m4'));
@@ -559,10 +526,7 @@ void main() {
       expect(find.text('Add reaction'), findsNothing);
     });
 
-    testBothViewports('a moderator may delete any text message', (
-      tester,
-      size,
-    ) async {
+    testWidgets('a moderator may delete any text message', (tester) async {
       final deleted = <String>[];
       await pumpAt(
         tester,
@@ -572,7 +536,6 @@ void main() {
           currentUserId: 'ada',
           onDelete: deleted.add,
         ),
-        size: size,
       );
 
       expect(await offersDelete(tester, 'm2'), isTrue);
@@ -589,9 +552,8 @@ void main() {
       expect(deleted, ['m4']);
     });
 
-    testBothViewports('without delete_messages only the author may delete', (
+    testWidgets('without delete_messages only the author may delete', (
       tester,
-      size,
     ) async {
       await pumpAt(
         tester,
@@ -602,16 +564,14 @@ void main() {
           onCopy: (_) {},
           onDelete: (_) {},
         ),
-        size: size,
       );
 
       expect(await offersDelete(tester, 'm2'), isTrue);
       expect(await offersDelete(tester, 'm4'), isFalse);
     });
 
-    testBothViewports('a viewer sees no delete on anyone else\'s message', (
+    testWidgets('a viewer sees no delete on anyone else\'s message', (
       tester,
-      size,
     ) async {
       await pumpAt(
         tester,
@@ -622,7 +582,6 @@ void main() {
           onCopy: (_) {},
           onDelete: (_) {},
         ),
-        size: size,
       );
 
       expect(await offersDelete(tester, 'm2'), isFalse);
@@ -677,89 +636,81 @@ void main() {
           )
           .where((paragraph) => paragraph.selections.isNotEmpty);
 
-      for (final size in [narrowViewport, wideViewport]) {
-        testWidgets('dragging the mouse selects message text ($size)', (
+      testWidgets('dragging the mouse selects message text', (tester) async {
+        await pumpAt(
           tester,
-        ) async {
-          await pumpAt(
-            tester,
-            QuarkMessageList(messages: linked, onCopy: (_) {}),
-            size: size,
-          );
-          expect(selected(tester), isEmpty);
+          QuarkMessageList(messages: linked, onCopy: (_) {}),
+        );
+        expect(selected(tester), isEmpty);
 
-          final body = tester.getRect(key('message_body_m1'));
-          final gesture = await tester.startGesture(
-            body.centerLeft + const Offset(2, 0),
-            kind: PointerDeviceKind.mouse,
-          );
-          await tester.pump();
-          await gesture.moveTo(body.centerLeft + const Offset(90, 0));
-          await tester.pump();
-          await gesture.up();
-          await tester.pumpAndSettle();
+        final body = tester.getRect(key('message_body_m1'));
+        final gesture = await tester.startGesture(
+          body.centerLeft + const Offset(2, 0),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump();
+        await gesture.moveTo(body.centerLeft + const Offset(90, 0));
+        await tester.pump();
+        await gesture.up();
+        await tester.pumpAndSettle();
 
-          final selection = selected(tester).single.selections.single;
-          printOnFailure('$selection');
-          expect(selection.isCollapsed, isFalse);
-          // The drag was the selection's: it opened nothing.
-          expect(find.byType(PopupMenuItem<int>), findsNothing);
-        }, variant: desktop);
+        final selection = selected(tester).single.selections.single;
+        printOnFailure('$selection');
+        expect(selection.isCollapsed, isFalse);
+        // The drag was the selection's: it opened nothing.
+        expect(find.byType(PopupMenuItem<int>), findsNothing);
+      }, variant: desktop);
 
-        testWidgets('a right-click opens the menu, not a toolbar ($size)', (
+      testWidgets('a right-click opens the menu, not a toolbar', (
+        tester,
+      ) async {
+        final copied = <String>[];
+        await pumpAt(
           tester,
-        ) async {
-          final copied = <String>[];
-          await pumpAt(
-            tester,
-            QuarkMessageList(messages: linked, onCopy: copied.add),
-            size: size,
-          );
+          QuarkMessageList(messages: linked, onCopy: copied.add),
+        );
 
-          await tester.tap(
-            key('message_body_m1'),
-            buttons: kSecondaryButton,
-            kind: PointerDeviceKind.mouse,
-          );
-          await tester.pumpAndSettle();
-          expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
+        await tester.tap(
+          key('message_body_m1'),
+          buttons: kSecondaryButton,
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
 
-          await tester.tap(key('message_copy_m1'));
-          await tester.pumpAndSettle();
-          expect(copied, ['m1']);
-        }, variant: desktop);
+        await tester.tap(key('message_copy_m1'));
+        await tester.pumpAndSettle();
+        expect(copied, ['m1']);
+      }, variant: desktop);
 
-        testWidgets('a long press is not the menu\'s ($size)', (tester) async {
-          await pumpAt(
-            tester,
-            QuarkMessageList(messages: linked, onCopy: (_) {}),
-            size: size,
-          );
-
-          await tester.longPress(key('message_body_m1'));
-          await tester.pumpAndSettle();
-
-          expect(find.byType(PopupMenuItem<int>), findsNothing);
-          expect(key('message_menu_m1'), findsOneWidget);
-        }, variant: desktop);
-
-        testWidgets('a link still opens inside the selection area ($size)', (
+      testWidgets('a long press is not the menu\'s', (tester) async {
+        await pumpAt(
           tester,
-        ) async {
-          final opened = <Uri>[];
-          await pumpAt(
-            tester,
-            QuarkMessageList(messages: linked, onOpenLink: opened.add),
-            size: size,
-          );
-          expect(find.byType(SelectionArea), findsOneWidget);
+          QuarkMessageList(messages: linked, onCopy: (_) {}),
+        );
 
-          await tester.tapOnText(find.textRange.ofSubstring('https://a.com/x'));
-          await tester.pump();
+        await tester.longPress(key('message_body_m1'));
+        await tester.pumpAndSettle();
 
-          expect(opened, [Uri.parse('https://a.com/x')]);
-        }, variant: desktop);
-      }
+        expect(find.byType(PopupMenuItem<int>), findsNothing);
+        expect(key('message_menu_m1'), findsOneWidget);
+      }, variant: desktop);
+
+      testWidgets('a link still opens inside the selection area', (
+        tester,
+      ) async {
+        final opened = <Uri>[];
+        await pumpAt(
+          tester,
+          QuarkMessageList(messages: linked, onOpenLink: opened.add),
+        );
+        expect(find.byType(SelectionArea), findsOneWidget);
+
+        await tester.tapOnText(find.textRange.ofSubstring('https://a.com/x'));
+        await tester.pump();
+
+        expect(opened, [Uri.parse('https://a.com/x')]);
+      }, variant: desktop);
     });
   });
 
@@ -914,9 +865,8 @@ void main() {
       await expectTapTargetGuidelines(tester);
     });
 
-    testBothViewports('a viewer without add_reactions only sees them', (
+    testWidgets('a viewer without add_reactions only sees them', (
       tester,
-      size,
     ) async {
       final events = <String>[];
       await pumpAt(
@@ -926,7 +876,6 @@ void main() {
           permissions: ChatPermissionPreset.viewer.permissions,
           onReact: (id, emoji) => events.add('$id $emoji'),
         ),
-        size: size,
       );
 
       expect(find.byKey(const ValueKey('message_react_r1')), findsNothing);
@@ -1345,10 +1294,7 @@ void main() {
     expect(reports.last, isTrue);
   });
 
-  testBothViewports('reports nothing where there is no list', (
-    tester,
-    size,
-  ) async {
+  testWidgets('reports nothing where there is no list', (tester) async {
     final reports = <bool>[];
     for (final list in [
       QuarkMessageList(messages: const [], onAtBottomChanged: reports.add),
@@ -1368,7 +1314,7 @@ void main() {
         onAtBottomChanged: reports.add,
       ),
     ]) {
-      await pumpAt(tester, list, size: size);
+      await pumpAt(tester, list);
     }
 
     expect(reports, isEmpty);
@@ -1483,11 +1429,8 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testBothViewports('without names or a reader nothing is marked', (
-      tester,
-      size,
-    ) async {
-      await pumpAt(tester, QuarkMessageList(messages: mentioning), size: size);
+    testWidgets('without names or a reader nothing is marked', (tester) async {
+      await pumpAt(tester, QuarkMessageList(messages: mentioning));
       expect(mentionsIn(tester, 'm1'), isEmpty);
       expect(find.byKey(const ValueKey('message_mention_m1')), findsNothing);
 
@@ -1497,7 +1440,6 @@ void main() {
           messages: mentioning,
           mentionNames: const ['ada', 'bob'],
         ),
-        size: size,
       );
       expect(mentionsIn(tester, 'm1'), ['@ada']);
       expect(find.byKey(const ValueKey('message_mention_m1')), findsNothing);
@@ -1629,14 +1571,12 @@ void main() {
       },
     );
 
-    testBothViewports('a pointer opens the menu without focusing into it', (
+    testWidgets('a pointer opens the menu without focusing into it', (
       tester,
-      size,
     ) async {
       await pumpAt(
         tester,
         QuarkMessageList(messages: thread(const {}), onReact: (_, _) {}),
-        size: size,
       );
 
       await tester.tap(find.byKey(const ValueKey('message_react_k3')));

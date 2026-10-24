@@ -706,7 +706,9 @@ The package is a separate pub package with no dependency on the app, so it canno
   `make test/probe`) so `ProbeAgent.start` runs. Needs an Android device/emulator, a signed-in Quark with photos for
   `tests/photos.probe`, and `make setup/probe`. Release builds leave the agent off.
 - **Layout survives narrow viewports.** No `Expanded` or `Flexible` inside slivers or other unbounded parents (#1599).
-  Every test file has a narrow (360x640) and a wide (1280x800) case.
+  A test that checks layout (overflow, sizes, positions, text wrapping, what shows at a breakpoint) runs at a narrow
+  (360x640) and a wide (1280x800) viewport through `testBothViewports`. A test that only checks a callback or state
+  runs once, as a plain `testWidgets`. When unsure, run both.
 - **Each widget ships as a set.** One file in `lib/src/<group>/` exported from the barrel; `///` docs on the class
   (purpose, key prefixes, one usage snippet), every constructor parameter, and every callback; one test file
   `test/<group>/<name>_test.dart`; one entry in `examples/widget_gallery/lib/registry.dart` with fake data and callbacks
@@ -715,8 +717,8 @@ The package is a separate pub package with no dependency on the app, so it canno
   fails when an exported widget has no `registry.dart` entry, and again when `docs.g.dart` is stale — run
   `make generate/frontend/widget-docs` after editing a `///` class comment and commit the result.
 - **Tests pump through the shared helper.** `packages/quark_widgets/test/support/pump.dart` gives you `pumpAt`,
-  `narrowViewport` (360x640) and `wideViewport` (1280x800), so a layout that only survives one of them fails
-  the same way in every file.
+  `testBothViewports`, `narrowViewport` (360x640) and `wideViewport` (1280x800), so a layout that only survives
+  one of them fails the same way in every file.
 - **One widget per file, no private widgets.** Every widget class is public and lives in a file named after it, even
   when it has one caller. No `class _Part extends StatelessWidget` inside another widget's file, and no
   `Widget _buildPart()` method that returns a subtree. In the package, a part of one parent lives in

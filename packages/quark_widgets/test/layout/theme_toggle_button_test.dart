@@ -6,12 +6,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('offers dark while the app is light', (tester, size) async {
+  testWidgets('offers dark while the app is light', (tester) async {
     final chosen = <ThemeMode>[];
     await pumpAt(
       tester,
       ThemeToggleButton(mode: ThemeMode.light, onChanged: chosen.add),
-      size: size,
     );
 
     expect(find.byIcon(QuarkIcons.dark_mode_rounded), findsOneWidget);
@@ -23,12 +22,11 @@ void main() {
     expect(chosen, [ThemeMode.dark]);
   });
 
-  testBothViewports('offers light while the app is dark', (tester, size) async {
+  testWidgets('offers light while the app is dark', (tester) async {
     final chosen = <ThemeMode>[];
     await pumpAt(
       tester,
       ThemeToggleButton(mode: ThemeMode.dark, onChanged: chosen.add),
-      size: size,
     );
 
     expect(find.byIcon(QuarkIcons.light_mode_rounded), findsOneWidget);

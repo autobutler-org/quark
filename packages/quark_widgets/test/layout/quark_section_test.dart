@@ -30,10 +30,7 @@ void main() {
     );
   });
 
-  testBothViewports('renders the actions the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the actions the caller handed it', (tester) async {
     final tapped = <String>[];
     await pumpAt(
       tester,
@@ -49,7 +46,6 @@ void main() {
         ],
         child: const Text('two hosts configured'),
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('host_add')));
@@ -58,14 +54,10 @@ void main() {
     expect(tapped, ['add']);
   });
 
-  testBothViewports('renders a glyph only when it is given one', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders a glyph only when it is given one', (tester) async {
     await pumpAt(
       tester,
       const QuarkSection(title: 'Backend hosts', child: Text('content')),
-      size: size,
     );
     expect(find.byType(Icon), findsNothing);
 
@@ -76,16 +68,14 @@ void main() {
         icon: Icons.info_outline,
         child: Text('content'),
       ),
-      size: size,
     );
     expect(find.byIcon(Icons.info_outline), findsOneWidget);
   });
 
-  testBothViewports('emits a key built from the title', (tester, size) async {
+  testWidgets('emits a key built from the title', (tester) async {
     await pumpAt(
       tester,
       const QuarkSection(title: 'Help & Support', child: Text('content')),
-      size: size,
     );
 
     expect(find.byKey(const ValueKey('section_help_support')), findsOneWidget);

@@ -43,7 +43,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('marks only the highlighted row', (tester, size) async {
+  testWidgets('marks only the highlighted row', (tester) async {
     await pumpAt(
       tester,
       QuarkMentionSuggestions(
@@ -51,7 +51,6 @@ void main() {
         highlighted: 'ann',
         onSelect: (_) {},
       ),
-      size: size,
     );
 
     expect(tintOf(tester, 'ann'), isNotNull);

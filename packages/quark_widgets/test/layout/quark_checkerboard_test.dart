@@ -46,14 +46,10 @@ void main() {
     expect(tester.getSize(find.byType(QuarkCheckerboard)), const Size(120, 90));
   });
 
-  testBothViewports('an explicit square size reaches the painter', (
-    tester,
-    size,
-  ) async {
+  testWidgets('an explicit square size reaches the painter', (tester) async {
     await pumpAt(
       tester,
       const QuarkCheckerboard(squareSize: 4, child: Text('artwork')),
-      size: size,
     );
 
     expect(painterOf(tester).squareSize, 4);

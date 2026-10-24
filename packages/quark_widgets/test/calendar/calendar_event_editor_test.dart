@@ -90,39 +90,30 @@ void main() {
     );
   }
 
-  testBothViewports('typing a title reports the new draft', (
-    tester,
-    size,
-  ) async {
+  testWidgets('typing a title reports the new draft', (tester) async {
     final h = _Harness();
-    await pumpAt(tester, h.editor(), size: size);
+    await pumpAt(tester, h.editor());
     await tester.enterText(find.byKey(const ValueKey('event_title')), 'Piano');
     expect(h.changed?.title, 'Piano');
     expect(h.changed?.start, _draft.start);
   });
 
-  testBothViewports('all day hides the times and reports the switch', (
-    tester,
-    size,
-  ) async {
+  testWidgets('all day hides the times and reports the switch', (tester) async {
     final h = _Harness();
-    await pumpAt(tester, h.editor(), size: size);
+    await pumpAt(tester, h.editor());
     await tester.tap(find.byKey(const ValueKey('event_all_day')));
     expect(h.changed?.allDay, isTrue);
 
-    await pumpAt(tester, h.editor(draft: h.changed), size: size);
+    await pumpAt(tester, h.editor(draft: h.changed));
     expect(find.byKey(const ValueKey('event_start_time')), findsNothing);
     expect(find.byKey(const ValueKey('event_end_time')), findsNothing);
     expect(find.byKey(const ValueKey('event_remind_900')), findsOneWidget);
     expect(find.text('Day before, 9 AM'), findsOneWidget);
   });
 
-  testBothViewports('repeat, reminder and color report their picks', (
-    tester,
-    size,
-  ) async {
+  testWidgets('repeat, reminder and color report their picks', (tester) async {
     final h = _Harness();
-    await pumpAt(tester, h.editor(), size: size);
+    await pumpAt(tester, h.editor());
 
     await tester.tap(find.byKey(const ValueKey('event_repeat_weekly')));
     expect(h.changed?.repeat, CalendarRepeat.weekly);
@@ -138,13 +129,9 @@ void main() {
     expect(h.changed?.colorIndex, 3);
   });
 
-  testBothViewports('turning a reminder off clears it', (tester, size) async {
+  testWidgets('turning a reminder off clears it', (tester) async {
     final h = _Harness();
-    await pumpAt(
-      tester,
-      h.editor(draft: _draft.copyWith(reminderMinutes: 30)),
-      size: size,
-    );
+    await pumpAt(tester, h.editor(draft: _draft.copyWith(reminderMinutes: 30)));
     final off = find.byKey(const ValueKey('event_remind_off'));
     await tester.ensureVisible(off);
     await tester.tap(off);
@@ -152,14 +139,10 @@ void main() {
     expect(h.changed!.reminderMinutes, isNull);
   });
 
-  testBothViewports('keeps a saved reminder it does not offer', (
-    tester,
-    size,
-  ) async {
+  testWidgets('keeps a saved reminder it does not offer', (tester) async {
     await pumpAt(
       tester,
       _Harness().editor(draft: _draft.copyWith(reminderMinutes: 1440)),
-      size: size,
     );
     expect(find.byKey(const ValueKey('event_remind_1440')), findsOneWidget);
     expect(find.text('1 day before'), findsOneWidget);
@@ -179,14 +162,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('a timed event has no reminder time button', (
-    tester,
-    size,
-  ) async {
+  testWidgets('a timed event has no reminder time button', (tester) async {
     await pumpAt(
       tester,
       _Harness().editor(draft: _draft.copyWith(reminderMinutes: 15)),
-      size: size,
     );
     expect(find.byKey(const ValueKey('event_remind_time')), findsNothing);
   });
@@ -221,15 +200,11 @@ void main() {
     expect(h.changed?.reminderMinutes, -870);
   });
 
-  testBothViewports('picking a reminder time keeps its day', (
-    tester,
-    size,
-  ) async {
+  testWidgets('picking a reminder time keeps its day', (tester) async {
     final h = _Harness();
     await pumpAt(
       tester,
       h.editor(draft: allDay.copyWith(reminderMinutes: 900)),
-      size: size,
     );
     final time = find.byKey(const ValueKey('event_remind_time'));
     await tester.ensureVisible(time);
@@ -243,17 +218,13 @@ void main() {
     expect(h.changed?.reminderMinutes, 180);
   });
 
-  testBothViewports('says a repeating edit reaches every repeat', (
-    tester,
-    size,
-  ) async {
+  testWidgets('says a repeating edit reaches every repeat', (tester) async {
     await pumpAt(
       tester,
       _Harness().editor(
         draft: _draft.copyWith(repeat: CalendarRepeat.weekly),
         editsSeries: true,
       ),
-      size: size,
     );
     expect(
       find.text('Every week on Thursday. Changes apply to every repeat.'),
@@ -261,28 +232,21 @@ void main() {
     );
   });
 
-  testBothViewports('shows the errors the caller composed', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows the errors the caller composed', (tester) async {
     await pumpAt(
       tester,
       _Harness().editor(
         timeError: 'The event has to end after it starts.',
         saveError: "Couldn't save the event.",
       ),
-      size: size,
     );
     expect(find.text('The event has to end after it starts.'), findsOneWidget);
     expect(find.text("Couldn't save the event."), findsOneWidget);
   });
 
-  testBothViewports('Save, Cancel, close and Delete call back', (
-    tester,
-    size,
-  ) async {
+  testWidgets('Save, Cancel, close and Delete call back', (tester) async {
     final h = _Harness();
-    await pumpAt(tester, h.editor(), size: size);
+    await pumpAt(tester, h.editor());
     await tester.tap(find.byKey(const ValueKey('event_save')));
     await tester.tap(find.byKey(const ValueKey('event_cancel')));
     await tester.tap(find.byKey(const ValueKey('event_close')));
@@ -290,38 +254,31 @@ void main() {
     expect((h.saves, h.cancels, h.deletes), (1, 2, 1));
   });
 
-  testBothViewports('a new event has no Delete', (tester, size) async {
-    await pumpAt(
-      tester,
-      _Harness().editor(isNew: true, withDelete: false),
-      size: size,
-    );
+  testWidgets('a new event has no Delete', (tester) async {
+    await pumpAt(tester, _Harness().editor(isNew: true, withDelete: false));
     expect(find.text('New event'), findsOneWidget);
     expect(find.byKey(const ValueKey('event_delete')), findsNothing);
   });
 
-  testBothViewports('waits while saving', (tester, size) async {
+  testWidgets('waits while saving', (tester) async {
     final h = _Harness();
-    await pumpAt(tester, h.editor(isSaving: true), size: size);
+    await pumpAt(tester, h.editor(isSaving: true));
     expect(find.byType(QuarkLoader), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('event_save')));
     await tester.tap(find.byKey(const ValueKey('event_cancel')));
     expect((h.saves, h.cancels), (0, 0));
   });
 
-  testBothViewports('Save waits for a draft the caller can save', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, _Harness().editor(canSave: false), size: size);
+  testWidgets('Save waits for a draft the caller can save', (tester) async {
+    await pumpAt(tester, _Harness().editor(canSave: false));
     final save = tester.widget<ButtonStyleButton>(
       find.byKey(const ValueKey('event_save')),
     );
     expect(save.onPressed, isNull);
   });
 
-  testBothViewports('a one-off event has no repeat end', (tester, size) async {
-    await pumpAt(tester, _Harness().editor(), size: size);
+  testWidgets('a one-off event has no repeat end', (tester) async {
+    await pumpAt(tester, _Harness().editor());
     expect(find.text('Repeat ends'), findsNothing);
     expect(find.byKey(const ValueKey('event_repeat_ends_on')), findsNothing);
   });
@@ -353,16 +310,15 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('the repeat end opens a date picker from its value', (
+  testWidgets('the repeat end opens a date picker from its value', (
     tester,
-    size,
   ) async {
     final h = _Harness();
     final ending = _draft.copyWith(
       repeat: CalendarRepeat.daily,
       repeatUntil: DateTime(2026, 9, 30),
     );
-    await pumpAt(tester, h.editor(draft: ending), size: size);
+    await pumpAt(tester, h.editor(draft: ending));
     await tester.ensureVisible(
       find.byKey(const ValueKey('event_repeat_until')),
     );
@@ -375,10 +331,7 @@ void main() {
     expect(h.changed?.repeatUntil, DateTime(2026, 9, 25));
   });
 
-  testBothViewports('shows the repeat end error the caller composed', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows the repeat end error the caller composed', (tester) async {
     final early = _draft.copyWith(
       repeat: CalendarRepeat.weekly,
       repeatUntil: DateTime(2026, 9, 1),
@@ -386,7 +339,6 @@ void main() {
     await pumpAt(
       tester,
       _Harness().editor(draft: early, repeatError: 'Too early.'),
-      size: size,
     );
     expect(find.text('Too early.'), findsOneWidget);
   });

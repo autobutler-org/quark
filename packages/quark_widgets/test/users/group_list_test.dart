@@ -23,29 +23,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testBothViewports('shows a spinner while loading and no rows', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      const GroupList(groups: groups, isLoading: true),
-      size: size,
-    );
+  testWidgets('shows a spinner while loading and no rows', (tester) async {
+    await pumpAt(tester, const GroupList(groups: groups, isLoading: true));
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byKey(const ValueKey('group_row_1')), findsNothing);
     expect(find.text('No groups yet'), findsNothing);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the error the caller handed it', (tester) async {
     await pumpAt(
       tester,
       const GroupList(groups: groups, error: "Couldn't load groups."),
-      size: size,
     );
 
     expect(find.text("Couldn't load groups."), findsOneWidget);
@@ -53,11 +42,8 @@ void main() {
     expect(find.byType(QuarkLoader), findsNothing);
   });
 
-  testBothViewports('shows the empty copy when there are no groups', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, const GroupList(groups: []), size: size);
+  testWidgets('shows the empty copy when there are no groups', (tester) async {
+    await pumpAt(tester, const GroupList(groups: []));
 
     expect(find.text('No groups yet'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);
@@ -79,7 +65,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('the built-in group has no menu', (tester, size) async {
+  testWidgets('the built-in group has no menu', (tester) async {
     await pumpAt(
       tester,
       GroupList(
@@ -88,16 +74,14 @@ void main() {
         onRename: (_) {},
         onDelete: (_) {},
       ),
-      size: size,
     );
 
     expect(find.byKey(const ValueKey('group_menu_1')), findsNothing);
     expect(find.byKey(const ValueKey('group_menu_2')), findsOneWidget);
   });
 
-  testBothViewports('reports each action with the group it came from', (
+  testWidgets('reports each action with the group it came from', (
     tester,
-    size,
   ) async {
     final events = <String>[];
     await pumpAt(
@@ -108,7 +92,6 @@ void main() {
         onRename: (id) => events.add('rename $id'),
         onDelete: (id) => events.add('delete $id'),
       ),
-      size: size,
     );
 
     for (final (action, id) in [('members', 2), ('rename', 3), ('delete', 4)]) {
@@ -120,13 +103,9 @@ void main() {
     expect(events, ['members 2', 'rename 3', 'delete 4']);
   });
 
-  testBothViewports('the new-group button reports a tap', (tester, size) async {
+  testWidgets('the new-group button reports a tap', (tester) async {
     var created = 0;
-    await pumpAt(
-      tester,
-      GroupList(groups: groups, onCreate: () => created++),
-      size: size,
-    );
+    await pumpAt(tester, GroupList(groups: groups, onCreate: () => created++));
 
     await tester.tap(find.byKey(const ValueKey('group_create')));
     await tester.pump();

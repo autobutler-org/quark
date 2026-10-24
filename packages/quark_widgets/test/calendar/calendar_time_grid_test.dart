@@ -168,15 +168,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('an empty day says it has no all-day events', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      _grid(days: [_today], events: const []),
-      size: size,
-    );
+  testWidgets('an empty day says it has no all-day events', (tester) async {
+    await pumpAt(tester, _grid(days: [_today], events: const []));
     expect(find.text('No all-day events'), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar_now_line')), findsNothing);
   });
@@ -205,27 +198,19 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('an empty hour creates at that hour', (tester, size) async {
+  testWidgets('an empty hour creates at that hour', (tester) async {
     DateTime? start;
     await pumpAt(
       tester,
       _grid(days: [_today], events: const [], onSlotTap: (s) => start = s),
-      size: size,
     );
     await tester.tap(find.byKey(const ValueKey('calendar_slot_2026-09-29_13')));
     expect(start, DateTime(2026, 9, 29, 13));
   });
 
-  testBothViewports('an event block calls back with its occurrence', (
-    tester,
-    size,
-  ) async {
+  testWidgets('an event block calls back with its occurrence', (tester) async {
     CalendarEventItem? tapped;
-    await pumpAt(
-      tester,
-      _grid(days: [_today], onEventTap: (e) => tapped = e),
-      size: size,
-    );
+    await pumpAt(tester, _grid(days: [_today], onEventTap: (e) => tapped = e));
     await tester.tap(find.byKey(const ValueKey('calendar_event_2_2026-09-29')));
     expect(tapped, _lunch);
   });
@@ -683,22 +668,14 @@ void main() {
       return mouse;
     }
 
-    testBothViewports('clears when the span changes', (tester, size) async {
+    testWidgets('clears when the span changes', (tester) async {
       final week = CalendarDates.weekOf(_today);
-      await pumpAt(
-        tester,
-        _grid(days: week, onSlotTap: (_) {}),
-        size: size,
-      );
+      await pumpAt(tester, _grid(days: week, onSlotTap: (_) {}));
       await mouseAt(tester, slot(tester, _today, 13));
       expect(ghosts(), 1);
 
       final next = [for (final d in week) CalendarDates.addDays(d, 7)];
-      await pumpAt(
-        tester,
-        _grid(days: next, onSlotTap: (_) {}),
-        size: size,
-      );
+      await pumpAt(tester, _grid(days: next, onSlotTap: (_) {}));
       expect(ghosts(), 0);
     });
 
@@ -726,7 +703,7 @@ void main() {
       expect(ghosts(), 1);
     });
 
-    testBothViewports('clears when its slot is tapped', (tester, size) async {
+    testWidgets('clears when its slot is tapped', (tester) async {
       DateTime? tapped;
       await pumpAt(
         tester,
@@ -734,7 +711,6 @@ void main() {
           days: CalendarDates.weekOf(_today),
           onSlotTap: (start) => tapped = start,
         ),
-        size: size,
       );
       final at = slot(tester, _today, 13);
       final mouse = await mouseAt(tester, at);
@@ -862,15 +838,11 @@ void main() {
       },
     );
 
-    testBothViewports('clears the hint when the press is canceled', (
-      tester,
-      size,
-    ) async {
+    testWidgets('clears the hint when the press is canceled', (tester) async {
       final sunday = CalendarDates.weekOf(_today).first;
       await pumpAt(
         tester,
         _grid(days: CalendarDates.weekOf(_today), onSlotTap: (_) {}),
-        size: size,
       );
       final start = slot(tester, sunday, 13);
       final mouse = await mouseAt(tester, start);
@@ -1170,9 +1142,9 @@ void main() {
       expect(moves, [(_vet, at(29, 16), at(29, 16, 15))]);
     }, variant: TargetPlatformVariant.desktop());
 
-    testBothViewports('Alt and an arrow move the focused event, and with '
-        'Shift its end', (tester, size) async {
-      final moves = await pumpVet(tester, [_today], size);
+    testWidgets('Alt and an arrow move the focused event, and with '
+        'Shift its end', (tester) async {
+      final moves = await pumpVet(tester, [_today], wideViewport);
       Focus.of(tester.element(find.text('Vet'))).requestFocus();
       await tester.pump();
 

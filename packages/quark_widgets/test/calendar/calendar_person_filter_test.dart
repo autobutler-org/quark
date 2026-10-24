@@ -30,7 +30,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('Everyone and My events call back', (tester, size) async {
+  testWidgets('Everyone and My events call back', (tester) async {
     final tapped = <String>[];
     await pumpAt(
       tester,
@@ -39,14 +39,13 @@ void main() {
         onEveryone: () => tapped.add('everyone'),
         onMine: () => tapped.add('mine'),
       ),
-      size: size,
     );
     await tester.tap(find.byKey(const ValueKey('calendar_filter_mine')));
     await tester.tap(find.byKey(const ValueKey('calendar_filter_everyone')));
     expect(tapped, ['mine', 'everyone']);
   });
 
-  testBothViewports('the person chip picks one person', (tester, size) async {
+  testWidgets('the person chip picks one person', (tester) async {
     String? picked;
     await pumpAt(
       tester,
@@ -57,7 +56,6 @@ void main() {
         onMine: () {},
         onPerson: (name) => picked = name,
       ),
-      size: size,
     );
     expect(find.text('Person'), findsOneWidget);
     final chip = find.byKey(const ValueKey('calendar_filter_people'));

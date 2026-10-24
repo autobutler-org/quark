@@ -35,40 +35,26 @@ void main() {
     ),
   ];
 
-  testBothViewports('shows a spinner while loading and no rows', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      QuarkMemberList(members: members, isLoading: true),
-      size: size,
-    );
+  testWidgets('shows a spinner while loading and no rows', (tester) async {
+    await pumpAt(tester, QuarkMemberList(members: members, isLoading: true));
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byKey(const ValueKey('member_row_ada')), findsNothing);
     expect(find.text('No members yet'), findsNothing);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the error the caller handed it', (tester) async {
     await pumpAt(
       tester,
       QuarkMemberList(members: members, error: "Couldn't load members."),
-      size: size,
     );
 
     expect(find.text("Couldn't load members."), findsOneWidget);
     expect(find.byKey(const ValueKey('member_row_ada')), findsNothing);
   });
 
-  testBothViewports('shows the empty copy when there are no members', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, const QuarkMemberList(members: []), size: size);
+  testWidgets('shows the empty copy when there are no members', (tester) async {
+    await pumpAt(tester, const QuarkMemberList(members: []));
 
     expect(find.text('No members yet'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);
@@ -92,23 +78,18 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('lists a group\'s accounts when it is expanded', (
-    tester,
-    size,
-  ) async {
+  testWidgets('lists a group\'s accounts when it is expanded', (tester) async {
     await pumpAt(
       tester,
       QuarkMemberList(members: members, expandedIds: const {'family'}),
-      size: size,
     );
 
     expect(find.byKey(const ValueKey('member_row_family_bob')), findsOneWidget);
     expect(find.byKey(const ValueKey('member_row_family_cy')), findsOneWidget);
   });
 
-  testBothViewports('reports the group that was tapped, not accounts', (
+  testWidgets('reports the group that was tapped, not accounts', (
     tester,
-    size,
   ) async {
     final toggled = <String>[];
     await pumpAt(
@@ -118,7 +99,6 @@ void main() {
         expandedIds: const {'family'},
         onToggleExpanded: toggled.add,
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('member_row_ada')));
@@ -129,10 +109,7 @@ void main() {
     expect(toggled, ['family']);
   });
 
-  testBothViewports('hands account ids to the avatar builder', (
-    tester,
-    size,
-  ) async {
+  testWidgets('hands account ids to the avatar builder', (tester) async {
     final ids = <String>[];
     await pumpAt(
       tester,
@@ -144,7 +121,6 @@ void main() {
           return const SizedBox();
         },
       ),
-      size: size,
     );
 
     expect(ids, ['ada', 'bob', 'cy', 'dee', 'eve']);
@@ -175,10 +151,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('shows a viewer no member-management buttons', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows a viewer no member-management buttons', (tester) async {
     await pumpAt(
       tester,
       QuarkMemberList(
@@ -187,7 +160,6 @@ void main() {
         onAddMembers: () {},
         onRemove: (_) {},
       ),
-      size: size,
     );
 
     expect(find.byKey(const ValueKey('member_list_add')), findsNothing);

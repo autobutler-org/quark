@@ -19,44 +19,42 @@ ButtonStyle _styleOf(WidgetTester tester, Key key) => tester
 /// which of the two it is drawn on. `QuarkChrome` is how it finds out.
 void main() {
   for (final brightness in Brightness.values) {
-    testBothViewports(
-      '${brightness.name}: tokens under it are the chrome set',
-      (tester, size) async {
-        late QuarkTokens outside;
-        late QuarkTokens inside;
-        late bool outsideIsOn;
-        late bool insideIsOn;
-        await pumpAt(
-          tester,
-          Builder(
-            builder: (context) {
-              outside = QuarkTokens.of(context);
-              outsideIsOn = QuarkChrome.isOn(context);
-              return QuarkChrome(
-                child: Builder(
-                  builder: (context) {
-                    inside = QuarkTokens.of(context);
-                    insideIsOn = QuarkChrome.isOn(context);
-                    return const SizedBox.shrink();
-                  },
-                ),
-              );
-            },
-          ),
-          size: size,
-          brightness: brightness,
-          themeColor: QuarkThemeColor.violet,
-        );
+    testWidgets('${brightness.name}: tokens under it are the chrome set', (
+      tester,
+    ) async {
+      late QuarkTokens outside;
+      late QuarkTokens inside;
+      late bool outsideIsOn;
+      late bool insideIsOn;
+      await pumpAt(
+        tester,
+        Builder(
+          builder: (context) {
+            outside = QuarkTokens.of(context);
+            outsideIsOn = QuarkChrome.isOn(context);
+            return QuarkChrome(
+              child: Builder(
+                builder: (context) {
+                  inside = QuarkTokens.of(context);
+                  insideIsOn = QuarkChrome.isOn(context);
+                  return const SizedBox.shrink();
+                },
+              ),
+            );
+          },
+        ),
+        brightness: brightness,
+        themeColor: QuarkThemeColor.violet,
+      );
 
-        final tokens = QuarkThemeColor.violet.tokensFor(brightness);
-        expect(outsideIsOn, isFalse);
-        expect(insideIsOn, isTrue);
-        expect(outside, tokens);
-        expect(inside, tokens.onChrome);
-        expect(inside.foreground, tokens.chromeForeground);
-        expect(inside, isNot(outside));
-      },
-    );
+      final tokens = QuarkThemeColor.violet.tokensFor(brightness);
+      expect(outsideIsOn, isFalse);
+      expect(insideIsOn, isTrue);
+      expect(outside, tokens);
+      expect(inside, tokens.onChrome);
+      expect(inside.foreground, tokens.chromeForeground);
+      expect(inside, isNot(outside));
+    });
 
     testBothViewports(
       '${brightness.name}: the same bar button draws for where it sits',
@@ -110,10 +108,7 @@ void main() {
     );
   }
 
-  testBothViewports('classic draws the same on chrome as off it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('classic draws the same on chrome as off it', (tester) async {
     late QuarkTokens inside;
     await pumpAt(
       tester,
@@ -125,16 +120,12 @@ void main() {
           },
         ),
       ),
-      size: size,
     );
 
     expect(inside, QuarkTokens.dark);
   });
 
-  testBothViewports('a menu opened from the chrome is not on it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('a menu opened from the chrome is not on it', (tester) async {
     late QuarkTokens inMenu;
     await pumpAt(
       tester,
@@ -159,7 +150,6 @@ void main() {
           ),
         ),
       ),
-      size: size,
       themeColor: QuarkThemeColor.lime,
     );
 

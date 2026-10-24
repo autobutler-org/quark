@@ -12,14 +12,10 @@ void main() {
     UserAccountItem(username: 'cy', status: UserAccountStatus.pending),
   ];
 
-  testBothViewports('shows a spinner while loading and no rows', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows a spinner while loading and no rows', (tester) async {
     await pumpAt(
       tester,
       const PendingRequestList(requests: requests, isLoading: true),
-      size: size,
     );
 
     expect(find.byType(QuarkLoader), findsOneWidget);
@@ -27,22 +23,18 @@ void main() {
     expect(find.text('No requests waiting'), findsNothing);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the error the caller handed it', (tester) async {
     await pumpAt(
       tester,
       const PendingRequestList(requests: requests, error: 'Nope.'),
-      size: size,
     );
 
     expect(find.text('Nope.'), findsOneWidget);
     expect(find.byKey(const ValueKey('request_row_bob')), findsNothing);
   });
 
-  testBothViewports('says so when nobody is waiting', (tester, size) async {
-    await pumpAt(tester, const PendingRequestList(requests: []), size: size);
+  testWidgets('says so when nobody is waiting', (tester) async {
+    await pumpAt(tester, const PendingRequestList(requests: []));
 
     expect(find.text('No requests waiting'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);

@@ -23,29 +23,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testBothViewports('shows a spinner while loading and no rows', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      const UserList(users: users, isLoading: true),
-      size: size,
-    );
+  testWidgets('shows a spinner while loading and no rows', (tester) async {
+    await pumpAt(tester, const UserList(users: users, isLoading: true));
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byKey(const ValueKey('user_row_ada')), findsNothing);
     expect(find.text('No accounts yet'), findsNothing);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the error the caller handed it', (tester) async {
     await pumpAt(
       tester,
       const UserList(users: users, error: "Couldn't load the accounts."),
-      size: size,
     );
 
     expect(find.text("Couldn't load the accounts."), findsOneWidget);
@@ -53,11 +42,10 @@ void main() {
     expect(find.byType(QuarkLoader), findsNothing);
   });
 
-  testBothViewports('shows the empty copy when there are no accounts', (
+  testWidgets('shows the empty copy when there are no accounts', (
     tester,
-    size,
   ) async {
-    await pumpAt(tester, const UserList(users: []), size: size);
+    await pumpAt(tester, const UserList(users: []));
 
     expect(find.text('No accounts yet'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);
@@ -81,10 +69,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('offers promote for an active non-admin', (
-    tester,
-    size,
-  ) async {
+  testWidgets('offers promote for an active non-admin', (tester) async {
     final promoted = <String>[];
     await pumpAt(
       tester,
@@ -93,7 +78,6 @@ void main() {
         onPromote: promoted.add,
         onDemote: (_) => fail('demote offered to a non-admin'),
       ),
-      size: size,
     );
 
     await openMenu(tester, 'bob');
@@ -104,12 +88,11 @@ void main() {
     expect(promoted, ['bob']);
   });
 
-  testBothViewports('offers demote for an admin', (tester, size) async {
+  testWidgets('offers demote for an admin', (tester) async {
     final demoted = <String>[];
     await pumpAt(
       tester,
       UserList(users: users, onPromote: (_) {}, onDemote: demoted.add),
-      size: size,
     );
 
     await openMenu(tester, 'ada');
@@ -120,7 +103,7 @@ void main() {
     expect(demoted, ['ada']);
   });
 
-  testBothViewports('offers nothing on your own row', (tester, size) async {
+  testWidgets('offers nothing on your own row', (tester) async {
     await pumpAt(
       tester,
       UserList(
@@ -129,7 +112,6 @@ void main() {
         onPromote: (_) {},
         onDemote: (_) {},
       ),
-      size: size,
     );
 
     expect(find.byKey(const ValueKey('user_menu_ada')), findsNothing);
@@ -150,9 +132,8 @@ void main() {
     expect(find.byType(PopupMenuButton<VoidCallback>), findsNothing);
   });
 
-  testBothViewports('disables an active account and enables a disabled one', (
+  testWidgets('disables an active account and enables a disabled one', (
     tester,
-    size,
   ) async {
     final events = <String>[];
     await pumpAt(
@@ -162,7 +143,6 @@ void main() {
         onDisable: (u) => events.add('disable $u'),
         onEnable: (u) => events.add('enable $u'),
       ),
-      size: size,
     );
 
     await openMenu(tester, 'bob');
@@ -180,15 +160,11 @@ void main() {
     expect(events, ['disable bob', 'enable cy']);
   });
 
-  testBothViewports('offers delete on every account but your own', (
-    tester,
-    size,
-  ) async {
+  testWidgets('offers delete on every account but your own', (tester) async {
     final deleted = <String>[];
     await pumpAt(
       tester,
       UserList(users: users, selfUsername: 'ada', onDelete: deleted.add),
-      size: size,
     );
 
     expect(find.byKey(const ValueKey('user_menu_ada')), findsNothing);

@@ -167,14 +167,12 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('left-handed keeps what is in a slot reading the same', (
+  testWidgets('left-handed keeps what is in a slot reading the same', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
       page(leftHanded: true, middle: const Text('breadcrumbs')),
-      size: size,
       scaffold: false,
     );
 

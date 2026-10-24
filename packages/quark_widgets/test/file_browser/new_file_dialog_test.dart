@@ -26,11 +26,8 @@ void main() {
     return created;
   }
 
-  testBothViewports('offers every type and defaults to the first', (
-    tester,
-    size,
-  ) async {
-    await pumpDialog(tester, size: size);
+  testWidgets('offers every type and defaults to the first', (tester) async {
+    await pumpDialog(tester);
 
     for (final type in kNewFileTypes) {
       expect(find.text(type.label), findsOneWidget);
@@ -42,11 +39,8 @@ void main() {
     expect(find.text('.qdoc'), findsOneWidget);
   });
 
-  testBothViewports('appends the selected extension to the name', (
-    tester,
-    size,
-  ) async {
-    final created = await pumpDialog(tester, size: size);
+  testWidgets('appends the selected extension to the name', (tester) async {
+    final created = await pumpDialog(tester);
 
     await tester.enterText(
       find.byKey(const ValueKey('new_file_name')),
@@ -58,11 +52,8 @@ void main() {
     expect(created, ['notes.qdoc']);
   });
 
-  testBothViewports('hints a name that matches the selected type', (
-    tester,
-    size,
-  ) async {
-    await pumpDialog(tester, size: size);
+  testWidgets('hints a name that matches the selected type', (tester) async {
+    await pumpDialog(tester);
 
     expect(find.text('Untitled document'), findsOneWidget);
 
@@ -85,11 +76,8 @@ void main() {
     expect(find.text('Untitled document'), findsNothing);
   });
 
-  testBothViewports('switches the extension with the type', (
-    tester,
-    size,
-  ) async {
-    final created = await pumpDialog(tester, size: size);
+  testWidgets('switches the extension with the type', (tester) async {
+    final created = await pumpDialog(tester);
 
     await tester.tap(find.byKey(const ValueKey('new_file_type_qsheet')));
     await tester.pump();
@@ -151,34 +139,30 @@ void main() {
     expect(events, ['cancel']);
   });
 
-  testBothViewports(
-    'announces each type as a choice, the picked one selected',
-    (tester, size) async {
-      await pumpDialog(tester, size: size);
-      final handle = tester.ensureSemantics();
-      await tester.tap(find.byKey(const ValueKey('new_file_type_qsheet')));
-      await tester.pump();
+  testWidgets('announces each type as a choice, the picked one selected', (
+    tester,
+  ) async {
+    await pumpDialog(tester);
+    final handle = tester.ensureSemantics();
+    await tester.tap(find.byKey(const ValueKey('new_file_type_qsheet')));
+    await tester.pump();
 
-      for (final (slug, selected) in const [
-        ('qsheet', true),
-        ('qdoc', false),
-      ]) {
-        final flags = tester
-            .getSemantics(find.byKey(ValueKey('new_file_type_$slug')))
-            .flagsCollection;
-        expect(flags.isButton, isTrue, reason: slug);
-        expect(flags.isInMutuallyExclusiveGroup, isTrue, reason: slug);
-        expect(flags.isSelected, selected ? Tristate.isTrue : Tristate.isFalse);
-      }
-      handle.dispose();
-      await expectTapTargetGuidelines(tester);
-    },
-  );
+    for (final (slug, selected) in const [('qsheet', true), ('qdoc', false)]) {
+      final flags = tester
+          .getSemantics(find.byKey(ValueKey('new_file_type_$slug')))
+          .flagsCollection;
+      expect(flags.isButton, isTrue, reason: slug);
+      expect(flags.isInMutuallyExclusiveGroup, isTrue, reason: slug);
+      expect(flags.isSelected, selected ? Tristate.isTrue : Tristate.isFalse);
+    }
+    handle.dispose();
+    await expectTapTargetGuidelines(tester);
+  });
 
   // #2604: the type cards were bare gesture detectors a keyboard could not
   // reach.
-  testBothViewports('a type is picked from the keyboard', (tester, size) async {
-    final created = await pumpDialog(tester, size: size);
+  testWidgets('a type is picked from the keyboard', (tester) async {
+    final created = await pumpDialog(tester);
     final handle = tester.ensureSemantics();
 
     final card = find.byKey(const ValueKey('new_file_type_qdoc'));

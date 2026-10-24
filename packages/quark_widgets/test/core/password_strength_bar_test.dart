@@ -5,25 +5,15 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('names the level for a strong password', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      const PasswordStrengthBar(password: 'Tr0ub4dor&3xyz'),
-      size: size,
-    );
+  testWidgets('names the level for a strong password', (tester) async {
+    await pumpAt(tester, const PasswordStrengthBar(password: 'Tr0ub4dor&3xyz'));
     await tester.pumpAndSettle();
 
     expect(find.text('Very strong'), findsOneWidget);
   });
 
-  testBothViewports('shows no label at all for an empty password', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, const PasswordStrengthBar(password: ''), size: size);
+  testWidgets('shows no label at all for an empty password', (tester) async {
+    await pumpAt(tester, const PasswordStrengthBar(password: ''));
     await tester.pumpAndSettle();
 
     expect(find.byType(Text), findsNothing);

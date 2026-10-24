@@ -138,11 +138,8 @@ void main() {
 
   // #2604: the button's own border replaced the theme's focus outline, so on
   // its input fill a keyboard user could not see it was focused.
-  testBothViewports('wears the focus outline while focused', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, chip(onPressed: () {}), size: size);
+  testWidgets('wears the focus outline while focused', (tester) async {
+    await pumpAt(tester, chip(onPressed: () {}));
     expect(buttonSide(tester, find.byKey(key)).width, lessThan(2));
 
     await tabTo(tester, find.byKey(key));

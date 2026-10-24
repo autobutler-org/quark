@@ -56,19 +56,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('the add button calls onAdd', (tester, size) async {
-    await pumpAt(tester, strip(three), size: size);
+  testWidgets('the add button calls onAdd', (tester) async {
+    await pumpAt(tester, strip(three));
 
     await tester.tap(find.byKey(const ValueKey('sheet_tab_add')));
 
     expect(events, ['add']);
   });
 
-  testBothViewports('tapping an unselected tab selects it', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, strip(three), size: size);
+  testWidgets('tapping an unselected tab selects it', (tester) async {
+    await pumpAt(tester, strip(three));
 
     await tester.tap(tab(1));
     await tester.pumpAndSettle();
@@ -163,11 +160,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('the selected tab menu button opens its menu', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, strip(three), size: size);
+  testWidgets('the selected tab menu button opens its menu', (tester) async {
+    await pumpAt(tester, strip(three));
 
     await tester.tap(menuButton(0));
     await tester.pumpAndSettle();
@@ -180,11 +174,10 @@ void main() {
     expect(events, ['rename 0']);
   });
 
-  testBothViewports('an unselected tab menu button opens its menu only', (
+  testWidgets('an unselected tab menu button opens its menu only', (
     tester,
-    size,
   ) async {
-    await pumpAt(tester, strip(three), size: size);
+    await pumpAt(tester, strip(three));
     await tester.ensureVisible(menuButton(2));
     await tester.pumpAndSettle();
 
@@ -205,11 +198,10 @@ void main() {
     ('move_left', 'move_left 2'),
     ('delete', 'delete 2'),
   ]) {
-    testBothViewports('long-press then $action calls back with the index', (
+    testWidgets('long-press then $action calls back with the index', (
       tester,
-      size,
     ) async {
-      await pumpAt(tester, strip(three), size: size);
+      await pumpAt(tester, strip(three));
 
       await tester.ensureVisible(tab(2));
       await tester.pumpAndSettle();
@@ -223,11 +215,8 @@ void main() {
     });
   }
 
-  testBothViewports('move right calls back with the index', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, strip(three), size: size);
+  testWidgets('move right calls back with the index', (tester) async {
+    await pumpAt(tester, strip(three));
 
     await tester.tap(tab(0));
     await tester.pumpAndSettle();
@@ -237,11 +226,8 @@ void main() {
     expect(events, ['move_right 0']);
   });
 
-  testBothViewports('move left is disabled on the first tab', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, strip(three), size: size);
+  testWidgets('move left is disabled on the first tab', (tester) async {
+    await pumpAt(tester, strip(three));
 
     await tester.tap(tab(0));
     await tester.pumpAndSettle();
@@ -253,11 +239,8 @@ void main() {
     expect(events, isEmpty);
   });
 
-  testBothViewports('move right is disabled on the last tab', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, strip(three), size: size);
+  testWidgets('move right is disabled on the last tab', (tester) async {
+    await pumpAt(tester, strip(three));
 
     await tester.ensureVisible(tab(2));
     await tester.pumpAndSettle();
@@ -268,11 +251,10 @@ void main() {
     expect(isEnabled(tester, 'move_left'), isTrue);
   });
 
-  testBothViewports('only one tab: delete and both moves are disabled', (
+  testWidgets('only one tab: delete and both moves are disabled', (
     tester,
-    size,
   ) async {
-    await pumpAt(tester, strip(const ['Sheet 1']), size: size);
+    await pumpAt(tester, strip(const ['Sheet 1']));
 
     await tester.tap(tab(0));
     await tester.pumpAndSettle();

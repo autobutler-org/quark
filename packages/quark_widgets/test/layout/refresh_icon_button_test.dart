@@ -7,12 +7,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('refreshes through its callback', (tester, size) async {
+  testWidgets('refreshes through its callback', (tester) async {
     var refreshes = 0;
     await pumpAt(
       tester,
       RefreshIconButton(isRefreshing: false, onPressed: () => refreshes++),
-      size: size,
     );
 
     expect(find.byIcon(QuarkIcons.refresh), findsOneWidget);
@@ -23,15 +22,11 @@ void main() {
     expect(refreshes, 1);
   });
 
-  testBothViewports('spins and refuses taps while refreshing', (
-    tester,
-    size,
-  ) async {
+  testWidgets('spins and refuses taps while refreshing', (tester) async {
     var refreshes = 0;
     await pumpAt(
       tester,
       RefreshIconButton(isRefreshing: true, onPressed: () => refreshes++),
-      size: size,
     );
 
     expect(find.byType(QuarkLoader), findsOneWidget);
@@ -70,9 +65,8 @@ void main() {
     expect(find.byTooltip('Reload photos'), findsOneWidget);
   });
 
-  testBothViewports('looks the same inside an app bar as outside one', (
+  testWidgets('looks the same inside an app bar as outside one', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
@@ -92,7 +86,6 @@ void main() {
           ),
         ],
       ),
-      size: size,
     );
 
     RenderParagraph glyph(String key) => tester.renderObject(

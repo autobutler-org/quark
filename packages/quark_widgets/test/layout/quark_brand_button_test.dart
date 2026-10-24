@@ -6,16 +6,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('shows the label and calls back on tap', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows the label and calls back on tap', (tester) async {
     var taps = 0;
-    await pumpAt(
-      tester,
-      QuarkBrandButton(label: 'Files', onTap: () => taps++),
-      size: size,
-    );
+    await pumpAt(tester, QuarkBrandButton(label: 'Files', onTap: () => taps++));
 
     expect(find.text('Files'), findsOneWidget);
     expect(find.byIcon(QuarkIcons.storage_rounded), findsOneWidget);
@@ -26,7 +19,7 @@ void main() {
     expect(taps, 1);
   });
 
-  testBothViewports('renders the icon it is given', (tester, size) async {
+  testWidgets('renders the icon it is given', (tester) async {
     await pumpAt(
       tester,
       QuarkBrandButton(
@@ -34,7 +27,6 @@ void main() {
         icon: QuarkIcons.photo_library_outlined,
         onTap: () {},
       ),
-      size: size,
     );
 
     expect(find.byIcon(QuarkIcons.photo_library_outlined), findsOneWidget);

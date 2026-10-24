@@ -45,7 +45,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('is a button when given onTap', (tester, size) async {
+  testWidgets('is a button when given onTap', (tester) async {
     var taps = 0;
     await pumpAt(
       tester,
@@ -54,7 +54,6 @@ void main() {
         label: 'Home',
         onTap: () => taps++,
       ),
-      size: size,
     );
     await tester.tap(find.byKey(const ValueKey('connection_indicator')));
     expect(taps, 1);

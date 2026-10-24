@@ -29,12 +29,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('confirms and cancels through the prefixed keys', (
-    tester,
-    size,
-  ) async {
+  testWidgets('confirms and cancels through the prefixed keys', (tester) async {
     final events = <String>[];
-    await pumpAt(tester, dialog(events), size: size);
+    await pumpAt(tester, dialog(events));
 
     await tester.tap(find.byKey(const ValueKey('delete_user_cancel')));
     await tester.tap(find.byKey(const ValueKey('delete_user_confirm')));
@@ -145,10 +142,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('a step that loses nothing draws a plain button', (
-    tester,
-    size,
-  ) async {
+  testWidgets('a step that loses nothing draws a plain button', (tester) async {
     await pumpAt(
       tester,
       ConfirmDeleteDialog(
@@ -160,7 +154,6 @@ void main() {
         onConfirm: () {},
         onCancel: () {},
       ),
-      size: size,
     );
 
     final button = tester.widget<FilledButton>(

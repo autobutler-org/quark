@@ -55,8 +55,8 @@ void main() {
     );
   }
 
-  testBothViewports('shows the name and the item count', (tester, size) async {
-    await pumpTile(tester, size: size);
+  testWidgets('shows the name and the item count', (tester) async {
+    await pumpTile(tester);
 
     expect(find.text('Trips'), findsOneWidget);
     expect(find.text('12'), findsOneWidget);
@@ -72,21 +72,15 @@ void main() {
     expect(find.text('0'), findsNothing);
   });
 
-  testBothViewports('keeps children hidden until the id is expanded', (
-    tester,
-    size,
-  ) async {
-    await pumpTile(tester, size: size);
+  testWidgets('keeps children hidden until the id is expanded', (tester) async {
+    await pumpTile(tester);
 
     expect(find.text('Iceland'), findsNothing);
     expect(find.byIcon(QuarkIcons.chevron_right_rounded), findsOneWidget);
   });
 
-  testBothViewports('renders the children of an expanded album', (
-    tester,
-    size,
-  ) async {
-    await pumpTile(tester, size: size, expandedIds: const {1});
+  testWidgets('renders the children of an expanded album', (tester) async {
+    await pumpTile(tester, expandedIds: const {1});
 
     expect(find.text('Iceland'), findsOneWidget);
     expect(find.text('Japan'), findsOneWidget);
@@ -105,12 +99,11 @@ void main() {
     );
   });
 
-  testBothViewports('reports the album that was tapped, at any depth', (
+  testWidgets('reports the album that was tapped, at any depth', (
     tester,
-    size,
   ) async {
     final events = <String>[];
-    await pumpTile(tester, size: size, expandedIds: const {1}, events: events);
+    await pumpTile(tester, expandedIds: const {1}, events: events);
 
     await tester.tap(find.byKey(const ValueKey('album_tile_1')));
     await tester.tap(find.byKey(const ValueKey('album_tile_3')));
@@ -119,12 +112,9 @@ void main() {
     expect(events, ['select:1', 'select:3']);
   });
 
-  testBothViewports('sends expansion out instead of keeping it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('sends expansion out instead of keeping it', (tester) async {
     final events = <String>[];
-    await pumpTile(tester, size: size, events: events);
+    await pumpTile(tester, events: events);
 
     await tester.tap(find.byKey(const ValueKey('album_expand_1')));
     await tester.pump();
@@ -144,13 +134,8 @@ void main() {
     expect(find.byKey(const ValueKey('album_expand_7')), findsNothing);
   });
 
-  testBothViewports('marks the selected album', (tester, size) async {
-    await pumpTile(
-      tester,
-      size: size,
-      selectedAlbumId: 2,
-      expandedIds: const {1},
-    );
+  testWidgets('marks the selected album', (tester) async {
+    await pumpTile(tester, selectedAlbumId: 2, expandedIds: const {1});
 
     final selected = tester.widget<Text>(find.text('Iceland'));
     final unselected = tester.widget<Text>(find.text('Trips'));
@@ -199,9 +184,9 @@ void main() {
     expect(events, ['menu:1', 'menu:3']);
   });
 
-  testBothViewports('right-click opens the same menu', (tester, size) async {
+  testWidgets('right-click opens the same menu', (tester) async {
     final events = <String>[];
-    await pumpTile(tester, size: size, withMenu: true, events: events);
+    await pumpTile(tester, withMenu: true, events: events);
 
     await tester.tap(
       find.byKey(const ValueKey('album_tile_1')),
@@ -229,9 +214,9 @@ void main() {
     expect(positions, [row, button.bottomLeft]);
   });
 
-  testBothViewports('offers no menu without a handler', (tester, size) async {
+  testWidgets('offers no menu without a handler', (tester) async {
     final events = <String>[];
-    await pumpTile(tester, size: size, events: events);
+    await pumpTile(tester, events: events);
 
     expect(find.byKey(const ValueKey('album_menu_1')), findsNothing);
     await tester.tap(

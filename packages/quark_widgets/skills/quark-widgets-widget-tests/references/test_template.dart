@@ -28,53 +28,38 @@ const threeThings = [
 void main() {
   // 1. Every declared state renders, and hides the others.
 
-  testBothViewports('shows a spinner while loading', (tester, size) async {
-    await pumpAt(
-      tester,
-      const ThingList(items: [], isLoading: true),
-      size: size,
-    );
+  testWidgets('shows a spinner while loading', (tester) async {
+    await pumpAt(tester, const ThingList(items: [], isLoading: true));
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.text('Nothing here yet'), findsNothing);
   });
 
-  testBothViewports('shows the empty copy when there is nothing', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, const ThingList(items: []), size: size);
+  testWidgets('shows the empty copy when there is nothing', (tester) async {
+    await pumpAt(tester, const ThingList(items: []));
 
     expect(find.text('Nothing here yet'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);
   });
 
-  testBothViewports('renders the error the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('renders the error the caller handed it', (tester) async {
     // The package never composes error copy. It renders the caller's string.
-    await pumpAt(
-      tester,
-      const ThingList(items: [], error: 'Host unreachable'),
-      size: size,
-    );
+    await pumpAt(tester, const ThingList(items: [], error: 'Host unreachable'));
 
     expect(find.text('Host unreachable'), findsOneWidget);
   });
 
-  testBothViewports('renders one row per item', (tester, size) async {
-    await pumpAt(tester, const ThingList(items: threeThings), size: size);
+  testWidgets('renders one row per item', (tester) async {
+    await pumpAt(tester, const ThingList(items: threeThings));
 
     expect(find.byKey(const ValueKey('thing_row_a')), findsOneWidget);
     expect(find.text('Beta'), findsOneWidget);
   });
 
-  testBothViewports('marks the selected item', (tester, size) async {
+  testWidgets('marks the selected item', (tester) async {
     await pumpAt(
       tester,
       const ThingList(items: threeThings, selectedIds: {'b'}),
-      size: size,
     );
 
     expect(find.byIcon(Icons.check), findsOneWidget);
@@ -90,13 +75,9 @@ void main() {
 
   // 3. Every callback fires exactly once, with the right value.
 
-  testBothViewports('reports the item that was tapped', (tester, size) async {
+  testWidgets('reports the item that was tapped', (tester) async {
     final selected = <String>[];
-    await pumpAt(
-      tester,
-      ThingList(items: threeThings, onSelect: selected.add),
-      size: size,
-    );
+    await pumpAt(tester, ThingList(items: threeThings, onSelect: selected.add));
 
     await tester.tap(find.byKey(const ValueKey('thing_row_b')));
     await tester.pump();
@@ -105,10 +86,7 @@ void main() {
     expect(selected, ['b']);
   });
 
-  testBothViewports('emits every action it offers, in order', (
-    tester,
-    size,
-  ) async {
+  testWidgets('emits every action it offers, in order', (tester) async {
     final events = <String>[];
     await pumpAt(
       tester,
@@ -117,7 +95,6 @@ void main() {
         onSelect: (id) => events.add('select:$id'),
         onDelete: (id) => events.add('delete:$id'),
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('thing_row_a')));

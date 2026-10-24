@@ -58,20 +58,13 @@ void main() {
     );
   });
 
-  testBothViewports('shows a loader before properties arrive', (
-    tester,
-    size,
-  ) async {
-    await pumpInSheet(
-      tester,
-      const QuarkDocumentProperties(isLoading: true),
-      size: size,
-    );
+  testWidgets('shows a loader before properties arrive', (tester) async {
+    await pumpInSheet(tester, const QuarkDocumentProperties(isLoading: true));
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.text('No document properties'), findsNothing);
   });
 
-  testBothViewports('shows the caller error and retries', (tester, size) async {
+  testWidgets('shows the caller error and retries', (tester) async {
     final events = <String>[];
     await pumpInSheet(
       tester,
@@ -79,30 +72,22 @@ void main() {
         error: "Couldn't load properties.",
         onRetry: () => events.add('retry'),
       ),
-      size: size,
     );
     expect(find.text("Couldn't load properties."), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('document_properties_retry')));
     expect(events, ['retry']);
   });
 
-  testBothViewports('shows the empty state with no values', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows the empty state with no values', (tester) async {
     await pumpInSheet(
       tester,
       const QuarkDocumentProperties(properties: DocumentProperties()),
-      size: size,
     );
     expect(find.text('No document properties'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);
   });
 
-  testBothViewports('keeps old properties through a refresh error', (
-    tester,
-    size,
-  ) async {
+  testWidgets('keeps old properties through a refresh error', (tester) async {
     await pumpInSheet(
       tester,
       QuarkDocumentProperties(
@@ -110,7 +95,6 @@ void main() {
         isLoading: true,
         error: 'The refresh failed.',
       ),
-      size: size,
     );
     expect(find.text('Ada Lovelace'), findsOneWidget);
     expect(find.text('The refresh failed.'), findsOneWidget);

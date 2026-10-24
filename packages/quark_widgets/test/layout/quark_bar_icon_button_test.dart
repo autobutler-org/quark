@@ -31,12 +31,9 @@ void main() {
     find.descendant(of: find.byKey(key), matching: find.byType(RichText)),
   );
 
-  testBothViewports('runs its action and explains itself', (
-    tester,
-    size,
-  ) async {
+  testWidgets('runs its action and explains itself', (tester) async {
     var presses = 0;
-    await pumpAt(tester, button(onPressed: () => presses++), size: size);
+    await pumpAt(tester, button(onPressed: () => presses++));
 
     expect(find.byTooltip('Select'), findsOneWidget);
     await tester.tap(find.byKey(key));
@@ -92,13 +89,9 @@ void main() {
     expect(glyph(tester).text.style!.color, QuarkTokens.dark.mutedForeground);
   });
 
-  testBothViewports('spins and refuses taps while busy', (tester, size) async {
+  testWidgets('spins and refuses taps while busy', (tester) async {
     var presses = 0;
-    await pumpAt(
-      tester,
-      button(onPressed: () => presses++, isBusy: true),
-      size: size,
-    );
+    await pumpAt(tester, button(onPressed: () => presses++, isBusy: true));
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byIcon(QuarkIcons.check_circle_outline), findsNothing);
@@ -170,11 +163,8 @@ void main() {
 
   // #2604: the button's own border replaced the theme's focus outline, so on
   // its input fill a keyboard user could not see it was focused.
-  testBothViewports('wears the focus outline while focused', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, button(onPressed: () {}), size: size);
+  testWidgets('wears the focus outline while focused', (tester) async {
+    await pumpAt(tester, button(onPressed: () {}));
     expect(buttonSide(tester, find.byKey(key)).width, lessThan(2));
 
     await tabTo(tester, find.byKey(key));

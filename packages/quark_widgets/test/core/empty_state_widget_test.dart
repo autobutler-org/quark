@@ -5,18 +5,17 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('renders the headline alone', (tester, size) async {
+  testWidgets('renders the headline alone', (tester) async {
     await pumpAt(
       tester,
       const EmptyStateWidget(icon: Icons.folder, headline: 'Nothing here'),
-      size: size,
     );
 
     expect(find.text('Nothing here'), findsOneWidget);
     expect(find.byIcon(Icons.folder), findsOneWidget);
   });
 
-  testBothViewports('renders the subtext when given one', (tester, size) async {
+  testWidgets('renders the subtext when given one', (tester) async {
     await pumpAt(
       tester,
       const EmptyStateWidget(
@@ -24,13 +23,12 @@ void main() {
         headline: 'Nothing here',
         subtext: 'Upload a file to get started.',
       ),
-      size: size,
     );
 
     expect(find.text('Upload a file to get started.'), findsOneWidget);
   });
 
-  testBothViewports('renders and wires the action', (tester, size) async {
+  testWidgets('renders and wires the action', (tester) async {
     var taps = 0;
     await pumpAt(
       tester,
@@ -42,7 +40,6 @@ void main() {
           child: const Text('Upload'),
         ),
       ),
-      size: size,
     );
 
     await tester.tap(find.text('Upload'));

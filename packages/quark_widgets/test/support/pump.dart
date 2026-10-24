@@ -39,8 +39,9 @@ Future<void> pumpAt(
 
 /// Runs [body] against both [narrowViewport] and [wideViewport].
 ///
-/// Every widget in this package ships with a narrow and a wide case (#1599),
-/// and this is the shortest way to write both.
+/// A test that checks layout (overflow, sizes, positions, wrapping, what a
+/// breakpoint shows) runs at both (#1599); one that only checks a callback or
+/// state is a plain `testWidgets` and runs once.
 void testBothViewports(
   String description,
   Future<void> Function(WidgetTester tester, Size size) body,

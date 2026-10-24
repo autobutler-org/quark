@@ -28,28 +28,17 @@ void main() {
     );
   }
 
-  testBothViewports('renders one segment per directory in the path', (
-    tester,
-    size,
-  ) async {
-    await pumpBar(tester, path: '/photos/2024/june', size: size);
+  testWidgets('renders one segment per directory in the path', (tester) async {
+    await pumpBar(tester, path: '/photos/2024/june');
 
     expect(find.text('photos'), findsOneWidget);
     expect(find.text('2024'), findsOneWidget);
     expect(find.text('june'), findsOneWidget);
   });
 
-  testBothViewports('navigates to the ancestor that was tapped', (
-    tester,
-    size,
-  ) async {
+  testWidgets('navigates to the ancestor that was tapped', (tester) async {
     final events = <String>[];
-    await pumpBar(
-      tester,
-      path: '/photos/2024/june',
-      size: size,
-      events: events,
-    );
+    await pumpBar(tester, path: '/photos/2024/june', events: events);
 
     await tester.tap(find.byKey(const ValueKey('breadcrumb_segment_0')));
     await tester.tap(find.byKey(const ValueKey('breadcrumb_segment_1')));
@@ -58,22 +47,18 @@ void main() {
     expect(events, ['select:/photos', 'select:/photos/2024']);
   });
 
-  testBothViewports('leaves the current directory without a tap target', (
+  testWidgets('leaves the current directory without a tap target', (
     tester,
-    size,
   ) async {
-    await pumpBar(tester, path: '/photos/2024/june', size: size);
+    await pumpBar(tester, path: '/photos/2024/june');
 
     // Only the two ancestors get a key; the leaf is plain text.
     expect(find.byKey(const ValueKey('breadcrumb_segment_2')), findsNothing);
   });
 
-  testBothViewports('goes home and up through its callbacks', (
-    tester,
-    size,
-  ) async {
+  testWidgets('goes home and up through its callbacks', (tester) async {
     final events = <String>[];
-    await pumpBar(tester, path: '/photos', size: size, events: events);
+    await pumpBar(tester, path: '/photos', events: events);
 
     await tester.tap(find.byKey(const ValueKey('breadcrumb_home')));
     await tester.tap(find.byKey(const ValueKey('breadcrumb_up')));
@@ -92,8 +77,8 @@ void main() {
     expect(find.text('/'), findsOneWidget);
   });
 
-  testBothViewports('disappears in search mode', (tester, size) async {
-    await pumpBar(tester, path: '/photos', size: size, isSearchMode: true);
+  testWidgets('disappears in search mode', (tester) async {
+    await pumpBar(tester, path: '/photos', isSearchMode: true);
 
     expect(find.text('photos'), findsNothing);
     expect(find.byKey(const ValueKey('breadcrumb_up')), findsNothing);
@@ -114,12 +99,9 @@ void main() {
   /// #2010: at the top folder the home glyph stayed primary-colored and
   /// tappable, and answered a click with nothing — the up button beside it
   /// had always gone quiet there.
-  testBothViewports('the home glyph is inert at the top folder', (
-    tester,
-    size,
-  ) async {
+  testWidgets('the home glyph is inert at the top folder', (tester) async {
     final events = <String>[];
-    await pumpBar(tester, path: '', size: size, events: events);
+    await pumpBar(tester, path: '', events: events);
 
     await tester.tap(find.byKey(const ValueKey('breadcrumb_home')));
     await tester.pump();
@@ -184,12 +166,9 @@ void main() {
 
   // #2604: home and the ancestors were bare gesture detectors a keyboard
   // could not reach.
-  testBothViewports('home and every ancestor work from the keyboard', (
-    tester,
-    size,
-  ) async {
+  testWidgets('home and every ancestor work from the keyboard', (tester) async {
     final events = <String>[];
-    await pumpBar(tester, path: '/photos/2024', size: size, events: events);
+    await pumpBar(tester, path: '/photos/2024', events: events);
 
     final home = find.byKey(const ValueKey('breadcrumb_home'));
     await tabTo(tester, home);

@@ -103,11 +103,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('a due reminder says how soon the event starts', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, _list(), size: size);
+  testWidgets('a due reminder says how soon the event starts', (tester) async {
+    await pumpAt(tester, _list());
     expect(find.text('Starts in 20 min'), findsOneWidget);
   });
 
@@ -139,32 +136,22 @@ void main() {
     expect(CalendarReminders.dueLabel(onTheDay, _now), 'Today');
   });
 
-  testBothViewports('taps through to the event', (tester, size) async {
+  testWidgets('taps through to the event', (tester) async {
     CalendarEventItem? tapped;
-    await pumpAt(tester, _list(onEventTap: (e) => tapped = e), size: size);
+    await pumpAt(tester, _list(onEventTap: (e) => tapped = e));
     await tester.tap(
       find.byKey(const ValueKey('calendar_upcoming_7_2026-10-01')),
     );
     expect(tapped, _soccer);
   });
 
-  testBothViewports('shows a loader while nothing has loaded', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, _list(days: const [], isLoading: true), size: size);
+  testWidgets('shows a loader while nothing has loaded', (tester) async {
+    await pumpAt(tester, _list(days: const [], isLoading: true));
     expect(find.byType(QuarkLoader), findsOneWidget);
   });
 
-  testBothViewports('keeps the list under a refresh error', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
-      tester,
-      _list(error: "Couldn't load your calendar."),
-      size: size,
-    );
+  testWidgets('keeps the list under a refresh error', (tester) async {
+    await pumpAt(tester, _list(error: "Couldn't load your calendar."));
     expect(find.text("Couldn't load your calendar."), findsOneWidget);
     expect(find.text('Vet'), findsOneWidget);
   });
@@ -195,20 +182,14 @@ void main() {
     });
   }
 
-  testBothViewports('no Try again without an error or a handler', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, _list(onRetry: () {}), size: size);
+  testWidgets('no Try again without an error or a handler', (tester) async {
+    await pumpAt(tester, _list(onRetry: () {}));
     expect(find.byKey(const ValueKey('calendar_upcoming_retry')), findsNothing);
-    await pumpAt(tester, _list(error: 'Failed.'), size: size);
+    await pumpAt(tester, _list(error: 'Failed.'));
     expect(find.byKey(const ValueKey('calendar_upcoming_retry')), findsNothing);
   });
 
-  testBothViewports('an empty week offers to add an event', (
-    tester,
-    size,
-  ) async {
+  testWidgets('an empty week offers to add an event', (tester) async {
     var adds = 0;
     await pumpAt(
       tester,
@@ -216,7 +197,6 @@ void main() {
         days: [CalendarDayEvents(day: _today, events: const [])],
         onAddEvent: () => adds++,
       ),
-      size: size,
     );
     expect(find.text('Nothing in the next 7 days'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('calendar_upcoming_add')));

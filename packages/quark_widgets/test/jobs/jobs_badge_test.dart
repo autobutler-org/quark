@@ -6,8 +6,8 @@ import '../support/pump.dart';
 
 /// The running-jobs badge: hidden at zero, a count otherwise, a tap out.
 void main() {
-  testBothViewports('renders nothing while no job runs', (tester, size) async {
-    await pumpAt(tester, JobsBadge(runningCount: 0, onTap: () {}), size: size);
+  testWidgets('renders nothing while no job runs', (tester) async {
+    await pumpAt(tester, JobsBadge(runningCount: 0, onTap: () {}));
     expect(find.byKey(const ValueKey('jobs_badge')), findsNothing);
     expect(find.byType(Badge), findsNothing);
   });
@@ -25,12 +25,11 @@ void main() {
     expect(button.tooltip, '3 jobs running');
   });
 
-  testBothViewports('calls back once when tapped', (tester, size) async {
+  testWidgets('calls back once when tapped', (tester) async {
     final taps = <String>[];
     await pumpAt(
       tester,
       JobsBadge(runningCount: 1, onTap: () => taps.add('tap')),
-      size: size,
     );
     await tester.tap(find.byKey(const ValueKey('jobs_badge')));
     await tester.pump();

@@ -5,10 +5,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('counts the selection and adds it to an album', (
-    tester,
-    size,
-  ) async {
+  testWidgets('counts the selection and adds it to an album', (tester) async {
     final events = <String>[];
     await pumpAt(
       tester,
@@ -16,7 +13,6 @@ void main() {
         selectedCount: 3,
         onAddToAlbum: () => events.add('add'),
       ),
-      size: size,
     );
 
     expect(find.text('3 photos selected'), findsOneWidget);
@@ -57,15 +53,13 @@ void main() {
     expect(find.text('1 photo selected'), findsOneWidget);
   });
 
-  testBothViewports('refuses to open the picker with nothing selected', (
+  testWidgets('refuses to open the picker with nothing selected', (
     tester,
-    size,
   ) async {
     var adds = 0;
     await pumpAt(
       tester,
       PhotoSelectionBar(selectedCount: 0, onAddToAlbum: () => adds++),
-      size: size,
     );
 
     final button = tester.widget<FilledButton>(

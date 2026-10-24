@@ -43,13 +43,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('off: reports turning it on', (tester, size) async {
+  testWidgets('off: reports turning it on', (tester) async {
     final changes = <bool>[];
-    await pumpAt(
-      tester,
-      _tile(enabled: false, onChanged: changes.add),
-      size: size,
-    );
+    await pumpAt(tester, _tile(enabled: false, onChanged: changes.add));
 
     expect(tester.widget<SwitchListTile>(find.byKey(_key)).value, isFalse);
 
@@ -59,16 +55,9 @@ void main() {
     expect(changes, [true]);
   });
 
-  testBothViewports('busy: holds still while a change is saving', (
-    tester,
-    size,
-  ) async {
+  testWidgets('busy: holds still while a change is saving', (tester) async {
     final changes = <bool>[];
-    await pumpAt(
-      tester,
-      _tile(isBusy: true, onChanged: changes.add),
-      size: size,
-    );
+    await pumpAt(tester, _tile(isBusy: true, onChanged: changes.add));
 
     await tester.tap(find.byKey(_key));
     await tester.pump();
@@ -77,11 +66,8 @@ void main() {
     expect(tester.widget<SwitchListTile>(find.byKey(_key)).onChanged, isNull);
   });
 
-  testBothViewports('shows the beta badge next to the label', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, _tile(), size: size);
+  testWidgets('shows the beta badge next to the label', (tester) async {
+    await pumpAt(tester, _tile());
 
     expect(
       find.descendant(

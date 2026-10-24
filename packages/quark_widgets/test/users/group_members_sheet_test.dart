@@ -27,10 +27,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('says so when the group has no members', (
-    tester,
-    size,
-  ) async {
+  testWidgets('says so when the group has no members', (tester) async {
     await pumpInSheet(
       tester,
       GroupMembersSheet(
@@ -38,7 +35,6 @@ void main() {
         candidates: candidates,
         onAdd: (_) {},
       ),
-      size: size,
     );
 
     expect(find.text('No members yet'), findsOneWidget);
@@ -48,7 +44,7 @@ void main() {
     );
   });
 
-  testBothViewports('reports the member to remove', (tester, size) async {
+  testWidgets('reports the member to remove', (tester) async {
     final removed = <int>[];
     await pumpInSheet(
       tester,
@@ -57,7 +53,6 @@ void main() {
         candidates: candidates,
         onRemove: removed.add,
       ),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('group_member_remove_2')));
@@ -132,10 +127,7 @@ void main() {
     );
   });
 
-  testBothViewports('shows the refusal the caller handed it', (
-    tester,
-    size,
-  ) async {
+  testWidgets('shows the refusal the caller handed it', (tester) async {
     await pumpInSheet(
       tester,
       const GroupMembersSheet(
@@ -143,7 +135,6 @@ void main() {
         candidates: candidates,
         error: "That account can't join a group.",
       ),
-      size: size,
     );
 
     expect(find.text("That account can't join a group."), findsOneWidget);

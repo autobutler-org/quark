@@ -40,11 +40,8 @@ void main() {
     );
   });
 
-  testBothViewports('opens the drawer from the brand button', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, page(), size: size, scaffold: false);
+  testWidgets('opens the drawer from the brand button', (tester) async {
+    await pumpAt(tester, page(), scaffold: false);
 
     await tester.tap(find.byKey(const ValueKey('brand_button')));
     await tester.pumpAndSettle();
@@ -206,11 +203,10 @@ void main() {
 
   // #2254: refresh is a slot beside the brand button, not an action. Every
   // page used to put it at a different index on the right.
-  testBothViewports('leaves the refresh slot out when onRefresh is null', (
+  testWidgets('leaves the refresh slot out when onRefresh is null', (
     tester,
-    size,
   ) async {
-    await pumpAt(tester, page(), size: size, scaffold: false);
+    await pumpAt(tester, page(), scaffold: false);
 
     expect(refreshButton(), findsNothing);
   });
@@ -236,14 +232,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('refreshes on tap', (tester, size) async {
+  testWidgets('refreshes on tap', (tester) async {
     var refreshes = 0;
-    await pumpAt(
-      tester,
-      page(onRefresh: () => refreshes++),
-      size: size,
-      scaffold: false,
-    );
+    await pumpAt(tester, page(onRefresh: () => refreshes++), scaffold: false);
 
     await tester.tap(refreshButton());
     await tester.pump();
@@ -251,15 +242,11 @@ void main() {
     expect(refreshes, 1);
   });
 
-  testBothViewports('spins and refuses taps while refreshing', (
-    tester,
-    size,
-  ) async {
+  testWidgets('spins and refuses taps while refreshing', (tester) async {
     var refreshes = 0;
     await pumpAt(
       tester,
       page(onRefresh: () => refreshes++, isRefreshing: true),
-      size: size,
       scaffold: false,
     );
 

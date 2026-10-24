@@ -26,11 +26,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('shows the content of the tab that was tapped', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(tester, const QuarkTabView(tabs: tabs), size: size);
+  testWidgets('shows the content of the tab that was tapped', (tester) async {
+    await pumpAt(tester, const QuarkTabView(tabs: tabs));
 
     await tester.tap(find.byKey(const ValueKey('tab_groups')));
     await tester.pumpAndSettle();
@@ -91,16 +88,16 @@ void main() {
       tabs: tabs,
     );
 
-    testBothViewports('starts on the tab it is given', (tester, size) async {
-      await pumpAt(tester, controlled(1, []), size: size);
+    testWidgets('starts on the tab it is given', (tester) async {
+      await pumpAt(tester, controlled(1, []));
 
       expect(find.text('the groups'), findsOneWidget);
       expect(find.text('the accounts'), findsNothing);
     });
 
-    testBothViewports('reports a tapped tab once', (tester, size) async {
+    testWidgets('reports a tapped tab once', (tester) async {
       final reported = <int>[];
-      await pumpAt(tester, controlled(0, reported), size: size);
+      await pumpAt(tester, controlled(0, reported));
 
       await tester.tap(find.byKey(const ValueKey('tab_groups')));
       await tester.pumpAndSettle();
@@ -123,14 +120,13 @@ void main() {
       expect(find.text('the groups'), findsOneWidget);
     });
 
-    testBothViewports('moves to a new selectedIndex without calling back', (
+    testWidgets('moves to a new selectedIndex without calling back', (
       tester,
-      size,
     ) async {
       final reported = <int>[];
-      await pumpAt(tester, controlled(0, reported), size: size);
+      await pumpAt(tester, controlled(0, reported));
 
-      await pumpAt(tester, controlled(1, reported), size: size);
+      await pumpAt(tester, controlled(1, reported));
       await tester.pumpAndSettle();
 
       expect(find.text('the groups'), findsOneWidget);

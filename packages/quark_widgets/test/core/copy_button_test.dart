@@ -5,15 +5,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('hands the text to onCopy when tapped', (
-    tester,
-    size,
-  ) async {
+  testWidgets('hands the text to onCopy when tapped', (tester) async {
     final copied = <String>[];
     await pumpAt(
       tester,
       CopyButton(text: 'secret', onCopy: (v) async => copied.add(v)),
-      size: size,
     );
 
     await tester.tap(find.byKey(const ValueKey('copy_button')));
@@ -22,7 +18,7 @@ void main() {
     expect(copied, ['secret']);
   });
 
-  testBothViewports('renders the labeled variant', (tester, size) async {
+  testWidgets('renders the labeled variant', (tester) async {
     await pumpAt(
       tester,
       CopyButton(
@@ -31,7 +27,6 @@ void main() {
         variant: CopyButtonVariant.outlined,
         onCopy: (_) async {},
       ),
-      size: size,
     );
 
     expect(find.text('Copy phrase'), findsOneWidget);
