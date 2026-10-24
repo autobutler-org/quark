@@ -38,6 +38,30 @@ bool isFormulaCellReference(String value) {
   return match != null;
 }
 
+/// Reads an A1 cell reference such as `B2`, in either case, as zero-based
+/// `(row, col)`; null when [ref] is not one. A `$` is not accepted: strip it
+/// first.
+(int, int)? parseCellRef(String ref) {
+  var splitIndex = 0;
+  while (splitIndex < ref.length &&
+      _isAsciiLetter(ref.codeUnitAt(splitIndex))) {
+    splitIndex++;
+  }
+  if (splitIndex == 0 || splitIndex == ref.length) return null;
+
+  final row = int.tryParse(ref.substring(splitIndex));
+  if (row == null || row <= 0) return null;
+
+  var column = 0;
+  for (final unit in ref.substring(0, splitIndex).toUpperCase().codeUnits) {
+    column = column * 26 + (unit - 64);
+  }
+  return (row - 1, column - 1);
+}
+
+bool _isAsciiLetter(int codeUnit) =>
+    (codeUnit >= 65 && codeUnit <= 90) || (codeUnit >= 97 && codeUnit <= 122);
+
 FormulaScanResult scanFormulaNumber(String source, int start) {
   var index = start;
   var sawDigit = false;

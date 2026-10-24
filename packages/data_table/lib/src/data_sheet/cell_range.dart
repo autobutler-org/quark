@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:quark_formula/evaluation/evaluation.dart' show parseCellRef;
 
 import 'cell/heading/util.dart';
 
@@ -49,25 +50,14 @@ class CellRange {
   static CellRange? tryParse(String text) {
     final match = _a1.firstMatch(text.replaceAll(r'$', '').toUpperCase());
     if (match == null) return null;
-    (int, int)? cell(String? letters, String? digits) {
-      if (letters == null || digits == null) return null;
-      final row = int.parse(digits);
-      if (row < 1) return null;
-      var col = 0;
-      for (final unit in letters.codeUnits) {
-        col = col * 26 + unit - 64;
-      }
-      return (row - 1, col - 1);
-    }
-
-    final start = cell(match[1], match[2]);
+    final start = parseCellRef(match[1]!);
     if (start == null) return null;
-    final end = match[3] == null ? start : cell(match[3], match[4]);
+    final end = match[2] == null ? start : parseCellRef(match[2]!);
     if (end == null) return null;
     return CellRange.fromCorners(start.$1, start.$2, end.$1, end.$2);
   }
 
-  static final _a1 = RegExp(r'^([A-Z]+)([0-9]+)(?::([A-Z]+)([0-9]+))?$');
+  static final _a1 = RegExp(r'^([A-Z]+[0-9]+)(?::([A-Z]+[0-9]+))?$');
 
   /// Number of rows the range covers.
   int get rowCount => bottom - top + 1;

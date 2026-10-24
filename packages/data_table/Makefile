@@ -17,7 +17,7 @@ PLATFORM ?= web
 FLUTTER_BUILD_MODE ?= debug
 
 .PHONY: build
-build: build/examples/minimal build/examples/spreadsheet ## Build examples
+build: build/examples/spreadsheet ## Build examples
 
 build/examples/%: env-PLATFORM ## Build example
 	cd ./examples/$*

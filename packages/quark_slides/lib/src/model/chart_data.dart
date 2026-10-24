@@ -139,10 +139,15 @@ class ChartData {
 
   /// [text] read as a chart value: a number, with any thousands commas,
   /// spaces or trailing percent sign dropped; 0 when it is none.
-  static double parseValue(String text) {
+  static double parseValue(String text) => tryParseValue(text) ?? 0;
+
+  /// [text] read as [parseValue] reads it, but null when it is not blank
+  /// and not a finite number, so an editor can flag the cell.
+  static double? tryParseValue(String text) {
     final cleaned = text.replaceAll(RegExp(r'[,\s%]'), '');
+    if (cleaned.isEmpty) return 0;
     final value = double.tryParse(cleaned);
-    return value != null && value.isFinite ? value : 0;
+    return value != null && value.isFinite ? value : null;
   }
 
   /// The data as a grid of text; see [ChartData.fromGrid].

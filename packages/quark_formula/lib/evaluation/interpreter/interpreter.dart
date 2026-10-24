@@ -61,7 +61,7 @@ class DataSheetInterpreter {
       graph.ensureNode(cell);
 
       for (final ref in formula.cellRefs) {
-        final dep = _parseCellRef(ref);
+        final dep = parseCellRef(ref);
         if (dep != null) {
           graph.addEdge(cell, dep);
         }
@@ -70,8 +70,8 @@ class DataSheetInterpreter {
       for (final rangeRef in formula.rangeRefs) {
         final colonIdx = rangeRef.indexOf(':');
         if (colonIdx < 0) continue;
-        final start = _parseCellRef(rangeRef.substring(0, colonIdx));
-        final end = _parseCellRef(rangeRef.substring(colonIdx + 1));
+        final start = parseCellRef(rangeRef.substring(0, colonIdx));
+        final end = parseCellRef(rangeRef.substring(colonIdx + 1));
         if (start == null || end == null) continue;
         final rowMin = start.$1 < end.$1 ? start.$1 : end.$1;
         final rowMax = start.$1 > end.$1 ? start.$1 : end.$1;
@@ -134,30 +134,4 @@ class DataSheetInterpreter {
     if (lower == 'false') return const BoolValue(false);
     return StringValue(raw);
   }
-
-  /// Parses a cell reference string such as "A1" into zero-based `(row, col)`.
-  (int, int)? _parseCellRef(String ref) {
-    var splitIndex = 0;
-    while (splitIndex < ref.length && _isAlpha(ref.codeUnitAt(splitIndex))) {
-      splitIndex++;
-    }
-    if (splitIndex == 0 || splitIndex == ref.length) return null;
-
-    final columnText = ref.substring(0, splitIndex);
-    final rowText = ref.substring(splitIndex);
-    final row = int.tryParse(rowText);
-    if (row == null || row <= 0) return null;
-
-    var column = 0;
-    for (final rune in columnText.runes) {
-      final upper = String.fromCharCode(rune).toUpperCase().codeUnitAt(0);
-      if (!_isAlpha(upper)) return null;
-      column = column * 26 + (upper - 64);
-    }
-
-    return (row - 1, column - 1);
-  }
-
-  bool _isAlpha(int codeUnit) =>
-      (codeUnit >= 65 && codeUnit <= 90) || (codeUnit >= 97 && codeUnit <= 122);
 }

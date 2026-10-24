@@ -43,8 +43,10 @@ void main() {
 
       for (final match in _widgetClass.allMatches(file.readAsStringSync())) {
         final name = match.group(1)!;
+        // The entry's own name, so a widget mentioned only in a comment or in
+        // another widget's entry does not count.
         expect(
-          registry.contains(name),
+          registry.contains("name: '$name'"),
           isTrue,
           reason:
               '$name is exported from quark_widgets but has no entry in '

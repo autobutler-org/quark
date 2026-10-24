@@ -26,7 +26,6 @@ environment:
 # `resolution: workspace` in their own pubspec.
 workspace:
   - packages/data_table
-  - packages/data_table/examples/minimal
   - packages/data_table/examples/spreadsheet
   - packages/quark_formula
   - packages/quark_icons

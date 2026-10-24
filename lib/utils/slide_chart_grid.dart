@@ -19,12 +19,7 @@ abstract final class SlideChartGrid {
   /// Whether [text] reads as a chart value: blank (read as 0), or a finite
   /// number, with any thousands commas, spaces or a percent sign, as
   /// `ChartData.parseValue` reads it.
-  static bool isValue(String text) {
-    final cleaned = text.replaceAll(RegExp(r'[,\s%]'), '');
-    if (cleaned.isEmpty) return true;
-    final value = double.tryParse(cleaned);
-    return value != null && value.isFinite;
-  }
+  static bool isValue(String text) => ChartData.tryParseValue(text) != null;
 
   /// The value cells of [grid], as (row, column), that are not numbers.
   /// The names in the first row and column are never checked.

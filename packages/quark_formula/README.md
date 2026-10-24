@@ -18,11 +18,9 @@ Then run `dart pub get` or `flutter pub get` in your consuming package.
 
 Public surface (not exhaustive):
 
-- package:quark_formula/quark_formula.dart
-  - Exports simple src-level helpers (Parser, Evaluator placeholder, errors, builtin helpers).
-
 - package:quark_formula/evaluation/evaluation.dart
-  - Re-exports the full evaluation pieces (lexer, parser, evaluator, interpreter).
+  - The package's one entrypoint. Re-exports the lexer, parser, evaluator and interpreter, and `parseCellRef`, which
+    reads an A1 reference such as `B2` as zero-based `(row, col)`.
 
 Key types and entrypoints (from evaluation/evaluator):
 
@@ -75,8 +73,6 @@ final result = evaluate(parsed, accessor);
 ```
 
 ## Notes
-
-- The package contains both a lightweight src/\* surface (exported by `package:quark_formula/quark_formula.dart`) and a fuller evaluation API under `package:quark_formula/evaluation/...`. Use the evaluation/ entrypoints for real formula parsing and evaluation.
 
 - For licensing and attribution, see the repository LICENSE at the project root.
 
