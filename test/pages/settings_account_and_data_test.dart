@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/pages/account_and_data_page.dart';
@@ -11,6 +10,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/settings/reset_quark_dialog.dart';
 
 import '../support/unreachable_quark.dart';
+import '../support/secure_storage.dart';
 
 /// #1762: App Store Review Guideline 5.1.1(v) rejects an app that supports
 /// account creation without letting a user start deleting their account from
@@ -22,20 +22,10 @@ import '../support/unreachable_quark.dart';
 void main() {
   final settings = AppSettings.instance;
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
   setUpAll(() {
     // The session token lives in secure storage on native platforms, and
     // there's no plugin behind it in a unit test.
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage();
   });
 
   late HttpOverrides? priorOverrides;

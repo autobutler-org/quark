@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/pages/settings_page.dart';
@@ -7,6 +6,8 @@ import 'package:quark/pages/terms_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
+
+import '../support/secure_storage.dart';
 
 /// Saving a Quark from the Settings dialog changes the active host, which
 /// re-runs the router's terms gate and replaces the Settings page (#1623).
@@ -18,20 +19,10 @@ import 'package:quark/services/auth_service.dart';
 void main() {
   final settings = AppSettings.instance;
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
   setUpAll(() {
     // The session token lives in secure storage on native platforms, and
     // there's no plugin behind it in a unit test.
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage();
   });
 
   Future<void> reset() async {

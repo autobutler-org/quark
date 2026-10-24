@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -13,14 +12,12 @@ import 'package:quark/widgets/storage_devices/role_dialog.dart';
 import 'package:quark/widgets/system/storage_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/secure_storage.dart';
+
 /// The Storage tab shows the protection status the Quark reported and follows
 /// its next step into the existing drive dialogs.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
 
   const devices = {
     'devices': [
@@ -47,15 +44,7 @@ void main() {
     ],
   };
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({

@@ -12,6 +12,8 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/recovery_phrase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// Argon2id's floor; the shipped cost is [KdfParams.standard].
 const _cheap = KdfParams(opsLimit: 1, memLimit: 8192);
 
@@ -54,9 +56,6 @@ class _FakeQuark {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final keystore = <String, String>{};
   late _FakeQuark quark;
   late ChatCrypto crypto;
@@ -97,8 +96,7 @@ void main() {
   setUpAll(() async {
     crypto = await ChatCrypto.load();
     // AppSettings keeps session tokens in the keystore too.
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (call) async => null);
+    mockSecureStorage();
   });
 
   setUp(() async {

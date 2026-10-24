@@ -1,9 +1,9 @@
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
 
 import '../services/events_service_test.dart' show FakeChannel;
+import 'secure_storage.dart';
 
 /// Runs [EventsService] over fake sockets, so a test can drop the connection
 /// and watch what a page does when it comes back.
@@ -12,11 +12,7 @@ class ReconnectingEvents {
 
   /// Starts the service against a fake Quark. Call from a `testWidgets` body.
   Future<void> start() async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-          (_) async => null,
-        );
+    mockSecureStorage();
     EventsService.connectChannel = (uri, {headers}) {
       final channel = FakeChannel();
       _channels.add(channel);

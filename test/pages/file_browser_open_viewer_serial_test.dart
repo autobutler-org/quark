@@ -24,6 +24,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 import '../support/fake_video_player_platform.dart';
+import '../support/secure_storage.dart';
 
 /// #3337: tapping a file in Files opened its viewer on the first *selected*
 /// device rather than the device the file is on, so every file on a second
@@ -33,10 +34,6 @@ import '../support/fake_video_player_platform.dart';
 /// viewer were handed (#3350).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
 
   Map<String, Object?> device(String name, {String serial = ''}) => {
     'name': name,
@@ -61,15 +58,7 @@ void main() {
   late List<Uri> requested;
   final realVideoPlatform = VideoPlayerPlatform.instance;
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     requested = [];

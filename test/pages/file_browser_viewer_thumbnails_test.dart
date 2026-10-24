@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -18,6 +17,8 @@ import 'package:quark/utils/decode_once_image.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_browser_list_tile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// #3355: after a photo was opened from Files and the viewer closed, the
 /// list's thumbnails sat one row off — the 0004 row showed 0005's picture.
 /// Each test lists a folder of images, opens one in the app's real `/view`
@@ -25,9 +26,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final names = [for (var i = 1; i <= 8; i++) 'files-photo-000$i.jpg'];
 
   Map<String, Object?> device(String name, {String serial = ''}) => {
@@ -50,15 +48,7 @@ void main() {
     'fileType': 'image',
   };
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   Future<void> setUpHost(String serial) async {
     sharedHttpClientFactory = () => MockClient((request) async {

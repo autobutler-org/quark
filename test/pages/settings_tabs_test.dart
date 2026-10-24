@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/feature_flags_controller.dart';
 import 'package:quark/models/feature_flag.dart';
@@ -11,6 +10,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 
 import '../support/unreachable_quark.dart';
+import '../support/secure_storage.dart';
 
 /// #2350: Settings is five tabs, each with its own URL. Every tab lays out on
 /// a phone and on a desktop, shows what it is meant to hold, and reports a
@@ -18,19 +18,7 @@ import '../support/unreachable_quark.dart';
 void main() {
   final settings = AppSettings.instance;
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   late HttpOverrides? priorOverrides;
 

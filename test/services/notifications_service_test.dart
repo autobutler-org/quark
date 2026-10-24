@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -11,14 +10,13 @@ import 'package:quark/services/notifications_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// #2493: the notifications list, and the per-type switch saved in the
 /// account's own settings.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final settings = AppSettings.instance;
   final requests = <http.Request>[];
 
@@ -46,15 +44,7 @@ void main() {
     return http.Response(jsonEncode(stored), 200);
   });
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
-
+  setUpAll(mockSecureStorage);
   setUp(() async {
     requests.clear();
     SharedPreferences.setMockInitialValues({

@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -16,15 +15,13 @@ import 'package:quark/widgets/setup/theme_step.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/auth_salt.dart';
+import '../support/secure_storage.dart';
 
 /// #2026: first-boot setup is three steps, and every one of them says which
 /// it is and how many there are, so the user can see the end from the start.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final stored = <String, String>{};
   final settings = AppSettings.instance;
   final realChatKeysOnSignIn = chatKeysOnSignIn;
@@ -39,28 +36,11 @@ void main() {
           required sessionToken,
           authSalt,
         }) async => null;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (call) async {
-          final key = call.arguments['key'] as String?;
-          switch (call.method) {
-            case 'read':
-              return stored[key];
-            case 'write':
-              stored[key!] = call.arguments['value'] as String;
-              return null;
-            case 'delete':
-              stored.remove(key);
-              return null;
-            default:
-              return null;
-          }
-        });
+    mockSecureStorage(stored);
   });
 
   tearDownAll(() {
     chatKeysOnSignIn = realChatKeysOnSignIn;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
   });
 
   Future<void> clearHosts() async {

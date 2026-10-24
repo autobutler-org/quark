@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/models/feature_flag.dart';
@@ -9,25 +8,16 @@ import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// Every top-level page opens this one drawer, so what it offers and where
 /// each row goes is decided here once (#1662). Admin-only pages are offered to
 /// admins only (#1928).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final settings = AppSettings.instance;
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
+  setUpAll(mockSecureStorage);
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   setUp(() => settings.isAdmin.value = false);

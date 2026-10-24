@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/chat_unread_controller.dart';
 import 'package:quark/models/chat_channel.dart';
@@ -10,25 +9,16 @@ import 'package:quark/services/events_service.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/secure_storage.dart';
+
 /// #2424: the drawer's Chat row carries a dot while any channel holds an
 /// unread message, read as the drawer opens and cleared live.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final settings = AppSettings.instance;
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   const dot = ValueKey('drawer_chat_unread');
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   tearDown(() => settings.featureFlags.value = const []);
 

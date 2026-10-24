@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -14,6 +13,8 @@ import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/widgets/doc_sheet_body.dart';
 import 'package:quark/widgets/doc_sheet_kind.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/secure_storage.dart';
 
 /// #2056: a sheet or doc could only be renamed from Files → Move/Rename.
 void main() {
@@ -199,15 +200,7 @@ void main() {
     });
 
     testWidgets('returns the new path and keeps the extension', (tester) async {
-      const secureStorage = MethodChannel(
-        'plugins.it_nomads.com/flutter_secure_storage',
-      );
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(secureStorage, (_) async => null);
-      addTearDown(() {
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(secureStorage, null);
-      });
+      mockSecureStorage();
       SharedPreferences.setMockInitialValues({});
       await AppSettings.instance.load();
       await AppSettings.instance.addHost(

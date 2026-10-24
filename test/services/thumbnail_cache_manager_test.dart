@@ -1,5 +1,4 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +8,8 @@ import 'package:quark/services/thumbnail_cache_manager.dart';
 import 'package:quark/utils/decode_once_image.dart';
 import 'package:quark/utils/thumbnail_cache_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/secure_storage.dart';
 
 /// Records what [ThumbnailCacheManager.evict] drops from disk.
 class _RecordingCacheManager extends Fake implements BaseCacheManager {
@@ -32,31 +33,11 @@ class _PendingImage extends ImageStreamCompleter {}
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final stored = <String, String>{};
   final settings = AppSettings.instance;
 
   setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (call) async {
-          final key = call.arguments['key'] as String?;
-          switch (call.method) {
-            case 'read':
-              return stored[key];
-            case 'write':
-              stored[key!] = call.arguments['value'] as String;
-            case 'delete':
-              stored.remove(key);
-          }
-          return null;
-        });
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage(stored);
   });
 
   setUp(() async {

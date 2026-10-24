@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:http/http.dart' as http;
@@ -19,6 +18,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/auth_salt.dart';
+import '../support/secure_storage.dart';
 
 /// Records where every request went and answers each one with an empty JSON
 /// listing, so nothing under test hangs waiting for a Quark.
@@ -156,22 +156,10 @@ class _EmptyHeaders implements HttpHeaders {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
   // Loaded outside the fake clock, so setup can derive its keys.
   setUpAll(ChatCrypto.load);
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   late _RecordingHttpOverrides overrides;
 

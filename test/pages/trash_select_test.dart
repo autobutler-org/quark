@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -15,6 +14,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../support/secure_storage.dart';
+
 /// #2250: the trash has had multi-select since it had a restore button, but
 /// the only way in was a long press on a row. A mouse does not long-press, so
 /// on the web the trash looked like it had no bulk actions at all. The app bar
@@ -22,20 +23,9 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final connectChannelDefault = EventsService.connectChannel;
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   /// Answers the calls a trash listing makes, with [items] at the trash root.
   /// [contents] is what a folder listing returns, when the page is inside one.

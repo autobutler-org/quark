@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -15,15 +14,13 @@ import 'package:quark/widgets/settings/hostname_section.dart';
 import 'package:quark/widgets/setup/theme_step.dart';
 
 import '../support/auth_salt.dart';
+import '../support/secure_storage.dart';
 
 /// #2344: the last step of first-boot setup offers to name the Quark, once
 /// there is an owner to ask as, and only on a Quark that can be renamed.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final stored = <String, String>{};
   final settings = AppSettings.instance;
   final realChatKeysOnSignIn = chatKeysOnSignIn;
@@ -43,28 +40,11 @@ void main() {
           required sessionToken,
           authSalt,
         }) async => null;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (call) async {
-          final key = call.arguments['key'] as String?;
-          switch (call.method) {
-            case 'read':
-              return stored[key];
-            case 'write':
-              stored[key!] = call.arguments['value'] as String;
-              return null;
-            case 'delete':
-              stored.remove(key);
-              return null;
-            default:
-              return null;
-          }
-        });
+    mockSecureStorage(stored);
   });
 
   tearDownAll(() {
     chatKeysOnSignIn = realChatKeysOnSignIn;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
   });
 
   Future<void> clearHosts() async {

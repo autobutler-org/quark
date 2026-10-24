@@ -1,25 +1,22 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/settings/settings_general_tab.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/secure_storage.dart';
+
 /// #2601: the General tab's high-contrast switch, for a platform with no
 /// contrast setting of its own, and the setting it saves.
 void main() {
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   const toggle = ValueKey('settings_high_contrast');
 
   setUp(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
+    mockSecureStorage();
     // The tab's host manager reads the saved hosts.
     SharedPreferences.setMockInitialValues({
       'hosts': jsonEncode([
@@ -29,10 +26,7 @@ void main() {
     await AppSettings.instance.load();
   });
 
-  tearDown(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  tearDown(() {});
 
   Future<void> pumpTab(
     WidgetTester tester, {

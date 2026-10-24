@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/calendar/calendar_bar_bottom.dart';
@@ -13,6 +12,8 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// #2740: under a picked theme color the app bar and the drawer are a
 /// saturated surface of their own, so every text and icon the app draws on
 /// them has to be legible there: 4.5:1 for text, 3:1 for an icon.
@@ -23,13 +24,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// the bar fails here, because `QuarkChrome` does not remap either.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
   setUpAll(() async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
+    mockSecureStorage();
     // Two Quarks, so the drawer shows its host switcher.
     SharedPreferences.setMockInitialValues({
       'hosts': jsonEncode([
@@ -44,8 +40,6 @@ void main() {
 
   tearDownAll(() {
     AppSettings.instance.isAdmin.value = false;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
   });
 
   /// The opaque fill [element] is painted on: every filled ancestor up to

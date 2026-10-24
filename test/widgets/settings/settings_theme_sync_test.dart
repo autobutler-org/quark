@@ -1,28 +1,24 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/services/app_settings.dart';
 
 import '../../support/unreachable_quark.dart';
+import '../../support/secure_storage.dart';
 
 /// #2053: the app bar's theme toggle and the Theme radios in Settings show one
 /// setting, so changing it from either moves the other.
 void main() {
   final settings = AppSettings.instance;
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   const toggle = ValueKey('theme_toggle');
 
   late HttpOverrides? priorOverrides;
 
   setUp(() async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
+    mockSecureStorage();
     priorOverrides = HttpOverrides.current;
     HttpOverrides.global = UnreachableQuarkHttpOverrides();
     await settings.setThemeMode(ThemeMode.system);
@@ -30,8 +26,6 @@ void main() {
 
   tearDown(() async {
     HttpOverrides.global = priorOverrides;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
     await settings.setThemeMode(ThemeMode.system);
   });
 

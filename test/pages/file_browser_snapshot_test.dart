@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/models/file_node.dart';
@@ -15,6 +14,8 @@ import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/listing_snapshot_store.dart';
 import 'package:quark/widgets/file_browser/folder_route_error_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/secure_storage.dart';
 
 /// How the Quark behind [_QuarkHttpOverrides] treats a request.
 enum _Quark {
@@ -180,19 +181,7 @@ FileNode _file(String name) => FileNode(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   // alice is a member, so a bare /files opens her home.
   final landing = homePath('alice');

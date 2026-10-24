@@ -18,6 +18,7 @@ import 'package:quark/widgets/setup/recovery_phrase_step.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/auth_salt.dart';
+import '../support/secure_storage.dart';
 
 /// #2430: recovering an account the Quark marks `legacyRecovery` sends its
 /// old phrase once and gives it a new one the app made. The page shows that
@@ -26,22 +27,13 @@ import '../support/auth_salt.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final settings = AppSettings.instance;
   final bodies = <Map<String, dynamic>>[];
 
   setUpAll(() async {
     // Loaded once outside the fake clock, so the recovery can derive keys.
     await ChatCrypto.load();
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (call) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage();
   });
 
   setUp(() async {

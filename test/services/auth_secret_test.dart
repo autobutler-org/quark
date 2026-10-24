@@ -22,6 +22,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/auth_salt.dart';
+import '../support/secure_storage.dart';
 
 const _password = 'correct horse battery staple';
 
@@ -135,9 +136,6 @@ class _FakeQuark {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   final settings = AppSettings.instance;
   late _FakeQuark quark;
   late ChatCrypto crypto;
@@ -153,13 +151,7 @@ void main() {
   setUpAll(() async {
     crypto = await ChatCrypto.load();
     authKey = await testAuthKey(_password);
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (call) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
+    mockSecureStorage();
   });
 
   setUp(() async {

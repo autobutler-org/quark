@@ -8,6 +8,8 @@ import 'package:quark/services/local_trust.dart';
 import 'package:quark/services/local_trust_pin_io.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/secure_storage.dart';
+
 /// A certificate that is nothing but its DER bytes, which is all pinning
 /// reads.
 class _FakeCertificate implements X509Certificate {
@@ -26,20 +28,9 @@ class _FakeCertificate implements X509Certificate {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const secureStorage = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
   const home = 'https://home.local';
 
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, (_) async => null);
-  });
-
-  tearDownAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorage, null);
-  });
+  setUpAll(mockSecureStorage);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({
