@@ -7,10 +7,6 @@ import 'data_sheet_controller.dart';
 import 'filter/column_filter_popover.dart';
 import 'freeze_menu_button.dart';
 
-// ---------------------------------------------------------------------------
-// Public widget
-// ---------------------------------------------------------------------------
-
 /// A ready-made toolbar companion for [DataSheetController].
 ///
 /// Provides grouped icon buttons for all common spreadsheet operations.
@@ -79,7 +75,6 @@ class DataSheetControlBar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
             child: Row(
               children: [
-                // ── Structure ──────────────────────────────────────────────
                 _group([
                   // Insert row before/after the selected row. With nothing
                   // selected the sheet edges are the anchor, so these still
@@ -116,7 +111,6 @@ class DataSheetControlBar extends StatelessWidget {
                           )
                         : null,
                   ),
-                  // Delete row / column
                   _btn(
                     QuarkIcons.delete_row,
                     'Delete row',
@@ -137,7 +131,6 @@ class DataSheetControlBar extends StatelessWidget {
                           )
                         : null,
                   ),
-                  // Duplicate row / column
                   _btn(
                     QuarkIcons.duplicate_row,
                     'Duplicate row',
@@ -154,7 +147,6 @@ class DataSheetControlBar extends StatelessWidget {
                   ),
                 ]),
                 const _Divider(),
-                // ── Clipboard ──────────────────────────────────────────────
                 _group([
                   _btn(
                     QuarkIcons.content_copy,
@@ -188,7 +180,6 @@ class DataSheetControlBar extends StatelessWidget {
                   ),
                 ]),
                 const _Divider(),
-                // ── Edit ───────────────────────────────────────────────────
                 _group([
                   _btn(
                     QuarkIcons.undo,
@@ -236,7 +227,6 @@ class DataSheetControlBar extends StatelessWidget {
                   ),
                 ]),
                 const _Divider(),
-                // ── Data ───────────────────────────────────────────────────
                 _group([
                   _btn(
                     QuarkIcons.sort,
@@ -268,7 +258,6 @@ class DataSheetControlBar extends StatelessWidget {
                   ),
                 ]),
                 const _Divider(),
-                // ── Filter ─────────────────────────────────────────────────
                 _group([
                   Builder(
                     builder: (context) => _btn(
@@ -307,10 +296,8 @@ class DataSheetControlBar extends StatelessWidget {
                   ),
                 ]),
                 const _Divider(),
-                // ── View ───────────────────────────────────────────────────
                 DataSheetFreezeMenuButton(controller: controller),
                 const _Divider(),
-                // ── Import / Export ────────────────────────────────────────
                 _group([
                   _btn(
                     QuarkIcons.export_csv,
@@ -340,10 +327,6 @@ class DataSheetControlBar extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Private helper widgets
-// ---------------------------------------------------------------------------
 
 Widget _group(List<Widget> children) {
   return Row(mainAxisSize: MainAxisSize.min, children: children);
@@ -378,10 +361,6 @@ class _Divider extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Dialog helpers
-// ---------------------------------------------------------------------------
 
 Future<void> _showSortDialog(
   BuildContext context,

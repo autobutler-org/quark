@@ -137,7 +137,6 @@ class ImageViewerPage extends StatefulWidget {
 
 class _ImageViewerPageState extends State<ImageViewerPage>
     with SingleTickerProviderStateMixin {
-  // Navigation state
   late int _currentIndex;
   // Null until the viewer's own download of [ImageViewerPage.relPath] lands.
   Uint8List? _currentBytes;
@@ -152,7 +151,6 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   // matches this has been superseded by a later swipe and drops its result.
   late int _targetIndex;
 
-  // UI state
   bool _sidebarOpen = true;
   bool _isFavorite = false;
   int _rotationQuarters = 0; // 0/1/2/3 × 90°
@@ -163,11 +161,9 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   late AnimationController _rotationAnim;
   late Animation<double> _rotationValue;
 
-  // Metadata
   PhotoMetadata? _metadata;
   bool _metadataLoading = false;
 
-  // Live Photo playback
   VideoPlayerController? _liveVideoController;
   bool _liveVideoPlaying = false;
   bool _liveVideoReady = false;
@@ -192,7 +188,6 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   bool _zoomedIn = false;
   late PageController _pageController;
 
-  // DraggableScrollableSheet controller for mobile drawer
   final _drawerController = DraggableScrollableController();
 
   @override
@@ -322,8 +317,6 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   // support rotation — local device assets have no server path to key on.
   bool get _isQuarkPhoto =>
       _currentRelPath != null && _currentRelPath!.isNotEmpty;
-
-  // --- Navigation ---
 
   /// How many pages the viewer offers: the whole list when the caller says
   /// how long it is, not just what it has loaded (#3357).
@@ -525,8 +518,6 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     onPage ? _navigate(index) : _goToPage(index - _targetIndex);
   }
 
-  // --- Metadata ---
-
   Future<void> _loadMetadata() => _loadMetadataForCurrent();
 
   Future<void> _loadMetadataForCurrent() async {
@@ -556,8 +547,6 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       if (mounted) setState(() => _metadataLoading = false);
     }
   }
-
-  // --- Live Photo ---
 
   void _prepareLiveVideo() {
     _disposeLiveVideo();
@@ -598,8 +587,6 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     _liveVideoController?.pause();
     if (mounted) setState(() => _liveVideoPlaying = false);
   }
-
-  // --- Actions ---
 
   void _toggleSidebar() {
     setState(() => _sidebarOpen = !_sidebarOpen);
@@ -829,8 +816,6 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     }
   }
 
-  // --- Zoom ---
-
   /// Zooms to [ImageViewerConfig.doubleTapZoomScale] around the double-tap,
   /// keeping the point under the finger where it is, or back out to 1x.
   void _toggleZoom() {
@@ -846,8 +831,6 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       0,
     )..multiply(Matrix4.diagonal3Values(scale, scale, 1));
   }
-
-  // --- Keyboard ---
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -876,8 +859,6 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     }
     return KeyEventResult.ignored;
   }
-
-  // --- Build ---
 
   @override
   Widget build(BuildContext context) {

@@ -31,7 +31,6 @@ class MetadataContent {
 
     final sections = <Widget>[];
 
-    // --- Date & time ---
     final exif = metadata?.exif;
     final dateTaken = exif?.dateTaken;
     final mtime = metadata?.mtime;
@@ -63,7 +62,6 @@ class MetadataContent {
       );
     }
 
-    // --- Location ---
     if (exif?.hasLocation == true) {
       sections.add(
         Section(
@@ -92,7 +90,6 @@ class MetadataContent {
       );
     }
 
-    // --- Camera & settings ---
     if (exif?.hasCameraInfo == true) {
       final rows = <Widget>[];
       final cam = exif!;
@@ -133,7 +130,6 @@ class MetadataContent {
       }
     }
 
-    // --- File info ---
     if (metadata != null) {
       final m = metadata;
       final ext = m.fileName.contains('.')
@@ -162,7 +158,6 @@ class MetadataContent {
       );
     }
 
-    // --- Albums ---
     if (metadata != null && metadata.albums.isNotEmpty) {
       sections.add(
         Section(

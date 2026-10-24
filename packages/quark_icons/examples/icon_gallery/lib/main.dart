@@ -30,9 +30,7 @@ class IconGalleryApp extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Icon catalogue — add new icons here as you add SVGs to svgs/
-// ---------------------------------------------------------------------------
+// Icon catalog: add an entry here for each SVG added to svgs/.
 
 class _IconEntry {
   const _IconEntry(this.data, this.name);
@@ -89,10 +87,6 @@ const _sections = <({String title, List<_IconEntry> icons})>[
     ],
   ),
 ];
-
-// ---------------------------------------------------------------------------
-// Gallery page
-// ---------------------------------------------------------------------------
 
 class IconGalleryPage extends StatefulWidget {
   const IconGalleryPage({super.key});
@@ -154,7 +148,6 @@ class _IconGalleryPageState extends State<IconGalleryPage> {
             ),
             body: Column(
               children: [
-                // ── Controls bar ──────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                   child: Row(
@@ -188,7 +181,6 @@ class _IconGalleryPageState extends State<IconGalleryPage> {
                   ),
                 ),
                 const Divider(height: 1),
-                // ── Icon grid ─────────────────────────────────────────────
                 Expanded(
                   child: filtered.isEmpty
                       ? Center(
@@ -255,10 +247,7 @@ class _IconGalleryPageState extends State<IconGalleryPage> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Icon tile — shows icon + name, tap to copy name
-// ---------------------------------------------------------------------------
-
+/// One icon and its name; tapping it copies the name.
 class _IconTile extends StatefulWidget {
   const _IconTile({required this.entry, required this.size});
   final _IconEntry entry;

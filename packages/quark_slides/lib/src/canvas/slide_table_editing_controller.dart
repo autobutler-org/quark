@@ -150,10 +150,6 @@ class SlideTableEditingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ---------------------------------------------------------------------------
-  // Commands
-  // ---------------------------------------------------------------------------
-
   /// Inserts a row above the selection.
   void insertRowAbove() => _onSelection((doc, slide, id, range) {
     doc.insertTableRow(slide, id, range.top);

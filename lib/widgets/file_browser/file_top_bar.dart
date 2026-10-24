@@ -139,7 +139,6 @@ class FileTopBar extends StatefulWidget implements PreferredSizeWidget {
 class _FileTopBarState extends State<FileTopBar> {
   final _hiddenCrumbsController = MenuController();
 
-  // ── Inline search ─────────────────────────────────────────────────────────
   bool _searchExpanded = false;
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();

@@ -134,10 +134,6 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
     return KeyEventResult.ignored;
   }
 
-  // ---------------------------------------------------------------------------
-  // Sync helpers
-  // ---------------------------------------------------------------------------
-
   void _onControllerChanged() {
     // Don't overwrite the bar while the user is actively typing in it.
     if (_focusNode.hasFocus) return;
@@ -193,10 +189,6 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Focus handling
-  // ---------------------------------------------------------------------------
-
   void _onFocusChanged() {
     if (_focusNode.hasFocus) {
       // When the bar gains focus, put the highlighted cell into edit mode so
@@ -227,10 +219,6 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
       _syncBarFromController();
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Auto-size
-  // ---------------------------------------------------------------------------
 
   /// Resize the bar height to tightly fit the current text content.
   void _autoSize() {
@@ -264,10 +252,6 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
     setState(() => _height = needed);
   }
 
-  // ---------------------------------------------------------------------------
-  // Commit / cancel logic
-  // ---------------------------------------------------------------------------
-
   /// Commit the current bar text to the active cell (same semantics as
   /// pressing Enter in the grid cell editor).
   void _commitIfActive() {
@@ -296,10 +280,6 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
     _controller.selection.goTo(r, c);
   }
 
-  // ---------------------------------------------------------------------------
-  // Address label
-  // ---------------------------------------------------------------------------
-
   /// The name box text: the selected range (`B2:D9`, or `B2` for one cell),
   /// or the cell being edited.
   String _cellLabel() {
@@ -311,10 +291,6 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
     if (r < 0 || c < 0) return '';
     return '${columnLabel(c)}${r + 1}';
   }
-
-  // ---------------------------------------------------------------------------
-  // Build
-  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -341,7 +317,6 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // ── Name box ──────────────────────────────────────────
                     SizedBox(
                       width: 80,
                       child: DecoratedBox(
@@ -371,7 +346,6 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
                         ),
                       ),
                     ),
-                    // ── fx icon ───────────────────────────────────────────
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Center(
@@ -385,13 +359,11 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
                         ),
                       ),
                     ),
-                    // ── Divider ───────────────────────────────────────────
                     VerticalDivider(
                       width: 1,
                       thickness: 1,
                       color: dividerColor,
                     ),
-                    // ── Value field ───────────────────────────────────────
                     Expanded(
                       key: _fieldKey,
                       child: Padding(
@@ -430,7 +402,6 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
                 ),
               ),
             ),
-            // ── Bottom-edge resize handle ──────────────────────────────────
             Positioned(
               left: 0,
               right: 0,

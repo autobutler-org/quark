@@ -50,9 +50,8 @@ class AppRoutes {
 
   /// Legacy alias. The file browser lived at /cirrus for the product's whole
   /// life, so external links and bookmarks exist. This redirects to [files].
-  ///
-  // TODO(pre-v1.0.0, #1601): delete this constant and the two /cirrus GoRoutes
-  // that redirect to /files.
+  /// Like [health], [devices] and [jobs], it is permanent, so old bookmarks
+  /// keep working.
   static const legacyCirrus = '/cirrus';
 
   /// A file's own viewer, for every kind without an editor of its own.
@@ -136,19 +135,13 @@ class AppRoutes {
   /// Legacy alias. Health was its own page before the System page took it
   /// in as a tab (#2351), so links and bookmarks exist. This redirects to
   /// its tab with the query kept.
-  ///
-  // TODO(pre-v1.0.0, #1601): delete this constant and its redirect GoRoute.
   static const health = '/health';
 
   /// Legacy alias for the System page's Storage tab, the drives. See
   /// [health].
-  ///
-  // TODO(pre-v1.0.0, #1601): delete this constant and its redirect GoRoute.
   static const devices = '/devices';
 
   /// Legacy alias for the System page's Jobs tab. See [health].
-  ///
-  // TODO(pre-v1.0.0, #1601): delete this constant and its redirect GoRoute.
   static const jobs = '/jobs';
 
   /// The admin-only Users page (#1662). Its tabs have their own URLs, one
@@ -682,7 +675,6 @@ final router = GoRouter(
       ),
     ),
     GoRoute(
-      // TODO(pre-v1.0.0, #1601): delete this route with the /cirrus alias.
       // /cirrus/:path redirects to /files/:path. The browser lived at /cirrus
       // before the rename, so old links and bookmarks must keep resolving.
       path: '${AppRoutes.legacyCirrus}/:path(.*)',
@@ -692,7 +684,6 @@ final router = GoRouter(
       ),
     ),
     GoRoute(
-      // TODO(pre-v1.0.0, #1601): delete this route with the /cirrus alias.
       // Bare /cirrus → /files.
       path: AppRoutes.legacyCirrus,
       redirect: (context, state) => AppRoutes.files,
@@ -814,7 +805,6 @@ final router = GoRouter(
       builder: (tab, onTabSelected) =>
           SystemPage(tab: tab, onTabSelected: onTabSelected),
     ),
-    // TODO(pre-v1.0.0, #1601): delete these three with their constants.
     // Health, Devices and Jobs were pages of their own before the System
     // page (#2351); old links land on the matching tab with the query kept.
     for (final (legacy, tab) in [

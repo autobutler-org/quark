@@ -221,7 +221,6 @@ class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
         _error = unreachable ? null : _signInError(e);
         _loading = false;
       });
-      // Announce error to screen readers
     }
   }
 

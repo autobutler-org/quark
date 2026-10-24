@@ -67,10 +67,6 @@ class HeaderCornerCell extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Column header cell with right-edge resize handle
-// ---------------------------------------------------------------------------
-
 /// A column's letter header, with a [HeaderResizeHandle] on its right edge
 /// and, when [onFilter] is set, a [ColumnFilterButton] beside it.
 ///
@@ -180,10 +176,6 @@ class ColumnHeaderCell extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Row number cell (left gutter) with bottom-edge resize handle
-// ---------------------------------------------------------------------------
 
 /// A row's number in the left gutter, with a [HeaderResizeHandle] on its
 /// bottom edge.

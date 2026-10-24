@@ -151,7 +151,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   late final FileBrowserEventsController _events;
   StreamSubscription<UploadBatchResult>? _uploadResultSub;
 
-  // Search state
   bool _isSearchMode = false;
   Future<List<FileNode>>? _searchFuture;
   String? _searchQuery;
@@ -717,7 +716,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
   Future<void> _refreshFileState() => manualRefresh();
 
-  // ── Multi-select / batch delete (#986) ──────────────────────────────────
+  // Multi-select / batch delete (#986).
 
   void _onSelectionChanged(FileNode node) {
     setState(() {
@@ -790,8 +789,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       );
     }
   }
-
-  // ── Optimistic updates ───────────────────────────────────────────────────
 
   /// Immediately remove a node from the displayed list.
   /// If the server call fails, [_refreshFileState] will reconcile.
@@ -1194,7 +1191,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     if (fileName == null || !mounted) return;
 
     try {
-      // Create empty content based on file type.
       final kind = fileKindForName(fileName);
       final emptyContent = switch (kind) {
         FileKind.qsheet =>
@@ -1326,7 +1322,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     showMessage(context, outcome.message);
   }
 
-  // ── CSV → .qsheet conversion (#1019) ──────────────────────────────────
+  // CSV → .qsheet conversion (#1019).
 
   /// Asks before converting [node] to a .qsheet beside it. [original] names
   /// what is left alone: "CSV file" or "workbook".
@@ -1349,7 +1345,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     if (confirm != true || !mounted) return;
 
     try {
-      // Download the CSV.
       final bytes = await FilesService.downloadFileBytes(
         node.apiPath,
         serial: serialOrNull(node.deviceSerial),
@@ -1413,7 +1408,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     }
   }
 
-  // ── .xlsx → .qsheet conversion (#1741) ────────────────────────────
+  // .xlsx → .qsheet conversion (#1741).
 
   /// The name the workbook at [node] converts to.
   static String _qsheetNameFor(FileNode node) {
@@ -1985,8 +1980,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         break;
     }
   }
-
-  // ── Mobile FAB (Create actions) ──────────────────────────────────────────
 
   /// Shows the FAB again and resyncs the offset the scroll listener compares
   /// against, so a page uncovered mid-list does not immediately re-hide it.

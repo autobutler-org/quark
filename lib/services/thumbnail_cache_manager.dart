@@ -10,9 +10,8 @@ import 'package:quark/utils/thumbnail_cache_key.dart';
 /// the whole app, sized by [ThumbnailCacheConfig], and the key each thumbnail
 /// is filed under.
 ///
-/// A widget passes [instance] and [keyFor] to its `CachedNetworkImage`, or
-/// shows [image]. On the web caching is left to the browser and the store
-/// goes unused.
+/// A widget shows [image]. On the web caching is left to the browser and the
+/// store goes unused.
 abstract final class ThumbnailCacheManager {
   /// The one store, shared so its object budget is counted once. A test
   /// swaps in a fake one so thumbnails load without the network or a disk.

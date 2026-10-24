@@ -121,7 +121,6 @@ class _QuarkModelViewerState extends State<QuarkModelViewer> {
   bool _moving = false;
   Timer? _settle;
 
-  // Gesture bookkeeping.
   Offset _lastFocal = Offset.zero;
   double _lastScale = 1;
   int _buttons = kPrimaryButton;

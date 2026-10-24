@@ -364,8 +364,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   final AlbumsCache _albumsCache;
   final bool _isWeb;
 
-  // ── Photos ─────────────────────────────────────────────────────────────────
-
   List<_Photo> _quark = const [];
 
   /// The sort [_quark] arrived in, which a failed refresh into another sort
@@ -389,8 +387,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   /// cannot land on top of the list it replaced.
   int _generation = 0;
 
-  // ── View choices ───────────────────────────────────────────────────────────
-
   PhotoCategory _category = PhotoCategory.quark;
   bool _categoriesExpanded = false;
   int _columns = PhotoGridConfig.defaultColumns;
@@ -405,16 +401,12 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   /// (#2510).
   AlbumSort _albumSort = AppSettings.instance.albumSort.value;
 
-  // ── Selection ──────────────────────────────────────────────────────────────
-
   bool _selectionMode = false;
   final Set<String> _selectedIds = {};
   AlbumItem? _addingToAlbum;
 
   /// The photos [_addingToAlbum] already holds, which cannot be picked.
   Set<String> _albumMemberIds = const {};
-
-  // ── Albums ─────────────────────────────────────────────────────────────────
 
   List<PhotoAlbum> _albums = const [];
   bool _albumsLoading = true;
@@ -446,8 +438,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   /// Bumped by every album items request, so a slow answer for an album the
   /// user has already left cannot land on the one they moved to.
   int _albumRequest = 0;
-
-  // ── Search ─────────────────────────────────────────────────────────────────
 
   /// What the grid is narrowed to, trimmed; empty shows everything.
   String _query = '';
@@ -728,8 +718,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
       ? _albumId != null || _pendingLink != null
       : _albumId != null && albumById(_albumId!) != null;
 
-  // ── Loading ────────────────────────────────────────────────────────────────
-
   /// Reloads everything: the first page of Quark photos, the device photos,
   /// the favorites, and the album tree.
   ///
@@ -1001,8 +989,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     super.dispose();
   }
 
-  // ── Search ─────────────────────────────────────────────────────────────────
-
   /// Narrows the grid to photos whose file name contains [text], or shows
   /// everything again when it is blank (#2059).
   ///
@@ -1059,8 +1045,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     notifyListeners();
   }
 
-  // ── View choices ───────────────────────────────────────────────────────────
-
   /// Shows [category], and folds the category picker away.
   void selectCategory(PhotoCategory category) {
     _category = category;
@@ -1102,8 +1086,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     await AppSettings.instance.setAlbumSort(sort);
   }
 
-  // ── Favorites ──────────────────────────────────────────────────────────────
-
   /// Flips whether the Quark photo [id] is a favorite, then reloads the album
   /// tree so the Favorites album's count follows. Device photos cannot be
   /// favorited and are ignored. Throws what the Quark threw.
@@ -1137,8 +1119,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     notifyListeners();
     await loadAlbums();
   }
-
-  // ── Selection ──────────────────────────────────────────────────────────────
 
   /// Starts selecting photos, with nothing selected. With [addingTo], the
   /// selection is headed for that album, and the grid switches to All photos
@@ -1270,8 +1250,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
       error: error,
     );
   }
-
-  // ── Albums ─────────────────────────────────────────────────────────────────
 
   /// Reloads the album tree, and keeps it for the next visit. A failure
   /// leaves the last tree in place.
@@ -1429,8 +1407,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     return (serial: photo!.serial ?? '', relPath: relPath);
   }
 
-  // ── One Quark photo ───────────────────────────────────────────────────────
-
   /// Downloads the Quark photo [id] to the device (#2276). Does nothing for a
   /// device photo. Throws what the Quark threw.
   Future<void> downloadPhoto(String id) async {
@@ -1548,8 +1524,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     await _deleteAlbum(id);
     await loadAlbums();
   }
-
-  // ── Uploads ────────────────────────────────────────────────────────────────
 
   /// The serial of the device an upload goes to, as [resolveUploadSerial]
   /// works it out: `''` for built-in storage, null when [pick] was dismissed.
@@ -1715,8 +1689,6 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     // than the Quark's 409 (#2016), the import asks for both to be kept.
     return _uploadFiles('', files, serial: serial, keepBoth: true);
   }
-
-  // ── Viewer ─────────────────────────────────────────────────────────────────
 
   /// Where the thumbnail of the Quark photo [id] is served, or null for a
   /// device photo.

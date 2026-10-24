@@ -8,8 +8,6 @@ import 'package:quark_widgets/quark_widgets.dart';
 typedef DocumentEditorKeyHandler =
     KeyEventResult? Function(KeyEvent event, Node? node);
 
-// ── Quill styles ──────────────────────────────────────────────────────────────
-
 DefaultStyles _quillStyles(ColorScheme cs) {
   final fg = cs.onSurface;
   final muted = cs.onSurface.withValues(alpha: 0.5);

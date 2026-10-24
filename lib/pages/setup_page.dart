@@ -67,11 +67,9 @@ class _SetupPageState extends State<SetupPage> {
   /// since switched away from is dropped.
   int _probeGeneration = 0;
 
-  // Step 2: recovery phrase acknowledgement
   String? _recoveryPhrase;
   bool _phraseAcknowledged = false;
 
-  // Step 3: theme selection
   bool _showThemeStep = false;
 
   @override

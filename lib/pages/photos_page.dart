@@ -258,8 +258,6 @@ class PhotosPageState extends State<PhotosPage>
     if (!_searchOpen) _controller.setSearchQuery('');
   }
 
-  // ── Photos ─────────────────────────────────────────────────────────────────
-
   void _onPhotoTap(List<PhotoItem> photos, int index) {
     if (_controller.selectionMode) {
       _controller.toggleSelection(photos[index].id);
@@ -434,8 +432,6 @@ class PhotosPageState extends State<PhotosPage>
         : null,
   );
 
-  // ── Selection ──────────────────────────────────────────────────────────────
-
   Future<void> _pickAlbumForSelection() async {
     final album = await AlbumPickerSheetHost.show(
       context,
@@ -502,8 +498,6 @@ class PhotosPageState extends State<PhotosPage>
       );
     }
   }
-
-  // ── Albums ─────────────────────────────────────────────────────────────────
 
   /// Shows the album [id] in place, or All photos for null, at its canonical
   /// link. [didUpdateWidget] hands the new URL to the controller.

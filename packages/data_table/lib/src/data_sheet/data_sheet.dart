@@ -537,10 +537,8 @@ class _DataSheetViewState extends State<_DataSheetView> {
         builder: (context, _) {
           return Column(
             children: [
-              // ── Formula bar ─────────────────────────────────────────
               if (widget.showFormulaBar)
                 DataSheetFormulaBar(controller: controller),
-              // ── Grid ────────────────────────────────────────────────
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) =>
@@ -624,7 +622,6 @@ class _DataSheetViewState extends State<_DataSheetView> {
               child: Column(
                 key: _gridBodyKey,
                 children: [
-                  // ── Column headers and frozen rows ──────────────────
                   SizedBox(
                     height: top,
                     child: ClipRect(
@@ -667,7 +664,6 @@ class _DataSheetViewState extends State<_DataSheetView> {
                       ),
                     ),
                   ),
-                  // ── Row numbers, frozen columns, and the body ───────
                   Expanded(
                     child: Row(
                       children: [
@@ -723,10 +719,6 @@ class _DataSheetViewState extends State<_DataSheetView> {
       ),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Layout helpers
-  // ---------------------------------------------------------------------------
 
   double _colWidth(int c) => c < controller.columnWidths.length
       ? controller.columnWidths[c]
@@ -1028,10 +1020,6 @@ class _DataSheetViewState extends State<_DataSheetView> {
     controller.selection.setActive(row, col);
   }
 
-  // ---------------------------------------------------------------------------
-  // Shortcut action helpers
-  // ---------------------------------------------------------------------------
-
   DataSheetClipboard get _clipboard =>
       widget.clipboard ?? DataSheetClipboard.memory;
 
@@ -1196,8 +1184,4 @@ class _DataSheetViewState extends State<_DataSheetView> {
       controller.selection.setHighlighted(highlightedRow, highlightedCol + 1);
     }
   }
-
-  // ── Header helpers ────────────────────────────────────────────────────────
-  // Column label conversion is in heading/column_label.dart (columnLabel())
-  // and heading widgets are in heading/heading_cells.dart.
 }

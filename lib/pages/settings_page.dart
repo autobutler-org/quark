@@ -234,7 +234,6 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _highContrast = false;
   bool _demoMode = false;
 
-  // SBOM state
   GoSbom? _goSbom;
   List<FlutterPackage>? _flutterSbom;
   bool _isLoadingSbom = false;
@@ -249,12 +248,10 @@ class _SettingsPageState extends State<SettingsPage> {
   /// enrolled. Once is enough: dismissing the sheet must not reopen it.
   bool _offeredRemoteAccessSetup = false;
 
-  // Connected devices state
   List<ConnectedDevice> _connectedDevices = [];
   bool _isLoadingDevices = false;
   String? _devicesError;
 
-  // Profile picture state
   bool _avatarBusy = false;
   String? _avatarError;
 

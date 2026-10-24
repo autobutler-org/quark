@@ -32,7 +32,7 @@ class DataSheetInterpreter {
     int cols,
     String Function(int, int) rawCellValue,
   ) {
-    // ── Stage 1: parse all formula cells ────────────────────────────────────
+    // Stage 1: parse all formula cells.
     final parsedFormulas = <(int, int), ParsedFormula>{};
     final parseErrors = <(int, int), FormulaValue>{};
 
@@ -52,7 +52,7 @@ class DataSheetInterpreter {
       }
     }
 
-    // ── Stage 2: build dependency graph ─────────────────────────────────────
+    // Stage 2: build dependency graph.
     final graph = DependencyGraph();
 
     for (final entry in parsedFormulas.entries) {
@@ -85,10 +85,10 @@ class DataSheetInterpreter {
       }
     }
 
-    // ── Stage 3: detect cycles with Tarjan's SCC ────────────────────────────
+    // Stage 3: detect cycles with Tarjan's SCC.
     final cycleMembers = findCycleMembers(graph);
 
-    // ── Stage 4: topological evaluation with Kahn's algorithm ───────────────
+    // Stage 4: topological evaluation with Kahn's algorithm.
     final results = <(int, int), FormulaValue>{};
 
     // Pre-assign error values to all cycle members.

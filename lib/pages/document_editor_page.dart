@@ -25,8 +25,6 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-// ── Find shortcut ─────────────────────────────────────────────────────────────
-
 /// Swallows Ctrl/Cmd+F inside a [QuillEditor] and runs [onToggle] instead.
 ///
 /// flutter_quill binds Ctrl/Cmd+F to its own modal search dialog
@@ -49,8 +47,6 @@ KeyEventResult? quillFindKeyInterceptor(KeyEvent event, VoidCallback onToggle) {
   if (event is KeyDownEvent) onToggle();
   return KeyEventResult.handled;
 }
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 /// The editor for one `.qdoc` document: read-only until the user starts editing, with auto-save, find, a word
 /// count, and PDF export and printing. Once the document has loaded, the title renames the file itself.
@@ -100,7 +96,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   static const _prefKeyDarkPage = 'document_editor_dark_page';
   bool _editorDarkPage = false;
 
-  // Auto-save
   static const _prefKeyAutoSave = 'document_editor_auto_save';
   static const _autoSaveDelay = Duration(seconds: 2);
   bool _autoSaveEnabled = true;
@@ -144,8 +139,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     _scrollController.dispose();
     super.dispose();
   }
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
 
   String _nameFromPath(String path) => fileNameWithoutExtension(path, '.qdoc');
 
@@ -195,7 +188,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     }
   }
 
-  // ── Read-only / edit toggle (#939) ────────────────────────────────────────
+  // Read-only / edit toggle (#939).
 
   void _enterEditMode() {
     _controller.readOnly = false;
@@ -230,7 +223,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     });
   }
 
-  // ── Focus restoration across a tab switch (#1856) ─────────────────────────
+  // Focus restoration across a tab switch (#1856).
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -246,8 +239,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
       _focusEditor();
     }
   }
-
-  // ── Document ───────────────────────────────────────────────────────────────
 
   Future<void> _loadDocument() async {
     setState(() {
@@ -469,8 +460,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     }
   }
 
-  // ── PDF / Print ────────────────────────────────────────────────────────────
-
   Future<Uint8List?> _buildPdfBytes() async {
     final converter = PDFConverter(
       document: _controller.document.toDelta(),
@@ -521,8 +510,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     }
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.of(context).canPop();
@@ -552,7 +539,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
               _toggleFindBar,
           const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
               _toggleFindBar,
-          // Escape — close find bar when open
           const SingleActivator(LogicalKeyboardKey.escape): () {
             if (_showFindBar) setState(() => _showFindBar = false);
           },
@@ -616,7 +602,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
                 : 'Find in document (Ctrl+F)',
             onPressed: _toggleFindBar,
           ),
-          // Auto-save toggle (only relevant in edit mode)
           if (!_isReadOnly)
             QuarkBarIconButton(
               key: const ValueKey('document_editor_autosave'),
@@ -633,7 +618,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
             isBusy: _exporting,
             onPressed: () => _showOverflowMenu(context),
           ),
-          // Save (only in edit mode)
           if (!_isReadOnly)
             QuarkBarChip(
               key: const ValueKey('document_editor_save'),

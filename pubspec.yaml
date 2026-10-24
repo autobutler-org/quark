@@ -1,5 +1,5 @@
 name: quark
-description: "A new Flutter project."
+description: "The Quark app: files, photos, documents and chat on a Quark at home."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
@@ -126,7 +126,8 @@ dependencies:
 # its files (the browser's downloads menu sends text/uri-list and text/plain),
 # so nothing uploaded and the drag highlight stayed stuck. The pin stays on the
 # 0.8.4 API until the hosted ^0.9 migration is unblocked: desktop_drop 0.9
-# needs cross_file ^0.4 while flutter_image_compress needs cross_file ^0.3.
+# needs cross_file ^0.4 while flutter_image_compress_platform_interface needs
+# cross_file ^0.3.
 # Drop this override once that move is done (#3640).
 dependency_overrides:
   desktop_drop:

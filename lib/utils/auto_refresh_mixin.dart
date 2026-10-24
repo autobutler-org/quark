@@ -24,8 +24,6 @@ import 'package:quark/services/app_settings.dart';
 /// [isRefreshing] for the in-progress indicator on the refresh button.
 mixin AutoRefreshMixin<T extends StatefulWidget>
     on State<T>, WidgetsBindingObserver {
-  // ── State ──────────────────────────────────────────────────────────────────
-
   /// True only for the very first load (no data yet).
   bool isInitialLoad = true;
 
@@ -39,8 +37,6 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
   /// A [manualRefresh] was turned away by the guards and still has to run.
   bool _refreshOwed = false;
   Timer? _owedRefreshTimer;
-
-  // ── Overrides ──────────────────────────────────────────────────────────────
 
   /// How often to auto-refresh. Reads from [AppSettings.refreshIntervalSeconds]
   /// by default. Override to use a fixed interval regardless of settings.
@@ -69,8 +65,6 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
   /// sets another widget's state has to wait for the frame.
   void didChangeRefreshing() {}
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────────
-
   @override
   void initState() {
     super.initState();
@@ -98,16 +92,12 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
     }
   }
 
-  // ── Public API ─────────────────────────────────────────────────────────────
-
   /// Call from a manual refresh button, or after a mutation. Same guard as
   /// the timer, except that a call the guard turns away is not dropped: one
   /// more refresh runs once the one in flight settles and the debounce lapses,
   /// however many calls were turned away in the meantime. A refresh already in
   /// flight may have fetched before the mutation landed (#2445).
   Future<void> manualRefresh() => _triggerRefresh(owe: true);
-
-  // ── Internals ──────────────────────────────────────────────────────────────
 
   void _startTimer() {
     _refreshTimer?.cancel();
