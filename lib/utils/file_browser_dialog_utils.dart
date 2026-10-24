@@ -350,28 +350,60 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
   );
 }
 
-/// Asks the user to confirm deleting [itemName]; true when they did.
+/// Shows [message] in a snack bar, with [action] and [duration] when given.
+///
+/// It queues behind a bar already on screen, which is Flutter's default, so
+/// one message never cuts off another. A bar that replaces the last on purpose
+/// (an undo) calls `hideCurrentSnackBar` itself. Does nothing once [context]
+/// is unmounted or has no [ScaffoldMessenger] above it.
+void showMessage(
+  BuildContext context,
+  String message, {
+  SnackBarAction? action,
+  Duration? duration,
+}) {
+  if (!context.mounted) return;
+  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+    SnackBar(
+      content: Text(message),
+      action: action,
+      duration: duration ?? const Duration(milliseconds: 4000),
+    ),
+  );
+}
+
+/// Asks the user to confirm deleting [itemName]; true when they did. [count]
+/// above one is a multi-select, and the title says how many: "Move 3 items to
+/// Trash?".
 ///
 /// Deleting moves the item to the trash rather than erasing it (#1844), so
 /// this says so: a confirmation that reads like the last word before something
 /// is gone forever is the wrong warning, and the one place a user decides is
 /// here. The permanent step lives in the trash, behind its own confirmation.
-Future<bool?> confirmDelete(BuildContext context, String itemName) =>
-    confirmAction(
-      context,
-      title: 'Move to Trash?',
-      message:
-          '$itemName moves to Trash. You can restore it for '
-          '${TrashConfig.retentionDays} days.',
-      confirmLabel: 'Move to Trash',
-    );
+Future<bool?> confirmDelete(
+  BuildContext context,
+  String itemName, {
+  int count = 1,
+}) {
+  final one = count == 1;
+  return confirmAction(
+    context,
+    title: one ? 'Move to Trash?' : 'Move $count items to Trash?',
+    message:
+        '$itemName ${one ? 'moves' : 'move'} to Trash. You can restore '
+        '${one ? 'it' : 'them'} for ${TrashConfig.retentionDays} days.',
+    confirmLabel: 'Move to Trash',
+  );
+}
 
-/// Asks the user to confirm [confirmLabel]; true when they did.
+/// Asks the user to confirm [confirmLabel]; true when they did. [keyPrefix]
+/// keys the buttons `<keyPrefix>_cancel` and `<keyPrefix>_confirm`.
 Future<bool?> confirmAction(
   BuildContext context, {
   required String title,
   required String message,
   required String confirmLabel,
+  String? keyPrefix,
 }) async {
   await Future<void>.delayed(Duration.zero);
   if (!context.mounted) {
@@ -387,10 +419,12 @@ Future<bool?> confirmAction(
         content: Text(message),
         actions: [
           TextButton(
+            key: keyPrefix == null ? null : ValueKey('${keyPrefix}_cancel'),
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancel'),
           ),
           TextButton(
+            key: keyPrefix == null ? null : ValueKey('${keyPrefix}_confirm'),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(confirmLabel),
           ),
@@ -398,6 +432,31 @@ Future<bool?> confirmAction(
       );
     },
   );
+}
+
+/// Shows a [ConfirmDeleteDialog] and answers true when the user confirmed.
+/// The arguments are the dialog's own.
+Future<bool> confirmDestructive(
+  BuildContext context, {
+  required String title,
+  required String body,
+  required String keyPrefix,
+  String confirmLabel = 'Delete',
+  bool destructive = true,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => ConfirmDeleteDialog(
+      title: title,
+      body: body,
+      keyPrefix: keyPrefix,
+      confirmLabel: confirmLabel,
+      destructive: destructive,
+      onConfirm: () => Navigator.of(dialogContext).pop(true),
+      onCancel: () => Navigator.of(dialogContext).pop(false),
+    ),
+  );
+  return confirmed == true;
 }
 
 Future<String?> _promptForText({

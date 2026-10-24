@@ -87,9 +87,7 @@ class _SlidesPageState extends State<SlidesPage>
       if (mounted) context.go(AppRoutes.slideFile(path));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.upload(e, 'create the presentation'))),
-      );
+      showMessage(context, Errors.upload(e, 'create the presentation'));
     }
   }
 
@@ -118,9 +116,7 @@ class _SlidesPageState extends State<SlidesPage>
       pick = await _controller.pickPowerPoint();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(Errors.importPowerPoint(e))));
+      showMessage(context, Errors.importPowerPoint(e));
       return;
     }
     if (pick == null || !mounted) return;

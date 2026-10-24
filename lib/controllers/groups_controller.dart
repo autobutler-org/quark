@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/models/group.dart';
 import 'package:quark/services/groups_service.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 typedef ListGroupsFn = Future<List<Group>> Function();
@@ -18,7 +19,7 @@ typedef GroupMemberFn = Future<void> Function(int groupId, int userId);
 /// groups again rather than trusting the Quark's answer, which leaves the
 /// members out of a rename. Failures come back raw; the page turns them into
 /// a sentence with `Errors`.
-class GroupsController extends ChangeNotifier {
+class GroupsController extends ChangeNotifier with SafeNotifier {
   GroupsController({
     ListGroupsFn listGroups = GroupsService.list,
     CreateGroupFn createGroup = GroupsService.create,
@@ -50,7 +51,6 @@ class GroupsController extends ChangeNotifier {
 
   /// Bumped by every load, so a slow response cannot overwrite a newer one.
   int _generation = 0;
-  bool _disposed = false;
 
   /// Every group, in the Quark's order: `everyone` first.
   List<GroupItem> get groups => [for (final group in _groups) itemFor(group)];
@@ -101,7 +101,7 @@ class GroupsController extends ChangeNotifier {
   /// Fetches the groups. A newer load supersedes this one.
   Future<void> load() async {
     final generation = ++_generation;
-    _notify();
+    notifyListeners();
     try {
       final groups = await _listGroups();
       if (!_isCurrent(generation)) return;
@@ -154,17 +154,17 @@ class GroupsController extends ChangeNotifier {
     if (_isSaving) return false;
     _isSaving = true;
     _saveError = null;
-    _notify();
+    notifyListeners();
     try {
       await request();
       await load();
       return true;
     } catch (error) {
-      if (!_disposed) _saveError = error;
+      if (!isDisposed) _saveError = error;
       return false;
     } finally {
       _isSaving = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -177,7 +177,7 @@ class GroupsController extends ChangeNotifier {
   ) async {
     if (busy.contains(id)) return null;
     busy.add(id);
-    _notify();
+    notifyListeners();
     try {
       await request();
       await load();
@@ -186,19 +186,9 @@ class GroupsController extends ChangeNotifier {
       return error;
     } finally {
       busy.remove(id);
-      _notify();
+      notifyListeners();
     }
   }
 
-  bool _isCurrent(int generation) => !_disposed && generation == _generation;
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
-  }
+  bool _isCurrent(int generation) => !isDisposed && generation == _generation;
 }

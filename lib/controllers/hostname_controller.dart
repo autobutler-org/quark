@@ -6,6 +6,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/services/hostname_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 
 /// The device name field in Settings and first-boot setup (#2344): what the
 /// Quark is called, renaming it, and following it to its new address.
@@ -19,7 +20,7 @@ import 'package:quark/utils/error_text.dart';
 ///
 /// Service calls arrive as function parameters defaulting to the real ones,
 /// so a test passes fakes without a mocking library.
-class HostnameController extends ChangeNotifier {
+class HostnameController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller talking to the real [HostnameService],
   /// [EventsService] and [AppSettings] unless overridden.
   HostnameController({
@@ -50,7 +51,6 @@ class HostnameController extends ChangeNotifier {
   String? _error;
   String? _renamedTo;
   String? _reopenAddress;
-  bool _disposed = false;
 
   static String? _defaultActiveHost() => AppSettings.instance.activeHost;
   static Uri _defaultPageUri() => Uri.base;
@@ -81,13 +81,13 @@ class HostnameController extends ChangeNotifier {
   /// Fetches the status. A failure leaves [status] null and sets no [error]:
   /// a Quark too old to have the endpoint just has no field.
   Future<void> load() async {
-    _notify();
+    notifyListeners();
     try {
       await _apply(await _getStatus());
     } catch (error) {
       debugPrint('[hostname_controller.dart] load failed: $error');
     } finally {
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -95,7 +95,7 @@ class HostnameController extends ChangeNotifier {
   Future<bool> rename(String name) async {
     _isWorking = true;
     _error = null;
-    _notify();
+    notifyListeners();
     try {
       await _apply(await _setHostname(name.trim()));
       return true;
@@ -104,7 +104,7 @@ class HostnameController extends ChangeNotifier {
       return false;
     } finally {
       _isWorking = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -132,7 +132,7 @@ class HostnameController extends ChangeNotifier {
     if (previous == null ||
         (previous.hostname == next.hostname &&
             previous.networkName == next.networkName)) {
-      _notify();
+      notifyListeners();
       return;
     }
     final oldHosts = {
@@ -145,7 +145,7 @@ class HostnameController extends ChangeNotifier {
     _reopenAddress = oldHosts.contains(page.host.toLowerCase())
         ? page.replace(host: newHost).origin
         : null;
-    _notify();
+    notifyListeners();
 
     final active = _activeHost();
     final uri = active == null ? null : Uri.tryParse(active);
@@ -162,13 +162,8 @@ class HostnameController extends ChangeNotifier {
     }
   }
 
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
   @override
   void dispose() {
-    _disposed = true;
     unawaited(_events.cancel());
     super.dispose();
   }

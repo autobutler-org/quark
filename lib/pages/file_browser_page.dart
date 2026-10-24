@@ -393,7 +393,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         return;
       }
       _refreshFileState();
-      _showMessage(
+      showMessage(
+        context,
         _uploadReport(result),
         duration: result.hadFailures || result.endedEarly
             ? const Duration(seconds: 10)
@@ -556,7 +557,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     });
     // The member landing stands in, and the flag is retried on its own.
     if (accountError != null) {
-      _showMessage(Errors.message(accountError, 'check your account'));
+      showMessage(context, Errors.message(accountError, 'check your account'));
     }
     // `_reloadFiles` may issue nothing while a deep link is still resolving.
     // Awaiting the sentinel would hang the refresh, and with it the mixin's
@@ -753,25 +754,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         .toList();
     if (nodes.isEmpty) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete selected'),
-        content: Text(
-          'Delete ${nodes.length} item${nodes.length == 1 ? '' : 's'}? '
-          'You can restore ${nodes.length == 1 ? 'it' : 'them'} from Trash.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDelete(
+      context,
+      nodes.length == 1 ? nodes.single.name : '${nodes.length} items',
+      count: nodes.length,
     );
     if (confirmed != true || !mounted) return;
 
@@ -790,14 +776,16 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     try {
       await _controller.deleteNodes(nodes: nodes);
       if (mounted) {
-        _showMessage(
+        showMessage(
+          context,
           'Deleted ${nodes.length} item${nodes.length == 1 ? "" : "s"}',
         );
       }
     } catch (e) {
       if (!mounted) return;
       if (snapshot != null) setState(() => _cachedFiles = snapshot);
-      _showMessage(
+      showMessage(
+        context,
         Errors.message(
           e,
           nodes.length == 1 ? 'delete the item' : 'delete the items',
@@ -908,7 +896,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       );
     } catch (e) {
       debugPrint('[file_browser_page.dart] Failed to list devices: $e');
-      if (mounted) _showMessage(Errors.message(e, action));
+      if (mounted) showMessage(context, Errors.message(e, action));
       return null;
     }
   }
@@ -936,10 +924,15 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         return;
       }
 
-      _showMessage('File picker plugin not available. Fully restart the app.');
+      showMessage(
+        context,
+        'File picker plugin not available. Fully restart the app.',
+      );
     } catch (e) {
       debugPrint('[file_browser_page.dart] Folder upload failed: $e');
-      _showMessage(Errors.message(e, 'read the selected folder'));
+      if (mounted) {
+        showMessage(context, Errors.message(e, 'read the selected folder'));
+      }
     }
   }
 
@@ -960,7 +953,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         return;
       }
 
-      _showMessage('File picker plugin not available. Fully restart the app.');
+      showMessage(
+        context,
+        'File picker plugin not available. Fully restart the app.',
+      );
     }
   }
 
@@ -981,7 +977,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         return;
       }
 
-      _showMessage('File picker plugin not available. Fully restart the app.');
+      showMessage(
+        context,
+        'File picker plugin not available. Fully restart the app.',
+      );
     }
   }
 
@@ -1021,7 +1020,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       );
 
       if (flattened.uploads.isEmpty) {
-        _showMessage('No files to upload');
+        showMessage(context, 'No files to upload');
         return;
       }
 
@@ -1032,7 +1031,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       );
     } catch (e) {
       debugPrint('[file_browser_page.dart] Error in catch block: $e');
-      _showMessage(Errors.message(e, 'read the dropped files'));
+      if (mounted) {
+        showMessage(context, Errors.message(e, 'read the dropped files'));
+      }
     }
   }
 
@@ -1166,7 +1167,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         return;
       }
 
-      _showMessage('Created folder $folderName');
+      showMessage(context, 'Created folder $folderName');
       // Belt-and-suspenders: refresh after a short delay in case the WebSocket
       // event is missed (dropped connection, buffering, etc.).
       Future.delayed(const Duration(seconds: 3), () {
@@ -1181,7 +1182,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       // Roll back optimistic folder
       if (snapshot != null) setState(() => _cachedFiles = snapshot);
 
-      _showMessage(Errors.message(e, 'create the folder'));
+      showMessage(context, Errors.message(e, 'create the folder'));
     } finally {
       if (mounted) {
         setState(() {
@@ -1215,7 +1216,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
       if (!mounted) return;
 
-      _showMessage('Created $fileName');
+      showMessage(context, 'Created $fileName');
 
       final filePath = _currentPath.isEmpty
           ? fileName
@@ -1234,7 +1235,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       }
     } catch (e) {
       if (!mounted) return;
-      _showMessage(Errors.upload(e, 'create the file'));
+      showMessage(context, Errors.upload(e, 'create the file'));
     }
   }
 
@@ -1255,10 +1256,13 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           name: node.name,
           serial: serialOrNull(archive.archiveSerial),
         );
-        if (mounted && message != null) _showMessage(message);
+        if (mounted && message != null) showMessage(context, message);
       } catch (e) {
         if (mounted) {
-          _showMessage(_controller.failureMessage(FileMenuAction.download, e));
+          showMessage(
+            context,
+            _controller.failureMessage(FileMenuAction.download, e),
+          );
         }
       }
       return;
@@ -1276,7 +1280,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         if (!mounted || shouldDelete != true) return;
         _optimisticRemove(node);
         await _controller.deleteNode(node: node);
-        if (mounted) _showMessage('Deleted');
+        if (mounted) showMessage(context, 'Deleted');
         return;
       }
 
@@ -1309,7 +1313,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         setState(() => _cachedFiles = snapshot);
       }
 
-      _showMessage(_controller.failureMessage(action, e));
+      showMessage(context, _controller.failureMessage(action, e));
     }
   }
 
@@ -1322,39 +1326,28 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       _refreshFileState();
     }
 
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger != null) {
-      messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(SnackBar(content: Text(outcome.message)));
-    }
+    showMessage(context, outcome.message);
   }
 
   // ── CSV → .qsheet conversion (#1019) ──────────────────────────────────
 
+  /// Asks before converting [node] to a .qsheet beside it. [original] names
+  /// what is left alone: "CSV file" or "workbook".
+  Future<bool?> _confirmConvert(FileNode node, String original) =>
+      confirmAction(
+        context,
+        title: 'Convert to .qsheet?',
+        message:
+            'Would you like to convert "${node.name}" to a Quark '
+            'spreadsheet (.qsheet)?\n\nThe original $original will not be '
+            'modified or deleted.',
+        confirmLabel: 'Convert',
+      );
+
   Future<void> _handleCsvOpen(FileNode node) async {
     if (!mounted) return;
 
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Convert to .qsheet?'),
-        content: Text(
-          'Would you like to convert "${node.name}" to a Quark '
-          'spreadsheet (.qsheet)?\n\nThe original CSV file will not be '
-          'modified or deleted.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Convert'),
-          ),
-        ],
-      ),
-    );
+    final confirm = await _confirmConvert(node, 'CSV file');
 
     if (confirm != true || !mounted) return;
 
@@ -1367,7 +1360,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       );
       if (!mounted) return;
       if (bytes == null || bytes.isEmpty) {
-        _showMessage(Errors.couldNot('read ${node.name}'));
+        showMessage(context, Errors.couldNot('read ${node.name}'));
         return;
       }
 
@@ -1420,7 +1413,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       );
     } catch (e) {
       if (!mounted) return;
-      _showMessage(Errors.message(e, 'convert the file'));
+      showMessage(context, Errors.message(e, 'convert the file'));
     }
   }
 
@@ -1438,27 +1431,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   Future<void> _handleXlsxOpen(FileNode node) async {
     if (!mounted) return;
 
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Convert to .qsheet?'),
-        content: Text(
-          'Would you like to convert "${node.name}" to a Quark '
-          'spreadsheet (.qsheet)?\n\nThe original workbook will not be '
-          'modified or deleted.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Convert'),
-          ),
-        ],
-      ),
-    );
+    final confirm = await _confirmConvert(node, 'workbook');
 
     if (confirm != true || !mounted) return;
     await _convertXlsx(node, overwrite: false);
@@ -1491,10 +1464,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         await _handleXlsxConflict(node);
         return;
       }
-      _showMessage(Errors.message(e, 'convert the file'));
+      showMessage(context, Errors.message(e, 'convert the file'));
     } catch (e) {
       if (!mounted) return;
-      _showMessage(Errors.message(e, 'convert the file'));
+      showMessage(context, Errors.message(e, 'convert the file'));
     }
   }
 
@@ -1648,7 +1621,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           name: node.name,
           serial: serialOrNull(archive.archiveSerial),
         );
-        if (mounted && message != null) _showMessage(message);
+        if (mounted && message != null) showMessage(context, message);
         return;
       }
 
@@ -1686,9 +1659,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
       // An image nothing could decode: its bytes are already here.
       final message = await _controller.saveBytes(bytes, node.name);
-      if (mounted && message != null) _showMessage(message);
+      if (mounted && message != null) showMessage(context, message);
     } catch (e) {
-      if (mounted) _showMessage(Errors.message(e, 'open the file'));
+      if (mounted) showMessage(context, Errors.message(e, 'open the file'));
     }
   }
 
@@ -1834,19 +1807,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
     context.go(AppRoutes.filesPath(normalized));
-  }
-
-  void _showMessage(String message, {Duration? duration}) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(message),
-        // Something went wrong is worth reading; the default four seconds is
-        // not enough for a sentence naming the reason.
-        duration: duration ?? const Duration(seconds: 4),
-      ),
-    );
   }
 
   void _goHome() {

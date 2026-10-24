@@ -6,6 +6,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/fullscreen.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_slides/quark_slides.dart';
 
 /// The URL one picture inside an office package is fetched from.
@@ -54,7 +55,7 @@ Uri previewPartUrl(String part, {required String filePath, String? serial}) {
 /// are visible for [controlsIdle] after the last [wakeControls].
 ///
 /// Service calls and fullscreen are parameters, so a test passes fakes.
-class SlidePresentController extends ChangeNotifier {
+class SlidePresentController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller for the file at [filePath] on the device
   /// [deviceSerial] (empty for the Quark's own storage), from the slide at
   /// [startIndex].
@@ -107,7 +108,6 @@ class SlidePresentController extends ChangeNotifier {
   bool _controlsVisible = true;
   Timer? _clock;
   Timer? _idle;
-  bool _disposed = false;
 
   String? get _serial => deviceSerial.isEmpty ? null : deviceSerial;
 
@@ -189,15 +189,15 @@ class SlidePresentController extends ChangeNotifier {
   Future<void> load() async {
     if (_presentation != null) return;
     _loadError = null;
-    _notify();
+    notifyListeners();
     try {
       final loaded = await loadPresentation(filePath, serial: _serial);
-      if (_disposed) return;
+      if (isDisposed) return;
       _show(loaded);
     } catch (e) {
       _loadError = e;
     }
-    _notify();
+    notifyListeners();
   }
 
   void _show(Presentation presentation) {
@@ -217,7 +217,7 @@ class SlidePresentController extends ChangeNotifier {
     if (to == _index) return;
     _movedBack = to < _index;
     _index = to;
-    _notify();
+    notifyListeners();
   }
 
   /// Shows the next slide; nothing at the last.
@@ -235,7 +235,7 @@ class SlidePresentController extends ChangeNotifier {
   /// Shows or hides the speaker's view.
   void togglePresenterView() {
     _presenterView = !_presenterView;
-    _notify();
+    notifyListeners();
   }
 
   /// Shows the controls and restarts their [controlsIdle] countdown.
@@ -243,18 +243,18 @@ class SlidePresentController extends ChangeNotifier {
     _idle?.cancel();
     _idle = Timer(controlsIdle, () {
       _controlsVisible = false;
-      _notify();
+      notifyListeners();
     });
     if (_controlsVisible) return;
     _controlsVisible = true;
-    _notify();
+    notifyListeners();
   }
 
   /// Enters fullscreen, or leaves it.
   Future<void> toggleFullscreen() async {
     if (!canToggleFullscreen) return;
     await fullscreen.setActive(!fullscreen.isActive);
-    _notify();
+    notifyListeners();
   }
 
   /// Leaves fullscreen, on the way out of presenting.
@@ -262,14 +262,9 @@ class SlidePresentController extends ChangeNotifier {
     if (isFullscreen) await fullscreen.setActive(false);
   }
 
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
   /// Stops the clock and the controls' countdown.
   @override
   void dispose() {
-    _disposed = true;
     _clock?.cancel();
     _idle?.cancel();
     elapsed.dispose();

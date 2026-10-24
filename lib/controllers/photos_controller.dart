@@ -27,6 +27,7 @@ import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/photo_grid_config.dart';
 import 'package:quark/utils/photo_month_sections.dart';
 import 'package:quark/utils/quark_widget_items.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark/utils/upload_destination.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -91,7 +92,7 @@ class AddToAlbumOutcome {
 ///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
-class PhotosController extends ChangeNotifier {
+class PhotosController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller talking to the real services unless overridden.
   PhotosController({
     Future<wire.PaginatedPhotosResponse> Function({
@@ -387,7 +388,6 @@ class PhotosController extends ChangeNotifier {
   /// Bumped by every [refresh], so a page of photos requested before it
   /// cannot land on top of the list it replaced.
   int _generation = 0;
-  bool _disposed = false;
 
   // ── View choices ───────────────────────────────────────────────────────────
 
@@ -765,7 +765,7 @@ class PhotosController extends ChangeNotifier {
     await albums;
     await albumItems;
     await search;
-    if (generation != _generation || _disposed) return;
+    if (generation != _generation || isDisposed) return;
 
     final sameScope = scope == _listCache.scope;
     _noHostSelected = noHost;
@@ -845,7 +845,7 @@ class PhotosController extends ChangeNotifier {
         order: _sortOrder,
         q: matched != null ? query : null,
       );
-      if (generation != _generation || _disposed) return;
+      if (generation != _generation || isDisposed) return;
       final page = response.photos.map(_Photo.fromWire);
       if (matched != null) {
         if (request != _searchRequest || _query != query) return;
@@ -865,7 +865,7 @@ class PhotosController extends ChangeNotifier {
       debugPrint('[photos_controller.dart] Error loading more photos: $e');
     } finally {
       _isLoadingMore = false;
-      if (!_disposed) notifyListeners();
+      notifyListeners();
     }
   }
 
@@ -995,13 +995,7 @@ class PhotosController extends ChangeNotifier {
   }
 
   @override
-  void notifyListeners() {
-    if (!_disposed) super.notifyListeners();
-  }
-
-  @override
   void dispose() {
-    _disposed = true;
     _searchTimer?.cancel();
     _datesTimer?.cancel();
     super.dispose();
@@ -1046,7 +1040,7 @@ class PhotosController extends ChangeNotifier {
         sort: _sortField,
         order: _sortOrder,
       );
-      if (request != _searchRequest || _disposed) return;
+      if (request != _searchRequest || isDisposed) return;
       _searchResults = (
         query: query,
         photos: response.photos.map(_Photo.fromWire).toList(growable: false),
@@ -1055,7 +1049,7 @@ class PhotosController extends ChangeNotifier {
       _searchError = null;
     } catch (e) {
       debugPrint('[photos_controller.dart] Error searching photos: $e');
-      if (request != _searchRequest || _disposed) return;
+      if (request != _searchRequest || isDisposed) return;
       if (_searchResults?.query != query) {
         _searchResults = null;
         _searchError = e;
@@ -1172,7 +1166,7 @@ class PhotosController extends ChangeNotifier {
   Future<void> _loadAlbumMembers(AlbumItem album) async {
     try {
       final items = await _listAlbumItems(album.id);
-      if (_disposed || _addingToAlbum != album) return;
+      if (isDisposed || _addingToAlbum != album) return;
       _albumMemberIds = {
         for (final item in items) _Photo.fromAlbumItem(item).id,
       };
@@ -1492,13 +1486,13 @@ class PhotosController extends ChangeNotifier {
     final sort = (_sortField, _sortOrder);
     try {
       final items = await _listAlbumItems(id, sort: sort.$1, order: sort.$2);
-      if (request != _albumRequest || _disposed) return;
+      if (request != _albumRequest || isDisposed) return;
       _showAlbumItems(items, sort);
       if (scope == _albumsCache.scope) {
         _albumsCache.putItems(id, items, sort: sort.$1, order: sort.$2);
       }
     } catch (e) {
-      if (request != _albumRequest || _disposed) return;
+      if (request != _albumRequest || isDisposed) return;
       debugPrint('[photos_controller.dart] Error loading album items: $e');
       if (_albumItems == null || _albumItemsSort != sort) {
         _albumItems = null;

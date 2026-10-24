@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:quark/services/data_protection_service.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The Storage tab's protection card: the level the Quark reported, and a
@@ -12,7 +13,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// [DataProtectionService.fetch], so a test passes a fake without a mocking
 /// library. [level] is that response's level. A drive list that disagrees
 /// with it is still shown as sent; this controller does not count copies.
-class DataProtectionController extends ChangeNotifier {
+class DataProtectionController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller. [events] defaults to the app's event stream.
   /// `backup_completed`, `backup_failed`, and `resync` load again.
   DataProtectionController({
@@ -29,7 +30,6 @@ class DataProtectionController extends ChangeNotifier {
   Object? _error;
   bool _isLoading = false;
   int _generation = 0;
-  bool _disposed = false;
 
   /// The last status, or null before the first success.
   DataProtectionStatus? get status => _status;
@@ -75,7 +75,7 @@ class DataProtectionController extends ChangeNotifier {
     final generation = ++_generation;
     if (_status == null) {
       _isLoading = true;
-      _notify();
+      notifyListeners();
     }
     try {
       final status = await _fetch();
@@ -88,7 +88,7 @@ class DataProtectionController extends ChangeNotifier {
     } finally {
       if (_current(generation)) {
         _isLoading = false;
-        _notify();
+        notifyListeners();
       }
     }
   }
@@ -102,15 +102,10 @@ class DataProtectionController extends ChangeNotifier {
     load();
   }
 
-  bool _current(int generation) => !_disposed && generation == _generation;
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
+  bool _current(int generation) => !isDisposed && generation == _generation;
 
   @override
   void dispose() {
-    _disposed = true;
     _events.cancel();
     super.dispose();
   }

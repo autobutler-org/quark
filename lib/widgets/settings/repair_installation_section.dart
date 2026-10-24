@@ -56,10 +56,9 @@ class _RepairInstallationSectionState extends State<RepairInstallationSection> {
     if (!await _controller.repair() || !mounted) return;
     // The same handling the update flow gives a restart: say it is happening.
     // While it is down, the page's disconnected banner explains the failures.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Quark is restarting. It will be back in a few seconds.'),
-      ),
+    showMessage(
+      context,
+      'Quark is restarting. It will be back in a few seconds.',
     );
   }
 

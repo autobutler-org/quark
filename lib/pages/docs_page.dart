@@ -177,9 +177,7 @@ class _DocsPageState extends State<DocsPage>
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.upload(e, 'create the document'))),
-        );
+        showMessage(context, Errors.upload(e, 'create the document'));
       }
     }
   }

@@ -3,6 +3,7 @@ import 'package:quark/models/feature_flag.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/feature_flags_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 
 /// The Features tab of Settings (#2542): the beta flags and an admin flipping
 /// one.
@@ -11,7 +12,7 @@ import 'package:quark/utils/error_text.dart';
 /// and the router follow too; this adds which flags are being saved. The
 /// service call arrives as a function parameter defaulting to the real one,
 /// so a test passes a fake without a mocking library.
-class FeatureFlagsController extends ChangeNotifier {
+class FeatureFlagsController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller over [flags], [AppSettings.featureFlags] unless
   /// overridden, saving through [FeatureFlagsService.setFlag] unless
   /// overridden.
@@ -27,7 +28,6 @@ class FeatureFlagsController extends ChangeNotifier {
   final ValueNotifier<List<FeatureFlag>> _flags;
   final Future<FeatureFlag> Function(String key, bool enabled) _setFlag;
   final Set<String> _saving = {};
-  bool _disposed = false;
 
   /// Every flag in the Quark's registry. Empty between betas.
   List<FeatureFlag> get flags => _flags.value;
@@ -51,13 +51,12 @@ class FeatureFlagsController extends ChangeNotifier {
       return Errors.message(e, 'change the feature');
     } finally {
       _saving.remove(key);
-      if (!_disposed) notifyListeners();
+      notifyListeners();
     }
   }
 
   @override
   void dispose() {
-    _disposed = true;
     _flags.removeListener(notifyListeners);
     super.dispose();
   }

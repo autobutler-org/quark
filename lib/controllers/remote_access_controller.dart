@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/services/remote_access_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/remote_access_config.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Remote access on the Settings Network tab (#2857): the Quark's status,
@@ -16,7 +17,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
-class RemoteAccessController extends ChangeNotifier {
+class RemoteAccessController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller talking to the real [RemoteAccessService] unless
   /// overridden.
   RemoteAccessController({
@@ -41,7 +42,6 @@ class RemoteAccessController extends ChangeNotifier {
   String? _error;
   Object? _loadFailure;
   Timer? _poll;
-  bool _disposed = false;
 
   /// The last status the Quark sent, or null before the first load.
   RemoteAccessStatus? get status => _status;
@@ -91,7 +91,7 @@ class RemoteAccessController extends ChangeNotifier {
   Future<void> load() async {
     _isLoading = true;
     _error = null;
-    _notify();
+    notifyListeners();
     try {
       _set(await _getStatus());
       _loadFailure = null;
@@ -101,7 +101,7 @@ class RemoteAccessController extends ChangeNotifier {
       _error = Errors.message(error, 'load remote access');
     } finally {
       _isLoading = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -112,7 +112,7 @@ class RemoteAccessController extends ChangeNotifier {
     _loadFailure = null;
     _isLoading = false;
     _syncPoll();
-    _notify();
+    notifyListeners();
   }
 
   /// Turns remote access on. Null on success, else what to tell the user.
@@ -127,7 +127,7 @@ class RemoteAccessController extends ChangeNotifier {
     String action,
   ) async {
     _isWorking = true;
-    _notify();
+    notifyListeners();
     try {
       _set(await call());
       return null;
@@ -136,7 +136,7 @@ class RemoteAccessController extends ChangeNotifier {
       return Errors.message(error, action);
     } finally {
       _isWorking = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -154,7 +154,7 @@ class RemoteAccessController extends ChangeNotifier {
   /// otherwise.
   void _syncPoll() {
     final status = _status;
-    if (_disposed ||
+    if (isDisposed ||
         status == null ||
         status.needsSetup ||
         !status.enabled ||
@@ -171,21 +171,16 @@ class RemoteAccessController extends ChangeNotifier {
   Future<void> _pollOnce() async {
     try {
       final status = await _getStatus();
-      if (_disposed) return;
+      if (isDisposed) return;
       _set(status);
-      _notify();
+      notifyListeners();
     } catch (error) {
       debugPrint('[remote_access_controller.dart] Poll failed: $error');
     }
   }
 
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
   @override
   void dispose() {
-    _disposed = true;
     _poll?.cancel();
     super.dispose();
   }

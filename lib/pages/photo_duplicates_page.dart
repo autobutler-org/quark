@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/controllers/duplicates_controller.dart';
 import 'package:quark/controllers/photo_index_controller.dart';
@@ -57,12 +58,9 @@ class _PhotoDuplicatesPageState extends State<PhotoDuplicatesPage>
     if (confirmed != true || !mounted) return;
     final failed = await _controller.deleteSelected();
     if (!mounted || failed == 0) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          Errors.couldNot('delete $failed ${failed == 1 ? 'photo' : 'photos'}'),
-        ),
-      ),
+    showMessage(
+      context,
+      Errors.couldNot('delete $failed ${failed == 1 ? 'photo' : 'photos'}'),
     );
   }
 

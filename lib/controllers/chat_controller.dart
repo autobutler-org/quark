@@ -16,6 +16,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_channels_service.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/services/sharing_service.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark/utils/search_fold.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -141,7 +142,7 @@ class ChatPendingSend {
 ///   owns reads on the device, so a channel never opened shows them.
 ///
 /// Every collaborator has a real default; tests pass fakes.
-class ChatController extends ChangeNotifier {
+class ChatController extends ChangeNotifier with SafeNotifier {
   /// Builds the controller. Call [select] with the URL's channel, then
   /// [refresh].
   ChatController({
@@ -208,8 +209,8 @@ class ChatController extends ChangeNotifier {
         unreadMentions ?? ChatUnreadMentionsController(unread: _unread);
     _wasUnlocked = _isUnlocked();
     _keyChanges.addListener(_onKeysChanged);
-    _unread.addListener(_notify);
-    _unreadMentions.addListener(_notify);
+    _unread.addListener(notifyListeners);
+    _unreadMentions.addListener(notifyListeners);
     _events = (events ?? EventsService.instance.events).listen(_onEvent);
   }
 
@@ -289,7 +290,6 @@ class ChatController extends ChangeNotifier {
   SharePrincipals _principals = const SharePrincipals();
   bool _isLoadingPeople = false;
   Object? _peopleError;
-  bool _disposed = false;
 
   /// The channels, `general` first.
   List<ChatChannel> get channels => _channels;
@@ -483,14 +483,14 @@ class ChatController extends ChangeNotifier {
     final channel = _selected;
     if (channel == null || _isCheckingKey) return;
     _isCheckingKey = true;
-    _notify();
+    notifyListeners();
     try {
       await _ensureKeys(channel.id);
     } catch (e) {
       debugPrint('chat: no key yet for channel ${channel.id}: $e');
     } finally {
       _isCheckingKey = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -623,7 +623,7 @@ class ChatController extends ChangeNotifier {
   void select(String? channelId) {
     _requested = channelId;
     _applySelection();
-    _notify();
+    notifyListeners();
   }
 
   /// Reloads the channels, the open channel's members, and anything the
@@ -654,7 +654,7 @@ class ChatController extends ChangeNotifier {
     if (!_isSearching && !canSearch) return;
     _isSearching = !_isSearching;
     _searchQuery = '';
-    _notify();
+    notifyListeners();
   }
 
   /// Searches the open channel's loaded messages for [query], on the device:
@@ -662,7 +662,7 @@ class ChatController extends ChangeNotifier {
   void search(String query) {
     if (!_isSearching) return;
     _searchQuery = query;
-    _notify();
+    notifyListeners();
   }
 
   /// Loads the page of messages before the oldest shown, or the first page
@@ -672,7 +672,7 @@ class ChatController extends ChangeNotifier {
     final messages = _messages;
     if (messages == null || _isLoadingOlder) return;
     _isLoadingOlder = true;
-    _notify();
+    notifyListeners();
     try {
       if (messages.error != null && messages.entries.isEmpty) {
         await messages.open();
@@ -681,7 +681,7 @@ class ChatController extends ChangeNotifier {
       }
     } finally {
       _isLoadingOlder = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -723,7 +723,7 @@ class ChatController extends ChangeNotifier {
       clientMessageId: _newClientMessageId(),
     );
     _pending = [..._pending, pending];
-    _notify();
+    notifyListeners();
     await _deliver(pending);
   }
 
@@ -733,7 +733,7 @@ class ChatController extends ChangeNotifier {
     if (pending == null || !pending.failed) return;
     final again = pending.withError(null);
     _replacePending(pendingId, again);
-    _notify();
+    notifyListeners();
     await _deliver(again);
   }
 
@@ -743,7 +743,7 @@ class ChatController extends ChangeNotifier {
       for (final p in _pending)
         if (p.id != pendingId) p,
     ];
-    _notify();
+    notifyListeners();
   }
 
   /// Unlocks chat with the account [password]. A wrong one lands in
@@ -752,14 +752,14 @@ class ChatController extends ChangeNotifier {
     if (_isUnlocking) return;
     _isUnlocking = true;
     _unlockError = null;
-    _notify();
+    notifyListeners();
     try {
       await _unlock(password);
     } catch (e) {
       _unlockError = e;
     } finally {
       _isUnlocking = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -821,7 +821,7 @@ class ChatController extends ChangeNotifier {
     });
     if (openError != null) {
       _saveError = openError;
-      _notify();
+      notifyListeners();
     }
     return created;
   }
@@ -831,14 +831,14 @@ class ChatController extends ChangeNotifier {
     if (_isLoadingPeople) return;
     _isLoadingPeople = true;
     _peopleError = null;
-    _notify();
+    notifyListeners();
     try {
       _principals = await _loadPrincipals();
     } catch (e) {
       _peopleError = e;
     } finally {
       _isLoadingPeople = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -961,32 +961,32 @@ class ChatController extends ChangeNotifier {
   void clearSaveError() {
     if (_saveError == null) return;
     _saveError = null;
-    _notify();
+    notifyListeners();
   }
 
   /// Flips the channel drawer of the collapsed layout.
   void toggleChannelList() {
     _isChannelListOpen = !_isChannelListOpen;
-    _notify();
+    notifyListeners();
   }
 
   /// Closes the channel drawer, as picking a channel from it does.
   void closeChannelList() {
     if (!_isChannelListOpen) return;
     _isChannelListOpen = false;
-    _notify();
+    notifyListeners();
   }
 
   /// Flips the member sheet of the collapsed layout.
   void toggleMemberList() {
     _isMemberListOpen = !_isMemberListOpen;
-    _notify();
+    notifyListeners();
   }
 
   /// Expands or collapses group [id] in the member list.
   void toggleGroup(String id) {
     if (!_expandedGroupIds.remove(id)) _expandedGroupIds.add(id);
-    _notify();
+    notifyListeners();
   }
 
   /// [entry] as `QuarkMessageList` draws it, with authors named by [nameOf]
@@ -1098,11 +1098,10 @@ class ChatController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _disposed = true;
     _pending.where((p) => p.failed).forEach(_keepAsDraft);
     _events.cancel();
     _keyChanges.removeListener(_onKeysChanged);
-    _unread.removeListener(_notify);
+    _unread.removeListener(notifyListeners);
     _unreadMentions.dispose();
     _closeMessages();
     super.dispose();
@@ -1144,7 +1143,7 @@ class ChatController extends ChangeNotifier {
     if (_isSaving) return null;
     _isSaving = true;
     _saveError = null;
-    _notify();
+    notifyListeners();
     try {
       return await change();
     } catch (e) {
@@ -1152,16 +1151,16 @@ class ChatController extends ChangeNotifier {
       return null;
     } finally {
       _isSaving = false;
-      _notify();
+      notifyListeners();
     }
   }
 
   Future<void> _loadChannels() async {
     _isLoadingChannels = true;
-    _notify();
+    notifyListeners();
     try {
       final channels = await (_isAdmin() ? _listAllChannels : _listChannels)();
-      if (_disposed) return;
+      if (isDisposed) return;
       _channels = channels;
       _unread.setChannels(channels);
       _channelsLoaded = true;
@@ -1171,7 +1170,7 @@ class ChatController extends ChangeNotifier {
       _channelsError = e;
     } finally {
       _isLoadingChannels = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -1179,17 +1178,17 @@ class ChatController extends ChangeNotifier {
     final channel = _selected;
     if (channel == null) return;
     _isLoadingMembers = true;
-    _notify();
+    notifyListeners();
     try {
       final members = await _listMembers(channel.id);
-      if (_disposed || _selected?.id != channel.id) return;
+      if (isDisposed || _selected?.id != channel.id) return;
       _members = members;
       _membersError = null;
     } catch (e) {
       if (_selected?.id == channel.id) _membersError = e;
     } finally {
       _isLoadingMembers = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -1259,7 +1258,7 @@ class ChatController extends ChangeNotifier {
 
   void _onMessagesChanged() {
     _markRead();
-    _notify();
+    notifyListeners();
   }
 
   /// Moves the open channel's read marker to its newest loaded message while
@@ -1284,7 +1283,7 @@ class ChatController extends ChangeNotifier {
       // ponytail: a send only goes to the channel on screen; one left behind
       // by switching fails and waits for retry there.
       _replacePending(pending.id, pending.withError(StateError('left')));
-      _notify();
+      notifyListeners();
       return;
     }
     try {
@@ -1294,12 +1293,12 @@ class ChatController extends ChangeNotifier {
       );
       discard(pending.id);
     } catch (e) {
-      if (_disposed) {
+      if (isDisposed) {
         _keepAsDraft(pending);
         return;
       }
       _replacePending(pending.id, pending.withError(e));
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -1338,7 +1337,7 @@ class ChatController extends ChangeNotifier {
     }
     if (!unlocked) _closeSearch();
     _wasUnlocked = unlocked;
-    _notify();
+    notifyListeners();
   }
 
   void _onEvent(FileEvent event) {
@@ -1367,9 +1366,5 @@ class ChatController extends ChangeNotifier {
         }
       }),
     );
-  }
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
   }
 }

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:data_table/data_sheet.dart';
 import 'package:data_table/data_table.dart';
 import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/models/file_node.dart';
@@ -258,17 +259,13 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
 
   Future<void> _deleteTab(int index) async {
     final tab = _tabs[index];
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ConfirmDeleteDialog(
-        title: 'Delete ${tab.name}?',
-        body: 'Everything on this sheet is deleted with it.',
-        keyPrefix: 'delete_sheet',
-        onConfirm: () => Navigator.of(dialogContext).pop(true),
-        onCancel: () => Navigator.of(dialogContext).pop(false),
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete ${tab.name}?',
+      body: 'Everything on this sheet is deleted with it.',
+      keyPrefix: 'delete_sheet',
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     setState(() {
       _tabs.removeAt(index);
       if (_selected > index || _selected == _tabs.length) _selected--;
@@ -311,9 +308,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'save the sheet'))),
-      );
+      showMessage(context, Errors.message(e, 'save the sheet'));
     }
   }
 
@@ -322,14 +317,10 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     try {
       await _doSave();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Saved')));
+      showMessage(context, 'Saved');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'save the sheet'))),
-      );
+      showMessage(context, Errors.message(e, 'save the sheet'));
     }
   }
 
@@ -355,9 +346,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'export the sheet'))),
-      );
+      showMessage(context, Errors.message(e, 'export the sheet'));
     } finally {
       _exporting = false;
     }
@@ -387,9 +376,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
         );
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.message(e, 'rename the sheet'))),
-        );
+        showMessage(context, Errors.message(e, 'rename the sheet'));
         return;
       }
       if (!mounted) return;

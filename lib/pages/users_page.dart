@@ -9,6 +9,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/users/recent_decisions/recent_decisions_list.dart';
@@ -97,9 +98,7 @@ class _UsersPageState extends State<UsersPage>
     final error = await action;
     final message = error == null ? success : Errors.message(error, failure);
     if (message == null || !mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showMessage(context, message);
   }
 
   /// Waits for an approve or deny and, when it worked, reloads the decisions
@@ -139,19 +138,15 @@ class _UsersPageState extends State<UsersPage>
 
   /// Asks before deleting [username], then deletes (#1909).
   Future<void> _confirmDelete(String username) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ConfirmDeleteDialog(
-        title: 'Delete $username?',
-        body:
-            "$username won't be able to sign in again. The files they own "
-            'stay on this Quark and become yours.',
-        keyPrefix: 'delete_user',
-        onConfirm: () => Navigator.of(dialogContext).pop(true),
-        onCancel: () => Navigator.of(dialogContext).pop(false),
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete $username?',
+      body:
+          "$username won't be able to sign in again. The files they own "
+          'stay on this Quark and become yours.',
+      keyPrefix: 'delete_user',
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     await _report(_controller.delete(username), 'delete $username');
   }
 
@@ -204,19 +199,15 @@ class _UsersPageState extends State<UsersPage>
   Future<void> _confirmDeleteGroup(int id) async {
     final group = _groups.group(id);
     if (group == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ConfirmDeleteDialog(
-        title: 'Delete ${group.name}?',
-        body:
-            'Whatever was shared with ${group.name} stops being shared with '
-            'its members. Their accounts and their own files stay.',
-        keyPrefix: 'delete_group',
-        onConfirm: () => Navigator.of(dialogContext).pop(true),
-        onCancel: () => Navigator.of(dialogContext).pop(false),
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete ${group.name}?',
+      body:
+          'Whatever was shared with ${group.name} stops being shared with '
+          'its members. Their accounts and their own files stay.',
+      keyPrefix: 'delete_group',
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     await _report(_groups.delete(id), 'delete the group');
   }
 

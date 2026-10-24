@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:quark/services/code_viewer_service.dart';
 import 'package:quark/utils/code_viewer_config.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 typedef ReadCodeRangeFn =
@@ -20,7 +21,7 @@ typedef ReadCodeRangeFn =
 ///
 /// The file is read [pageBytes] at a time and only as far as the reader asks,
 /// so opening a 1 GB log costs one page. Search covers the lines read so far.
-class CodeViewerController extends ChangeNotifier {
+class CodeViewerController extends ChangeNotifier with SafeNotifier {
   CodeViewerController({
     required this.path,
     this.serial,
@@ -57,7 +58,6 @@ class CodeViewerController extends ChangeNotifier {
   List<CodeSearchMatch> _matches = const [];
   int? _activeMatch;
   int _generation = 0;
-  bool _disposed = false;
 
   /// The lines read so far, without their line endings. A new list each time
   /// a page lands.
@@ -114,7 +114,7 @@ class CodeViewerController extends ChangeNotifier {
     _error = null;
     _loadMoreError = null;
     _search();
-    _notify();
+    notifyListeners();
     try {
       await _readPage(generation);
     } catch (e) {
@@ -123,7 +123,7 @@ class CodeViewerController extends ChangeNotifier {
     }
     if (generation != _generation) return;
     _isLoading = false;
-    _notify();
+    notifyListeners();
   }
 
   /// Reads the next page, when there is one and none is already out.
@@ -132,7 +132,7 @@ class CodeViewerController extends ChangeNotifier {
     final generation = _generation;
     _isLoadingMore = true;
     _loadMoreError = null;
-    _notify();
+    notifyListeners();
     try {
       await _readPage(generation);
     } catch (e) {
@@ -141,14 +141,14 @@ class CodeViewerController extends ChangeNotifier {
     }
     if (generation != _generation) return;
     _isLoadingMore = false;
-    _notify();
+    notifyListeners();
   }
 
   /// Turns line wrapping on or off.
   void setWrap(bool wrap) {
     if (_wrap == wrap) return;
     _wrap = wrap;
-    _notify();
+    notifyListeners();
   }
 
   /// Searches the lines read so far for [query] and moves to the first hit.
@@ -157,7 +157,7 @@ class CodeViewerController extends ChangeNotifier {
     _query = query;
     _search();
     _activeMatch = _matches.isEmpty ? null : 0;
-    _notify();
+    notifyListeners();
   }
 
   /// Moves to the hit after the one in view, wrapping to the first.
@@ -169,7 +169,7 @@ class CodeViewerController extends ChangeNotifier {
   void _step(int by) {
     if (_matches.isEmpty) return;
     _activeMatch = ((_activeMatch ?? 0) + by) % _matches.length;
-    _notify();
+    notifyListeners();
   }
 
   Future<void> _readPage(int generation) async {
@@ -236,13 +236,8 @@ class CodeViewerController extends ChangeNotifier {
         : (active ?? 0).clamp(0, _matches.length - 1);
   }
 
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
   @override
   void dispose() {
-    _disposed = true;
     _generation++;
     super.dispose();
   }

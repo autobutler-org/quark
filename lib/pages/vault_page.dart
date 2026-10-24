@@ -11,6 +11,7 @@ import 'package:quark/services/file_save.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/utils/vault_export.dart';
 import 'package:quark/utils/vault_import.dart';
@@ -53,11 +54,6 @@ class _VaultPageState extends State<VaultPage>
   @override
   Future<void> refresh() => _vault.load();
 
-  void _snack(String text) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
-
   void _openEntry([int? id]) {
     _vault.touch();
     Navigator.of(context).push(
@@ -80,7 +76,7 @@ class _VaultPageState extends State<VaultPage>
     try {
       await _vault.startOver(password);
     } catch (e) {
-      _snack(Errors.message(e, 'delete your vault'));
+      if (mounted) showMessage(context, Errors.message(e, 'delete your vault'));
     }
   }
 
@@ -127,23 +123,19 @@ class _VaultPageState extends State<VaultPage>
 
   /// Deletes folder [id] once the user confirms. Its entries stay, in no folder.
   Future<void> _deleteFolder(int id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ConfirmDeleteDialog(
-        title: 'Delete ${_vault.folderNameOf(id)}?',
-        body:
-            'The folder is removed on every device. The logins in it are '
-            'kept, in no folder.',
-        keyPrefix: 'delete_vault_folder',
-        onConfirm: () => Navigator.of(dialogContext).pop(true),
-        onCancel: () => Navigator.of(dialogContext).pop(false),
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete ${_vault.folderNameOf(id)}?',
+      body:
+          'The folder is removed on every device. The logins in it are '
+          'kept, in no folder.',
+      keyPrefix: 'delete_vault_folder',
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     try {
       await _vault.delete(id);
     } catch (e) {
-      _snack(Errors.vault(e, 'delete the folder'));
+      if (mounted) showMessage(context, Errors.vault(e, 'delete the folder'));
     }
   }
 
@@ -156,9 +148,12 @@ class _VaultPageState extends State<VaultPage>
     setState(() => _importing = true);
     try {
       final text = await readVaultImport(file.readAsByteStream());
-      _snack(vaultImportSummary(await _vault.import(text)));
+      final summary = vaultImportSummary(await _vault.import(text));
+      if (mounted) showMessage(context, summary);
     } catch (e) {
-      _snack(Errors.message(e, 'import your entries'));
+      if (mounted) {
+        showMessage(context, Errors.message(e, 'import your entries'));
+      }
     } finally {
       if (mounted) setState(() => _importing = false);
     }
@@ -173,9 +168,11 @@ class _VaultPageState extends State<VaultPage>
       final saved = kIsWeb
           ? await web_download.saveBytesForDownload(bytes, format.fileName)
           : await saveBytesThroughDialog(bytes, format.fileName);
-      if (saved != null) _snack('Exported as ${format.fileName}');
+      if (saved != null && mounted) {
+        showMessage(context, 'Exported as ${format.fileName}');
+      }
     } catch (e) {
-      _snack(Errors.message(e, 'export your vault'));
+      if (mounted) showMessage(context, Errors.message(e, 'export your vault'));
     }
   }
 

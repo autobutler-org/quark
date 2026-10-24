@@ -4,6 +4,7 @@ import 'package:quark/models/path_grant.dart';
 import 'package:quark/services/file_versions_service.dart';
 import 'package:quark/services/sharing_service.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 typedef ListFileVersionsFn = Future<List<FileVersion>> Function(String path);
@@ -20,7 +21,7 @@ typedef LoadPrincipalsFn = Future<SharePrincipals> Function();
 /// member may read; it is fetched once and a failure only costs the names.
 /// The signed-in account, [selfUserId], reads "You", the Quark itself
 /// "System", and an account the list does not hold "Unknown user".
-class FileVersionsController extends ChangeNotifier {
+class FileVersionsController extends ChangeNotifier with SafeNotifier {
   FileVersionsController({
     required this.path,
     this.selfUserId,
@@ -46,7 +47,6 @@ class FileVersionsController extends ChangeNotifier {
   Object? _error;
   String? _busyId;
   int _generation = 0;
-  bool _disposed = false;
 
   /// What the last load failed with, null after one that worked. The page
   /// turns it into a sentence.
@@ -90,11 +90,11 @@ class FileVersionsController extends ChangeNotifier {
         onError: (_) => null,
       );
       final versions = await listVersions(path);
-      if (_disposed || generation != _generation) return;
+      if (isDisposed || generation != _generation) return;
       _versions = versions;
       _error = null;
     } catch (e) {
-      if (_disposed || generation != _generation) return;
+      if (isDisposed || generation != _generation) return;
       _error = e;
     }
     notifyListeners();
@@ -107,7 +107,7 @@ class FileVersionsController extends ChangeNotifier {
     _setBusy(id);
     try {
       await restoreVersion(path, id);
-      if (!_disposed) await load();
+      if (!isDisposed) await load();
       return null;
     } catch (e) {
       return e;
@@ -133,14 +133,8 @@ class FileVersionsController extends ChangeNotifier {
   }
 
   void _setBusy(String? id) {
-    if (_disposed) return;
+    if (isDisposed) return;
     _busyId = id;
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 }

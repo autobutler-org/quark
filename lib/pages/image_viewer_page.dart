@@ -506,13 +506,12 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   /// on the photo it was already showing (#1708).
   void _showLoadFailure(Object? error, int newIndex) {
     final gone = error is ApiException && error.statusCode == 404;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(Errors.message(error, 'load the photo')),
-        action: gone
-            ? null
-            : SnackBarAction(label: 'Retry', onPressed: () => _retry(newIndex)),
-      ),
+    showMessage(
+      context,
+      Errors.message(error, 'load the photo'),
+      action: gone
+          ? null
+          : SnackBarAction(label: 'Retry', onPressed: () => _retry(newIndex)),
     );
   }
 
@@ -630,9 +629,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       if (!mounted) return;
       // Roll back and surface the error.
       setState(() => _isFavorite = !_isFavorite);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'update the favorite'))),
-      );
+      showMessage(context, Errors.message(e, 'update the favorite'));
     }
   }
 
@@ -643,11 +640,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
 
   Future<void> _rotate() async {
     if (!_isQuarkPhoto) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Rotation is only supported for Quark photos'),
-        ),
-      );
+      showMessage(context, 'Rotation is only supported for Quark photos');
       return;
     }
 
@@ -700,9 +693,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
         );
       });
       _playRotation();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'rotate the photo'))),
-      );
+      showMessage(context, Errors.message(e, 'rotate the photo'));
     }
   }
 
@@ -735,15 +726,11 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       );
       if (!mounted) return;
       _listChanged = true;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Added to ${album.name}')));
+      showMessage(context, 'Added to ${album.name}');
       _loadMetadata(); // refresh album list in sidebar
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.message(e, 'add it to the album'))),
-        );
+        showMessage(context, Errors.message(e, 'add it to the album'));
       }
     }
   }
@@ -759,17 +746,11 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       );
       if (!mounted) return;
       _listChanged = true;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Removed from ${album.name}')));
+      showMessage(context, 'Removed from ${album.name}');
       _loadMetadata();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(Errors.message(e, 'remove it from the album')),
-          ),
-        );
+        showMessage(context, Errors.message(e, 'remove it from the album'));
       }
     }
   }
@@ -804,14 +785,10 @@ class _ImageViewerPageState extends State<ImageViewerPage>
           ? newRelPath.substring(newRelPath.lastIndexOf('/') + 1)
           : newRelPath;
       _listChanged = true;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Copy saved as $newName')));
+      showMessage(context, 'Copy saved as $newName');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'copy the photo'))),
-      );
+      showMessage(context, Errors.message(e, 'copy the photo'));
     }
   }
 
@@ -838,9 +815,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       _close();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.message(e, 'delete the photo'))),
-        );
+        showMessage(context, Errors.message(e, 'delete the photo'));
       }
     }
   }

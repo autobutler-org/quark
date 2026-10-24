@@ -19,6 +19,7 @@ import 'package:quark/services/settings_service.dart';
 import 'package:quark/services/users_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -439,9 +440,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (e) {
       debugPrint('[settings_page.dart] Error: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'remove the device'))),
-      );
+      showMessage(context, Errors.message(e, 'remove the device'));
     }
   }
 
@@ -607,9 +606,7 @@ class _SettingsPageState extends State<SettingsPage> {
       debugPrint('[settings_page.dart] Error: $e');
       if (!mounted) return;
       setState(() => _isUpdatingVersion = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(Errors.update(e))));
+      showMessage(context, Errors.update(e));
       return;
     }
     if (!mounted) return;
@@ -948,22 +945,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _signOut() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sign out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Sign out'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmAction(
+      context,
+      title: 'Sign out',
+      message: 'Are you sure you want to sign out?',
+      confirmLabel: 'Sign out',
     );
     if (confirmed != true || !mounted) return;
     await AuthService.logout();

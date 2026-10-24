@@ -6,6 +6,7 @@ import 'package:quark/services/photo_index_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/photo_location.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The photo library index status shown with duplicate results (#3556):
@@ -20,7 +21,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
-class PhotoIndexController extends ChangeNotifier {
+class PhotoIndexController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller. [events] defaults to the app's event stream.
   PhotoIndexController({
     Future<PhotoIndexStatus> Function() fetch = PhotoIndexService.fetchStatus,
@@ -52,7 +53,6 @@ class PhotoIndexController extends ChangeNotifier {
   bool _isHidden = false;
   bool _showFailures = false;
   int _generation = 0;
-  bool _disposed = false;
 
   /// The last status, or null before the first success.
   PhotoIndexStatus? get status => _status;
@@ -92,7 +92,7 @@ class PhotoIndexController extends ChangeNotifier {
     final generation = ++_generation;
     if (_status == null) {
       _isLoading = true;
-      _notify();
+      notifyListeners();
     }
     try {
       final status = await _fetch();
@@ -104,7 +104,7 @@ class PhotoIndexController extends ChangeNotifier {
     } finally {
       if (_current(generation)) {
         _isLoading = false;
-        _notify();
+        notifyListeners();
       }
     }
   }
@@ -118,7 +118,7 @@ class PhotoIndexController extends ChangeNotifier {
   /// Shows or hides the failed files.
   void toggleFailures() {
     _showFailures = !_showFailures;
-    _notify();
+    notifyListeners();
   }
 
   Future<void> _change(
@@ -127,7 +127,7 @@ class PhotoIndexController extends ChangeNotifier {
   ) async {
     if (_isChanging) return;
     _isChanging = true;
-    _notify();
+    notifyListeners();
     // A load already in flight answered before this change; drop it.
     final generation = ++_generation;
     try {
@@ -137,7 +137,7 @@ class PhotoIndexController extends ChangeNotifier {
       if (_current(generation)) _fail(error, action);
     } finally {
       _isChanging = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -191,15 +191,10 @@ class PhotoIndexController extends ChangeNotifier {
     if (event.kind == 'photo_index_changed' || event.kind == 'resync') load();
   }
 
-  bool _current(int generation) => !_disposed && generation == _generation;
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
+  bool _current(int generation) => !isDisposed && generation == _generation;
 
   @override
   void dispose() {
-    _disposed = true;
     _events?.cancel();
     super.dispose();
   }

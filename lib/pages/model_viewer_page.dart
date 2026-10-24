@@ -5,6 +5,7 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/pages/generic_file_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
@@ -64,9 +65,7 @@ class _ModelViewerPageState extends State<ModelViewerPage> {
   void _announceFallback() {
     final fallback = _controller.fallback;
     if (fallback == null || !mounted) return;
-    ScaffoldMessenger.maybeOf(context)
-      ?..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(Errors.modelPreview(fallback))));
+    showMessage(context, Errors.modelPreview(fallback));
   }
 
   @override

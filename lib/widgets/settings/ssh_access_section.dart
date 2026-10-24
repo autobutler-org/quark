@@ -103,7 +103,7 @@ class _SshAccessSectionState extends State<SshAccessSection> {
 
   void _announce(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    showMessage(context, text);
   }
 
   @override

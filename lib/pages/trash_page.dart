@@ -99,12 +99,6 @@ class _TrashPageState extends State<TrashPage>
   @override
   Future<void> refresh() => _controller.load();
 
-  void _showMessage(String message, {SnackBarAction? action}) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message), action: action));
-  }
-
   static String _items(int count) => count == 1 ? '1 item' : '$count items';
 
   Future<void> _onMenuAction(FileNode node, FileMenuAction action) async {
@@ -122,10 +116,11 @@ class _TrashPageState extends State<TrashPage>
     if (nodes.isEmpty) return;
     try {
       final count = await _controller.restore(nodes);
-      if (mounted) _showMessage('Restored ${_items(count)}');
+      if (mounted) showMessage(context, 'Restored ${_items(count)}');
     } catch (e) {
       if (!mounted) return;
-      _showMessage(
+      showMessage(
+        context,
         Errors.restore(
           e,
           nodes.length == 1 ? 'restore the item' : 'restore the items',
@@ -166,10 +161,11 @@ class _TrashPageState extends State<TrashPage>
     if (confirmed != true || !mounted) return;
     try {
       final count = await _controller.deletePermanently(nodes);
-      if (mounted) _showMessage('Deleted ${_items(count)} for good');
+      if (mounted) showMessage(context, 'Deleted ${_items(count)} for good');
     } catch (e) {
       if (!mounted) return;
-      _showMessage(
+      showMessage(
+        context,
         Errors.message(
           e,
           nodes.length == 1 ? 'delete the item' : 'delete the items',
@@ -191,9 +187,9 @@ class _TrashPageState extends State<TrashPage>
     if (confirmed != true || !mounted) return;
     try {
       final count = await _controller.empty();
-      if (mounted) _showMessage('Deleted ${_items(count)} for good');
+      if (mounted) showMessage(context, 'Deleted ${_items(count)} for good');
     } catch (e) {
-      if (mounted) _showMessage(Errors.message(e, 'empty the trash'));
+      if (mounted) showMessage(context, Errors.message(e, 'empty the trash'));
     }
     unawaited(manualRefresh());
   }

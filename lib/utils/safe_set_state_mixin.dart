@@ -24,3 +24,24 @@ mixin SafeSetStateMixin<T extends StatefulWidget> on State<T> {
     setState(update);
   }
 }
+
+/// The [ChangeNotifier] twin of [SafeSetStateMixin]: [notifyListeners] after
+/// [dispose] does nothing instead of throwing, so an answer that lands after
+/// the page closed is dropped. [isDisposed] tells an async step to stop.
+mixin SafeNotifier on ChangeNotifier {
+  bool _disposed = false;
+
+  /// Whether [dispose] has run.
+  bool get isDisposed => _disposed;
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+}

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_viewer_actions.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/controllers/video_playback_controller.dart';
@@ -171,12 +172,6 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
         _failPlayback(opened: true, controller: controller, proxy: _proxy);
       });
     });
-  }
-
-  void _say(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   bool _canTrim(VideoPlayerController? controller) {
@@ -394,7 +389,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
   void _enterTrimMode() {
     final controller = _controller;
     if (controller == null || !_canTrim(controller)) {
-      _say(Errors.trimUnavailable);
+      showMessage(context, Errors.trimUnavailable);
       return;
     }
     controller.pause();
@@ -408,7 +403,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
   Future<void> _exportTrim() async {
     final controller = _controller;
     if (controller == null || !_canTrim(controller)) {
-      _say(Errors.trimUnavailable);
+      showMessage(context, Errors.trimUnavailable);
       return;
     }
     if (_exportingTrim) return;
@@ -417,7 +412,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
     final relPath = params['filePath'] ?? '';
     final serial = params['serial'];
     if (relPath.isEmpty) {
-      _say(Errors.trimPathUnknown);
+      showMessage(context, Errors.trimPathUnknown);
       return;
     }
 
@@ -439,16 +434,13 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
         _trimStart = 0.0;
         _trimEnd = 1.0;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(trimmed.savedMessage(Duration(milliseconds: startMs))),
-        ),
+      showMessage(
+        context,
+        trimmed.savedMessage(Duration(milliseconds: startMs)),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(Errors.trim(e))));
+      showMessage(context, Errors.trim(e));
     } finally {
       if (mounted) setState(() => _exportingTrim = false);
     }
@@ -457,7 +449,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
   Future<void> _saveFrame() async {
     final controller = _controller;
     if (controller == null || !_canSaveFrame(controller)) {
-      _say(Errors.saveFrameUnavailable);
+      showMessage(context, Errors.saveFrameUnavailable);
       return;
     }
     if (_savingFrame) return;
@@ -467,7 +459,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
     final relPath = params['filePath'] ?? '';
     final serial = params['serial'];
     if (relPath.isEmpty) {
-      _say(Errors.saveFramePathUnknown);
+      showMessage(context, Errors.saveFramePathUnknown);
       return;
     }
 
@@ -492,14 +484,10 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
       );
       if (!mounted) return;
       final fileName = (landed.isEmpty ? name : landed.first).split('/').last;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Frame saved as $fileName')));
+      showMessage(context, 'Frame saved as $fileName');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'save the frame'))),
-      );
+      showMessage(context, Errors.message(e, 'save the frame'));
     } finally {
       if (mounted) setState(() => _savingFrame = false);
       if (wasPlaying && _controller != null) await _controller!.play();
@@ -514,16 +502,13 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
       await playback.toggleWatched();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            Errors.message(
-              e,
-              wasWatched
-                  ? 'mark the video as unwatched'
-                  : 'mark the video as watched',
-            ),
-          ),
+      showMessage(
+        context,
+        Errors.message(
+          e,
+          wasWatched
+              ? 'mark the video as unwatched'
+              : 'mark the video as watched',
         ),
       );
     }

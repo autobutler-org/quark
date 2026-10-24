@@ -5,6 +5,7 @@ import 'package:quark/controllers/share_controller.dart';
 import 'package:quark/controllers/share_target.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Opens the share sheet for the file or folder at [relPath] on the device
@@ -158,22 +159,17 @@ Future<bool> _confirmKeyRotation(
   required bool removing,
 }) async {
   final who = principal.name;
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => ConfirmDeleteDialog(
-      title: removing
-          ? 'Remove $who from $itemName?'
-          : 'Stop $who reading $itemName?',
-      body:
-          "The channel's key will change, so $who can't read anything posted "
-          'from now on. They keep whatever they already downloaded.',
-      keyPrefix: 'rotate_key',
-      confirmLabel: removing ? 'Remove' : 'Change',
-      onConfirm: () => Navigator.of(dialogContext).pop(true),
-      onCancel: () => Navigator.of(dialogContext).pop(false),
-    ),
+  return confirmDestructive(
+    context,
+    title: removing
+        ? 'Remove $who from $itemName?'
+        : 'Stop $who reading $itemName?',
+    body:
+        "The channel's key will change, so $who can't read anything posted "
+        'from now on. They keep whatever they already downloaded.',
+    keyPrefix: 'rotate_key',
+    confirmLabel: removing ? 'Remove' : 'Change',
   );
-  return confirmed == true;
 }
 
 /// Asks before [principal] stops being an owner of [itemName], by removing
@@ -185,18 +181,13 @@ Future<bool> _confirmOwnerChange(
   required bool removing,
 }) async {
   final who = principal.name;
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => ConfirmDeleteDialog(
-      title: removing ? "Remove $who's access?" : 'Stop $who being an owner?',
-      body:
-          '$who is an owner of $itemName. If no other owner is left, only '
-          'admins can change who has access to it.',
-      keyPrefix: removing ? 'revoke_owner' : 'demote_owner',
-      confirmLabel: removing ? 'Remove' : 'Change',
-      onConfirm: () => Navigator.of(dialogContext).pop(true),
-      onCancel: () => Navigator.of(dialogContext).pop(false),
-    ),
+  return confirmDestructive(
+    context,
+    title: removing ? "Remove $who's access?" : 'Stop $who being an owner?',
+    body:
+        '$who is an owner of $itemName. If no other owner is left, only '
+        'admins can change who has access to it.',
+    keyPrefix: removing ? 'revoke_owner' : 'demote_owner',
+    confirmLabel: removing ? 'Remove' : 'Change',
   );
-  return confirmed == true;
 }

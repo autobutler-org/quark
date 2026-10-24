@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/models/user_account.dart';
 import 'package:quark/services/users_service.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 typedef ListUsersFn = Future<List<UserAccount>> Function();
@@ -22,7 +23,7 @@ typedef CreateUserFn =
 /// so a test passes fakes without a mocking library. Actions hand back the
 /// raw failure rather than copy; the page turns it into a sentence with
 /// `Errors`.
-class UsersController extends ChangeNotifier {
+class UsersController extends ChangeNotifier with SafeNotifier {
   UsersController({
     this.selfUsername,
     ListUsersFn listUsers = UsersService.list,
@@ -76,7 +77,6 @@ class UsersController extends ChangeNotifier {
 
   /// Bumped by every load, so a slow response cannot overwrite a newer one.
   int _generation = 0;
-  bool _disposed = false;
 
   /// Every account that is not a pending request, for the accounts list.
   List<UserAccountItem> get accounts => [
@@ -140,7 +140,7 @@ class UsersController extends ChangeNotifier {
   /// supersedes this one.
   Future<void> load() async {
     final generation = ++_generation;
-    _notify();
+    notifyListeners();
     try {
       final results = await Future.wait<Object>([
         _listUsers(),
@@ -199,17 +199,17 @@ class UsersController extends ChangeNotifier {
     if (_isCreating) return false;
     _isCreating = true;
     _createError = null;
-    _notify();
+    notifyListeners();
     try {
       await _createUser(username: input.username, password: input.password);
       await load();
       return true;
     } catch (error) {
-      if (!_disposed) _createError = error;
+      if (!isDisposed) _createError = error;
       return false;
     } finally {
       _isCreating = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -225,16 +225,16 @@ class UsersController extends ChangeNotifier {
   Future<Object?> setAccessRequestsEnabled(bool enabled) async {
     if (_isSavingAccessRequests) return null;
     _isSavingAccessRequests = true;
-    _notify();
+    notifyListeners();
     try {
       final saved = await _setAccessRequests(enabled);
-      if (!_disposed) _accessRequestsEnabled = saved;
+      if (!isDisposed) _accessRequestsEnabled = saved;
       return null;
     } catch (error) {
       return error;
     } finally {
       _isSavingAccessRequests = false;
-      _notify();
+      notifyListeners();
     }
   }
 
@@ -243,7 +243,7 @@ class UsersController extends ChangeNotifier {
   Future<Object?> _act(String username, Future<void> Function() request) async {
     if (_busy.contains(username)) return null;
     _busy.add(username);
-    _notify();
+    notifyListeners();
     try {
       await request();
       await load();
@@ -252,19 +252,9 @@ class UsersController extends ChangeNotifier {
       return error;
     } finally {
       _busy.remove(username);
-      _notify();
+      notifyListeners();
     }
   }
 
-  bool _isCurrent(int generation) => !_disposed && generation == _generation;
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
-  }
+  bool _isCurrent(int generation) => !isDisposed && generation == _generation;
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
@@ -112,15 +113,11 @@ class _PlaintextEditorPageState extends State<PlaintextEditorPage> {
         _saving = false;
         _dirty = false;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Saved')));
+      showMessage(context, 'Saved');
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'save the file'))),
-      );
+      showMessage(context, Errors.message(e, 'save the file'));
     }
   }
 

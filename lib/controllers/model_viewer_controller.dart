@@ -5,6 +5,7 @@ import 'package:quark/services/model_viewer_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/model_viewer_config.dart';
 import 'package:quark/utils/model_viewer_files.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Parses a model file's bytes, with the sibling files it names;
@@ -34,7 +35,7 @@ typedef ListModelResourcesFn =
 /// the viewer will not draw — too large, too detailed, too slow to read,
 /// not a valid model — sets [fallback], and the page shows the file's
 /// details instead. A failed request sets [error], which offers Retry.
-class ModelViewerController extends ChangeNotifier {
+class ModelViewerController extends ChangeNotifier with SafeNotifier {
   ModelViewerController({
     required this.path,
     this.serial,
@@ -66,7 +67,6 @@ class ModelViewerController extends ChangeNotifier {
   int? _fileSize;
   bool _wireframe = false;
   int _generation = 0;
-  bool _disposed = false;
 
   /// The model, once read.
   QuarkModelMesh? get mesh => _mesh;
@@ -94,7 +94,7 @@ class ModelViewerController extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     _fallback = null;
-    _notify();
+    notifyListeners();
     try {
       final format = modelFormatForName(path);
       if (format == null) {
@@ -143,7 +143,7 @@ class ModelViewerController extends ChangeNotifier {
       _error = e;
     }
     _isLoading = false;
-    _notify();
+    notifyListeners();
   }
 
   /// Reads at most [length] bytes of the file called [name] in the model's
@@ -180,16 +180,11 @@ class ModelViewerController extends ChangeNotifier {
   void setWireframe(bool wireframe) {
     if (_wireframe == wireframe) return;
     _wireframe = wireframe;
-    _notify();
-  }
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
+    notifyListeners();
   }
 
   @override
   void dispose() {
-    _disposed = true;
     _generation++;
     super.dispose();
   }

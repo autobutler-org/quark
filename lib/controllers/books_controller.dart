@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/books_service.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 
 /// Fetches every book on the Quark.
 typedef ListBooksFn = Future<List<FileNode>> Function();
@@ -10,7 +11,7 @@ typedef ListBooksFn = Future<List<FileNode>> Function();
 ///
 /// A failed refresh keeps the listing it had and sets [error]; the next good
 /// one clears it, as on Slides.
-class BooksController extends ChangeNotifier {
+class BooksController extends ChangeNotifier with SafeNotifier {
   /// [listBooks] defaults to the real service, so a test passes a fake.
   BooksController({this.listBooks = BooksService.list});
 
@@ -18,7 +19,6 @@ class BooksController extends ChangeNotifier {
 
   List<FileNode> _books = const [];
   Object? _error;
-  bool _disposed = false;
 
   /// Every book from the last good listing, by file name, case ignored.
   List<FileNode> get books => _books;
@@ -36,12 +36,6 @@ class BooksController extends ChangeNotifier {
     } catch (e) {
       _error = e;
     }
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
+    notifyListeners();
   }
 }

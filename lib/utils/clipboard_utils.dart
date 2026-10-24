@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/clipboard_utils_stub.dart'
     if (dart.library.js_interop) 'package:quark/utils/clipboard_utils_web.dart';
 
@@ -38,7 +39,5 @@ Future<void> copyToClipboard(
 }) async {
   await writeClipboardText(text);
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
-  );
+  showMessage(context, message, duration: const Duration(seconds: 2));
 }

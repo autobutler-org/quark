@@ -6,6 +6,7 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/services/content_search_service.dart';
 import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 
 /// Fetches every presentation on the Quark.
 typedef ListSlidesFn = Future<List<FileNode>> Function();
@@ -39,7 +40,7 @@ typedef ListImportFolderFn = Future<List<FileNode>> Function(String path);
 /// failed refresh keeps the listing it had and sets [error]; the next good one
 /// clears it, so a poll against an unreachable Quark does not blink the list
 /// away and back.
-class SlidesController extends ChangeNotifier {
+class SlidesController extends ChangeNotifier with SafeNotifier {
   /// Every service call is a parameter defaulting to the real one, so a test
   /// passes fakes.
   SlidesController({
@@ -83,7 +84,6 @@ class SlidesController extends ChangeNotifier {
   Object? _error;
   Timer? _searchTimer;
   int _searchGeneration = 0;
-  bool _disposed = false;
 
   /// Every presentation from the last good listing, newest first.
   List<FileNode> get files => _files;
@@ -121,7 +121,7 @@ class SlidesController extends ChangeNotifier {
     } catch (e) {
       _error = e;
     }
-    _notify();
+    notifyListeners();
   }
 
   /// Filters by name at once, and searches contents once typing pauses.
@@ -133,7 +133,7 @@ class SlidesController extends ChangeNotifier {
     final q = query.trim();
     _contentResults = const [];
     _contentSearching = q.isNotEmpty;
-    _notify();
+    notifyListeners();
     if (q.isEmpty) return;
     _searchTimer = Timer(searchDebounce, () async {
       List<ContentSearchResult> results;
@@ -149,7 +149,7 @@ class SlidesController extends ChangeNotifier {
           if (r.relPath.toLowerCase().endsWith(SlidesService.extension)) r,
       ];
       _contentSearching = false;
-      _notify();
+      notifyListeners();
     });
   }
 
@@ -173,13 +173,8 @@ class SlidesController extends ChangeNotifier {
     return importPowerPoint(await uploadPowerPoint(pick));
   }
 
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
   @override
   void dispose() {
-    _disposed = true;
     _searchTimer?.cancel();
     super.dispose();
   }

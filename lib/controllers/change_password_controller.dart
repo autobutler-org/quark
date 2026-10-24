@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/safe_set_state_mixin.dart';
 
 /// The change-password dialog's one service call, kept out of the Settings
 /// page (#3022).
@@ -10,7 +11,7 @@ import 'package:quark/utils/error_text.dart';
 ///
 /// The service call arrives as a function parameter defaulting to the real
 /// static method, so a test passes a fake without a mocking library.
-class ChangePasswordController extends ChangeNotifier {
+class ChangePasswordController extends ChangeNotifier with SafeNotifier {
   /// Creates a controller talking to the real [AuthService] unless overridden.
   ChangePasswordController({
     Future<void> Function({
@@ -29,7 +30,6 @@ class ChangePasswordController extends ChangeNotifier {
 
   bool _isWorking = false;
   String? _error;
-  bool _disposed = false;
 
   /// Whether a change is in flight. The dialog disables its fields and
   /// buttons meanwhile.
@@ -61,13 +61,7 @@ class ChangePasswordController extends ChangeNotifier {
       return false;
     } finally {
       _isWorking = false;
-      if (!_disposed) notifyListeners();
+      notifyListeners();
     }
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 }
