@@ -9,7 +9,7 @@ ignore ./node_modules
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.2
 	github.com/KononK/resize v0.0.0-20200801203131-21c514740ed6
-	github.com/andybalholm/brotli v1.2.6
+	github.com/andybalholm/brotli v1.2.7
 	github.com/autobutler-org/sprocket v0.2.1
 	github.com/bep/imagemeta v1.1.0
 	github.com/coder/websocket v1.8.15
