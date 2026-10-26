@@ -220,7 +220,7 @@ run_upload_stress() {
       curl -sS -o /dev/null -w "%{http_code}\n" \
         -X POST "$BASE_URL/api/v0/files/upload" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
-        -F "file=@{}" > "$WORK_DIR/upload_status_codes.txt"
+        -F "files=@{}" > "$WORK_DIR/upload_status_codes.txt"
 
   local failures
   failures="$(grep -vc '^200$' "$WORK_DIR/upload_status_codes.txt" || true)"
