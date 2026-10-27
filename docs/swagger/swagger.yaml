@@ -655,6 +655,33 @@ definitions:
           $ref: '#/definitions/featureflagutil.FlagState'
         type: array
     type: object
+  fileutil.SheetPreview:
+    properties:
+      tabs:
+        description: Tabs holds one entry per worksheet, in workbook order.
+        items:
+          $ref: '#/definitions/fileutil.SheetPreviewTab'
+        type: array
+    type: object
+  fileutil.SheetPreviewData:
+    properties:
+      rows:
+        items:
+          items:
+            type: string
+          type: array
+        type: array
+    type: object
+  fileutil.SheetPreviewTab:
+    properties:
+      data:
+        allOf:
+        - $ref: '#/definitions/fileutil.SheetPreviewData'
+        description: Data holds the worksheet's cells.
+      name:
+        description: Name is the worksheet's name.
+        type: string
+    type: object
   fileutil.SlideWarning:
     properties:
       message:
@@ -6556,14 +6583,15 @@ paths:
       - files
   /files/convert/xlsx:
     post:
-      description: Reads an .xlsx or .xlsm workbook and writes it back as a sibling
-        .qsheet, the format the Sheets editor opens. The workbook itself is left untouched.
-        Answers 409 when a .qsheet of that name already exists and overwrite was not
-        asked for; with overwrite on the internal device, the replaced sheet is first
-        snapshotted into its version history. Needs read access on the workbook and
-        write access on its directory; the caller owns a newly created .qsheet.
+      description: Reads an .xlsx, .xlsm, .ods or .xls workbook, with the reader its
+        extension names, and writes it back as a sibling .qsheet, the format the Sheets
+        editor opens. The workbook itself is left untouched. Answers 409 when a .qsheet
+        of that name already exists and overwrite was not asked for; with overwrite
+        on the internal device, the replaced sheet is first snapshotted into its version
+        history. Needs read access on the workbook and write access on its directory;
+        the caller owns a newly created .qsheet.
       parameters:
-      - description: Path to the .xlsx or .xlsm file to convert
+      - description: Path to the .xlsx, .xlsm, .ods or .xls file to convert
         in: query
         name: filePath
         required: true
@@ -8682,6 +8710,54 @@ paths:
       security:
       - BearerAuth: []
       summary: Get a document's properties
+      tags:
+      - previews
+  /previews/sheet:
+    get:
+      description: 'Streams an .xlsx, .xlsm, .ods or .xls workbook as .qsheet JSON
+        for the read-only sheet viewer: {tabs}, each tab a {name, data: {rows}} with
+        every cell the value it displays. The reader is chosen by extension, the same
+        one POST /files/convert/xlsx runs, and nothing is stored. Rows are written
+        as they are read, so a body that does not parse was cut off by a server error.
+        Formulas contribute their cached value and macros are never read. A file that
+        is not what its name says, is encrypted, or is past the conversion limits
+        is a 400. Needs read access on the workbook.'
+      parameters:
+      - description: Path to the workbook
+        in: query
+        name: filePath
+        required: true
+        type: string
+      - description: Device serial number
+        in: query
+        name: serial
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/fileutil.SheetPreview'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Server busy converting other documents
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Preview a spreadsheet
       tags:
       - previews
   /previews/slides:

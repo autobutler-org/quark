@@ -5215,7 +5215,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Reads an .xlsx or .xlsm workbook and writes it back as a sibling .qsheet, the format the Sheets editor opens. The workbook itself is left untouched. Answers 409 when a .qsheet of that name already exists and overwrite was not asked for; with overwrite on the internal device, the replaced sheet is first snapshotted into its version history. Needs read access on the workbook and write access on its directory; the caller owns a newly created .qsheet.",
+                "description": "Reads an .xlsx, .xlsm, .ods or .xls workbook, with the reader its extension names, and writes it back as a sibling .qsheet, the format the Sheets editor opens. The workbook itself is left untouched. Answers 409 when a .qsheet of that name already exists and overwrite was not asked for; with overwrite on the internal device, the replaced sheet is first snapshotted into its version history. Needs read access on the workbook and write access on its directory; the caller owns a newly created .qsheet.",
                 "produces": [
                     "application/json"
                 ],
@@ -5226,7 +5226,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Path to the .xlsx or .xlsm file to convert",
+                        "description": "Path to the .xlsx, .xlsm, .ods or .xls file to convert",
                         "name": "filePath",
                         "in": "query",
                         "required": true
@@ -8187,6 +8187,70 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/previews/sheet": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams an .xlsx, .xlsm, .ods or .xls workbook as .qsheet JSON for the read-only sheet viewer: {tabs}, each tab a {name, data: {rows}} with every cell the value it displays. The reader is chosen by extension, the same one POST /files/convert/xlsx runs, and nothing is stored. Rows are written as they are read, so a body that does not parse was cut off by a server error. Formulas contribute their cached value and macros are never read. A file that is not what its name says, is encrypted, or is past the conversion limits is a 400. Needs read access on the workbook.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "previews"
+                ],
+                "summary": "Preview a spreadsheet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Path to the workbook",
+                        "name": "filePath",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device serial number",
+                        "name": "serial",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/fileutil.SheetPreview"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "503": {
+                        "description": "Server busy converting other documents",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -12234,6 +12298,49 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/featureflagutil.FlagState"
                     }
+                }
+            }
+        },
+        "fileutil.SheetPreview": {
+            "type": "object",
+            "properties": {
+                "tabs": {
+                    "description": "Tabs holds one entry per worksheet, in workbook order.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/fileutil.SheetPreviewTab"
+                    }
+                }
+            }
+        },
+        "fileutil.SheetPreviewData": {
+            "type": "object",
+            "properties": {
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "fileutil.SheetPreviewTab": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "description": "Data holds the worksheet's cells.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/fileutil.SheetPreviewData"
+                        }
+                    ]
+                },
+                "name": {
+                    "description": "Name is the worksheet's name.",
+                    "type": "string"
                 }
             }
         },
