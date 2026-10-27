@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:quark/utils/file_viewer_actions.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/services/local_media_proxy.dart';
+import 'package:quark/services/music_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/media_autoplay.dart';
+import 'package:quark/utils/music_play_threshold.dart';
 import 'package:quark/widgets/audio_player/audio_controls.dart';
 import 'package:quark/widgets/audio_player/error_view.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
@@ -14,9 +16,16 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Full-screen player for an audio file on the Quark.
+///
+/// Once the listening crosses [MusicPlayThreshold] it counts one play in the
+/// user's music history (#3284), at most once per opening. A file the
+/// library does not know is answered 404 and nothing is counted.
 class AudioPlayerPage extends StatefulWidget {
   final Uri url;
   final String name;
+
+  /// Counts a play of the file at a path on a device; tests pass a fake.
+  final Future<void> Function(String relPath, {String serial}) recordPlay;
 
   /// Whether playback may start without the user pressing play.
   final bool Function() canAutoplay;
@@ -31,6 +40,7 @@ class AudioPlayerPage extends StatefulWidget {
     required this.name,
     this.canAutoplay = canAutoplayMedia,
     this.onClose,
+    this.recordPlay = MusicService.recordPlay,
   });
 
   @override
@@ -43,6 +53,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage> {
   bool _loading = true;
   String? _errorMessage;
   bool _downloading = false;
+  MusicPlayThreshold? _playThreshold;
 
   @override
   void initState() {
@@ -96,6 +107,8 @@ class _AudioPlayerPageState extends State<AudioPlayerPage> {
       _proxy = proxy;
       _loading = false;
     });
+    _playThreshold = MusicPlayThreshold(controller.value.duration);
+    controller.addListener(_countPlay);
 
     // A play() the browser blocks for lack of a user gesture does not throw;
     // it leaves the controller in an error state where play does nothing
@@ -109,8 +122,23 @@ class _AudioPlayerPageState extends State<AudioPlayerPage> {
     }
   }
 
+  /// Posts the play once the listening crosses the threshold. A failure is
+  /// only logged: the history is a nicety, and the song keeps playing.
+  void _countPlay() {
+    final controller = _controller;
+    final relPath = widget.url.queryParameters['filePath'];
+    if (controller == null || relPath == null || relPath.isEmpty) return;
+    if (!(_playThreshold?.update(controller.value.position) ?? false)) return;
+    widget
+        .recordPlay(relPath, serial: widget.url.queryParameters['serial'] ?? '')
+        .catchError(
+          (Object e) => debugPrint('[audio_player_page.dart] record play: $e'),
+        );
+  }
+
   @override
   void dispose() {
+    _controller?.removeListener(_countPlay);
     _controller?.dispose();
     _controller = null;
     _proxy?.close();
