@@ -1350,6 +1350,15 @@ test/stress/capacity: build/backend ## Simulate STRESS_USERS app clients against
 .PHONY: test/unit
 test/unit: test/unit/backend test/unit/frontend ## Run unit tests
 
+# The Android unit tests are not part of test/unit: they need a JDK and the Android
+# SDK, which CI's build-android job has.
+.PHONY: test/unit/android
+test/unit/android: generate/frontend/sbom ## Run the Android JVM unit tests (needs a JDK and the Android SDK)
+	# --config-only writes android/gradlew and local.properties without building.
+	# cspell:words gradlew
+	flutter build apk --config-only
+	cd android && ./gradlew :app:testDebugUnitTest
+
 # The backend unit packages: everything but the API handler packages, which
 # test/integration/backend runs, and the chaos suites. Recursive, so `go list` runs
 # only for a target that reads it; pass BACKEND_UNIT_PACKAGES=<pkgs> to run fewer.

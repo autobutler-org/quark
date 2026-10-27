@@ -149,6 +149,10 @@ jobs:
       - name: Build [android]
         run: |
           make build/frontend/android
+      # The JVM unit tests, the vault crypto native autofill runs (#3597) among them.
+      - name: Test [android]
+        run: |
+          make test/unit/android
       # Saved on main only, like the Flutter SDK in .github/actions/setup-flutter: this
       # cache is 3 GB, and a copy saved on any other ref is one only that ref can restore.
       - name: Save Gradle caches

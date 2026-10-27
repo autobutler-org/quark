@@ -14,3 +14,4 @@ key.properties
 **/*.jks
 # `key.properties` is a literal, so a stray key.properties.bak would not match it.
 *.bak
+.kotlin/
