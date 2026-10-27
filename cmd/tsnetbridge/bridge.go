@@ -22,7 +22,9 @@ import (
 	"sync"
 	"time"
 
+	"tailscale.com/envknob"
 	"tailscale.com/ipn"
+	"tailscale.com/logtail"
 	"tailscale.com/tsnet"
 )
 
@@ -180,6 +182,13 @@ func statusJSON() string {
 }
 
 func upNode(cfg Config) (*tsnet.Server, DialFunc, error) {
+	// The library uploads diagnostic logs and client metrics to its vendor
+	// from the moment a node starts until the coordination server's first
+	// map response, and for the life of the process if that response never
+	// comes (#3786). Turn it off before a node exists. Phone builds also
+	// pass ts_omit_logtail, which compiles the uploader out.
+	logtail.Disable()
+	envknob.SetNoLogsNoSupport()
 	if cfg.StateDir == "" || cfg.ControlURL == "" || cfg.Hostname == "" {
 		return nil, nil, errors.New("stateDir, controlUrl, and hostname are required")
 	}

@@ -1672,6 +1672,11 @@ MIGRATION_BASE_REF ?= origin/main
 check/migrations: ## Check DB migrations are numbered above the base branch (MIGRATION_BASE_REF=origin/main)
 	./scripts/check-migration-numbers.bash "$(MIGRATION_BASE_REF)"
 
+# Not part of `make check`: it builds two binaries. CI runs it in check-backend.
+.PHONY: check/log-upload
+check/log-upload: ## Check release builds compile out diagnostic log upload (#3786)
+	./scripts/check-log-upload.bash
+
 # The footer Claude Code appends to a pull request it opens, without its leading
 # emoji so a line matches with or without it.
 ATTRIBUTION_FOOTER := Generated with [Claude Code](https://claude.com/claude-code)

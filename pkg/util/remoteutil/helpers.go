@@ -20,8 +20,10 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
+	"tailscale.com/envknob"
 	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
+	"tailscale.com/logtail"
 	"tailscale.com/tsnet"
 )
 
@@ -35,6 +37,13 @@ var errReconnect = errors.New("couldn't reconnect to remote access; turn it off 
 
 // startLocked is Start's body. mu must be held.
 func startLocked(authKey string) error {
+	// The library uploads diagnostic logs and client metrics to its vendor
+	// from the moment a node starts until the coordination server's first
+	// map response, and for the life of the process if that response never
+	// comes (#3786). Turn it off before a node exists. Release builds also
+	// pass ts_omit_logtail, which compiles the uploader out.
+	logtail.Disable()
+	envknob.SetNoLogsNoSupport()
 	if running {
 		return nil
 	}

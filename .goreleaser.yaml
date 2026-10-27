@@ -18,6 +18,10 @@ builds:
   - main: ./cmd/quark/main.go
     env:
       - CGO_ENABLED=0
+    # Compiles out the embedded networking library's diagnostic log uploader.
+    # scripts/check-log-upload.bash fails if this tag is dropped (#3786).
+    tags:
+      - ts_omit_logtail
     goos:
       - linux
     goarch:
