@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/controllers/code_viewer_controller.dart';
 import 'package:quark/services/code_viewer_service.dart';
+import 'package:quark/services/model_thumbnail_service.dart';
 import 'package:quark/services/model_viewer_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/model_viewer_config.dart';
@@ -43,6 +44,7 @@ class ModelViewerController extends ChangeNotifier with SafeNotifier {
     this.parse = ModelViewerService.parse,
     this.listResources = ModelViewerService.resources,
     this.limits = ModelViewerConfig.limits,
+    this.onMeshLoaded = saveOpenedModelThumbnail,
   });
 
   /// The file's files-relative path.
@@ -59,6 +61,15 @@ class ModelViewerController extends ChangeNotifier with SafeNotifier {
 
   /// The caps the file is held to.
   final QuarkModelLimits limits;
+
+  /// Told each mesh the file parses to, so the Files grid can show it
+  /// (#3227); [saveOpenedModelThumbnail] by default.
+  final void Function({
+    required String path,
+    String? serial,
+    required QuarkModelMesh mesh,
+  })
+  onMeshLoaded;
 
   QuarkModelMesh? _mesh;
   bool _isLoading = true;
@@ -134,6 +145,7 @@ class ModelViewerController extends ChangeNotifier with SafeNotifier {
       );
       if (generation != _generation) return;
       _mesh = mesh;
+      onMeshLoaded(path: path, serial: serial, mesh: mesh);
     } on QuarkModelParseException catch (e) {
       if (generation != _generation) return;
       _mesh = null;

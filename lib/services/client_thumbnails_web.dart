@@ -3,16 +3,22 @@ import 'dart:js_interop';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
+import 'package:quark/services/model_thumbnail_source_web.dart';
 import 'package:quark/utils/client_thumbnail_config.dart';
 import 'package:quark/utils/file_kind.dart';
+import 'package:quark/utils/model_thumbnail_config.dart';
 import 'package:web/web.dart' as web;
 
 /// Renders the thumbnail of [blob], the file [name], with the browser's
 /// decoders: `createImageBitmap` for a photo, which applies its EXIF
 /// orientation, and a `<video>` element seeked to the Quark's frame for a
 /// video. A format the browser cannot decode — HEIC outside Safari, HEVC in
-/// most of them — renders nothing.
+/// most of them — renders nothing. A 3D model is drawn by the model viewer's
+/// renderer (#3227).
 Future<Uint8List?> renderBlobThumbnail(web.Blob blob, String name) async {
+  if (wantsModelThumbnail(name)) {
+    return renderModelThumbnailFromBlob(blob, name);
+  }
   if (!wantsClientThumbnail(name)) {
     return null;
   }
