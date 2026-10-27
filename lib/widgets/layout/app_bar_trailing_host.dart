@@ -19,7 +19,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The indicator is left out until [connection] has a mode, which is never on
 /// web and never with no Quark configured. While remote access is paused on
 /// this phone the pill still shows, the pages gain a banner under the app
-/// bar, and an unreachable page offers to turn it back on (#2876). The bell
+/// bar, and an unreachable page offers to turn it back on (#2876). A device
+/// with no node of its own, like the desktop app, gets no switch or pause in
+/// the sheet (#3779). The bell
 /// renders nothing while nobody is signed in.
 class AppBarTrailingHost extends StatefulWidget {
   /// Creates the scope around [child].
@@ -80,7 +82,7 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
                 mode: mode ?? ConnectionMode.offline,
                 paused: paused,
                 pairingError: connection.pairingError,
-                onPause: connection.pause,
+                onPause: connection.hasDeviceNode ? connection.pause : null,
                 onResume: connection.resumeRemoteAccess,
                 onNavigate: widget.onNavigate,
               ),

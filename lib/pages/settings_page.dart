@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/change_password_controller.dart';
+import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/feature_flags_controller.dart';
 import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/controllers/remote_access_controller.dart';
@@ -728,7 +729,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTryAgain: _retryRemoteAccess,
                 ),
               ),
-              thisPhone: kIsWeb ? null : const ThisPhoneCard(),
+              thisPhone: ConnectionController.instance.hasDeviceNode
+                  ? const ThisPhoneCard()
+                  : null,
+              showDesktopNote:
+                  !kIsWeb && !ConnectionController.instance.hasDeviceNode,
               connectedDevices: ConnectedDevicesCard(
                 devices: _connectedDevices,
                 isLoading: _isLoadingDevices,

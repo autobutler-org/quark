@@ -15,6 +15,7 @@ class SettingsNetworkTab extends StatelessWidget {
     required this.remoteAccess,
     required this.connectedDevices,
     this.thisPhone,
+    this.showDesktopNote = false,
     this.header,
     super.key,
   });
@@ -33,8 +34,18 @@ class SettingsNetworkTab extends StatelessWidget {
   final Widget connectedDevices;
 
   /// This phone's own remote access switch. Null leaves the section out,
-  /// including on web, where this phone does not run a node.
+  /// as on web and desktop, where this device does not run a node.
   final Widget? thisPhone;
+
+  /// Whether to say, under the remote access card, that the desktop app
+  /// cannot use remote access yet (#3779).
+  final bool showDesktopNote;
+
+  /// What [showDesktopNote] says. Reword it when desktop remote access ships
+  /// (#2877).
+  static const desktopRemoteAccessNote =
+      "Remote access isn't available in the desktop app yet. At home, Quark "
+      'works as usual.';
 
   /// Shown above the tab's content and scrolled with it, such as the
   /// page's disconnected banner; null shows nothing.
@@ -51,6 +62,10 @@ class SettingsNetworkTab extends StatelessWidget {
           const Text('Remote access', style: heading),
           const SizedBox(height: 8),
           remoteAccess,
+          if (showDesktopNote) ...[
+            const SizedBox(height: 8),
+            const Text(desktopRemoteAccessNote),
+          ],
           const SizedBox(height: 24),
           if (thisPhone != null) ...[
             const Text('This phone', style: heading),

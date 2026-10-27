@@ -49,6 +49,7 @@ void main() {
     Future<String?> Function(String upstream)? embeddedProxy,
     Future<void> Function(String upstream)? warmEmbeddedTunnel,
     Future<bool> Function()? rejected,
+    bool hasDeviceNode = true,
   }) {
     final c = ConnectionController(
       activeHostChanges: hostChanges ?? ChangeNotifier(),
@@ -75,6 +76,7 @@ void main() {
         }
       },
       // The real tunnel is the phone. These tests inject the answer.
+      hasDeviceNode: () => hasDeviceNode,
       embeddedProxy: embeddedProxy ?? (_) async => null,
       warmEmbeddedTunnel:
           warmEmbeddedTunnel ?? (upstream) async => warmed.add(upstream),
@@ -649,6 +651,46 @@ void main() {
       expect(restarted.remoteAccessPaused, isFalse);
       expect(pauses.containsKey(_lan), isFalse);
       restarted.dispose();
+    });
+  });
+
+  // #3779: a desktop has no node of its own, so the Quark's private remote
+  // address is out of its reach.
+  group('without a node on this device', () {
+    test('does not probe the remote address away from home', () async {
+      final c = build(hasDeviceNode: false);
+      await c.check();
+      expect(probed, [_lan]);
+      expect(c.mode, ConnectionMode.offline);
+      expect(c.baseUrl, isNull);
+    });
+
+    test('probes the proxy a node of its own hands back', () async {
+      const proxy = 'http://127.0.0.1:41234';
+      answering = {proxy};
+      final c = build(hasDeviceNode: false, embeddedProxy: (_) async => proxy);
+      await c.check();
+      expect(probed, [_lan, proxy]);
+      expect(c.mode, ConnectionMode.remote);
+      expect(c.baseUrl, proxy);
+    });
+
+    test('does not ask the Quark for a key at home', () async {
+      connectedAtHome();
+      final c = build(hasDeviceNode: false);
+      await c.check();
+      expect(c.mode, ConnectionMode.local);
+      expect(pairCalls, 0);
+      expect(enrolled, isEmpty);
+    });
+
+    test('ignores a pause saved earlier', () async {
+      pauses[_lan] = const StoredPause(choice: DevicePauseChoice.untilManual);
+      final c = build(hasDeviceNode: false);
+      c.start();
+      await pumpEventQueue();
+      expect(c.hasDeviceNode, isFalse);
+      expect(c.remoteAccessPaused, isFalse);
     });
   });
 }

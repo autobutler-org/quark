@@ -41,6 +41,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Pausing remote access on this phone stops only this phone's node. It is
 /// remembered across a restart, and it never calls the Quark.
 ///
+/// Where the platform has no node of its own ([hasDeviceNode] false, the
+/// desktop app today), the Quark's private remote address is out of reach:
+/// away from home only a proxy [embeddedProxy] hands back is probed, the
+/// device never pairs, and a pause saved earlier is ignored (#3779).
+///
 /// Service calls arrive as function parameters defaulting to the real ones,
 /// so a test passes fakes and never touches the network.
 class ConnectionController extends ChangeNotifier {
@@ -80,6 +85,7 @@ class ConnectionController extends ChangeNotifier {
         enroll =
         EmbeddedTunnel.enroll,
     Future<bool> Function() nodeRejected = _appNodeRejected,
+    bool Function() hasDeviceNode = _appHasDeviceNode,
     DateTime Function() now = DateTime.now,
   }) : _probe = probe,
        _readRemoteAccess = readRemoteAccess,
@@ -97,6 +103,7 @@ class ConnectionController extends ChangeNotifier {
        _clearPause = clearPause,
        _enroll = enroll,
        _nodeRejected = nodeRejected,
+       _hasDeviceNode = hasDeviceNode,
        _now = now,
        _activeHostChanges =
            activeHostChanges ?? AppSettings.instance.activeHostNotifier;
@@ -133,6 +140,7 @@ class ConnectionController extends ChangeNotifier {
   })
   _enroll;
   final Future<bool> Function() _nodeRejected;
+  final bool Function() _hasDeviceNode;
   final DateTime Function() _now;
 
   /// Fires when the active Quark changes; [AppSettings.activeHostNotifier]
@@ -169,6 +177,10 @@ class ConnectionController extends ChangeNotifier {
   /// How the active Quark is reached, or null before the first check and
   /// when no Quark is configured.
   ConnectionMode? get mode => _mode;
+
+  /// Whether this device runs its own tailnet node, so remote access and
+  /// its pause apply to it. False on web and on desktop.
+  bool get hasDeviceNode => _hasDeviceNode();
 
   /// Whether remote access is paused on this phone only.
   bool get remoteAccessPaused => _pause != null;
@@ -265,8 +277,15 @@ class ConnectionController extends ChangeNotifier {
     if (stored != null) {
       final proxy = await _embeddedProxy(stored);
       if (!isCurrent()) return;
-      final remote = (proxy != null && proxy.isNotEmpty) ? proxy : stored;
-      if (await _reaches(remote, ConnectionConfig.remoteProbeTimeout)) {
+      // Without a node of its own, this device cannot reach the tailnet
+      // address, so only a proxy is worth probing.
+      final remote = (proxy != null && proxy.isNotEmpty)
+          ? proxy
+          : _hasDeviceNode()
+          ? stored
+          : null;
+      if (remote != null &&
+          await _reaches(remote, ConnectionConfig.remoteProbeTimeout)) {
         if (!isCurrent()) return;
         _set(ConnectionMode.remote, host: host.hostAddress, url: remote);
         _settled(generation);
@@ -351,7 +370,7 @@ class ConnectionController extends ChangeNotifier {
       await _warmEmbeddedTunnel('');
       return;
     }
-    if (kIsWeb) {
+    if (kIsWeb || !_hasDeviceNode()) {
       await _warmEmbeddedTunnel(remote);
       return;
     }
@@ -470,7 +489,7 @@ class ConnectionController extends ChangeNotifier {
 
   Future<void> _restorePause() async {
     final host = _activeHost()?.hostAddress;
-    if (host == null) return;
+    if (host == null || !_hasDeviceNode()) return;
     final stored = await _readPause(host);
     if (stored == null) return;
     final until = stored.until;
@@ -539,6 +558,8 @@ class ConnectionController extends ChangeNotifier {
     }
     super.dispose();
   }
+
+  static bool _appHasDeviceNode() => EmbeddedTunnel.isSupported;
 
   static HostEntry? _appActiveHost() => AppSettings.instance.activeHostEntry;
 
