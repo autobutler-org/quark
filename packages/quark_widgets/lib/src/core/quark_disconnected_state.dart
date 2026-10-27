@@ -3,7 +3,7 @@
 /// to load, and [QuarkDisconnectedBanner] sits above a page that stays usable.
 ///
 /// Both are for the case where a Quark *is* configured and simply cannot be
-/// reached — off the local network, Tailscale down, device asleep. The
+/// reached — off the home network, remote access down, device asleep. The
 /// zero-config case belongs to the app's connect form; that is not this.
 ///
 /// The copy says only what the app actually knows. It does not guess between
@@ -44,12 +44,14 @@ const String quarkDisconnectedShort = 'Not connected';
 /// The troubleshooting steps, in the order they are worth checking.
 ///
 /// Deliberately static: v1 does not autodetect *why* the Quark is unreachable,
-/// so every step here has to hold for every cause.
+/// so every step here has to hold for every cause. Written for a browser,
+/// which reaches the Quark only on the home network. No step names the
+/// product behind remote access (#3778), and none says "try again": the app
+/// retries by itself, and the retry button is the caller's to offer.
 const List<String> quarkTroubleshootingSteps = [
-  "Check you're on the same network as your Quark, or connected to it through "
-      'Tailscale or another remote access route.',
-  'Confirm the Quark address in Settings is correct.',
-  'Confirm your Quark is powered on.',
+  "Make sure you're on your home Wi-Fi.",
+  'Make sure your Quark is switched on.',
+  'Check the Quark address in Settings.',
 ];
 
 /// [quarkTroubleshootingSteps] for pages that already show host management —
@@ -61,10 +63,9 @@ const List<String> quarkTroubleshootingSteps = [
 /// a destination the user navigates to ("in Settings") is stable; pointing at
 /// a screen position is not.
 const List<String> quarkTroubleshootingStepsInPlace = [
-  "Check you're on the same network as your Quark, or connected to it through "
-      'Tailscale or another remote access route.',
-  'Confirm the Quark address is correct.',
-  'Confirm your Quark is powered on.',
+  "Make sure you're on your home Wi-Fi.",
+  'Make sure your Quark is switched on.',
+  'Check the Quark address.',
 ];
 
 /// Full-page disconnected state, for a page with nothing left to show.

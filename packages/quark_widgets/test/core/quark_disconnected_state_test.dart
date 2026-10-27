@@ -93,10 +93,7 @@ void main() {
         size: wideViewport,
       );
 
-      expect(
-        find.text('Confirm the Quark address is correct.'),
-        findsOneWidget,
-      );
+      expect(find.text('Check the Quark address.'), findsOneWidget);
     });
   });
 
@@ -119,14 +116,8 @@ void main() {
         size: narrowViewport,
       );
 
-      expect(
-        find.text('Confirm the Quark address is correct.'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Confirm the Quark address in Settings is correct.'),
-        findsNothing,
-      );
+      expect(find.text('Check the Quark address.'), findsOneWidget);
+      expect(find.text('Check the Quark address in Settings.'), findsNothing);
     });
 
     test('gives no directional guidance', () {
@@ -157,6 +148,69 @@ void main() {
       await pumpAt(tester, const QuarkDisconnectedBanner(), size: wideViewport);
 
       expect(find.text('Try again'), findsNothing);
+    });
+  });
+
+  // #3778: remote access is built into Quark, so the checklist never names a
+  // networking product, and the app retries by itself, so no step asks the
+  // user to try again without a button that does it.
+  group('troubleshooting steps', () {
+    const vendorNames = ['tailscale', 'tsnet', 'headscale', 'wireguard'];
+
+    for (final (name, steps) in [
+      ('default', quarkTroubleshootingSteps),
+      ('in place', quarkTroubleshootingStepsInPlace),
+    ]) {
+      test('$name steps name no vendor and ask for no retry', () {
+        for (final step in steps) {
+          for (final vendor in vendorNames) {
+            expect(step.toLowerCase(), isNot(contains(vendor)));
+          }
+          expect(step.toLowerCase(), isNot(contains('try again')));
+        }
+      });
+    }
+
+    test('the default steps are the browser checklist', () {
+      expect(quarkTroubleshootingSteps, [
+        "Make sure you're on your home Wi-Fi.",
+        'Make sure your Quark is switched on.',
+        'Check the Quark address in Settings.',
+      ]);
+    });
+
+    testBothViewports('the full-page view renders no vendor name', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(tester, const QuarkDisconnectedView(), size: size);
+
+      for (final vendor in vendorNames) {
+        expect(
+          find.textContaining(RegExp(vendor, caseSensitive: false)),
+          findsNothing,
+        );
+      }
+      for (final step in quarkTroubleshootingSteps) {
+        expect(find.text(step), findsOneWidget);
+      }
+    });
+
+    testBothViewports('the banner renders no vendor name', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(tester, const QuarkDisconnectedBanner(), size: size);
+
+      for (final vendor in vendorNames) {
+        expect(
+          find.textContaining(RegExp(vendor, caseSensitive: false)),
+          findsNothing,
+        );
+      }
+      for (final step in quarkTroubleshootingStepsInPlace) {
+        expect(find.text(step), findsOneWidget);
+      }
     });
   });
 }
