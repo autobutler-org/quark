@@ -8,6 +8,8 @@ void main() {
     expect(fileKindForName('app.tsx'), FileKind.code);
     expect(fileKindForName('BEACH.JPG'), FileKind.image);
     expect(fileKindForName('budget.xlsm'), FileKind.xlsx);
+    expect(fileKindForName('deck.odp'), FileKind.slideshow);
+    expect(fileKindForName('Deck.ODP'), FileKind.slideshow);
     expect(fileKindForName('notes.qdoc'), FileKind.qdoc);
     expect(fileKindForName('backup.tar.gz'), FileKind.archive);
     expect(fileKindForName('Makefile'), FileKind.generic);
