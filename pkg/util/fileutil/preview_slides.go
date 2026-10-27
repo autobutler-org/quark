@@ -79,7 +79,7 @@ func PreviewSlides(params PreviewSlidesParams) (PreviewSlidesResult, error) {
 	if err != nil {
 		return PreviewSlidesResult{}, err
 	}
-	source, size, closer, err := openXlsx(params.Ctx, fsys, params.FilePath)
+	source, size, closer, err := openZip(params.Ctx, fsys, params.FilePath)
 	if err != nil {
 		return PreviewSlidesResult{}, err
 	}
