@@ -4,12 +4,14 @@ import 'package:quark/controllers/code_viewer_controller.dart';
 import 'package:quark/controllers/markdown_viewer_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
+import 'package:quark/utils/markdown_properties.dart';
 import 'package:quark/utils/markdown_viewer_files.dart';
 import 'package:quark/widgets/code_viewer/code_viewer_body.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/widgets/layout/leave_pop_scope.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/markdown_viewer/markdown_viewer_body.dart';
+import 'package:quark/widgets/viewer/document_properties_sheet.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,6 +22,7 @@ import 'package:url_launcher/url_launcher.dart';
 /// Raw HTML in the file shows as text, and an image on the web loads only
 /// when the reader asks. A link to another file on the Quark opens it; a web
 /// link opens in the browser. "Edit" hands the file to the plaintext editor.
+/// "Properties" counts the words and characters in the text already read.
 class MarkdownViewerPage extends StatefulWidget {
   /// The file's files-relative path.
   final String filePath;
@@ -153,6 +156,20 @@ class _MarkdownViewerPageState extends State<MarkdownViewerPage> {
                               serial: widget.deviceSerial,
                               // Back from the editor returns here (#3186).
                               from: GoRouterState.of(context).uri.toString(),
+                            ),
+                          ),
+                  ),
+                  QuarkBarIconButton(
+                    key: const ValueKey('markdown_viewer_properties'),
+                    icon: QuarkIcons.info_outline,
+                    tooltip: 'Properties',
+                    onPressed:
+                        _controller.isLoading || _controller.error != null
+                        ? null
+                        : () => showDocumentPropertiesSheet(
+                            context,
+                            properties: markdownDocumentProperties(
+                              _controller.document,
                             ),
                           ),
                   ),

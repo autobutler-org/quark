@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -8,9 +9,11 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quark/controllers/code_viewer_controller.dart';
+import 'package:quark/services/code_viewer_service.dart';
 import 'package:quark/controllers/markdown_viewer_controller.dart';
 import 'package:quark/pages/markdown_viewer_page.dart';
 import 'package:quark/router.dart';
+import 'package:quark/utils/markdown_properties.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/markdown_viewer/markdown_viewer_image.dart';
@@ -81,6 +84,7 @@ void main() {
     ReadCodeRangeFn? readRange,
     String filePath = 'notes/trip/readme.md',
     int maxBytes = 64 * 1024,
+    bool settle = true,
   }) async {
     opened.clear();
     final read = readRange ?? readerOver(content);
@@ -127,7 +131,11 @@ void main() {
         routerConfig: router,
       ),
     );
-    await tester.pumpAndSettle();
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      await tester.pump();
+    }
     return router;
   }
 
@@ -361,6 +369,70 @@ void main() {
     );
     expect(find.textContaining('boom'), findsNothing);
     expect(editEnabled(tester), isFalse);
+  });
+
+  for (final size in const [Size(360, 640), Size(1280, 800)]) {
+    testWidgets('Properties shows the word count at ${size.width}', (
+      tester,
+    ) async {
+      setViewport(tester, size);
+      const content = 'Hello world\n\nSecond line\n';
+      await pumpViewer(tester, content: content);
+
+      await tester.tap(
+        find.byKey(const ValueKey('markdown_viewer_properties')),
+      );
+      await tester.pumpAndSettle();
+
+      final properties = markdownDocumentProperties(
+        QuarkMarkdownDocument.parse(content),
+      );
+      expect(
+        find.byKey(const ValueKey('document_property_words')),
+        findsOneWidget,
+      );
+      expect(find.text('${properties.words}'), findsOneWidget);
+      expect(find.text('${properties.characters}'), findsOneWidget);
+      expect(find.text('Counts from this preview.'), findsOneWidget);
+      expect(properties.words, 4);
+      expect(properties.characters, 22);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('Properties stays disabled until the file has loaded', (
+    tester,
+  ) async {
+    final gate = Completer<CodeViewerRange>();
+    await pumpViewer(
+      tester,
+      settle: false,
+      readRange: (path, {required start, required length, serial}) =>
+          gate.future,
+    );
+
+    expect(
+      tester
+          .widget<QuarkBarIconButton>(
+            find.byKey(const ValueKey('markdown_viewer_properties')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    gate.complete((
+      bytes: Uint8List.fromList(utf8.encode('Hello\n')),
+      totalSize: 6,
+    ));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<QuarkBarIconButton>(
+            find.byKey(const ValueKey('markdown_viewer_properties')),
+          )
+          .onPressed,
+      isNotNull,
+    );
   });
 
   testWidgets('back with nothing underneath lands in the containing folder', (
