@@ -4,7 +4,13 @@
 # unit tests. The Makefile needs GNU Make 3.82+, and the runner runs this with
 # `sh -c`, where `make` on macOS is Apple's 3.81, so prefer gmake as
 # git/hooks/pre-commit does.
-gate = "$(command -v gmake || echo make) check test"
+#
+# The runner starts from a fresh worktree with no resolved Dart packages
+# (.dart_tool/package_config.json). Without them `dart format` cannot find
+# package:flutter_lints/flutter.yaml, falls back to its default style and
+# rewrites a hundred-odd files, so check/format/flutter fails on any change.
+# Resolve them first, as AGENTS.md asks of any fresh worktree.
+gate = "flutter pub get && $(command -v gmake || echo make) check test"
 
 # The slowest required check (Build: build-android, build-ios) takes up to ~10m
 # on a pull request; 20m leaves room for runner queueing.
