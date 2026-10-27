@@ -78,3 +78,6 @@ reverse-proxies to the local listener, so the phone reaches the device over the 
 The node's state persists; an auth key is provisioned only when there is none. Because the proxy connects from
 loopback, `X-Forwarded-For` is trusted only from loopback (or `QUARK_TRUSTED_PROXIES`), which keeps the login
 rate limiter keyed on the real client IP.
+Before it builds a node, `remoteutil` and the phone bridge (`cmd/tsnetbridge`) turn off the diagnostic log and
+client-metrics upload that library otherwise sends to its vendor, for the life of the process (#3786). Release
+builds and both phone builds also compile that uploader out (`ts_omit_logtail`). Relay use is unchanged.

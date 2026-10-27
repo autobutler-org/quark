@@ -42,6 +42,11 @@ jobs:
       - name: Lint go
         run: |
           make check/lint/go
+      # Release builds compile out the networking library's diagnostic log
+      # uploader. This builds two binaries, so it stays out of `make check`.
+      - name: Check diagnostic log upload is compiled out
+        run: |
+          make check/log-upload
       - name: Lint sqlc
         run: |
           make check/lint/sqlc

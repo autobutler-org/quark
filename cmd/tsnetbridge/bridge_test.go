@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"tailscale.com/envknob"
 )
 
 func TestStartStopStatus_ProxiesThroughInjectedDial(t *testing.T) {
@@ -303,5 +305,19 @@ func TestProxy_RejectsMissingTokenWrongTokenAndForeignHost(t *testing.T) {
 	}
 	if _, next, err := Start(Config{Upstream: "http://100.64.0.3", Dial: noDial}); err != nil || next == token {
 		t.Fatalf("restart: token reused %v, err %v", next == token, err)
+	}
+}
+
+// TestUpNode_DisablesLogUploadBeforeNode verifies upNode turns off the
+// networking library's diagnostic log upload before it builds a node, so a
+// phone sends nothing to the library vendor (#3786). The config is rejected,
+// so the node is never built and the switch must already be set.
+func TestUpNode_DisablesLogUploadBeforeNode(t *testing.T) {
+	envknob.SetenvForTest(t, "TS_NO_LOGS_NO_SUPPORT", "")
+	if _, _, err := upNode(Config{}); err == nil {
+		t.Fatal("upNode(Config{}) = nil error; want the missing-field error")
+	}
+	if !envknob.NoLogsNoSupport() {
+		t.Fatal("NoLogsNoSupport() = false after upNode; want log upload off before the node is built")
 	}
 }

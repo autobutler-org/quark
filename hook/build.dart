@@ -56,6 +56,23 @@ void main(List<String> args) async {
   });
 }
 
+/// Go arguments shared by the Android and iOS builds. `ts_omit_logtail`
+/// compiles out the networking library's diagnostic log uploader, so a phone
+/// has no path that sends those logs to the vendor (#3786).
+List<String> _goBuildArgs(String buildMode, String out) => [
+  'build',
+  '-trimpath',
+  '-ldflags',
+  '-s -w',
+  '-tags',
+  'ts_omit_logtail',
+  '-buildmode',
+  buildMode,
+  '-o',
+  out,
+  './cmd/tsnetbridge',
+];
+
 /// Joins the tailnet. Fails with a fix when Go or the mobile toolchain is
 /// missing, because a silent "not found" does not say what to install.
 Future<void> _buildGo(HookInput input, CodeConfig code, Uri out) async {
@@ -72,17 +89,7 @@ Future<void> _buildGo(HookInput input, CodeConfig code, Uri out) async {
     final target = '--target=$triple$api';
     await _run(
       go,
-      [
-        'build',
-        '-trimpath',
-        '-ldflags',
-        '-s -w',
-        '-buildmode',
-        'c-shared',
-        '-o',
-        out.toFilePath(),
-        './cmd/tsnetbridge',
-      ],
+      _goBuildArgs('c-shared', out.toFilePath()),
       workingDirectory: root,
       environment: {
         'CGO_ENABLED': '1',
@@ -110,17 +117,7 @@ Future<void> _buildGo(HookInput input, CodeConfig code, Uri out) async {
   final archive = input.outputDirectory.resolve('lib$_name.a');
   await _run(
     go,
-    [
-      'build',
-      '-trimpath',
-      '-ldflags',
-      '-s -w',
-      '-buildmode',
-      'c-archive',
-      '-o',
-      archive.toFilePath(),
-      './cmd/tsnetbridge',
-    ],
+    _goBuildArgs('c-archive', archive.toFilePath()),
     workingDirectory: root,
     environment: {
       'CGO_ENABLED': '1',
