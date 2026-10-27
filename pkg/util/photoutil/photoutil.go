@@ -45,11 +45,25 @@ type ExifData struct {
 	Height       int
 }
 
+// Resize says how a thumbnail meets its width × height box.
+type Resize int
+
+const (
+	// ResizeCrop scales the image to cover the box and center-crops it to
+	// exactly the box: the square grid tiers.
+	ResizeCrop Resize = iota
+	// ResizeFit scales the image down to fit within the box, aspect ratio
+	// kept and never upscaled: the uncropped display rendition (#3440).
+	ResizeFit
+)
+
 // GenerateThumbnailParams contains parameters for generating a thumbnail
 type GenerateThumbnailParams struct {
 	FilePath string
 	Width    uint
 	Height   uint
+	// Resize is how the image meets Width × Height; the zero value crops.
+	Resize Resize
 }
 
 // GenerateThumbnailResult contains the result of generating a thumbnail
@@ -76,7 +90,8 @@ func ApplyRotation(img image.Image, quarters int64) image.Image {
 // a multi-hundred-megabyte TIFF on the heap per request (#1723).
 // ext is the lowercase file extension (e.g. ".jpg") used for format detection.
 // RAW and video files are not supported — callers must use GenerateThumbnail for those.
-func GenerateThumbnailFromReader(rs io.ReadSeeker, ext string, width, height uint) (*GenerateThumbnailResult, error) {
+// mode is how the image meets width × height.
+func GenerateThumbnailFromReader(rs io.ReadSeeker, ext string, width, height uint, mode Resize) (*GenerateThumbnailResult, error) {
 	fileType := storageutil.DetermineFileTypeFromPath("file" + ext)
 	if fileType != storageutil.FileTypeImage {
 		return nil, fmt.Errorf("GenerateThumbnailFromReader: unsupported file type for extension %q", ext)
@@ -88,9 +103,9 @@ func GenerateThumbnailFromReader(rs io.ReadSeeker, ext string, width, height uin
 	}
 	orientation := sourceOrientation(rs, ImageFormatFromPath("file"+ext))
 
-	cropped, err := uprightThumbnail(img, orientation, width, height)
+	cropped, err := uprightThumbnail(img, orientation, width, height, mode)
 	if err != nil {
-		return nil, fmt.Errorf("GenerateThumbnailFromReader: crop: %w", err)
+		return nil, fmt.Errorf("GenerateThumbnailFromReader: resize: %w", err)
 	}
 	return &GenerateThumbnailResult{Thumbnail: cropped, Format: format, DHash: uprightDHash(img, orientation)}, nil
 }
@@ -98,12 +113,12 @@ func GenerateThumbnailFromReader(rs io.ReadSeeker, ext string, width, height uin
 // GenerateThumbnailFromImage creates a thumbnail from an image that is
 // already decoded and upright, such as a video's keyframe. It has no source
 // format to report beyond the JPEG the thumbnail is cached as, and no DHash.
-func GenerateThumbnailFromImage(img image.Image, width, height uint) (*GenerateThumbnailResult, error) {
-	cropped, format, err := cropToFit(img, width, height)
+func GenerateThumbnailFromImage(img image.Image, width, height uint, mode Resize) (*GenerateThumbnailResult, error) {
+	thumb, err := resizeTo(img, width, height, mode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate thumbnail: %w", err)
 	}
-	return &GenerateThumbnailResult{Thumbnail: cropped, Format: format}, nil
+	return &GenerateThumbnailResult{Thumbnail: thumb, Format: "jpeg"}, nil
 }
 
 // GenerateThumbnail creates a thumbnail image from an image file. A video's
@@ -121,7 +136,7 @@ func GenerateThumbnail(params GenerateThumbnailParams) (*GenerateThumbnailResult
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert RAW file: %w", err)
 		}
-		cropped, _, cropErr := cropToFit(img, params.Width, params.Height)
+		cropped, cropErr := resizeTo(img, params.Width, params.Height, params.Resize)
 		if cropErr != nil {
 			return nil, fmt.Errorf("crop RAW thumbnail: %w", cropErr)
 		}
@@ -132,7 +147,7 @@ func GenerateThumbnail(params GenerateThumbnailParams) (*GenerateThumbnailResult
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate thumbnail: %w", err)
 	}
-	thumbnail, err := uprightThumbnail(img, orientation, params.Width, params.Height)
+	thumbnail, err := uprightThumbnail(img, orientation, params.Width, params.Height, params.Resize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate thumbnail: %w", err)
 	}

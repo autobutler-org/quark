@@ -56,6 +56,9 @@ func TestCacheKey(t *testing.T) {
 	if keySm == keyMd {
 		t.Errorf("CacheKey collision: sm == md")
 	}
+	if keyXl := CacheKey("serial1", "/photos/test.jpg", 0, SizeXl); keyXl == key1 {
+		t.Errorf("CacheKey collision: lg == xl")
+	}
 }
 
 func TestParseSize(t *testing.T) {
@@ -66,8 +69,9 @@ func TestParseSize(t *testing.T) {
 		{"sm", SizeSm},
 		{"md", SizeMd},
 		{"lg", SizeLg},
-		{"", SizeLg},   // empty defaults to lg
-		{"xl", SizeLg}, // unknown defaults to lg
+		{"xl", SizeXl},
+		{"", SizeLg},    // empty defaults to lg
+		{"xxl", SizeLg}, // unknown defaults to lg
 	}
 	for _, tt := range tests {
 		got := ParseSize(tt.input)
@@ -85,6 +89,7 @@ func TestDimensions(t *testing.T) {
 		{SizeSm, 96, 96},
 		{SizeMd, 240, 240},
 		{SizeLg, 400, 400},
+		{SizeXl, 1280, 1280},
 		{"unknown", 400, 400}, // unknown falls back to lg
 	}
 	for _, tt := range tests {

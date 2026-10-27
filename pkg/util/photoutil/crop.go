@@ -47,3 +47,32 @@ func cropToFit(img image.Image, width, height uint) (image.Image, string, error)
 	}
 	return cropped, "jpeg", nil
 }
+
+// resizeTo brings an image to a thumbnail tier's box the way mode says.
+func resizeTo(img image.Image, width, height uint, mode Resize) (image.Image, error) {
+	if mode == ResizeFit {
+		return scaleWithin(img, width, height)
+	}
+	thumb, _, err := cropToFit(img, width, height)
+	return thumb, err
+}
+
+// scaleWithin scales an image down to fit within width × height, keeping its
+// aspect ratio. An image already inside the box is returned as it is: a
+// display rendition is never upscaled.
+func scaleWithin(img image.Image, width, height uint) (image.Image, error) {
+	bounds := img.Bounds()
+	srcW := uint(bounds.Dx())
+	srcH := uint(bounds.Dy())
+
+	if srcW == 0 || srcH == 0 {
+		return nil, fmt.Errorf("source image has zero dimensions")
+	}
+	if srcW <= width && srcH <= height {
+		return img, nil
+	}
+	if srcW*height > srcH*width {
+		return resize.Resize(width, max(1, srcH*width/srcW), img, resize.Lanczos3), nil
+	}
+	return resize.Resize(max(1, srcW*height/srcH), height, img, resize.Lanczos3), nil
+}

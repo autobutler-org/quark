@@ -10,6 +10,10 @@
 // (H.264, HEVC or VP9 video, HEIC) is answered with [NeedsClientRender] so a client
 // can render one and upload it.
 //
+// [SizeXl] is the one tier that is not a cropped square (#3440): the whole
+// photo, scaled down to fit a screen, for a slideshow. It is never resized
+// from a client thumbnail, which is smaller than it.
+//
 // A track's thumbnail is its cover art (#2982): the picture embedded in it,
 // or the cover image in its folder, whichever the music library recorded.
 // [PrepareCover] keys the cache entry by the picture's hash, so the tracks of
@@ -55,6 +59,9 @@ const (
 	SizeSm Size = "sm" // 96×96  – grid icons / file browser
 	SizeMd Size = "md" // 240×240 – card previews
 	SizeLg Size = "lg" // 400×400 – detail view (legacy default)
+	// SizeXl is the display rendition: the whole photo scaled down to fit
+	// within 1280×1280, aspect ratio kept, never upscaled.
+	SizeXl Size = "xl"
 )
 
 // The reasons [ClientRenderReason] gives.
@@ -127,6 +134,8 @@ type PrepareResult struct {
 	RotationQuarters int64
 	Width            uint
 	Height           uint
+	// Resize is how the image meets Width × Height.
+	Resize photoutil.Resize
 }
 
 // PrepareCoverParams names a track's cover thumbnail.
@@ -153,6 +162,8 @@ type PrepareCoverResult struct {
 	CoverKey string
 	Width    uint
 	Height   uint
+	// Resize is how the picture meets Width × Height.
+	Resize photoutil.Resize
 }
 
 // GenerateCoverParams renders a track's cover into its cache entry.
@@ -169,6 +180,8 @@ type GenerateCoverParams struct {
 	// Width and Height are the target dimensions.
 	Width  uint
 	Height uint
+	// Resize is how the image meets them; the zero value crops.
+	Resize photoutil.Resize
 	// CachedPath is where the encoded thumbnail is committed.
 	CachedPath string
 }
@@ -195,6 +208,8 @@ type GenerateParams struct {
 	// Width and Height are the target dimensions.
 	Width  uint
 	Height uint
+	// Resize is how the image meets them; the zero value crops.
+	Resize photoutil.Resize
 	// RotationQuarters applies the user's server-side rotation.
 	RotationQuarters int64
 	// CachedPath is where the encoded thumbnail is committed.
@@ -219,6 +234,8 @@ type GenerateFromReaderParams struct {
 	// Width and Height are the target dimensions.
 	Width  uint
 	Height uint
+	// Resize is how the image meets them; the zero value crops.
+	Resize photoutil.Resize
 	// RotationQuarters applies the user's server-side rotation.
 	RotationQuarters int64
 	// CachedPath is where the encoded thumbnail is committed.
@@ -298,6 +315,8 @@ func ParseSize(raw string) Size {
 		return SizeSm
 	case SizeMd:
 		return SizeMd
+	case SizeXl:
+		return SizeXl
 	default:
 		return SizeLg
 	}
@@ -310,9 +329,20 @@ func Dimensions(size Size) (width, height uint) {
 		return 96, 96
 	case SizeMd:
 		return 240, 240
+	case SizeXl:
+		return 1280, 1280
 	default: // SizeLg and any unknown value
 		return 400, 400
 	}
+}
+
+// ResizeFor returns how a size tier meets its dimensions: [SizeXl] fits the
+// whole image within them, every other tier is a center-cropped square.
+func ResizeFor(size Size) photoutil.Resize {
+	if size == SizeXl {
+		return photoutil.ResizeFit
+	}
+	return photoutil.ResizeCrop
 }
 
 // ETagFromModTime returns a quoted ETag string derived from a file's

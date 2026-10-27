@@ -151,8 +151,12 @@ func StoreClientThumbnail(params StoreClientThumbnailParams) (StoreClientThumbna
 // uploaded for the file. The tier is cached under its usual key and counts as
 // stale once the file or its client thumbnail is newer than it. Resizing a
 // 400px JPEG is cheap, so this does not wait on the IO semaphore generation
-// does.
+// does. [SizeXl] is never served from it: that would upscale a 400px
+// thumbnail into a display rendition, so it always comes from the file.
 func FromClientThumbnail(params FromClientThumbnailParams) (FromClientThumbnailResult, error) {
+	if params.Size == SizeXl {
+		return FromClientThumbnailResult{}, nil
+	}
 	source, err := clientThumbnailPath(params.Serial, params.RelPath)
 	if err != nil {
 		return FromClientThumbnailResult{}, err
@@ -253,7 +257,7 @@ func decodeClientThumbnail(file string, width, height uint) (image.Image, error)
 		return nil, fmt.Errorf("open client thumbnail: %w", err)
 	}
 	defer f.Close()
-	result, err := photoutil.GenerateThumbnailFromReader(f, ".jpg", width, height)
+	result, err := photoutil.GenerateThumbnailFromReader(f, ".jpg", width, height, photoutil.ResizeCrop)
 	if err != nil {
 		return nil, fmt.Errorf("resize client thumbnail: %w", err)
 	}
