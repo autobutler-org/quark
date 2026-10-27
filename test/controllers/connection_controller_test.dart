@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/device_pairing_store.dart';
+import 'package:quark/services/embedded_tunnel.dart';
 import 'package:quark/services/remote_access_service.dart';
 import 'package:quark/utils/connection_config.dart';
 import 'package:quark/utils/error_text.dart';
@@ -47,6 +48,7 @@ void main() {
     Listenable? hostChanges,
     Future<String?> Function(String upstream)? embeddedProxy,
     Future<void> Function(String upstream)? warmEmbeddedTunnel,
+    Future<bool> Function()? rejected,
   }) {
     final c = ConnectionController(
       activeHostChanges: hostChanges ?? ChangeNotifier(),
@@ -103,7 +105,7 @@ void main() {
               ),
             );
           },
-      nodeRejected: () async => nodeRejected,
+      nodeRejected: rejected ?? () async => nodeRejected,
       now: () => clock(),
     );
     if (autoDispose) addTearDown(c.dispose);
@@ -501,7 +503,7 @@ void main() {
     });
 
     test(
-      'a rejected node drops the stored key and the next visit pairs',
+      'a rejected node drops the stored key and pairs again once a visit',
       () async {
         connectedAtHome();
         pairings[_lan] = const StoredPairing(
@@ -512,22 +514,60 @@ void main() {
         nodeRejected = true;
         final c = build();
         await c.check();
-        expect(pairCalls, 0);
+        expect(pairCalls, 1);
+        expect(pairings[_lan]?.authKey, 'key');
+        expect(warmed, ['', _remote]);
+
+        // The new key is refused too: this visit asks for no third.
+        await c.check();
+        expect(pairCalls, 1);
         expect(pairings.containsKey(_lan), isFalse);
-        expect(warmed, ['']);
 
         answering = {_remote};
         nodeRejected = false;
         await c.check();
         expect(c.mode, ConnectionMode.remote);
-        expect(pairCalls, 0);
+        expect(pairCalls, 1);
 
         connectedAtHome();
         await c.check();
-        expect(pairCalls, 1);
+        expect(pairCalls, 2);
         expect(pairings[_lan]?.authKey, 'key');
       },
     );
+
+    // The node is only started by the warm after the home check, so a key
+    // that stopped working while the app was closed shows up as a failed
+    // start, which the bridge reports as NeedsLogin (#3783).
+    test('a stored pairing whose start failed to log in is replaced on the '
+        'next home check', () async {
+      connectedAtHome();
+      pairings[_lan] = const StoredPairing(
+        authKey: 'expired',
+        controlUrl: 'https://control.example',
+        quarkAddress: _remote,
+      );
+      var bridge = const TunnelStatus(state: 'Stopped');
+      final c = build(
+        warmEmbeddedTunnel: (upstream) async {
+          warmed.add(upstream);
+          bridge = TunnelStatus(
+            state: upstream.isEmpty ? 'Stopped' : 'NeedsLogin',
+            error: upstream.isEmpty ? '' : 'joining the tailnet',
+          );
+        },
+        rejected: () async => ConnectionController.isRejected(bridge),
+      );
+      await c.check();
+      expect(warmed, [_remote]);
+      expect(pairCalls, 0);
+      expect(pairings[_lan]?.authKey, 'expired');
+
+      await c.check();
+      expect(pairCalls, 1);
+      expect(enrolled.single.authKey, 'key');
+      expect(pairings[_lan]?.authKey, 'key');
+    });
   });
 
   group('pause', () {

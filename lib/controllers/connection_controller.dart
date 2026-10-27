@@ -357,22 +357,25 @@ class ConnectionController extends ChangeNotifier {
     }
     final stored = await _readPairing(host.hostAddress);
     if (!isCurrent()) return;
-    // A key the coordination server no longer accepts is dropped here, and
-    // this visit home does not ask for another. The next visit does.
-    if (stored != null && await _nodeRejected()) {
-      if (!isCurrent()) return;
+    // A key the coordination server no longer accepts, whether the node
+    // dropped to NeedsLogin while running or a start could not log in with
+    // it (#3783), is dropped here and replaced once per visit home. A second
+    // rejection waits for the next visit.
+    final rejected = stored != null && await _nodeRejected();
+    if (!isCurrent()) return;
+    if (rejected) {
       await _clearPairing(host.hostAddress);
-      _repairHeld = true;
       _setPairingError(null);
       await _warmEmbeddedTunnel('');
-      return;
+      if (!isCurrent() || _repairHeld) return;
+      _repairHeld = true;
     }
     final canPair =
-        !_repairHeld &&
+        (rejected || !_repairHeld) &&
         status != null &&
         status.enabled &&
         status.connected &&
-        stored == null;
+        (stored == null || rejected);
     if (canPair) {
       final paired = await _pair(host.hostAddress, generation, isCurrent);
       if (!isCurrent() || paired == null) {
@@ -551,11 +554,14 @@ class ConnectionController extends ChangeNotifier {
     String? remoteAddress,
   ) => AppSettings.instance.setRemoteAddress(hostAddress, remoteAddress);
 
-  /// `NeedsLogin` is the bridge's report that the key expired or the node
-  /// was removed. Anything else keeps the saved pairing.
   static Future<bool> _appNodeRejected() async {
     if (!EmbeddedTunnel.isSupported) return false;
-    final status = await EmbeddedTunnel.status();
-    return status.state == 'NeedsLogin';
+    return isRejected(await EmbeddedTunnel.status());
   }
+
+  /// `NeedsLogin` is the bridge's report that the key expired, the node was
+  /// removed, or the last start could not log in. Anything else keeps the
+  /// saved pairing.
+  @visibleForTesting
+  static bool isRejected(TunnelStatus status) => status.state == 'NeedsLogin';
 }
