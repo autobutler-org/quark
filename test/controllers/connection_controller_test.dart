@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/connection_controller.dart';
+import 'package:quark/models/this_phone_setup.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/device_pairing_store.dart';
 import 'package:quark/services/embedded_tunnel.dart';
@@ -32,6 +33,8 @@ void main() {
   late List<String> warmed;
   late bool nodeRejected;
   late Object? pairFailure;
+  late Object? enrollFailure;
+  late List<String> logged;
   late DateTime Function() clock;
 
   const paired = PairedDevice(
@@ -50,6 +53,7 @@ void main() {
     Future<void> Function(String upstream)? warmEmbeddedTunnel,
     Future<bool> Function()? rejected,
     bool hasDeviceNode = true,
+    Future<PairedDevice> Function()? pairDevice,
   }) {
     final c = ConnectionController(
       activeHostChanges: hostChanges ?? ChangeNotifier(),
@@ -81,12 +85,14 @@ void main() {
       warmEmbeddedTunnel:
           warmEmbeddedTunnel ?? (upstream) async => warmed.add(upstream),
       watchEmbeddedTunnel: (_) {},
-      pairDevice: () async {
-        pairCalls++;
-        final failure = pairFailure;
-        if (failure != null) throw failure;
-        return paired;
-      },
+      pairDevice:
+          pairDevice ??
+          () async {
+            pairCalls++;
+            final failure = pairFailure;
+            if (failure != null) throw failure;
+            return paired;
+          },
       readPairing: (h) async => pairings[h],
       savePairing: (h, pairing) async => pairings[h] = pairing,
       clearPairing: (h) async => pairings.remove(h),
@@ -99,6 +105,8 @@ void main() {
             required String authKey,
             required String upstream,
           }) async {
+            final failure = enrollFailure;
+            if (failure != null) throw failure;
             enrolled.add(
               StoredPairing(
                 authKey: authKey,
@@ -109,6 +117,7 @@ void main() {
           },
       nodeRejected: rejected ?? () async => nodeRejected,
       now: () => clock(),
+      log: logged.add,
     );
     if (autoDispose) addTearDown(c.dispose);
     return c;
@@ -128,6 +137,8 @@ void main() {
     warmed = [];
     nodeRejected = false;
     pairFailure = null;
+    enrollFailure = null;
+    logged = [];
     clock = DateTime.now;
   });
 
@@ -463,14 +474,16 @@ void main() {
       expect(statusReads, 1);
     });
 
-    test('a 409 waits for the next check and says nothing', () async {
+    test('a 409 waits for the next check and says why', () async {
       connectedAtHome();
       pairFailure = const ApiException(409, 'off');
       final c = build();
       await c.check();
       await c.check();
       expect(pairCalls, 2);
-      expect(c.pairingError, isNull);
+      expect(c.setup.state, ThisPhoneSetupState.notWorking);
+      expect(c.setup.message, ConnectionController.quarkCannotAddPhone);
+      expect(c.pairingError, ConnectionController.quarkCannotAddPhone);
       expect(pairings, isEmpty);
     });
 
@@ -487,6 +500,8 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       expect(pairCalls, 2);
       expect(c.pairingError, isNull);
+      expect(c.setup.state, ThisPhoneSetupState.settingUp);
+      expect(c.setup.message, ConnectionController.quarkStillConnecting);
       c.dispose();
     });
 
@@ -513,36 +528,48 @@ void main() {
           controlUrl: 'https://control.example',
           quarkAddress: _remote,
         );
-        nodeRejected = true;
-        final c = build();
+        final refused = {'expired'};
+        final c = build(
+          rejected: () async => refused.contains(pairings[_lan]?.authKey),
+        );
         await c.check();
         expect(pairCalls, 1);
         expect(pairings[_lan]?.authKey, 'key');
         expect(warmed, ['', _remote]);
+        expect(c.setup.state, ThisPhoneSetupState.ready);
 
         // The new key is refused too: this visit asks for no third.
+        refused.add('key');
         await c.check();
         expect(pairCalls, 1);
         expect(pairings.containsKey(_lan), isFalse);
+        expect(c.setup.state, ThisPhoneSetupState.notWorking);
+        expect(c.setup.message, ConnectionController.keyRefusedAgain);
+        expect(c.pairingError, ConnectionController.keyRefusedAgain);
+
+        await c.check();
+        expect(pairCalls, 1);
+        expect(c.setup.state, ThisPhoneSetupState.notWorking);
 
         answering = {_remote};
-        nodeRejected = false;
         await c.check();
         expect(c.mode, ConnectionMode.remote);
         expect(pairCalls, 1);
 
         connectedAtHome();
+        refused.clear();
         await c.check();
         expect(pairCalls, 2);
         expect(pairings[_lan]?.authKey, 'key');
+        expect(c.setup.state, ThisPhoneSetupState.ready);
       },
     );
 
     // The node is only started by the warm after the home check, so a key
     // that stopped working while the app was closed shows up as a failed
     // start, which the bridge reports as NeedsLogin (#3783).
-    test('a stored pairing whose start failed to log in is replaced on the '
-        'next home check', () async {
+    test('a stored pairing whose start failed to log in is replaced in the '
+        'same home check', () async {
       connectedAtHome();
       pairings[_lan] = const StoredPairing(
         authKey: 'expired',
@@ -553,22 +580,140 @@ void main() {
       final c = build(
         warmEmbeddedTunnel: (upstream) async {
           warmed.add(upstream);
+          final key = pairings[_lan]?.authKey;
           bridge = TunnelStatus(
-            state: upstream.isEmpty ? 'Stopped' : 'NeedsLogin',
-            error: upstream.isEmpty ? '' : 'joining the tailnet',
+            state: upstream.isEmpty
+                ? 'Stopped'
+                : key == 'expired'
+                ? 'NeedsLogin'
+                : 'Running',
           );
         },
         rejected: () async => ConnectionController.isRejected(bridge),
       );
       await c.check();
-      expect(warmed, [_remote]);
-      expect(pairCalls, 0);
-      expect(pairings[_lan]?.authKey, 'expired');
-
-      await c.check();
+      expect(warmed, [_remote, '', _remote]);
       expect(pairCalls, 1);
       expect(enrolled.single.authKey, 'key');
       expect(pairings[_lan]?.authKey, 'key');
+      expect(c.setup.state, ThisPhoneSetupState.ready);
+    });
+
+    test('a node that did not start says so', () async {
+      connectedAtHome();
+      host = HostEntry(name: 'Home', hostAddress: _lan);
+      enrollFailure = Exception('the tailnet node did not start: boom');
+      final c = build();
+      await c.check();
+      expect(pairCalls, 1);
+      expect(c.setup.state, ThisPhoneSetupState.notWorking);
+      expect(c.setup.message, ConnectionController.nodeDidNotStart);
+    });
+  });
+
+  group('setup state', () {
+    test('starts not set up', () {
+      final c = build();
+      expect(c.setup.state, ThisPhoneSetupState.notSetUp);
+      expect(c.pairingError, isNull);
+    });
+
+    test('is setting up while the Quark mints a key', () async {
+      connectedAtHome();
+      host = HostEntry(name: 'Home', hostAddress: _lan);
+      final minted = Completer<PairedDevice>();
+      final c = build(pairDevice: () => minted.future);
+      final seen = <ThisPhoneSetupState>[];
+      c.addListener(() => seen.add(c.setup.state));
+      final checking = c.check();
+      await pumpEventQueue();
+      expect(c.setup.state, ThisPhoneSetupState.settingUp);
+      minted.complete(paired);
+      await checking;
+      expect(c.setup.state, ThisPhoneSetupState.ready);
+      expect(
+        seen,
+        containsAllInOrder([
+          ThisPhoneSetupState.settingUp,
+          ThisPhoneSetupState.ready,
+        ]),
+      );
+    });
+
+    test('is ready with a stored pairing whose node runs', () async {
+      connectedAtHome();
+      pairings[_lan] = const StoredPairing(
+        authKey: 'kept',
+        controlUrl: 'https://control.example',
+        quarkAddress: _remote,
+      );
+      final c = build();
+      await c.check();
+      expect(c.setup.state, ThisPhoneSetupState.ready);
+      expect(c.pairingError, isNull);
+    });
+
+    test('is not set up while remote access is off for the Quark', () async {
+      answering = {_lan};
+      status = const RemoteAccessStatus(enabled: false);
+      final c = build();
+      await c.check();
+      expect(c.setup.state, ThisPhoneSetupState.notSetUp);
+      expect(c.setup.message, ConnectionController.remoteAccessOffForQuark);
+    });
+
+    test('away with no pairing says to open the app at home once', () async {
+      host = HostEntry(name: 'Home', hostAddress: _lan);
+      final c = build();
+      await c.check();
+      expect(c.mode, ConnectionMode.offline);
+      expect(c.setup.state, ThisPhoneSetupState.notSetUp);
+      expect(c.setup.message, ConnectionController.finishSetupAtHome);
+      expect(c.pairingError, ConnectionController.finishSetupAtHome);
+      expect(
+        ConnectionController.finishSetupAtHome,
+        'Open Quark once on your home Wi-Fi to finish setting up remote '
+        'access.',
+      );
+    });
+
+    test('a desktop without a node is never told to go home', () async {
+      host = HostEntry(name: 'Home', hostAddress: _lan);
+      final c = build(hasDeviceNode: false);
+      await c.check();
+      expect(c.mode, ConnectionMode.offline);
+      expect(c.pairingError, isNull);
+    });
+
+    test('away with a pairing does not ask to go home', () async {
+      host = HostEntry(name: 'Home', hostAddress: _lan);
+      pairings[_lan] = const StoredPairing(
+        authKey: 'kept',
+        controlUrl: 'https://control.example',
+        quarkAddress: _remote,
+      );
+      final c = build();
+      await c.check();
+      expect(c.setup.message, isNot(ConnectionController.finishSetupAtHome));
+      expect(c.pairingError, isNull);
+    });
+
+    test('logs each step without the key', () async {
+      connectedAtHome();
+      host = HostEntry(name: 'Home', hostAddress: _lan);
+      const secret = 'preauth-secret-0123';
+      final c = build(
+        pairDevice: () async => const PairedDevice(
+          authKey: secret,
+          controlUrl: 'https://control.example',
+          quarkAddress: _remote,
+        ),
+      );
+      await c.check();
+      expect(logged.any((l) => l.contains('pair')), isTrue);
+      expect(logged.any((l) => l.contains('ready')), isTrue);
+      expect(logged.any((l) => l.contains(secret)), isFalse);
+      expect(logged.any((l) => l.contains(_remote)), isFalse);
     });
   });
 
