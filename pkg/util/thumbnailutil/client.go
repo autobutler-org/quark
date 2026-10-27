@@ -40,6 +40,18 @@ func NeedsClientRender(name string) bool {
 	return storageutil.DetermineFileTypeFromPath(name) == storageutil.FileTypeVideo
 }
 
+// IsClientOnly reports whether a file is a 3D model the device draws no
+// thumbnail for (#3227): an STL, OBJ or PLY. Its only thumbnail is one a
+// client rendered when it opened or uploaded the file, and without one it
+// has none.
+func IsClientOnly(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".stl", ".obj", ".ply":
+		return true
+	}
+	return false
+}
+
 // ClientRenderReason says why the device could not render a video's
 // thumbnail, given the error [Generate] returned, so a client that cannot
 // render it either can tell the user (#3559): [ClientRenderUnsupported] for a
@@ -187,10 +199,10 @@ func FromClientThumbnail(params FromClientThumbnailParams) (FromClientThumbnailR
 }
 
 // StoreClientThumbnails attaches the "thumbnail" part of a multipart body to
-// a photo or video the caller may write.
+// a photo, video or 3D model the caller may write.
 func StoreClientThumbnails(params StoreClientThumbnailsParams) (StoreClientThumbnailsResult, error) {
 	fileType := storageutil.DetermineFileTypeFromPath(params.RelPath)
-	if fileType != storageutil.FileTypeImage && fileType != storageutil.FileTypeVideo {
+	if fileType != storageutil.FileTypeImage && fileType != storageutil.FileTypeVideo && !IsClientOnly(params.RelPath) {
 		return StoreClientThumbnailsResult{}, ErrNotMedia
 	}
 	ctx := context.Background()
@@ -226,7 +238,8 @@ func StoreClientThumbnails(params StoreClientThumbnailsParams) (StoreClientThumb
 			RelPath: params.RelPath,
 			Source:  source,
 			Reader:  part,
-			IsVideo: fileType == storageutil.FileTypeVideo,
+			// Only a photo is hashed for near-duplicate detection.
+			IsVideo: fileType != storageutil.FileTypeImage,
 		})
 		part.Close()
 		return StoreClientThumbnailsResult{}, err
