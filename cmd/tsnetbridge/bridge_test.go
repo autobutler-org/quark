@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStartStopStatus_ProxiesThroughInjectedDial(t *testing.T) {
@@ -303,5 +304,45 @@ func TestProxy_RejectsMissingTokenWrongTokenAndForeignHost(t *testing.T) {
 	}
 	if _, next, err := Start(Config{Upstream: "http://100.64.0.3", Dial: noDial}); err != nil || next == token {
 		t.Fatalf("restart: token reused %v, err %v", next == token, err)
+	}
+}
+
+// A node with no key it can log in with stops at needs-login. Start gives up
+// as soon as the backend says so instead of waiting out upTimeout, and Status
+// keeps reporting it, so the app can tell the pairing no longer works (#3783).
+func TestStart_NoAcceptedKeyReportsNeedsLogin(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	control := "http://" + ln.Addr().String()
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = Stop() })
+
+	began := time.Now()
+	_, _, err = Start(Config{
+		StateDir:   t.TempDir(),
+		ControlURL: control,
+		Hostname:   "phone-test",
+		Upstream:   "http://100.64.0.1",
+	})
+	if err == nil {
+		t.Fatal("Start succeeded without a key")
+	}
+	if took := time.Since(began); took > upTimeout/2 {
+		t.Fatalf("Start took %s; it waited for the timeout", took)
+	}
+	st := Status()
+	if st.State != needsLogin || st.Error == "" || st.Port != 0 {
+		t.Fatalf("status after a failed start = %+v", st)
+	}
+
+	if err := Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if st := Status(); st.State != "Stopped" {
+		t.Fatalf("status after stop = %+v", st)
 	}
 }
