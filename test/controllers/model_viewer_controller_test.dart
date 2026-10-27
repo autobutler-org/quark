@@ -19,12 +19,14 @@ void main() {
   late List<String> paths;
   late List<(int, QuarkModelFormat)> parses;
   late Map<String, Uint8List> parsedResources;
+  late List<(String, String?, QuarkModelMesh)> loaded;
 
   setUp(() {
     reads = [];
     paths = [];
     parses = [];
     parsedResources = {};
+    loaded = [];
   });
 
   /// A Quark serving [size] bytes, saying how big the file is unless
@@ -64,6 +66,8 @@ void main() {
       parse: parse ?? parseOk,
       listResources: (bytes, format) async => resources,
       limits: QuarkModelLimits(maxBytes: maxBytes),
+      onMeshLoaded: ({required path, serial, required mesh}) =>
+          loaded.add((path, serial, mesh)),
     );
     addTearDown(controller.dispose);
     return controller;
@@ -80,6 +84,23 @@ void main() {
     expect(viewer.fileSize, 500);
     expect(reads, [(start: 0, length: 1), (start: 0, length: 1001)]);
     expect(parses, [(500, QuarkModelFormat.stl)]);
+  });
+
+  test('hands the parsed mesh on for its thumbnail (#3227)', () async {
+    final viewer = controller(readRange: quark(500));
+    await viewer.load();
+    expect(loaded, [('prints/part.stl', null, triangle)]);
+  });
+
+  test('a file it falls back on hands nothing on', () async {
+    final viewer = controller(
+      readRange: quark(500),
+      parse: (bytes, format, limits, {resources = const {}}) async =>
+          throw const QuarkModelParseException(QuarkModelParseIssue.malformed),
+    );
+    await viewer.load();
+    expect(viewer.fallback, QuarkModelParseIssue.malformed);
+    expect(loaded, isEmpty);
   });
 
   test('a file the Quark says is over the cap is never downloaded', () async {
