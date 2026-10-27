@@ -712,6 +712,12 @@ definitions:
       createdAt:
         description: CreatedAt is when the job was queued.
         type: string
+      detail:
+        description: |-
+          Detail is the kind-specific JSON object its Handler saved while it ran,
+          "{}" until it saves one: a completed trim's clip path and actual start,
+          a backup's phase and counts.
+        type: object
       error:
         description: Error is diagnostic text for a failed job, not copy for a user.
         type: string

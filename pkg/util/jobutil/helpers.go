@@ -46,16 +46,13 @@ func retryBusy(ctx context.Context, op func() error) error {
 }
 
 func jobFromRow(row db.Job) Job {
-	params := json.RawMessage(row.Params)
-	if s := strings.TrimSpace(row.Params); s == "" || s == "null" {
-		params = json.RawMessage("{}")
-	}
 	return Job{
 		ID:         row.ID,
 		Kind:       row.Kind,
 		Lane:       row.Lane,
 		Name:       row.Name,
-		Params:     params,
+		Params:     objectOrEmpty(row.Params),
+		Detail:     objectOrEmpty(row.Detail),
 		Status:     Status(row.Status),
 		Progress:   row.Progress,
 		Attempts:   row.Attempts,
@@ -65,6 +62,14 @@ func jobFromRow(row db.Job) Job {
 		Error:      row.Error,
 		UserID:     row.UserID.Int64,
 	}
+}
+
+// objectOrEmpty is a stored JSON object, or {} for a column holding none.
+func objectOrEmpty(s string) json.RawMessage {
+	if t := strings.TrimSpace(s); t == "" || t == "null" {
+		return json.RawMessage("{}")
+	}
+	return json.RawMessage(s)
 }
 
 func timePtr(t sql.NullTime) *time.Time {

@@ -64,7 +64,11 @@ type Job struct {
 	Name string `json:"name"`
 	// Params is the kind-specific JSON object the job was enqueued with, so a
 	// client can build its own label from Kind and Params.
-	Params   json.RawMessage `json:"params" swaggertype:"object"`
+	Params json.RawMessage `json:"params" swaggertype:"object"`
+	// Detail is the kind-specific JSON object its Handler saved while it ran,
+	// "{}" until it saves one: a completed trim's clip path and actual start,
+	// a backup's phase and counts.
+	Detail   json.RawMessage `json:"detail" swaggertype:"object"`
 	Status   Status          `json:"status" enums:"pending,running,completed,failed,canceled"`
 	Progress float64         `json:"progress"`
 	// Attempts is how many times the job has started running: 0 before its
