@@ -362,9 +362,12 @@ func TestJobJSONMatchesTheContract(t *testing.T) {
 	if err := json.Unmarshal(encoded, &fields); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"id", "kind", "lane", "name", "params", "status", "progress", "attempts", "createdAt", "startedAt", "finishedAt", "error"}
+	want := []string{"id", "kind", "lane", "name", "params", "detail", "status", "progress", "attempts", "createdAt", "startedAt", "finishedAt", "error"}
 	if _, ok := fields["params"].(map[string]any); !ok {
 		t.Errorf("params is not a JSON object: %s", encoded)
+	}
+	if detail, ok := fields["detail"].(map[string]any); !ok || len(detail) != 0 {
+		t.Errorf("a job whose handler saved nothing has detail %v, want {}: %s", fields["detail"], encoded)
 	}
 	if len(fields) != len(want) {
 		t.Errorf("job JSON has %d fields, want %d: %s", len(fields), len(want), encoded)
@@ -382,6 +385,23 @@ func TestJobJSONMatchesTheContract(t *testing.T) {
 	}
 	if _, err := time.Parse(time.RFC3339, fields["createdAt"].(string)); err != nil {
 		t.Errorf("createdAt is not RFC 3339: %v", err)
+	}
+}
+
+// TestJobCarriesTheDetailItsHandlerSaved reads back what a handler stored in
+// the detail column, which is how a trim hands a client its result (#3426).
+func TestJobCarriesTheDetailItsHandlerSaved(t *testing.T) {
+	h := newHarness(t)
+	job := h.enqueue(t, 1)
+	if _, err := h.database.Db.Exec(`UPDATE jobs SET detail = '{"relPath":"clip_trimmed.mp4"}' WHERE id = ?`, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, err := h.queue.Get(context.Background(), GetParams{ID: job.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got.Job.Detail) != `{"relPath":"clip_trimmed.mp4"}` {
+		t.Fatalf("detail = %s, want the saved object", got.Job.Detail)
 	}
 }
 
