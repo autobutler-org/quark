@@ -73,6 +73,7 @@ void main() {
     for (final section in [
       QuarkDrawerSection.files,
       QuarkDrawerSection.photos,
+      QuarkDrawerSection.music,
       QuarkDrawerSection.calendar,
       QuarkDrawerSection.slides,
       QuarkDrawerSection.trash,

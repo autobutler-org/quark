@@ -19,6 +19,9 @@ enum QuarkDrawerSection {
   /// The photo library.
   photos,
 
+  /// The music library: songs, albums, artists and genres.
+  music,
+
   /// The household calendar.
   calendar,
 
@@ -70,7 +73,7 @@ const _manageSections = {
 /// offers, with the current one marked.
 ///
 /// The rows come in two groups (#2046). The pages a household opens every day
-/// lead: Files, Photos, Calendar, Docs, Sheets, Slides, Books, Chat and Vault.
+/// lead: Files, Photos, Music, Calendar, Docs, Sheets, Slides, Books, Chat and Vault.
 /// The pages for looking after the Quark follow under a "Manage" label: Trash,
 /// System, Users and Settings. The everyday pages sit under a "Household"
 /// label, so a screen reader can jump to either group as a heading (#3187).
@@ -127,6 +130,7 @@ class QuarkDrawer extends StatelessWidget {
     this.onSelectHost,
     this.onTapFiles,
     this.onTapPhotos,
+    this.onTapMusic,
     this.onTapCalendar,
     this.onTapTrash,
     this.onTapDocs,
@@ -163,6 +167,9 @@ class QuarkDrawer extends StatelessWidget {
 
   /// Called when the Photos row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapPhotos;
+
+  /// Called when the Music row is tapped. Null hides the row.
+  final FutureOr<void> Function()? onTapMusic;
 
   /// Called when the Calendar row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapCalendar;
@@ -217,6 +224,12 @@ class QuarkDrawer extends StatelessWidget {
         QuarkIcons.photo_library_outlined,
         'Photos',
         onTapPhotos,
+      ),
+      (
+        QuarkDrawerSection.music,
+        QuarkIcons.library_music_outlined,
+        'Music',
+        onTapMusic,
       ),
       (
         QuarkDrawerSection.calendar,

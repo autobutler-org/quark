@@ -15,6 +15,9 @@ import 'package:quark/pages/file_viewer_page.dart';
 import 'package:quark/pages/login_page.dart';
 import 'package:quark/pages/markdown_viewer_page.dart';
 import 'package:quark/pages/model_viewer_page.dart';
+import 'package:quark/pages/music_album_page.dart';
+import 'package:quark/pages/music_artist_page.dart';
+import 'package:quark/pages/music_page.dart';
 import 'package:quark/pages/photo_duplicates_page.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/pages/plaintext_editor_page.dart';
@@ -65,6 +68,43 @@ class AppRoutes {
 
   /// The query parameter naming the album the Photos page shows.
   static const photosAlbumParam = 'album';
+
+  /// The music library (#3283). Its tabs have their own URLs, see
+  /// [musicTab]; this bare path redirects to Songs.
+  static const music = '/music';
+
+  /// The query parameter narrowing Songs to one genre; empty names the
+  /// untagged tracks.
+  static const musicGenreParam = 'genre';
+
+  /// One tab of the Music page, e.g. musicTab(MusicTab.albums) →
+  /// '/music/albums'.
+  static String musicTab(MusicTab tab) => '$music/${tab.slug}';
+
+  /// Songs narrowed to [genre], e.g. musicGenre('Jazz') →
+  /// '/music/songs?genre=Jazz'.
+  static String musicGenre(String genre) => Uri(
+    path: musicTab(MusicTab.songs),
+    queryParameters: {musicGenreParam: genre},
+  ).toString();
+
+  /// One album's tracks, a drill-down from Music, by its album key.
+  static String musicAlbum(String albumKey) =>
+      '$music/albums/${Uri.encodeComponent(albumKey)}';
+
+  /// The drill-down from Music to one album artist's albums and songs.
+  static const musicArtistPath = '/music/artist';
+
+  /// The query parameter naming the artist [musicArtistPath] shows.
+  static const musicArtistParam = 'name';
+
+  /// One album artist's page, e.g. musicArtist('AC/DC') →
+  /// '/music/artist?name=AC%2FDC'. The name rides in the query rather than
+  /// the path because an untagged artist's is empty and a `/` is common.
+  static String musicArtist(String name) => Uri(
+    path: musicArtistPath,
+    queryParameters: {musicArtistParam: name},
+  ).toString();
 
   /// The household calendar (#1144). Its views have their own URLs, see
   /// [calendarView]; this bare path redirects to the one chosen in Settings,
@@ -448,6 +488,19 @@ enum UsersTab implements RouteTab {
   final String slug;
 }
 
+/// The Music page's tabs (#3283), in the order they show.
+enum MusicTab implements RouteTab {
+  songs('songs'),
+  albums('albums'),
+  artists('artists'),
+  genres('genres');
+
+  const MusicTab(this.slug);
+
+  @override
+  final String slug;
+}
+
 /// The System page's tabs (#2351). Health is the overview, so it comes first.
 enum SystemTab implements RouteTab {
   health('health'),
@@ -702,6 +755,33 @@ final router = GoRouter(
           builder: (context, state) => const PhotoDuplicatesPage(),
         ),
       ],
+    ),
+    // Before the Music tabs, so `albums/<key>` is never read as a tab.
+    GoRoute(
+      path: '${AppRoutes.music}/albums/:albumKey',
+      builder: (context, state) =>
+          MusicAlbumPage(albumKey: state.pathParameters['albumKey'] ?? ''),
+    ),
+    GoRoute(
+      path: AppRoutes.musicArtistPath,
+      builder: (context, state) => MusicArtistPage(
+        name: state.uri.queryParameters[AppRoutes.musicArtistParam] ?? '',
+      ),
+    ),
+    ...tabbedRoutes(
+      path: AppRoutes.music,
+      tabs: MusicTab.values,
+      builder: (tab, onTabSelected) => Builder(
+        builder: (context) => MusicPage(
+          tab: tab,
+          onTabSelected: onTabSelected,
+          genre: tab == MusicTab.songs
+              ? GoRouterState.of(
+                  context,
+                ).uri.queryParameters[AppRoutes.musicGenreParam]
+              : null,
+        ),
+      ),
     ),
     GoRoute(
       path: AppRoutes.trash,

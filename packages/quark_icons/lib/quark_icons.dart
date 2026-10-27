@@ -451,6 +451,7 @@ class QuarkIcons {
   static const IconData slideshow_outlined = Icons.slideshow_outlined;
   static const IconData video_file_outlined = Icons.video_file_outlined;
   static const IconData audio_file_outlined = Icons.audio_file_outlined;
+  static const IconData library_music_outlined = Icons.library_music_outlined;
   static const IconData table_chart = Icons.table_chart;
   static const IconData table_chart_outlined = Icons.table_chart_outlined;
   static const IconData edit_document = Icons.edit_document;

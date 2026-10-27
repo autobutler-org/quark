@@ -29,6 +29,7 @@ Journey IDs are stable — don't renumber when adding new ones.
 | [navigation.md](navigation.md)           | Navigation drawer (destinations, groups, hidden rows)  |
 | [file-browser.md](file-browser.md)       | file browser (browse, upload, download, manage) |
 | [photos.md](photos.md)                   | Photos, albums, favorites                              |
+| [music.md](music.md)                     | Music library (songs, albums, artists, genres, search) |
 | [calendar.md](calendar.md)               | Calendar (views, events, repeats, reminders)           |
 | [trash.md](trash.md)                     | Trash (browse, restore, delete permanently, empty)     |
 | [docs.md](docs.md)                       | Document editor (.qdoc files)                         |

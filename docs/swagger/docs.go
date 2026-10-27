@@ -7090,6 +7090,112 @@ const docTemplate = `{
                 }
             }
         },
+        "/music/history": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the library tracks the caller has played, with their play count and last play, most recent first or most played first. Tracks whose file is gone or no longer readable are left out.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "music"
+                ],
+                "summary": "List the caller's played music",
+                "parameters": [
+                    {
+                        "enum": [
+                            "recent",
+                            "most"
+                        ],
+                        "type": "string",
+                        "description": "Order; recent when absent",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "How many: 50 when absent, at most 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_music.HistoryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/music/plays": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Adds one play to the caller's count for a library track and stamps it now. The player decides when a play counts and posts once per play. A path that is not a library track, or one the caller cannot read, is 404.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "music"
+                ],
+                "summary": "Record a play of a music track",
+                "parameters": [
+                    {
+                        "description": "The track's device, empty for the internal drive, and its path",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_music.recordPlayRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/music/rescan": {
             "post": {
                 "security": [
@@ -12628,6 +12734,20 @@ const docTemplate = `{
                 }
             }
         },
+        "musicutil.PlayedTrack": {
+            "type": "object",
+            "properties": {
+                "lastPlayedAt": {
+                    "type": "string"
+                },
+                "playCount": {
+                    "type": "integer"
+                },
+                "track": {
+                    "$ref": "#/definitions/musicutil.Track"
+                }
+            }
+        },
         "musicutil.SearchResult": {
             "type": "object",
             "properties": {
@@ -14320,6 +14440,17 @@ const docTemplate = `{
                 }
             }
         },
+        "v0_music.HistoryResponse": {
+            "type": "object",
+            "properties": {
+                "tracks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/musicutil.PlayedTrack"
+                    }
+                }
+            }
+        },
         "v0_music.SearchResponse": {
             "type": "object",
             "properties": {
@@ -14342,6 +14473,21 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/musicutil.Track"
                     }
+                }
+            }
+        },
+        "v0_music.recordPlayRequest": {
+            "type": "object",
+            "required": [
+                "relPath"
+            ],
+            "properties": {
+                "relPath": {
+                    "type": "string"
+                },
+                "serial": {
+                    "description": "Serial is the device holding the track, '' for the internal drive.",
+                    "type": "string"
                 }
             }
         },
