@@ -15,10 +15,10 @@ import (
 
 // convertXlsx godoc
 // @Summary Convert a spreadsheet to a Quark spreadsheet
-// @Description Reads an .xlsx or .xlsm workbook and writes it back as a sibling .qsheet, the format the Sheets editor opens. The workbook itself is left untouched. Answers 409 when a .qsheet of that name already exists and overwrite was not asked for; with overwrite on the internal device, the replaced sheet is first snapshotted into its version history. Needs read access on the workbook and write access on its directory; the caller owns a newly created .qsheet.
+// @Description Reads an .xlsx, .xlsm, .ods or .xls workbook, with the reader its extension names, and writes it back as a sibling .qsheet, the format the Sheets editor opens. The workbook itself is left untouched. Answers 409 when a .qsheet of that name already exists and overwrite was not asked for; with overwrite on the internal device, the replaced sheet is first snapshotted into its version history. Needs read access on the workbook and write access on its directory; the caller owns a newly created .qsheet.
 // @Tags files
 // @Produce json
-// @Param filePath query string true "Path to the .xlsx or .xlsm file to convert"
+// @Param filePath query string true "Path to the .xlsx, .xlsm, .ods or .xls file to convert"
 // @Param serial query string false "Device serial number"
 // @Param overwrite query bool false "Replace an existing .qsheet of the same name"
 // @Success 200 {object} ConvertXlsxJSON

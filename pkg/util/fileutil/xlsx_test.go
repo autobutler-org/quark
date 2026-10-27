@@ -210,9 +210,9 @@ func TestConvertXlsxToQsheetOverwritesWhenAsked(t *testing.T) {
 }
 
 func TestConvertXlsxToQsheetRejectsOtherExtensions(t *testing.T) {
-	// .xls is the legacy binary format, not the OOXML package: it is refused
-	// rather than attempted, so the client can keep offering the download.
-	for _, name := range []string{"legacy.xls", "notes.txt", "sheet.csv"} {
+	// Anything that is not a workbook is refused rather than attempted, so the
+	// client can keep offering the download.
+	for _, name := range []string{"slides.pptx", "notes.txt", "sheet.csv"} {
 		t.Run(name, func(t *testing.T) {
 			f := newXlsxFixture(t, "budget.xlsx")
 			f.params.FilePath = name
@@ -342,20 +342,74 @@ func TestConvertXlsxToQsheetSurvivesANonAtomicNamespace(t *testing.T) {
 	}
 }
 
-func TestIsXlsxPath(t *testing.T) {
+func TestConvertXlsxToQsheetReadsOdsAndXls(t *testing.T) {
+	for name, tc := range map[string]struct {
+		seed     func(t *testing.T, root, name string)
+		workbook string
+		want     string
+	}{
+		"ods": {seedOds, "books/budget.ods", "Item"},
+		"xls": {seedXls, "books/legacy.xls", "Item"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newXlsxFixture(t, "placeholder.xlsx")
+			tc.seed(t, f.root, tc.workbook)
+			f.params.FilePath = tc.workbook
+
+			result, err := fileutil.ConvertXlsxToQsheet(f.params)
+			if err != nil {
+				t.Fatalf("ConvertXlsxToQsheet: %v", err)
+			}
+			want := strings.TrimSuffix(tc.workbook, filepath.Ext(tc.workbook)) + ".qsheet"
+			if result.Path != want || result.Tabs == 0 {
+				t.Errorf("result = %+v, want a sheet at %s", result, want)
+			}
+			raw, err := os.ReadFile(filepath.Join(f.root, filepath.FromSlash(result.Path)))
+			if err != nil {
+				t.Fatalf("read %s: %v", result.Path, err)
+			}
+			if !strings.Contains(string(raw), `"`+tc.want+`"`) {
+				t.Errorf("%s does not hold %q: %s", result.Path, tc.want, raw)
+			}
+		})
+	}
+}
+
+func TestConvertXlsxToQsheetRefusesAWorkbookThatIsNotOne(t *testing.T) {
+	for _, workbook := range []string{"fake.ods", "fake.xls"} {
+		f := newXlsxFixture(t, "placeholder.xlsx")
+		if err := os.WriteFile(filepath.Join(f.root, workbook), []byte("plain text"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		f.params.FilePath = workbook
+
+		_, err := fileutil.ConvertXlsxToQsheet(f.params)
+		var unsupported *fileutil.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Errorf("%s: err = %v, want an UnsupportedError", workbook, err)
+		}
+		if left := leftovers(t, f.root); len(left) != 0 {
+			t.Errorf("%s: failed conversion left %v behind", workbook, left)
+		}
+	}
+}
+
+func TestIsWorkbookPath(t *testing.T) {
 	tests := map[string]bool{
 		"budget.xlsx":       true,
 		"macros.xlsm":       true,
 		"BUDGET.XLSX":       true,
 		"a/b/c/budget.xlsx": true,
-		"legacy.xls":        false,
+		"legacy.xls":        true,
+		"calc.ods":          true,
+		"slides.pptx":       false,
 		"notes.txt":         false,
 		"budget":            false,
 		"":                  false,
 	}
 	for path, want := range tests {
-		if got := fileutil.IsXlsxPath(path); got != want {
-			t.Errorf("IsXlsxPath(%q) = %v, want %v", path, got, want)
+		if got := fileutil.IsWorkbookPath(path); got != want {
+			t.Errorf("IsWorkbookPath(%q) = %v, want %v", path, got, want)
 		}
 	}
 }

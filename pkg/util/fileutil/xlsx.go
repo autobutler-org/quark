@@ -11,12 +11,14 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/odsutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
+	"github.com/autobutler-org/quark/pkg/util/xlsutil"
 	"github.com/autobutler-org/quark/pkg/util/xlsxutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
-// ConvertXlsxParams converts one .xlsx or .xlsm into the .qsheet the Sheets
+// ConvertXlsxParams converts one .xlsx, .xlsm, .ods or .xls into the .qsheet the Sheets
 // editor opens, written beside the workbook it came from.
 type ConvertXlsxParams struct {
 	// Ctx bounds the read and the write.
@@ -55,7 +57,8 @@ type ConvertXlsxResult struct {
 
 // ConvertXlsxToQsheet reads the workbook at params.FilePath and writes it back
 // as a sibling .qsheet, the format the Sheets editor already understands
-// (#1741). The original workbook is left untouched.
+// (#1741). The original workbook is left untouched. The reader is chosen by
+// extension, as [IsWorkbookPath] lists them.
 //
 // The conversion streams: the workbook is read in place, and the .qsheet is
 // piped into the destination as its rows are produced rather than assembled in
@@ -64,7 +67,7 @@ type ConvertXlsxResult struct {
 // nothing behind — least of all a half-written file where the user's own
 // spreadsheet used to be.
 func ConvertXlsxToQsheet(params ConvertXlsxParams) (ConvertXlsxResult, error) {
-	if !IsXlsxPath(params.FilePath) {
+	if !IsWorkbookPath(params.FilePath) {
 		return ConvertXlsxResult{}, &UnsupportedError{
 			Err: fmt.Errorf("not a spreadsheet Quark can convert: %s", filepath.Base(params.FilePath)),
 		}
@@ -75,7 +78,7 @@ func ConvertXlsxToQsheet(params ConvertXlsxParams) (ConvertXlsxResult, error) {
 		filePath: params.FilePath, serial: params.Serial, overwrite: params.Overwrite,
 		beforeOverwrite: params.BeforeOverwrite, ext: ".qsheet",
 	}, func(source io.ReaderAt, size int64, out io.Writer) (xlsxutil.ConvertToQsheetResult, error) {
-		return xlsxutil.ConvertToQsheet(xlsxutil.ConvertToQsheetParams{Source: source, Size: size, Out: out})
+		return convertWorkbook(params.Ctx, params.FilePath, source, size, out)
 	}, convertError)
 	if err != nil {
 		return ConvertXlsxResult{}, err
@@ -162,24 +165,47 @@ func stageSibling[T any](s siblingStage, produce func(io.ReaderAt, int64, io.Wri
 	return done.result, target, existed, nil
 }
 
-// IsXlsxPath reports whether a path names a workbook this can convert. The
-// legacy .xls is not one: it is a binary compound file rather than the OOXML
-// package .xlsx and .xlsm share, and needs a different reader entirely.
-func IsXlsxPath(filePath string) bool {
+// IsWorkbookPath reports whether a path names a workbook Quark can read into
+// a .qsheet: an OOXML .xlsx or .xlsm, an OpenDocument .ods, or a legacy
+// Excel 97–2003 .xls.
+func IsWorkbookPath(filePath string) bool {
 	switch strings.ToLower(filepath.Ext(filePath)) {
-	case ".xlsx", ".xlsm":
+	case ".xlsx", ".xlsm", ".ods", ".xls":
 		return true
 	}
 	return false
 }
 
-// convertError maps what xlsxutil reports onto the errors the handler already
-// derives status codes from. A workbook that is malformed or past the
-// conversion limits is the caller's file, not a server fault.
+// convertWorkbook writes the workbook in source to out as a .qsheet, with
+// the reader its extension names. Each reader's result has the same fields,
+// so they all report as xlsxutil's. ctx stops the readers that take none at
+// their next read.
+func convertWorkbook(ctx context.Context, filePath string, source io.ReaderAt, size int64, out io.Writer) (xlsxutil.ConvertToQsheetResult, error) {
+	source = ctxReaderAt{ctx: ctx, r: source}
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".ods":
+		result, err := odsutil.ConvertToQsheet(odsutil.ConvertToQsheetParams{Ctx: ctx, Source: source, Size: size, Out: out})
+		return xlsxutil.ConvertToQsheetResult(result), err
+	case ".xls":
+		result, err := xlsutil.ConvertToQsheet(xlsutil.ConvertToQsheetParams{Source: source, Size: size, Out: out})
+		return xlsxutil.ConvertToQsheetResult(result), err
+	}
+	return xlsxutil.ConvertToQsheet(xlsxutil.ConvertToQsheetParams{Source: source, Size: size, Out: out})
+}
+
+// convertError maps what the workbook readers report onto the errors the
+// handler already derives status codes from. A workbook that is malformed,
+// encrypted or past the conversion limits is the caller's file, not a server
+// fault.
 func convertError(err error) error {
-	if errors.Is(err, xlsxutil.ErrNotSpreadsheet) || errors.Is(err, xlsxutil.ErrNotQsheet) ||
-		errors.Is(err, xlsxutil.ErrTooLarge) {
-		return &UnsupportedError{Err: err}
+	for _, fault := range []error{
+		xlsxutil.ErrNotSpreadsheet, xlsxutil.ErrNotQsheet, xlsxutil.ErrTooLarge,
+		odsutil.ErrMalformed, odsutil.ErrTooLarge, odsutil.ErrEncrypted,
+		xlsutil.ErrNotSpreadsheet, xlsutil.ErrTooLarge, xlsutil.ErrEncrypted,
+	} {
+		if errors.Is(err, fault) {
+			return &UnsupportedError{Err: err}
+		}
 	}
 	return err
 }
