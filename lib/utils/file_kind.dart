@@ -137,6 +137,9 @@ const _kindByExtension = {
   '.docx': FileKind.docx,
   '.pptx': FileKind.slideshow,
   '.ppt': FileKind.slideshow,
+  // An ODF presentation. The previews API reads it (#3274), and it opens
+  // with the other presentations.
+  '.odp': FileKind.slideshow,
   '.epub': FileKind.epub,
   // .xlsm is .xlsx with macros attached. The legacy binary .xls is not OOXML
   // and has no reader, so it stays generic (#1741).
