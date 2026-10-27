@@ -177,9 +177,9 @@ func TestThumbnail_ModelServesOnlyWhatAClientRendered(t *testing.T) {
 		}
 		expectJPEG(t, h.do("/api/v0/thumbnails/"+rel+"?size=sm"), 96, 96)
 		expectJPEG(t, h.do("/api/v0/thumbnails/"+rel), 400, 400)
-		if w := h.do("/api/v0/thumbnails/" + rel + "?size=xl"); w.Code != http.StatusNotFound {
-			t.Errorf("%s xl = %d, want 404: nothing upscales a client thumbnail", rel, w.Code)
-		}
+		// xl is not a tier. ParseSize reads any unknown size as lg, the same
+		// 400px square a photo or a video gets, so nothing here is upscaled.
+		expectJPEG(t, h.do("/api/v0/thumbnails/"+rel+"?size=xl"), 400, 400)
 	}
 }
 
