@@ -7,6 +7,16 @@ import 'package:video_player_platform_interface/video_player_platform_interface.
 
 import '../support/fake_video_player_platform.dart';
 
+/// A platform whose position moves a tenth of a second on every poll, as a
+/// playing song's does.
+class _AdvancingPlatform extends FakeVideoPlayerPlatform {
+  Duration _position = Duration.zero;
+
+  @override
+  Future<Duration> getPosition(int playerId) async =>
+      _position += const Duration(milliseconds: 100);
+}
+
 /// #2002, audio side: opened straight from its URL on web, the page called
 /// play() with no user gesture behind it. The browser rejected it, the
 /// controller went erroneous, and the play button did nothing from then on.
@@ -82,6 +92,35 @@ void main() {
 
     expect(saves, [('Music/song.mp3', 'USB1', 'song.mp3')]);
     expect(find.text('Downloaded song.mp3'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  // #3284: the 10-second song counts once its first 5 seconds are heard,
+  // and only once however long it keeps playing.
+  testWidgets('counts one play once half a short song is heard', (
+    tester,
+  ) async {
+    VideoPlayerPlatform.instance = _AdvancingPlatform();
+    final plays = <String>[];
+    await pumpPage(
+      tester,
+      AudioPlayerPage(
+        url: Uri.parse(
+          'http://quark.test/api/v0/files/download?filePath=m%2Fsong.mp3&serial=USB1',
+        ),
+        name: 'song.mp3',
+        canAutoplay: () => true,
+        recordPlay: (relPath, {serial = ''}) async =>
+            plays.add('$serial:$relPath'),
+      ),
+    );
+
+    expect(plays, isEmpty);
+    for (var i = 0; i < 200; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(plays, ['USB1:m/song.mp3']);
 
     await tester.pumpWidget(const SizedBox());
   });

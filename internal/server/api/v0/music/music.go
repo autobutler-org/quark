@@ -1,8 +1,9 @@
 // Package v0_music serves /api/v0/music: the music library built from the
 // audio files on each device. Songs, albums, artists and genres, the tag
 // search and the library's scan status are open to every account and list
-// only what the caller can read. Queuing a rescan, POST /music/rescan, is
-// admin-only. Cover art is the thumbnail route and the audio itself the file
+// only what the caller can read. Each account's play history, POST
+// /music/plays and GET /music/history, is its own. Queuing a rescan, POST
+// /music/rescan, is admin-only. Cover art is the thumbnail route and the audio itself the file
 // download (docs/architecture/music-library.md).
 package v0_music
 
@@ -47,4 +48,9 @@ type GenresResponse struct {
 // SearchResponse is the readable matches, best ranked first.
 type SearchResponse struct {
 	Results []musicutil.SearchResult `json:"results"`
+}
+
+// HistoryResponse is the caller's played tracks, in the asked order.
+type HistoryResponse struct {
+	Tracks []musicutil.PlayedTrack `json:"tracks"`
 }

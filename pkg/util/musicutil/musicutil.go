@@ -16,6 +16,12 @@
 //
 // Search is FTS5 and so SQLite only: on PostgreSQL it answers a
 // *db.UnsupportedError until #2958.
+//
+// Play history is not derived from files, so it stays out of the table: each
+// account's plays of a track are one vfs_metadata row on the track's path,
+// under the key "music.plays.<user id>", as {count, lastPlayedAt}. The client
+// decides when a play counts; RecordPlay only counts. Moving a file drops its
+// history, the same limit playbackutil documents.
 package musicutil
 
 import (
@@ -46,6 +52,14 @@ const DefaultLimit = 50
 
 // MaxLimit is the largest page a listing or search returns.
 const MaxLimit = 200
+
+// ErrTrackNotFound is returned for a play of a path that is not a track in
+// the library, or one the caller cannot read.
+var ErrTrackNotFound = errors.New("musicutil: no such track")
+
+// ErrInvalidHistorySort is returned for a HistorySort that is not one of the
+// named ones.
+var ErrInvalidHistorySort = errors.New("musicutil: unknown history sort")
 
 // ErrInvalidSort is returned for a TrackSort that is not one of the named
 // ones.
@@ -426,4 +440,75 @@ func Rescan(params RescanParams) (RescanResult, error) {
 		Kind: RescanKind, Name: "Scan the music library", Params: struct{}{}, UserID: params.UserID,
 	})
 	return RescanResult(queued), err
+}
+
+// RecordPlayParams is one finished play of a track by one account.
+type RecordPlayParams struct {
+	Ctx    context.Context
+	DB     *sql.DB
+	Store  vfs.MetadataStore
+	Access accessutil.Access
+	// Serial is the device holding the track, '' for the internal drive.
+	Serial  string
+	RelPath string
+}
+
+// RecordPlayResult is the track's play count after this play.
+type RecordPlayResult struct {
+	Plays Plays
+}
+
+// Plays is how often one account has played one track, and when last.
+type Plays struct {
+	Count        int       `json:"count"`
+	LastPlayedAt time.Time `json:"lastPlayedAt"`
+}
+
+// RecordPlay adds one play to the caller's count for a library track and
+// stamps it now. A path that is not in the library, or that the caller
+// cannot read, is ErrTrackNotFound.
+func RecordPlay(params RecordPlayParams) (RecordPlayResult, error) {
+	return recordPlay(params)
+}
+
+// HistorySort orders a play history.
+type HistorySort string
+
+// The history sorts. Ties fall back to the most recent play, then the title.
+const (
+	// HistoryRecent is the most recently played first.
+	HistoryRecent HistorySort = "recent"
+	// HistoryMost is the most often played first.
+	HistoryMost HistorySort = "most"
+)
+
+// ListHistoryParams asks for one account's played tracks.
+type ListHistoryParams struct {
+	Ctx    context.Context
+	DB     *sql.DB
+	Store  vfs.MetadataStore
+	Access accessutil.Access
+	// Serials are the devices to look on, '' for the internal drive.
+	Serials []string
+	Sort    HistorySort
+	// Limit is DefaultLimit when zero or less and at most MaxLimit.
+	Limit int
+}
+
+// PlayedTrack is a track and the caller's plays of it.
+type PlayedTrack struct {
+	Track        Track     `json:"track"`
+	PlayCount    int       `json:"playCount"`
+	LastPlayedAt time.Time `json:"lastPlayedAt"`
+}
+
+// ListHistoryResult is up to Limit played tracks, in the asked order.
+type ListHistoryResult struct {
+	Tracks []PlayedTrack
+}
+
+// ListHistory lists the tracks the caller has played that are still in the
+// library and still readable to them.
+func ListHistory(params ListHistoryParams) (ListHistoryResult, error) {
+	return listHistory(params)
 }

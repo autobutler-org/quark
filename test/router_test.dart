@@ -272,6 +272,30 @@ void main() {
     });
   });
 
+  group('AppRoutes music (#3283)', () {
+    test('each tab and drill-down has its own URL', () {
+      expect(AppRoutes.musicTab(MusicTab.songs), '/music/songs');
+      expect(AppRoutes.musicTab(MusicTab.genres), '/music/genres');
+      expect(AppRoutes.musicAlbum('ab12'), '/music/albums/ab12');
+      expect(AppRoutes.musicGenre('Jazz'), '/music/songs?genre=Jazz');
+    });
+
+    test('an artist or genre name survives the trip, empty included', () {
+      for (final name in ['AC/DC', 'Simon & Garfunkel', '100%', '']) {
+        expect(
+          Uri.parse(AppRoutes.musicArtist(name)).queryParameters['name'],
+          name,
+          reason: name,
+        );
+        expect(
+          Uri.parse(AppRoutes.musicGenre(name)).queryParameters['genre'],
+          name,
+          reason: name,
+        );
+      }
+    });
+  });
+
   group('AppRoutes.photosAlbum', () {
     test('names the album in the query, and is /photos for All photos', () {
       expect(AppRoutes.photosAlbum('3'), '/photos?album=3');

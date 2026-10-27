@@ -122,6 +122,32 @@ lib/widgets/
                                 ModelViewerController; reads AppSettings
                                 for the disconnected state and writes its
                                 sentences with Errors
+  music/
+    music_library_body.dart     everything under the Music app bar: load,
+                                error, empty and scanning states, search
+                                results or the four tabs, all from a
+                                MusicController; words errors with Errors
+    music_songs_list.dart       TrackListTile rows with a header and Show
+                                more; used by Songs, album and artist pages
+    music_history_sections.dart Songs' Recently played and Most played
+                                sections, TrackListTile rows
+    music_albums_grid.dart      the Albums tab's AlbumGridTile grid
+    music_album_tile.dart       one MusicAlbum as an AlbumGridTile
+    music_artists_list.dart     the Artists tab's ArtistListTile rows
+    music_genres_list.dart      the Genres tab's GenreListTile rows
+    music_artist_albums.dart    an artist page's albums, wrapped
+    music_album_header.dart     an album page's cover, title and counts
+    music_detail_body.dart      an album or artist page's load and error
+                                states; reuses SlidesErrorView
+    music_genre_filter.dart     the chip naming Songs' genre
+    music_search_field.dart     the Music search box
+    music_load_more_button.dart Show more, or a loader
+    music_cover.dart            cover art from the thumbnail endpoint, for
+                                MusicCoverArt's coverBuilder
+    music_items.dart            maps the app's music models into the
+                                package's value types
+    music_rescan_card.dart      Settings' Rescan music library; calls
+                                MusicService and words errors with Errors
   notifications/
     notification_copy.dart      the title, body and Settings label of each
                                 notification type; the Quark sends no text
