@@ -25,7 +25,7 @@ final class VaultAutofillTests: XCTestCase {
 
     /// A cache file shaped as `VaultCache.encode` writes it, with Dart's microsecond timestamp.
     private func file(schema: Int = 1, items: [[String: Any]]? = nil) throws -> Data {
-        let items = items ?? [[
+        let items = try items ?? [[
             "id": 42,
             "ciphertext": try XCTUnwrap(item["ciphertext"] as? String),
             "nonce": try XCTUnwrap(item["nonce"] as? String),
