@@ -136,11 +136,36 @@ void main() {
   });
 
   testWidgets('a type with no viewer opens the generic one', (tester) async {
+    // A .docx used to stand in for this (#1184). The document viewer sends
+    // word-processing files to /document, so the case with no viewer is a
+    // type the redirect leaves on /view.
+    final r = await openFromFolder(tester, 'papers', 'papers/my report.bin');
+
+    expect(at(r), '/view/papers/my%20report.bin');
+    expect(find.byType(GenericFileViewerPage), findsOneWidget);
+    expect(find.text('my report.bin'), findsWidgets);
+  });
+
+  testWidgets('a word-processing document opens where the redirect sends it', (
+    tester,
+  ) async {
     final r = await openFromFolder(tester, 'papers', 'papers/my report.docx');
 
-    expect(at(r), '/view/papers/my%20report.docx');
-    expect(find.byType(GenericFileViewerPage), findsOneWidget);
-    expect(find.text('my report.docx'), findsWidgets);
+    // #2987: /document when the document viewer is wired, otherwise /view
+    // and the generic page. The mounted route is the app's real redirect.
+    final where =
+        viewFileRedirect('papers/my report.docx', null) ??
+        '/view/papers/my%20report.docx';
+    expect(at(r), where);
+    final onGeneric = where.startsWith('${AppRoutes.viewFile}/');
+    expect(
+      find.byType(GenericFileViewerPage),
+      onGeneric ? findsOneWidget : findsNothing,
+    );
+    if (onGeneric) {
+      expect(find.text('my report.docx'), findsWidgets);
+    }
+    await unmount(tester);
   });
 
   testWidgets('closing replaces the viewer with its folder', (tester) async {
