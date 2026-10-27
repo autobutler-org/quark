@@ -192,7 +192,8 @@ right tool for reproducing a CI failure locally.
 [schmeide](https://github.com/autobutler-org/schmeide) is the org's software factory. Given an assigned issue
 carrying the `schmeide:ready` label, it runs a fresh Claude Code or Grok CLI session in a worktree, runs the
 gate, opens a PR as the schmeide GitHub App, and reviews it. `.schmeide/config.toml` sets the gate to
-`make check test` (through `gmake` where it exists), the same targets CI runs on every PR,
+`flutter pub get` and then `make check test` (through `gmake` where it exists), the same targets CI runs on
+every PR, with the packages resolved first because the factory's worktree starts without them,
 and turns on factory merge: a PR that passes review goes into the merge queue once its checks are green, with
 no person in the loop. It replaces saddle: the `saddle:` labels, `saddle/...` branches and `Saddle-Task:`
 trailers in older history are the predecessor's, and new work goes through schmeide.
