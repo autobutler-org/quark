@@ -20,6 +20,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/musicutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -108,6 +109,7 @@ func newMusicHarness(t *testing.T) musicHarness {
 	deps := deputil.NewDependencies().
 		WithStorageService(storageutil.NewStorageService(systemDevice{})).
 		WithDatabase(database).
+		WithMetadataStore(vfs.NewSQLiteMetadataStore(database.Db)).
 		WithJobQueue(queue)
 
 	h := musicHarness{

@@ -16,6 +16,8 @@ func (r *router) Routes() []*serverutil.Route {
 		listGenresRoute,
 		searchMusicRoute,
 		getStatusRoute,
+		recordPlayRoute,
+		listHistoryRoute,
 	}
 }
 
@@ -33,4 +35,11 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 type caller struct {
 	deps   deputil.Dependencies
 	access accessutil.Access
+}
+
+// recordPlayRequest names the track a play is recorded for.
+type recordPlayRequest struct {
+	// Serial is the device holding the track, '' for the internal drive.
+	Serial  string `json:"serial"`
+	RelPath string `json:"relPath" binding:"required"`
 }

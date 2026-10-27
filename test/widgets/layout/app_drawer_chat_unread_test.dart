@@ -41,6 +41,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // On a phone the household rows fill the screen before Chat's; the
+    // drawer's list only builds the rows scrolled into view.
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('drawer_chat')),
+      50,
+    );
   }
 
   for (final (label, size) in [

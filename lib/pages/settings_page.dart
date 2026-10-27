@@ -24,6 +24,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/music/music_rescan_card.dart';
 import 'package:quark/widgets/notifications/notification_preferences_card.dart';
 import 'package:quark/widgets/settings/change_password/change_password_dialog.dart';
 import 'package:quark/widgets/settings/connected_devices_card.dart';
@@ -672,6 +673,7 @@ class _SettingsPageState extends State<SettingsPage> {
               onOpenStorage: hasHost
                   ? () => context.go(AppRoutes.systemTab(SystemTab.storage))
                   : null,
+              musicLibrary: hasHost && isAdmin ? const MusicRescanCard() : null,
             ),
           ),
           QuarkTab(
