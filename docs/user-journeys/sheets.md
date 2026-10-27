@@ -1,6 +1,7 @@
 # Sheets Journeys
 
-Covers the Sheets page (`/sheets`) and the spreadsheet editor for `.qsheet` files.
+Covers the Sheets page (`/sheets`), the spreadsheet editor for `.qsheet` files, and opening an Excel workbook
+from Files (JN-SH-007).
 
 ---
 
@@ -99,3 +100,42 @@ Covers the Sheets page (`/sheets`) and the spreadsheet editor for `.qsheet` file
 **Expected result:**
 
 - Editor opens the file from the specified device.
+
+---
+
+### JN-SH-007: Open an Excel, ODS or XLS workbook from Files
+
+**Preconditions:** Signed in, on `/files`, with `data/budget.xlsx` and no `budget.qsheet` beside it.
+
+**Steps:**
+
+1. Tap `budget.xlsx`.
+2. In **Convert to .qsheet?**, tap **Convert**.
+3. Go back to Files, tap `budget.xlsx`, tap **Convert** again, and choose **Open existing**.
+4. Go back to Files, tap `budget.xlsx`, tap **Convert** again, and choose **Replace**.
+
+**Expected result:**
+
+- The first dialog asks whether to convert "budget.xlsx" to a Quark spreadsheet (`.qsheet`) and says the
+  original workbook will not be modified or deleted. The buttons are **Cancel** and **Convert**.
+- **Convert** leaves `budget.xlsx` in place, writes `budget.qsheet` beside it, and opens that file in the
+  spreadsheet editor (JN-SH-002).
+- Every later tap asks **Convert to .qsheet?** again. After **Convert**, because `budget.qsheet` is already
+  there, the dialog is **Spreadsheet already exists**: "budget.qsheet" is already here. Open it, or replace it
+  with a fresh conversion of "budget.xlsx"? The buttons are **Cancel**, **Replace** and **Open existing**.
+- **Open existing** opens the `.qsheet` and leaves the workbook alone. **Replace** converts again over that
+  `.qsheet` and opens the new file. **Cancel** changes nothing.
+- Sheets (`/sheets`) lists `.qsheet` files only. The workbook never appears there.
+
+**Notes:**
+
+- `.xlsm` asks the same way. The new name drops `.xlsx` or `.xlsm`.
+- **Cancel** on the first dialog leaves the workbook unopened.
+- A failure reads "Couldn't convert the file." A folder the account cannot write reads "You don't have
+  permission to convert the file."
+- Opening `/view/data/budget.xlsx`, or the file's `/files` URL, skips the question and shows the generic viewer
+  (JN-FB-019). Tapping the row in Files is the path that asks.
+- `.ods` and `.xls` are not a spreadsheet kind. Tapping one opens the generic viewer, labeled "ODS file" or
+  "XLS file", and Files does not ask to convert it. The Quark can convert those two as well as `.xlsx` and
+  `.xlsm`; the app only asks for the last two (JN-FB-048).
+- A workbook inside an archive is downloaded, not converted (JN-FB-020).

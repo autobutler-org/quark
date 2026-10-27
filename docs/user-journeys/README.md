@@ -27,14 +27,14 @@ Journey IDs are stable — don't renumber when adding new ones.
 | ---------------------------------------- | ------------------------------------------------------ |
 | [auth.md](auth.md)                       | Setup, login, logout, recovery                         |
 | [navigation.md](navigation.md)           | Navigation drawer (destinations, groups, hidden rows)  |
-| [file-browser.md](file-browser.md)       | file browser (browse, upload, download, manage) |
+| [file-browser.md](file-browser.md)       | file browser, including where office and Markdown files open |
 | [photos.md](photos.md)                   | Photos, albums, favorites                              |
 | [music.md](music.md)                     | Music library (songs, albums, artists, genres, search) |
 | [calendar.md](calendar.md)               | Calendar (views, events, repeats, reminders)           |
 | [trash.md](trash.md)                     | Trash (browse, restore, delete permanently, empty)     |
-| [docs.md](docs.md)                       | Document editor (.qdoc files)                         |
-| [sheets.md](sheets.md)                   | Spreadsheet editor (.qsheet files)                    |
-| [slides.md](slides.md)                   | Presentation editor (.qslide files)                   |
+| [docs.md](docs.md)                       | Document editor (.qdoc), and opening a Word, ODT or RTF file |
+| [sheets.md](sheets.md)                   | Spreadsheet editor (.qsheet), and opening an Excel workbook |
+| [slides.md](slides.md)                   | Presentation editor (.qslide), and opening an ODP file |
 | [books.md](books.md)                     | Books page (every PDF and EPUB, opened in the viewer)  |
 | [vault.md](vault.md)                     | Each account's password vault (setup, entries, import/export, phone autofill) |
 | [health.md](health.md)                   | System page, Health tab: live metrics                  |
