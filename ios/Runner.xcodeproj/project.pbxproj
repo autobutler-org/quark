@@ -950,7 +950,7 @@
 		};
 		D3598A000000000000000060 /* XCLocalSwiftPackageReference "QuarkVaultCrypto" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = QuarkVaultCrypto;
+			relativePath = QuarkVaultCryptoBuild;
 		};
 /* End XCLocalSwiftPackageReference section */
 /* Begin XCSwiftPackageProductDependency section */
