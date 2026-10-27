@@ -478,3 +478,110 @@ func TestGetPart_ServesOnlyAPresentationsMediaFolder(t *testing.T) {
 		}
 	}
 }
+
+// writeOds packages a one-sheet OpenDocument spreadsheet at rel.
+func (h harness) writeOds(t *testing.T, rel string) {
+	t.Helper()
+	const mime = "application/vnd.oasis.opendocument.spreadsheet"
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, p := range []struct{ name, body string }{
+		{"mimetype", mime},
+		{"META-INF/manifest.xml", `<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">` +
+			`<manifest:file-entry manifest:full-path="/" manifest:media-type="` + mime + `"/>` +
+			`<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/></manifest:manifest>`},
+		{"content.xml", `<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" ` +
+			`xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">` +
+			`<office:body><office:spreadsheet><table:table table:name="Ledger"><table:table-row>` +
+			`<table:table-cell office:value-type="string"><text:p>Item</text:p></table:table-cell>` +
+			`<table:table-cell office:value-type="float" office:value="3.5"><text:p>3.50</text:p></table:table-cell>` +
+			`</table:table-row></table:table></office:spreadsheet></office:body></office:document-content>`},
+	} {
+		w, err := zw.Create(p.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(w, p.body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	h.writeFile(t, rel, buf.Bytes())
+}
+
+// writeXls copies xlsutil's LibreOffice-saved Excel 97 workbook to rel.
+func (h harness) writeXls(t *testing.T, rel string) {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "pkg", "util", "xlsutil", "testdata", "libreoffice.xls"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.writeFile(t, rel, raw)
+}
+
+func TestPreviewSheet_StreamsEachReader(t *testing.T) {
+	h := newHarness(t)
+	h.writeOds(t, "shared/ledger.ods")
+	h.writeXls(t, "shared/budget.xls")
+
+	for rel, want := range map[string]struct {
+		tab   string
+		first []string
+	}{
+		"shared/ledger.ods": {"Ledger", []string{"Item", "3.5"}},
+		"shared/budget.xls": {"Budget", []string{"Item", "Cost", "Due"}},
+	} {
+		w := h.get("sheet", map[string]string{"filePath": rel})
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d: %s", rel, w.Code, w.Body.String())
+		}
+		if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+			t.Errorf("%s: Content-Type = %q", rel, ct)
+		}
+		var got struct {
+			Tabs []struct {
+				Name string `json:"name"`
+				Data struct {
+					Rows [][]string `json:"rows"`
+				} `json:"data"`
+			} `json:"tabs"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatalf("%s: body is not one JSON object: %v\n%s", rel, err, w.Body.String())
+		}
+		if len(got.Tabs) == 0 || got.Tabs[0].Name != want.tab || len(got.Tabs[0].Data.Rows) == 0 ||
+			strings.Join(got.Tabs[0].Data.Rows[0], "|") != strings.Join(want.first, "|") {
+			t.Errorf("%s: preview = %+v", rel, got)
+		}
+	}
+}
+
+func TestPreviewSheet_Refusals(t *testing.T) {
+	h := newHarness(t)
+	h.writeOds(t, "other/secret.ods")
+	h.writeFile(t, "shared/fake.xls", []byte("this is plain text"))
+	h.writeFile(t, "shared/fake.ods", []byte("this is plain text"))
+	h.writeFile(t, "shared/notes.csv", []byte("a,b"))
+
+	for name, tc := range map[string]struct {
+		filePath string
+		want     int
+	}{
+		"no access":      {"other/secret.ods", http.StatusNotFound},
+		"missing":        {"shared/missing.xlsx", http.StatusNotFound},
+		"not an xls":     {"shared/fake.xls", http.StatusBadRequest},
+		"not an ods":     {"shared/fake.ods", http.StatusBadRequest},
+		"not a workbook": {"shared/notes.csv", http.StatusBadRequest},
+		"no filePath":    {"", http.StatusBadRequest},
+	} {
+		w := h.get("sheet", map[string]string{"filePath": tc.filePath})
+		if w.Code != tc.want {
+			t.Errorf("%s: status = %d, want %d: %s", name, w.Code, tc.want, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), `"tabs"`) {
+			t.Errorf("%s: a refusal started a sheet: %s", name, w.Body.String())
+		}
+	}
+}
