@@ -9901,16 +9901,18 @@ paths:
       - storage
   /thumbnails/{filePath}:
     get:
-      description: 'Returns a thumbnail for the specified photo, video or music track.
-        A track''s thumbnail is its cover art, embedded or from its folder as the
-        music library recorded it, and a track with none is a 404. A photo or video''s
-        is resized from the thumbnail a client uploaded for it when there is a fresh
-        one, generated from the file otherwise. When the device cannot render a video
-        or HEIC itself, the 404 body carries "clientRender": true, telling a client
-        that may write the file to render a thumbnail (JPEG, long edge 400) and PUT
-        it to this path. For a video, its "reason" says why the device could not:
-        "unsupported" for a codec it has no decoder for, "unreadable" for a file that
-        does not parse as a video.'
+      description: 'Returns a thumbnail for the specified photo, video, music track
+        or 3D model. A track''s thumbnail is its cover art, embedded or from its folder
+        as the music library recorded it, and a track with none is a 404. An STL,
+        OBJ or PLY model''s is the one a client rendered and PUT, and a model with
+        none is a 404 without clientRender. A photo or video''s is resized from the
+        thumbnail a client uploaded for it when there is a fresh one, generated from
+        the file otherwise. When the device cannot render a video or HEIC itself,
+        the 404 body carries "clientRender": true, telling a client that may write
+        the file to render a thumbnail (JPEG, long edge 400) and PUT it to this path.
+        For a video, its "reason" says why the device could not: "unsupported" for
+        a codec it has no decoder for, "unreadable" for a file that does not parse
+        as a video.'
       parameters:
       - description: Path to the image file
         in: path
@@ -9957,14 +9959,14 @@ paths:
     put:
       consumes:
       - multipart/form-data
-      description: 'Stores the thumbnail a client rendered for a photo or video, replacing
-        any stored before: a JPEG with a long edge of 400 and rotation applied, in
-        a part named "thumbnail". The sm, md and lg sizes are resized from it, and
-        a photo''s thumbnail feeds near-duplicate detection. It lives in the thumbnail
-        cache, so a move, rename or cache clear drops it and a client renders it again
-        on view. Needs write access on the file.'
+      description: 'Stores the thumbnail a client rendered for a photo, video or 3D
+        model (STL, OBJ, PLY), replacing any stored before: a JPEG with a long edge
+        of 400 and rotation applied, in a part named "thumbnail". The sm, md and lg
+        sizes are resized from it, and a photo''s thumbnail feeds near-duplicate detection.
+        It lives in the thumbnail cache, so a move, rename or cache clear drops it
+        and a client renders it again on view. Needs write access on the file.'
       parameters:
-      - description: Path to the photo or video
+      - description: Path to the photo, video or 3D model
         in: path
         name: filePath
         required: true

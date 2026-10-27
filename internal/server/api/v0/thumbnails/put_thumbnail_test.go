@@ -156,6 +156,33 @@ func TestThumbnail_ClientRenderMarkerThenPut(t *testing.T) {
 	}
 }
 
+// TestThumbnail_ModelServesOnlyWhatAClientRendered: the device draws no
+// 3D model (#3227), so an STL, OBJ or PLY answers a plain 404 until a
+// client renders one and PUTs it, and every size is served from that.
+func TestThumbnail_ModelServesOnlyWhatAClientRendered(t *testing.T) {
+	for _, rel := range []string{"prints/part.stl", "prints/part.OBJ", "scans/room.ply"} {
+		h := newThumbnailHarness(t)
+		writeUndecodable(t, h.filesDir, rel)
+
+		w := h.do("/api/v0/thumbnails/" + rel + "?size=sm")
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("%s before a PUT = %d, want 404: %s", rel, w.Code, w.Body.String())
+		}
+		if bytes.Contains(w.Body.Bytes(), []byte("clientRender")) {
+			t.Errorf("%s: a model is not backfilled from the grid: %s", rel, w.Body.String())
+		}
+
+		if w := h.put(t, "/api/v0/thumbnails/"+rel, map[string][]byte{"thumbnail": jpegOf(t, 400, 400)}); w.Code != http.StatusNoContent {
+			t.Fatalf("PUT %s = %d: %s", rel, w.Code, w.Body.String())
+		}
+		expectJPEG(t, h.do("/api/v0/thumbnails/"+rel+"?size=sm"), 96, 96)
+		expectJPEG(t, h.do("/api/v0/thumbnails/"+rel), 400, 400)
+		if w := h.do("/api/v0/thumbnails/" + rel + "?size=xl"); w.Code != http.StatusNotFound {
+			t.Errorf("%s xl = %d, want 404: nothing upscales a client thumbnail", rel, w.Code)
+		}
+	}
+}
+
 // TestThumbnail_MissingFileHasNoMarker: a file that is not there is a plain
 // 404, not an invitation to render.
 func TestThumbnail_MissingFileHasNoMarker(t *testing.T) {
