@@ -46,6 +46,7 @@ func PrepareCover(params PrepareCoverParams) (PrepareCoverResult, error) {
 		CoverKey:    row.CoverKey,
 		Width:       width,
 		Height:      height,
+		Resize:      ResizeFor(params.Size),
 	}
 	if cachedInfo, cacheErr := os.Stat(result.CachedPath); cacheErr == nil {
 		result.CachedModTime = cachedInfo.ModTime()
@@ -67,7 +68,7 @@ func GenerateCover(params GenerateCoverParams) (GenerateResult, error) {
 		return GenerateResult{}, err
 	}
 	defer closeSource()
-	result, err := photoutil.GenerateThumbnailFromReader(source, ext, params.Width, params.Height)
+	result, err := photoutil.GenerateThumbnailFromReader(source, ext, params.Width, params.Height, params.Resize)
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("%w: %w", ErrUnsupportedSource, err)
 	}

@@ -95,6 +95,7 @@ func getArchiveThumbnail(
 			Ext:              ext,
 			Width:            prepared.Width,
 			Height:           prepared.Height,
+			Resize:           prepared.Resize,
 			RotationQuarters: prepared.RotationQuarters,
 			CachedPath:       prepared.CachedPath,
 		})
@@ -152,6 +153,7 @@ func getCoverThumbnail(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, 
 			CoverKey:    prepared.CoverKey,
 			Width:       prepared.Width,
 			Height:      prepared.Height,
+			Resize:      prepared.Resize,
 			CachedPath:  prepared.CachedPath,
 		})
 		if errors.Is(genErr, thumbnailutil.ErrNoCover) || errors.Is(genErr, thumbnailutil.ErrUnsupportedSource) ||

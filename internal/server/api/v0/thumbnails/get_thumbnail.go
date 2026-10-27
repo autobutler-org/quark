@@ -29,7 +29,7 @@ import (
 // @Produce png,jpeg
 // @Param filePath path string true "Path to the image file"
 // @Param serial query string false "Device serial number (for device-specific files)"
-// @Param size query string false "Thumbnail size tier: sm (96px), md (240px), lg (400px). Defaults to lg." Enums(sm, md, lg)
+// @Param size query string false "Thumbnail size tier: sm (96px), md (240px), lg (400px), each a center-cropped square, or xl, the whole image scaled down to fit within 1280px, aspect ratio kept and never upscaled. xl is generated from the file, never from a client thumbnail, so a video or HEIC the device cannot render has no xl. Defaults to lg." Enums(sm, md, lg, xl)
 // @Success 200 {file} file
 // @Failure 304 "Not Modified"
 // @Failure 404 {object} clientRenderResponse "Not Found. clientRender is true when a client should render the thumbnail and PUT it"
@@ -156,6 +156,7 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 			IsVideo:          isVideo,
 			Width:            prepared.Width,
 			Height:           prepared.Height,
+			Resize:           prepared.Resize,
 			RotationQuarters: prepared.RotationQuarters,
 			CachedPath:       prepared.CachedPath,
 		})

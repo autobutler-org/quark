@@ -9819,12 +9819,16 @@ paths:
         in: query
         name: serial
         type: string
-      - description: 'Thumbnail size tier: sm (96px), md (240px), lg (400px). Defaults
-          to lg.'
+      - description: 'Thumbnail size tier: sm (96px), md (240px), lg (400px), each
+          a center-cropped square, or xl, the whole image scaled down to fit within
+          1280px, aspect ratio kept and never upscaled. xl is generated from the file,
+          never from a client thumbnail, so a video or HEIC the device cannot render
+          has no xl. Defaults to lg.'
         enum:
         - sm
         - md
         - lg
+        - xl
         in: query
         name: size
         type: string

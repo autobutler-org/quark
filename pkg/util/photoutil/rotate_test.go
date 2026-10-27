@@ -133,7 +133,7 @@ func TestOrientDecodedImageSkipsFormatsTheDecoderAlreadyOriented(t *testing.T) {
 func TestGenerateThumbnailFromReaderRespectsExifOrientation(t *testing.T) {
 	data := exifOrientedJPEG(t, 6)
 
-	result, err := GenerateThumbnailFromReader(bytes.NewReader(data), ".jpg", 10, 20)
+	result, err := GenerateThumbnailFromReader(bytes.NewReader(data), ".jpg", 10, 20, ResizeCrop)
 	if err != nil {
 		t.Fatalf("GenerateThumbnailFromReader: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestUprightThumbnailMatchesRotatingFirst(t *testing.T) {
 	src := gradientImage(256, 128)
 	for orientation := 1; orientation <= 8; orientation++ {
 		for _, size := range [][2]uint{{32, 32}, {32, 16}, {16, 32}} {
-			got, err := uprightThumbnail(src, orientation, size[0], size[1])
+			got, err := uprightThumbnail(src, orientation, size[0], size[1], ResizeCrop)
 			if err != nil {
 				t.Fatalf("orientation %d %v: %v", orientation, size, err)
 			}
@@ -249,7 +249,7 @@ func TestUprightThumbnailDoesNotCopyTheSource(t *testing.T) {
 	var before, after runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&before)
-	if _, err := uprightThumbnail(src, 6, 64, 64); err != nil {
+	if _, err := uprightThumbnail(src, 6, 64, 64, ResizeCrop); err != nil {
 		t.Fatal(err)
 	}
 	runtime.ReadMemStats(&after)

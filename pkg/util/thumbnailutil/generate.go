@@ -36,6 +36,7 @@ func Generate(params GenerateParams) (GenerateResult, error) {
 			Ext:              params.Ext,
 			Width:            params.Width,
 			Height:           params.Height,
+			Resize:           params.Resize,
 			RotationQuarters: params.RotationQuarters,
 			CachedPath:       params.CachedPath,
 		})
@@ -76,7 +77,7 @@ func Generate(params GenerateParams) (GenerateResult, error) {
 // and commits it to the cache. A source it cannot decode comes back as
 // [ErrUnsupportedSource].
 func GenerateFromReader(params GenerateFromReaderParams) (GenerateResult, error) {
-	result, err := photoutil.GenerateThumbnailFromReader(params.Reader, params.Ext, params.Width, params.Height)
+	result, err := photoutil.GenerateThumbnailFromReader(params.Reader, params.Ext, params.Width, params.Height, params.Resize)
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("%w: %w", ErrUnsupportedSource, err)
 	}
@@ -122,7 +123,7 @@ func storeHashes(queries db.Querier, serial, relPath, dhash string, source io.Re
 	}
 }
 
-// render produces the cropped thumbnail image for the RAW or video at
+// render produces the thumbnail image for the RAW or video at
 // hostPath: from a video's keyframe, or from the converted RAW.
 func render(params GenerateParams, hostPath string) (*photoutil.GenerateThumbnailResult, error) {
 	if !params.IsVideo {
@@ -130,19 +131,20 @@ func render(params GenerateParams, hostPath string) (*photoutil.GenerateThumbnai
 			FilePath: hostPath,
 			Width:    params.Width,
 			Height:   params.Height,
+			Resize:   params.Resize,
 		})
 	}
 	frame, err := videoFrame(params.Ctx, hostPath, params.Width, params.Height)
 	if err != nil {
 		return nil, err
 	}
-	return photoutil.GenerateThumbnailFromImage(frame, params.Width, params.Height)
+	return photoutil.GenerateThumbnailFromImage(frame, params.Width, params.Height, params.Resize)
 }
 
 // videoFrame decodes a representative frame of a video: the keyframe nearest
 // 2s in, or nearest a tenth of the way through a video too short for that to
 // land inside it. width and height are the thumbnail tier; the frame's longer
-// side is capped to the larger of the two before it is cropped. A codec the
+// side is capped to the larger of the two before it is cropped or fitted. A codec the
 // device has no decoder for comes back as [videoutil.ErrNoDecoder].
 func videoFrame(ctx context.Context, videoPath string, width, height uint) (image.Image, error) {
 	at := 2 * time.Second

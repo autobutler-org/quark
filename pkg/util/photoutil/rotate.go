@@ -29,16 +29,17 @@ func sourceOrientation(r io.ReadSeeker, format imagemeta.ImageFormat) int {
 	return GetOrientation(r, format)
 }
 
-// uprightThumbnail scales and center-crops a decoded source to width × height
-// as it will look once its EXIF orientation is applied, and applies the
-// orientation to the thumbnail rather than to the source (#2762). Rotating
+// uprightThumbnail scales a decoded source to width × height, center-cropped
+// or fitted within as mode says, as it will look once its EXIF orientation is
+// applied, and applies the orientation to the thumbnail rather than to the
+// source (#2762). Rotating
 // the source first cost a second full-size RGBA and most of the CPU of a
 // portrait thumbnail.
-func uprightThumbnail(img image.Image, orientation int, width, height uint) (image.Image, error) {
+func uprightThumbnail(img image.Image, orientation int, width, height uint, mode Resize) (image.Image, error) {
 	if swapsAxes(orientation) {
 		width, height = height, width
 	}
-	thumb, _, err := cropToFit(img, width, height)
+	thumb, err := resizeTo(img, width, height, mode)
 	if err != nil {
 		return nil, err
 	}

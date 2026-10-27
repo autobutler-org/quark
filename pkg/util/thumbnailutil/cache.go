@@ -68,6 +68,7 @@ func Prepare(params PrepareParams) (PrepareResult, error) {
 		RotationQuarters: rotationQuarters,
 		Width:            width,
 		Height:           height,
+		Resize:           ResizeFor(params.Size),
 	}
 	if cachedInfo, cacheErr := os.Stat(cachedPath); cacheErr == nil {
 		result.CachedModTime = cachedInfo.ModTime()
