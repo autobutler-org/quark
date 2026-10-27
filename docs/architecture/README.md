@@ -18,6 +18,7 @@ repository root; everything here expands on it. Diagrams are Mermaid, so GitHub 
 | [Styling](styling.md)                 | design tokens, the theme, and what keeps pages visually consistent |
 | [Build and tooling](tooling.md)       | code generation, checks, how the knowledge base stays true     |
 | [Music library](music-library.md)    | scan, tags, cover art, and search for local music              |
+| [Read-only documents](read-only-documents.md) | office-format readers, and the viewers the app has not opened yet |
 | [PostgreSQL for development](postgres-dev.md) | the local instance and the `DB_BACKEND` switch         |
 
 These pages describe structure, which changes slowly. For what Quark does feature by feature, the inventory is

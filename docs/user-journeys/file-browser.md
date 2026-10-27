@@ -1,6 +1,7 @@
 # File Browser Journeys
 
-Covers browsing, uploading, downloading, and managing files via the file browser at `/files`.
+Covers browsing, uploading, downloading, and managing files via the file browser at `/files`, including where
+an office file and a Markdown file open (JN-FB-048, JN-FB-049).
 
 ---
 
@@ -348,7 +349,9 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 - **Download** saves the file to the device. **Open with…** hands it to the OS native handler.
 - If no handler is available, a clear error or fallback message is shown.
 
-**Notes:** A `.pdf` has its own viewer (JN-FB-045).
+**Notes:** A `.pdf` has its own viewer (JN-FB-045). A Markdown file opens rendered (JN-FB-049). Tapping an
+Excel workbook in the listing asks to convert it (JN-SH-007); its `/view` URL is this page. A Word file
+(JN-DOC-007), a PowerPoint file and an ODP (JN-SL-040) open here too.
 
 ---
 
@@ -955,7 +958,9 @@ them goes there. Files inside an archive still open over the browser and have no
   reaches the system one.
 - The viewer needs no internet connection: the PDF engine ships inside the app, the web build included.
 - A PDF inside an archive (JN-FB-020) still downloads; it has no viewer there.
-- Word, Excel, PowerPoint and EPUB files still open in the generic viewer (JN-FB-019).
+- A Word file (JN-DOC-007), an ODP (JN-SL-040) and an EPUB still open in the generic viewer (JN-FB-019).
+  Tapping an Excel workbook asks to convert it (JN-SH-007). A PowerPoint file opens here too, and its menu can
+  import it (JN-SL-029). A Markdown file opens rendered (JN-FB-049).
 
 ---
 
@@ -1029,3 +1034,76 @@ Quark holds an earlier version of it.
   `PUT /api/v0/playback/watched`. Moving or renaming the video starts it over.
 - A watched video stays watched while it is played again, until **Mark as unwatched**.
 - A "Continue watching" row, a theater library, subtitles and chapters are not built yet (#2985).
+
+---
+
+### JN-FB-048: Where a Word file, a workbook, a PowerPoint file or an ODP opens
+
+**Preconditions:** Signed in. One folder holds `q1.docx`, `budget.xlsx`, `Talk.pptx` and `Talk.odp`.
+
+**Steps:**
+
+1. Tap `q1.docx`, then go back.
+2. Tap `budget.xlsx` and cancel the convert dialog.
+3. Tap `Talk.pptx`, go back, and open its menu.
+4. Tap `Talk.odp`, go back, and open its menu.
+
+**Expected result:**
+
+- `q1.docx` opens the generic viewer. The document is not rendered, and Docs does not list it (JN-DOC-007).
+  A `.docm`, `.odt` or `.rtf` does the same.
+- `budget.xlsx` asks **Convert to .qsheet?** and does not open a sheet viewer. **Cancel** leaves it unopened.
+  Confirming writes a sibling `.qsheet` and opens that in the editor (JN-SH-007). An `.ods` or `.xls` skips the
+  question and opens the generic viewer.
+- `Talk.pptx` opens the generic viewer. Its menu offers **Open as presentation**, which imports a `.qslide`
+  and opens the editor (JN-SL-029). The slides are not drawn from the `.pptx` itself.
+- `Talk.odp` opens the generic viewer. Its menu has no **Open as presentation**, and Slides does not list it
+  (JN-SL-040).
+- None of the four is drawn in the app on tap. A PDF is (JN-FB-045), and a Markdown file is (JN-FB-049).
+
+**Notes:**
+
+- The Quark can preview a word-processing file, a presentation (including `.odp`) and a workbook, and can
+  convert or import them to `.qdoc`, `.qslide` and `.qsheet`. The app uses that only for the PowerPoint menu
+  import and for the `.xlsx` / `.xlsm` convert prompt.
+- Inside an archive, all four download instead of opening (JN-FB-020).
+
+---
+
+### JN-FB-049: Read a Markdown file
+
+**Preconditions:** `notes/readme.md` exists. It has a heading, a relative link to another file in `notes/`, and
+a remote image.
+
+**Steps:**
+
+1. Tap the file, or open `/markdown/notes/readme.md`.
+2. Tap **Source**, then **Rendered**.
+3. Tap the relative link, then go back.
+4. Tap **Load remote image** on the remote image.
+5. Tap **Edit**.
+
+**Expected result:**
+
+- The file opens at `/markdown/notes/readme.md`, named in the bar. Headings, lists, tables and code blocks are
+  drawn. The page is not an editor.
+- **Source** shows the file's text. **Rendered** returns to the drawn page.
+- A relative link opens that file. A link cannot climb above the files root. An `http` or `https` link opens
+  outside the app. Any other scheme, including `javascript:` and `data:`, does nothing.
+- A picture in the same folder loads on its own. A remote picture stays a button until **Load remote image**
+  (or **Load remote image:** and its alt text).
+- **Edit** opens the plaintext editor. Back from there returns to this page.
+- A file the rendered view stops early on says how much it showed, for example "Showing the first 1.0 MB of
+  2.0 MB. View the source to read the rest." **Edit** stays off then. **Source** still pages through the rest.
+- A failure reads "Couldn't load the file." When the Quark cannot be reached, the disconnected state shows,
+  with a retry.
+
+**Notes:**
+
+- `.markdown` opens here too. A `.txt` opens at `/code/<path>` instead, and **Edit** there reaches the
+  plaintext editor.
+- The rendered view reads at most 1 MB. Raw HTML is shown as text. An SVG image in the file is drawn; a
+  script inside that SVG does not run.
+- The source chip's key is `markdown_viewer_source_toggle`, **Edit** is `markdown_viewer_edit`, and a remote
+  image's button starts with `markdown_viewer_load_image_`.
+- An `.md` inside an archive is previewed as text, not rendered (JN-FB-020).
