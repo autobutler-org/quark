@@ -20,8 +20,10 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
+	"tailscale.com/envknob"
 	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
+	"tailscale.com/logtail"
 	"tailscale.com/tsnet"
 )
 
@@ -38,6 +40,7 @@ func startLocked(authKey string) error {
 	if running {
 		return nil
 	}
+	disableLogUpload()
 	dir := stateDir()
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		lastErr = fmt.Errorf("failed to create tsnet state dir: %w", err)
@@ -65,6 +68,17 @@ func startLocked(authKey string) error {
 	running = true
 	lastErr = nil
 	return nil
+}
+
+// disableLogUpload turns off, for the life of the process, the diagnostic log
+// and metrics upload tsnet starts with every node, which goes to the library
+// vendor's log host rather than to AutoButler. Our coordination server sends
+// the same switch, but only in its first map response, so it is set here
+// before a node exists (#3786). logtail.Disable drops entries and pending
+// uploads; NoLogsNoSupport makes the upload transport a no-op.
+func disableLogUpload() {
+	logtail.Disable()
+	envknob.SetNoLogsNoSupport()
 }
 
 // startProxyLocked is StartProxy's body. mu must be held.

@@ -23,7 +23,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"tailscale.com/envknob"
 	"tailscale.com/ipn"
+	"tailscale.com/logtail"
 	"tailscale.com/tsnet"
 )
 
@@ -201,6 +203,11 @@ func statusJSON() string {
 // upNode joins the tailnet. When it fails, it also returns the last backend
 // state the node reported.
 func upNode(cfg Config) (*tsnet.Server, DialFunc, string, error) {
+	// tsnet uploads its diagnostic logs and metrics to the library vendor's
+	// log host until our coordination server's first map response says
+	// stop. Turn that off for the process before a node exists (#3786).
+	logtail.Disable()
+	envknob.SetNoLogsNoSupport()
 	if cfg.StateDir == "" || cfg.ControlURL == "" || cfg.Hostname == "" {
 		return nil, nil, "", errors.New("stateDir, controlUrl, and hostname are required")
 	}

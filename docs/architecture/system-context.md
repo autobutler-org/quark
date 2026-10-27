@@ -78,3 +78,6 @@ reverse-proxies to the local listener, so the phone reaches the device over the 
 The node's state persists; an auth key is provisioned only when there is none. Because the proxy connects from
 loopback, `X-Forwarded-For` is trusted only from loopback (or `QUARK_TRUSTED_PROXIES`), which keeps the login
 rate limiter keyed on the real client IP.
+Before it builds a node, `remoteutil` (and the phone bridge, `cmd/tsnetbridge`) turns off the diagnostic log and
+metrics upload `tsnet` otherwise sends to Tailscale's log host, for the life of the process (#3786). The node
+still uses the coordination server's relay servers.
