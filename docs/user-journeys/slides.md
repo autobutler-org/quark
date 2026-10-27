@@ -5,7 +5,7 @@ inserting pictures, tables and charts, its speaker notes, and presenting (#1152,
 #1166, #1167, #1170).
 
 Slides is always listed in the drawer and at `/slides`. It is not behind a switch. Stored presentations stay
-(#2869).
+(#2869). An `.odp` opened from Files is not imported and is not drawn (JN-SL-040).
 
 ---
 
@@ -591,6 +591,7 @@ same drive as the presentation (`photos/cover.jpg`).
   inside an archive.
 - Tapping the PowerPoint file itself still opens it in the generic viewer, as before.
 - **Open as presentation** is always in that menu for a PowerPoint file. It is not behind a switch.
+- An `.odp` has no such entry (JN-SL-040).
 
 ---
 
@@ -834,3 +835,30 @@ same drive as the presentation (`photos/cover.jpg`).
 - A pie chart draws its first series only and has no gridlines to turn on.
 - In view-only mode the chart can still be selected and read by a screen reader, but the **Chart** group is gone,
   Enter does nothing, and the properties panel's title takes no input.
+
+---
+
+### JN-SL-040: Open an ODP file from Files
+
+**Preconditions:** Signed in, on `/files`, with `talks/Talk.odp`.
+
+**Steps:**
+
+1. Tap `Talk.odp`.
+2. Go back to the folder and open the file's menu (the three-dot button, or a long press on the row).
+
+**Expected result:**
+
+- The generic viewer opens at `/view/talks/Talk.odp` (JN-FB-019). It shows the generic file icon, the name, and
+  "ODP file" with the size when the file has one. The slides are not drawn. **Download** saves the file, and
+  off web **Open with…** hands it to another app.
+- The menu has no **Open as presentation**. That entry is only on a `.pptx`, `.pptm` or `.ppsx` (JN-SL-029).
+- Slides (`/slides`) does not list the file. That list is `.qslide` files only (JN-SL-001).
+
+**Notes:**
+
+- A legacy `.ppt` is Kind Presentation and opens this same generic viewer. Its menu has no **Open as
+  presentation** either. Tapping a `.pptx` also opens the generic viewer; the import is the menu.
+- The Quark can import an `.odp` to a sibling `.qslide` and can stream it as a deck for a viewer. The app calls
+  neither, so there is no ODP viewer and no import from Files (JN-FB-048).
+- An `.odp` inside an archive is downloaded, not previewed (JN-FB-020).
