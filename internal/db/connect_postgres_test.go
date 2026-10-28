@@ -252,7 +252,9 @@ func TestConnectToPostgresRefusesSynchronousCommitOff(t *testing.T) {
 	}
 	query := databaseURL.Query()
 	query.Set("options", "-c synchronous_commit=off")
-	databaseURL.RawQuery = query.Encode()
+	// Encode writes a space as "+", which pgx passes through literally, so the
+	// server would see a parameter named "+synchronous_commit".
+	databaseURL.RawQuery = strings.ReplaceAll(query.Encode(), "+", "%20")
 
 	database, err := db.ConnectToPostgres(databaseURL.String())
 	if err == nil {
