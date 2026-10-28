@@ -48,6 +48,18 @@ abstract final class Errors {
     return couldNot(action);
   }
 
+  /// Why the connection sheet couldn't read remote access status while the
+  /// app reaches its Quark by [mode] (#3606). Connected locally or remotely,
+  /// the sheet's own header says the app is connected, so a request that got
+  /// no answer is a failed status check, not a lost connection. Only
+  /// [ConnectionMode.offline] keeps [quarkDisconnectedInline].
+  static String remoteAccessStatus(Object? error, ConnectionMode mode) {
+    final text = message(error, 'load remote access status');
+    return mode != ConnectionMode.offline && text == quarkDisconnectedInline
+        ? couldNot('check remote access')
+        : text;
+  }
+
   /// A saved Quark presented a different certificate from the one the app
   /// pinned the first time it connected, so the app refuses to talk to it
   /// (#2721). Names the way out: Forget certificate in the Quark's menu.

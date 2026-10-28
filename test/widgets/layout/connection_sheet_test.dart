@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:quark/services/remote_access_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/layout/connection_sheet.dart';
@@ -130,6 +131,105 @@ void main() {
 
     expect(find.text("Remote access couldn't connect"), findsOneWidget);
     expect(find.textContaining('tsnet'), findsNothing);
+  });
+
+  // #3606: connected, a status read that got no answer is a failed check,
+  // not "you're not connected", and the row offers a retry.
+  for (final size in [const Size(360, 640), const Size(1280, 800)]) {
+    testWidgets('a failed read while connected offers a retry '
+        '(${size.width})', (tester) async {
+      var reads = 0;
+      var fail = true;
+      await pumpButton(
+        tester,
+        mode: ConnectionMode.remote,
+        read: () async {
+          reads++;
+          if (fail) throw http.ClientException('Connection closed');
+          return const RemoteAccessStatus(enabled: true, connected: true);
+        },
+        onNavigate: (_) {},
+        size: size,
+      );
+      await tester.tap(find.byKey(const ValueKey('connection_indicator')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(reads, 2, reason: 'a read with no answer is tried once more');
+      expect(find.text(quarkDisconnectedInline), findsNothing);
+      expect(find.text("Couldn't check remote access."), findsOneWidget);
+
+      fail = false;
+      await tester.tap(find.byKey(const ValueKey('connection_sheet_retry')));
+      await tester.pumpAndSettle();
+      expect(find.text('Remote access is on'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('connection_sheet_retry')),
+        findsNothing,
+      );
+    });
+  }
+
+  testWidgets('a read that fails once and then answers shows the answer', (
+    tester,
+  ) async {
+    var reads = 0;
+    await pumpButton(
+      tester,
+      mode: ConnectionMode.remote,
+      read: () async {
+        if (reads++ == 0) throw http.ClientException('Connection closed');
+        return const RemoteAccessStatus(enabled: true, connected: true);
+      },
+      onNavigate: (_) {},
+    );
+    await tester.tap(find.byKey(const ValueKey('connection_indicator')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remote access is on'), findsOneWidget);
+    expect(find.text("Couldn't check remote access."), findsNothing);
+  });
+
+  testWidgets('reads again when the address changes', (tester) async {
+    final address = ValueNotifier<String?>('https://quark.local');
+    addTearDown(address.dispose);
+    var fail = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: QuarkTheme.dark(themeColor: QuarkThemeColor.classic),
+        home: Scaffold(
+          body: ConnectionSheet(
+            mode: ConnectionMode.remote,
+            onOpenSettings: () {},
+            addressChanges: address,
+            address: () => address.value,
+            readRemoteAccess: () async {
+              if (fail) throw http.ClientException('Connection closed');
+              return const RemoteAccessStatus(enabled: true, connected: true);
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text("Couldn't check remote access."), findsOneWidget);
+
+    fail = false;
+    address.value = 'http://127.0.0.1:4242';
+    await tester.pumpAndSettle();
+    expect(find.text('Remote access is on'), findsOneWidget);
+  });
+
+  testWidgets('offline keeps the disconnected sentence', (tester) async {
+    await pumpButton(
+      tester,
+      mode: ConnectionMode.offline,
+      read: () async => throw http.ClientException('No route to host'),
+      onNavigate: (_) {},
+    );
+    await tester.tap(find.byKey(const ValueKey('connection_indicator')));
+    await tester.pumpAndSettle();
+
+    expect(find.text(quarkDisconnectedInline), findsOneWidget);
   });
 
   test('labels every mode', () {

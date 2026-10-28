@@ -505,6 +505,16 @@ final List<GalleryEntry> registry = [
           remoteAccessError: "Couldn't load remote access status.",
           onOpenSettings: () => log('ConnectionStatusView.onOpenSettings'),
         ),
+        const Divider(),
+        ConnectionStatusView(
+          mode: ConnectionMode.remote,
+          label: 'Connected through remote access',
+          detail: 'The status read failed, so the row offers a retry.',
+          remoteAccessError: "Couldn't check remote access.",
+          onRetryRemoteAccess: () =>
+              log('ConnectionStatusView.onRetryRemoteAccess'),
+          onOpenSettings: () => log('ConnectionStatusView.onOpenSettings'),
+        ),
       ],
     ),
   ),
