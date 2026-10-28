@@ -10,9 +10,9 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
-// SetRoleParams assigns a role to a storage device. The master password is
-// re-entered for this, so the params carry the credentials to check as well as
-// the role to write.
+// SetRoleParams assigns a role to a storage device. The caller's login
+// password is re-entered for this, so the params carry the credentials to check
+// as well as the role to write.
 type SetRoleParams struct {
 	// Ctx bounds the reads and the write.
 	Ctx context.Context
@@ -61,7 +61,7 @@ func SetRole(params SetRoleParams) (SetRoleResult, error) {
 		return SetRoleResult{}, unauthorized(errors.New("username does not match session"))
 	}
 
-	// Re-validate master password.
+	// Re-validate the caller's login password.
 	if _, _, err := authutil.ValidateBasicAuth(ctx, params.Queries, params.Username, params.Password); err != nil {
 		// A raw password goes back as it is: it carries its own 426.
 		if errors.Is(err, authutil.ErrAppTooOld) {

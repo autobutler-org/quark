@@ -11,7 +11,7 @@ import (
 
 // setDeviceRole godoc
 // @Summary Set the role of a storage device
-// @Description Assigns a role (default-storage, snapshot-backup, unassigned) to a device. Requires master password re-entry. A drive whose health.verdict is replace-soon is refused with 409 unless acknowledgeHealth is true. Watch does not block. Unknown is not healthy. Files already on the drive are left in place. Switching default storage to a drive in worse health than the current one uses the stronger 409 text.
+// @Description Assigns a role (default-storage, snapshot-backup, unassigned) to a device. Requires the caller's login password again. A drive whose health.verdict is replace-soon is refused with 409 unless acknowledgeHealth is true. Watch does not block. Unknown is not healthy. Files already on the drive are left in place. Switching default storage to a drive in worse health than the current one uses the stronger 409 text.
 // @Tags storage
 // @Accept json
 // @Produce json
