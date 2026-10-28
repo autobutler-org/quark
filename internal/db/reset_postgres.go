@@ -133,11 +133,18 @@ func runMigration(ctx context.Context, tx *sql.Tx, version uint, read func(uint)
 	return err
 }
 
+// identityTx is what advanceIdentities runs on: the reset's *sql.Tx, or the
+// *sql.Conn MoveToPostgres holds its transaction on.
+type identityTx interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 // advanceIdentities moves each identity sequence of table past the rows just
 // copied into it with their ids. PostgreSQL does not do that for an explicit
 // id, and the next insert would otherwise be handed an id a restored row
 // holds.
-func advanceIdentities(ctx context.Context, tx *sql.Tx, table string) error {
+func advanceIdentities(ctx context.Context, tx identityTx, table string) error {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT column_name FROM information_schema.columns
 		WHERE table_schema = current_schema() AND table_name = $1 AND is_identity = 'YES'`, table)

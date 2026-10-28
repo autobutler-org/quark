@@ -139,6 +139,13 @@ engines. On PostgreSQL (`reset_postgres.go`) it runs the migrations' own down fi
 one transaction, carries the same kept tables across, and moves their identity sequences past the rows it
 restored.
 
+`db.MoveToPostgres` (`move_postgres.go`, the `quark move-to-postgres` command) copies an install's SQLite
+file, opened read-only, into an empty PostgreSQL database in one transaction and checks every table's count.
+It reads the tables, columns and foreign keys from the PostgreSQL catalog, so a new table or column needs
+nothing there. A column type outside the mapping above needs a case in `convertForPostgres`, and a table the
+server rebuilds from disk goes in `rebuiltTables`. [`docs/architecture/postgres-move.md`](../../docs/architecture/postgres-move.md)
+has the rest.
+
 ## What PostgreSQL does differently at run time
 
 The schema and the queries are held equal by the tests. These are not, and code has to allow for them:

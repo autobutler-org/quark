@@ -193,7 +193,8 @@ In Kubernetes, put the URL in a `Secret` and reference it from the Deployment's 
   the tailnet identity each belong to one process. Running several instances is #2964.
 - **Not everything works yet.** Content search answers `501` with the issue that tracks it;
   [the full list](architecture/data.md#what-does-not-work-on-postgresql-yet) is in the data architecture page.
-  There is no tool yet to move an existing SQLite install's data across (#2962).
+  To move an existing SQLite install's data across, run `quark move-to-postgres` against the same volume
+  with the server stopped: [Moving to PostgreSQL](architecture/postgres-move.md).
 
 ### Requirements
 
@@ -253,7 +254,8 @@ To restore:
    the image refuses to start, saying so.
 
 A backup does not restore across backends: a dump restores onto PostgreSQL only, and a SQLite install's
-`chat_backup.db` and `vault_items_backup.db` onto SQLite only. Moving a SQLite install to PostgreSQL is #2962.
+`chat_backup.db` and `vault_items_backup.db` onto SQLite only. Moving a SQLite install to PostgreSQL is
+`quark move-to-postgres` ([Moving to PostgreSQL](architecture/postgres-move.md)).
 
 ## The data directory
 
