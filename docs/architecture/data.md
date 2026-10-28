@@ -286,6 +286,7 @@ what an item is, and its name, URL, username, password, notes, two-factor secret
 ciphertext, so no column says anything about the content. Every query in `sql/queries/vault.sql` takes the
 account's `user_id`, so no call, an admin's included, reaches another account's rows. The Quark never sees a key or
 a plaintext: the app derives and opens everything ([Chat security](../chat-security.md#split-keys-2430) has the key
-derivation). A snapshot copies both tables as they are into `vault_items_backup.db`, and `backup.ImportVault`
-restores them ([Backup](backup.md)). The household vault of `005_vault`, one master password for everyone, is
+derivation). On SQLite a snapshot copies both tables as they are into `vault_items_backup.db`, and
+`backup.ImportVault` restores them; on PostgreSQL they are in the operator's database backup
+([Backup](backup.md#on-postgresql)). The household vault of `005_vault`, one master password for everyone, is
 dropped by `038_drop_household_vault`.

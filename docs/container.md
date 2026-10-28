@@ -218,7 +218,8 @@ In Kubernetes, put the URL in a `Secret` and reference it from the Deployment's 
 ### Backup and restore
 
 On PostgreSQL the database is backed up with PostgreSQL's tools, and Quark's snapshot backup covers the files
-only: a snapshot there writes no `chat_backup.db` or `vault_items_backup.db`, because the chat and the vault are
+only: a snapshot there writes no `chat_backup.db` or `vault_items_backup.db`, and removes the ones an earlier SQLite
+snapshot left at the drive's root, because the chat and the vault are
 in the database ([Backup](architecture/backup.md#on-postgresql)).
 
 To back up:

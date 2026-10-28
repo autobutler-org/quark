@@ -129,7 +129,8 @@ Covers the System page's Storage tab (`/system/storage`) — listing, mounting, 
 
 **Expected result:**
 
-- No password is asked. The dialog says chat and every account's vault are included, still encrypted.
+- No password is asked. The dialog says chat and every account's vault are backed up still encrypted: on the drive
+  when Quark keeps its own database, or in the operator's PostgreSQL backups on a PostgreSQL-backed install.
 - Backup job starts and a status indicator updates with progress: "Preparing backup...", "Scanning files...", then
   "Copying files" with a percentage and file and byte counts.
 - On completion, a success state is shown.

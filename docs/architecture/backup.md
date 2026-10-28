@@ -23,7 +23,8 @@ On PostgreSQL a snapshot holds the files and the manifest only: see [On PostgreS
 
 ## The chat export
 
-`ExportChat` runs on every snapshot and asks for no password. Message bodies, reactions and channel keys are
+`ExportChat` runs on every snapshot of a SQLite-backed Quark and asks for no password; on PostgreSQL the chat is in
+the operator's database backup instead ([On PostgreSQL](#on-postgresql)). Message bodies, reactions and channel keys are
 encrypted on the client under keys the Quark never holds, and the rest of what the chat tables store is public
 keys, signatures, and who posted in which channel when. The copy is exactly as private as the database it came
 from, so it is not encrypted a second time.
@@ -82,7 +83,9 @@ No handler calls `ImportChat` yet; the restore route and its page are still to c
 
 ## The vault export
 
-`ExportVault` runs on every snapshot beside the chat export and, like it, asks for no password (#3460). Each
+`ExportVault` runs on every snapshot of a SQLite-backed Quark beside the chat export and, like it, asks for no
+password (#3460); on PostgreSQL the vault is in the operator's database backup instead
+([On PostgreSQL](#on-postgresql)). Each
 account's vault items are encrypted on the client under that account's vault key, and the key is stored only
 wrapped under the account's password and, when the client had it, its recovery phrase. The copy of
 `vault_keys` and `vault_items` is exactly as private as the database it came from, and a restored vault opens
@@ -109,7 +112,8 @@ backups (`pg_dump`, or a managed service's backups), and Quark's snapshot backup
 there holds the device directories and `backup_manifest.json`, and no `chat_backup.db` or `vault_items_backup.db`:
 the chat and the vault are rows in that database, and its backups carry them with everything else in it, accounts
 included. `ExportChat`, `ImportChat`, `ExportVault` and `ImportVault` return `ErrDatabaseBackedUpSeparately` and
-write nothing. [Running Quark in a container](../container.md#backup-and-restore) has the procedure.
+write nothing, and a snapshot removes the `chat_backup.db` and `vault_items_backup.db` an earlier SQLite snapshot
+left at the drive's root, so the manifest never lists a copy the snapshot did not take. [Running Quark in a container](../container.md#backup-and-restore) has the procedure.
 
 A backup does not restore across backends:
 
