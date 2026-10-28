@@ -74,6 +74,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Taps the bar action [key], opening the phone's "Manage" menu first when
+  /// the row has collapsed into it (#3589).
+  Future<void> tapBarAction(WidgetTester tester, String key) async {
+    final menu = find.byKey(const ValueKey('app_bar_bottom_menu'));
+    if (menu.evaluate().isNotEmpty) {
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.byKey(ValueKey(key)));
+    await tester.pumpAndSettle();
+  }
+
   for (final size in const [Size(360, 640), Size(1280, 800)]) {
     group('at $size', () {
       void useSize(WidgetTester tester) {
@@ -139,8 +151,7 @@ void main() {
         final vault = await pump(tester);
         await submitPassword(tester, _password);
 
-        await tester.tap(find.byKey(const ValueKey('vault_new_entry')));
-        await tester.pumpAndSettle();
+        await tapBarAction(tester, 'vault_new_entry');
         await tester.enterText(
           find.byKey(const ValueKey('vault_entry_name')),
           'Mail',
@@ -175,9 +186,7 @@ void main() {
         expect(find.text('Bank of Somewhere'), findsNothing);
         expect(server.items.containsKey(bank.id), isFalse);
 
-        // A phone's bar scrolls its actions sideways; Lock is the last one.
-        await tester.ensureVisible(find.byKey(const ValueKey('vault_lock')));
-        await tester.pumpAndSettle();
+        // Lock stays in the bar at every width, without scrolling (#3589).
         await tester.tap(find.byKey(const ValueKey('vault_lock')));
         await tester.pumpAndSettle();
         expect(find.text('Your vault is locked'), findsOneWidget);
@@ -213,8 +222,7 @@ void main() {
         final vault = await pump(tester);
         await submitPassword(tester, _password);
 
-        await tester.tap(find.byKey(const ValueKey('vault_new_folder')));
-        await tester.pumpAndSettle();
+        await tapBarAction(tester, 'vault_new_folder');
         await tester.enterText(
           find.byKey(const ValueKey('name_dialog_field')),
           '   ',
