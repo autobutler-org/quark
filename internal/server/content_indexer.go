@@ -3,15 +3,18 @@ package server
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log"
 	"maps"
 	"slices"
 	"sync"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/searchutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -19,10 +22,11 @@ import (
 // index in sync. It runs as a background goroutine for the lifetime of the
 // server process.
 //
-// Upload → index content (if file is a supported text format)
-// Delete → remove index entry
-// Move   → remove old entry, index new path
-// Resync → backfill every device, as at startup
+// Upload     → index the file, or every file under the folder the event names
+// New folder → the same: a restored or extracted folder names itself
+// Delete     → remove the index entry
+// Move       → remove the old entry, index the new file
+// Resync     → backfill every device, as at startup
 //
 // Every file is read through its device's files namespace in the VFS
 // registry. A device plugged in later is backfilled once its namespace is
@@ -63,38 +67,124 @@ func handleContentEvent(deps deputil.Dependencies, db *sql.DB, registry vfs.Regi
 		backfillContentIndex(deps)
 		return
 	}
-	if evt.Path == "" {
-		return
-	}
 	serial := evt.DeviceSerial
 	switch evt.Kind {
-	case eventbus.EventUpload:
+	case eventbus.EventUpload, eventbus.EventNewFolder:
+		// An upload names the folder the files landed in, and a restored
+		// or extracted folder arrives as new_folder. Either may name a file.
 		indexEventPath(db, registry, serial, evt.Path)
 
 	case eventbus.EventDelete:
-		if err := searchutil.DeleteContent(context.Background(), db, serial, evt.Path); err != nil {
-			log.Printf("[content-indexer] delete %s: %v", evt.Path, err)
-		}
+		deleteContentPath(db, serial, evt.Path)
 
 	case eventbus.EventMove:
-		// Remove old entry.
-		if err := searchutil.DeleteContent(context.Background(), db, serial, evt.Path); err != nil {
-			log.Printf("[content-indexer] delete old path %s: %v", evt.Path, err)
+		// An empty path is the root, not a row.
+		if accessutil.Canonical(evt.Path) == "" {
+			return
 		}
-		// Index new path if non-empty.
-		if evt.NewPath != "" {
-			indexEventPath(db, registry, serial, evt.NewPath)
-		}
+		deleteContentPath(db, serial, evt.Path)
+		// A moved folder is not walked. Its rows still name the old paths,
+		// and indexing the new tree would leave both.
+		indexMovedPath(db, registry, serial, evt.NewPath)
 	}
 }
 
-// indexEventPath indexes relPath on the device with serial through its files
-// namespace. A device with no namespace is skipped, and so is the trash.
+// deleteContentPath removes the index row for relPath. An empty path names
+// the root, which is not a row.
+func deleteContentPath(db *sql.DB, serial, relPath string) {
+	relPath = accessutil.Canonical(relPath)
+	if relPath == "" {
+		return
+	}
+	if err := searchutil.DeleteContent(context.Background(), db, serial, relPath); err != nil {
+		log.Printf("[content-indexer] delete %s: %v", relPath, err)
+	}
+}
+
+// indexEventPath indexes relPath on the device with serial. A folder —
+// including the device root, which an upload into it names as "" — is walked
+// and every file under it is indexed. A file is indexed alone. A device with
+// no namespace is skipped, and so is the trash.
 func indexEventPath(db *sql.DB, registry vfs.Registry, serial, relPath string) {
-	fsys, ok := registry.Get(vfs.FilesNamespace(serial))
+	fsys, relPath, ok := contentFS(registry, serial, relPath)
 	if !ok {
 		return
 	}
+	fi, err := statContentPath(fsys, relPath)
+	switch {
+	case errors.Is(err, vfs.ErrNotFound):
+		return
+	case err != nil:
+		log.Printf("[content-indexer] stat %s: %v", relPath, err)
+		return
+	case !fi.IsDir:
+		indexContentFile(db, fsys, serial, relPath)
+		return
+	}
+
+	// One file's cap is indexTimeout. A folder holds many, so the walk has
+	// the same bound as a device backfill and stops between files.
+	ctx, cancel := context.WithTimeout(context.Background(), backfillTimeout)
+	defer cancel()
+	walkErr := vfs.Walk(ctx, fsys, relPath, func(info vfs.FileInfo) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if !info.IsDir {
+			indexContentFile(db, fsys, serial, info.Path)
+		}
+		return nil
+	})
+	if walkErr != nil && !errors.Is(walkErr, vfs.ErrNotFound) {
+		log.Printf("[content-indexer] walk %s: %v", relPath, walkErr)
+	}
+}
+
+// indexMovedPath indexes the file a move landed on. A folder is left alone:
+// the rows under it still name the old paths, and walking would index the
+// new ones beside them.
+func indexMovedPath(db *sql.DB, registry vfs.Registry, serial, relPath string) {
+	fsys, relPath, ok := contentFS(registry, serial, relPath)
+	if !ok || relPath == "" {
+		return
+	}
+	fi, err := statContentPath(fsys, relPath)
+	if err != nil {
+		if !errors.Is(err, vfs.ErrNotFound) {
+			log.Printf("[content-indexer] stat %s: %v", relPath, err)
+		}
+		return
+	}
+	if fi.IsDir {
+		return
+	}
+	indexContentFile(db, fsys, serial, relPath)
+}
+
+// statContentPath stats relPath, giving up after indexTimeout.
+func statContentPath(fsys vfs.VFS, relPath string) (vfs.FileInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), indexTimeout)
+	defer cancel()
+	return fsys.Stat(ctx, relPath)
+}
+
+// contentFS is the files namespace for serial and relPath in canonical form.
+// A serial with no namespace, and the trash, have nothing to index.
+func contentFS(registry vfs.Registry, serial, relPath string) (vfs.VFS, string, bool) {
+	fsys, ok := registry.Get(vfs.FilesNamespace(serial))
+	if !ok {
+		return nil, "", false
+	}
+	relPath = accessutil.Canonical(relPath)
+	if storageutil.IsTrashPath(relPath) {
+		return nil, "", false
+	}
+	return fsys, relPath, true
+}
+
+// indexContentFile indexes one file. A file that is not indexable, or that
+// is in the trash, is a no-op inside IndexFile.
+func indexContentFile(db *sql.DB, fsys vfs.VFS, serial, relPath string) {
 	if err := searchutil.IndexFileWithTimeout(db, fsys, serial, relPath, indexTimeout); err != nil {
 		log.Printf("[content-indexer] index %s: %v", relPath, err)
 	}
