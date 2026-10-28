@@ -97,8 +97,31 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text("Couldn't load remote access status."), findsOneWidget);
     expect(find.text('Remote access settings'), findsNothing);
+    expect(find.byKey(const ValueKey('connection_sheet_retry')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('connection_sheet_settings')));
     expect(opens, 1);
+  });
+
+  // A failed read offers a retry when the caller can read again (#3606).
+  testBothViewports('offers a retry after a failed read', (tester, size) async {
+    var retries = 0;
+    var opens = 0;
+    await pumpAt(
+      tester,
+      ConnectionStatusView(
+        mode: ConnectionMode.remote,
+        label: 'Remote',
+        detail: 'Detail.',
+        remoteAccessError: "Couldn't check remote access.",
+        onRetryRemoteAccess: () => retries++,
+        onOpenSettings: () => opens++,
+      ),
+      size: size,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const ValueKey('connection_sheet_retry')));
+    expect(retries, 1);
+    expect(opens, 0);
   });
 
   testWidgets('hides the settings row without onOpenSettings', (tester) async {

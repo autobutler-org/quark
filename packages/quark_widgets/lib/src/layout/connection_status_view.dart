@@ -11,10 +11,12 @@ import 'connection_indicator.dart';
 /// right now, in the caller's [label] and [detail], and links to the Quark's
 /// remote access settings with [remoteAccess] as a word. While the caller is
 /// still reading it the row says so ([isCheckingRemoteAccess]), and when the
-/// read failed it shows the caller's [remoteAccessError].
+/// read failed it shows the caller's [remoteAccessError], with a retry when
+/// the caller passes [onRetryRemoteAccess].
 ///
 /// Key prefixes: `connection_sheet_status` on the header,
-/// `connection_sheet_settings` on the settings row.
+/// `connection_sheet_settings` on the settings row, `connection_sheet_retry`
+/// on its retry button.
 ///
 /// ```dart
 /// ConnectionStatusView(
@@ -35,6 +37,7 @@ class ConnectionStatusView extends StatelessWidget {
     this.remoteAccess,
     this.isCheckingRemoteAccess = false,
     this.remoteAccessError,
+    this.onRetryRemoteAccess,
     this.onOpenSettings,
     this.thisPhoneLabel,
     this.thisPhoneOn = true,
@@ -61,6 +64,10 @@ class ConnectionStatusView extends StatelessWidget {
   /// Why [remoteAccess] could not be read, in the caller's words, or null.
   final String? remoteAccessError;
 
+  /// Reads [remoteAccess] again after [remoteAccessError]. Null hides the
+  /// retry button.
+  final VoidCallback? onRetryRemoteAccess;
+
   /// Opens the Quark's remote access settings. Null hides the row.
   final VoidCallback? onOpenSettings;
 
@@ -82,6 +89,9 @@ class ConnectionStatusView extends StatelessWidget {
     final (icon, color) = ConnectionIndicator.glyphFor(mode, tokens);
     final onOpenSettings = this.onOpenSettings;
     final remoteAccessError = this.remoteAccessError;
+    final onRetry = remoteAccess == null && remoteAccessError != null
+        ? onRetryRemoteAccess
+        : null;
     final onThisPhoneChanged = this.onThisPhoneChanged;
     final thisPhoneError = this.thisPhoneError;
     return Column(
@@ -138,7 +148,19 @@ class ConnectionStatusView extends StatelessWidget {
               RemoteAccessState.on => 'Remote access is on',
               RemoteAccessState.failing => "Remote access couldn't connect",
             }),
-            trailing: const Icon(QuarkIcons.chevron_right),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onRetry != null)
+                  IconButton(
+                    key: const ValueKey('connection_sheet_retry'),
+                    tooltip: 'Try again',
+                    icon: const Icon(QuarkIcons.refresh),
+                    onPressed: onRetry,
+                  ),
+                const Icon(QuarkIcons.chevron_right),
+              ],
+            ),
             onTap: onOpenSettings,
           ),
         if (onThisPhoneChanged != null)
