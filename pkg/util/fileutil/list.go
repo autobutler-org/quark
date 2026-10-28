@@ -99,6 +99,10 @@ func listFilesVFS(ctx context.Context, registry vfs.Registry, rootDir string, se
 
 // vfsFileNode is a VFS entry as every listing reports it.
 func vfsFileNode(fi vfs.FileInfo) FileNode {
+	fileType := storageutil.FileTypeFolder
+	if !fi.IsDir {
+		fileType = storageutil.DetermineFileTypeFromPath(fi.Path)
+	}
 	return FileNode{
 		Name:         fi.Name,
 		Size:         fi.Size,
@@ -108,7 +112,7 @@ func vfsFileNode(fi vfs.FileInfo) FileNode {
 		DirPath:      fi.Path,
 		FullPath:     fi.Path,
 		DeviceSerial: fi.DeviceSerial,
-		FileType:     string(storageutil.DetermineFileTypeFromPath(fi.Path)),
+		FileType:     string(fileType),
 		ModifiedAt:   fi.ModTime,
 	}
 }

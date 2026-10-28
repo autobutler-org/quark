@@ -881,13 +881,14 @@ func TestDetermineFileTypeFromPath_EmptyOrSlashPath(t *testing.T) {
 	}
 }
 
-func TestDetermineFileTypeFromPath_DirectoryPath(t *testing.T) {
-	// Test a directory path (uses os.Stat and IsDir check)
+func TestDetermineFileTypeFromPath_DoesNotStat(t *testing.T) {
+	// A path names a VFS entry, not a host path, so an existing directory is
+	// not a folder by its name alone: callers check IsDir (#3720).
 	tempDir := t.TempDir()
 
 	result := DetermineFileTypeFromPath(tempDir)
-	if result != FileTypeFolder {
-		t.Errorf("DetermineFileTypeFromPath(%s) = %s; want %s", tempDir, result, FileTypeFolder)
+	if result != FileTypeGeneric {
+		t.Errorf("DetermineFileTypeFromPath(%s) = %s; want %s", tempDir, result, FileTypeGeneric)
 	}
 }
 

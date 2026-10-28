@@ -197,12 +197,9 @@ func DetermineFileTypeFromPath(filePath string) FileType {
 		".lisp", ".cl", ".scm", ".clj", ".cljs", ".ex", ".exs", ".erl", ".hrl":
 		return FileTypeCode
 	default:
-		stat, err := os.Stat(filePath)
-		if err == nil && stat != nil {
-			if stat.IsDir() {
-				return FileTypeFolder
-			}
-		}
+		// The path alone cannot say whether it names a folder: callers pass
+		// VFS-relative names, which mean nothing to the process working
+		// directory (#3720). A caller with a FileInfo checks IsDir first.
 		return FileTypeGeneric
 	}
 }

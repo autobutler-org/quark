@@ -227,6 +227,11 @@ func TestListFiles_WithSubdirectory(t *testing.T) {
 	if len(result) != 1 || !result[0].IsDir || result[0].DirPath != "docs" {
 		t.Fatalf("Expected the docs dir alone, got %+v", result)
 	}
+	// "docs" has no extension and is not a path under the process working
+	// directory, so only IsDir can make it a folder (#3720).
+	if result[0].FileType != string(storageutil.FileTypeFolder) {
+		t.Errorf("docs FileType = %q, want %q", result[0].FileType, storageutil.FileTypeFolder)
+	}
 
 	result, err = listAsSystem(t, registry, "docs")
 	if err != nil {
