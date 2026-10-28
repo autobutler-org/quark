@@ -24,8 +24,10 @@ typedef ListModelResourcesFn =
     Future<List<String>> Function(Uint8List bytes, QuarkModelFormat format);
 
 /// State behind the 3D model viewer for the file at [path] (#2988): the
-/// parsed mesh, whether it shows as a wireframe, and why it could not be
-/// shown.
+/// parsed mesh, whether it shows as a wireframe, the unit its numbers are
+/// read in and the print bed it is checked against (#3228), and why it
+/// could not be shown. The unit and the bed last as long as the controller,
+/// so a reload keeps them.
 ///
 /// A file over [limits]' size is never downloaded: a one-byte read learns
 /// its size first, and the real read stops at the cap either way. The
@@ -66,6 +68,8 @@ class ModelViewerController extends ChangeNotifier with SafeNotifier {
   QuarkModelParseIssue? _fallback;
   int? _fileSize;
   bool _wireframe = false;
+  QuarkModelUnit _unit = QuarkModelUnit.file;
+  QuarkPrintBed? _printBed;
   int _generation = 0;
 
   /// The model, once read.
@@ -87,6 +91,12 @@ class ModelViewerController extends ChangeNotifier with SafeNotifier {
 
   /// Whether the model shows as edges.
   bool get wireframe => _wireframe;
+
+  /// The unit one of the file's coordinates is.
+  QuarkModelUnit get unit => _unit;
+
+  /// The print bed the model is checked against, null for none.
+  QuarkPrintBed? get printBed => _printBed;
 
   /// Reads and parses the file, dropping what was read before.
   Future<void> load() async {
@@ -180,6 +190,20 @@ class ModelViewerController extends ChangeNotifier with SafeNotifier {
   void setWireframe(bool wireframe) {
     if (_wireframe == wireframe) return;
     _wireframe = wireframe;
+    notifyListeners();
+  }
+
+  /// Reads the file's coordinates as [unit].
+  void setUnit(QuarkModelUnit unit) {
+    if (_unit == unit) return;
+    _unit = unit;
+    notifyListeners();
+  }
+
+  /// Checks the model against [printBed], or against none when null.
+  void setPrintBed(QuarkPrintBed? printBed) {
+    if (_printBed == printBed) return;
+    _printBed = printBed;
     notifyListeners();
   }
 

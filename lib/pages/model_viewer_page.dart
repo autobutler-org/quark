@@ -13,7 +13,8 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/model_viewer/model_viewer_body.dart';
 
 /// The 3D model viewer at `/model/<path>` (#2988): an STL, OBJ, PLY, glTF or
-/// 3MF file drawn to orbit, pan and zoom, with its size and counts.
+/// 3MF file drawn to orbit, pan and zoom, with its size, area, volume,
+/// counts and print-bed fit.
 ///
 /// A file the viewer will not draw (over the size, triangle or time cap, or
 /// not a valid model) falls back to the file's details and download

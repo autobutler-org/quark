@@ -110,6 +110,18 @@ void main() {
     expect(mesh.preview, isNull);
   });
 
+  test('a parsed model carries its measurements', () async {
+    final mesh = await ModelViewerService.parse(
+      plySheet(20),
+      QuarkModelFormat.ply,
+      ModelViewerConfig.limits,
+    );
+    // A sheet has an edge all round, so it is open.
+    expect(mesh.measurements, mesh.measure());
+    expect(mesh.measurements!.isClosed, isFalse);
+    expect(mesh.measurements!.surfaceArea, greaterThan(0));
+  });
+
   test('a model over the new cap is refused as too detailed', () async {
     const faces = ModelViewerConfig.maxTriangles + 1;
     final header = ascii.encode(

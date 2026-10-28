@@ -9,8 +9,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The 3D model viewer's surface: the disconnected state when the Quark
 /// cannot be reached, otherwise a [QuarkModelViewer] fed from [controller],
-/// with its error sentence written by [Errors] and the file's format and
-/// size as its status line.
+/// with its error sentence written by [Errors], the file's format and size
+/// as its status line, and the unit and print bed the controller keeps.
 class ModelViewerBody extends StatelessWidget {
   /// The viewer's state; the caller rebuilds this widget when it changes.
   final ModelViewerController controller;
@@ -35,6 +35,10 @@ class ModelViewerBody extends StatelessWidget {
       onRetry: controller.load,
       wireframe: controller.wireframe,
       onWireframeChanged: controller.setWireframe,
+      unit: controller.unit,
+      onUnitChanged: controller.setUnit,
+      printBed: controller.printBed,
+      onPrintBedChanged: controller.setPrintBed,
       statusLabel: size == null
           ? format.toUpperCase()
           : '${format.toUpperCase()} · ${StorageDevice.formatBytes(size)}',
