@@ -25,7 +25,8 @@ sudo -u quark quark move-to-postgres --database-url 'postgres://quark:secret@db.
 - **The SQLite database must be at this build's schema.** If it is older, start this build on SQLite once so it
   migrates, stop it again and rerun. The command will not migrate the file itself, because that would change it.
 
-When it finishes it prints each table's row count, the total and the time taken, then the next step: add
+When it finishes it prints each table's row count, the total and the time taken, that every copied table
+matches SQLite, and that `file_content` was left empty to be rebuilt when the server starts. Then the next step: add
 `QUARK_DB_BACKEND=postgres` and `QUARK_DATABASE_URL` to the service with `sudo systemctl edit quark`, a drop-in
 that survives the unit being rewritten by `quark install`, and start the service. To abandon the move, start
 it without them.

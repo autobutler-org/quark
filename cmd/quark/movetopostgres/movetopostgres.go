@@ -5,8 +5,10 @@ package movetopostgres
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -49,17 +51,7 @@ Moving from PostgreSQL back to SQLite is not supported.`,
 			if err != nil {
 				return fmt.Errorf("%w\nThe install still runs on SQLite, unchanged", err)
 			}
-			var total int64
-			for _, table := range result.Tables {
-				note := ""
-				if table.Rebuilt {
-					note = "  (rebuilt from the files when the server starts)"
-				}
-				fmt.Printf("  %-28s %8d%s\n", table.Table, table.Rows, note)
-				total += table.Rows
-			}
-			fmt.Printf("Moved %d rows in %d tables in %s; every count matches SQLite's.\n",
-				total, len(result.Tables), result.Elapsed.Round(time.Millisecond))
+			printSummary(os.Stdout, result)
 			fmt.Printf(`
 Next, point the service at PostgreSQL. Run sudo systemctl edit quark, add
 
@@ -79,4 +71,25 @@ SQLite as before.
 	cmd.Flags().StringVar(&sqlitePath, "sqlite", filepath.Join(storageutil.GetDataDir(), "quark.db"),
 		"the install's SQLite database")
 	return cmd
+}
+
+// printSummary prints each table's row count and what the counts prove: the
+// copied tables match SQLite, and the rebuilt ones were left empty on purpose,
+// their SQLite counts never read.
+func printSummary(w io.Writer, result db.MoveToPostgresResult) {
+	var total int64
+	var rebuilt []string
+	for _, table := range result.Tables {
+		_, _ = fmt.Fprintf(w, "  %-28s %8d\n", table.Table, table.Rows)
+		total += table.Rows
+		if table.Rebuilt {
+			rebuilt = append(rebuilt, table.Table)
+		}
+	}
+	_, _ = fmt.Fprintf(w, "Moved %d rows in %d tables in %s; every copied table matches its row count in SQLite.\n",
+		total, len(result.Tables)-len(rebuilt), result.Elapsed.Round(time.Millisecond))
+	if len(rebuilt) > 0 {
+		_, _ = fmt.Fprintf(w, "%s was left empty, not copied: the server rebuilds it from the files when it starts.\n",
+			strings.Join(rebuilt, ", "))
+	}
 }
