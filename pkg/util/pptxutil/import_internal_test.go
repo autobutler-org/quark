@@ -153,37 +153,19 @@ func TestImportChargesEveryPartAgainstOneBudget(t *testing.T) {
 	if err := zw.Close(); err != nil {
 		t.Fatal(err)
 	}
+	saved := archiveLimits
+	archiveLimits.MaxTotalBytes = 1000
+	t.Cleanup(func() { archiveLimits = saved })
 	a, err := openArchive(bytes.NewReader(b.Bytes()), int64(b.Len()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.remaining = 1000
 	var v struct{}
-	if err := a.decodeXML("a.xml", &v); err != nil {
+	if err := decodeXML(a, "a.xml", &v); err != nil {
 		t.Fatalf("first part: %v", err)
 	}
-	if err := a.decodeXML("b.xml", &v); !errors.Is(err, ErrTooLarge) {
+	if err := decodeXML(a, "b.xml", &v); !errors.Is(err, ErrTooLarge) {
 		t.Fatalf("second part = %v, want ErrTooLarge", err)
-	}
-}
-
-func TestImportResolvesRelationshipTargetsInsideThePackage(t *testing.T) {
-	for _, c := range []struct {
-		source, target, want string
-		ok                   bool
-	}{
-		{"ppt/slides/slide1.xml", "../media/image1.png", "ppt/media/image1.png", true},
-		{"ppt/slides/slide1.xml", "/ppt/media/a%20b.png", "ppt/media/a b.png", true},
-		{"ppt/presentation.xml", "slides/slide1.xml", "ppt/slides/slide1.xml", true},
-		{"", "ppt/presentation.xml", "ppt/presentation.xml", true},
-		{"ppt/slides/slide1.xml", "../../../etc/passwd", "", false},
-		{"ppt/slides/slide1.xml", "..\\media\\x.png", "", false},
-		{"ppt/slides/slide1.xml", "", "", false},
-	} {
-		got, ok := resolveTarget(c.source, c.target)
-		if got != c.want || ok != c.ok {
-			t.Errorf("resolveTarget(%q, %q) = %q, %v; want %q, %v", c.source, c.target, got, ok, c.want, c.ok)
-		}
 	}
 }
 

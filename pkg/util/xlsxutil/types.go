@@ -1,16 +1,17 @@
 package xlsxutil
 
 import (
-	"archive/zip"
 	"bufio"
 	"io"
 	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/officezip"
 )
 
-// workbook is a resolved .xlsx package: the parts, indexed by name, and the
-// worksheets in the order the workbook lists them.
+// workbook is a resolved .xlsx package and the worksheets in the order the
+// workbook lists them.
 type workbook struct {
-	parts  partIndex
+	pkg    *officezip.Package
 	sheets []sheetRef
 	// epoch is the day serial 0 denotes. Almost every workbook counts from
 	// 1899-12-30; one saved with the 1904 date system counts from 1904-01-01.
@@ -21,19 +22,7 @@ type workbook struct {
 // holding its rows.
 type sheetRef struct {
 	name string
-	part *zip.File
-}
-
-// partIndex maps a package-relative part name ("xl/worksheets/sheet1.xml") to
-// its archive entry. Built once so a lookup does not walk the whole archive.
-type partIndex map[string]*zip.File
-
-// relationship is one entry of a .rels part: Target is resolved relative to
-// the directory of the part the relationships belong to.
-type relationship struct {
-	ID     string `xml:"Id,attr"`
-	Type   string `xml:"Type,attr"`
-	Target string `xml:"Target,attr"`
+	part string
 }
 
 // sharedItem is one entry of the shared-string table. Plain text sits in T;

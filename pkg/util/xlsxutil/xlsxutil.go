@@ -8,16 +8,15 @@
 // the same trade the CSV importer already makes (#1019): .qsheet stays the one
 // format the editor has to understand, and the whole editor is reused as-is.
 //
-// An .xlsx is a zip of XML parts, so reading one needs random access to the
-// archive but not the archive in memory: the caller supplies an [io.ReaderAt]
-// and its size, every part is decoded as a token stream, and rows are written
-// onto Out as they are read. Only the shared-string table is held whole, which
-// is inherent to the format — a cell references its text by index — so it is
-// bounded by [MaxSharedStringBytes] instead.
+// An .xlsx is a zip of XML parts. Import opens it through officezip, so the
+// caller supplies an [io.ReaderAt] and its size, every part is decoded as a
+// token stream, and rows are written onto Out as they are read. Only the
+// shared-string table is held whole, which is inherent to the format — a cell
+// references its text by index — so it is bounded by [MaxSharedStringBytes]
+// instead.
 package xlsxutil
 
 import (
-	"archive/zip"
 	"errors"
 	"fmt"
 	"io"
@@ -106,22 +105,22 @@ func ConvertToQsheet(params ConvertToQsheetParams) (ConvertToQsheetResult, error
 		return ConvertToQsheetResult{}, fmt.Errorf("%w: empty file", ErrNotSpreadsheet)
 	}
 
-	zr, err := zip.NewReader(params.Source, params.Size)
-	if err != nil {
-		return ConvertToQsheetResult{}, fmt.Errorf("%w: %v", ErrNotSpreadsheet, err)
-	}
-
-	book, err := readWorkbook(zr)
+	pkg, err := openPackage(params.Source, params.Size)
 	if err != nil {
 		return ConvertToQsheetResult{}, err
 	}
 
-	shared, err := readSharedStrings(book.parts)
+	book, err := readWorkbook(pkg)
 	if err != nil {
 		return ConvertToQsheetResult{}, err
 	}
 
-	styles, err := readStyles(book.parts)
+	shared, err := readSharedStrings(pkg)
+	if err != nil {
+		return ConvertToQsheetResult{}, err
+	}
+
+	styles, err := readStyles(pkg)
 	if err != nil {
 		return ConvertToQsheetResult{}, err
 	}

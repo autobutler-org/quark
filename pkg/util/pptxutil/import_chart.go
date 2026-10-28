@@ -169,13 +169,12 @@ func (s *slideReader) convertChart(f *xGraphicFrame, t transform, template bool)
 		return nil, nil
 	}
 	rel, ok := s.source.rels[f.Data.Chart.ID]
-	part, inside := resolveTarget(s.source.part, rel.Target)
-	if !ok || !inside || !s.a.has(part) {
+	if !ok || rel.Part == "" || !s.a.Has(rel.Part) {
 		s.warn(graphicFrameWarning(chartURI))
 		return nil, nil
 	}
 	var cs xChartSpace
-	if err := s.a.decodeXML(part, &cs); err != nil {
+	if err := decodeXML(s.a, rel.Part, &cs); err != nil {
 		if errors.Is(err, ErrTooLarge) {
 			return nil, err
 		}

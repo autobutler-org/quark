@@ -1,62 +1,64 @@
 package xlsxutil
 
 import (
-	"archive/zip"
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/autobutler-org/quark/pkg/util/officezip"
 )
 
-// openPart opens one part of the package for reading, bounded.
+// openPackage opens an .xlsx through officezip.
 //
-// A zip entry declares its own uncompressed size, and a small compressed part
-// can expand to an arbitrarily large one, so neither the declaration nor the
-// stream is trusted: the declared size rejects an honest oversized part
-// outright, and the reader refuses to hand over more than the limit however
-// small the part claimed to be. This is the guard the archive extractor
-// already applies per entry (fileutil.ArchiveLimits.MaxEntryBytes); a workbook is
-// a zip and needs the same one.
-func openPart(f *zip.File, limit int64) (io.ReadCloser, error) {
-	if f.UncompressedSize64 > uint64(limit) {
-		return nil, fmt.Errorf("%w: %s is larger than %d bytes", ErrTooLarge, f.Name, limit)
-	}
-	rc, err := f.Open()
+// MaxPartBytes is the cap this reader already puts on one part. MaxTotalBytes
+// has to cover every part a conversion reads: the root relationships, the
+// workbook, its relationships and the styles, each worksheet twice (once to
+// measure it and once to stream it), and the shared strings. A zero total
+// would take officezip's default and reject a workbook that converts today.
+// Shared strings are tighter than MaxPartBytes and are read with PartLimited.
+func openPackage(src io.ReaderAt, size int64) (*officezip.Package, error) {
+	pkg, err := officezip.Open(src, size, officezip.Limits{
+		MaxPartBytes:  MaxPartBytes,
+		MaxTotalBytes: MaxPartBytes*int64(4+2*MaxSheets) + MaxSharedStringBytes,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s: %v", ErrNotSpreadsheet, f.Name, err)
+		return nil, wrapPackage(err)
 	}
-	return &boundedPart{
-		reader: io.LimitReader(rc, limit+1),
-		closer: rc,
-		name:   f.Name,
-		limit:  limit,
-	}, nil
+	return pkg, nil
 }
 
-// boundedPart stops a part that expands past its limit, rather than letting it
-// be read to the end of whatever it decompresses to.
-type boundedPart struct {
-	reader io.Reader
-	closer io.Closer
-	name   string
-	limit  int64
-	read   int64
-}
-
-func (b *boundedPart) Read(p []byte) (int, error) {
-	n, err := b.reader.Read(p)
-	b.read += int64(n)
-	if b.read > b.limit {
-		return n, fmt.Errorf("%w: %s expands past %d bytes", ErrTooLarge, b.name, b.limit)
+// openPart opens one part for reading, capped at limit uncompressed bytes.
+// limit cannot rise above the package's MaxPartBytes. A zip entry declares
+// its own uncompressed size, and a small compressed part can expand to an
+// arbitrarily large one, so neither the declaration nor the stream is trusted.
+func openPart(pkg *officezip.Package, name string, limit int64) (io.ReadCloser, error) {
+	rc, err := pkg.PartLimited(name, limit)
+	if err != nil {
+		return nil, wrapPackage(err)
 	}
-	return n, err
+	return rc, nil
 }
 
-func (b *boundedPart) Close() error { return b.closer.Close() }
+// wrapPackage reports an officezip failure as this package's own sentinel.
+// A part past a limit is [ErrTooLarge]; anything else about the package is
+// [ErrNotSpreadsheet].
+func wrapPackage(err error) error {
+	if err == nil || errors.Is(err, ErrTooLarge) || errors.Is(err, ErrNotSpreadsheet) {
+		return err
+	}
+	if errors.Is(err, officezip.ErrTooLarge) {
+		return fmt.Errorf("%w: %v", ErrTooLarge, err)
+	}
+	return fmt.Errorf("%w: %v", ErrNotSpreadsheet, err)
+}
 
 // partError reports what went wrong reading a part. A part that broke its
 // bound says so; anything else is a malformed package.
 func partError(name string, err error) error {
-	if errors.Is(err, ErrTooLarge) {
+	if errors.Is(err, ErrTooLarge) || errors.Is(err, officezip.ErrTooLarge) {
+		return wrapPackage(err)
+	}
+	if errors.Is(err, ErrNotSpreadsheet) {
 		return err
 	}
 	return fmt.Errorf("%w: %s: %v", ErrNotSpreadsheet, name, err)

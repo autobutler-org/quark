@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/officezip"
 )
 
 // stylesPart is where a workbook keeps its cell formats.
@@ -33,13 +35,12 @@ var builtinDateFormats = map[int]dateKind{
 // readStyles loads the cell formats and works out which of them display a
 // date. A workbook with no styles part has no date-formatted cells, which is
 // not an error — its numbers are all numbers.
-func readStyles(parts partIndex) (numberFormats, error) {
+func readStyles(pkg *officezip.Package) (numberFormats, error) {
 	formats := numberFormats{dateStyles: map[int]dateKind{}}
-	f, ok := parts[stylesPart]
-	if !ok {
+	if !pkg.Has(stylesPart) {
 		return formats, nil
 	}
-	rc, err := openPart(f, MaxPartBytes)
+	rc, err := openPart(pkg, stylesPart, MaxPartBytes)
 	if err != nil {
 		return formats, err
 	}

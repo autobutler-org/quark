@@ -1,13 +1,14 @@
 package xlsxutil
 
 import (
-	"archive/zip"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/officezip"
 )
 
 // sheetExtent is how much of a worksheet holds anything: the widest row and
@@ -26,8 +27,8 @@ type sheetExtent struct {
 // been read. Measuring in a separate pass is what keeps that from meaning
 // "hold the sheet in memory": the pass reads the part a token at a time and
 // keeps two integers, and the entry is simply opened again to write from.
-func measureSheet(f *zip.File) (sheetExtent, error) {
-	rc, err := openPart(f, MaxPartBytes)
+func measureSheet(pkg *officezip.Package, name string) (sheetExtent, error) {
+	rc, err := openPart(pkg, name, MaxPartBytes)
 	if err != nil {
 		return sheetExtent{}, err
 	}
@@ -47,7 +48,7 @@ func measureSheet(f *zip.File) (sheetExtent, error) {
 			break
 		}
 		if err != nil {
-			return sheetExtent{}, partError(f.Name, err)
+			return sheetExtent{}, partError(name, err)
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
@@ -95,11 +96,11 @@ func measureSheet(f *zip.File) (sheetExtent, error) {
 // exactly extent.width cells, for extent.rows rows. Rows and cells a worksheet
 // leaves out — it stores only what holds something — are emitted as the empty
 // strings they stand for, so a value stays in the column and row it was in.
-func streamSheet(f *zip.File, extent sheetExtent, epoch time.Time, shared []string, formats numberFormats, emit func([]string) error) (int, error) {
+func streamSheet(pkg *officezip.Package, name string, extent sheetExtent, epoch time.Time, shared []string, formats numberFormats, emit func([]string) error) (int, error) {
 	if extent.rows == 0 || extent.width == 0 {
 		return 0, nil
 	}
-	rc, err := openPart(f, MaxPartBytes)
+	rc, err := openPart(pkg, name, MaxPartBytes)
 	if err != nil {
 		return 0, err
 	}
@@ -116,7 +117,7 @@ func streamSheet(f *zip.File, extent sheetExtent, epoch time.Time, shared []stri
 			break
 		}
 		if err != nil {
-			return filled, partError(f.Name, err)
+			return filled, partError(name, err)
 		}
 		start, ok := tok.(xml.StartElement)
 		if !ok || start.Name.Local != "row" {
@@ -125,7 +126,7 @@ func streamSheet(f *zip.File, extent sheetExtent, epoch time.Time, shared []stri
 
 		var row sheetRow
 		if err := dec.DecodeElement(&row, &start); err != nil {
-			return filled, partError(f.Name, err)
+			return filled, partError(name, err)
 		}
 		if row.Index <= 0 {
 			row.Index = written + 1

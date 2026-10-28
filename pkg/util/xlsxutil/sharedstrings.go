@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/autobutler-org/quark/pkg/util/officezip"
 )
 
 // sharedStringsPart is where a workbook keeps its string table. Its location
@@ -16,12 +18,11 @@ const sharedStringsPart = "xl/sharedStrings.xml"
 // carries an index into this slice rather than its own text, so unlike the
 // rows this cannot be streamed past — it is held whole and bounded by
 // [MaxSharedStringBytes] instead.
-func readSharedStrings(parts partIndex) ([]string, error) {
-	f, ok := parts[sharedStringsPart]
-	if !ok {
+func readSharedStrings(pkg *officezip.Package) ([]string, error) {
+	if !pkg.Has(sharedStringsPart) {
 		return nil, nil
 	}
-	rc, err := openPart(f, MaxSharedStringBytes)
+	rc, err := openPart(pkg, sharedStringsPart, MaxSharedStringBytes)
 	if err != nil {
 		return nil, err
 	}
