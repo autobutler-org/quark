@@ -87,6 +87,10 @@ func TestMoveToPostgres_CopiesEveryRow(t *testing.T) {
 		// A child whose id is lower than its parent's.
 		`INSERT INTO photo_albums (id, name, parent_id, user_id) VALUES (3, 'paris', 5, 7)`,
 		`INSERT INTO vault_keys (user_id, wrapped_by_password, salt_pw, kdf_params) VALUES (7, x'00ff10', x'01', '{}')`,
+		// An empty NOT NULL blob and an empty nullable one, which the driver scans as nil slices.
+		`INSERT INTO users (id, username, password_hash, recovery_phrase_hash) VALUES (8, 'eve', 'p', 'r')`,
+		`INSERT INTO vault_keys (user_id, wrapped_by_password, salt_pw, wrapped_by_phrase, salt_rp, kdf_params)
+			VALUES (8, x'', x'01', x'', x'01', '{}')`,
 		`INSERT INTO photo_hashes (device_serial, rel_path, taken_checked) VALUES ('', 'a.jpg', 1)`,
 		`INSERT INTO group_members (group_id, user_id) SELECT id, 7 FROM groups WHERE name = 'everyone'`,
 		`INSERT INTO file_content (serial, rel_path, extracted) VALUES ('', 'a.txt', 'hello')`,
@@ -103,7 +107,7 @@ func TestMoveToPostgres_CopiesEveryRow(t *testing.T) {
 		counts[table.Table] = table.Rows
 	}
 	for table, want := range map[string]int64{
-		"users": 1, "sessions": 1, "photo_albums": 2, "vault_keys": 1, "photo_hashes": 1,
+		"users": 2, "sessions": 1, "photo_albums": 2, "vault_keys": 2, "photo_hashes": 1,
 		"group_members": 1, "groups": 1, "install": 1, "file_content": 0,
 	} {
 		if counts[table] != want {
@@ -132,6 +136,14 @@ func TestMoveToPostgres_CopiesEveryRow(t *testing.T) {
 	if !bytes.Equal(wrapped, []byte{0x00, 0xff, 0x10}) {
 		t.Errorf("vault_keys.wrapped_by_password = %x, want 00ff10", wrapped)
 	}
+	var emptyPassword, emptyPhrase []byte
+	if err := target.Db.QueryRow(`SELECT wrapped_by_password, wrapped_by_phrase FROM vault_keys WHERE user_id = 8`).
+		Scan(&emptyPassword, &emptyPhrase); err != nil {
+		t.Fatal(err)
+	}
+	if emptyPassword == nil || len(emptyPassword) != 0 || emptyPhrase == nil || len(emptyPhrase) != 0 {
+		t.Errorf("empty blobs read back as %#v, %#v; want empty bytea, not NULL", emptyPassword, emptyPhrase)
+	}
 	var takenChecked bool
 	if err := target.Db.QueryRow(`SELECT taken_checked FROM photo_hashes`).Scan(&takenChecked); err != nil || !takenChecked {
 		t.Errorf("photo_hashes.taken_checked = %v, %v; want true", takenChecked, err)
@@ -157,8 +169,8 @@ func TestMoveToPostgres_CopiesEveryRow(t *testing.T) {
 	var nextID int64
 	if err := target.Db.QueryRow(
 		`INSERT INTO users (username, password_hash, recovery_phrase_hash) VALUES ('bob', 'p', 'r') RETURNING id`,
-	).Scan(&nextID); err != nil || nextID <= 7 {
-		t.Fatalf("insert after the move = %d, %v; want an id past 7", nextID, err)
+	).Scan(&nextID); err != nil || nextID <= 8 {
+		t.Fatalf("insert after the move = %d, %v; want an id past 8", nextID, err)
 	}
 
 	// The database is in use now, so a second run is refused and changes nothing.
@@ -167,7 +179,44 @@ func TestMoveToPostgres_CopiesEveryRow(t *testing.T) {
 		t.Fatalf("second MoveToPostgres = %v, want a refusal", err)
 	}
 	var users int64
-	if err := target.Db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&users); err != nil || users != 2 {
-		t.Fatalf("users after the refused run = %d, %v; want 2", users, err)
+	if err := target.Db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&users); err != nil || users != 3 {
+		t.Fatalf("users after the refused run = %d, %v; want 3", users, err)
+	}
+}
+
+func TestMoveToPostgres_RefusesAnAccountBeforeMigrating(t *testing.T) {
+	databaseURL := dbtest.PostgresURL(t)
+	target, err := db.ConnectToPostgres(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { target.Db.Close() })
+	// An install that is in use and behind this build's migrations.
+	if _, err := target.Db.Exec(`INSERT INTO users (username, password_hash, recovery_phrase_hash) VALUES ('ada', 'p', 'r')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := target.Db.Exec(`UPDATE schema_migrations SET version = version - 1`); err != nil {
+		t.Fatal(err)
+	}
+	var version int64
+	if err := target.Db.QueryRow(`SELECT version FROM schema_migrations`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+
+	path := sqliteFileForMove(t)
+	if _, err := db.MoveToPostgres(context.Background(), db.MoveToPostgresParams{SQLitePath: path, PostgresURL: databaseURL}); err == nil ||
+		!strings.Contains(err.Error(), "already has 1 account") {
+		t.Fatalf("MoveToPostgres = %v, want a refusal naming the account", err)
+	}
+	var gotVersion, users int64
+	var dirty bool
+	if err := target.Db.QueryRow(`SELECT version, dirty FROM schema_migrations`).Scan(&gotVersion, &dirty); err != nil {
+		t.Fatal(err)
+	}
+	if gotVersion != version || dirty {
+		t.Errorf("schema_migrations after the refusal = %d (dirty: %t), want %d, clean", gotVersion, dirty, version)
+	}
+	if err := target.Db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&users); err != nil || users != 1 {
+		t.Errorf("users after the refusal = %d, %v; want 1", users, err)
 	}
 }

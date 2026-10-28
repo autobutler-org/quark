@@ -91,11 +91,16 @@ func MoveToPostgres(ctx context.Context, params MoveToPostgresParams) (MoveToPos
 		return MoveToPostgresResult{}, fmt.Errorf("not a PostgreSQL connection URL: %w", err)
 	}
 	config.RuntimeParams["timezone"] = "UTC"
+	target := openPostgresPool(*config)
+	defer target.Close()
+	// Before the migrations, which would otherwise upgrade a database in use,
+	// or mark it dirty, before the move refused it.
+	if err := refuseAccounts(ctx, target); err != nil {
+		return MoveToPostgresResult{}, err
+	}
 	if err := migratePostgres(*config); err != nil {
 		return MoveToPostgresResult{}, err
 	}
-	target := openPostgresPool(*config)
-	defer target.Close()
 
 	// One read transaction, so every table and every count comes from the same
 	// snapshot of the SQLite file.
@@ -181,13 +186,8 @@ func requireCurrentSQLite(sqlDB *sql.DB, path string) error {
 // referenced table before the tables referencing it. It returns the tables
 // with their verified row counts.
 func copyTables(ctx context.Context, source *sql.Tx, conn *sql.Conn) ([]MovedTable, error) {
-	var accounts int64
-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&accounts); err != nil {
-		return nil, fmt.Errorf("failed to look for accounts in the PostgreSQL database: %w", err)
-	}
-	if accounts > 0 {
-		return nil, fmt.Errorf("the PostgreSQL database already has %d account(s), so it is in use, perhaps by an "+
-			"earlier move that finished. Nothing was changed. Point the move at an empty database", accounts)
+	if err := refuseAccounts(ctx, conn); err != nil {
+		return nil, err
 	}
 
 	tables, err := postgresTables(ctx, conn)
@@ -231,6 +231,30 @@ func copyTables(ctx context.Context, source *sql.Tx, conn *sql.Conn) ([]MovedTab
 		moved = append(moved, MovedTable{Table: table, Rows: got, Rebuilt: rebuilt})
 	}
 	return moved, nil
+}
+
+// refuseAccounts returns an error when the PostgreSQL database has a users
+// table with a row in it, so it is in use. A database without the table, an
+// empty one, is fine.
+func refuseAccounts(ctx context.Context, target interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}) error {
+	var hasUsers bool
+	var accounts int64
+	err := target.QueryRowContext(ctx,
+		`SELECT to_regclass(quote_ident(current_schema()) || '.users') IS NOT NULL`).Scan(&hasUsers)
+	if err == nil && hasUsers {
+		err = target.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&accounts)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to look for accounts in the PostgreSQL database (%w). Check the URL, and "+
+			"that the database is running and reachable from here", err)
+	}
+	if accounts > 0 {
+		return fmt.Errorf("the PostgreSQL database already has %d account(s), so it is in use, perhaps by an "+
+			"earlier move that finished. Nothing was changed. Point the move at an empty database", accounts)
+	}
+	return nil
 }
 
 // postgresTables lists the schema's tables, schema_migrations aside, each
@@ -403,6 +427,11 @@ func convertForPostgres(value any, dataType string) (any, error) {
 	case "bytea":
 		switch v := value.(type) {
 		case []byte:
+			// The driver scans an empty BLOB as a nil slice, which pgx's COPY
+			// writes as NULL. A SQL NULL never gets here: it is a nil value.
+			if v == nil {
+				return []byte{}, nil
+			}
 			return v, nil
 		case string:
 			return []byte(v), nil

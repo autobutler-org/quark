@@ -65,6 +65,14 @@ func TestConvertForPostgres(t *testing.T) {
 	}
 }
 
+func TestConvertForPostgres_AnEmptyBlobIsNotNull(t *testing.T) {
+	// modernc.org/sqlite scans x'' as a nil []byte, which pgx's COPY writes as NULL.
+	got, err := convertForPostgres([]byte(nil), "bytea")
+	if b, ok := got.([]byte); err != nil || !ok || b == nil {
+		t.Fatalf("convertForPostgres(nil []byte, bytea) = %#v, %v; want a non-nil empty slice", got, err)
+	}
+}
+
 func TestDependencyOrder(t *testing.T) {
 	got, err := dependencyOrder(
 		[]string{"sessions", "photo_albums", "users", "group_members", "groups"},

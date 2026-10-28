@@ -40,7 +40,8 @@ it without them.
   match included, rolls it back.
 - **Rerunning is safe.** After a failed run PostgreSQL is as it was, so the next run starts over. After a
   successful run the database has accounts in it, and the move refuses to run again rather than overwrite what
-  the server has written since.
+  the server has written since. It looks for accounts before it migrates anything, so a database in use that
+  is behind this build's schema is refused as it is, not upgraded first.
 - **The target is migrated first,** through the same code the server's startup uses, so it refuses a database
   Quark did not make, one marked dirty, or one at a newer version, with the same messages.
 
@@ -64,7 +65,7 @@ its PostgreSQL column's type.
 | `BOOLEAN`          | the integer 0 or 1                                     | `false` / `true`                         |
 | `BIGINT`           | an integer, including a 0/1 flag and an autoincrement id | as it is, ids included                  |
 | `DOUBLE PRECISION` | a float, or an integer SQLite stored in a `REAL`       | to a float                               |
-| `BYTEA`            | a blob, or text stored in a `BLOB` column              | the bytes                                |
+| `BYTEA`            | a blob, or text stored in a `BLOB` column              | the bytes; an empty blob stays empty, not `NULL` |
 | `TEXT`             | text, or a number stored in a `TEXT` column            | as text                                  |
 
 A `NULL` stays `NULL`, and a value of any other type stops the move with the table and column named. Ids are
@@ -80,18 +81,28 @@ snapshot the rows came from.
   document, and the server's startup backfill extracts it again from the files on every device, so the first
   start on PostgreSQL rebuilds it. SQLite's FTS5 index over it, `file_content_fts`, is not in the PostgreSQL
   schema at all; content search on PostgreSQL is #2958.
+- **Filename search** is not a table at all. It is the in-memory `indexutil.FileIndex`, which `BuildAndWatch`
+  builds from the files when the server starts, on either engine, so the move has nothing of it to copy.
 - **Music search**'s FTS5 index, `music_tracks_fts`, is not in the PostgreSQL schema either. The library itself,
   `music_tracks`, is copied.
 - **Every PostgreSQL index** is built by PostgreSQL as the rows arrive; none is copied.
 
 ## Downtime
 
-The service is stopped for the whole copy, so the downtime is the command's run time plus a restart. No
-timing has been measured yet. It grows with the number of rows rather than with the size of the files, which
+The service is stopped for the whole copy, so the downtime is the command's run time plus a restart.
+
+Measured on a SQLite file shaped like a home library, 54 MB: 4 accounts with a vault key each, 100,000
+`photo_hashes` rows, 100,000 `vfs_metadata` rows, 5,000 chat messages and 400 vault items, plus the rows the
+migrations seed. The command printed `Moved 205415 rows in 36 tables in 3.336s`, on an AMD Ryzen 7 2700X
+(16 threads, 15 GiB) with PostgreSQL 18.6 on the same machine and both the SQLite file and PostgreSQL's data
+directory on tmpfs. That is close to the best case: a device on eMMC or an SD card, or a PostgreSQL across a
+network, takes longer, and the command's own figure is the one to trust for a given install.
+
+The time grows with the number of rows rather than with the size of the files, which
 stay on disk: the tables are accounts, sessions, albums, photo hashes, vault and chat rows, jobs and VFS
 metadata. `file_content`, the extracted text of every document and the largest table on an install with many
 documents, is not copied, so it costs the move nothing; its rebuild runs in the background after the server
-is back. The command prints the time it took, which is the number to quote for an install of that size.
+is back.
 
 ## Not covered
 
