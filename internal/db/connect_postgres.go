@@ -45,6 +45,10 @@ const (
 	// answered by now is down or misaddressed, and the server should say so
 	// rather than hang.
 	postgresPingTimeout = 10 * time.Second
+	// postgresMinVersionNum is the oldest server_version_num Quark starts on:
+	// PostgreSQL 14. pgx supports the versions the PostgreSQL project still
+	// supports, and 13 is past its end of life. CI tests 18.
+	postgresMinVersionNum = 140000
 )
 
 // ConnectToPostgres opens the PostgreSQL database at url, brings its schema up
@@ -127,6 +131,18 @@ func migratePostgres(config pgx.ConnConfig) (err error) {
 			target, config.Database, config.User, err, DatabaseURLEnv)
 	}
 
+	var versionNum int
+	var fsync, synchronousCommit string
+	if err := sqlDB.QueryRowContext(ctx, `
+		SELECT current_setting('server_version_num')::int, current_setting('fsync'), current_setting('synchronous_commit')`,
+	).Scan(&versionNum, &fsync, &synchronousCommit); err != nil {
+		return fmt.Errorf("failed to read the settings of the PostgreSQL database at %s: %w", target, err)
+	}
+	if err := checkPostgresDurability(versionNum, fsync, synchronousCommit); err != nil {
+		return fmt.Errorf("the PostgreSQL database %q at %s, as user %q: %w. Nothing was changed",
+			config.Database, target, config.User, err)
+	}
+
 	// Looked for before golang-migrate is given the database, because it would
 	// run the baseline into those tables, fail partway and leave its dirty
 	// mark behind.
@@ -196,4 +212,24 @@ func migratePostgres(config pgx.ConnConfig) (err error) {
 				"database marked dirty, and Quark will not start on it until that is resolved: %w",
 			config.Database, target, upErr)
 	}
+}
+
+// checkPostgresDurability refuses a server Quark cannot keep its promises on
+// (docs/architecture/durability.md): one older than PostgreSQL 14, or one
+// that can lose an acknowledged commit. Any synchronous_commit but off (on,
+// local, remote_write, remote_apply) flushes the local WAL before the commit
+// returns, so each of those is accepted.
+func checkPostgresDurability(versionNum int, fsync, synchronousCommit string) error {
+	switch {
+	case versionNum < postgresMinVersionNum:
+		return fmt.Errorf("the server is PostgreSQL %d.%d, and Quark needs PostgreSQL 14 or newer. Upgrade the server",
+			versionNum/10000, versionNum%10000)
+	case fsync == "off":
+		return errors.New("the server runs with fsync = off, so a power cut or an OS crash can corrupt the " +
+			"database. Set fsync = on in postgresql.conf; on a managed service it is on unless someone turned it off")
+	case synchronousCommit == "off":
+		return errors.New("the session runs with synchronous_commit = off, so a crash can lose a write Quark " +
+			"already acknowledged. Run `ALTER ROLE <user> SET synchronous_commit = on`, or set it in postgresql.conf")
+	}
+	return nil
 }

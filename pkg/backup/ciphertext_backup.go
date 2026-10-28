@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -26,8 +27,8 @@ type ciphertextBackup struct {
 	// also the name the file is attached under, which directory and steps
 	// spell out.
 	filename string
-	// feature names the backup in the *db.UnsupportedError a PostgreSQL-backed
-	// Quark is answered with.
+	// feature names the backup in the refusal a PostgreSQL-backed Quark is
+	// answered with.
 	feature string
 	// ddl creates the file's schema and sets its user_version to version.
 	ddl     string
@@ -65,12 +66,23 @@ func (b ciphertextBackup) schema() string {
 	return strings.TrimSuffix(b.filename, ".db")
 }
 
+// ErrDatabaseBackedUpSeparately is what the chat and vault backups answer on
+// a PostgreSQL-backed Quark. There the chat and the vault are rows in the
+// operator's database, and the operator's PostgreSQL backups (pg_dump, a
+// managed service's snapshots) carry them; a SQLite copy beside the files
+// would be a second, older copy nobody restores from (#2963).
+var ErrDatabaseBackedUpSeparately = errors.New(
+	"on PostgreSQL the chat and the vault are backed up with the database, by the operator's PostgreSQL backups, not by Quark")
+
 // require turns away a live database the backup cannot attach a file to. The
-// copy is SQLite's ATTACH DATABASE on the live connection, so a
-// PostgreSQL-backed Quark gets a *db.UnsupportedError until one streamed path
-// serves both backends (#2963).
+// copy is SQLite's ATTACH DATABASE on the live connection. This check stands
+// in for db.RequireSQLite in front of that SQLite-only SQL: on PostgreSQL the
+// refusal is by design, not a feature still to come.
 func (b ciphertextBackup) require(liveDB *sql.DB) error {
-	return db.RequireSQLite(liveDB, b.feature, 2963)
+	if db.BackendOf(liveDB) == db.Postgres {
+		return fmt.Errorf("%s: %w", b.feature, ErrDatabaseBackedUpSeparately)
+	}
+	return nil
 }
 
 // export writes the backup of liveDB into targetDir and returns its path.

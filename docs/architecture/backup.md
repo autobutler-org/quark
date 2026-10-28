@@ -12,16 +12,19 @@ protected the files are. How the file copies survive a power cut is in
 | Entry                             | What it is                                                                | Written by       |
 | --------------------------------- | ------------------------------------------------------------------------- | ---------------- |
 | `<device>_<serial>/`, `internal/` | every other managed device's files, one directory per source device       | `SnapshotBackup` |
-| `chat_backup.db`                  | the chat tables                                                           | `ExportChat`     |
-| `vault_items_backup.db`           | every account's vault key and vault items                                 | `ExportVault`    |
+| `chat_backup.db`                  | the chat tables (SQLite installs only)                                    | `ExportChat`     |
+| `vault_items_backup.db`           | every account's vault key and vault items (SQLite installs only)          | `ExportVault`    |
 | `backup_manifest.json`            | the SHA-256 and size of every file above                                  | `WriteManifest`  |
 
 The rest of `quark.db` is not in a snapshot. Accounts, sessions, groups, albums and access grants are lost with
 the internal disk and are set up again by hand.
 
+On PostgreSQL a snapshot holds the files and the manifest only: see [On PostgreSQL](#on-postgresql).
+
 ## The chat export
 
-`ExportChat` runs on every snapshot and asks for no password. Message bodies, reactions and channel keys are
+`ExportChat` runs on every snapshot of a SQLite-backed Quark and asks for no password; on PostgreSQL the chat is in
+the operator's database backup instead ([On PostgreSQL](#on-postgresql)). Message bodies, reactions and channel keys are
 encrypted on the client under keys the Quark never holds, and the rest of what the chat tables store is public
 keys, signatures, and who posted in which channel when. The copy is exactly as private as the database it came
 from, so it is not encrypted a second time.
@@ -80,7 +83,9 @@ No handler calls `ImportChat` yet; the restore route and its page are still to c
 
 ## The vault export
 
-`ExportVault` runs on every snapshot beside the chat export and, like it, asks for no password (#3460). Each
+`ExportVault` runs on every snapshot of a SQLite-backed Quark beside the chat export and, like it, asks for no
+password (#3460); on PostgreSQL the vault is in the operator's database backup instead
+([On PostgreSQL](#on-postgresql)). Each
 account's vault items are encrypted on the client under that account's vault key, and the key is stored only
 wrapped under the account's password and, when the client had it, its recovery phrase. The copy of
 `vault_keys` and `vault_items` is exactly as private as the database it came from, and a restored vault opens
@@ -99,6 +104,26 @@ like it has no route yet (#2428). It restores only while no account has a vault 
 Accounts are matched by username. A matched account's vault key replaces any its first sign-in on the new
 install made, and its items come back byte for byte under their old ids. An account that is not here is
 skipped, and its username comes back in `UnmatchedUsers`.
+
+## On PostgreSQL
+
+On an install whose main database is PostgreSQL, the database is backed up by the operator's own PostgreSQL
+backups (`pg_dump`, or a managed service's backups), and Quark's snapshot backup covers the files only. A snapshot
+there holds the device directories and `backup_manifest.json`, and no `chat_backup.db` or `vault_items_backup.db`:
+the chat and the vault are rows in that database, and its backups carry them with everything else in it, accounts
+included. `ExportChat`, `ImportChat`, `ExportVault` and `ImportVault` return `ErrDatabaseBackedUpSeparately` and
+write nothing, and a snapshot removes the `chat_backup.db` and `vault_items_backup.db` an earlier SQLite snapshot
+left at the drive's root, so the manifest never lists a copy the snapshot did not take. [Running Quark in a container](../container.md#backup-and-restore) has the procedure.
+
+A backup does not restore across backends:
+
+| Backup                                       | Restores onto                              |
+| -------------------------------------------- | ------------------------------------------ |
+| a snapshot's device directories              | either backend: they are plain files       |
+| `chat_backup.db`, `vault_items_backup.db`    | SQLite only                                |
+| a `pg_dump` of the database                  | PostgreSQL only                            |
+
+Moving a SQLite install to PostgreSQL is #2962.
 
 ## Backup reminders
 

@@ -41,12 +41,15 @@ With neither set Quark is on SQLite exactly as it was. With `postgres`, `db.Conn
 the migrations in `internal/db/migrations_postgres/` under golang-migrate's advisory lock. It never repairs or
 resets a database. One that does not answer, is marked dirty, is at a version this build does not have, or
 already holds tables Quark did not make stops startup with an error saying what was found and what to do, and
-is left as it was. The URL carries a password, so the log names the host, database and user and nothing else.
+is left as it was. It also refuses a server older than PostgreSQL 14, or one running with `fsync` or
+`synchronous_commit` off ([Durability](durability.md#postgresql)). The URL carries a password, so the log names
+the host, database and user and nothing else.
 
-Only the main schema moves. Files stay on disk, and
-anything exported or portable is a SQLite file on every backend: the `chat_backup.db` and
-`vault_items_backup.db` a backup writes. Code above `internal/db` holds a `db.Querier` and does
-not know which engine answers it.
+Only the main schema moves. Files stay on disk. The `chat_backup.db` and `vault_items_backup.db` a SQLite
+install's snapshot writes stay SQLite files; on PostgreSQL no such file is written, and the chat and the vault
+are backed up with the rest of the database by the operator's PostgreSQL backups
+([Backup](backup.md#on-postgresql)). Code above `internal/db` holds a `db.Querier` and does not know which engine
+answers it.
 
 ### What does not work on PostgreSQL yet
 
@@ -58,15 +61,14 @@ leaves the rest of the server serving.
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----- |
 | Content search (`GET /files/search/content`)                     | Refused. Files are still indexed into `file_content`, so the text is there when search arrives           | #2958 |
 | Music search                                                     | No route yet. `music_tracks` is shared; FTS5 `music_tracks_fts` is SQLite only, like content search      | #2958 |
-| Snapshot backup (`POST /storage/devices/snapshot-backup`)        | Refused before anything is copied: every snapshot includes the chat and vault backups                    | #2963 |
-| Chat and vault backup and restore (`backup.ExportChat`, `ImportChat`, `ExportVault`, `ImportVault`) | Refused: each attaches a SQLite file to the live connection | #2963 |
-| `/health` and the durability guarantees                          | `/health` does not report on the PostgreSQL connection, and Quark checks no PostgreSQL durability setting | #2963 |
 | Moving an existing install's data from SQLite                    | No tool. A PostgreSQL install starts empty                                                               | #2962 |
 | Choosing the backend from the admin settings                     | Environment variables only                                                                               | #2961 |
 | More than one instance on one database                           | Not refused and not safe. See [Running Quark in a Container](../container.md)                            | #2964 |
 | The backend test suites                                          | Run on SQLite whatever `DB_BACKEND` says, except `make test/db/postgres`                                 | #2960 |
 
-What does work that might be expected not to: the per-account vault itself, and the factory reset an admin asks for (`db.ResetDatabase`), which on PostgreSQL drops
+What does work that might be expected not to: the per-account vault itself, a snapshot backup (the files and
+the manifest; the database is the operator's to back up), `/health`'s check that the database answers, and the
+factory reset an admin asks for (`db.ResetDatabase`), which on PostgreSQL drops
 and re-runs the migrations in one transaction and keeps the same tables SQLite's does.
 
 ### What behaves differently
@@ -284,6 +286,7 @@ what an item is, and its name, URL, username, password, notes, two-factor secret
 ciphertext, so no column says anything about the content. Every query in `sql/queries/vault.sql` takes the
 account's `user_id`, so no call, an admin's included, reaches another account's rows. The Quark never sees a key or
 a plaintext: the app derives and opens everything ([Chat security](../chat-security.md#split-keys-2430) has the key
-derivation). A snapshot copies both tables as they are into `vault_items_backup.db`, and `backup.ImportVault`
-restores them ([Backup](backup.md)). The household vault of `005_vault`, one master password for everyone, is
+derivation). On SQLite a snapshot copies both tables as they are into `vault_items_backup.db`, and
+`backup.ImportVault` restores them; on PostgreSQL they are in the operator's database backup
+([Backup](backup.md#on-postgresql)). The household vault of `005_vault`, one master password for everyone, is
 dropped by `038_drop_household_vault`.

@@ -40,14 +40,37 @@ flag. [Data](data.md#main-schema) has the full list of what startup does with a 
 ## PostgreSQL
 
 Everything above is about SQLite. On an install whose main database is PostgreSQL
-([The PostgreSQL backend](data.md#the-postgresql-backend)), a committed transaction is as durable as that server
-makes it. Quark sets and checks nothing there: not `synchronous_commit`, not `fsync`, not the server's version.
-What Quark should require of PostgreSQL, and what a backup of such an install contains, is #2963; until then that
-is the operator's to get right. The orderings above that span more than one statement are transactions on
-PostgreSQL too.
+([The PostgreSQL backend](data.md#the-postgresql-backend)), a committed transaction is durable when the server
+flushes its write-ahead log before it acknowledges the commit. The orderings above that span more than one
+statement are transactions on PostgreSQL too.
 
-The files a backup writes stay SQLite on every backend, so this section
-changes nothing for them, and the Files section below is the same on both.
+`db.ConnectToPostgres` checks the server before it migrates anything, and refuses to start, changing nothing,
+on any of these:
+
+| Setting              | Refused                         | Why                                                         |
+| -------------------- | ------------------------------- | ----------------------------------------------------------- |
+| `server_version_num` | below 140000 (PostgreSQL 14)    | the oldest version the PostgreSQL project still supports    |
+| `fsync`              | `off`                           | a power cut or OS crash can corrupt the database            |
+| `synchronous_commit` | `off`                           | a crash can lose a commit Quark already acknowledged        |
+
+Every other `synchronous_commit` (`on`, `local`, `remote_write`, `remote_apply`) flushes the local WAL before the
+commit returns and is accepted. Both settings are read as Quark's session sees them, so a per-role or
+per-database `off` is refused as well. On a managed service `fsync` usually cannot be changed and is on;
+`synchronous_commit` can be set per role, with `ALTER ROLE <user> SET synchronous_commit = on`.
+
+What stays the operator's responsibility:
+
+- the storage under the server, and that it honors a flush;
+- `full_page_writes` left on;
+- replication and failover settings, if any, and what a failover can lose;
+- backups and point-in-time recovery of the database ([Backup](backup.md#on-postgresql));
+- whatever a managed service does or does not promise beyond these.
+
+`/health` pings the database on every request, on either backend, and reports `healthy: false` with an alert
+when it does not answer within two seconds.
+
+A snapshot backup of a PostgreSQL-backed install writes no chat or vault SQLite file: the database's own backups
+carry those rows. The Files section below is the same on both backends.
 
 ## Files
 

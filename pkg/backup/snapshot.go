@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -134,7 +135,10 @@ func SnapshotBackup(
 	}
 
 	// Phase 3: the chat and vault exports. They are ciphertext and need no
-	// password, so every snapshot of a Quark with a database carries both.
+	// password, so every snapshot of a SQLite-backed Quark carries both. On
+	// PostgreSQL the database's own backups carry them, the snapshot is the
+	// files and the manifest, and a previous SQLite snapshot's two files are
+	// removed so the manifest does not list them.
 	if params.LiveDB != nil {
 		if err := exportCiphertextTo(ctx, params.LiveDB, target); err != nil {
 			return failJob(params, err)
@@ -218,8 +222,20 @@ func scanTree(ctx context.Context, fsys vfs.VFS) (files int, bytes int64, err er
 	return
 }
 
-// exportCiphertextTo writes the chat and vault exports onto the target.
+// exportCiphertextTo writes the chat and vault exports onto the target. On
+// PostgreSQL it writes neither: the database's own backups carry both. It
+// removes the ones a SQLite snapshot left at the target's root instead, so the
+// manifest never vouches for a chat or vault the snapshot did not take.
+// Device directories are the user's files and are left alone.
 func exportCiphertextTo(ctx context.Context, liveDB *sql.DB, target vfs.VFS) error {
+	if db.BackendOf(liveDB) == db.Postgres {
+		for _, b := range ciphertextBackups {
+			if err := target.Delete(ctx, b.filename, vfs.DeleteOptions{}); err != nil && !errors.Is(err, vfs.ErrNotFound) {
+				return fmt.Errorf("remove %s: %w", b.filename, err)
+			}
+		}
+		return nil
+	}
 	dir, err := hostDir(ctx, target)
 	if err != nil {
 		return err

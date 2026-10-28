@@ -98,8 +98,9 @@ engine behind it can change without touching a caller.
   branch on it needs a query both engines accept, or a per-engine query, instead.
 - **The one thing a caller may do is refuse.** A feature built on raw SQL only SQLite accepts starts with
   `db.RequireSQLite(sqlDB, "<Feature>", <issue>)` and returns its `*db.UnsupportedError`, which `serverutil`
-  answers as `501`. Today that is content search, and the chat and vault backups and with them the snapshot
-  backup.
+  answers as `501`. Today that is content search. The chat and vault backups refuse PostgreSQL by design
+  rather than for now: they return `backup.ErrDatabaseBackedUpSeparately`, because the operator's PostgreSQL
+  backups carry those rows, and a snapshot backup leaves both files out.
 - **An error inside `db.InTx` ends the transaction.** On PostgreSQL a failed statement aborts it and every
   later statement is refused, where SQLite carries on. Return the error, a unique violation included
   (`sqlutil.IsUniqueConstraintErr` recognizes both engines'), and never continue past one.
@@ -124,6 +125,9 @@ environment names PostgreSQL, hands over to `db.ConnectToPostgres(url)` (`connec
 - **Migrations run through golang-migrate's pgx v5 driver** from the embedded `migrations_postgres/`. It
   takes a session-level advisory lock (`pg_advisory_lock`) around creating `schema_migrations` and around the
   run, so two servers starting at once on one database are safe: the second waits, then finds nothing to do.
+- **The server is checked before anything is migrated.** PostgreSQL older than 14, `fsync = off` or
+  `synchronous_commit = off` stops startup and changes nothing (`checkPostgresDurability`, and
+  [`docs/architecture/durability.md`](../../docs/architecture/durability.md#postgresql) for why).
 - **There is no reset on PostgreSQL, and there must never be one.** A database that does not answer, a dirty
   flag, a version this build does not have, or tables Quark did not make each stop startup with an error
   saying what was found and what to do, and change nothing. SQLite's startup (`initSchema`) refuses the same

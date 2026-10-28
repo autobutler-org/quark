@@ -242,6 +242,40 @@ func TestConnectToPostgresRefusesWhatItCannotCarryForward(t *testing.T) {
 	}
 }
 
+// A session that would acknowledge a commit before its WAL is flushed is
+// refused before anything is migrated. The setting rides on the URL, as a
+// startup option of this connection only, so no other test's session sees it.
+func TestConnectToPostgresRefusesSynchronousCommitOff(t *testing.T) {
+	databaseURL, err := url.Parse(dbtest.PostgresURL(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := databaseURL.Query()
+	query.Set("options", "-c synchronous_commit=off")
+	// Encode writes a space as "+", which pgx passes through literally, so the
+	// server would see a parameter named "+synchronous_commit".
+	databaseURL.RawQuery = strings.ReplaceAll(query.Encode(), "+", "%20")
+
+	database, err := db.ConnectToPostgres(databaseURL.String())
+	if err == nil {
+		database.Db.Close()
+		t.Fatal("ConnectToPostgres opened the database, want a refusal")
+	}
+	for _, want := range []string{"synchronous_commit = off", "Nothing was changed"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal %q does not say %q", err, want)
+		}
+	}
+	var tables int
+	if err := rawPostgres(t, databaseURL.String()).QueryRow(
+		`SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema()`).Scan(&tables); err != nil {
+		t.Fatal(err)
+	}
+	if tables != 0 {
+		t.Errorf("the refusal left %d tables behind", tables)
+	}
+}
+
 // Nothing listening is an error that names the address and the fix, within
 // the ping timeout, and never repeats the password.
 func TestConnectToPostgresWithNothingListening(t *testing.T) {

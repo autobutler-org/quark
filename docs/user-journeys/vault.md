@@ -376,8 +376,9 @@ the vault (JN-VT-020).
 
 ### JN-VT-019: Restore the vault from a backup drive (retired)
 
-Retired by #3460: the app no longer offers this. A snapshot backup (JN-SD-008) copies every account's vault, as
-ciphertext with its wrapped key, into `vault_items_backup.db` and asks for no password. Restoring that file waits on
+Retired by #3460: the app no longer offers this. On a SQLite-backed Quark a snapshot backup (JN-SD-008) copies
+every account's vault, as ciphertext with its wrapped key, into `vault_items_backup.db` and asks for no password; on
+PostgreSQL the vault is in the operator's database backup instead. Restoring that file waits on
 the restore route chat restore will use (#2428). `POST /api/v0/vault/import-backup` is gone, and a
 `vault_backup.db` from an older snapshot can no longer be restored.
 
