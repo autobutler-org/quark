@@ -277,6 +277,9 @@ lib/widgets/
                                 RecoveryPhraseController and Errors for
                                 error text, shows a snack bar once added
   vault/
+    vault_bar_bottom.dart       the unlocked vault's second bar row (#3589):
+                                New entry, New folder, Import and Export,
+                                collapsing into a "Manage" menu on a phone
     vault_entry_page.dart       one entry over the vault page (#3461): the
                                 package VaultEntryDetails or VaultEntryForm,
                                 saving and deleting through VaultController,

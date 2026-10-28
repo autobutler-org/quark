@@ -21,9 +21,9 @@ import 'package:quark/utils/web_download_stub.dart'
     as web_download;
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/vault/vault_bar_bottom.dart';
 import 'package:quark/widgets/vault/vault_entry_page.dart';
 import 'package:quark/widgets/vault/vault_error_view.dart';
-import 'package:quark/widgets/vault/vault_export_menu.dart';
 import 'package:quark/widgets/vault/vault_start_over_dialog.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -188,40 +188,31 @@ class _VaultPageState extends State<VaultPage>
         return QuarkPageScaffold(
           title: 'Vault',
           icon: QuarkIcons.lock_outline,
-          // A locked vault has nothing on screen to reload.
-          onRefresh: unlocked ? manualRefresh : null,
-          isRefreshing: isRefreshing,
-          actions: [
-            if (unlocked) ...[
-              QuarkBarChip(
-                key: const ValueKey('vault_new_entry'),
-                icon: QuarkIcons.add_rounded,
-                label: 'New entry',
-                onPressed: _openEntry,
-              ),
-              QuarkBarChip(
-                key: const ValueKey('vault_new_folder'),
-                icon: QuarkIcons.create_new_folder_outlined,
-                label: 'New folder',
-                tooltip: 'New folder',
-                onPressed: _newFolder,
-              ),
-              QuarkBarChip(
-                key: const ValueKey('vault_import'),
-                icon: QuarkIcons.upload_rounded,
-                label: 'Import',
-                onPressed: _importing ? null : _import,
-              ),
-              VaultExportMenu(onExport: _export),
-              QuarkBarIconButton(
-                key: const ValueKey('vault_lock'),
-                icon: QuarkIcons.lock_open,
-                tooltip: 'Lock vault',
-                onPressed: _vault.lock,
-              ),
+          appBar: QuarkAppBar(
+            label: 'Vault',
+            icon: QuarkIcons.lock_outline,
+            // A locked vault has nothing on screen to reload.
+            onRefresh: unlocked ? manualRefresh : null,
+            isRefreshing: isRefreshing,
+            actions: [
+              if (unlocked)
+                QuarkBarIconButton(
+                  key: const ValueKey('vault_lock'),
+                  icon: QuarkIcons.lock_open,
+                  tooltip: 'Lock vault',
+                  onPressed: _vault.lock,
+                ),
+              const AppThemeToggle(),
             ],
-            const AppThemeToggle(),
-          ],
+            bottom: unlocked
+                ? VaultBarBottom(
+                    onNewEntry: _openEntry,
+                    onNewFolder: _newFolder,
+                    onImport: _importing ? null : _import,
+                    onExport: _export,
+                  )
+                : null,
+          ),
           drawer: const AppDrawer(activeSection: QuarkDrawerSection.vault),
           body: switch (status) {
             VaultStatus.loading => const Center(child: QuarkLoader()),
