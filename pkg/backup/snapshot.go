@@ -134,7 +134,9 @@ func SnapshotBackup(
 	}
 
 	// Phase 3: the chat and vault exports. They are ciphertext and need no
-	// password, so every snapshot of a Quark with a database carries both.
+	// password, so every snapshot of a SQLite-backed Quark carries both. On
+	// PostgreSQL the database's own backups carry them, and the snapshot is
+	// the files and the manifest.
 	if params.LiveDB != nil {
 		if err := exportCiphertextTo(ctx, params.LiveDB, target); err != nil {
 			return failJob(params, err)
@@ -218,14 +220,19 @@ func scanTree(ctx context.Context, fsys vfs.VFS) (files int, bytes int64, err er
 	return
 }
 
-// exportCiphertextTo writes the chat and vault exports onto the target.
+// exportCiphertextTo writes the chat and vault exports onto the target. On
+// PostgreSQL it writes neither: the database's own backups carry both.
 func exportCiphertextTo(ctx context.Context, liveDB *sql.DB, target vfs.VFS) error {
 	dir, err := hostDir(ctx, target)
 	if err != nil {
 		return err
 	}
 	for _, b := range ciphertextBackups {
-		if _, err := b.export(ctx, liveDB, dir); err != nil {
+		_, err := b.export(ctx, liveDB, dir)
+		if errors.Is(err, ErrDatabaseBackedUpSeparately) {
+			return nil
+		}
+		if err != nil {
 			return fmt.Errorf("export %s: %w", b.filename, err)
 		}
 	}

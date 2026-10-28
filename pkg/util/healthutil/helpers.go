@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/disk"
@@ -13,6 +14,9 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/sensors"
 )
+
+// backendNames is how a health alert names each database engine.
+var backendNames = map[db.Backend]string{db.SQLite: "SQLite", db.Postgres: "PostgreSQL"}
 
 // applyCPUThreshold implements the sustained-load rule: CPU must stay at or
 // above CPUCriticalPercent for longer than CPUSustainedDuration before it

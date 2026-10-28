@@ -1,6 +1,9 @@
 package v0_health
 
 import (
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
+	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/healthutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/gin-gonic/gin"
 )
@@ -26,7 +29,7 @@ type HealthJSON struct {
 
 // getHealth godoc
 // @Summary Get system health status
-// @Description Returns current hardware health: CPU, memory, disk usage and temperature. Sets healthy=false with alert messages when any metric exceeds its critical threshold.
+// @Description Returns current hardware health: CPU, memory, disk usage and temperature. Sets healthy=false with alert messages when any metric exceeds its critical threshold, or when the database (SQLite or PostgreSQL) does not answer a ping within 2 seconds.
 // @Tags health
 // @Produce json
 // @Success 200 {object} HealthJSON
@@ -35,6 +38,9 @@ type HealthJSON struct {
 func (r *router) getHealthRoute() *serverutil.Route {
 	return serverutil.ApiRoute("GET", "/health", func(c *gin.Context) *serverutil.Response {
 		status := r.collector.CurrentHealth()
+		if deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps"); ok && deps.Database() != nil {
+			healthutil.CheckDatabase(c.Request.Context(), deps.Database().Db, &status)
+		}
 		alerts := status.Alerts
 		if alerts == nil {
 			alerts = []string{}

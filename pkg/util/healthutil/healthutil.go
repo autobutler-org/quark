@@ -1,12 +1,19 @@
-// Package healthutil provides gopsutil-based host hardware health metrics.
+// Package healthutil provides gopsutil-based host hardware health metrics,
+// and the check that the server's database answers.
 // It is intentionally free of OTel dependencies so the health endpoint
 // has no dependency on any telemetry backend.
 package healthutil
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
+	"log/slog"
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/autobutler-org/quark/internal/db"
 )
 
 const (
@@ -85,4 +92,23 @@ func (c *Collector) CurrentHealth() HealthStatus {
 	status.Alerts = slices.Clone(status.Alerts)
 	status.CPUCorePercents = slices.Clone(status.CPUCorePercents)
 	return status
+}
+
+// databasePingTimeout bounds how long a health check waits on the database.
+// One that has not answered a ping by now is down or unreachable.
+const databasePingTimeout = 2 * time.Second
+
+// CheckDatabase pings sqlDB, the server's database on either backend, and
+// when it does not answer within databasePingTimeout clears status.Healthy
+// and adds an alert naming the engine. It is read on every call, not cached
+// with the host sample: a database that has gone away should show at once.
+func CheckDatabase(ctx context.Context, sqlDB *sql.DB, status *HealthStatus) {
+	ctx, cancel := context.WithTimeout(ctx, databasePingTimeout)
+	defer cancel()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		name := backendNames[db.BackendOf(sqlDB)]
+		slog.Warn("health: the database is not answering", "backend", name, "error", err)
+		status.Healthy = false
+		status.Alerts = append(status.Alerts, fmt.Sprintf("The %s database is not answering", name))
+	}
 }

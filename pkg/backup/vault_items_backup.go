@@ -74,7 +74,7 @@ var vaultRestoreSteps = []restoreStep{
 // came from and a restored vault opens with what opened it before.
 //
 // A failed export leaves the previous backup whole, and a PostgreSQL-backed
-// Quark gets a *db.UnsupportedError and nothing written (#2963).
+// Quark gets [ErrDatabaseBackedUpSeparately] and nothing written.
 func ExportVault(ctx context.Context, liveDB *sql.DB, targetDir string) (string, error) {
 	return vaultBackup.export(ctx, liveDB, targetDir)
 }

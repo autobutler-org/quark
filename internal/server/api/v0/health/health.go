@@ -1,4 +1,5 @@
-// Package v0_health serves /api/v0/health, the device metrics the Health page shows.
+// Package v0_health serves /api/v0/health, the device metrics the Health page shows and whether the
+// database answers.
 package v0_health
 
 import (

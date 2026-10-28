@@ -12,12 +12,14 @@ protected the files are. How the file copies survive a power cut is in
 | Entry                             | What it is                                                                | Written by       |
 | --------------------------------- | ------------------------------------------------------------------------- | ---------------- |
 | `<device>_<serial>/`, `internal/` | every other managed device's files, one directory per source device       | `SnapshotBackup` |
-| `chat_backup.db`                  | the chat tables                                                           | `ExportChat`     |
-| `vault_items_backup.db`           | every account's vault key and vault items                                 | `ExportVault`    |
+| `chat_backup.db`                  | the chat tables (SQLite installs only)                                    | `ExportChat`     |
+| `vault_items_backup.db`           | every account's vault key and vault items (SQLite installs only)          | `ExportVault`    |
 | `backup_manifest.json`            | the SHA-256 and size of every file above                                  | `WriteManifest`  |
 
 The rest of `quark.db` is not in a snapshot. Accounts, sessions, groups, albums and access grants are lost with
 the internal disk and are set up again by hand.
+
+On PostgreSQL a snapshot holds the files and the manifest only: see [On PostgreSQL](#on-postgresql).
 
 ## The chat export
 
@@ -99,6 +101,25 @@ like it has no route yet (#2428). It restores only while no account has a vault 
 Accounts are matched by username. A matched account's vault key replaces any its first sign-in on the new
 install made, and its items come back byte for byte under their old ids. An account that is not here is
 skipped, and its username comes back in `UnmatchedUsers`.
+
+## On PostgreSQL
+
+On an install whose main database is PostgreSQL, the database is backed up by the operator's own PostgreSQL
+backups (`pg_dump`, or a managed service's backups), and Quark's snapshot backup covers the files only. A snapshot
+there holds the device directories and `backup_manifest.json`, and no `chat_backup.db` or `vault_items_backup.db`:
+the chat and the vault are rows in that database, and its backups carry them with everything else in it, accounts
+included. `ExportChat`, `ImportChat`, `ExportVault` and `ImportVault` return `ErrDatabaseBackedUpSeparately` and
+write nothing. [Running Quark in a container](../container.md#backup-and-restore) has the procedure.
+
+A backup does not restore across backends:
+
+| Backup                                       | Restores onto                              |
+| -------------------------------------------- | ------------------------------------------ |
+| a snapshot's device directories              | either backend: they are plain files       |
+| `chat_backup.db`, `vault_items_backup.db`    | SQLite only                                |
+| a `pg_dump` of the database                  | PostgreSQL only                            |
+
+Moving a SQLite install to PostgreSQL is #2962.
 
 ## Backup reminders
 

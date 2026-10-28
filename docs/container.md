@@ -191,9 +191,68 @@ In Kubernetes, put the URL in a `Secret` and reference it from the Deployment's 
 - **One replica is still the rule**, and `strategy: Recreate` with it. PostgreSQL removes the database's reason
   for that and none of the others: the file store on a `ReadWriteOnce` volume, the event bus, running jobs and
   the tailnet identity each belong to one process. Running several instances is #2964.
-- **Not everything works yet.** Content search and snapshot backup answer `501`
-  with the issue that tracks them; [the full list](architecture/data.md#what-does-not-work-on-postgresql-yet) is
-  in the data architecture page. There is no tool yet to move an existing SQLite install's data across (#2962).
+- **Not everything works yet.** Content search answers `501` with the issue that tracks it;
+  [the full list](architecture/data.md#what-does-not-work-on-postgresql-yet) is in the data architecture page.
+  There is no tool yet to move an existing SQLite install's data across (#2962).
+
+### Requirements
+
+- **PostgreSQL 14 or newer.** CI tests 18. An older server is refused at startup with the version it found.
+- **No extension today.** Filename search on PostgreSQL (#2958) will need `pg_trgm`, which its migration
+  enables; the role will then need permission to create it, or an admin creates it first.
+- **`fsync` and `synchronous_commit` not `off`.** Quark refuses to start on either, because a crash could then
+  lose or corrupt what it already acknowledged. [Durability](architecture/durability.md#postgresql) has the
+  rest, and what stays the operator's to get right.
+
+### Connection settings
+
+`QUARK_DATABASE_URL` is a PostgreSQL connection URL, `postgres://<user>:<password>@<host>:<port>/<database>?<options>`.
+
+- `sslmode=require` (or `verify-full`) for a server across a network; `sslmode=disable` only on a private link.
+- `search_path=<schema>` to give Quark a schema of its own in a shared database.
+- The pool opens up to 16 connections, gives one back after 5 idle minutes, and retires every connection after
+  30, so a failover or a moved DNS name is picked up without a restart. Leave room for it under the server's
+  `max_connections`.
+- The session time zone is pinned to UTC whatever the server or role default is.
+
+### Backup and restore
+
+On PostgreSQL the database is backed up with PostgreSQL's tools, and Quark's snapshot backup covers the files
+only: a snapshot there writes no `chat_backup.db` or `vault_items_backup.db`, because the chat and the vault are
+in the database ([Backup](architecture/backup.md#on-postgresql)).
+
+To back up:
+
+1. Dump the database, or rely on the managed service's backups:
+
+   ```bash
+   pg_dump --format=custom --file=quark.dump "$QUARK_DATABASE_URL"
+   ```
+
+   `pg_dump` and `pg_restore` do not accept `search_path` in a URL. If Quark's URL carries one, give them the
+   URL without it and name the schema with `--schema=<schema>`.
+
+2. Back up the files: a snapshot backup onto a drive with the `snapshot-backup` role, or a copy of the
+   `/var/lib/quark` volume.
+
+The dump and the files are taken at different moments, as the database and the files are on SQLite.
+
+To restore:
+
+1. Stop Quark.
+2. Create an empty database and load the dump into it:
+
+   ```bash
+   pg_restore --no-owner --dbname="$QUARK_DATABASE_URL" quark.dump
+   ```
+
+3. Put the files back under the volume's `data/files/` directory. From a snapshot, that is the contents of
+   its `internal/` directory; each other drive's files are in its `<device>_<serial>/` directory.
+4. Start Quark. It finds `schema_migrations` and carries the schema forward. A dump from a newer build than
+   the image refuses to start, saying so.
+
+A backup does not restore across backends: a dump restores onto PostgreSQL only, and a SQLite install's
+`chat_backup.db` and `vault_items_backup.db` onto SQLite only. Moving a SQLite install to PostgreSQL is #2962.
 
 ## The data directory
 

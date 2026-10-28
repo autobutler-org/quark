@@ -333,7 +333,6 @@ func TestSnapshotBackupJob_ExportsTheVaultWithNoPassword(t *testing.T) {
 	result, err := StartSnapshotBackup(StartSnapshotBackupParams{
 		Ctx:                ctx,
 		Queries:            database.Queries,
-		LiveDB:             database.Db,
 		Registry:           f.registry,
 		Queue:              a.queue,
 		TargetDeviceSerial: targetSerial,

@@ -118,7 +118,8 @@ type SnapshotBackupParams struct {
 	Save     func(job *BackupJob)
 	EventBus *eventbus.Bus
 	// LiveDB is the live database whose chat and vault tables are exported
-	// beside the files, as ciphertext. Nil skips both exports.
+	// beside the files, as ciphertext. Nil, or a PostgreSQL database, skips
+	// both exports.
 	LiveDB      *sql.DB
 	IOSemaphore *iosemutil.Semaphore // throttles file copies to yield to interactive requests
 	// Queries is the database a completed snapshot is recorded in for

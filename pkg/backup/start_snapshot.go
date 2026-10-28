@@ -2,7 +2,6 @@ package backup
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -43,10 +42,6 @@ type StartSnapshotBackupParams struct {
 	Ctx context.Context
 	// Queries reads the device roles and the job holding the target's lock.
 	Queries db.Querier
-	// LiveDB is the live database, whose chat and vault tables every snapshot
-	// exports. A backend those exports cannot read refuses the backup here,
-	// before anything is copied. Nil skips that check.
-	LiveDB *sql.DB
 	// Registry holds the target device's files namespace.
 	Registry vfs.Registry
 	// Queue runs the backup. Its Handler for [Kind] comes from [NewHandler].
@@ -70,16 +65,6 @@ type StartSnapshotBackupResult struct {
 // every instance at once, so a second start returns a [BackupInProgressError].
 func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupResult, error) {
 	ctx := params.Ctx
-
-	// Every snapshot carries the chat and vault exports. Refused now, with the
-	// reason, rather than after the files are copied or by leaving them out.
-	if params.LiveDB != nil {
-		for _, b := range ciphertextBackups {
-			if err := b.require(params.LiveDB); err != nil {
-				return StartSnapshotBackupResult{}, fmt.Errorf("a snapshot backup includes the chat and the vault: %w", err)
-			}
-		}
-	}
 
 	role, err := params.Queries.GetDeviceRole(ctx, params.TargetDeviceSerial)
 	if err != nil || role != "snapshot-backup" {

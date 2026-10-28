@@ -7406,7 +7406,8 @@ paths:
     get:
       description: 'Returns current hardware health: CPU, memory, disk usage and temperature.
         Sets healthy=false with alert messages when any metric exceeds its critical
-        threshold.'
+        threshold, or when the database (SQLite or PostgreSQL) does not answer a ping
+        within 2 seconds.'
       produces:
       - application/json
       responses:

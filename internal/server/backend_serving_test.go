@@ -182,6 +182,11 @@ func serveFirstRun(t *testing.T, backend db.Backend, postgresURL string) map[str
 	expect("create the same album", code, http.StatusConflict)
 	do("albums", http.MethodGet, "/api/v0/albums", nil)
 
+	// A snapshot backup starts on either backend: on PostgreSQL it holds the
+	// files only. No such device, so both get as far as saying so.
+	code, _ = do("snapshot backup", http.MethodPost, "/api/v0/storage/devices/snapshot-backup", map[string]string{"targetDeviceSerial": "no-such-device"})
+	expect("snapshot backup", code, http.StatusBadRequest)
+
 	// What PostgreSQL cannot do yet. SQLite answers; PostgreSQL says which
 	// feature it is and where that is tracked, and stays up.
 	for step, request := range unsupportedOnPostgres {
@@ -223,13 +228,6 @@ var unsupportedOnPostgres = map[string]struct {
 		method: http.MethodGet, path: "/api/v0/files/search/content?q=anything",
 		sqlite:   `200 []`,
 		postgres: `501 {"error":"Content search is not supported on the PostgreSQL backend yet (#2958)"}`,
-	},
-	// No such device: SQLite gets as far as saying so.
-	"snapshot backup": {
-		method: http.MethodPost, path: "/api/v0/storage/devices/snapshot-backup",
-		body:     map[string]string{"targetDeviceSerial": "no-such-device"},
-		sqlite:   `400 {"error":"target device must have the snapshot-backup role"}`,
-		postgres: `501 {"error":"a snapshot backup includes the chat and the vault: Chat backup is not supported on the PostgreSQL backend yet (#2963)"}`,
 	},
 }
 
