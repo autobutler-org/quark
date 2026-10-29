@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -286,6 +287,65 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    expect(
+      tester.getSemantics(find.byType(QuillEditor)),
+      isSemantics(
+        isTextField: true,
+        isMultiline: true,
+        isFocused: true,
+        isEnabled: true,
+        hasFocusAction: true,
+      ),
+    );
+    semantics.dispose();
+  });
+
+  /// The platform's editing state, with [character] inserted at the caret.
+  TextEditingValue editingValueWith(WidgetTester tester, String character) {
+    final state = tester.testTextInput.editingState!;
+    final text = state['text'] as String;
+    final offset = state['selectionExtent'] as int;
+    return TextEditingValue(
+      text: text.replaceRange(offset, offset, character),
+      selection: TextSelection.collapsed(offset: offset + character.length),
+    );
+  }
+
+  // A .qdoc opens read-only, so Quill never registers the focus listener that
+  // calls TextInput.show. Edit then focuses two frames later. The web engine
+  // attaches its DOM field only after that show, and SemanticsAction.focus on
+  // an already-focused node has to show it again (#3743).
+  testWidgets('takes typing when a read-only editor becomes editable', (
+    WidgetTester tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await pumpFrame(tester, isReadOnly: true);
+    await pumpFrame(tester, isReadOnly: false);
+    editorFocus.requestFocus();
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    tester.testTextInput.updateEditingValue(editingValueWith(tester, 'a'));
+    await tester.pump();
+    expect(controller.document.toPlainText(), contains('a'));
+
+    // Drop the connection while focus stays put. SemanticsAction.focus on a
+    // node that is already focused has to show the input again; a bare
+    // requestFocus would not.
+    tester
+        .state<QuillRawEditorState>(find.byType(QuillRawEditor))
+        .closeConnectionIfNeeded();
+    expect(tester.testTextInput.hasAnyClients, isFalse);
+
+    final node = tester.getSemantics(find.byType(QuillEditor));
+    node.owner!.performAction(node.id, SemanticsAction.focus);
+    await tester.pump();
+
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    tester.testTextInput.updateEditingValue(editingValueWith(tester, 'b'));
+    await tester.pump();
+    expect(controller.document.toPlainText(), contains('ab'));
     expect(
       tester.getSemantics(find.byType(QuillEditor)),
       isSemantics(

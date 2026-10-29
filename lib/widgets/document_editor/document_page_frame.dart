@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:quark/utils/document_markdown_shortcuts.dart';
@@ -145,7 +146,27 @@ HorizontalSpacing _indentWidth(
 }
 
 /// The page-shaped card the document is written on, and the editor inside it.
-class DocumentPageFrame extends StatelessWidget {
+///
+/// flutter_quill runs its own text input but exposes no text field to
+/// semantics. With semantics on, the web engine types only into the DOM
+/// element of a focused, enabled text-field node, so without one every
+/// keystroke went nowhere on web (#3743). The node is a leaf, or an inner
+/// focusable node takes the click and blurs the field; `value` keeps the text
+/// readable to native screen readers. A read-only page leaves its lines as
+/// separate nodes to read. The editor stays mounted across the read-only
+/// switch.
+///
+/// Quill registers the focus listener that calls [TextInput.show] only from
+/// [State.initState], and only when the editor is created already editable.
+/// A document opens read-only, so that listener is never added.
+/// [FocusNode.requestFocus] applies in a later microtask, and on a node that
+/// is already focused it returns without a keyboard token. This opens the
+/// connection with [EditorState.requestKeyboard] once the node is focused,
+/// then changes the semantics annotation so the engine's text field updates
+/// again after [TextInput.show] has stored its config. Drop both once
+/// flutter_quill registers that listener when `readOnly` becomes false.
+/// flutter-quill#2531 tracks the missing text-field semantics only.
+class DocumentPageFrame extends StatefulWidget {
   final QuillController controller;
   final FocusNode editorFocus;
   final ScrollController scrollController;
@@ -175,6 +196,86 @@ class DocumentPageFrame extends StatelessWidget {
   });
 
   @override
+  State<DocumentPageFrame> createState() => _DocumentPageFrameState();
+}
+
+class _DocumentPageFrameState extends State<DocumentPageFrame> {
+  final GlobalKey<QuillEditorState> _editorKey = GlobalKey();
+
+  /// Bumped after each [TextInput.show]. The web engine ignores
+  /// [SemanticsProperties.currentValueLength], but the framework only resends
+  /// a semantics node whose annotation changed. An already-focused field would
+  /// otherwise never reach `SemanticTextField.update` again, and that update
+  /// is what attaches the DOM field to the config [TextInput.show] stored.
+  int _semanticsGeneration = 0;
+  bool _waitingForEditor = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.editorFocus.addListener(_onEditorFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(DocumentPageFrame oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.editorFocus != widget.editorFocus) {
+      oldWidget.editorFocus.removeListener(_onEditorFocusChanged);
+      widget.editorFocus.addListener(_onEditorFocusChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.editorFocus.removeListener(_onEditorFocusChanged);
+    super.dispose();
+  }
+
+  /// [requestFocus] applies in a microtask. By the time this runs, [hasFocus]
+  /// is already true, which is when [EditorState.requestKeyboard] shows the
+  /// input instead of requesting focus again.
+  void _onEditorFocusChanged() {
+    if (!widget.editorFocus.hasFocus || widget.isReadOnly) return;
+    _openInputConnection();
+  }
+
+  /// The web engine focused this field's DOM element.
+  ///
+  /// A node that is already focused must show the input itself.
+  /// [FocusNode.requestFocus] would return without a keyboard token, and Quill
+  /// has no listener to consume one on this path.
+  void _onSemanticsFocus() {
+    if (widget.isReadOnly) return;
+    if (widget.editorFocus.hasFocus) {
+      _openInputConnection();
+      return;
+    }
+    widget.editorFocus.requestFocus();
+  }
+
+  void _openInputConnection() {
+    final editor = _editorKey.currentState?.editableTextKey.currentState;
+    if (editor == null) {
+      if (_waitingForEditor) return;
+      _waitingForEditor = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _waitingForEditor = false;
+        if (!mounted || !widget.editorFocus.hasFocus || widget.isReadOnly) {
+          return;
+        }
+        _openInputConnection();
+      });
+      return;
+    }
+    editor.requestKeyboard();
+    // Off web, show() attaches the input directly. On web the engine attaches
+    // its DOM field from the next semantics update, which it sends only when
+    // the annotation changed.
+    if (!mounted || !kIsWeb) return;
+    setState(() => _semanticsGeneration++);
+  }
+
+  @override
   Widget build(BuildContext context) {
     // When dark page mode is active, use the app's dark theme ColorScheme;
     // when light, use the app's light theme ColorScheme, both in the app's
@@ -182,9 +283,10 @@ class DocumentPageFrame extends StatelessWidget {
     // editor page consistent with the rest of the app's design language
     // while allowing the user to choose page brightness independently of
     // the global theme toggle.
-    final pageCs = darkPage
-        ? QuarkTheme.dark(themeColor: themeColor).colorScheme
-        : QuarkTheme.light(themeColor: themeColor).colorScheme;
+    final pageCs = widget.darkPage
+        ? QuarkTheme.dark(themeColor: widget.themeColor).colorScheme
+        : QuarkTheme.light(themeColor: widget.themeColor).colorScheme;
+    final isReadOnly = widget.isReadOnly;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
@@ -199,35 +301,37 @@ class DocumentPageFrame extends StatelessWidget {
         // editor's own recognizer wins the arena over the text itself, which
         // is why the config below reports those separately (#1853).
         child: GestureDetector(
-          onTap: onTap,
+          onTap: widget.onTap,
           behavior: HitTestBehavior.translucent,
-          // flutter_quill runs its own text input but exposes no text field to
-          // semantics. With semantics on, the web engine types only into the
-          // DOM element of a focused, enabled text-field node, so without
-          // this every keystroke went nowhere on web (#3743). The node is a
-          // leaf, or an inner focusable node takes the click and blurs the
-          // field; `value` keeps the text readable to native screen readers.
-          // A read-only page leaves its lines as separate nodes to read. The
-          // wrapper stays in the tree either way so toggling edit mode does
-          // not remount the editor. Drop it once flutter_quill publishes
-          // these itself (flutter-quill issue 2531).
           child: ListenableBuilder(
-            listenable: Listenable.merge([editorFocus, controller]),
+            listenable: Listenable.merge([
+              widget.editorFocus,
+              widget.controller,
+            ]),
             builder: (context, child) => Semantics(
               container: !isReadOnly,
               textField: !isReadOnly,
               multiline: isReadOnly ? null : true,
               enabled: isReadOnly ? null : true,
-              focused: isReadOnly ? null : editorFocus.hasFocus,
-              value: isReadOnly ? null : controller.document.toPlainText(),
-              onFocus: isReadOnly ? null : editorFocus.requestFocus,
+              focused: isReadOnly ? null : widget.editorFocus.hasFocus,
+              value: isReadOnly
+                  ? null
+                  : widget.controller.document.toPlainText(),
+              // See [_semanticsGeneration]. Omitted off web, where show() attaches
+              // the input directly, and while read-only, where this is not a field.
+              currentValueLength:
+                  !kIsWeb || isReadOnly || _semanticsGeneration == 0
+                  ? null
+                  : _semanticsGeneration,
+              onFocus: isReadOnly ? null : _onSemanticsFocus,
               excludeSemantics: !isReadOnly,
               child: child,
             ),
             child: QuillEditor.basic(
-              controller: controller,
-              focusNode: editorFocus,
-              scrollController: scrollController,
+              key: _editorKey,
+              controller: widget.controller,
+              focusNode: widget.editorFocus,
+              scrollController: widget.scrollController,
               config: QuillEditorConfig(
                 autoFocus: false,
                 expands: false,
@@ -249,7 +353,7 @@ class DocumentPageFrame extends StatelessWidget {
                 // Quill still places the caret where the user clicked — the
                 // caller only learns the tap happened (#1853).
                 onTapUp: (details, getPosition) {
-                  onTap();
+                  widget.onTap();
                   return false;
                 },
                 customStyles: _quillStyles(pageCs),
@@ -266,8 +370,8 @@ class DocumentPageFrame extends StatelessWidget {
                 // of the inline find bar — see [quillFindKeyInterceptor].
                 // ignore: experimental_member_use
                 onKeyPressed: (event, node) =>
-                    codeBlockTabHandler(controller, event) ??
-                    onKeyPressed(event, node),
+                    codeBlockTabHandler(widget.controller, event) ??
+                    widget.onKeyPressed(event, node),
               ),
             ),
           ),
