@@ -3,6 +3,7 @@ package v0_files
 import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/deviceutil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -12,7 +13,7 @@ import (
 
 // listFilesByType godoc
 // @Summary List all files of a given type
-// @Description Recursively walks all managed devices and returns files whose fileType matches the given value, sorted newest-first.
+// @Description Recursively walks all managed devices and returns files whose fileType matches the given value, sorted newest-first. A live-sync copy on the default-storage drive of a file on the internal drive is listed once, as the internal file.
 // @Tags files
 // @Produce json
 // @Param fileType query string true "File type to filter by (e.g. qdoc, qsheet)"
@@ -36,14 +37,22 @@ func listFilesByType(c *gin.Context) *serverutil.Response {
 	if resp != nil {
 		return resp
 	}
+	mirror, err := deviceutil.DefaultStorageSerial(deviceutil.DefaultStorageSerialParams{
+		Ctx:      c.Request.Context(),
+		Database: deps.Database(),
+	})
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 
 	result, err := fileutil.ListByType(fileutil.ListByTypeParams{
-		Ctx:      c.Request.Context(),
-		Registry: deps.VFSRegistry(),
-		Serials:  c.QueryArray("serial"),
-		Access:   access,
-		FileType: storageutil.FileType(fileTypeParam),
-		Cache:    deps.ByTypeCache(),
+		Ctx:          c.Request.Context(),
+		Registry:     deps.VFSRegistry(),
+		Serials:      c.QueryArray("serial"),
+		Access:       access,
+		FileType:     storageutil.FileType(fileTypeParam),
+		Cache:        deps.ByTypeCache(),
+		MirrorSerial: mirror.Serial,
 	})
 	if err != nil {
 		return fileError(err)

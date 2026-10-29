@@ -4992,7 +4992,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Recursively walks all managed devices and returns files whose fileType matches the given value, sorted newest-first.",
+                "description": "Recursively walks all managed devices and returns files whose fileType matches the given value, sorted newest-first. A live-sync copy on the default-storage drive of a file on the internal drive is listed once, as the internal file.",
                 "produces": [
                     "application/json"
                 ],

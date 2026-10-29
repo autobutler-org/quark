@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -511,5 +512,80 @@ func TestArchiveListingsCarryModifiedAt(t *testing.T) {
 				t.Errorf("%s: %s modified at %v, want none", name, unknown, got[unknown])
 			}
 		}
+	}
+}
+
+// devicesDetector reports a fixed set of devices.
+type devicesDetector []storageutil.Device
+
+func (d devicesDetector) DetectDevices() ([]storageutil.Device, error) { return d, nil }
+
+// The reported symptom (#3338): a new doc on the internal drive, mirrored by
+// live sync onto the default-storage drive, was listed once per drive.
+func TestListByType_HidesTheDefaultStorageMirror(t *testing.T) {
+	const ssd, other = "USB-SSD", "USB-OTHER"
+	var devices devicesDetector
+	filesDirs := map[string]string{}
+	for _, serial := range []string{"", ssd, other} {
+		mountPoint := t.TempDir()
+		filesDirs[serial] = filepath.Join(mountPoint, "quark", "data", "files")
+		device := storageutil.Device{Name: "Internal", MountPoint: mountPoint, IsInternal: true}
+		if serial != "" {
+			device = storageutil.Device{Name: serial, MountPoint: mountPoint, UsbInfo: &serialOnlyUsbDevice{serial: serial}}
+		}
+		devices = append(devices, device)
+	}
+	write := func(serial, relPath string) {
+		t.Helper()
+		p := filepath.Join(filesDirs[serial], relPath)
+		if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("doc"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// hello is mirrored; ssd-only lives on the SSD alone; the other drive's
+	// copy of hello is an unrelated file at the same path.
+	write("", "docs/hello.qdoc")
+	write(ssd, "docs/hello.qdoc")
+	write(ssd, "ssd-only.qdoc")
+	write(other, "docs/hello.qdoc")
+
+	registry := newDeviceRegistry(t, storageutil.NewStorageService(devices))
+	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := func(mirror string, serials ...string) []string {
+		t.Helper()
+		result, err := ListByType(ListByTypeParams{
+			Ctx: context.Background(), Registry: registry, Access: system.Access,
+			FileType: storageutil.FileTypeQdoc, Serials: serials, MirrorSerial: mirror,
+		})
+		if err != nil {
+			t.Fatalf("ListByType: %v", err)
+		}
+		var got []string
+		for _, f := range result.Files {
+			got = append(got, f.DirPath+"@"+f.DeviceSerial)
+		}
+		slices.Sort(got)
+		return got
+	}
+
+	want := []string{"docs/hello.qdoc@", "docs/hello.qdoc@" + other, "ssd-only.qdoc@" + ssd}
+	if got := list(ssd); !slices.Equal(got, want) {
+		t.Errorf("with %s as default storage: got %v, want %v", ssd, got, want)
+	}
+	// Without a default-storage drive nothing is a mirror.
+	if got := list(""); len(got) != 4 {
+		t.Errorf("without default storage: got %v, want all four files", got)
+	}
+	// Asking for the SSD alone still shows its copy: the internal one is not
+	// in the listing to stand in for it.
+	want = []string{"docs/hello.qdoc@" + ssd, "ssd-only.qdoc@" + ssd}
+	if got := list(ssd, ssd); !slices.Equal(got, want) {
+		t.Errorf("SSD alone: got %v, want %v", got, want)
 	}
 }

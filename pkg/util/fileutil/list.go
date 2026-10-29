@@ -193,6 +193,11 @@ type ListByTypeParams struct {
 	FileType storageutil.FileType
 	// Cache keeps the walk between requests. Nil walks every time.
 	Cache *ByTypeCache
+	// MirrorSerial is the default-storage drive live sync copies the internal
+	// drive onto, empty when no external drive holds the role. A file there
+	// at the same path as one on the internal drive is that file's mirror,
+	// and is left out so each document is listed once (#3338).
+	MirrorSerial string
 }
 
 // ListByTypeResult is every file of the requested type, newest first.
@@ -218,7 +223,26 @@ func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 	// readableNewestFirst filters and sorts in place, so it gets a copy of
 	// what the cache holds.
 	files = append(make([]FileNode, 0, len(files)), files...)
-	return ListByTypeResult{Files: readableNewestFirst(params.Access, files, 0)}, nil
+	files = readableNewestFirst(params.Access, files, 0)
+	return ListByTypeResult{Files: withoutMirrorCopies(files, params.MirrorSerial)}, nil
+}
+
+// withoutMirrorCopies drops the files on mirrorSerial's drive that sit at the
+// same path as a file on the internal drive. It runs after the access filter,
+// so a caller who can read only the mirror copy still sees it.
+func withoutMirrorCopies(files []FileNode, mirrorSerial string) []FileNode {
+	if mirrorSerial == "" {
+		return files
+	}
+	internal := make(map[string]bool)
+	for _, f := range files {
+		if f.DeviceSerial == "" {
+			internal[f.DirPath] = true
+		}
+	}
+	return slices.DeleteFunc(files, func(f FileNode) bool {
+		return f.DeviceSerial == mirrorSerial && internal[f.DirPath]
+	})
 }
 
 // listAllFiles walks every device Serials selects and returns the files keep
