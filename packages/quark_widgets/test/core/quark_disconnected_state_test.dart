@@ -1,3 +1,4 @@
+// cspell:words kwallet libtailscale
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -24,15 +25,16 @@ void main() {
       }
     });
 
-    testWidgets('says the reason in place of the body when one is set', (
+    testWidgets('a reason set on the view replaces the checklist', (
       tester,
     ) async {
-      QuarkDisconnectedView.reason = 'Finish setting up at home.';
+      QuarkDisconnectedView.reason = QuarkUnreachableReason.notSetUp;
       addTearDown(() => QuarkDisconnectedView.reason = null);
       await pumpAt(tester, const QuarkDisconnectedView());
 
       expect(find.text('Finish setting up at home.'), findsOneWidget);
       expect(find.text(quarkDisconnectedBody), findsNothing);
+      expect(find.text(quarkTroubleshootingSteps.first), findsNothing);
     });
 
     testWidgets('shows the address it could not reach', (tester) async {
@@ -104,10 +106,7 @@ void main() {
         size: wideViewport,
       );
 
-      expect(
-        find.text('Confirm the Quark address is correct.'),
-        findsOneWidget,
-      );
+      expect(find.text('Check the Quark address.'), findsOneWidget);
     });
   });
 
@@ -121,6 +120,17 @@ void main() {
       expect(find.text(quarkDisconnectedBody), findsOneWidget);
     });
 
+    testWidgets('a reason set for pages that already build it replaces '
+        'the checklist', (tester) async {
+      QuarkDisconnectedView.reason = QuarkUnreachableReason.notSetUp;
+      addTearDown(() => QuarkDisconnectedView.reason = null);
+      await pumpAt(tester, const QuarkDisconnectedBanner());
+
+      expect(find.text('Finish setting up at home.'), findsOneWidget);
+      expect(find.text(quarkDisconnectedBody), findsNothing);
+      expect(find.text(quarkTroubleshootingStepsInPlace.first), findsNothing);
+    });
+
     testWidgets('does not send the user to Settings they are already on', (
       tester,
     ) async {
@@ -130,14 +140,8 @@ void main() {
         size: narrowViewport,
       );
 
-      expect(
-        find.text('Confirm the Quark address is correct.'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Confirm the Quark address in Settings is correct.'),
-        findsNothing,
-      );
+      expect(find.text('Check the Quark address.'), findsOneWidget);
+      expect(find.text('Check the Quark address in Settings.'), findsNothing);
     });
 
     test('gives no directional guidance', () {
@@ -170,4 +174,115 @@ void main() {
       expect(find.text('Try again'), findsNothing);
     });
   });
+
+  // #3778: the checklist used to name a networking vendor and ask for a
+  // manual network check. A browser gets three plain steps. A phone shows
+  // the reason it already knows (#3776) and no checklist.
+  test('the steps name no vendor and never say to try again', () {
+    for (final step in [
+      ...quarkTroubleshootingSteps,
+      ...quarkTroubleshootingStepsInPlace,
+    ]) {
+      expect(step, isNot(contains(_vendorName)));
+      expect(step.toLowerCase(), isNot(contains('try again')));
+    }
+    expect(quarkTroubleshootingSteps, [
+      "Make sure you're on your home Wi‑Fi.",
+      'Make sure your Quark is switched on.',
+      'Check the Quark address in Settings.',
+    ]);
+    expect(quarkTroubleshootingStepsInPlace, [
+      "Make sure you're on your home Wi‑Fi.",
+      'Make sure your Quark is switched on.',
+      'Check the Quark address.',
+    ]);
+  });
+
+  testBothViewports(
+    'the checklist names no vendor and a phone shows its reason',
+    (tester, size) async {
+      await pumpAt(tester, const QuarkDisconnectedView(), size: size);
+      expect(tester.takeException(), isNull);
+      for (final step in quarkTroubleshootingSteps) {
+        expect(find.text(step), findsOneWidget);
+      }
+      expect(find.textContaining(_vendorName), findsNothing);
+
+      await pumpAt(tester, const QuarkDisconnectedBanner(), size: size);
+      expect(tester.takeException(), isNull);
+      for (final step in quarkTroubleshootingStepsInPlace) {
+        expect(find.text(step), findsOneWidget);
+      }
+      expect(find.text('Check the Quark address in Settings.'), findsNothing);
+      expect(find.textContaining(_vendorName), findsNothing);
+
+      for (final (reason, headline, body) in _phoneReasons) {
+        expect(reason.headline, headline);
+        expect(reason.body, body);
+
+        await pumpAt(
+          tester,
+          QuarkDisconnectedView(unreachableReason: reason),
+          size: size,
+        );
+        expect(tester.takeException(), isNull);
+        expect(find.text(headline), findsOneWidget);
+        expect(find.text(body), findsOneWidget);
+        expect(find.text(quarkDisconnectedHeadline), findsNothing);
+        expect(find.text(quarkTroubleshootingSteps.first), findsNothing);
+        expect(find.textContaining(_vendorName), findsNothing);
+
+        await pumpAt(
+          tester,
+          QuarkDisconnectedBanner(unreachableReason: reason),
+          size: size,
+        );
+        expect(tester.takeException(), isNull);
+        expect(find.text(headline), findsOneWidget);
+        expect(find.text(body), findsOneWidget);
+        expect(find.text(quarkTroubleshootingStepsInPlace.first), findsNothing);
+        expect(find.textContaining(_vendorName), findsNothing);
+      }
+    },
+  );
 }
+
+/// Vendor and library names that must not appear in the unreachable copy.
+final RegExp _vendorName = RegExp(
+  'tailscale|headscale|tsnet|wireguard|kwallet|gnome keyring|'
+  'gnome-keyring|libtailscale|tailnet',
+  caseSensitive: false,
+);
+
+/// The away-screen sentences from #3776, one per reason the phone can know.
+const List<(QuarkUnreachableReason, String, String)> _phoneReasons = [
+  (
+    QuarkUnreachableReason.notSetUp,
+    'Finish setting up at home.',
+    "This phone isn't set up for remote access yet. Next time you're on "
+        'your home Wi‑Fi, open Quark. It sets itself up in a few seconds, '
+        'and then works away from home.',
+  ),
+  (
+    QuarkUnreachableReason.paused,
+    'Remote access is paused.',
+    'You paused it on this phone.',
+  ),
+  (
+    QuarkUnreachableReason.notAnswering,
+    "Your Quark isn't answering.",
+    'It may be switched off, or your home internet may be down. '
+        "We'll reconnect by ourselves.",
+  ),
+  (
+    QuarkUnreachableReason.noInternet,
+    'No internet on this phone.',
+    "Quark will reconnect as soon as you're back online.",
+  ),
+  (
+    QuarkUnreachableReason.needsSignIn,
+    'This Wi‑Fi needs a sign-in first.',
+    "Sign in or accept the network's terms in your browser, or switch to "
+        'mobile data. Quark reconnects by itself.',
+  ),
+];

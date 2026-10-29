@@ -3,7 +3,7 @@
 /// to load, and [QuarkDisconnectedBanner] sits above a page that stays usable.
 ///
 /// Both are for the case where a Quark *is* configured and simply cannot be
-/// reached — off the local network, Tailscale down, device asleep. The
+/// reached — off the local network, remote access down, device asleep. The
 /// zero-config case belongs to the app's connect form; that is not this.
 ///
 /// The copy says only what the app actually knows. It does not guess between
@@ -41,15 +41,17 @@ const String quarkDisconnectedInline =
 /// same page already carries the explanation and the steps.
 const String quarkDisconnectedShort = 'Not connected';
 
-/// The troubleshooting steps, in the order they are worth checking.
+/// What a browser can check when the Quark is unreachable.
 ///
-/// Deliberately static: v1 does not autodetect *why* the Quark is unreachable,
-/// so every step here has to hold for every cause.
+/// A browser cannot use remote access, and it cannot tell why the Quark is
+/// out of reach, so each step has to hold for every cause. A phone passes
+/// [QuarkUnreachableReason] instead of this list. Nothing here asks the
+/// person to retry: the app retries by itself, and the retry button is the
+/// only control that tries again.
 const List<String> quarkTroubleshootingSteps = [
-  "Check you're on the same network as your Quark, or connected to it through "
-      'Tailscale or another remote access route.',
-  'Confirm the Quark address in Settings is correct.',
-  'Confirm your Quark is powered on.',
+  "Make sure you're on your home Wi‑Fi.",
+  'Make sure your Quark is switched on.',
+  'Check the Quark address in Settings.',
 ];
 
 /// [quarkTroubleshootingSteps] for pages that already show host management —
@@ -61,16 +63,82 @@ const List<String> quarkTroubleshootingSteps = [
 /// a destination the user navigates to ("in Settings") is stable; pointing at
 /// a screen position is not.
 const List<String> quarkTroubleshootingStepsInPlace = [
-  "Check you're on the same network as your Quark, or connected to it through "
-      'Tailscale or another remote access route.',
-  'Confirm the Quark address is correct.',
-  'Confirm your Quark is powered on.',
+  "Make sure you're on your home Wi‑Fi.",
+  'Make sure your Quark is switched on.',
+  'Check the Quark address.',
 ];
+
+/// Why a phone cannot reach its Quark, when the phone already knows (#3776).
+///
+/// Shown in place of [quarkTroubleshootingSteps]. A browser cannot tell these
+/// apart and does not use remote access, so it keeps the checklist.
+enum QuarkUnreachableReason {
+  /// This phone has not finished setting up remote access.
+  notSetUp(
+    'Finish setting up at home.',
+    "This phone isn't set up for remote access yet. Next time you're on "
+        'your home Wi‑Fi, open Quark. It sets itself up in a few seconds, '
+        'and then works away from home.',
+  ),
+
+  /// Remote access is paused on this phone.
+  paused('Remote access is paused.', 'You paused it on this phone.'),
+
+  /// The phone can use remote access, but the Quark is not answering.
+  notAnswering(
+    "Your Quark isn't answering.",
+    'It may be switched off, or your home internet may be down. '
+        "We'll reconnect by ourselves.",
+  ),
+
+  /// This phone has no internet connection.
+  noInternet(
+    'No internet on this phone.',
+    "Quark will reconnect as soon as you're back online.",
+  ),
+
+  /// This network wants a sign-in before it lets traffic through.
+  needsSignIn(
+    'This Wi‑Fi needs a sign-in first.',
+    "Sign in or accept the network's terms in your browser, or switch to "
+        'mobile data. Quark reconnects by itself.',
+  );
+
+  /// Creates a reason with the headline and the sentence under it.
+  const QuarkUnreachableReason(this.headline, this.body);
+
+  /// The line that replaces [quarkDisconnectedHeadline].
+  final String headline;
+
+  /// The sentence that replaces [quarkDisconnectedBody] and the checklist.
+  final String body;
+}
+
+/// The words both shapes show: a phone's reason, or the browser checklist.
+({String headline, String body, List<String>? steps}) _disconnectedCopy({
+  required QuarkUnreachableReason? unreachableReason,
+  required List<String> steps,
+}) {
+  final known = unreachableReason ?? QuarkDisconnectedView.reason;
+  if (known != null) {
+    return (headline: known.headline, body: known.body, steps: null);
+  }
+  return (
+    headline: quarkDisconnectedHeadline,
+    body: quarkDisconnectedBody,
+    steps: steps,
+  );
+}
 
 /// Full-page disconnected state, for a page with nothing left to show.
 ///
-/// Key prefixes: `disconnected_retry` and `disconnected_manage_hosts` on the
-/// two buttons, each rendered only when its callback is supplied.
+/// A browser shows [quarkTroubleshootingSteps]. A phone that already knows
+/// why passes [unreachableReason], or the app sets [reason], and that
+/// reason replaces the checklist.
+///
+/// Key prefixes: `disconnected_retry`, `disconnected_manage_hosts`, and
+/// `disconnected_turn_on_remote_access` on the buttons, each rendered only
+/// when its callback is supplied.
 ///
 /// ```dart
 /// QuarkDisconnectedView(
@@ -89,6 +157,7 @@ class QuarkDisconnectedView extends StatelessWidget {
     this.manageHostsLabel = 'Check the address',
     this.steps = quarkTroubleshootingSteps,
     this.onTurnOnRemoteAccess,
+    this.unreachableReason,
   });
 
   /// The address the app tried and could not reach, shown under the body so a
@@ -108,6 +177,9 @@ class QuarkDisconnectedView extends StatelessWidget {
   final String manageHostsLabel;
 
   /// The troubleshooting checklist, in the order it is worth checking.
+  ///
+  /// Ignored when [unreachableReason] or [reason] is set. A phone shows
+  /// that reason instead of a checklist.
   final List<String> steps;
 
   /// Ends a pause of remote access on this phone. Null hides the button
@@ -116,15 +188,21 @@ class QuarkDisconnectedView extends StatelessWidget {
   /// Key: `disconnected_turn_on_remote_access`.
   final VoidCallback? onTurnOnRemoteAccess;
 
+  /// Why this phone cannot reach the Quark, when the phone already knows.
+  ///
+  /// Replaces the checklist with that reason's own words. Null keeps
+  /// [steps]. Wins over [reason] when both are set.
+  final QuarkUnreachableReason? unreachableReason;
+
   /// Set while remote access is paused on this phone, so a page that already
   /// builds this view can offer the button without a new argument.
   static VoidCallback? turnOnRemoteAccess;
 
-  /// Why the Quark is out of reach when the app knows, in the caller's words,
-  /// shown in place of the general body. Set while this phone has not
-  /// finished setting up remote access, so a page that already builds this
-  /// view says so without a new argument.
-  static String? reason;
+  /// [unreachableReason] for pages that already build this view.
+  ///
+  /// The app sets it on a phone, from the reason the phone already knows,
+  /// and leaves it null on a browser. Null keeps [steps].
+  static QuarkUnreachableReason? reason;
 
   @override
   Widget build(BuildContext context) {
@@ -132,7 +210,10 @@ class QuarkDisconnectedView extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
     final address = hostAddress;
     final turnOn = onTurnOnRemoteAccess ?? turnOnRemoteAccess;
-    final body = reason ?? quarkDisconnectedBody;
+    final copy = _disconnectedCopy(
+      unreachableReason: unreachableReason,
+      steps: steps,
+    );
 
     return SingleChildScrollView(
       padding: EdgeInsets.symmetric(
@@ -152,7 +233,7 @@ class QuarkDisconnectedView extends StatelessWidget {
               ),
               SizedBox(height: tokens.spacingMd),
               Text(
-                quarkDisconnectedHeadline,
+                copy.headline,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 17,
@@ -162,7 +243,7 @@ class QuarkDisconnectedView extends StatelessWidget {
               ),
               SizedBox(height: tokens.spacingSm),
               Text(
-                body,
+                copy.body,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -181,8 +262,10 @@ class QuarkDisconnectedView extends StatelessWidget {
                   ),
                 ),
               ],
-              SizedBox(height: tokens.spacingLg),
-              TroubleshootingList(steps: steps),
+              if (copy.steps case final checklist?) ...[
+                SizedBox(height: tokens.spacingLg),
+                TroubleshootingList(steps: checklist),
+              ],
               SizedBox(height: tokens.spacingLg),
               Wrap(
                 spacing: tokens.spacingSm + tokens.spacingXs,
@@ -221,6 +304,10 @@ class QuarkDisconnectedView extends StatelessWidget {
 /// Compact disconnected state, for a page that stays usable while
 /// disconnected — Settings and login, where the fix lives on the page itself.
 ///
+/// Uses [quarkTroubleshootingStepsInPlace] unless [unreachableReason] or
+/// [QuarkDisconnectedView.reason] names why this phone cannot reach the
+/// Quark. That reason replaces the checklist.
+///
 /// Key prefixes: `disconnected_banner_retry` on the retry button, rendered
 /// only when [onRetry] is supplied.
 ///
@@ -233,6 +320,7 @@ class QuarkDisconnectedBanner extends StatelessWidget {
     super.key,
     this.onRetry,
     this.steps = quarkTroubleshootingStepsInPlace,
+    this.unreachableReason,
   });
 
   /// Re-runs whatever load failed. The retry button is hidden when null.
@@ -240,12 +328,25 @@ class QuarkDisconnectedBanner extends StatelessWidget {
 
   /// The troubleshooting checklist. Defaults to the in-place wording, which
   /// does not send the user to a page they are already on.
+  ///
+  /// Ignored when [unreachableReason] or [QuarkDisconnectedView.reason] is
+  /// set.
   final List<String> steps;
+
+  /// Why this phone cannot reach the Quark, when the phone already knows.
+  ///
+  /// Replaces the checklist. Null reads [QuarkDisconnectedView.reason], and
+  /// null there keeps [steps].
+  final QuarkUnreachableReason? unreachableReason;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = QuarkTokens.of(context);
+    final copy = _disconnectedCopy(
+      unreachableReason: unreachableReason,
+      steps: steps,
+    );
 
     return Semantics(
       liveRegion: true,
@@ -270,7 +371,7 @@ class QuarkDisconnectedBanner extends StatelessWidget {
                 SizedBox(width: tokens.spacingSm),
                 Expanded(
                   child: Text(
-                    quarkDisconnectedHeadline,
+                    copy.headline,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -282,15 +383,17 @@ class QuarkDisconnectedBanner extends StatelessWidget {
             ),
             SizedBox(height: tokens.spacingSm),
             Text(
-              quarkDisconnectedBody,
+              copy.body,
               style: TextStyle(
                 fontSize: 14,
                 height: 1.5,
                 color: colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
-            SizedBox(height: tokens.spacingSm + tokens.spacingXs),
-            TroubleshootingList(steps: steps),
+            if (copy.steps case final checklist?) ...[
+              SizedBox(height: tokens.spacingSm + tokens.spacingXs),
+              TroubleshootingList(steps: checklist),
+            ],
             if (onRetry != null) ...[
               SizedBox(height: tokens.spacingXs),
               Align(
