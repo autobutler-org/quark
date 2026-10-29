@@ -245,6 +245,72 @@ void main() {
       }
     },
   );
+
+  // The app bar host assigns [QuarkDisconnectedView.reason] while it
+  // rebuilds and passes the same page back down. A screen already showing
+  // the browser checklist has to swap in the phone's reason without the
+  // page around it building again.
+  testBothViewports(
+    'a reason set after the screen is up replaces the checklist',
+    (tester, size) async {
+      final published = ValueNotifier<QuarkUnreachableReason?>(null);
+      final pageBuilds = <int>[0];
+      addTearDown(() => QuarkDisconnectedView.reason = null);
+
+      await pumpAt(
+        tester,
+        ValueListenableBuilder<QuarkUnreachableReason?>(
+          valueListenable: published,
+          builder: (context, value, child) {
+            QuarkDisconnectedView.reason = value;
+            return child!;
+          },
+          child: Column(
+            children: [
+              _StaysMounted(builds: pageBuilds),
+              const QuarkDisconnectedBanner(),
+              const Expanded(child: QuarkDisconnectedView()),
+            ],
+          ),
+        ),
+        size: size,
+      );
+
+      expect(find.text(quarkTroubleshootingSteps.first), findsNWidgets(2));
+      expect(find.text('Check the Quark address in Settings.'), findsOneWidget);
+      expect(find.text('Check the Quark address.'), findsOneWidget);
+      expect(pageBuilds.single, 1);
+      expect(tester.takeException(), isNull);
+
+      for (final (reason, headline, body) in _phoneReasons) {
+        published.value = reason;
+        await tester.pump();
+
+        expect(find.text(headline), findsNWidgets(2));
+        expect(find.text(body), findsNWidgets(2));
+        expect(find.text(quarkDisconnectedHeadline), findsNothing);
+        expect(find.text(quarkTroubleshootingSteps.first), findsNothing);
+        expect(find.textContaining(_vendorName), findsNothing);
+        expect(pageBuilds.single, 1);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+}
+
+/// Counts its own builds. The unreachable screen sits beside it, and a
+/// reason change must leave the count alone.
+class _StaysMounted extends StatelessWidget {
+  const _StaysMounted({required this.builds});
+
+  /// Incremented on each build. A one-element list so the test can read it.
+  final List<int> builds;
+
+  @override
+  Widget build(BuildContext context) {
+    builds[0] += 1;
+    return const SizedBox.shrink();
+  }
 }
 
 /// Vendor and library names that must not appear in the unreachable copy.
