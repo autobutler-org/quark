@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/services/device_pairing_store.dart';
@@ -8,6 +9,37 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The switch that pauses remote access on this phone only (#2876).
 const String remoteAccessOnThisPhone = 'Remote access on this phone';
+
+/// The same switch once a desktop can run a node (#2877).
+const String remoteAccessOnThisComputer = 'Remote access on this computer';
+
+/// What the Network tab says where this build has no on-device node (#3779).
+///
+/// Desktop cannot run remote access yet (#2877). At home the app still
+/// talks to the Quark on the local network.
+const String desktopRemoteAccessUnavailable =
+    "Remote access isn't available in the desktop app yet. "
+    'At home, Quark works as usual.';
+
+/// Whether [platform] is a phone. Tests pass a platform; otherwise this is
+/// the one the app is running on. Flutter tests report Android.
+bool _isPhonePlatform(TargetPlatform? platform) {
+  final target = platform ?? defaultTargetPlatform;
+  return target == TargetPlatform.android || target == TargetPlatform.iOS;
+}
+
+/// The Network tab's heading for this device's own remote access (#3779).
+///
+/// "This phone" on a phone, "This computer" on desktop, so the section is
+/// already named for a desktop node (#2877).
+String thisDeviceRemoteAccessHeading([TargetPlatform? platform]) =>
+    _isPhonePlatform(platform) ? 'This phone' : 'This computer';
+
+/// The switch label for this device's own remote access.
+String remoteAccessOnThisDevice([TargetPlatform? platform]) =>
+    _isPhonePlatform(platform)
+    ? remoteAccessOnThisPhone
+    : remoteAccessOnThisComputer;
 
 /// How long a timed pause lasts, as the choice itself says it.
 const String pauseForAnHour = 'For 1 hour';
@@ -34,7 +66,7 @@ Future<DevicePauseChoice?> showDevicePauseChoice(BuildContext context) {
   return showDialog<DevicePauseChoice>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text(remoteAccessOnThisPhone),
+      title: Text(remoteAccessOnThisDevice()),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

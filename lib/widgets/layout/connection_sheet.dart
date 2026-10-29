@@ -150,7 +150,7 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
             : null,
         onRetryRemoteAccess: _reload,
         onOpenSettings: widget.onOpenSettings,
-        thisPhoneLabel: remoteAccessOnThisPhone,
+        thisPhoneLabel: remoteAccessOnThisDevice(),
         thisPhoneOn: widget.remoteAccessOnThisPhone,
         thisPhoneError: widget.pairingError,
         onThisPhoneChanged: widget.onRemoteAccessChanged,
