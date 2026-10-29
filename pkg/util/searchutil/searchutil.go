@@ -1,5 +1,5 @@
 // Package searchutil provides text extraction and full-text search over
-// indexed file contents using SQLite FTS5.
+// indexed file contents: SQLite's FTS5, or a tsvector on PostgreSQL.
 //
 // Supported for text extraction (in order of fidelity):
 //   - Quark documents (.qdoc), spreadsheets (.qsheet) and presentations
@@ -56,7 +56,7 @@ func ParseLimit(raw string) int {
 // raise a syntax error; text that uses the syntax passes through, so
 // "artist:nina" still filters a column. Empty text matches nothing.
 func SanitizeQuery(q string) string {
-	return sanitizeFTSQuery(q)
+	return db.FTS5Query(q)
 }
 
 // ReadablePageParams pages through ranked matches on behalf of a caller who
@@ -96,7 +96,7 @@ type BackfillResult struct {
 	Failed int
 }
 
-// SearchResult is a single FTS5 search hit.
+// SearchResult is a single content search hit.
 type SearchResult struct {
 	// Serial is the storage device serial that holds the file.
 	Serial string `json:"serial"`

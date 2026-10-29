@@ -7040,7 +7040,7 @@ paths:
   /files/search/content:
     get:
       description: |-
-        Full-text search over indexed file contents using SQLite FTS5.
+        Full-text search over indexed file contents: FTS5 on SQLite, a tsvector on PostgreSQL, which ranks differently.
         Only text-based file formats are indexed (.txt, .md, .csv, .yaml, .json, etc.).
         Binary formats (images, video, PDF) are not indexed.
         Returns up to `limit` results ordered by relevance rank.
@@ -7071,13 +7071,9 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
-        "501":
-          description: Content search is not supported on the PostgreSQL backend yet
-          schema:
-            $ref: '#/definitions/serverutil.Response'
       security:
       - BearerAuth: []
-      summary: Search file contents (FTS5)
+      summary: Search file contents
       tags:
       - files
   /files/stat:

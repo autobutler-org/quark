@@ -149,11 +149,12 @@ type DeviceRole struct {
 }
 
 type FileContent struct {
-	ID        int64
-	Serial    string
-	RelPath   string
-	Extracted string
-	UpdatedAt time.Time
+	ID           int64
+	Serial       string
+	RelPath      string
+	Extracted    string
+	UpdatedAt    time.Time
+	SearchVector interface{}
 }
 
 type Group struct {

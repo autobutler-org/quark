@@ -199,7 +199,7 @@ In Kubernetes, put the URL in a `Secret` and reference it from the Deployment's 
 ### Requirements
 
 - **PostgreSQL 14 or newer.** CI tests 18. An older server is refused at startup with the version it found.
-- **No extension today.** Filename search on PostgreSQL (#2958) will need `pg_trgm`, which its migration
+- **No extension today.** Filename search on PostgreSQL (#2956) will need `pg_trgm`, which its migration
   enables; the role will then need permission to create it, or an admin creates it first.
 - **`fsync` and `synchronous_commit` not `off`.** Quark refuses to start on either, because a crash could then
   lose or corrupt what it already acknowledged. [Durability](architecture/durability.md#postgresql) has the

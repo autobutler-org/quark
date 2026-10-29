@@ -187,6 +187,11 @@ func serveFirstRun(t *testing.T, backend db.Backend, postgresURL string) map[str
 	code, _ = do("snapshot backup", http.MethodPost, "/api/v0/storage/devices/snapshot-backup", map[string]string{"targetDeviceSerial": "no-such-device"})
 	expect("snapshot backup", code, http.StatusBadRequest)
 
+	// Content search runs on both (#2958). Nothing is indexed, so both find
+	// nothing.
+	code, _ = do("content search", http.MethodGet, "/api/v0/files/search/content?q=anything", nil)
+	expect("content search", code, http.StatusOK)
+
 	// What PostgreSQL cannot do yet. SQLite answers; PostgreSQL says which
 	// feature it is and where that is tracked, and stays up.
 	for step, request := range unsupportedOnPostgres {
@@ -223,17 +228,11 @@ var unsupportedOnPostgres = map[string]struct {
 	body         any
 	sqlite       string
 	postgres     string
-}{
-	"content search": {
-		method: http.MethodGet, path: "/api/v0/files/search/content?q=anything",
-		sqlite:   `200 []`,
-		postgres: `501 {"error":"Content search is not supported on the PostgreSQL backend yet (#2958)"}`,
-	},
-}
+}{}
 
 // Quark starts and serves on an empty PostgreSQL database, and what it serves
 // is what it serves on SQLite: the same first-run journey runs on both, and
-// every step but the one PostgreSQL does not support yet has to answer with
+// every step but those PostgreSQL does not support yet has to answer with
 // the same status and the same body, ids included.
 //
 // Named for PostgreSQL because that is what selects it: `make test/db/postgres`

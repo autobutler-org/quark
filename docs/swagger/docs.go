@@ -5923,14 +5923,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Full-text search over indexed file contents using SQLite FTS5.\nOnly text-based file formats are indexed (.txt, .md, .csv, .yaml, .json, etc.).\nBinary formats (images, video, PDF) are not indexed.\nReturns up to ` + "`" + `limit` + "`" + ` results ordered by relevance rank.",
+                "description": "Full-text search over indexed file contents: FTS5 on SQLite, a tsvector on PostgreSQL, which ranks differently.\nOnly text-based file formats are indexed (.txt, .md, .csv, .yaml, .json, etc.).\nBinary formats (images, video, PDF) are not indexed.\nReturns up to ` + "`" + `limit` + "`" + ` results ordered by relevance rank.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "files"
                 ],
-                "summary": "Search file contents (FTS5)",
+                "summary": "Search file contents",
                 "parameters": [
                     {
                         "type": "string",
@@ -5964,12 +5964,6 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
-                        }
-                    },
-                    "501": {
-                        "description": "Content search is not supported on the PostgreSQL backend yet",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

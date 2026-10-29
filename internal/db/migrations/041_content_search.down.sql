@@ -1,0 +1,4 @@
+-- Nothing to do on SQLite. Content search here is file_content_fts, which
+-- 006_file_search created. This migration is PostgreSQL's 041, which gives
+-- file_content the tsvector column and GIN index it searches (#2958); the
+-- number is taken on both engines so a number means the same change on both.

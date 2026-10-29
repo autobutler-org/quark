@@ -44,8 +44,9 @@ type MoveToPostgresResult struct {
 // copies. file_content is the text extracted from every document for content
 // search, and the server's startup backfill (backfillContentIndex) extracts
 // it again from the files themselves, so copying it would only carry over
-// what the index looked like on SQLite. SQLite's FTS5 tables over it and over
-// music_tracks are not in the PostgreSQL schema at all (#2958).
+// what the index looked like on SQLite. Its search_vector on PostgreSQL is a
+// generated column, which copyTable never writes, and SQLite's FTS5 tables
+// over it and over music_tracks are not in the PostgreSQL schema at all.
 var rebuiltTables = []string{"file_content"}
 
 // moveTimeLayouts are the forms a SQLite DATETIME may hold as text: its own

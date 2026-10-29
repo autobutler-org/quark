@@ -79,8 +79,8 @@ snapshot the rows came from.
 
 - **Content search** (`file_content`) is left empty, not copied. It is the text extracted from every
   document, and the server's startup backfill extracts it again from the files on every device, so the first
-  start on PostgreSQL rebuilds it. SQLite's FTS5 index over it, `file_content_fts`, is not in the PostgreSQL
-  schema at all; content search on PostgreSQL is #2958.
+  start on PostgreSQL rebuilds it, and its generated `search_vector` with it. SQLite's FTS5 index over it,
+  `file_content_fts`, is not in the PostgreSQL schema at all.
 - **Filename search** is not a table at all. It is the in-memory `indexutil.FileIndex`, which `BuildAndWatch`
   builds from the files when the server starts, on either engine, so the move has nothing of it to copy.
 - **Music search**'s FTS5 index, `music_tracks_fts`, is not in the PostgreSQL schema either. The library itself,

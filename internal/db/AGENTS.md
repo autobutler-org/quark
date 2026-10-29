@@ -8,8 +8,8 @@ numbered; [`sql/queries/AGENTS.md`](../../sql/queries/AGENTS.md) covers the quer
 This file sits in `internal/db/` and not beside the migrations because `database.go` embeds the whole
 `migrations/` directory into the binary. Nothing but migrations goes in there.
 
-> **Status.** The server runs on either engine, chosen at startup. Content search has no PostgreSQL schema
-> yet (#2958), and a few other features are SQLite-only for now:
+> **Status.** The server runs on either engine, chosen at startup. Music search and a few other features are
+> SQLite-only for now:
 > [`docs/architecture/data.md`](../../docs/architecture/data.md#what-does-not-work-on-postgresql-yet) lists
 > them.
 
@@ -29,16 +29,19 @@ The PostgreSQL set is a sibling directory, not `migrations/postgres/`: the embed
 - **A schema change is a migration in each set, with the same number, in the same pull request.** The
   PostgreSQL set starts at `032_baseline`, the whole schema as it stood after SQLite's migration 032, so that
   from 033 on a number means the same change on both engines.
-- **`make check/migrations` checks the SQLite set only.** Nothing yet fails a pull request that adds a
-  migration to one set and not the other (#2958). `TestPostgresSchemaMatchesSQLite` catches the drift once
-  the PostgreSQL job runs: it compares every table's columns, in order, by name, nullability and mapped type.
-  It does not compare indexes, defaults or constraints.
+- **`make check/migrations` fails a migration in one set and not the other.** Above the PostgreSQL baseline
+  every file name is in both sets. A change one engine needs and the other does not still takes the number on
+  both, as a migration that does nothing on the other engine, with a comment saying so: `041_content_search` is
+  the example. `TestPostgresSchemaMatchesSQLite` catches the drift in what the sets build once the PostgreSQL
+  job runs: it compares every table's columns, in order, by name, nullability and mapped type. It does not
+  compare indexes, defaults or constraints.
 - **Every migration has a `.down.sql`** that drops exactly what its `.up.sql` created.
   `TestPostgresMigrationsRunDownAndUpAgain` runs the PostgreSQL set down and up again.
 - **Not in the PostgreSQL schema:** `file_content_fts` and its triggers, and `music_tracks_fts` and its
-  triggers. Both are FTS5. Content search on PostgreSQL is #2958, and music search follows it. The
-  `file_content` and `music_tracks` tables themselves are in both schemas, because the generated queries
-  write to them.
+  triggers. Both are FTS5. Content search's counterpart is `file_content.search_vector`, a generated
+  `tsvector` with a GIN index (`041_content_search`), the one column only one schema has; music search has
+  none yet. The `file_content` and `music_tracks` tables themselves are in both schemas, because the
+  generated queries write to them.
 
 sqlc reads an engine's migrations as that engine's schema, so the column types chosen here decide the Go
 types sqlc generates.
@@ -98,7 +101,8 @@ engine behind it can change without touching a caller.
   branch on it needs a query both engines accept, or a per-engine query, instead.
 - **The one thing a caller may do is refuse.** A feature built on raw SQL only SQLite accepts starts with
   `db.RequireSQLite(sqlDB, "<Feature>", <issue>)` and returns its `*db.UnsupportedError`, which `serverutil`
-  answers as `501`. Today that is content search. The chat and vault backups refuse PostgreSQL by design
+  answers as `501`. Today that is music search. A feature that needs one raw statement per engine keeps both
+  here instead, as `db.SearchContent` does for content search. The chat and vault backups refuse PostgreSQL by design
   rather than for now: they return `backup.ErrDatabaseBackedUpSeparately`, because the operator's PostgreSQL
   backups carry those rows, and a snapshot backup leaves both files out.
 - **An error inside `db.InTx` ends the transaction.** On PostgreSQL a failed statement aborts it and every
