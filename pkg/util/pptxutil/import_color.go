@@ -29,7 +29,7 @@ var systemColors = map[string]string{"windowText": "000000", "window": "FFFFFF"}
 // readTheme reads a theme's colors and fonts.
 func (im *importer) readTheme(name string) (*theme, error) {
 	var x xTheme
-	if err := im.a.decodeXML(name, &x); err != nil {
+	if err := decodeXML(im.a, name, &x); err != nil {
 		return nil, err
 	}
 	t := &theme{colors: map[string]string{}, majorFont: x.MajorFont.Typeface, minorFont: x.MinorFont.Typeface}

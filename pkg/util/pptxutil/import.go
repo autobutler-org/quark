@@ -8,6 +8,8 @@ import (
 	"math"
 	"slices"
 	"strings"
+
+	"github.com/autobutler-org/quark/pkg/util/officezip"
 )
 
 // The relationship types an import follows, by their last path segment, which
@@ -25,7 +27,7 @@ const (
 
 // importer carries the state of one import across its slides.
 type importer struct {
-	a      *pptxArchive
+	a      *officezip.Package
 	params ImportPptxParams
 	// scale is EMU per slide unit; see the package doc.
 	scale float64
@@ -107,7 +109,7 @@ const (
 type templatePart struct {
 	name string
 	part xSlidePart
-	rels map[string]xRel
+	rels map[string]partRel
 	// master is the layout's master; nil for a master.
 	master *templatePart
 	theme  *theme
@@ -116,7 +118,7 @@ type templatePart struct {
 }
 
 // readPptx converts every slide in show order, writing each as it goes.
-func readPptx(a *pptxArchive, params ImportPptxParams) (ImportPptxResult, error) {
+func readPptx(a *officezip.Package, params ImportPptxParams) (ImportPptxResult, error) {
 	im := &importer{
 		a:               a,
 		params:          params,
@@ -130,7 +132,7 @@ func readPptx(a *pptxArchive, params ImportPptxParams) (ImportPptxResult, error)
 		return im.result, err
 	}
 	var pres xPresentation
-	if err := a.decodeXML(presPart, &pres); err != nil {
+	if err := decodeXML(a, presPart, &pres); err != nil {
 		return im.result, err
 	}
 	presRels, err := im.rels(presPart)
@@ -162,8 +164,8 @@ func readPptx(a *pptxArchive, params ImportPptxParams) (ImportPptxResult, error)
 		var slide outSlide
 		var warnings []string
 		leftOut, approximated := im.leftOut.startSlide(), im.approximated.startSlide()
-		if target, inside := resolveTarget(presPart, rel.Target); ok && inside && a.has(target) {
-			slide, warnings, err = im.readSlide(target)
+		if ok && rel.Part != "" && a.Has(rel.Part) {
+			slide, warnings, err = im.readSlide(rel.Part)
 		} else {
 			err = fmt.Errorf("%w: slide %d", errMissingPart, number)
 		}
@@ -238,64 +240,74 @@ func (im *importer) mainPart() (string, error) {
 		return "", err
 	}
 	for _, rel := range rels {
-		if strings.HasSuffix(rel.Type, relOfficeDoc) {
-			if target, ok := resolveTarget("", rel.Target); ok && im.a.has(target) {
-				return target, nil
-			}
+		if strings.HasSuffix(rel.Type, relOfficeDoc) && rel.Part != "" && im.a.Has(rel.Part) {
+			return rel.Part, nil
 		}
 	}
-	if im.a.has("ppt/presentation.xml") {
+	if im.a.Has("ppt/presentation.xml") {
 		return "ppt/presentation.xml", nil
 	}
 	return "", fmt.Errorf("%w: no presentation part", ErrNotPptx)
 }
 
+// partRel is one internal relationship whose target has already been resolved
+// to a part name. Part is empty when the target does not stay inside the
+// package.
+type partRel struct {
+	Type string
+	Part string
+}
+
 // rels reads a part's relationships by id; a part without any has none. The
-// package's own are those of the part "".
-func (im *importer) rels(part string) (map[string]xRel, error) {
-	name := "_rels/.rels"
-	if part != "" {
-		name = relsPath(part)
-	}
-	byID := map[string]xRel{}
-	if !im.a.has(name) {
+// package's own are those of the part "". External targets are dropped, and
+// each internal target is resolved with officezip so one that climbs out of
+// the package resolves to nothing.
+func (im *importer) rels(part string) (map[string]partRel, error) {
+	name := relsPath(part)
+	byID := map[string]partRel{}
+	if !im.a.Has(name) {
 		return byID, nil
 	}
 	var rels xRels
-	if err := im.a.decodeXML(name, &rels); err != nil {
+	if err := decodeXML(im.a, name, &rels); err != nil {
 		return nil, err
 	}
 	for _, rel := range rels.Rels {
-		if !strings.EqualFold(rel.TargetMode, "External") {
-			byID[rel.ID] = rel
+		if strings.EqualFold(rel.TargetMode, "External") {
+			continue
 		}
+		target, ok := officezip.ResolveTarget(part, rel.Target)
+		if !ok {
+			target = ""
+		}
+		byID[rel.ID] = partRel{Type: rel.Type, Part: target}
 	}
 	return byID, nil
 }
 
 // related is the first internal part of relType a part's relationships name.
-func related(source string, rels map[string]xRel, relType string) (string, bool) {
-	// Ids order the choice when there are several, so it does not depend on
-	// map order.
+// Ids order the choice when there are several, so it does not depend on map
+// order. A target that did not resolve is not a part.
+func related(rels map[string]partRel, relType string) (string, bool) {
 	best := ""
 	for id, rel := range rels {
 		if strings.HasSuffix(rel.Type, relType) && (best == "" || id < best) {
 			best = id
 		}
 	}
-	if best == "" {
+	if best == "" || rels[best].Part == "" {
 		return "", false
 	}
-	return resolveTarget(source, rels[best].Target)
+	return rels[best].Part, true
 }
 
 // title is the package's title, or the caller's fallback.
 func (im *importer) title() string {
 	rels, err := im.rels("")
 	if err == nil {
-		if part, ok := related("", rels, relCoreProps); ok && im.a.has(part) {
+		if part, ok := related(rels, relCoreProps); ok && im.a.Has(part) {
 			var core xCore
-			if im.a.decodeXML(part, &core) == nil && strings.TrimSpace(core.Title) != "" {
+			if decodeXML(im.a, part, &core) == nil && strings.TrimSpace(core.Title) != "" {
 				return strings.TrimSpace(core.Title)
 			}
 		}
@@ -327,7 +339,7 @@ func (im *importer) template(name string, master *templatePart) (*templatePart, 
 		return t, nil
 	}
 	t := &templatePart{name: name, master: master}
-	elements, err := im.a.decodeXMLCounted(name, &t.part)
+	elements, err := decodeXMLCounted(im.a, name, &t.part)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +360,7 @@ func (im *importer) template(name string, master *templatePart) (*templatePart, 
 			}
 		}
 		t.theme = &theme{colors: map[string]string{}}
-		if themePart, ok := related(name, rels, relTheme); ok && im.a.has(themePart) {
+		if themePart, ok := related(rels, relTheme); ok && im.a.Has(themePart) {
 			t.theme, err = im.readTheme(themePart)
 			if err != nil {
 				return nil, err
@@ -365,7 +377,7 @@ func (im *importer) template(name string, master *templatePart) (*templatePart, 
 // then the slide's, then its background and notes.
 func (im *importer) readSlide(name string) (outSlide, []string, error) {
 	var part xSlidePart
-	if err := im.a.decodeXML(name, &part); err != nil {
+	if err := decodeXML(im.a, name, &part); err != nil {
 		return outSlide{}, nil, err
 	}
 	rels, err := im.rels(name)
@@ -374,12 +386,12 @@ func (im *importer) readSlide(name string) (outSlide, []string, error) {
 	}
 	s := &slideReader{importer: im, warned: map[string]bool{}}
 	var layout, master *templatePart
-	if layoutPart, ok := related(name, rels, relSlideLayout); ok && im.a.has(layoutPart) {
+	if layoutPart, ok := related(rels, relSlideLayout); ok && im.a.Has(layoutPart) {
 		layoutRels, err := im.rels(layoutPart)
 		if err != nil {
 			return outSlide{}, nil, err
 		}
-		if masterPart, ok := related(layoutPart, layoutRels, relSlideMaster); ok && im.a.has(masterPart) {
+		if masterPart, ok := related(layoutRels, relSlideMaster); ok && im.a.Has(masterPart) {
 			if master, err = im.template(masterPart, nil); err != nil {
 				return outSlide{}, nil, err
 			}
@@ -428,7 +440,7 @@ func (im *importer) readSlide(name string) (outSlide, []string, error) {
 	if slide.Background, err = s.background(part.Background, layout, master); err != nil {
 		return outSlide{}, nil, err
 	}
-	if notesPart, ok := related(name, rels, relNotesSlide); ok && im.a.has(notesPart) {
+	if notesPart, ok := related(rels, relNotesSlide); ok && im.a.Has(notesPart) {
 		slide.Notes = s.notes(notesPart)
 	}
 	return slide, s.warnings, nil
@@ -469,7 +481,7 @@ type slideReader struct {
 // source is a part and its relationships.
 type source struct {
 	part string
-	rels map[string]xRel
+	rels map[string]partRel
 }
 
 // warn records a warning once per slide.
@@ -551,7 +563,7 @@ func (s *slideReader) countElement() error {
 // paragraph. A notes slide that cannot be read has none.
 func (s *slideReader) notes(name string) string {
 	var part xSlidePart
-	if err := s.a.decodeXML(name, &part); err != nil {
+	if err := decodeXML(s.a, name, &part); err != nil {
 		return ""
 	}
 	var lines []string

@@ -1,7 +1,7 @@
 // Package pptxutil converts between .qslide presentations and PowerPoint
-// (.pptx) packages, using nothing but archive/zip and encoding/xml: it writes
-// a .qslide out as a .pptx for export (#1172), and reads a .pptx back in as a
-// .qslide for import (#1171).
+// (.pptx) packages. Export writes a .qslide out as a .pptx (#1172). Import
+// reads a .pptx back in as a .qslide (#1171), opening the package through
+// officezip and decoding the PresentationML with encoding/xml.
 //
 // A .pptx is a zip of PresentationML parts: the content types, the package and
 // presentation relationships, docProps, ppt/presentation.xml with the slide

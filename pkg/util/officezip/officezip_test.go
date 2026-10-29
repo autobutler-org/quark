@@ -256,6 +256,47 @@ func TestPartThatOutgrowsItsDeclarationFails(t *testing.T) {
 	}
 }
 
+func TestPartLimitedTightensOneRead(t *testing.T) {
+	body := strings.Repeat("z", 300)
+	data := buildZip(t, entry{"big.bin", body}, entry{"small.bin", "ok"})
+
+	pkg := mustOpen(t, data, officezip.Limits{MaxPartBytes: 1000})
+	if _, err := pkg.PartLimited("big.bin", 100); !errors.Is(err, officezip.ErrTooLarge) {
+		t.Fatalf("tight read err = %v, want ErrTooLarge", err)
+	}
+	// A limit of zero is the package cap, so the same part is readable.
+	got, err := readPartLimited(pkg, "big.bin", 0)
+	if err != nil || got != body {
+		t.Fatalf("zero limit read %d bytes, err %v", len(got), err)
+	}
+
+	// A limit above the package cap cannot raise it.
+	pkg = mustOpen(t, data, officezip.Limits{MaxPartBytes: 100})
+	if _, err := pkg.PartLimited("big.bin", 10_000); !errors.Is(err, officezip.ErrTooLarge) {
+		t.Fatalf("raised limit err = %v, want ErrTooLarge", err)
+	}
+
+	size, ok := pkg.DeclaredSize("small.bin")
+	if !ok || size != int64(len("ok")) {
+		t.Fatalf("DeclaredSize(small.bin) = %d, %v", size, ok)
+	}
+	if _, ok := pkg.DeclaredSize("missing.bin"); ok {
+		t.Fatal("DeclaredSize reported a part the package does not hold")
+	}
+}
+
+// readPartLimited reads a whole part through PartLimited.
+func readPartLimited(pkg *officezip.Package, name string, limit int64) (string, error) {
+	rc, err := pkg.PartLimited(name, limit)
+	if err != nil {
+		return "", err
+	}
+	defer rc.Close()
+	var sb strings.Builder
+	_, err = io.Copy(&sb, rc)
+	return sb.String(), err
+}
+
 func TestPartCapsAndBudget(t *testing.T) {
 	big := strings.Repeat("z", 600<<10)
 	data := buildZip(t, entry{"a.bin", big}, entry{"b.bin", big}, entry{"exact.bin", strings.Repeat("e", 1<<20)})

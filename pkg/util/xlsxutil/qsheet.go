@@ -19,7 +19,7 @@ func writeQsheet(w io.Writer, book workbook, shared []string, formats numberForm
 	}
 
 	for i, sheet := range book.sheets {
-		extent, err := measureSheet(sheet.part)
+		extent, err := measureSheet(book.pkg, sheet.part)
 		if err != nil {
 			return result, err
 		}
@@ -56,7 +56,7 @@ func writeQsheet(w io.Writer, book workbook, shared []string, formats numberForm
 		}
 
 		rows := 0
-		filled, err := streamSheet(sheet.part, extent, book.epoch, shared, formats, func(cells []string) error {
+		filled, err := streamSheet(book.pkg, sheet.part, extent, book.epoch, shared, formats, func(cells []string) error {
 			if rows > 0 {
 				if err := out.WriteByte(','); err != nil {
 					return err

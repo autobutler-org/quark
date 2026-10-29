@@ -653,6 +653,44 @@ func TestImportRefusesEntriesThatClimbOutOfThePackage(t *testing.T) {
 	}
 }
 
+// keptSlide is a rectangle whose text an import keeps, so a test can tell
+// that the slide itself was read.
+const keptSlide = `<p:sp><p:nvSpPr><p:cNvPr id="2" name="Box"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+	`<p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="635000" cy="635000"/></a:xfrm>` +
+	`<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>` +
+	`<p:txBody><a:bodyPr/><a:p><a:r><a:t>Kept</a:t></a:r></a:p></p:txBody></p:sp>`
+
+func TestImportLeavesASlideEmptyWhenItsTargetClimbsOut(t *testing.T) {
+	slide := keptSlide
+	b := deck(slide)
+	// rId11 is the first slide. The target names the real slide by leaving
+	// the package and coming back, which must not be followed.
+	b["ppt/_rels/presentation.xml.rels"] = rels([3]string{"rId11", "slide", "../../../ppt/slides/slide1.xml"})
+	doc, result := importPptx(t, b.zip(t), nil)
+	if strings.Contains(asJSON(doc), "Kept") {
+		t.Fatalf("a slide target that climbs out was read: %s", asJSON(slides(doc)))
+	}
+	var empty bool
+	for _, w := range result.Warnings {
+		if strings.Contains(w.Message, "left empty") {
+			empty = true
+		}
+	}
+	if !empty {
+		t.Fatalf("warnings = %+v, want the empty-slide warning", result.Warnings)
+	}
+}
+
+func TestImportReadsASlideWhoseTargetStaysInside(t *testing.T) {
+	b := deck(keptSlide)
+	// ".." that does not leave the package still names the slide.
+	b["ppt/_rels/presentation.xml.rels"] = rels([3]string{"rId11", "slide", "../ppt/slides/slide1.xml"})
+	doc, _ := importPptx(t, b.zip(t), nil)
+	if !strings.Contains(asJSON(doc), "Kept") {
+		t.Fatalf("a slide target that stays inside was not read: %s", asJSON(slides(doc)))
+	}
+}
+
 func TestImportRefusesDuplicateEntries(t *testing.T) {
 	var out bytes.Buffer
 	zw := zip.NewWriter(&out)

@@ -12,6 +12,8 @@ import (
 	"path"
 	"strconv"
 	"strings"
+
+	"github.com/autobutler-org/quark/pkg/util/officezip"
 )
 
 // The defaults PowerPoint draws what a file leaves unset with.
@@ -413,11 +415,11 @@ func (s *slideReader) picture(src source, fill xBlipFill) (string, bool, error) 
 		return "", false, nil
 	}
 	rel, ok := src.rels[fill.Blip.Embed]
-	part, inside := resolveTarget(src.part, rel.Target)
-	if !ok || !inside || !s.a.has(part) {
+	if !ok || rel.Part == "" || !s.a.Has(rel.Part) {
 		s.warn("Some pictures were missing from the file.")
 		return "", false, nil
 	}
+	part := rel.Part
 	key := strings.ToLower(part)
 	if ref, seen := s.media[key]; seen {
 		if ref == "" {
@@ -445,7 +447,10 @@ func (s *slideReader) storePicture(part string) (string, string, error) {
 	if s.params.StoreMedia == nil {
 		return "", "Pictures are not imported here.", nil
 	}
-	declared := int64(min(s.a.parts[strings.ToLower(part)].UncompressedSize64, math.MaxInt64))
+	declared, ok := s.a.DeclaredSize(part)
+	if !ok {
+		return "", "Some pictures were missing from the file.", nil
+	}
 	tooLarge := fmt.Sprintf("Pictures larger than %d MiB were left out.", MaxImageBytes>>20)
 	if declared > MaxImageBytes {
 		return "", tooLarge, nil
@@ -453,15 +458,15 @@ func (s *slideReader) storePicture(part string) (string, string, error) {
 	if s.mediaBytes+declared > MaxMediaBytes {
 		return "", fmt.Sprintf("Pictures past the first %d MiB were left out.", MaxMediaBytes>>20), nil
 	}
-	rc, err := s.a.open(part, MaxImageBytes)
+	rc, err := s.a.PartLimited(part, MaxImageBytes)
 	if err != nil {
-		return "", "", err
+		return "", "", wrapPackage(err)
 	}
 	defer rc.Close()
-	reader := rc.(*budgetReader)
+	counted := &countingReader{r: rc}
 
 	head := make([]byte, 512)
-	n, err := io.ReadFull(rc, head)
+	n, err := io.ReadFull(counted, head)
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 		return "", "", s.mediaReadError(err)
 	}
@@ -475,12 +480,13 @@ func (s *slideReader) storePicture(part string) (string, string, error) {
 		return "", fmt.Sprintf("Pictures in a format the editor cannot show (%s) were left out.", format), nil
 	}
 
-	ref, err := s.params.StoreMedia(mediaName(part, ext), io.MultiReader(bytes.NewReader(head), rc))
-	s.mediaBytes += reader.read
+	ref, err := s.params.StoreMedia(mediaName(part, ext), io.MultiReader(bytes.NewReader(head), counted))
+	s.mediaBytes += counted.n
 	switch {
-	case reader.pastBudget:
-		return "", "", fmt.Errorf("%w: the package unpacks to more than %d bytes", ErrTooLarge, int64(MaxImportBytes))
-	case reader.pastLimit:
+	case errors.Is(counted.err, officezip.ErrTooLarge) || errors.Is(counted.err, ErrTooLarge):
+		if strings.Contains(counted.err.Error(), "unpacks to more than") {
+			return "", "", wrapPackage(counted.err)
+		}
 		return "", tooLarge, nil
 	case err != nil:
 		return "", "", err
@@ -488,11 +494,29 @@ func (s *slideReader) storePicture(part string) (string, string, error) {
 	return ref, "", nil
 }
 
+// countingReader counts the bytes a picture read hands out, and keeps the
+// first error that was not a short read, so a cap the reader hit is visible
+// even when the store function reports something else.
+type countingReader struct {
+	r   io.Reader
+	n   int64
+	err error
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	if err != nil && c.err == nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		c.err = err
+	}
+	return n, err
+}
+
 // mediaReadError keeps a read past the budget [ErrTooLarge] and makes any
 // other failure to unpack a picture the file's fault.
 func (s *slideReader) mediaReadError(err error) error {
-	if errors.Is(err, ErrTooLarge) {
-		return err
+	if errors.Is(err, ErrTooLarge) || errors.Is(err, officezip.ErrTooLarge) || errors.Is(err, officezip.ErrMalformed) {
+		return wrapPackage(err)
 	}
 	return fmt.Errorf("%w: %v", ErrNotPptx, err)
 }

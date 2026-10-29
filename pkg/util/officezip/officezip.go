@@ -10,6 +10,8 @@
 // read with [Package.Part], which never hands out more than
 // [Limits.MaxPartBytes] whatever size the entry declares, and every part
 // read from one package draws on a shared [Limits.MaxTotalBytes] budget.
+// [Package.PartLimited] and [Package.XMLLimited] tighten that cap for one
+// read, such as an XML part beside a larger picture, and cannot raise it.
 // Reaching either cap is [ErrTooLarge], never a silent truncation.
 //
 // XML parts are read with [Package.XML], a token decoder that fails once a
@@ -32,6 +34,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 )
 
@@ -208,12 +211,24 @@ func (p *Package) Has(name string) bool {
 // it is read fails that read with [ErrTooLarge]. A part the package does not
 // hold is [ErrMissingPart].
 func (p *Package) Part(name string) (io.ReadCloser, error) {
+	return p.PartLimited(name, p.limits.MaxPartBytes)
+}
+
+// PartLimited opens a part capped at limit uncompressed bytes. A limit of
+// zero or above [Limits.MaxPartBytes] is MaxPartBytes: a caller can read one
+// part more tightly than the package allows, and cannot read one more
+// loosely. The package's unpacked budget still applies. The refusal rules
+// are [Package.Part]'s.
+func (p *Package) PartLimited(name string, limit int64) (io.ReadCloser, error) {
+	if limit <= 0 || limit > p.limits.MaxPartBytes {
+		limit = p.limits.MaxPartBytes
+	}
 	f, ok := p.parts[strings.ToLower(name)]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrMissingPart, name)
 	}
-	if f.UncompressedSize64 > uint64(p.limits.MaxPartBytes) {
-		return nil, fmt.Errorf("%w: %s declares more than %d bytes", ErrTooLarge, name, p.limits.MaxPartBytes)
+	if f.UncompressedSize64 > uint64(limit) {
+		return nil, fmt.Errorf("%w: %s declares more than %d bytes", ErrTooLarge, name, limit)
 	}
 	if f.UncompressedSize64 > uint64(max(p.remaining, 0)) {
 		return nil, fmt.Errorf("%w: the package unpacks to more than %d bytes", ErrTooLarge, p.limits.MaxTotalBytes)
@@ -222,13 +237,33 @@ func (p *Package) Part(name string) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s: %v", ErrMalformed, name, err)
 	}
-	return &budgetReader{rc: rc, pkg: p, name: name, limit: p.limits.MaxPartBytes}, nil
+	return &budgetReader{rc: rc, pkg: p, name: name, limit: limit}, nil
+}
+
+// DeclaredSize is the uncompressed size name declares, and false when the
+// package has no such part. It is the entry's own number: a read is still
+// capped, because the number can be a lie.
+func (p *Package) DeclaredSize(name string) (int64, bool) {
+	f, ok := p.parts[strings.ToLower(name)]
+	if !ok {
+		return 0, false
+	}
+	if f.UncompressedSize64 > uint64(math.MaxInt64) {
+		return math.MaxInt64, true
+	}
+	return int64(f.UncompressedSize64), true
 }
 
 // XML opens an XML part as a counting token decoder, in strict mode. Close
 // the decoder when done.
 func (p *Package) XML(name string) (*Decoder, error) {
-	rc, err := p.Part(name)
+	return p.XMLLimited(name, p.limits.MaxPartBytes)
+}
+
+// XMLLimited is [Package.XML] with the part capped at limit bytes the way
+// [Package.PartLimited] caps a raw read.
+func (p *Package) XMLLimited(name string, limit int64) (*Decoder, error) {
+	rc, err := p.PartLimited(name, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -239,6 +274,13 @@ func (p *Package) XML(name string) (*Decoder, error) {
 		maxDepth:    p.limits.MaxDepth,
 	}
 	return &Decoder{Decoder: xml.NewTokenDecoder(counter), counter: counter, part: rc}, nil
+}
+
+// ResolveTarget resolves a relationship target against the part that holds
+// it. An absolute target is from the package root. A target that climbs out
+// of the package, or that is not a path inside it, resolves to nothing.
+func ResolveTarget(source, target string) (string, bool) {
+	return resolveTarget(source, target)
 }
 
 // Relationships reads the relationships of an OOXML part from its _rels

@@ -442,6 +442,50 @@ func TestConvertToQsheetReportsWhatItWrote(t *testing.T) {
 	}
 }
 
+func TestConvertToQsheetRejectsASheetTargetThatClimbsOut(t *testing.T) {
+	// The worksheet is in the package. The relationship reaches it by climbing
+	// out and back in; that target is not a part, so the workbook has nothing
+	// to convert.
+	src, size := buildXlsx(t, map[string]string{
+		"_rels/.rels":     rootRels,
+		"xl/workbook.xml": workbookXML("Hidden"),
+		"xl/_rels/workbook.xml.rels": `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+			`<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="../../xl/worksheets/sheet1.xml"/>` +
+			`</Relationships>`,
+		"xl/worksheets/sheet1.xml": sheetXML(`<row r="1"><c r="A1"><v>1</v></c></row>`),
+	})
+	_, err := ConvertToQsheet(ConvertToQsheetParams{Source: src, Size: size, Out: &bytes.Buffer{}})
+	if !errors.Is(err, ErrNotSpreadsheet) {
+		t.Fatalf("err = %v, want ErrNotSpreadsheet", err)
+	}
+}
+
+func TestConvertToQsheetReadsASheetTargetThatStaysInside(t *testing.T) {
+	doc := convert(t, map[string]string{
+		"_rels/.rels":     rootRels,
+		"xl/workbook.xml": workbookXML("Kept"),
+		"xl/_rels/workbook.xml.rels": `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+			`<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/../worksheets/sheet1.xml"/>` +
+			`</Relationships>`,
+		"xl/worksheets/sheet1.xml": sheetXML(`<row r="1"><c r="A1"><v>1</v></c></row>`),
+	})
+	assertRows(t, doc.Tabs[0].Data.Rows, [][]string{{"1"}})
+}
+
+func TestConvertToQsheetRejectsAnEntryThatClimbsOut(t *testing.T) {
+	src, size := buildXlsx(t, map[string]string{
+		"../evil.xml":                "nope",
+		"_rels/.rels":                rootRels,
+		"xl/workbook.xml":            workbookXML("Sheet1"),
+		"xl/_rels/workbook.xml.rels": workbookRels(1),
+		"xl/worksheets/sheet1.xml":   sheetXML(`<row r="1"><c r="A1"><v>1</v></c></row>`),
+	})
+	_, err := ConvertToQsheet(ConvertToQsheetParams{Source: src, Size: size, Out: &bytes.Buffer{}})
+	if !errors.Is(err, ErrNotSpreadsheet) {
+		t.Fatalf("err = %v, want ErrNotSpreadsheet", err)
+	}
+}
+
 // assertRows compares a tab's rows against what the workbook should have
 // produced, reporting the whole grid rather than the first cell that differs.
 func assertRows(t *testing.T, got, want [][]string) {
