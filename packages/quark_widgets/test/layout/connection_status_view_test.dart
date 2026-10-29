@@ -139,6 +139,48 @@ void main() {
     );
   });
 
+  // The switch reads where this phone's setup stands, and an error takes
+  // the status line's place (#3776).
+  testBothViewports('shows this phone\'s status under its switch', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      ConnectionStatusView(
+        mode: ConnectionMode.local,
+        label: 'Home',
+        detail: 'Detail.',
+        thisPhoneLabel: 'This phone',
+        thisPhoneOn: false,
+        thisPhoneStatus: 'Setting up.',
+        onThisPhoneChanged: (_) {},
+      ),
+      size: size,
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Setting up.'), findsOneWidget);
+  });
+
+  testWidgets('shows this phone\'s error in place of its status', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      ConnectionStatusView(
+        mode: ConnectionMode.local,
+        label: 'Home',
+        detail: 'Detail.',
+        thisPhoneLabel: 'This phone',
+        thisPhoneStatus: 'Setting up.',
+        thisPhoneError: 'It did not work.',
+        onThisPhoneChanged: (_) {},
+      ),
+    );
+    expect(find.text('It did not work.'), findsOneWidget);
+    expect(find.text('Setting up.'), findsNothing);
+  });
+
   testLargeText('survives large text', (tester, size) async {
     await pumpInSheet(
       tester,

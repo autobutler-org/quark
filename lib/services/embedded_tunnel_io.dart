@@ -194,13 +194,17 @@ Future<void> tunnelEnroll({
       ..controlUrl = controlUrl
       ..upstream = upstream;
     await _save(root, cfg);
-    await _startNative(
+    // A node still running on a key the Quark rejected would turn this start
+    // away, so a new key always starts from a stopped node.
+    if (_running) await _stopNative();
+    final (port, error) = await _startNative(
       stateDir: _statePath(root),
       controlUrl: controlUrl,
       authKey: authKey,
       hostname: cfg.hostname,
       upstream: upstream,
     );
+    if (port < 0) throw StateError('embedded tunnel did not start: $error');
   });
 }
 

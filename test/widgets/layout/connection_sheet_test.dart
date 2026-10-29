@@ -77,6 +77,44 @@ void main() {
     });
   }
 
+  testWidgets('offline before this phone set up says to finish at home', (
+    tester,
+  ) async {
+    setViewport(tester, const Size(360, 640));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: QuarkTheme.dark(themeColor: QuarkThemeColor.classic),
+        home: Scaffold(
+          appBar: AppBar(
+            actions: [
+              ConnectionSheetButton(
+                mode: ConnectionMode.offline,
+                onNavigate: (_) {},
+                readRemoteAccess: () async => throw Exception('unreachable'),
+                thisPhoneOn: false,
+                phoneStatus: Errors.finishRemoteAccessAtHome,
+                offlineReason: Errors.finishRemoteAccessAtHome,
+                onPause: (_) async {},
+                onResume: () async {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('connection_indicator')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text(Errors.quarkOutOfReach), findsNothing);
+    // The header and the switch both say it.
+    expect(find.text(Errors.finishRemoteAccessAtHome), findsNWidgets(2));
+    final toggle = tester.widget<SwitchListTile>(
+      find.byKey(const ValueKey('remote_access_on_this_phone')),
+    );
+    expect(toggle.value, isFalse);
+  });
+
   testWidgets('offline says so in plain words, without a status', (
     tester,
   ) async {

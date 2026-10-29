@@ -95,7 +95,9 @@ abstract final class EmbeddedTunnel {
   /// Joins the tailnet with a freshly issued key and starts the proxy.
   ///
   /// [authKey] is single-use. Later starts go through [warm] with an empty
-  /// key and the state this call leaves on disk.
+  /// key and the state this call leaves on disk. A node already running is
+  /// stopped first, and a node that does not start throws, so the caller
+  /// never keeps a pairing it cannot connect with (#3776).
   static Future<void> enroll({
     required String controlUrl,
     required String authKey,

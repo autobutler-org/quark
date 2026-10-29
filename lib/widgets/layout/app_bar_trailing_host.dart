@@ -59,6 +59,7 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
   void dispose() {
     QuarkPageScaffold.pauseBanner = null;
     QuarkDisconnectedView.turnOnRemoteAccess = null;
+    QuarkDisconnectedView.reason = null;
     super.dispose();
   }
 
@@ -76,13 +77,21 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
         QuarkDisconnectedView.turnOnRemoteAccess = paused
             ? () => unawaited(connection.resumeRemoteAccess())
             : null;
+        QuarkDisconnectedView.reason = onDevice
+            ? connection.offlineReason
+            : null;
         return QuarkAppBarTrailing(
           actions: [
             if (mode != null || paused)
               ConnectionSheetButton(
                 mode: mode ?? ConnectionMode.offline,
                 paused: paused,
+                thisPhoneOn: connection.remoteAccessOnThisPhone,
                 pairingError: onDevice ? connection.pairingError : null,
+                phoneStatus: onDevice
+                    ? connection.phoneRemoteAccessDetail
+                    : null,
+                offlineReason: onDevice ? connection.offlineReason : null,
                 onPause: onDevice ? connection.pause : null,
                 onResume: onDevice ? connection.resumeRemoteAccess : null,
                 onNavigate: widget.onNavigate,
