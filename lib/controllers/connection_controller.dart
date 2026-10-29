@@ -41,6 +41,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Pausing remote access on this phone stops only this phone's node. It is
 /// remembered across a restart, and it never calls the Quark.
 ///
+/// Signing out calls [forgetDevice], which stops the node and drops this
+/// phone's pairing, so the next account to sign in pairs afresh (#3785).
+///
 /// Service calls arrive as function parameters defaulting to the real ones,
 /// so a test passes fakes and never touches the network.
 class ConnectionController extends ChangeNotifier {
@@ -57,6 +60,7 @@ class ConnectionController extends ChangeNotifier {
         EmbeddedTunnel.proxyUrl,
     Future<void> Function(String upstream) warmEmbeddedTunnel =
         EmbeddedTunnel.warm,
+    Future<void> Function() forgetEmbeddedTunnel = EmbeddedTunnel.forget,
     void Function(void Function() onReconnected) watchEmbeddedTunnel =
         EmbeddedTunnel.watchLifecycle,
     Future<PairedDevice> Function() pairDevice = RemoteAccessService.pairDevice,
@@ -87,6 +91,7 @@ class ConnectionController extends ChangeNotifier {
        _saveRemoteAddress = saveRemoteAddress,
        _embeddedProxy = embeddedProxy,
        _warmEmbeddedTunnel = warmEmbeddedTunnel,
+       _forgetEmbeddedTunnel = forgetEmbeddedTunnel,
        _watchEmbeddedTunnel = watchEmbeddedTunnel,
        _pairDevice = pairDevice,
        _readPairing = readPairing,
@@ -115,6 +120,9 @@ class ConnectionController extends ChangeNotifier {
 
   /// Starts the on-device node, or stops it when the upstream is empty.
   final Future<void> Function(String upstream) _warmEmbeddedTunnel;
+
+  /// Stops the on-device node and deletes its state.
+  final Future<void> Function() _forgetEmbeddedTunnel;
 
   /// Registers the foreground restart. Called once from [start].
   final void Function(void Function() onReconnected) _watchEmbeddedTunnel;
@@ -436,6 +444,26 @@ class ConnectionController extends ChangeNotifier {
       _setPairingError(Errors.message(error, _pairAction));
       return null;
     }
+  }
+
+  /// Stops this phone's node, deletes its state, and drops the pairing saved
+  /// for the active Quark (#3785).
+  ///
+  /// Signing out and deleting the account call it, so a phone that changes
+  /// hands keeps no way onto the household's tailnet, and the next account to
+  /// sign in pairs for itself the next time it is home. A check already in
+  /// flight is dropped, so it cannot start the node again; a started
+  /// controller checks again after [ConnectionConfig.recheckInterval].
+  Future<void> forgetDevice() async {
+    _timer?.cancel();
+    _generation++;
+    _repairHeld = false;
+    _setPairingError(null);
+    if (_mode == ConnectionMode.remote) _set(ConnectionMode.offline);
+    await _forgetEmbeddedTunnel();
+    final host = _activeHost()?.hostAddress;
+    if (host != null) await _clearPairing(host);
+    if (_started) _schedule(_generation, ConnectionConfig.recheckInterval);
   }
 
   /// Pauses remote access on this phone only. Nothing is sent to the Quark.

@@ -20,6 +20,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
+	"github.com/autobutler-org/quark/pkg/util/remoteutil"
 	"github.com/autobutler-org/quark/pkg/util/repairutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/sshutil"
@@ -69,6 +70,9 @@ type Dependencies interface {
 	// sign-ins. It is in memory only, so no lockout travels with a drive
 	// (#1861).
 	LoginGuard() *ratelimitutil.LoginGuard
+	// PairDeviceRateLimiter limits remote-access device keys per account;
+	// keys are the username (#3785).
+	PairDeviceRateLimiter() *ratelimitutil.Limiter
 	// PhotoIndex is the photo library index pass's status and pause flag
 	// (#3556), in memory only.
 	PhotoIndex() *photoutil.IndexControl
@@ -92,6 +96,7 @@ type Dependencies interface {
 	WithIOSemaphore(sem *iosemutil.Semaphore) Dependencies
 	WithJobQueue(q *jobutil.Queue) Dependencies
 	WithLoginGuard(guard *ratelimitutil.LoginGuard) Dependencies
+	WithPairDeviceRateLimiter(limiter *ratelimitutil.Limiter) Dependencies
 	WithPhotoIndex(control *photoutil.IndexControl) Dependencies
 	WithRepairSystem(system repairutil.System) Dependencies
 	WithSSHSystem(system sshutil.System) Dependencies
@@ -139,6 +144,9 @@ func NewDependencies() Dependencies {
 		// chatRateLimiter caps chat writes per account, well above the app's
 		// own traffic; see ChatWriteRate.
 		chatRateLimiter: ratelimitutil.NewWithRate(ChatWriteRate, ChatWriteBurst),
+		// pairRateLimiter keeps one account from spending the household's
+		// device-key budget; see remoteutil.PairDeviceBurst.
+		pairRateLimiter: ratelimitutil.NewWithRate(remoteutil.PairDeviceRate, remoteutil.PairDeviceBurst),
 		// sshSystem is the real host. It runs nothing until an admin asks, and
 		// reports itself unavailable anywhere but the installed service (#2131).
 		sshSystem: sshutil.DefaultSystem(),

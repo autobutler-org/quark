@@ -204,6 +204,16 @@ Future<void> tunnelEnroll({
   });
 }
 
+Future<void> tunnelForget() {
+  if (!_mobile) return Future<void>.value();
+  return _serialized(() async {
+    await _stopNative();
+    _config = null;
+    final root = await _rootDir();
+    await root.delete(recursive: true);
+  });
+}
+
 void tunnelWatch(void Function() onReconnected) {
   if (!_mobile) return;
   _onReconnected = onReconnected;

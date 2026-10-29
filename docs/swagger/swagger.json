@@ -8544,7 +8544,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Mints a single-use pre-auth key that adds the caller's device, such as a phone, to this Quark's Headscale household, and returns what the device needs to join the tailnet and reach the Quark. Any signed-in user may call it. 409 when the Quark is on the user's own tailnet, when remote access is off, or when the Quark has no household to add to; 503 while remote access is still connecting.",
+                "description": "Mints a single-use pre-auth key that adds the caller's device, such as a phone, to this Quark's Headscale household, and returns what the device needs to join the tailnet and reach the Quark. Any signed-in user may call it, a few times an hour. 409 when the Quark is on the user's own tailnet, when remote access is off, or when the Quark has no household to add to; 503 while remote access is still connecting.",
                 "produces": [
                     "application/json"
                 ],
@@ -8567,6 +8567,12 @@
                     },
                     "409": {
                         "description": "Custom tailnet, remote access off, or no household",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "This account has asked for too many keys recently",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

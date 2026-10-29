@@ -97,6 +97,13 @@ abstract final class EmbeddedTunnel {
     upstream: upstream,
   );
 
+  /// Stops the node and deletes its state, so nothing on this phone can
+  /// rejoin the tailnet until a fresh key is enrolled (#3785).
+  ///
+  /// Signing out calls this, so the next person to sign in on the phone does
+  /// not inherit the last one's node.
+  static Future<void> forget() => impl.tunnelForget();
+
   /// Restarts the node when the app returns to the foreground, then calls
   /// [onReconnected] so the address check runs again. The port can change.
   static void watchLifecycle(void Function() onReconnected) =>

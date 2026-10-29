@@ -30,6 +30,7 @@ type dependencies struct {
 	byTypeCache     *fileutil.ByTypeCache
 	chatRateLimiter *ratelimitutil.Limiter
 	loginGuard      *ratelimitutil.LoginGuard
+	pairRateLimiter *ratelimitutil.Limiter
 
 	database       *db.DatabaseSqlc
 	downloadTokens *downloadutil.TokenStore
@@ -143,6 +144,15 @@ func (d *dependencies) ChatRateLimiter() *ratelimitutil.Limiter {
 
 func (d *dependencies) WithChatRateLimiter(limiter *ratelimitutil.Limiter) Dependencies {
 	d.chatRateLimiter = limiter
+	return d
+}
+
+func (d *dependencies) PairDeviceRateLimiter() *ratelimitutil.Limiter {
+	return d.pairRateLimiter
+}
+
+func (d *dependencies) WithPairDeviceRateLimiter(limiter *ratelimitutil.Limiter) Dependencies {
+	d.pairRateLimiter = limiter
 	return d
 }
 

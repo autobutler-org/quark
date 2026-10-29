@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/controllers/chat_keys_controller.dart';
+import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/models/account_keys.dart';
 import 'package:quark/models/chat_keys.dart';
 import 'package:quark/models/vault_key.dart';
@@ -1210,10 +1211,14 @@ class AuthService {
   ///
   /// A cookie session has no token to send, and the request still goes out:
   /// it is what ends the session on the Quark and clears the cookie.
+  ///
+  /// It also forgets this phone's remote-access node and pairing for the
+  /// Quark, so whoever signs in next does not inherit them (#3785).
   static Future<void> logout() async {
     final signedIn = AppSettings.instance.sessionToken != null;
     final authorization = _authorization;
     await AppSettings.instance.setSessionToken(null);
+    await _forgetDevice();
     if (!signedIn) return;
     try {
       final uri = _baseUri.resolve('/api/v0/auth/logout');
@@ -1333,6 +1338,7 @@ class AuthService {
       throwApiError(response.statusCode, body, context);
     }
     await _forgetLocalSession();
+    await _forgetDevice();
     return DeleteAccountResult(
       filesRetained: _decodeFilesRetained(response.body),
     );
@@ -1360,6 +1366,17 @@ class AuthService {
   static Future<void> _forgetLocalSession() async {
     await AppSettings.instance.setUsername(null);
     await AppSettings.instance.setSessionToken(null);
+  }
+
+  /// Forgets this phone's remote-access node and its pairing with the
+  /// current Quark (#3785). Best effort: a store that cannot be reached must
+  /// not stop the sign-out, and the next pairing replaces what is left.
+  static Future<void> _forgetDevice() async {
+    try {
+      await ConnectionController.instance.forgetDevice();
+    } catch (error) {
+      debugPrint('[auth_service.dart] Could not forget this device: $error');
+    }
   }
 
   /// Throws for a sign-in the Quark refused because of the account's status

@@ -26,5 +26,8 @@ Future<void> tunnelEnroll({
   required String upstream,
 }) async {}
 
+/// Does nothing: there is no node to forget.
+Future<void> tunnelForget() async {}
+
 /// Does nothing.
 void tunnelWatch(void Function() onReconnected) {}

@@ -10,6 +10,7 @@ import (
 
 	v0_settings "github.com/autobutler-org/quark/internal/server/api/v0/settings"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
+	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/remoteutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
@@ -21,6 +22,13 @@ import (
 // means an unauthenticated request. The Quark starts enrolled, on, and
 // connected; each test turns off what it is about.
 func newPairEngine(t *testing.T, username string) *gin.Engine {
+	t.Helper()
+	return newPairEngineWith(t, deputil.NewDependencies(), func(*gin.Context) string { return username })
+}
+
+// newPairEngineWith is newPairEngine with the dependency graph given, and the
+// username read from each request, so one engine can serve several accounts.
+func newPairEngineWith(t *testing.T, deps deputil.Dependencies, username func(*gin.Context) string) *gin.Engine {
 	t.Helper()
 	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
 	if err := settingsutil.SetRemoteAccess(true); err != nil {
@@ -35,8 +43,9 @@ func newPairEngine(t *testing.T, username string) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
-		if username != "" {
-			c = ctxutil.With(c, "username", username)
+		c = ctxutil.With(c, "deps", deps)
+		if name := username(c); name != "" {
+			c = ctxutil.With(c, "username", name)
 		}
 		c.Next()
 	})
@@ -150,5 +159,59 @@ func TestPairDevice_Unauthenticated(t *testing.T) {
 	}
 	if *calls != 0 {
 		t.Errorf("provisioning service called %d times; want none", *calls)
+	}
+}
+
+// TestPairDevice_LimitedPerAccount verifies one account cannot spend the
+// household's key budget at the provisioning service (#3785): past
+// remoteutil.PairDeviceBurst it is refused with 429 without a provisioning
+// call, and another account still pairs.
+func TestPairDevice_LimitedPerAccount(t *testing.T) {
+	engine := newPairEngineWith(t, deputil.NewDependencies(), func(c *gin.Context) string {
+		return c.GetHeader("X-Test-User")
+	})
+	calls := fakeProvisioner(t)
+	pair := func(user string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, pairPath, nil)
+		req.Header.Set("X-Test-User", user)
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		return w
+	}
+
+	for i := range remoteutil.PairDeviceBurst {
+		if w := pair("alice"); w.Code != http.StatusOK {
+			t.Fatalf("pair %d returned %d; want 200: %s", i+1, w.Code, w.Body.String())
+		}
+	}
+	w := pair("alice")
+	if w.Code != http.StatusTooManyRequests || !strings.Contains(w.Body.String(), "wait a while") {
+		t.Errorf("pair past the limit returned %d %s; want 429 saying to wait", w.Code, w.Body.String())
+	}
+	if *calls != remoteutil.PairDeviceBurst {
+		t.Errorf("provisioning service called %d times; want %d", *calls, remoteutil.PairDeviceBurst)
+	}
+	if w := pair("bob"); w.Code != http.StatusOK {
+		t.Errorf("another account's pair returned %d; want 200: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestPairDevice_RefusalSpendsNothing verifies a request refused before the
+// provisioning service is not counted against the account.
+func TestPairDevice_RefusalSpendsNothing(t *testing.T) {
+	deps := deputil.NewDependencies()
+	engine := newPairEngineWith(t, deps, func(*gin.Context) string { return "alice" })
+	fakeProvisioner(t)
+	restore := remoteutil.SetStatusForTesting(remoteutil.StatusResult{})
+	for range remoteutil.PairDeviceBurst + 1 {
+		if w := doSettingsReq(engine, http.MethodPost, pairPath, nil); w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("POST while connecting returned %d; want 503", w.Code)
+		}
+	}
+	restore()
+	t.Cleanup(remoteutil.SetStatusForTesting(remoteutil.StatusResult{Connected: true, RemoteURL: "http://100.64.0.7:80"}))
+
+	if w := doSettingsReq(engine, http.MethodPost, pairPath, nil); w.Code != http.StatusOK {
+		t.Errorf("POST once connected returned %d; want 200: %s", w.Code, w.Body.String())
 	}
 }
