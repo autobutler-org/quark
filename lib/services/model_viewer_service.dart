@@ -20,7 +20,8 @@ class ModelViewerService {
   /// names, within [limits] on a background isolate (inline on the web,
   /// where the time cap bounds the pause), and gives a mesh over
   /// `ModelViewerConfig.previewTriangles` the preview the viewer draws
-  /// while it moves (#3231). Throws the parser's
+  /// while it moves (#3231), and every mesh its measurements (#3228), so
+  /// neither costs the UI isolate a frame. Throws the parser's
   /// `QuarkModelParseException` for a file it will not draw.
   static Future<QuarkModelMesh> parse(
     Uint8List bytes,
@@ -51,5 +52,5 @@ class ModelViewerService {
     job.format,
     limits: job.limits,
     resources: job.resources,
-  ).withPreview(ModelViewerConfig.previewTriangles);
+  ).withPreview(ModelViewerConfig.previewTriangles).withMeasurements();
 }

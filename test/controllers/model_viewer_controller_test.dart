@@ -211,4 +211,23 @@ void main() {
     expect(viewer.wireframe, isTrue);
     expect(notified, 1);
   });
+
+  test('unit and print bed change and notify once per change', () {
+    final viewer = controller(readRange: quark(10));
+    var notified = 0;
+    viewer.addListener(() => notified++);
+    expect(viewer.unit, QuarkModelUnit.file);
+    expect(viewer.printBed, isNull);
+    viewer.setUnit(QuarkModelUnit.inches);
+    viewer.setUnit(QuarkModelUnit.inches);
+    final bed = QuarkPrintBed.common.first;
+    viewer.setPrintBed(bed);
+    viewer.setPrintBed(bed);
+    expect(viewer.unit, QuarkModelUnit.inches);
+    expect(viewer.printBed, bed);
+    expect(notified, 2);
+    viewer.setPrintBed(null);
+    expect(viewer.printBed, isNull);
+    expect(notified, 3);
+  });
 }

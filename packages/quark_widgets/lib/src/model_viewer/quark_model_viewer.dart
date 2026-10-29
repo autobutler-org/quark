@@ -8,8 +8,11 @@ import 'package:quark_icons/quark_icons.dart';
 
 import '../core/empty_state_widget.dart';
 import '../core/quark_loader.dart';
+import '../models/quark_model_unit.dart';
+import '../models/quark_print_bed.dart';
 import '../theme/quark_tokens.dart';
 import 'quark_model_camera.dart';
+import 'quark_model_measurements.dart';
 import 'quark_model_mesh.dart';
 import 'quark_model_viewer/model_renderer.dart';
 import 'quark_model_viewer/model_viewer_controls.dart';
@@ -17,7 +20,8 @@ import 'quark_model_viewer/model_viewer_painter.dart';
 import 'quark_model_viewer/model_viewer_stats.dart';
 
 /// An interactive 3D view of a triangle mesh: orbit, pan and zoom, a
-/// wireframe toggle, reset view, and the model's size and counts.
+/// wireframe toggle, reset view, and the model's size, area, volume, counts
+/// and print-bed fit.
 ///
 /// Controls:
 /// - **Touch:** one finger turns the model, two fingers move it, pinch
@@ -29,18 +33,25 @@ import 'quark_model_viewer/model_viewer_stats.dart';
 ///
 /// The camera is view state, like a scroll offset, so the viewer keeps it
 /// and resets it when [mesh] changes. Whether the model shows as a
-/// wireframe is the caller's: [wireframe] in, [onWireframeChanged] out.
-/// Nothing moves on its own, so there is no motion to reduce.
+/// wireframe is the caller's: [wireframe] in, [onWireframeChanged] out. So
+/// are the unit the numbers are labeled in and the print bed the model is
+/// checked against (#3228): [unit] and [printBed] in, [onUnitChanged] and
+/// [onPrintBedChanged] out. Nothing moves on its own, so there is no motion
+/// to reduce.
 ///
 /// States: a loader while [isLoading]; [error] with a Retry button; "Nothing
 /// to show" when [mesh] is null or has no triangles; otherwise the model.
-/// The viewer fills the space it is given, so give it a bounded height.
+/// The viewer fills the space it is given, so give it a bounded height. The
+/// stats strip takes at most half of it and scrolls past that.
 ///
 /// Key prefixes: `model_viewer_canvas`, `model_viewer_retry`, plus those of
 /// `ModelViewerControls` (`model_viewer_wireframe_toggle`,
 /// `model_viewer_zoom_in`, `model_viewer_zoom_out`, `model_viewer_reset`)
-/// and `ModelViewerStats` (`model_viewer_size`, `model_viewer_triangles`,
-/// `model_viewer_vertices`, `model_viewer_hint`, `model_viewer_status`).
+/// and `ModelViewerStats` (`model_viewer_size`, `model_viewer_area`,
+/// `model_viewer_volume`, `model_viewer_triangles`, `model_viewer_vertices`,
+/// `model_viewer_unit`, `model_viewer_unit_option_<unit name>`,
+/// `model_viewer_bed`, `model_viewer_bed_option_<bed id>` with `none` for no
+/// bed, `model_viewer_bed_fit`, `model_viewer_hint`, `model_viewer_status`).
 ///
 /// ```dart
 /// QuarkModelViewer(
@@ -50,6 +61,10 @@ import 'quark_model_viewer/model_viewer_stats.dart';
 ///   onRetry: controller.load,
 ///   wireframe: controller.wireframe,
 ///   onWireframeChanged: controller.setWireframe,
+///   unit: controller.unit,
+///   onUnitChanged: controller.setUnit,
+///   printBed: controller.printBed,
+///   onPrintBedChanged: controller.setPrintBed,
 /// );
 /// ```
 class QuarkModelViewer extends StatefulWidget {
@@ -61,6 +76,11 @@ class QuarkModelViewer extends StatefulWidget {
     this.onRetry,
     this.wireframe = false,
     this.onWireframeChanged,
+    this.unit = QuarkModelUnit.file,
+    this.onUnitChanged,
+    this.printBed,
+    this.printBeds = QuarkPrintBed.common,
+    this.onPrintBedChanged,
     this.statusLabel,
     super.key,
   });
@@ -73,6 +93,10 @@ class QuarkModelViewer extends StatefulWidget {
   /// key, and the full mesh again once the gesture ends or the input has
   /// rested for [settleDelay] (#3231), so a model too detailed to redraw
   /// every frame still moves smoothly.
+  ///
+  /// The stats use the mesh's `QuarkModelMesh.measurements` when it carries
+  /// them and measure it once here when it does not, so a caller with a
+  /// detailed mesh measures it where it parsed it.
   final QuarkModelMesh? mesh;
 
   /// Whether the model is still loading, which shows a loader.
@@ -91,6 +115,24 @@ class QuarkModelViewer extends StatefulWidget {
   /// Called with the opposite of [wireframe] by its button and the `W` key.
   /// Null disables both.
   final ValueChanged<bool>? onWireframeChanged;
+
+  /// The unit one of the file's coordinates is, which labels the sizes, the
+  /// area and the volume. [QuarkModelUnit.file] labels nothing.
+  final QuarkModelUnit unit;
+
+  /// Called with the unit picked from the units chip. Null leaves the chip
+  /// out.
+  final ValueChanged<QuarkModelUnit>? onUnitChanged;
+
+  /// The print bed the model is checked against, null for none.
+  final QuarkPrintBed? printBed;
+
+  /// The beds the bed chip offers; [QuarkPrintBed.common] by default.
+  final List<QuarkPrintBed> printBeds;
+
+  /// Called with the bed picked from the bed chip, or null for none. Null
+  /// leaves the chip out.
+  final ValueChanged<QuarkPrintBed?>? onPrintBedChanged;
 
   /// A line about the file, shown with the counts; null shows nothing.
   final String? statusLabel;
@@ -117,6 +159,8 @@ class _QuarkModelViewerState extends State<QuarkModelViewer> {
   QuarkModelCamera _camera = QuarkModelCamera.initial;
   ModelRenderer? _renderer;
   ModelRenderer? _previewRenderer;
+  QuarkModelMesh? _measured;
+  QuarkModelMeasurements? _measurements;
   bool _focused = false;
   bool _moving = false;
   Timer? _settle;
@@ -131,6 +175,18 @@ class _QuarkModelViewerState extends State<QuarkModelViewer> {
     final renderer = _renderer;
     if (renderer != null && identical(renderer.mesh, mesh)) return renderer;
     return _renderer = ModelRenderer(mesh);
+  }
+
+  /// What [mesh] measures: what it carries, or measured once here.
+  QuarkModelMeasurements _measurementsFor(QuarkModelMesh mesh) {
+    final carried = mesh.measurements;
+    if (carried != null) return carried;
+    final measurements = _measurements;
+    if (measurements != null && identical(_measured, mesh)) {
+      return measurements;
+    }
+    _measured = mesh;
+    return _measurements = mesh.measure();
   }
 
   /// The renderer for the mesh's preview, null when it has none to draw.
@@ -274,119 +330,140 @@ class _QuarkModelViewerState extends State<QuarkModelViewer> {
         subtext: 'This model has no surfaces to draw.',
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final size = constraints.biggest;
-                    return Semantics(
-                      label:
-                          '3D model. Arrow keys turn it, Shift and the '
-                          'arrows move it, plus and minus zoom.',
-                      child: Focus(
-                        focusNode: _focusNode,
-                        onKeyEvent: _onKey,
-                        onFocusChange: (focused) =>
-                            setState(() => _focused = focused),
-                        child: Listener(
-                          onPointerDown: (event) {
-                            _buttons = event.buttons;
-                            _focusNode.requestFocus();
-                          },
-                          onPointerSignal: (event) {
-                            if (event is! PointerScrollEvent) return;
-                            GestureBinding.instance.pointerSignalResolver
-                                .register(event, (event) {
-                                  _startMoving(settle: true);
-                                  _zoom(
-                                    math
-                                        .pow(
-                                          1.002,
-                                          -(event as PointerScrollEvent)
-                                              .scrollDelta
-                                              .dy,
-                                        )
-                                        .toDouble(),
-                                  );
-                                });
-                          },
-                          child: GestureDetector(
-                            key: const ValueKey('model_viewer_canvas'),
-                            behavior: HitTestBehavior.opaque,
-                            onDoubleTap: _reset,
-                            onScaleStart: (details) {
-                              _lastFocal = details.localFocalPoint;
-                              _lastScale = 1;
-                              _startMoving();
-                            },
-                            onScaleEnd: (_) => _stopMoving(),
-                            onScaleUpdate: (details) {
-                              final delta =
-                                  details.localFocalPoint - _lastFocal;
-                              _lastFocal = details.localFocalPoint;
-                              // Two fingers, a trackpad, a right or middle
-                              // mouse button, or Shift moves; anything else
-                              // turns.
-                              final pan =
-                                  details.pointerCount > 1 ||
-                                  _buttons & kPrimaryButton == 0 ||
-                                  HardwareKeyboard.instance.isShiftPressed;
-                              _drag(delta, size, pan: pan);
-                              if (details.scale != _lastScale &&
-                                  details.scale > 0) {
-                                _zoom(details.scale / _lastScale);
-                                _lastScale = details.scale;
-                              }
-                            },
-                            child: DecoratedBox(
-                              position: DecorationPosition.foreground,
-                              decoration: BoxDecoration(
-                                border: _focused
-                                    ? Border.all(
-                                        color: tokens.primary,
-                                        width: tokens.focusRingWidth,
-                                      )
-                                    : null,
-                              ),
-                              child: CustomPaint(
-                                size: size,
-                                painter: ModelViewerPainter(
-                                  renderer: preview ?? renderer,
-                                  camera: _camera,
-                                  color: tokens.primary,
-                                  edgeColor: tokens.foreground,
-                                  wireframe: widget.wireframe,
+    return LayoutBuilder(
+      builder: (context, outer) {
+        final maxHeight = outer.maxHeight;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final size = constraints.biggest;
+                        return Semantics(
+                          label:
+                              '3D model. Arrow keys turn it, Shift and the '
+                              'arrows move it, plus and minus zoom.',
+                          child: Focus(
+                            focusNode: _focusNode,
+                            onKeyEvent: _onKey,
+                            onFocusChange: (focused) =>
+                                setState(() => _focused = focused),
+                            child: Listener(
+                              onPointerDown: (event) {
+                                _buttons = event.buttons;
+                                _focusNode.requestFocus();
+                              },
+                              onPointerSignal: (event) {
+                                if (event is! PointerScrollEvent) return;
+                                GestureBinding.instance.pointerSignalResolver
+                                    .register(event, (event) {
+                                      _startMoving(settle: true);
+                                      _zoom(
+                                        math
+                                            .pow(
+                                              1.002,
+                                              -(event as PointerScrollEvent)
+                                                  .scrollDelta
+                                                  .dy,
+                                            )
+                                            .toDouble(),
+                                      );
+                                    });
+                              },
+                              child: GestureDetector(
+                                key: const ValueKey('model_viewer_canvas'),
+                                behavior: HitTestBehavior.opaque,
+                                onDoubleTap: _reset,
+                                onScaleStart: (details) {
+                                  _lastFocal = details.localFocalPoint;
+                                  _lastScale = 1;
+                                  _startMoving();
+                                },
+                                onScaleEnd: (_) => _stopMoving(),
+                                onScaleUpdate: (details) {
+                                  final delta =
+                                      details.localFocalPoint - _lastFocal;
+                                  _lastFocal = details.localFocalPoint;
+                                  // Two fingers, a trackpad, a right or middle
+                                  // mouse button, or Shift moves; anything else
+                                  // turns.
+                                  final pan =
+                                      details.pointerCount > 1 ||
+                                      _buttons & kPrimaryButton == 0 ||
+                                      HardwareKeyboard.instance.isShiftPressed;
+                                  _drag(delta, size, pan: pan);
+                                  if (details.scale != _lastScale &&
+                                      details.scale > 0) {
+                                    _zoom(details.scale / _lastScale);
+                                    _lastScale = details.scale;
+                                  }
+                                },
+                                child: DecoratedBox(
+                                  position: DecorationPosition.foreground,
+                                  decoration: BoxDecoration(
+                                    border: _focused
+                                        ? Border.all(
+                                            color: tokens.primary,
+                                            width: tokens.focusRingWidth,
+                                          )
+                                        : null,
+                                  ),
+                                  child: CustomPaint(
+                                    size: size,
+                                    painter: ModelViewerPainter(
+                                      renderer: preview ?? renderer,
+                                      camera: _camera,
+                                      color: tokens.primary,
+                                      edgeColor: tokens.foreground,
+                                      wireframe: widget.wireframe,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                    );
-                  },
+                        );
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    top: tokens.spacingSm,
+                    right: tokens.spacingSm,
+                    child: ModelViewerControls(
+                      wireframe: widget.wireframe,
+                      onWireframeChanged: widget.onWireframeChanged,
+                      onZoomIn: () => _zoom(QuarkModelViewer.zoomStep),
+                      onZoomOut: () => _zoom(1 / QuarkModelViewer.zoomStep),
+                      onReset: _reset,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // At most half the height, so large text or a narrow screen
+            // never squeezes the canvas out.
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxHeight / 2),
+              child: SingleChildScrollView(
+                child: ModelViewerStats(
+                  mesh: mesh,
+                  measurements: _measurementsFor(mesh),
+                  unit: widget.unit,
+                  onUnitChanged: widget.onUnitChanged,
+                  printBed: widget.printBed,
+                  printBeds: widget.printBeds,
+                  onPrintBedChanged: widget.onPrintBedChanged,
+                  statusLabel: widget.statusLabel,
                 ),
               ),
-              Positioned(
-                top: tokens.spacingSm,
-                right: tokens.spacingSm,
-                child: ModelViewerControls(
-                  wireframe: widget.wireframe,
-                  onWireframeChanged: widget.onWireframeChanged,
-                  onZoomIn: () => _zoom(QuarkModelViewer.zoomStep),
-                  onZoomOut: () => _zoom(1 / QuarkModelViewer.zoomStep),
-                  onReset: _reset,
-                ),
-              ),
-            ],
-          ),
-        ),
-        ModelViewerStats(mesh: mesh, statusLabel: widget.statusLabel),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -163,6 +163,25 @@ void main() {
     );
   });
 
+  testWidgets('the unit and bed chips reach the controller', (tester) async {
+    await pumpViewer(tester);
+    await tester.tap(find.byKey(const ValueKey('model_viewer_unit')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('model_viewer_unit_option_millimeters')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('X 10 · Y 20 · Z 0 mm'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('model_viewer_bed')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('model_viewer_bed_option_prusa_mini')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Fits Prusa MINI'), findsOneWidget);
+  });
+
   testWidgets('a model over the cap falls back to its details and says why', (
     tester,
   ) async {

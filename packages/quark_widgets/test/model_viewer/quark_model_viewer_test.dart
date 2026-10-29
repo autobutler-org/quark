@@ -89,6 +89,8 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byKey(canvas), findsOneWidget);
     expect(find.text('X 2 · Y 3 · Z 4'), findsOneWidget);
+    expect(find.text('Area 52'), findsOneWidget);
+    expect(find.text('Volume 24'), findsOneWidget);
     expect(find.text('12 triangles'), findsOneWidget);
     expect(find.text('8 vertices'), findsOneWidget);
     expect(find.text('STL · 684 B'), findsOneWidget);
@@ -361,6 +363,142 @@ void main() {
     expect(camera(tester).zoom, isNot(1));
     await pumpAt(tester, viewer(box()));
     expect(camera(tester), QuarkModelCamera.initial);
+  });
+
+  testWidgets('says when the mesh is open', (tester) async {
+    final full = box();
+    final open = QuarkModelMesh.fromTriangles(
+      positions: full.positions,
+      indices: Uint32List.sublistView(full.indices, 6),
+    );
+    await pumpAt(tester, QuarkModelViewer(mesh: open));
+    final volume = tester.widget<Text>(
+      find.byKey(const ValueKey('model_viewer_volume')),
+    );
+    expect(volume.data, matches(RegExp(r'^Volume ≈ [\d.]+, mesh is open$')));
+  });
+
+  testWidgets('uses the measurements a mesh carries', (tester) async {
+    final full = box();
+    final mesh = QuarkModelMesh(
+      positions: full.positions,
+      indices: full.indices,
+      normals: full.normals,
+      min: full.min,
+      max: full.max,
+      measurements: const QuarkModelMeasurements(
+        volume: 7,
+        surfaceArea: 9,
+        isClosed: true,
+      ),
+    );
+    await pumpAt(tester, QuarkModelViewer(mesh: mesh));
+    expect(find.text('Volume 7'), findsOneWidget);
+    expect(find.text('Area 9'), findsOneWidget);
+  });
+
+  testWidgets('without handlers the unit and bed chips are left out', (
+    tester,
+  ) async {
+    await pumpAt(tester, QuarkModelViewer(mesh: box()));
+    expect(find.byKey(const ValueKey('model_viewer_unit')), findsNothing);
+    expect(find.byKey(const ValueKey('model_viewer_bed')), findsNothing);
+    expect(find.byKey(const ValueKey('model_viewer_bed_fit')), findsNothing);
+  });
+
+  testWidgets('a unit labels the sizes, area and volume', (tester) async {
+    final picked = <QuarkModelUnit>[];
+    await pumpAt(
+      tester,
+      QuarkModelViewer(
+        mesh: box(),
+        unit: QuarkModelUnit.millimeters,
+        onUnitChanged: picked.add,
+      ),
+    );
+    expect(find.text('X 2 · Y 3 · Z 4 mm'), findsOneWidget);
+    expect(find.text('Area 52 mm²'), findsOneWidget);
+    expect(find.text('Volume 24 mm³'), findsOneWidget);
+    expect(find.text('Units: mm'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('model_viewer_unit')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('model_viewer_unit_option_inches')),
+    );
+    await tester.pumpAndSettle();
+    expect(picked, [QuarkModelUnit.inches]);
+  });
+
+  testWidgets('the bed chip picks a bed and the strip says if it fits', (
+    tester,
+  ) async {
+    QuarkPrintBed? picked = QuarkPrintBed.common.first;
+    await pumpAt(
+      tester,
+      QuarkModelViewer(mesh: box(), onPrintBedChanged: (bed) => picked = bed),
+    );
+    expect(find.text('Bed: none'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('model_viewer_bed')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('model_viewer_bed_option_ender_3')),
+    );
+    await tester.pumpAndSettle();
+    expect(picked?.id, 'ender_3');
+
+    await tester.tap(find.byKey(const ValueKey('model_viewer_bed')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('model_viewer_bed_option_none')),
+    );
+    await tester.pumpAndSettle();
+    expect(picked, isNull);
+  });
+
+  testWidgets('the fit is checked in the unit picked', (tester) async {
+    const bed = QuarkPrintBed(
+      id: 'tiny',
+      name: 'Tiny',
+      width: 60,
+      depth: 60,
+      height: 60,
+    );
+    Widget viewer(QuarkModelUnit unit) => QuarkModelViewer(
+      mesh: box(),
+      unit: unit,
+      printBed: bed,
+      onPrintBedChanged: (_) {},
+    );
+    await pumpAt(tester, viewer(QuarkModelUnit.file));
+    expect(find.text('Fits Tiny if in mm'), findsOneWidget);
+    await pumpAt(tester, viewer(QuarkModelUnit.millimeters));
+    expect(find.text('Fits Tiny'), findsOneWidget);
+    // Four inches is 101.6 mm, taller than the bed.
+    await pumpAt(tester, viewer(QuarkModelUnit.inches));
+    expect(find.text('Too big for Tiny'), findsOneWidget);
+  });
+
+  testBothViewports('the chips and the fit survive 200% text', (
+    tester,
+    size,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = largeTextScale;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pumpAt(
+      tester,
+      QuarkModelViewer(
+        mesh: box(),
+        unit: QuarkModelUnit.inches,
+        onUnitChanged: (_) {},
+        printBed: QuarkPrintBed.common.last,
+        onPrintBedChanged: (_) {},
+        statusLabel: 'STL · 684 B',
+      ),
+      size: size,
+    );
+    expect(tester.takeException(), isNull);
+    expectNoClippedText(tester);
   });
 
   test('the camera clamps its pitch and zoom', () {

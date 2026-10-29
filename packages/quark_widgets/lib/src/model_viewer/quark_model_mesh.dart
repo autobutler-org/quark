@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'quark_model_measurements.dart';
 import 'quark_model_mesh/cluster_vertices.dart';
+import 'quark_model_mesh/measure_mesh.dart';
 
 /// The 3D file formats `parseQuarkModel` reads.
 enum QuarkModelFormat {
@@ -42,7 +44,9 @@ enum QuarkModelFormat {
 /// A mesh too detailed to turn smoothly can carry a [preview], a coarser
 /// copy `QuarkModelViewer` draws while the model is moving (#3231);
 /// [withPreview] makes one, and is worth running on the isolate that parsed
-/// the mesh.
+/// the mesh. It can carry its [measurements] the same way (#3228), made by
+/// [withMeasurements] where the mesh was parsed, since measuring a detailed
+/// mesh takes a while.
 ///
 /// ```dart
 /// final mesh = QuarkModelMesh.fromTriangles(
@@ -61,6 +65,7 @@ class QuarkModelMesh {
     required this.max,
     this.isZUp = false,
     this.preview,
+    this.measurements,
   });
 
   /// Builds a mesh from [positions] (x, y, z per vertex) and [indices]
@@ -135,6 +140,10 @@ class QuarkModelMesh {
   /// while the model moves; null draws this mesh all the time.
   final QuarkModelMesh? preview;
 
+  /// This mesh's volume, area and whether it is closed, or null when they
+  /// have not been measured; [measure] measures them.
+  final QuarkModelMeasurements? measurements;
+
   /// This mesh carrying a [preview] of at most [maxTriangles] triangles, or
   /// carrying none when it already has no more than that.
   ///
@@ -143,16 +152,35 @@ class QuarkModelMesh {
   /// with the grid coarsened until few enough are left. It costs a pass
   /// over the vertices and triangles per grid tried, and the memory of the
   /// preview plus a word per vertex.
-  QuarkModelMesh withPreview(int maxTriangles) => QuarkModelMesh(
+  QuarkModelMesh withPreview(int maxTriangles) => _copy(
+    preview: triangleCount > maxTriangles
+        ? clusterVertices(this, maxTriangles)
+        : null,
+    measurements: measurements,
+  );
+
+  /// This mesh carrying its [measurements], measured once here.
+  QuarkModelMesh withMeasurements() =>
+      _copy(preview: preview, measurements: measure());
+
+  /// Measures this mesh's volume and surface area, and whether it is closed.
+  ///
+  /// It costs a pass over the vertices, three over the triangles, and while
+  /// it runs about 12 bytes a triangle and 20 a vertex.
+  QuarkModelMeasurements measure() => measureMesh(this);
+
+  QuarkModelMesh _copy({
+    required QuarkModelMesh? preview,
+    required QuarkModelMeasurements? measurements,
+  }) => QuarkModelMesh(
     positions: positions,
     indices: indices,
     normals: normals,
     min: min,
     max: max,
     isZUp: isZUp,
-    preview: triangleCount > maxTriangles
-        ? clusterVertices(this, maxTriangles)
-        : null,
+    preview: preview,
+    measurements: measurements,
   );
 
   /// How many vertices the mesh has, after identical ones are merged.
@@ -167,4 +195,13 @@ class QuarkModelMesh {
   /// The bounding box's size along x, y and z, in the file's units.
   ({double x, double y, double z}) get size =>
       (x: max[0] - min[0], y: max[1] - min[1], z: max[2] - min[2]);
+
+  /// The bounding box as it stands on a print bed, in the file's units:
+  /// [width] and [depth] across, [height] along the up axis [isZUp] names.
+  ({double width, double depth, double height}) get footprint {
+    final size = this.size;
+    return isZUp
+        ? (width: size.x, depth: size.y, height: size.z)
+        : (width: size.x, depth: size.z, height: size.y);
+  }
 }

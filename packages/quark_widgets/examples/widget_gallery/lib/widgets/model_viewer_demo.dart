@@ -7,7 +7,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// A torus written out as an OBJ file and read back with `parseQuarkModel`,
 /// so the gallery shows the parser and the viewer together. The demo keeps
-/// the wireframe flag the viewer leaves to its caller, and logs each change.
+/// the wireframe flag, the unit and the print bed the viewer leaves to its
+/// caller, and logs each change.
 class ModelViewerDemo extends StatefulWidget {
   /// Creates the demo; [log] receives each callback.
   const ModelViewerDemo({required this.log, super.key});
@@ -26,6 +27,8 @@ class _ModelViewerDemoState extends State<ModelViewerDemo> {
   );
 
   bool _wireframe = false;
+  QuarkModelUnit _unit = QuarkModelUnit.file;
+  QuarkPrintBed? _printBed;
 
   /// An OBJ torus of [rings] by [sides] quads, 40 units across.
   static String _torusObj(int rings, int sides) {
@@ -61,6 +64,16 @@ class _ModelViewerDemoState extends State<ModelViewerDemo> {
       onWireframeChanged: (wireframe) {
         widget.log('QuarkModelViewer.onWireframeChanged($wireframe)');
         setState(() => _wireframe = wireframe);
+      },
+      unit: _unit,
+      onUnitChanged: (unit) {
+        widget.log('QuarkModelViewer.onUnitChanged(${unit.name})');
+        setState(() => _unit = unit);
+      },
+      printBed: _printBed,
+      onPrintBedChanged: (bed) {
+        widget.log('QuarkModelViewer.onPrintBedChanged(${bed?.id})');
+        setState(() => _printBed = bed);
       },
       statusLabel: 'Torus written as OBJ',
     );
