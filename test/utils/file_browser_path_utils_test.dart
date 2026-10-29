@@ -199,6 +199,66 @@ void main() {
     });
   });
 
+  // ─── canWritePath ──────────────────────────────────────────────────
+  group('canWritePath', () {
+    for (final (serial, path, want) in [
+      ('', 'users/alice/hello.qdoc', true),
+      ('', '/users/alice/hello.qdoc', true),
+      ('', 'users/alice', true),
+      ('  ', 'users/alice/hello.qdoc', true),
+      ('', 'users/alicia/hello.qdoc', false),
+      ('', 'users/bob/hello.qdoc', false),
+      ('', 'hello.qdoc', false),
+      ('', 'groups/everyone/hello.qdoc', false),
+      ('USB1', 'users/alice/hello.qdoc', false),
+    ]) {
+      test('a member ($serial, $path) is $want', () {
+        expect(
+          canWritePath(
+            isAdmin: false,
+            username: 'alice',
+            serial: serial,
+            path: path,
+          ),
+          want,
+        );
+      });
+    }
+
+    test('an admin may write any path, on any drive', () {
+      expect(
+        canWritePath(
+          isAdmin: true,
+          username: null,
+          serial: 'USB1',
+          path: 'notes/hello.qdoc',
+        ),
+        isTrue,
+      );
+    });
+
+    test('a member with no username may write nothing', () {
+      expect(
+        canWritePath(
+          isAdmin: false,
+          username: null,
+          serial: '',
+          path: 'users/alice/hello.qdoc',
+        ),
+        isFalse,
+      );
+      expect(
+        canWritePath(
+          isAdmin: false,
+          username: '   ',
+          serial: '',
+          path: 'hello.qdoc',
+        ),
+        isFalse,
+      );
+    });
+  });
+
   // ─── isWithin ──────────────────────────────────────────────────────
   group('isWithin', () {
     for (final (root, path, want) in [

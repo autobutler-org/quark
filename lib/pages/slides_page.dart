@@ -3,8 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/slides_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
+import 'package:quark/utils/delete_doc_sheet.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
@@ -39,9 +41,11 @@ class _SlidesPageState extends State<SlidesPage>
   late final SlidesController _controller =
       widget.controller ?? SlidesController();
   final _search = TextEditingController();
+  late final Listenable _listing;
 
   @override
   void initState() {
+    _listing = Listenable.merge([_controller, AppSettings.instance.isAdmin]);
     super.initState();
     _search.addListener(() => _controller.setQuery(_search.text));
   }
@@ -66,6 +70,10 @@ class _SlidesPageState extends State<SlidesPage>
       siblings: _controller.files,
     );
     if (renamed != null) manualRefresh();
+  }
+
+  Future<void> _delete(FileNode node) async {
+    if (await deleteDocOrSheet(context, node)) manualRefresh();
   }
 
   Future<void> _share(FileNode node) => showShareSheet(
@@ -163,7 +171,7 @@ class _SlidesPageState extends State<SlidesPage>
           ),
           Expanded(
             child: ListenableBuilder(
-              listenable: _controller,
+              listenable: _listing,
               builder: (context, _) => SlidesBody(
                 loading: isInitialLoad && _controller.files.isEmpty,
                 error: _controller.error,
@@ -176,6 +184,7 @@ class _SlidesPageState extends State<SlidesPage>
                 onOpen: _open,
                 onRename: _rename,
                 onShare: _share,
+                onDelete: _delete,
               ),
             ),
           ),

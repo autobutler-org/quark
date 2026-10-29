@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/doc_sheet_listing_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
+import 'package:quark/utils/delete_doc_sheet.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
@@ -33,9 +35,11 @@ class _DocsPageState extends State<DocsPage>
     emptyFile: '{"ops":[{"insert":"\\n"}]}',
   );
   final _search = TextEditingController();
+  late final Listenable _listing;
 
   @override
   void initState() {
+    _listing = Listenable.merge([_controller, AppSettings.instance.isAdmin]);
     super.initState();
     _search.addListener(() => _controller.setQuery(_search.text));
   }
@@ -73,6 +77,10 @@ class _DocsPageState extends State<DocsPage>
       siblings: _controller.siblings,
     );
     if (renamed != null) manualRefresh();
+  }
+
+  Future<void> _delete(FileNode node) async {
+    if (await deleteDocOrSheet(context, node)) manualRefresh();
   }
 
   Future<void> _create() async {
@@ -119,7 +127,7 @@ class _DocsPageState extends State<DocsPage>
           ),
           Expanded(
             child: ListenableBuilder(
-              listenable: _controller,
+              listenable: _listing,
               builder: (context, _) => DocSheetBody(
                 kind: DocSheetKind.docs,
                 loading: isInitialLoad && !_controller.hasListing,
@@ -134,6 +142,7 @@ class _DocsPageState extends State<DocsPage>
                 onOpenDoc: _openDoc,
                 onOpenSheet: _openSheet,
                 onRename: _rename,
+                onDelete: _delete,
               ),
             ),
           ),

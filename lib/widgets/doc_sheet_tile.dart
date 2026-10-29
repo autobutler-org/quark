@@ -24,12 +24,16 @@ class DocSheetTile extends StatelessWidget {
   final VoidCallback onTap;
 
   /// Offered from the row's menu, keyed `doc_sheet_menu_<relPath>` and
-  /// `doc_sheet_rename_<relPath>`. With none the row has no menu.
+  /// `doc_sheet_rename_<relPath>`. With no actions the row has no menu.
   final VoidCallback? onRename;
 
   /// Offered from the same menu, keyed `doc_sheet_share_<relPath>`; opens
   /// the share sheet (#1170).
   final VoidCallback? onShare;
+
+  /// Offered from the same menu, keyed `doc_sheet_delete_<relPath>`. The
+  /// caller confirms and moves the file to Trash (#3339).
+  final VoidCallback? onDelete;
 
   const DocSheetTile({
     required this.relPath,
@@ -39,6 +43,7 @@ class DocSheetTile extends StatelessWidget {
     this.snippet,
     this.onRename,
     this.onShare,
+    this.onDelete,
     super.key,
   });
 
@@ -85,6 +90,7 @@ class DocSheetTile extends StatelessWidget {
 
     final onRename = this.onRename;
     final onShare = this.onShare;
+    final onDelete = this.onDelete;
     final entries = [
       if (onRename != null)
         QuarkMenuEntry(
@@ -97,6 +103,13 @@ class DocSheetTile extends StatelessWidget {
           key: ValueKey('doc_sheet_share_$relPath'),
           label: 'Share',
           onSelected: onShare,
+        ),
+      if (onDelete != null)
+        QuarkMenuEntry(
+          key: ValueKey('doc_sheet_delete_$relPath'),
+          label: 'Delete',
+          destructive: true,
+          onSelected: onDelete,
         ),
     ];
     // A right-click on the row opens the same menu as its button (#2276).
