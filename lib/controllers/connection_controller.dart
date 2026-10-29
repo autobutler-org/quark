@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:quark/services/app_settings.dart';
@@ -35,10 +36,17 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// address is not probed: a desktop cannot reach it (#3779). A proxy the
 /// node returns is still probed, which is how a future desktop node (#2877)
 /// says it can reach the Quark. While a home check succeeds and this phone
-/// has no saved pairing, it asks the Quark for a key, stores it, and
-/// [enroll] starts the node so the proxy is up before the phone leaves home
-/// (#2876). Coming back to the foreground restarts the node and checks again;
-/// the proxy port can change.
+/// has no saved pairing, it asks the Quark for a key, [enroll] starts the
+/// node, and only then is the pairing stored, so the proxy is up before the
+/// phone leaves home (#2876). Coming back to the foreground restarts the
+/// node and checks again; the proxy port can change.
+///
+/// Setting up heals itself (#3776). A stored pairing whose node does not run,
+/// or whose key the Quark no longer accepts, is dropped on the next check at
+/// home and the phone pairs again in that same check. [phoneRemoteAccess] and
+/// [phoneRemoteAccessDetail] say where that stands in words a user reads,
+/// including the Quark's own refusals, and [setupLog] keeps each step for
+/// diagnostics.
 ///
 /// Pausing remote access on this phone stops only this phone's node. It is
 /// remembered across a restart, and it never calls the Quark.
@@ -86,7 +94,7 @@ class ConnectionController extends ChangeNotifier {
         })
         enroll =
         EmbeddedTunnel.enroll,
-    Future<bool> Function() nodeRejected = _appNodeRejected,
+    Future<TunnelStatus?> Function() nodeStatus = _appNodeStatus,
     DateTime Function() now = DateTime.now,
   }) : _probe = probe,
        _readRemoteAccess = readRemoteAccess,
@@ -105,7 +113,7 @@ class ConnectionController extends ChangeNotifier {
        _savePause = savePause,
        _clearPause = clearPause,
        _enroll = enroll,
-       _nodeRejected = nodeRejected,
+       _nodeStatus = nodeStatus,
        _now = now,
        _activeHostChanges =
            activeHostChanges ?? AppSettings.instance.activeHostNotifier;
@@ -149,7 +157,9 @@ class ConnectionController extends ChangeNotifier {
     required String upstream,
   })
   _enroll;
-  final Future<bool> Function() _nodeRejected;
+
+  /// This phone's node, or null where the app does not embed one.
+  final Future<TunnelStatus?> Function() _nodeStatus;
   final DateTime Function() _now;
 
   /// Fires when the active Quark changes; [AppSettings.activeHostNotifier]
@@ -162,11 +172,9 @@ class ConnectionController extends ChangeNotifier {
   Timer? _timer;
   Timer? _pauseTimer;
   StoredPause? _pause;
-  String? _pairingError;
-
-  /// Set after a rejected node drops its key, so this visit home does not
-  /// immediately ask for another one. Cleared once the phone leaves home.
-  bool _repairHeld = false;
+  PhoneRemoteAccess _phone = PhoneRemoteAccess.notSetUp;
+  String? _phoneDetail;
+  final List<String> _setupLog = [];
 
   /// Whether a home probe has failed since the current pause. "Until I'm
   /// back" waits for that, then clears on the next probe that succeeds.
@@ -183,6 +191,9 @@ class ConnectionController extends ChangeNotifier {
   /// How long "For 1 hour" lasts.
   static const _hour = Duration(hours: 1);
 
+  /// How many steps [setupLog] keeps.
+  static const _setupLogLength = 50;
+
   /// How the active Quark is reached, or null before the first check and
   /// when no Quark is configured.
   ConnectionMode? get mode => _mode;
@@ -190,11 +201,42 @@ class ConnectionController extends ChangeNotifier {
   /// Whether remote access is paused on this phone only.
   bool get remoteAccessPaused => _pause != null;
 
+  /// Whether this phone's remote access switch reads on: not paused, and
+  /// paired or on the way to it. A phone that never paired reads off.
+  bool get remoteAccessOnThisPhone =>
+      _pause == null && _phone != PhoneRemoteAccess.notSetUp;
+
   /// Which pause is in effect, or null when this phone is not paused.
   DevicePauseChoice? get pauseChoice => _pause?.choice;
 
-  /// Why automatic pairing failed, in [Errors]' words, or null.
-  String? get pairingError => _pairingError;
+  /// Where remote access on this phone stands.
+  PhoneRemoteAccess get phoneRemoteAccess => _phone;
+
+  /// [phoneRemoteAccess] in a sentence for the user, or null while paused
+  /// and when the state says it all. Away from home with no pairing this is
+  /// [Errors.finishRemoteAccessAtHome].
+  String? get phoneRemoteAccessDetail => _pause != null
+      ? null
+      : _phoneDetail ?? (_mode == ConnectionMode.local ? null : _finishAtHome);
+
+  /// Why this phone's remote access is not working, in [Errors]' words, or
+  /// null while it is not [PhoneRemoteAccess.notWorking].
+  String? get pairingError =>
+      _phone == PhoneRemoteAccess.notWorking ? _phoneDetail : null;
+
+  /// What to tell a user the Quark is out of reach for when it is because
+  /// this phone never paired, or null. Only set while offline.
+  String? get offlineReason =>
+      _mode == ConnectionMode.offline ? _finishAtHome : null;
+
+  /// The latest setup steps, oldest first, each stamped with its time. For
+  /// the diagnostics a user can send (#3613); never shown as status.
+  List<String> get setupLog => List.unmodifiable(_setupLog);
+
+  String? get _finishAtHome =>
+      _phone == PhoneRemoteAccess.notSetUp && _pause == null
+      ? Errors.finishRemoteAccessAtHome
+      : null;
 
   /// The remote-access address requests go to instead of the active host's
   /// own, or null to use the active host's.
@@ -220,16 +262,25 @@ class ConnectionController extends ChangeNotifier {
       unawaited(check());
     });
     _activeHostChanges.addListener(_onHostChanged);
-    unawaited(_restorePause().then((_) => check()));
+    unawaited(_restore().then((_) => check()));
   }
 
   void _onHostChanged() {
     _backoff = ConnectionConfig.offlineBackoffInitial;
     _pauseTimer?.cancel();
     _pause = null;
-    _repairHeld = false;
     _awaySincePause = false;
-    unawaited(_restorePause().then((_) => check()));
+    unawaited(_restore().then((_) => check()));
+  }
+
+  /// Reads the active Quark's pause and whether this phone paired with it.
+  Future<void> _restore() async {
+    await _restorePause();
+    final host = _activeHost()?.hostAddress;
+    final stored = host == null ? null : await _readPairing(host);
+    _setPhone(
+      stored == null ? PhoneRemoteAccess.notSetUp : PhoneRemoteAccess.ready,
+    );
   }
 
   /// Probes the active Quark's addresses and settles [mode] and [baseUrl].
@@ -268,9 +319,7 @@ class ConnectionController extends ChangeNotifier {
     if (!isCurrent()) return;
 
     // Away from home with this phone paused: the node stays stopped, and the
-    // remote address is not probed. Leaving home is what allows the next
-    // visit to pair again after a rejected key.
-    _repairHeld = false;
+    // remote address is not probed.
     if (_pause?.choice == DevicePauseChoice.untilHome) _awaySincePause = true;
     if (_pause != null) {
       _set(ConnectionMode.offline);
@@ -361,19 +410,32 @@ class ConnectionController extends ChangeNotifier {
     await _ensureDeviceNode(host, remote, status, generation, isCurrent);
   }
 
-  /// Stops this phone's node while it is paused, remote access is off, or this
-  /// build does not offer it yet, and otherwise pairs once and starts the
+  /// Stops this phone's node while it is paused or has nothing to reach,
+  /// keeps a working pairing running, and otherwise pairs and starts the
   /// node.
+  ///
+  /// A stored pairing whose node is not running, or whose key the Quark no
+  /// longer accepts, is dropped and replaced in this same check: the phone
+  /// is home, which is the one place it can pair.
   Future<void> _ensureDeviceNode(
     HostEntry host,
     String? remote,
-    RemoteAccessStatus? status,
+    RemoteAccessStatus status,
     int generation,
     bool Function() isCurrent,
   ) async {
     if (!isCurrent()) return;
     if (_pause != null || remote == null || remote.isEmpty) {
       await _warmEmbeddedTunnel('');
+      if (_pause != null || !isCurrent()) return;
+      if (!status.enabled) {
+        _setPhone(PhoneRemoteAccess.notSetUp, Errors.quarkRemoteAccessOff);
+      } else {
+        _setPhone(
+          PhoneRemoteAccess.settingUp,
+          Errors.quarkRemoteAccessNotConnected,
+        );
+      }
       return;
     }
     if (kIsWeb) {
@@ -382,85 +444,111 @@ class ConnectionController extends ChangeNotifier {
     }
     final stored = await _readPairing(host.hostAddress);
     if (!isCurrent()) return;
-    // A key the coordination server no longer accepts is dropped here, and
-    // this visit home does not ask for another. The next visit does.
-    if (stored != null && await _nodeRejected()) {
+    if (stored != null) {
+      await _warmEmbeddedTunnel(remote);
       if (!isCurrent()) return;
-      await _clearPairing(host.hostAddress);
-      _repairHeld = true;
-      _setPairingError(null);
-      await _warmEmbeddedTunnel('');
-      return;
-    }
-    final canPair =
-        !_repairHeld &&
-        status != null &&
-        status.enabled &&
-        status.connected &&
-        stored == null;
-    if (canPair) {
-      final paired = await _pair(host.hostAddress, generation, isCurrent);
-      if (!isCurrent() || paired == null) {
-        if (isCurrent()) await _warmEmbeddedTunnel(remote);
+      final node = await _nodeStatus();
+      if (!isCurrent()) return;
+      final state = node?.state;
+      final rejected = state == 'NeedsLogin' || state == 'NeedsMachineAuth';
+      final running = node == null || state == 'Running' || state == 'Starting';
+      if (!rejected && running) {
+        _setPhone(PhoneRemoteAccess.ready);
         return;
       }
+      _log(
+        rejected
+            ? 'the Quark rejected this phone\'s key; dropping the pairing'
+            : 'the node is $state with a stored pairing '
+                  '(${node?.error}); dropping the pairing',
+      );
+      await _clearPairing(host.hostAddress);
+      await _warmEmbeddedTunnel('');
+      if (!isCurrent()) return;
+      _setPhone(
+        PhoneRemoteAccess.notWorking,
+        rejected
+            ? Errors.phoneRemoteAccessRejected
+            : Errors.phoneRemoteAccessDidNotStart,
+      );
     }
-    await _warmEmbeddedTunnel(remote);
+    if (!status.connected) {
+      _setPhone(
+        PhoneRemoteAccess.settingUp,
+        Errors.quarkRemoteAccessNotConnected,
+      );
+      return;
+    }
+    if (await _pair(host.hostAddress, generation, isCurrent)) {
+      await _warmEmbeddedTunnel(remote);
+    }
   }
 
-  /// Asks the Quark for a key and starts the node. Null means it did not
-  /// pair: a 409 waits for the next check, a 503 waits
-  /// [RemoteAccessConfig.statusPollInterval], and anything else is on
-  /// [pairingError].
-  Future<StoredPairing?> _pair(
+  /// Asks the Quark for a key, starts the node, and stores the pairing once
+  /// the node runs. False means it did not pair, with the reason on
+  /// [phoneRemoteAccessDetail]: a 409 and a node that did not start wait for
+  /// the next check, and a 503 waits [RemoteAccessConfig.statusPollInterval].
+  Future<bool> _pair(
     String host,
     int generation,
     bool Function() isCurrent,
   ) async {
+    _setPhone(PhoneRemoteAccess.settingUp);
+    _log('asking the Quark for a key');
+    final PairedDevice paired;
     try {
-      final paired = await _pairDevice();
-      if (!isCurrent()) return null;
-      final stored = StoredPairing(
+      paired = await _pairDevice();
+    } catch (error) {
+      if (!isCurrent()) return false;
+      _log('the Quark did not pair this phone: $error');
+      switch (error) {
+        case ApiException(statusCode: 409):
+          _setPhone(PhoneRemoteAccess.notWorking, Errors.quarkRefusedThisPhone);
+        case ApiException(statusCode: 503):
+          _setPhone(
+            PhoneRemoteAccess.settingUp,
+            Errors.quarkRemoteAccessNotConnected,
+          );
+          _schedule(generation, RemoteAccessConfig.statusPollInterval);
+        default:
+          _setPhone(
+            PhoneRemoteAccess.notWorking,
+            Errors.message(error, _pairAction),
+          );
+      }
+      return false;
+    }
+    if (!isCurrent()) return false;
+    _log('starting this phone\'s node');
+    try {
+      await _enroll(
+        controlUrl: paired.controlUrl,
+        authKey: paired.authKey,
+        upstream: paired.quarkAddress,
+      );
+    } catch (error) {
+      if (!isCurrent()) return false;
+      // Nothing was stored, so the next check at home pairs again.
+      _log('the node did not start: $error');
+      await _warmEmbeddedTunnel('');
+      _setPhone(
+        PhoneRemoteAccess.notWorking,
+        Errors.phoneRemoteAccessDidNotStart,
+      );
+      return false;
+    }
+    if (!isCurrent()) return false;
+    await _savePairing(
+      host,
+      StoredPairing(
         authKey: paired.authKey,
         controlUrl: paired.controlUrl,
         quarkAddress: paired.quarkAddress,
-      );
-      await _savePairing(host, stored);
-      if (!isCurrent()) return null;
-      try {
-        await _enroll(
-          controlUrl: stored.controlUrl,
-          authKey: stored.authKey,
-          upstream: stored.quarkAddress,
-        );
-      } catch (error, stack) {
-        debugPrint('[connection_controller.dart] Node did not start: $error');
-        debugPrint('$stack');
-      }
-      if (!isCurrent()) return null;
-      _setPairingError(null);
-      return stored;
-    } on ApiException catch (error) {
-      if (!isCurrent()) return null;
-      if (error.statusCode == 409) {
-        _setPairingError(null);
-        return null;
-      }
-      if (error.statusCode == 503) {
-        _setPairingError(null);
-        _schedule(generation, RemoteAccessConfig.statusPollInterval);
-        return null;
-      }
-      debugPrint('[connection_controller.dart] Pairing failed: $error');
-      _setPairingError(Errors.message(error, _pairAction));
-      return null;
-    } catch (error, stack) {
-      if (!isCurrent()) return null;
-      debugPrint('[connection_controller.dart] Pairing failed: $error');
-      debugPrint('$stack');
-      _setPairingError(Errors.message(error, _pairAction));
-      return null;
-    }
+      ),
+    );
+    if (!isCurrent()) return false;
+    _setPhone(PhoneRemoteAccess.ready);
+    return true;
   }
 
   /// Stops this phone's node, deletes its state, and drops the pairing saved
@@ -474,8 +562,7 @@ class ConnectionController extends ChangeNotifier {
   Future<void> forgetDevice() async {
     _timer?.cancel();
     _generation++;
-    _repairHeld = false;
-    _setPairingError(null);
+    _setPhone(PhoneRemoteAccess.notSetUp);
     if (_mode == ConnectionMode.remote) _set(ConnectionMode.offline);
     await _forgetEmbeddedTunnel();
     final host = _activeHost()?.hostAddress;
@@ -557,10 +644,20 @@ class ConnectionController extends ChangeNotifier {
     });
   }
 
-  void _setPairingError(String? error) {
-    if (error == _pairingError) return;
-    _pairingError = error;
+  /// Moves this phone to [state], logging the change.
+  void _setPhone(PhoneRemoteAccess state, [String? detail]) {
+    if (state == _phone && detail == _phoneDetail) return;
+    _phone = state;
+    _phoneDetail = detail;
+    _log('this phone is ${state.name}${detail == null ? '' : ': $detail'}');
     notifyListeners();
+  }
+
+  /// Records one setup step for [setupLog] and the platform log.
+  void _log(String step) {
+    developer.log(step, name: 'quark.remote_access');
+    _setupLog.add('${_now().toUtc().toIso8601String()} $step');
+    if (_setupLog.length > _setupLogLength) _setupLog.removeAt(0);
   }
 
   void _set(ConnectionMode? mode, {String? host, String? url}) {
@@ -596,11 +693,24 @@ class ConnectionController extends ChangeNotifier {
     String? remoteAddress,
   ) => AppSettings.instance.setRemoteAddress(hostAddress, remoteAddress);
 
-  /// `NeedsLogin` is the bridge's report that the key expired or the node
-  /// was removed. Anything else keeps the saved pairing.
-  static Future<bool> _appNodeRejected() async {
-    if (!EmbeddedTunnel.isSupported) return false;
-    final status = await EmbeddedTunnel.status();
-    return status.state == 'NeedsLogin';
-  }
+  /// The embedded node's status, or null where the app does not embed one,
+  /// so a desktop build never drops its pairing over a node it has not got.
+  static Future<TunnelStatus?> _appNodeStatus() async =>
+      EmbeddedTunnel.isSupported ? EmbeddedTunnel.status() : null;
+}
+
+/// Where remote access on this phone stands (#3776), as the switch and its
+/// card show it. A pause is separate: [ConnectionController.remoteAccessPaused].
+enum PhoneRemoteAccess {
+  /// This phone has not paired with the Quark.
+  notSetUp,
+
+  /// Pairing is under way, or waiting on the Quark.
+  settingUp,
+
+  /// Paired, with the node running.
+  ready,
+
+  /// Pairing or the node failed; the detail says why and what happens next.
+  notWorking,
 }

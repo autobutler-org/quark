@@ -26,7 +26,10 @@ class ConnectionSheetButton extends StatelessWidget {
     required this.onNavigate,
     this.readRemoteAccess = RemoteAccessService.getStatus,
     this.paused = false,
+    this.thisPhoneOn = true,
     this.pairingError,
+    this.phoneStatus,
+    this.offlineReason,
     this.onPause,
     this.onResume,
     super.key,
@@ -46,8 +49,18 @@ class ConnectionSheetButton extends StatelessWidget {
   /// Paused.
   final bool paused;
 
+  /// Whether the sheet's switch reads on. A phone that never paired reads
+  /// off even when it is not paused.
+  final bool thisPhoneOn;
+
   /// Why automatic pairing failed, in [Errors]' words, or null.
   final String? pairingError;
+
+  /// Where this phone's remote access setup stands, in words, or null.
+  final String? phoneStatus;
+
+  /// Why the Quark is out of reach, when the app knows, or null.
+  final String? offlineReason;
 
   /// Pauses remote access on this phone. Null hides the switch.
   final Future<void> Function(DevicePauseChoice choice)? onPause;
@@ -65,8 +78,10 @@ class ConnectionSheetButton extends StatelessWidget {
       builder: (sheetContext) => ConnectionSheet(
         mode: mode,
         readRemoteAccess: readRemoteAccess,
-        remoteAccessOnThisPhone: !paused,
+        remoteAccessOnThisPhone: thisPhoneOn && !paused,
         pairingError: pairingError,
+        phoneStatus: phoneStatus,
+        offlineReason: offlineReason,
         onRemoteAccessChanged: onPause == null
             ? null
             : (on) async {

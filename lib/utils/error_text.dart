@@ -102,6 +102,41 @@ abstract final class Errors {
       "The app can't reach your Quark right now. Check your internet "
       "connection, or try again when you're home.";
 
+  /// This phone has never paired and is away from home, where it can't
+  /// (#3776). Pairing asks the Quark over the home network.
+  static const String finishRemoteAccessAtHome =
+      'Open Quark once on your home Wi-Fi to finish setting up remote access.';
+
+  /// The Quark has remote access turned off, so this phone has nothing to
+  /// set up (#3776).
+  static const String quarkRemoteAccessOff =
+      'Remote access is off on your Quark. An admin can turn it on in '
+      'Settings.';
+
+  /// The Quark answered a pairing with 503: it is still connecting its own
+  /// remote access, and the phone asks again on its own (#3776).
+  static const String quarkRemoteAccessNotConnected =
+      "Your Quark isn't connected to remote access yet. We'll keep trying.";
+
+  /// The Quark answered a pairing with 409: it has no way to add a device
+  /// right now — remote access was turned off, it is on its own network, or
+  /// it lost its enrollment (#3776). Each has the same way out.
+  static const String quarkRefusedThisPhone =
+      "Your Quark can't add this phone to remote access right now. An admin "
+      'can turn remote access off and on again in Settings to fix it.';
+
+  /// This phone paired, but its own connection did not start. The app drops
+  /// the pairing and pairs again on the next check at home (#3776).
+  static const String phoneRemoteAccessDidNotStart =
+      "Remote access couldn't start on this phone. It will set itself up "
+      "again the next time it's on your home Wi-Fi.";
+
+  /// The Quark no longer accepts this phone's key. Re-pairing is automatic at
+  /// home, so this shows only while that has not happened yet (#3776).
+  static const String phoneRemoteAccessRejected =
+      'Your Quark stopped accepting this phone. It will set itself up again '
+      "the next time it's on your home Wi-Fi.";
+
   /// The device has nowhere safe to keep a sign-in. On a Linux desktop that
   /// is a Secret Service (GNOME Keyring, KWallet) that is missing or locked
   /// (#3148); the Quark accepted the password, so this is not a credentials

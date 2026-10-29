@@ -8,30 +8,41 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The same switch as the connection sheet. Turning it off asks how long,
 /// and that pause stops only this device's node. The label says "this
 /// phone" or "this computer" for the device the app is on (#3779). The
-/// Network tab leaves this card out where there is no on-device node.
+/// Network tab leaves this card out where there is no on-device node. The
+/// switch reads off until this device has paired, and the line under it
+/// says where setup stands: waiting on the Quark, what to do away from
+/// home, or why it is not working (#3776). Turning it on checks again,
+/// which pairs at home.
 ///
 /// Key: `remote_access_on_this_phone`.
 class ThisPhoneCard extends StatelessWidget {
-  /// Creates the card over [ConnectionController.instance].
-  const ThisPhoneCard({super.key});
+  /// Creates the card over [connection], [ConnectionController.instance]
+  /// unless a test passes its own.
+  const ThisPhoneCard({super.key, this.connection});
+
+  /// The controller the card reads and drives.
+  final ConnectionController? connection;
 
   @override
   Widget build(BuildContext context) {
-    final connection = ConnectionController.instance;
+    final connection = this.connection ?? ConnectionController.instance;
     return ListenableBuilder(
       listenable: connection,
       builder: (context, _) {
         final error = connection.pairingError;
+        final status = connection.phoneRemoteAccessDetail;
         final tokens = QuarkTokens.of(context);
         return Card(
           margin: EdgeInsets.zero,
           child: SwitchListTile(
             key: const ValueKey('remote_access_on_this_phone'),
             title: Text(remoteAccessOnThisDevice()),
-            subtitle: error == null
-                ? null
-                : Text(error, style: TextStyle(color: tokens.error)),
-            value: !connection.remoteAccessPaused,
+            subtitle: error != null
+                ? Text(error, style: TextStyle(color: tokens.error))
+                : status != null
+                ? Text(status)
+                : null,
+            value: connection.remoteAccessOnThisPhone,
             onChanged: (on) async {
               if (on) {
                 await connection.resumeRemoteAccess();

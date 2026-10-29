@@ -29,6 +29,8 @@ class ConnectionSheet extends StatefulWidget {
     this.address = _activeBaseUrl,
     this.remoteAccessOnThisPhone = true,
     this.pairingError,
+    this.phoneStatus,
+    this.offlineReason,
     this.onRemoteAccessChanged,
     super.key,
   });
@@ -55,6 +57,15 @@ class ConnectionSheet extends StatefulWidget {
 
   /// Why this phone could not set itself up, in [Errors]' words, or null.
   final String? pairingError;
+
+  /// Where this phone's remote access setup stands, in words, or null.
+  /// [pairingError] takes its place when set.
+  final String? phoneStatus;
+
+  /// Why the Quark is out of reach when the app knows — this phone never
+  /// finished setting up remote access (#3776). Replaces the general
+  /// offline detail.
+  final String? offlineReason;
 
   /// Turns this phone's remote access on or off. Null hides the switch,
   /// which is how the sheet stays as it was where pausing does not apply.
@@ -140,7 +151,8 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
           ConnectionMode.remote =>
             "You're away from home, so the app reaches your Quark through "
                 'remote access.',
-          ConnectionMode.offline => Errors.quarkOutOfReach,
+          ConnectionMode.offline =>
+            widget.offlineReason ?? Errors.quarkOutOfReach,
         },
         remoteAccess: snapshot.data,
         isCheckingRemoteAccess:
@@ -153,6 +165,7 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
         thisPhoneLabel: remoteAccessOnThisDevice(),
         thisPhoneOn: widget.remoteAccessOnThisPhone,
         thisPhoneError: widget.pairingError,
+        thisPhoneStatus: widget.phoneStatus,
         onThisPhoneChanged: widget.onRemoteAccessChanged,
       ),
     );

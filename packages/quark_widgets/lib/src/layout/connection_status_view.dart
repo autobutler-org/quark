@@ -43,6 +43,7 @@ class ConnectionStatusView extends StatelessWidget {
     this.thisPhoneOn = true,
     this.onThisPhoneChanged,
     this.thisPhoneError,
+    this.thisPhoneStatus,
     super.key,
   });
 
@@ -81,7 +82,12 @@ class ConnectionStatusView extends StatelessWidget {
   final ValueChanged<bool>? onThisPhoneChanged;
 
   /// Why this phone could not set itself up, in the caller's words, or null.
+  /// Shown in the error color, in place of [thisPhoneStatus].
   final String? thisPhoneError;
+
+  /// Where this phone's setup stands, in the caller's words, or null. Shown
+  /// under the switch when there is no [thisPhoneError].
+  final String? thisPhoneStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +100,7 @@ class ConnectionStatusView extends StatelessWidget {
         : null;
     final onThisPhoneChanged = this.onThisPhoneChanged;
     final thisPhoneError = this.thisPhoneError;
+    final thisPhoneStatus = this.thisPhoneStatus;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -168,9 +175,11 @@ class ConnectionStatusView extends StatelessWidget {
             key: const ValueKey('remote_access_on_this_phone'),
             contentPadding: EdgeInsets.zero,
             title: Text(thisPhoneLabel ?? ''),
-            subtitle: thisPhoneError == null
-                ? null
-                : Text(thisPhoneError, style: TextStyle(color: tokens.error)),
+            subtitle: thisPhoneError != null
+                ? Text(thisPhoneError, style: TextStyle(color: tokens.error))
+                : thisPhoneStatus != null
+                ? Text(thisPhoneStatus)
+                : null,
             value: thisPhoneOn,
             onChanged: onThisPhoneChanged,
           ),

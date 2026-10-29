@@ -24,6 +24,17 @@ void main() {
       }
     });
 
+    testWidgets('says the reason in place of the body when one is set', (
+      tester,
+    ) async {
+      QuarkDisconnectedView.reason = 'Finish setting up at home.';
+      addTearDown(() => QuarkDisconnectedView.reason = null);
+      await pumpAt(tester, const QuarkDisconnectedView());
+
+      expect(find.text('Finish setting up at home.'), findsOneWidget);
+      expect(find.text(quarkDisconnectedBody), findsNothing);
+    });
+
     testWidgets('shows the address it could not reach', (tester) async {
       await pumpAt(
         tester,

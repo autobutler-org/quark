@@ -120,12 +120,19 @@ class QuarkDisconnectedView extends StatelessWidget {
   /// builds this view can offer the button without a new argument.
   static VoidCallback? turnOnRemoteAccess;
 
+  /// Why the Quark is out of reach when the app knows, in the caller's words,
+  /// shown in place of the general body. Set while this phone has not
+  /// finished setting up remote access, so a page that already builds this
+  /// view says so without a new argument.
+  static String? reason;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = QuarkTokens.of(context);
     final address = hostAddress;
     final turnOn = onTurnOnRemoteAccess ?? turnOnRemoteAccess;
+    final body = reason ?? quarkDisconnectedBody;
 
     return SingleChildScrollView(
       padding: EdgeInsets.symmetric(
@@ -155,7 +162,7 @@ class QuarkDisconnectedView extends StatelessWidget {
               ),
               SizedBox(height: tokens.spacingSm),
               Text(
-                quarkDisconnectedBody,
+                body,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
