@@ -135,6 +135,28 @@ String homePath(String? username) {
 String landingPath({required bool isAdmin, required String? username}) =>
     isAdmin ? '' : homePath(username);
 
+/// Whether the signed-in account may change [path] on [serial].
+///
+/// An admin may write any path. A member may write their home on the internal
+/// drive — `users/<username>` and everything inside it — and nothing else this
+/// client can see they may write: the device root, another account's files, a
+/// read share (#2139). A path on another drive is outside that home. Group
+/// folders and a write share are writable on the Quark too, but this client
+/// does not have those grants, so it reports them as not writable rather than
+/// offering a change the Quark would refuse.
+bool canWritePath({
+  required bool isAdmin,
+  required String? username,
+  required String serial,
+  required String path,
+}) {
+  if (isAdmin) return true;
+  if (serial.trim().isNotEmpty) return false;
+  final home = homePath(username);
+  if (home.isEmpty) return false;
+  return isWithin(home, path);
+}
+
 /// Whether [path] is [rootPath] or something inside it — the test for whether
 /// a caller whose reach starts at [rootPath] can open [path].
 ///

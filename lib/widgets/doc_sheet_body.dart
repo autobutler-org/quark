@@ -5,6 +5,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/content_search_service.dart';
 import 'package:quark/utils/connection_error.dart';
+import 'package:quark/utils/delete_doc_sheet.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/content_result_tile.dart';
 import 'package:quark/widgets/doc_sheet_kind.dart';
@@ -66,6 +67,11 @@ class DocSheetBody extends StatelessWidget {
   /// rows have no menu.
   final ValueChanged<FileNode>? onRename;
 
+  /// Deletes a listed file, after the page confirms. A file
+  /// [canDeleteListedFile] rejects is left out of the menu, and content-only
+  /// hits have no menu (#3339).
+  final ValueChanged<FileNode>? onDelete;
+
   /// Shows [files], [otherFiles] and [contentResults] for [searchQuery].
   const DocSheetBody({
     required this.kind,
@@ -81,6 +87,7 @@ class DocSheetBody extends StatelessWidget {
     required this.onOpenDoc,
     required this.onOpenSheet,
     this.onRename,
+    this.onDelete,
     super.key,
   });
 
@@ -207,6 +214,7 @@ class DocSheetBody extends StatelessWidget {
         node.deviceSerial: node.deviceName,
     };
     final onRename = this.onRename;
+    final onDelete = this.onDelete;
     final openOwn = kind == DocSheetKind.docs ? onOpenDoc : onOpenSheet;
     final openOther = kind == DocSheetKind.docs ? onOpenSheet : onOpenDoc;
     DocSheetTile nodeTile(FileNode node, VoidCallback onTap) => DocSheetTile(
@@ -216,6 +224,9 @@ class DocSheetBody extends StatelessWidget {
       snippet: snippets[DocSheetTile.fileKey(node.deviceSerial, node.apiPath)],
       onTap: onTap,
       onRename: onRename == null ? null : () => onRename(node),
+      onDelete: onDelete == null || !canDeleteListedFile(node)
+          ? null
+          : () => onDelete(node),
     );
     ContentResultTile hitTile(ContentSearchResult r) => ContentResultTile(
       result: r,

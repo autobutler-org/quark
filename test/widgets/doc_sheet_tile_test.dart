@@ -14,6 +14,7 @@ void main() {
     WidgetTester tester, {
     VoidCallback? onRename,
     VoidCallback? onShare,
+    VoidCallback? onDelete,
   }) => tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
@@ -24,6 +25,7 @@ void main() {
           onTap: () {},
           onRename: onRename,
           onShare: onShare,
+          onDelete: onDelete,
         ),
       ),
     ),
@@ -48,6 +50,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(renamed, 1);
+  });
+
+  testWidgets('Delete is in the row menu when the row can be deleted', (
+    tester,
+  ) async {
+    var deleted = 0;
+    await pumpTile(tester, onRename: () {}, onDelete: () => deleted++);
+    await tester.tap(find.byKey(const ValueKey('doc_sheet_menu_$path')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('doc_sheet_delete_$path')));
+    await tester.pumpAndSettle();
+    expect(deleted, 1);
   });
 
   testWidgets('Share is in the row menu when the row can be shared', (

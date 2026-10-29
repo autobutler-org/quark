@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/content_search_service.dart';
+import 'package:quark/utils/delete_doc_sheet.dart';
 import 'package:quark/widgets/content_result_tile.dart';
 import 'package:quark/widgets/doc_sheet_tile.dart';
 import 'package:quark/widgets/search_section_header.dart';
@@ -32,6 +33,7 @@ class SlidesBody extends StatelessWidget {
     required this.onOpen,
     this.onRename,
     this.onShare,
+    this.onDelete,
     super.key,
   });
 
@@ -71,6 +73,11 @@ class SlidesBody extends StatelessWidget {
   /// Opens the share sheet for a listed presentation (#1170); content-only
   /// hits have no menu.
   final ValueChanged<FileNode>? onShare;
+
+  /// Deletes a listed presentation, after the page confirms. A file
+  /// [canDeleteListedFile] rejects is left out of the menu, and content-only
+  /// hits have no menu (#3339).
+  final ValueChanged<FileNode>? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -132,6 +139,7 @@ class SlidesBody extends StatelessWidget {
     };
     final onRename = this.onRename;
     final onShare = this.onShare;
+    final onDelete = this.onDelete;
 
     final items = <Widget>[
       for (final node in files)
@@ -144,6 +152,9 @@ class SlidesBody extends StatelessWidget {
           onTap: () => onOpen(node),
           onRename: onRename == null ? null : () => onRename(node),
           onShare: onShare == null ? null : () => onShare(node),
+          onDelete: onDelete == null || !canDeleteListedFile(node)
+              ? null
+              : () => onDelete(node),
         ),
       if (contentOnly.isNotEmpty)
         const SearchSectionHeader(
