@@ -163,6 +163,7 @@ events, so clients treat events as a hint to refresh and the REST endpoints as t
 | Jobs       | `job_queued`, `job_started`, `job_progress`, `job_completed`, `job_failed`, `job_canceled` |
 | Backup     | `backup_started`, `backup_progress`, `backup_completed`, `backup_failed`                   |
 | Vault      | `vault_changed`, delivered only to the account whose vault it is                          |
+| Feeds      | `feed_changed`, delivered only to the account whose subscription changed                  |
 | Accounts   | `account_changed`, `access_changed`                                                       |
 | Settings   | `feature_flag_changed`, `public_settings_changed`                                         |
 | Device     | `hostname_changed`                                                                        |

@@ -43,6 +43,12 @@ const (
 	// VaultChanged; Path is empty.
 	EventVaultChanged EventKind = "vault_changed"
 
+	// EventFeedChanged fires when an account subscribes to a feed, renames it,
+	// files it in a folder, or unsubscribes (#3714). Data is a FeedChanged;
+	// Path is empty. It reaches only that account's sessions. A feed URL can
+	// carry a private token, and the event never carries the URL.
+	EventFeedChanged EventKind = "feed_changed"
+
 	// EventAccountChanged fires when an account's role changes (promoted or
 	// demoted), so signed-in apps refetch what they are allowed to show.
 	EventAccountChanged EventKind = "account_changed"
@@ -190,6 +196,15 @@ type VaultChanged struct {
 	// to the key or the whole vault.
 	ItemID int64 `json:"itemId"`
 	// UserID is the account whose vault changed. It is never sent.
+	UserID int64 `json:"-"`
+}
+
+// FeedChanged is the data of a feed_changed event. Like a vault event it
+// reaches only the sessions of the account whose subscription changed.
+type FeedChanged struct {
+	// FeedID is the subscription created, updated or deleted.
+	FeedID int64 `json:"feedId"`
+	// UserID is the account whose subscription changed. It is never sent.
 	UserID int64 `json:"-"`
 }
 

@@ -76,6 +76,9 @@ type Querier interface {
 	// photo_albums.user_id is nullable only because SQLite cannot add a NOT NULL
 	// foreign key column (014); the CAST keeps the parameter a plain id.
 	CreateFavoritesAlbum(ctx context.Context, userID int64) (PhotoAlbum, error)
+	// CreateFeed stores a subscription. A second row with the same url for the
+	// same account is a unique violation. url is stored whole, token included.
+	CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, error)
 	CreateGroup(ctx context.Context, name string) (Group, error)
 	CreateJob(ctx context.Context, arg CreateJobParams) (Job, error)
 	// CreatePendingUser records an account request from the sign-in page (#1908).
@@ -105,6 +108,9 @@ type Querier interface {
 	// DeleteFavoritesUnder drops the favorite for a deleted path, and every
 	// favorite under it when the path is a folder, for every account.
 	DeleteFavoritesUnder(ctx context.Context, arg DeleteFavoritesUnderParams) error
+	// DeleteFeed removes one of an account's subscriptions and, by the foreign
+	// key, its entries. Another account's id deletes nothing.
+	DeleteFeed(ctx context.Context, arg DeleteFeedParams) (int64, error)
 	DeleteFileContent(ctx context.Context, arg DeleteFileContentParams) error
 	DeleteFileContentBySerial(ctx context.Context, serial string) error
 	// DeleteGroup drops a group; ON DELETE CASCADE drops its members and grants.
@@ -205,6 +211,9 @@ type Querier interface {
 	GetDeviceName(ctx context.Context, deviceSerial string) (string, error)
 	GetDeviceRole(ctx context.Context, deviceSerial string) (string, error)
 	GetFavoritesAlbum(ctx context.Context, userID int64) (PhotoAlbum, error)
+	// GetFeed returns one of an account's subscriptions. Another account's id
+	// finds nothing.
+	GetFeed(ctx context.Context, arg GetFeedParams) (Feed, error)
 	GetGroup(ctx context.Context, id int64) (Group, error)
 	GetInstallID(ctx context.Context) (string, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
@@ -316,6 +325,11 @@ type Querier interface {
 	ListConnectedDevices(ctx context.Context) ([]ConnectedDevice, error)
 	ListExactDuplicates(ctx context.Context) ([]ListExactDuplicatesRow, error)
 	ListFavorites(ctx context.Context, userID int64) ([]PhotoFavorite, error)
+	// Feed subscriptions (#3714). Every query takes the account's user_id, so no
+	// call can reach another account's rows. url is a credential and is returned
+	// only to that account.
+	// ListFeeds returns an account's subscriptions, filed folders first.
+	ListFeeds(ctx context.Context, userID int64) ([]Feed, error)
 	// ListGroupMembers lists every membership with the member's username, for
 	// ListGroups to fold into its groups.
 	ListGroupMembers(ctx context.Context) ([]ListGroupMembersRow, error)
@@ -539,6 +553,10 @@ type Querier interface {
 	TrimAccountRequestHistory(ctx context.Context, limit int64) error
 	UpdateCalendarEvent(ctx context.Context, arg UpdateCalendarEventParams) (CalendarEvent, error)
 	UpdateChatChannel(ctx context.Context, arg UpdateChatChannelParams) (ChatChannel, error)
+	// UpdateFeed renames one of an account's subscriptions or moves it to another
+	// folder. Another account's id updates nothing and returns no row. The feed
+	// URL is not changed here.
+	UpdateFeed(ctx context.Context, arg UpdateFeedParams) (Feed, error)
 	// The status guard keeps a job finished or canceled since from being touched.
 	UpdateJobDetail(ctx context.Context, arg UpdateJobDetailParams) error
 	// The owner guard keeps an instance whose job was reclaimed from writing to a
