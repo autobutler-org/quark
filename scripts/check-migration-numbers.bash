@@ -18,6 +18,12 @@ Checks the migrations under internal/db/migrations/ against BASE_REF
      NNN_snake_case.up.sql / NNN_snake_case.down.sql.
   4. The numbers run contiguously with no gaps, starting at 000 or 001, so
      the order a migration merged in is the order it is numbered in.
+  5. The PostgreSQL set under internal/db/migrations_postgres/ is in step
+     with it (#2958). That set starts at a baseline, its lowest number, which
+     stands for every SQLite migration up to and including that number; above
+     the baseline each engine has the same file names. A migration added for
+     one engine without its counterpart fails here. Every PostgreSQL
+     migration is named like a SQLite one and has both directions.
 
 Untracked files count, so a local run catches a new migration before it is
 committed. Exits 0 when clean, 1 with one line per violation otherwise.
@@ -27,6 +33,7 @@ fi
 
 BASE_REF="${1:-${MIGRATION_BASE_REF:-origin/main}}"
 MIGRATIONS_DIR="internal/db/migrations"
+POSTGRES_DIR="internal/db/migrations_postgres"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_ROOT}"
@@ -123,6 +130,47 @@ for (( number = min_number; number <= max_number; number++ )); do
         report "${MIGRATIONS_DIR}: no migration numbered ${padded} (numbering must be contiguous, with no gaps)"
     fi
 done
+
+# Rule 5: the PostgreSQL set against the SQLite one. The baseline is the
+# lowest PostgreSQL number; everything above it pairs up by file name.
+declare -A sqlite_files=()
+for path in "${existing[@]}" "${added[@]}"; do
+    sqlite_files["$(basename "${path}")"]=1
+done
+declare -A postgres_files=()
+declare -A postgres_directions=()
+baseline=-1
+while IFS= read -r path; do
+    [[ -n "${path}" ]] || continue
+    name="$(basename "${path}")"
+    if [[ ! "${name}" =~ ${name_pattern} ]]; then
+        report "${path}: not named NNN_snake_case.up.sql or NNN_snake_case.down.sql"
+        continue
+    fi
+    number=$((10#${BASH_REMATCH[1]}))
+    postgres_files["${name}"]=${number}
+    postgres_directions["${BASH_REMATCH[1]}_${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"]=1
+    (( baseline < 0 || number < baseline )) && baseline=${number}
+done < <(git ls-files --cached --others --exclude-standard -- "${POSTGRES_DIR}" | sort)
+
+if (( baseline >= 0 )); then
+    for key in "${!postgres_directions[@]}"; do
+        stem="${key%.*}"
+        [[ -n "${postgres_directions[${stem}.up]:-}" ]] || report "${POSTGRES_DIR}/${stem}.up.sql: missing (found only the .down.sql)"
+        [[ -n "${postgres_directions[${stem}.down]:-}" ]] || report "${POSTGRES_DIR}/${stem}.down.sql: missing (found only the .up.sql)"
+    done
+    for name in "${!postgres_files[@]}"; do
+        if (( postgres_files[${name}] > baseline )) && [[ -z "${sqlite_files[${name}]:-}" ]]; then
+            report "${POSTGRES_DIR}/${name}: no ${MIGRATIONS_DIR}/${name}; a schema change is a migration in each set with the same name (internal/db/AGENTS.md)"
+        fi
+    done
+    for name in "${!sqlite_files[@]}"; do
+        [[ "${name}" =~ ${name_pattern} ]] || continue
+        if (( 10#${BASH_REMATCH[1]} > baseline )) && [[ -z "${postgres_files[${name}]:-}" ]]; then
+            report "${MIGRATIONS_DIR}/${name}: no ${POSTGRES_DIR}/${name}; a schema change is a migration in each set with the same name, even one that does nothing on that engine (internal/db/AGENTS.md)"
+        fi
+    done
+fi
 
 if (( violations > 0 )); then
     echo

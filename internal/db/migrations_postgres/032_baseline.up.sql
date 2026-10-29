@@ -5,10 +5,9 @@
 -- generate the same Go types for both engines.
 --
 -- Not here: content search. SQLite's file_content_fts is an FTS5 table kept
--- current by three triggers, and its PostgreSQL counterpart (a tsvector column
--- and a GIN index) belongs to #2958 together with the search queries, which
--- are raw SQL in pkg/util/searchutil and not part of the sqlc set. The
--- file_content table itself is here, because generated queries write to it.
+-- current by three triggers, and its PostgreSQL counterpart, a tsvector column
+-- and a GIN index, is 041_content_search. The file_content table itself is
+-- here, because generated queries write to it.
 
 -- Functions named after SQLite ones, so a shared query can call them under one
 -- spelling (rule 16 in sql/queries/AGENTS.md). Each implements only the form

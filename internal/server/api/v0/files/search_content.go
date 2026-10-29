@@ -24,9 +24,9 @@ type ContentSearchResult struct {
 }
 
 // searchContent godoc
-// @Summary Search file contents (FTS5)
+// @Summary Search file contents
 // @Schemes http https
-// @Description Full-text search over indexed file contents using SQLite FTS5.
+// @Description Full-text search over indexed file contents: FTS5 on SQLite, a tsvector on PostgreSQL, which ranks differently.
 // @Description Only text-based file formats are indexed (.txt, .md, .csv, .yaml, .json, etc.).
 // @Description Binary formats (images, video, PDF) are not indexed.
 // @Description Returns up to `limit` results ordered by relevance rank.
@@ -37,7 +37,6 @@ type ContentSearchResult struct {
 // @Success 200 {array}  ContentSearchResult
 // @Failure 400 {object} serverutil.Response "Bad Request — missing query"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
-// @Failure 501 {object} serverutil.Response "Content search is not supported on the PostgreSQL backend yet"
 // @Security BearerAuth
 // @Router /files/search/content [get]
 func searchContent(c *gin.Context) *serverutil.Response {

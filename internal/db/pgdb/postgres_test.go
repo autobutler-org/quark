@@ -124,7 +124,7 @@ var postgresType = map[string]string{
 // The PostgreSQL schema is written by hand beside the SQLite one. This holds
 // it to the same tables and, column for column, the same order, nullability
 // and mapped type, which is what gives sqlc identical Go types on both sides.
-// Indexes, defaults and constraints are not compared here (#2958).
+// Indexes, defaults and constraints are not compared here.
 func TestPostgresSchemaMatchesSQLite(t *testing.T) {
 	postgres := openPostgres(t)
 	sqlite := dbtest.NewDB(t).Db
@@ -132,8 +132,8 @@ func TestPostgresSchemaMatchesSQLite(t *testing.T) {
 	want := map[string][]column{}
 	// FTS5 virtual tables and the shadow tables SQLite creates beside them are
 	// not in the PostgreSQL schema. A new one has to be named here:
-	// file_content_fts (content search) and music_tracks_fts (music search),
-	// both #2958.
+	// file_content_fts (content search, whose PostgreSQL counterpart is the
+	// search_vector column skipped below) and music_tracks_fts (music search).
 	tables, err := sqlite.Query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
 		AND name != 'schema_migrations' AND name NOT LIKE 'file_content_fts%' AND name NOT LIKE 'music_tracks_fts%'`)
 	if err != nil {
@@ -181,6 +181,11 @@ func TestPostgresSchemaMatchesSQLite(t *testing.T) {
 		var col column
 		if err := rows.Scan(&table, &col.Name, &col.Type, &col.Nullable); err != nil {
 			t.Fatal(err)
+		}
+		// PostgreSQL's counterpart of file_content_fts is a generated column
+		// on file_content itself (041_content_search). No query reads it.
+		if table == "file_content" && col.Name == "search_vector" {
+			continue
 		}
 		got[table] = append(got[table], col)
 	}

@@ -71,7 +71,7 @@ runs that check on its own.
   `/var/lib/postgresql` and `PGDATA` is set to `/var/lib/postgresql/pgdata`, a layout images 17 and 18 both
   accept.
 - `pg_trgm`, which filename search needs, ships in the image. The migration that adds filename search enables
-  it (#2958), so there is no init script here to keep in step with the migrations.
+  it (#2956), so there is no init script here to keep in step with the migrations.
 
 | Target                     | What it does                                              |
 | -------------------------- | --------------------------------------------------------- |

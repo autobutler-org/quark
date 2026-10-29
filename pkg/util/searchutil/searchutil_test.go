@@ -154,10 +154,10 @@ func TestIndexFile(t *testing.T) {
 	}
 }
 
-// --- sanitizeFTSQuery ---
+// --- SanitizeQuery ---
 
 func TestSanitizeFTSQuery_PlainTerm(t *testing.T) {
-	got := sanitizeFTSQuery("hello")
+	got := SanitizeQuery("hello")
 	if !strings.HasPrefix(got, `"`) || !strings.HasSuffix(got, `"`) {
 		t.Errorf("plain term should be quoted, got %q", got)
 	}
@@ -165,7 +165,7 @@ func TestSanitizeFTSQuery_PlainTerm(t *testing.T) {
 
 func TestSanitizeFTSQuery_WithOperator(t *testing.T) {
 	q := "hello AND world"
-	got := sanitizeFTSQuery(q)
+	got := SanitizeQuery(q)
 	if got != q {
 		t.Errorf("operator query should pass through unchanged, got %q", got)
 	}
@@ -173,14 +173,14 @@ func TestSanitizeFTSQuery_WithOperator(t *testing.T) {
 
 func TestSanitizeFTSQuery_WithPrefix(t *testing.T) {
 	q := "hel*"
-	got := sanitizeFTSQuery(q)
+	got := SanitizeQuery(q)
 	if got != q {
 		t.Errorf("prefix query should pass through, got %q", got)
 	}
 }
 
 func TestSanitizeFTSQuery_Empty(t *testing.T) {
-	got := sanitizeFTSQuery("")
+	got := SanitizeQuery("")
 	if got == "" {
 		t.Error("empty query should not return empty string (FTS5 syntax error)")
 	}

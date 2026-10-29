@@ -298,7 +298,8 @@ Every query lives in `sql/queries/*.sql` and reaches Go as generated code in `in
 - **A query whose only caller is a test is fine.** A query with no caller at all is dead: sqlc has no linter
   for that, so check before adding one and check again when you delete the last call site.
 - **Legitimate exceptions, each needing a comment saying which one applies:** SQL sqlc's SQLite parser
-  cannot accept (FTS5 `MATCH`, `rank` and `snippet()` in `pkg/util/searchutil/search.go`), DDL and
+  cannot accept (FTS5 `MATCH`, `rank` and `snippet()` in `internal/db/content_search.go`, beside the
+  PostgreSQL statement for the same search), DDL and
   statements built from `sqlite_master` at runtime (`internal/db/reset.go`), and writes to a database
   outside the migration set (the chat and vault backup files in `pkg/backup/ciphertext_backup.go`, whose
   schemas are `internal/db/chat_backup_schema.go` and `internal/db/vault_items_backup_schema.go`).

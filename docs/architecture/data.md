@@ -59,7 +59,6 @@ leaves the rest of the server serving.
 
 | Feature                                                          | On PostgreSQL today                                                                                      | Issue |
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----- |
-| Content search (`GET /files/search/content`)                     | Refused. Files are still indexed into `file_content`, so the text is there when search arrives           | #2958 |
 | Music search                                                     | No route yet. `music_tracks` is shared; FTS5 `music_tracks_fts` is SQLite only, like content search      | #2958 |
 | Choosing the backend from the admin settings                     | Environment variables only                                                                               | #2961 |
 | More than one instance on one database                           | Not refused and not safe. See [Running Quark in a Container](../container.md)                            | #2964 |
@@ -87,6 +86,18 @@ and re-runs the migrations in one transaction and keeps the same tables SQLite's
   (`chatutil.keepingAnOwner`) take a row lock as their transaction's first statement, a no-op `UPDATE`, so the
   second request waits for the first and counts what it left (#3171). A job lane's limit (`ClaimJob`) is still
   open, and is tracked with the rest of the multi-instance work in #2964.
+- **Content search ranks by another formula.** Both engines find the same files for the same words
+  (`TestContentSearchMatchesOnBothEngines` holds them to it): plain text is one phrase, stemmed the English way
+  on both (`porter` on SQLite, the `english` configuration on PostgreSQL), and quotes, `OR`, `AND` and `NOT`
+  mean the same. The order is not the same. SQLite ranks with FTS5's bm25, which weighs a rare word above a
+  common one and saturates how often a word repeats; PostgreSQL's `ts_rank` counts occurrences, divided by the
+  log of the text's length, and has no idea how rare a word is across the index. A file that says a word many
+  times in a short text comes first on both, but a query of two words, one rare and one common, can put a file
+  with only the common word higher on PostgreSQL. The snippet is `ts_headline`'s and shows up to 20 words around
+  the match, where FTS5's shows 20 tokens with `…` at a cut. Some queries match differently: English stop
+  words (`the`, `and`, `of`) are dropped on PostgreSQL, so a query of only stop words finds nothing; accents
+  are kept, where `unicode61` folds them away, so `cafe` does not find `café`; a prefix star (`prog*`) is
+  dropped, so it matches the whole word only; a column filter is ignored; and parentheses do not group.
 
 ## Main schema
 
@@ -153,12 +164,15 @@ join. `path_access.level` is `read`, `write` or `owner`, and each row names exac
 | `036_music_library`    | `music_tracks`, `music_tracks_fts` (FTS5, SQLite only)              |
 | `037_per_account_vault` | `vault_keys`, `vault_items`                                            |
 | `038_drop_household_vault` | drops `005_vault`'s tables                                          |
+| `041_content_search`   | PostgreSQL only: `file_content.search_vector` (a generated `tsvector`) and its GIN index; nothing on SQLite |
 
 `music_tracks` (#2982) is a cache built from audio files, not a record: every column is derived, and a rescan
-rebuilds it. `music_tracks_fts` is its FTS5 mirror and exists only on SQLite, with `file_content_fts`.
+rebuilds it. `music_tracks_fts` is its FTS5 mirror and exists only on SQLite, like `file_content_fts`, whose
+PostgreSQL counterpart is the `search_vector` column of `041_content_search`.
 
 Migrations are numbered, gap-free and paired; `make check/migrations` fails a PR whose number is at or below
-`main`'s highest, because golang-migrate would silently skip it on upgraded devices.
+`main`'s highest, because golang-migrate would silently skip it on upgraded devices. It also fails a migration
+above PostgreSQL's `032_baseline` that one engine's set has and the other's does not.
 
 The migrations run up on every start, and startup never empties a database to get there (#3127).
 `classifyMigrationState` reads the version recorded in `schema_migrations` and `initSchema` acts on what it finds:
