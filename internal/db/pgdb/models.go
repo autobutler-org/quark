@@ -148,6 +148,37 @@ type DeviceRole struct {
 	UpdatedAt    time.Time
 }
 
+type Feed struct {
+	ID                  int64
+	UserID              int64
+	Url                 string
+	Title               string
+	Name                string
+	SiteLink            string
+	Icon                string
+	Folder              string
+	Etag                string
+	LastModified        string
+	LastFetchedAt       sql.NullTime
+	LastError           string
+	ConsecutiveFailures int64
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type FeedEntry struct {
+	ID          int64
+	FeedID      int64
+	Guid        string
+	Url         string
+	Title       string
+	Author      string
+	PublishedAt sql.NullTime
+	FetchedAt   time.Time
+	Content     string
+	ContentHash string
+}
+
 type FileContent struct {
 	ID           int64
 	Serial       string

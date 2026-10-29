@@ -141,6 +141,11 @@ func (a *postgresQueries) CreateFavoritesAlbum(ctx context.Context, userID int64
 	return PhotoAlbum(row), err
 }
 
+func (a *postgresQueries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, error) {
+	row, err := a.q.CreateFeed(ctx, pgdb.CreateFeedParams(arg))
+	return Feed(row), err
+}
+
 func (a *postgresQueries) CreateGroup(ctx context.Context, name string) (Group, error) {
 	row, err := a.q.CreateGroup(ctx, name)
 	return Group(row), err
@@ -218,6 +223,10 @@ func (a *postgresQueries) DeleteExpiredSessions(ctx context.Context) error {
 
 func (a *postgresQueries) DeleteFavoritesUnder(ctx context.Context, arg DeleteFavoritesUnderParams) error {
 	return a.q.DeleteFavoritesUnder(ctx, pgdb.DeleteFavoritesUnderParams(arg))
+}
+
+func (a *postgresQueries) DeleteFeed(ctx context.Context, arg DeleteFeedParams) (int64, error) {
+	return a.q.DeleteFeed(ctx, pgdb.DeleteFeedParams(arg))
 }
 
 func (a *postgresQueries) DeleteFileContent(ctx context.Context, arg DeleteFileContentParams) error {
@@ -445,6 +454,11 @@ func (a *postgresQueries) GetDeviceRole(ctx context.Context, deviceSerial string
 func (a *postgresQueries) GetFavoritesAlbum(ctx context.Context, userID int64) (PhotoAlbum, error) {
 	row, err := a.q.GetFavoritesAlbum(ctx, userID)
 	return PhotoAlbum(row), err
+}
+
+func (a *postgresQueries) GetFeed(ctx context.Context, arg GetFeedParams) (Feed, error) {
+	row, err := a.q.GetFeed(ctx, pgdb.GetFeedParams(arg))
+	return Feed(row), err
 }
 
 func (a *postgresQueries) GetGroup(ctx context.Context, id int64) (Group, error) {
@@ -843,6 +857,18 @@ func (a *postgresQueries) ListFavorites(ctx context.Context, userID int64) ([]Ph
 	items := make([]PhotoFavorite, len(rows))
 	for i, row := range rows {
 		items[i] = PhotoFavorite(row)
+	}
+	return items, nil
+}
+
+func (a *postgresQueries) ListFeeds(ctx context.Context, userID int64) ([]Feed, error) {
+	rows, err := a.q.ListFeeds(ctx, userID)
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]Feed, len(rows))
+	for i, row := range rows {
+		items[i] = Feed(row)
 	}
 	return items, nil
 }
@@ -1310,6 +1336,11 @@ func (a *postgresQueries) UpdateCalendarEvent(ctx context.Context, arg UpdateCal
 func (a *postgresQueries) UpdateChatChannel(ctx context.Context, arg UpdateChatChannelParams) (ChatChannel, error) {
 	row, err := a.q.UpdateChatChannel(ctx, pgdb.UpdateChatChannelParams(arg))
 	return ChatChannel(row), err
+}
+
+func (a *postgresQueries) UpdateFeed(ctx context.Context, arg UpdateFeedParams) (Feed, error) {
+	row, err := a.q.UpdateFeed(ctx, pgdb.UpdateFeedParams(arg))
+	return Feed(row), err
 }
 
 func (a *postgresQueries) UpdateJobDetail(ctx context.Context, arg UpdateJobDetailParams) error {

@@ -165,10 +165,17 @@ join. `path_access.level` is `read`, `write` or `owner`, and each row names exac
 | `037_per_account_vault` | `vault_keys`, `vault_items`                                            |
 | `038_drop_household_vault` | drops `005_vault`'s tables                                          |
 | `041_content_search`   | PostgreSQL only: `file_content.search_vector` (a generated `tsvector`) and its GIN index; nothing on SQLite |
+| `042_feeds`            | `feeds`, `feed_entries`                                                     |
 
 `music_tracks` (#2982) is a cache built from audio files, not a record: every column is derived, and a rescan
 rebuilds it. `music_tracks_fts` is its FTS5 mirror and exists only on SQLite, like `file_content_fts`, whose
 PostgreSQL counterpart is the `search_vector` column of `041_content_search`.
+
+`feeds` (#3714) is one account's feed subscriptions. Each row belongs to one account and nothing is shared, so
+a later unread count has one owner. `url` is the feed address and may carry a private token: it is checked for
+a public http or https address before anything is fetched, and errors and events never repeat it. `name` is the
+account's own label; `title` is the publisher's title. `folder` is the one label the account files the feed
+under. `feed_entries` holds items once a feed is read; this migration only creates the table.
 
 Migrations are numbered, gap-free and paired; `make check/migrations` fails a PR whose number is at or below
 `main`'s highest, because golang-migrate would silently skip it on upgraded devices. It also fails a migration

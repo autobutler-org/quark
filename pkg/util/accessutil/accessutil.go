@@ -533,6 +533,9 @@ type FilterEventResult struct {
 //     either.
 //   - vault_changed passes only to the account whose vault changed, so its
 //     other sessions refetch. The vault is private to its owner, admins too.
+//   - feed_changed passes only to the account whose subscription changed.
+//     A feed URL can carry a private token, and the event never carries it.
+//     Admins get no pass here either.
 //   - Otherwise an admin hears every event unchanged.
 //   - trash_changed, account_changed and music_library_changed carry no path
 //     and pass: each tells an open app to refetch something that answers for
@@ -573,6 +576,10 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 	}
 	if evt.Kind == eventbus.EventVaultChanged {
 		changed, ok := evt.Data.(eventbus.VaultChanged)
+		return FilterEventResult{Event: evt, Deliver: ok && changed.UserID != 0 && changed.UserID == access.principal.UserID}
+	}
+	if evt.Kind == eventbus.EventFeedChanged {
+		changed, ok := evt.Data.(eventbus.FeedChanged)
 		return FilterEventResult{Event: evt, Deliver: ok && changed.UserID != 0 && changed.UserID == access.principal.UserID}
 	}
 	if access.principal.IsAdmin {

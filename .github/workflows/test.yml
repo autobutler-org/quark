@@ -105,6 +105,21 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Download Go modules
+        run: |
+          # The module proxy drops connections often enough that one download
+          # fails a job whose tree is fine. The PostgreSQL job on #3850 died
+          # here, reading golang.org/x/text, and never ran a test; the same
+          # modules had already downloaded on the other Go jobs.
+          attempt=1
+          until go mod download; do
+            if [ "$attempt" -ge 3 ]; then
+              exit 1
+            fi
+            echo "go mod download failed (attempt ${attempt}); retrying"
+            attempt=$((attempt + 1))
+            sleep $((attempt * 5))
+          done
       - name: Check the database layer and a first run of the server on PostgreSQL
         run: |
           make test/db/postgres

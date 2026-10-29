@@ -4785,6 +4785,283 @@
                 }
             }
         },
+        "/feeds": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the caller's subscriptions, folders first, then by the caller's name or the publisher's title. Another account's subscriptions are not included. An account with none gets an empty list.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feeds"
+                ],
+                "summary": "List the caller's feed subscriptions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/feedutil.Feed"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Subscribes the caller to a feed. Without discover, url is the feed address and nothing is fetched. With discover, url is a site page: it is fetched and searched for a feed link. One link is subscribed to. Several links return 409 and the candidates, and store nothing; the caller subscribes to the chosen candidate with discover left false. The address must be http or https and must not resolve to a private, loopback or link-local range. A feed address can carry a private token, and no error repeats it. name is the caller's label and folder is the one folder they file it under. Publishes feed_changed to the caller's sessions.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feeds"
+                ],
+                "summary": "Subscribe to a feed",
+                "parameters": [
+                    {
+                        "description": "The feed or site address",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_feeds.addRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/feedutil.Feed"
+                        }
+                    },
+                    "400": {
+                        "description": "an address that is not allowed, a page with no feed, or a malformed body",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the caller already subscribes to that feed, or the page offers several",
+                        "schema": {
+                            "$ref": "#/definitions/v0_feeds.ChoiceJSON"
+                        }
+                    },
+                    "413": {
+                        "description": "a body over 16 KiB",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/feeds/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns one subscription of the caller's. Another account's id, or one that names nothing, is a 404, for an admin too.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feeds"
+                ],
+                "summary": "Get one of the caller's feed subscriptions",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Subscription id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/feedutil.Feed"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the caller has no subscription with that id",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes one of the caller's subscriptions and the entries stored for it. Another account's id, or one that names nothing, is a 404, for an admin too, and deletes nothing. Publishes feed_changed with the subscription's id to the caller's sessions.",
+                "tags": [
+                    "feeds"
+                ],
+                "summary": "Unsubscribe from a feed",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Subscription id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the caller has no subscription with that id",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes the caller's label, the folder they file the subscription under, or both. A missing field is left as it is. An empty name clears the label, so the publisher's title shows, and an empty folder takes the feed out of its folder. Another account's id, or one that names nothing, is a 404, for an admin too, and changes nothing. The feed URL is not changed. Publishes feed_changed to the caller's sessions.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feeds"
+                ],
+                "summary": "Rename a feed or file it in a folder",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Subscription id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The label, the folder, or both",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_feeds.updateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/feedutil.Feed"
+                        }
+                    },
+                    "400": {
+                        "description": "a label that is not valid, or a body that changes nothing",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the caller has no subscription with that id",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "413": {
+                        "description": "a body over 16 KiB",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/files": {
             "get": {
                 "security": [
@@ -12071,6 +12348,67 @@
                 }
             }
         },
+        "feedutil.Candidate": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "feedutil.Feed": {
+            "type": "object",
+            "properties": {
+                "consecutiveFailures": {
+                    "type": "integer"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "etag": {
+                    "type": "string"
+                },
+                "folder": {
+                    "type": "string"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "lastError": {
+                    "type": "string"
+                },
+                "lastFetchedAt": {
+                    "type": "string"
+                },
+                "lastModified": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "siteLink": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "fileversionutil.Kind": {
             "type": "string",
             "enum": [
@@ -13548,6 +13886,48 @@
             "properties": {
                 "isFavorite": {
                     "type": "boolean"
+                }
+            }
+        },
+        "v0_feeds.ChoiceJSON": {
+            "type": "object",
+            "properties": {
+                "candidates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/feedutil.Candidate"
+                    }
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_feeds.addRequest": {
+            "type": "object",
+            "properties": {
+                "discover": {
+                    "type": "boolean"
+                },
+                "folder": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_feeds.updateRequest": {
+            "type": "object",
+            "properties": {
+                "folder": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
                 }
             }
         },
