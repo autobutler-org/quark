@@ -33,14 +33,19 @@ void main() {
       expect(flattened(), contains('<html lang="en">'));
     });
 
-    // Turning the semantics tree on at startup stopped typing in Docs and
-    // Slides on web (#3743). main() loads settings and starts controllers
-    // before runApp, so it cannot run under a test; this guards the call
-    // against coming back before #3743 is fixed.
-    test('do not get the semantics tree forced on at startup', () {
-      final main = File('lib/main.dart').readAsStringSync();
+    // main() loads settings and starts controllers before runApp, so it
+    // cannot run under a test; this guards the call instead. The editors
+    // expose a text field to this tree, so turning it on keeps keystrokes
+    // (#3743) and screen readers (#2599).
+    test('get the semantics tree without opting in', () {
+      final main = File(
+        'lib/main.dart',
+      ).readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
 
-      expect(main, isNot(contains('ensureSemantics()')));
+      expect(
+        main,
+        contains('if (kIsWeb) SemanticsBinding.instance.ensureSemantics();'),
+      );
     });
   });
 

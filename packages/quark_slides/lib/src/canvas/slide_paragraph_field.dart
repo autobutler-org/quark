@@ -117,6 +117,20 @@ class _SlideParagraphFieldState extends State<SlideParagraphField>
     setState(() {});
   }
 
+  /// The web engine focused this field's DOM element (#3743).
+  ///
+  /// That element only receives keystrokes once this node asks for focus, so
+  /// the input connection opens and a later semantics update can attach it.
+  /// When the field is already focused, sending the node again reattaches the
+  /// element after a blur dropped it.
+  void _onSemanticsFocus() {
+    if (_focusNode.hasFocus) {
+      setState(() {});
+      return;
+    }
+    _focusNode.requestFocus();
+  }
+
   @override
   void didUpdateWidget(SlideParagraphField oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -244,11 +258,13 @@ class _SlideParagraphFieldState extends State<SlideParagraphField>
         fit: OverflowBoxFit.deferToChild,
         child: _gestures.buildGestureDetector(
           behavior: HitTestBehavior.translucent,
-          // `TextField` marks its field enabled; a bare EditableText does not,
-          // and with semantics on the web engine disables the DOM element it
-          // types into unless the node says enabled (#3743).
+          // With semantics on, the web engine types into a DOM element that
+          // stays disabled until the node says enabled, and that stays
+          // detached until SemanticsAction.focus opens the input connection
+          // (#3743). See [_onSemanticsFocus].
           child: Semantics(
             enabled: true,
+            onFocus: _onSemanticsFocus,
             child: EditableText(
               key: editableTextKey,
               controller: _controller,

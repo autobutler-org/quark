@@ -155,7 +155,12 @@ void main() {
       await editTitle(tester);
       expect(
         find.semantics.byFlag(SemanticsFlag.isTextField).evaluate().single,
-        isSemantics(isTextField: true, isFocused: true, isEnabled: true),
+        isSemantics(
+          isTextField: true,
+          isFocused: true,
+          isEnabled: true,
+          hasFocusAction: true,
+        ),
       );
       semantics.dispose();
     });

@@ -293,6 +293,7 @@ void main() {
         isMultiline: true,
         isFocused: true,
         isEnabled: true,
+        hasFocusAction: true,
       ),
     );
     semantics.dispose();
