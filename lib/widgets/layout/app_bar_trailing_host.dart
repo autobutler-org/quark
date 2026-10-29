@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/controllers/notifications_controller.dart';
+import 'package:quark/services/embedded_tunnel.dart';
 import 'package:quark/router.dart';
 import 'package:quark/widgets/layout/connection_sheet_button.dart';
 import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
@@ -18,9 +19,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// The indicator is left out until [connection] has a mode, which is never on
 /// web and never with no Quark configured. While remote access is paused on
-/// this phone the pill still shows, the pages gain a banner under the app
-/// bar, and an unreachable page offers to turn it back on (#2876). The bell
-/// renders nothing while nobody is signed in.
+/// a device that runs a node, the pill still shows, the pages gain a banner
+/// under the app bar, and an unreachable page offers to turn it back on
+/// (#2876). Desktop has no node, so that switch, banner, and chip stay
+/// hidden (#3779). The bell renders nothing while nobody is signed in.
 class AppBarTrailingHost extends StatefulWidget {
   /// Creates the scope around [child].
   const AppBarTrailingHost({
@@ -67,7 +69,8 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
       listenable: connection,
       builder: (context, _) {
         final mode = connection.mode;
-        final paused = connection.remoteAccessPaused;
+        final onDevice = EmbeddedTunnel.runsOnDeviceNode;
+        final paused = onDevice && connection.remoteAccessPaused;
         QuarkPageScaffold.pauseBanner = (context) =>
             paused ? RemoteAccessPauseBanner(controller: connection) : null;
         QuarkDisconnectedView.turnOnRemoteAccess = paused
@@ -79,9 +82,9 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
               ConnectionSheetButton(
                 mode: mode ?? ConnectionMode.offline,
                 paused: paused,
-                pairingError: connection.pairingError,
-                onPause: connection.pause,
-                onResume: connection.resumeRemoteAccess,
+                pairingError: onDevice ? connection.pairingError : null,
+                onPause: onDevice ? connection.pause : null,
+                onResume: onDevice ? connection.resumeRemoteAccess : null,
                 onNavigate: widget.onNavigate,
               ),
             ListenableBuilder(

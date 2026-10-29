@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/change_password_controller.dart';
@@ -12,6 +11,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/connected_devices_service.dart';
+import 'package:quark/services/embedded_tunnel.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/sbom_service.dart';
 import 'package:quark/services/settings_service.dart';
@@ -726,7 +726,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTryAgain: _retryRemoteAccess,
                 ),
               ),
-              thisPhone: kIsWeb ? null : const ThisPhoneCard(),
+              thisPhone: EmbeddedTunnel.runsOnDeviceNode
+                  ? const ThisPhoneCard()
+                  : null,
               connectedDevices: ConnectedDevicesCard(
                 devices: _connectedDevices,
                 isLoading: _isLoadingDevices,

@@ -30,13 +30,15 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// follows the switch. [mode] feeds the app bar's [ConnectionIndicator].
 ///
 /// On iOS and Android the remote address is the on-device proxy in front of
-/// the Quark's tailnet URL (#1881). [embeddedProxy] returns that proxy, or
-/// null where the app does not embed a node, and the tailnet URL is used as
-/// it stands. While a home check succeeds and this phone has no saved
-/// pairing, it asks the Quark for a key, stores it, and [enroll] starts the
-/// node so the proxy is up before the phone leaves home (#2876). Coming back
-/// to the foreground restarts the node and checks again; the proxy port can
-/// change.
+/// the Quark's tailnet URL (#1881). [embeddedProxy] returns that proxy.
+/// Where this build has no on-device node, the Quark's private tailnet
+/// address is not probed: a desktop cannot reach it (#3779). A proxy the
+/// node returns is still probed, which is how a future desktop node (#2877)
+/// says it can reach the Quark. While a home check succeeds and this phone
+/// has no saved pairing, it asks the Quark for a key, stores it, and
+/// [enroll] starts the node so the proxy is up before the phone leaves home
+/// (#2876). Coming back to the foreground restarts the node and checks again;
+/// the proxy port can change.
 ///
 /// Pausing remote access on this phone stops only this phone's node. It is
 /// remembered across a restart, and it never calls the Quark.
@@ -55,6 +57,7 @@ class ConnectionController extends ChangeNotifier {
     Listenable? activeHostChanges,
     Future<String?> Function(String upstream) embeddedProxy =
         EmbeddedTunnel.proxyUrl,
+    bool? hasOnDeviceNode,
     Future<void> Function(String upstream) warmEmbeddedTunnel =
         EmbeddedTunnel.warm,
     void Function(void Function() onReconnected) watchEmbeddedTunnel =
@@ -86,6 +89,7 @@ class ConnectionController extends ChangeNotifier {
        _activeHost = activeHost,
        _saveRemoteAddress = saveRemoteAddress,
        _embeddedProxy = embeddedProxy,
+       _hasOnDeviceNode = hasOnDeviceNode ?? EmbeddedTunnel.isSupported,
        _warmEmbeddedTunnel = warmEmbeddedTunnel,
        _watchEmbeddedTunnel = watchEmbeddedTunnel,
        _pairDevice = pairDevice,
@@ -112,6 +116,11 @@ class ConnectionController extends ChangeNotifier {
 
   /// Replaces a tailnet URL with the on-device proxy in front of it.
   final Future<String?> Function(String upstream) _embeddedProxy;
+
+  /// Whether this platform runs an on-device node. False on desktop, web,
+  /// and in tests unless one opts into the phone. A proxy from
+  /// [_embeddedProxy] is probed either way (#3779).
+  final bool _hasOnDeviceNode;
 
   /// Starts the on-device node, or stops it when the upstream is empty.
   final Future<void> Function(String upstream) _warmEmbeddedTunnel;
@@ -265,8 +274,16 @@ class ConnectionController extends ChangeNotifier {
     if (stored != null) {
       final proxy = await _embeddedProxy(stored);
       if (!isCurrent()) return;
-      final remote = (proxy != null && proxy.isNotEmpty) ? proxy : stored;
-      if (await _reaches(remote, ConnectionConfig.remoteProbeTimeout)) {
+      // No on-device node means this device cannot reach the Quark's private
+      // tailnet address. Probe only a proxy the node hands back, which is
+      // how a future desktop node (#2877) says it can reach the Quark.
+      final remote = (proxy != null && proxy.isNotEmpty)
+          ? proxy
+          : _hasOnDeviceNode
+          ? stored
+          : null;
+      if (remote != null &&
+          await _reaches(remote, ConnectionConfig.remoteProbeTimeout)) {
         if (!isCurrent()) return;
         _set(ConnectionMode.remote, host: host.hostAddress, url: remote);
         _settled(generation);

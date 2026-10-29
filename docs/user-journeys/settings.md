@@ -9,7 +9,7 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 | --- | --- | --- |
 | **General** | `/settings/general` | Backend hosts, theme, left-handed mode, theme color, the view Calendar opens on ([JN-CA-011](calendar.md)), auto-refresh interval, demo mode, a link to the drives |
 | **Account** | `/settings/account` | Sign out, your sessions, then an **Account and data** row at the bottom that leads to Delete account and (admins) Reset this Quark |
-| **Network** | `/settings/network` | Remote access, connected devices, SSH access (admins) |
+| **Network** | `/settings/network` | Remote access, connected devices, SSH access (admins), and on a phone that phone's own remote access |
 | **Updates** | `/settings/updates` | The Quark's version, a note that updates are manual, updates (admins), Repair installation (admins) |
 | **About** | `/settings/about` | The app's version, Help & Support, Terms of Service, the software bill of materials |
 | **Features** | `/settings/features` | A switch per beta feature (admins, only while a beta exists) |
@@ -602,7 +602,7 @@ The Quark has at least one feature still in beta.
 
 ### JN-ST-032: See how the app reaches the Quark from any page
 
-**Preconditions:** The mobile app is signed in to a Quark (the indicator never shows on web).
+**Preconditions:** The mobile or desktop app is signed in to a Quark (the indicator never shows on web).
 
 **Steps:**
 
@@ -618,6 +618,14 @@ The Quark has at least one feature still in beta.
   status (#2904).
 - Step 2 closes the sheet and opens `/settings/network`.
 - Nothing in the sheet names Tailscale, an address, or a raw error.
+
+**Notes:**
+
+- The desktop app shows the same indicator. It has no switch for remote access on this computer, and no
+  pause banner. The Network tab says, once: remote access isn't available in the desktop app yet, and at
+  home Quark works as usual (#3779). Away from home the app does not try the Quark's private remote address.
+  A desktop node is #2877.
+- On a phone, the sheet and the Network tab offer a switch that pauses remote access on that phone only.
 
 ---
 

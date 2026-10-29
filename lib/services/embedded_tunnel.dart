@@ -11,9 +11,11 @@
 /// hands this app on each start; `tunnel_token_client.dart` adds it.
 ///
 /// Web builds export the stub, which reports the tunnel unavailable. A browser
-/// cannot run a node.
+/// cannot run a node. Desktop reports the tunnel unavailable too, until a
+/// desktop node ships (#2877).
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:quark/services/embedded_tunnel_stub.dart'
     if (dart.library.ffi) 'package:quark/services/embedded_tunnel_io.dart'
     as impl;
@@ -63,6 +65,13 @@ class TunnelStatus {
 abstract final class EmbeddedTunnel {
   /// Whether this platform loads the native bridge.
   static bool get isSupported => impl.tunnelIsSupported;
+
+  /// Whether remote access can run on the device this build is on.
+  ///
+  /// True on iOS and Android. False on web, where the page is already at
+  /// whichever address the browser opened, and on desktop until that node
+  /// ships (#2877, #3779).
+  static bool get runsOnDeviceNode => !kIsWeb && isSupported;
 
   /// The node's current state.
   static Future<TunnelStatus> status() async =>

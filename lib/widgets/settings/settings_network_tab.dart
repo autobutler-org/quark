@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:quark/services/embedded_tunnel.dart';
+import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
 import 'package:quark/widgets/settings/hostname_section.dart';
 import 'package:quark/widgets/settings/ssh_access_section.dart';
 
@@ -7,6 +10,8 @@ import 'package:quark/widgets/settings/ssh_access_section.dart';
 ///
 /// The page loads the data and builds [remoteAccess] and [connectedDevices];
 /// this tab lays them out and says what is missing while no Quark is set.
+/// Where this build has no on-device node, the phone's remote-access switch
+/// is left out and [desktopRemoteAccessUnavailable] is said once (#3779).
 class SettingsNetworkTab extends StatelessWidget {
   /// Creates the tab.
   const SettingsNetworkTab({
@@ -32,8 +37,9 @@ class SettingsNetworkTab extends StatelessWidget {
   /// The connected devices card, shown while a Quark is set.
   final Widget connectedDevices;
 
-  /// This phone's own remote access switch. Null leaves the section out,
-  /// including on web, where this phone does not run a node.
+  /// This device's own remote access switch. Null leaves the section out.
+  /// A widget passed where [EmbeddedTunnel.runsOnDeviceNode] is false is
+  /// left out too: desktop and web do not run a node (#3779).
   final Widget? thisPhone;
 
   /// Shown above the tab's content and scrolled with it, such as the
@@ -52,10 +58,13 @@ class SettingsNetworkTab extends StatelessWidget {
           const SizedBox(height: 8),
           remoteAccess,
           const SizedBox(height: 24),
-          if (thisPhone != null) ...[
-            const Text('This phone', style: heading),
+          if (EmbeddedTunnel.runsOnDeviceNode && thisPhone != null) ...[
+            Text(thisDeviceRemoteAccessHeading(), style: heading),
             const SizedBox(height: 8),
             thisPhone!,
+            const SizedBox(height: 24),
+          ] else if (!kIsWeb && !EmbeddedTunnel.isSupported) ...[
+            const Text(desktopRemoteAccessUnavailable),
             const SizedBox(height: 24),
           ],
         ],

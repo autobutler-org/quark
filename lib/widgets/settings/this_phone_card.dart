@@ -3,10 +3,12 @@ import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// Remote access on this phone, on the Network tab of Settings (#2876).
+/// Remote access on this device, on the Network tab of Settings (#2876).
 ///
 /// The same switch as the connection sheet. Turning it off asks how long,
-/// and that pause stops only this phone's node.
+/// and that pause stops only this device's node. The label says "this
+/// phone" or "this computer" for the device the app is on (#3779). The
+/// Network tab leaves this card out where there is no on-device node.
 ///
 /// Key: `remote_access_on_this_phone`.
 class ThisPhoneCard extends StatelessWidget {
@@ -25,7 +27,7 @@ class ThisPhoneCard extends StatelessWidget {
           margin: EdgeInsets.zero,
           child: SwitchListTile(
             key: const ValueKey('remote_access_on_this_phone'),
-            title: const Text(remoteAccessOnThisPhone),
+            title: Text(remoteAccessOnThisDevice()),
             subtitle: error == null
                 ? null
                 : Text(error, style: TextStyle(color: tokens.error)),

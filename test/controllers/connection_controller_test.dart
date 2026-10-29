@@ -46,6 +46,7 @@ void main() {
     bool autoDispose = true,
     Listenable? hostChanges,
     Future<String?> Function(String upstream)? embeddedProxy,
+    bool? hasOnDeviceNode,
     Future<void> Function(String upstream)? warmEmbeddedTunnel,
   }) {
     final c = ConnectionController(
@@ -73,7 +74,10 @@ void main() {
         }
       },
       // The real tunnel is the phone. These tests inject the answer.
+      // The test VM reports no on-device node, so the phone's fallback to
+      // the private address opts in. A desktop test passes false (#3779).
       embeddedProxy: embeddedProxy ?? (_) async => null,
+      hasOnDeviceNode: hasOnDeviceNode ?? true,
       warmEmbeddedTunnel:
           warmEmbeddedTunnel ?? (upstream) async => warmed.add(upstream),
       watchEmbeddedTunnel: (_) {},
@@ -152,6 +156,28 @@ void main() {
     expect(c.mode, ConnectionMode.remote);
     expect(c.baseUrl, _remote);
     expect(probed, [_lan, _remote]);
+  });
+
+  test(
+    'does not probe the private remote address without an on-device node',
+    () async {
+      answering = {_remote};
+      final c = build(hasOnDeviceNode: false);
+      await c.check();
+      expect(c.mode, ConnectionMode.offline);
+      expect(c.baseUrl, isNull);
+      expect(probed, [_lan]);
+    },
+  );
+
+  test('probes a proxy a desktop node says it can reach', () async {
+    const proxy = 'http://127.0.0.1:9';
+    answering = {proxy};
+    final c = build(hasOnDeviceNode: false, embeddedProxy: (_) async => proxy);
+    await c.check();
+    expect(c.mode, ConnectionMode.remote);
+    expect(c.baseUrl, proxy);
+    expect(probed, [_lan, proxy]);
   });
 
   test('uses the embedded proxy instead of the tailnet address', () async {
