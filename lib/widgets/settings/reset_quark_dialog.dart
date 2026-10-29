@@ -86,18 +86,47 @@ class QuarkResetSelection {
 /// names would send the reader looking for a control that is not there.
 const String kResetQuarkDevicesLabel = 'Quark data on attached drives';
 
-/// What the user reads when a reset would leave data on the appliance.
+/// What the user reads when a reset drops the accounts but leaves files.
+///
+/// The next person to set the Quark up can open whatever was left. A reset
+/// that keeps the accounts uses [kResetQuarkAccountsStayWarning] instead,
+/// because there is no next setup (#3774).
 const String kResetQuarkPartialWarning =
     'This leaves data on the Quark. Whoever sets it up next will be able to '
     'reach whatever you leave.';
+
+/// What the user reads when a reset keeps the accounts.
+///
+/// Leaving the database standing is not a return to first-boot setup, so
+/// this must not say someone sets the Quark up next (#3774).
+const String kResetQuarkAccountsStayWarning =
+    'This leaves accounts and settings on the Quark. Those accounts can '
+    'still sign in.';
+
+/// The opening line while Accounts and settings is checked.
+///
+/// That box drops the databases, and the accounts with them, and sends the
+/// Quark back through first-boot setup. It is the only box that does (#3774).
+const String kResetQuarkDropsAccountsIntro =
+    'Returns this Quark to first-boot setup. Every account on it goes, '
+    'yours included, and it has to be set up again. This cannot be undone.';
+
+/// The opening line while Accounts and settings is unchecked.
+///
+/// A reset that leaves the databases standing keeps every account, so this
+/// line must not say they go (#3774).
+const String kResetQuarkKeepsAccountsIntro =
+    'Keeps every account, yours included. This Quark does not return to '
+    'first-boot setup. Anything still checked is erased, and that cannot be '
+    'undone.';
 
 /// What the user reads when a reset would reach off the appliance and onto a
 /// drive they plugged in (#2052).
 ///
 /// Louder than [kResetQuarkPartialWarning] because it is the one choice here
-/// that touches something the Quark does not own. Leaving data behind is
-/// recoverable by whoever sets the Quark up next; erasing a drive is not
-/// recoverable by anyone.
+/// that touches something the Quark does not own. Data left on the Quark can
+/// still be opened. A drive this reset erases cannot be brought back by
+/// anyone.
 const String kResetQuarkDriveWarning =
     'This erases the Quark data directory on the drives attached right now. '
     'That is the one part of this reset nothing can bring back — not even a '
@@ -124,6 +153,12 @@ const String kResetQuarkDriveWarning =
 ///
 /// The account's password gates the reset (#2346), on top of the boxes rather
 /// than instead of them: it proves who is asking, the boxes say what goes.
+///
+/// The opening line follows the Accounts and settings box, and so does the
+/// data-left-behind warning (#3774). That box is the database reset: checked,
+/// every account goes and the next person to set the Quark up can reach
+/// whatever was left. Unchecked, the accounts stay and can still sign in, and
+/// neither line says otherwise.
 ///
 /// Key prefixes: `reset_quark_database`, `reset_quark_files`,
 /// `reset_quark_devices`, `reset_quark_scope`, `reset_quark_warning`,
@@ -189,10 +224,10 @@ class _ResetQuarkDialogState extends State<ResetQuarkDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Returns this Quark to first-boot setup. Every account on it goes, '
-            'yours included, and it has to be set up again. This cannot be '
-            'undone.',
+          Text(
+            _selection.database
+                ? kResetQuarkDropsAccountsIntro
+                : kResetQuarkKeepsAccountsIntro,
           ),
           const SizedBox(height: 12),
           CheckboxListTile(
@@ -250,9 +285,11 @@ class _ResetQuarkDialogState extends State<ResetQuarkDialog> {
           ),
           if (_selection.leavesDataBehind) ...[
             const SizedBox(height: 8),
-            const ResetQuarkWarning(
-              key: ValueKey('reset_quark_warning'),
-              message: kResetQuarkPartialWarning,
+            ResetQuarkWarning(
+              key: const ValueKey('reset_quark_warning'),
+              message: _selection.database
+                  ? kResetQuarkPartialWarning
+                  : kResetQuarkAccountsStayWarning,
             ),
           ],
           if (_selection.devices) ...[
