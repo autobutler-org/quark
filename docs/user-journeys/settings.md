@@ -353,6 +353,8 @@ nobody needs to type or paste it.
 
 - Session is cleared.
 - App redirects to `/login`.
+- On a phone, its remote-access connection to this Quark stops and is forgotten. Whoever signs in next is set up
+  afresh the next time the phone is home, and does not inherit the last person's (#3785).
 - See also JN-AUTH-007.
 
 ---

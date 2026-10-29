@@ -31,6 +31,8 @@ void main() {
   late List<String> warmed;
   late bool nodeRejected;
   late Object? pairFailure;
+  late Completer<void>? pairGate;
+  late int forgotten;
   late DateTime Function() clock;
 
   const paired = PairedDevice(
@@ -80,9 +82,11 @@ void main() {
       hasOnDeviceNode: hasOnDeviceNode ?? true,
       warmEmbeddedTunnel:
           warmEmbeddedTunnel ?? (upstream) async => warmed.add(upstream),
+      forgetEmbeddedTunnel: () async => forgotten++,
       watchEmbeddedTunnel: (_) {},
       pairDevice: () async {
         pairCalls++;
+        await pairGate?.future;
         final failure = pairFailure;
         if (failure != null) throw failure;
         return paired;
@@ -128,6 +132,8 @@ void main() {
     warmed = [];
     nodeRejected = false;
     pairFailure = null;
+    pairGate = null;
+    forgotten = 0;
     clock = DateTime.now;
   });
 
@@ -635,6 +641,73 @@ void main() {
       expect(restarted.remoteAccessPaused, isFalse);
       expect(pauses.containsKey(_lan), isFalse);
       restarted.dispose();
+    });
+  });
+
+  group('signing out (#3785)', () {
+    test('forgets the node and this Quark\'s pairing', () async {
+      connectedAtHome();
+      pairings['https://other.local'] = const StoredPairing(
+        authKey: 'other',
+        controlUrl: 'https://control.example',
+        quarkAddress: _remote,
+      );
+      final c = build();
+      await c.check();
+      expect(pairings.containsKey(_lan), isTrue);
+
+      await c.forgetDevice();
+      expect(forgotten, 1);
+      expect(pairings.containsKey(_lan), isFalse);
+      expect(pairings.containsKey('https://other.local'), isTrue);
+    });
+
+    test('the next account to sign in pairs for itself', () async {
+      connectedAtHome();
+      final c = build();
+      await c.check();
+      expect(pairCalls, 1);
+
+      // Signed out: no session, so the check reads no status and asks for
+      // no key.
+      final signedIn = status;
+      status = null;
+      await c.forgetDevice();
+      await c.check();
+      expect(pairCalls, 1);
+      expect(pairings.containsKey(_lan), isFalse);
+
+      status = signedIn;
+      await c.check();
+      expect(pairCalls, 2);
+      expect(enrolled, hasLength(2));
+      expect(pairings.containsKey(_lan), isTrue);
+    });
+
+    test('a check still pairing when it lands does not save its key', () async {
+      connectedAtHome();
+      pairGate = Completer<void>();
+      final c = build();
+      final pending = c.check();
+      await pumpEventQueue();
+      expect(pairCalls, 1);
+
+      await c.forgetDevice();
+      pairGate!.complete();
+      await pending;
+      expect(pairings.containsKey(_lan), isFalse);
+      expect(enrolled, isEmpty);
+    });
+
+    test('leaves the remote address once forgotten', () async {
+      answering = {_remote};
+      final c = build();
+      await c.check();
+      expect(c.mode, ConnectionMode.remote);
+
+      await c.forgetDevice();
+      expect(c.mode, ConnectionMode.offline);
+      expect(c.baseUrl, isNull);
     });
   });
 }

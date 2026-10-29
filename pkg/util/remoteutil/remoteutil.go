@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
+	"golang.org/x/time/rate"
 	"tailscale.com/tsnet"
 )
 
@@ -54,6 +56,23 @@ var (
 	// ErrNotConnected means remote access is on but the node has not joined
 	// the tailnet yet.
 	ErrNotConnected = errors.New("remote access is still connecting; try again in a moment")
+	// ErrTooManyPairs means the account has asked for more keys than
+	// PairDeviceBurst allows (#3785).
+	ErrTooManyPairs = errors.New("this account has set up too many devices recently; wait a while and try again")
+)
+
+// Each account's budget for PairDevice (#3785). The provisioning service
+// limits a household to 30 keys an hour (#2317), so without this one account
+// could spend the whole household's budget and leave everyone else unable to
+// pair. A phone asks once, and again only after its key is rejected, so three
+// at once covers a phone, a tablet and a retry. The limiter forgets an
+// account that has been idle for 15 minutes, so the most one account can take
+// is PairDeviceBurst every 15 minutes, 12 an hour.
+const (
+	// PairDeviceRate is the sustained keys per second: one every 30 minutes.
+	PairDeviceRate = rate.Limit(1.0 / (30 * 60))
+	// PairDeviceBurst is how many keys an account may ask for at once.
+	PairDeviceBurst = 3
 )
 
 // AccessState is what Settings should treat remote access as. It is derived
@@ -88,6 +107,16 @@ func Enrolled() bool {
 	return household != "" && token != ""
 }
 
+// PairDeviceParams is who is asking for a key, and the limiter they spend
+// it from.
+type PairDeviceParams struct {
+	// Account is the signed-in account asking. It is the limiter's key.
+	Account string
+	// Limiter is the per-account budget, normally built with PairDeviceRate
+	// and PairDeviceBurst.
+	Limiter *ratelimitutil.Limiter
+}
+
 // PairDeviceResult is what a device needs to join the Quark's household and
 // reach it.
 type PairDeviceResult struct {
@@ -104,8 +133,10 @@ type PairDeviceResult struct {
 // household credential from settings (pair mode, #2358) with a fresh random
 // device ID, since each device is its own node. It fails with ErrCustomTailnet,
 // ErrRemoteAccessOff, ErrNoHousehold or ErrNotConnected before any network
-// call when a key could not be used.
-func PairDevice() (PairDeviceResult, error) {
+// call when a key could not be used, and with ErrTooManyPairs when the account
+// has spent its budget. Only a request that reaches the provisioning service
+// spends from the budget.
+func PairDevice(params PairDeviceParams) (PairDeviceResult, error) {
 	control := controlURL()
 	if control != defaultControlURL {
 		return PairDeviceResult{}, ErrCustomTailnet
@@ -120,6 +151,9 @@ func PairDevice() (PairDeviceResult, error) {
 	status := Status()
 	if !status.Connected || status.RemoteURL == "" {
 		return PairDeviceResult{}, ErrNotConnected
+	}
+	if params.Limiter == nil || !params.Limiter.Allow(params.Account) {
+		return PairDeviceResult{}, ErrTooManyPairs
 	}
 	deviceID, err := newPairDeviceID()
 	if err != nil {

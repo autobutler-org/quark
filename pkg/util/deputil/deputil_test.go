@@ -25,6 +25,9 @@ func TestNewDependencies(t *testing.T) {
 	if deps.ChatRateLimiter() == nil {
 		t.Error("Expected ChatRateLimiter() to be ready")
 	}
+	if deps.PairDeviceRateLimiter() == nil {
+		t.Error("Expected PairDeviceRateLimiter() to be ready")
+	}
 	if deps.ZipSlots() == nil {
 		t.Error("Expected ZipSlots() to be ready")
 	}
