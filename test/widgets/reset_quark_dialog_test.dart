@@ -156,6 +156,33 @@ void main() {
     await tapVisible(tester, database);
 
     expect(warning, findsOneWidget);
+    // Keeping the database is not a return to setup, so the warning must not
+    // tell the admin that the next person can reach what was left (#3774).
+    expect(find.text(kResetQuarkAccountsStayWarning), findsOneWidget);
+    expect(find.text(kResetQuarkPartialWarning), findsNothing);
+  });
+
+  // #3774: the opening line used to say every account goes even after
+  // Accounts and settings was turned off. That box is the database reset,
+  // and it is the only one that drops them.
+  testWidgets('says accounts go only while accounts and settings is checked', (
+    tester,
+  ) async {
+    await pumpDialog(tester, size: narrowViewport);
+
+    expect(find.text(kResetQuarkDropsAccountsIntro), findsOneWidget);
+    expect(find.textContaining('Every account on it goes'), findsOneWidget);
+
+    await tapVisible(tester, database);
+
+    expect(find.text(kResetQuarkDropsAccountsIntro), findsNothing);
+    expect(find.textContaining('Every account on it goes'), findsNothing);
+    expect(find.text(kResetQuarkKeepsAccountsIntro), findsOneWidget);
+
+    await tapVisible(tester, database);
+
+    expect(find.text(kResetQuarkDropsAccountsIntro), findsOneWidget);
+    expect(find.text(kResetQuarkKeepsAccountsIntro), findsNothing);
   });
 
   testWidgets('goes quiet again once everything is back on', (tester) async {
