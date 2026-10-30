@@ -19,6 +19,9 @@ jobs:
       labels: errand-x64
     container:
       image: autobutlerci.azurecr.io/quark/ci-frontend:latest
+    permissions:
+      contents: read
+      actions: write
     steps:
       - name: Check tag format
         run: |
@@ -51,6 +54,7 @@ jobs:
       image: autobutlerci.azurecr.io/quark/ci-backend:latest
     permissions:
       contents: write
+      actions: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
