@@ -20,6 +20,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -65,6 +67,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-frontend:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -92,6 +96,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     # Job-level permissions replace the workflow's, so contents: read is repeated.
     # pull-requests: read is what lets check/attribution read the pull request.
     permissions:
@@ -117,6 +123,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -134,6 +142,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

@@ -32,6 +32,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     permissions:
       contents: read
       pull-requests: read
@@ -58,6 +60,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -87,6 +91,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     timeout-minutes: 10
     services:
       # The image major, user, password, database and port compose.yaml gives a developer,
@@ -135,6 +141,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     timeout-minutes: 10
     steps:
       - name: Checkout code
@@ -163,6 +171,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     timeout-minutes: 30
     steps:
       - name: Checkout code
@@ -194,6 +204,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-frontend:latest
     # A leg takes about six minutes; a stuck `flutter test` would otherwise
     # hold the runner for the six-hour default (#2768).
     timeout-minutes: 20
@@ -246,6 +258,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     steps:
       - name: Check every suite passed
         run: |

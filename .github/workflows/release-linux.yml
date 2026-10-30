@@ -39,6 +39,8 @@ jobs:
     runs-on:
       group: errand
       labels: ${{ matrix.label }}
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-full:latest
     timeout-minutes: 45
     permissions:
       # gh release upload writes to the release GoReleaser created for the tag.

@@ -32,6 +32,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     strategy:
       fail-fast: false
       matrix:

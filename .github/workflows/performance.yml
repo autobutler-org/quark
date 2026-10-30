@@ -29,6 +29,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     permissions:
       contents: read
       pull-requests: read
@@ -50,6 +52,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     # Room for run_gated.sh to rerun a scenario once.
     timeout-minutes: 15
     steps:
@@ -88,6 +92,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     # Room for run_gated.sh to rerun a scenario once.
     timeout-minutes: 15
     steps:
@@ -128,6 +134,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     needs:
       - changes
       - performance-loadtest

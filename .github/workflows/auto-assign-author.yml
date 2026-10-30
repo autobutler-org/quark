@@ -14,5 +14,7 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     steps:
       - uses: autobutler-org/auto-assign-author@25423cd556c9478331904e1db61c304b3bf67432 # main

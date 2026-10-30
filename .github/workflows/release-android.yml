@@ -60,6 +60,8 @@ jobs:
     runs-on:
       group: errand
       labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-frontend:latest
     timeout-minutes: 45
     permissions:
       contents: read
