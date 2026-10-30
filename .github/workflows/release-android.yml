@@ -57,7 +57,11 @@ defaults:
 jobs:
   release-android:
     # Android builds are Linux-native, so unlike iOS this needs no macOS runner.
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-frontend:latest
     timeout-minutes: 45
     permissions:
       contents: read

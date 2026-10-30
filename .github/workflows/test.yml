@@ -29,7 +29,11 @@ jobs:
   # .github/path-filters.yml. See the same job in build.yml for what each is compared
   # against and why jobs skip with `if:` rather than `on: paths:`.
   changes:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     permissions:
       contents: read
       pull-requests: read
@@ -53,7 +57,11 @@ jobs:
   test-backend:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -80,7 +88,11 @@ jobs:
   test-postgres:
     needs: changes
     if: needs.changes.outputs.postgres != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     timeout-minutes: 10
     services:
       # The image major, user, password, database and port compose.yaml gives a developer,
@@ -126,7 +138,11 @@ jobs:
   api-chaos:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     timeout-minutes: 10
     steps:
       - name: Checkout code
@@ -152,7 +168,11 @@ jobs:
   power-cut:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     timeout-minutes: 30
     steps:
       - name: Checkout code
@@ -181,7 +201,11 @@ jobs:
   test-frontend-suite:
     needs: changes
     if: needs.changes.outputs.frontend != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-frontend:latest
     # A leg takes about six minutes; a stuck `flutter test` would otherwise
     # hold the runner for the six-hour default (#2768).
     timeout-minutes: 20
@@ -231,7 +255,11 @@ jobs:
   test-frontend:
     needs: test-frontend-suite
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     steps:
       - name: Check every suite passed
         run: |

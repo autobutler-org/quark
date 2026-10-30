@@ -31,7 +31,11 @@ defaults:
 
 jobs:
   release-docker:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     timeout-minutes: 30
     permissions:
       contents: read

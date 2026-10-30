@@ -17,7 +17,11 @@ permissions:
   contents: read
 jobs:
   check-backend:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -60,7 +64,11 @@ jobs:
             exit 1;
           fi
   check-frontend:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-frontend:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -85,7 +93,11 @@ jobs:
             exit 1
           fi
   check-misc:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     # Job-level permissions replace the workflow's, so contents: read is repeated.
     # pull-requests: read is what lets check/attribution read the pull request.
     permissions:
@@ -108,7 +120,11 @@ jobs:
           make check/attribution PR=${{ github.event.pull_request.number }}
 
   check-migrations:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -123,7 +139,11 @@ jobs:
           make check/migrations MIGRATION_BASE_REF=origin/${{ github.base_ref || 'main' }}
 
   security-backend:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: errand-x64
+    container:
+      image: autobutlerci.azurecr.io/quark/ci-backend:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

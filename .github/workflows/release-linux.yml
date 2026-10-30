@@ -31,13 +31,14 @@ jobs:
       matrix:
         include:
           - arch: x64
-            runner: ubuntu-22.04
+            label: errand-x64
           - arch: arm64
-            runner: ubuntu-22.04-arm
-    # Pinned, not ubuntu-latest: linux/AppImageBuilder.yml bundles libraries from
-    # this release's apt archive, so the runner has to be the release its `sources` name.
-    # build-linux in build.yml uses the same ones.
-    runs-on: ${{ matrix.runner }}
+            label: errand
+    # Same legs as build-linux. AppImage still bundles this Ubuntu's libraries, and
+    # the Errand image is not pinned to 22.04 yet.
+    runs-on:
+      group: errand
+      labels: ${{ matrix.label }}
     timeout-minutes: 45
     permissions:
       # gh release upload writes to the release GoReleaser created for the tag.
