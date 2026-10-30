@@ -192,11 +192,8 @@ right tool for reproducing a CI failure locally.
 
 ### CI images
 
-Errand's runner image is `autobutlerci.azurecr.io/quark/ci-full:latest`. A job that does not set
-`container:` runs there. That image is Flutter, the Linux desktop packages, the Docker client, and the
-Actions runner. The tag is `latest`. Jobs do not pin a digest.
-
-A job that should not carry that whole image names a smaller one:
+Errand runs the job inside an image from `autobutlerci.azurecr.io/quark`. The workflow names it. The tag is
+`latest`. Jobs do not pin a digest.
 
 ```yaml
 container:
@@ -206,16 +203,13 @@ container:
 - `quark/ci-backend` is Go, Node, Docker, sqlc, swag, golangci-lint, and govulncheck. Backend jobs and
   GoReleaser use it.
 - `quark/ci-frontend` is Flutter and Node. Frontend checks, the web build, and Android use it.
-- `quark/ci-full` is the default runner. Do not also set `container:` to it.
+- `quark/ci-full` is the frontend image plus `linux/apt-packages.txt`. The Linux desktop build and the
+  AppImage use it.
 
-Runner sizes come later. A label will mean small, medium, or large, and each size will be its own scale set with its own CPU and memory request. Until that is asked for, every runner is the current 4-core node. Do not add a size label or a second scale set ahead of that.
-
-`.github/workflows/ci-image.yml` builds all three for amd64 (`errand-x64`) and arm64 (`errand`). The
-workflow starts on every pull request and in the merge queue. The six build jobs skip themselves with `if:`
-when `image` in `.github/path-filters.yml` did not match, and a skipped job still reports a status. Those six
-job names are required checks. A workflow-level `paths` filter would leave them pending and block the merge.
-A failed build does not merge. Push uses `CI_IMAGE_AZURE_CLIENT_ID` and runs from `main`. Pointing the
-scale sets at `ci-full` and logging the runner into the registry are iac changes, not changes here.
+`.github/workflows/ci-image.yml` builds all three for amd64 (`errand-x64`) and arm64 (`errand`). A pull
+request that changes `ci/**`, `linux/apt-packages.txt`, `go.mod`, `pubspec.yaml`, `.nvmrc`, the Makefile, or
+that workflow builds and does not push. Push uses `CI_IMAGE_AZURE_CLIENT_ID` and runs from `main`. The runner
+image stays the upstream Actions image. Logging it into the registry is an iac change, not a change here.
 
 The release builds the web app on `ci-frontend` and uploads `internal/server/public`. The backend job
 downloads that directory and then runs GoReleaser. `//go:embed public` in `internal/server/routes.go` reads

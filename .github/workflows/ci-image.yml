@@ -1,4 +1,4 @@
-# cspell:words autobutlerci dorny
+# cspell:words autobutlerci
 name: CI image
 
 permissions:
@@ -9,11 +9,23 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-  # No paths filter here. The build jobs are required, and a workflow that does
-  # not start reports no status, so the pull request waits forever. changes
-  # skips the builds with if: when the image inputs did not move.
+    paths:
+      - ci/**
+      - linux/apt-packages.txt
+      - go.mod
+      - pubspec.yaml
+      - .nvmrc
+      - Makefile
+      - .github/workflows/ci-image.yml
   pull_request:
-  merge_group:
+    paths:
+      - ci/**
+      - linux/apt-packages.txt
+      - go.mod
+      - pubspec.yaml
+      - .nvmrc
+      - Makefile
+      - .github/workflows/ci-image.yml
 
 concurrency:
   group: ci-image-${{ github.event_name }}-${{ github.ref }}
@@ -26,33 +38,10 @@ env:
   AZURE_SUBSCRIPTION_ID: 8add0a4f-6638-4cf3-95bd-cd46ab3ca970
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      image: ${{ steps.filter.outputs.image }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Filter paths
-        id: filter
-        if: github.event_name != 'workflow_dispatch'
-        # A filter that fails leaves the output empty, and the builds run.
-        continue-on-error: true
-        uses: dorny/paths-filter@v4
-        with:
-          filters: .github/path-filters.yml
-
   build:
     name: build ${{ matrix.name }} ${{ matrix.arch }}
-    needs: changes
     # A fork pull request would build its Dockerfile on the privileged runners.
-    # A job skipped by this if reports success, so a required check still passes
-    # when the image inputs did not change. A failed build does not.
-    if: >-
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
-      needs.changes.outputs.image != 'false'
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on:
       group: errand
       labels: ${{ matrix.label }}
@@ -124,7 +113,7 @@ jobs:
             ci
 
       - name: Require the image publisher client id
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         env:
           CLIENT_ID: ${{ vars.CI_IMAGE_AZURE_CLIENT_ID }}
         run: |
@@ -136,14 +125,14 @@ jobs:
           fi
 
       - uses: azure/login@v3
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         with:
           client-id: ${{ vars.CI_IMAGE_AZURE_CLIENT_ID }}
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Push
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         run: |
           set -euo pipefail
           az acr login --name "${REGISTRY_NAME}"
@@ -152,7 +141,7 @@ jobs:
   publish:
     name: publish latest
     needs: build
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request'
     runs-on:
       group: errand
       labels: errand-x64
