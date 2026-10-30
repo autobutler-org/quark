@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE: autobutlerci.azurecr.io/ci
+  IMAGE: autobutlerci.azurecr.io/quark/ci
   REGISTRY_NAME: autobutlerci
   AZURE_TENANT_ID: 1196631e-40d1-42f3-91a4-1c80f49065f8
   AZURE_SUBSCRIPTION_ID: 8add0a4f-6638-4cf3-95bd-cd46ab3ca970

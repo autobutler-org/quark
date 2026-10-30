@@ -1,3 +1,5 @@
+<!-- cspell:words autobutlerci -->
+
 # CI image
 
 Debian stable slim, with Go, Flutter, Node, and the CI tools pinned in this
@@ -5,7 +7,7 @@ repo. Errand runs it as the runner image. The tag is `latest`. Each new job
 pod sets `imagePullPolicy: Always`, so the job gets whatever main last pushed.
 Jobs do not pin a digest.
 
-The registry is `autobutlerci.azurecr.io/ci`. The workflow is
+The image is `autobutlerci.azurecr.io/quark/ci`. The workflow is
 `.github/workflows/ci-image.yml`. It reads versions from `go.mod`,
 `pubspec.yaml`, `.nvmrc`, and the `*_VERSION` lines in the Makefile, and it
 copies `linux/apt-packages.txt` into this directory before `docker build`.

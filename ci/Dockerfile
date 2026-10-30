@@ -1,3 +1,4 @@
+# cspell:words kubelet GOBIN
 # CI image for Errand. Debian's slim stable image, plus the tools Quark's Linux
 # jobs already install on a runner. The workflow passes the versions from the
 # repo files. The defaults match those files as of 2026-10-30 so a local build

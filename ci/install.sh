@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# cspell:words TARGETARCH nodearch dockerarch runnerarch installdependencies
 # Install the CI toolchain and the Actions runner. Versions and TARGETARCH
 # come from the image build. The Dockerfile is what runs this.
 
