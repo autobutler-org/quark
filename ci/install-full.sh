@@ -12,8 +12,12 @@ xargs -a /tmp/apt-packages.txt apt-get install -y --no-install-recommends
 cleanup_packages
 install_node
 install_flutter
+install_docker
+install_runner
 
 node --version
 flutter --version
+docker --version
 command -v cmake
 command -v patchelf
+test -x /home/runner/run.sh

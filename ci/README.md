@@ -2,8 +2,9 @@
 
 # CI images
 
-Three Debian stable slim job images. Errand stays on the upstream Actions
-runner. A workflow says which image the job runs in:
+Three Debian stable slim images. `quark/ci-full` is the Errand runner, so a job
+with no `container:` runs there. It has Flutter, `linux/apt-packages.txt`, the
+Docker client, and the Actions runner. A smaller job names one of the other two:
 
 ```yaml
 container:
@@ -14,9 +15,9 @@ The tag is `latest`. Jobs do not pin a digest.
 
 | Image | Use |
 | --- | --- |
+| `quark/ci-full` | Default runner. Flutter, Linux desktop packages, Docker, Actions runner |
 | `quark/ci-backend` | Go, Node, Docker, sqlc, swag, golangci-lint, govulncheck |
 | `quark/ci-frontend` | Flutter and Node |
-| `quark/ci-full` | Flutter plus `linux/apt-packages.txt` |
 
 The release builds the web app in `ci-frontend`, uploads `internal/server/public`,
 and the backend job downloads that directory before GoReleaser. `//go:embed public`

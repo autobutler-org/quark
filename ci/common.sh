@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cspell:words TARGETARCH nodearch dockerarch goarch
+# cspell:words TARGETARCH nodearch dockerarch goarch runnerarch installdependencies
 # Shared install steps for the CI job images. The image files pass versions
 # as build args, which become environment variables for these scripts.
 
@@ -10,11 +10,13 @@ amd64)
 	goarch=amd64
 	nodearch=x64
 	dockerarch=x86_64
+	runnerarch=x64
 	;;
 arm64)
 	goarch=arm64
 	nodearch=arm64
 	dockerarch=aarch64
+	runnerarch=arm64
 	;;
 *)
 	echo "unsupported architecture ${TARGETARCH}" >&2
@@ -69,6 +71,21 @@ install_flutter() {
 	git config --system --add safe.directory /opt/flutter
 	/opt/flutter/bin/flutter --disable-analytics
 	/opt/flutter/bin/flutter precache --linux
+}
+
+install_runner() {
+	groupadd --gid 123 docker
+	useradd --create-home --uid 1001 --gid docker --shell /bin/bash runner
+	usermod -aG sudo runner
+	echo '%sudo ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/runner
+	chmod 440 /etc/sudoers.d/runner
+	curl -fsSL -o /tmp/runner.tar.gz \
+		"https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-${runnerarch}-${RUNNER_VERSION}.tar.gz"
+	tar -xzf /tmp/runner.tar.gz -C /home/runner
+	rm /tmp/runner.tar.gz
+	/home/runner/bin/installdependencies.sh
+	mkdir -p /home/runner/.pub-cache /home/runner/go /home/runner/.cache
+	chown -R runner:runner /home/runner /opt/flutter
 }
 
 install_go_tools() {

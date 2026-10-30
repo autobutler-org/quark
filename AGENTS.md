@@ -192,8 +192,11 @@ right tool for reproducing a CI failure locally.
 
 ### CI images
 
-Errand runs the job inside an image from `autobutlerci.azurecr.io/quark`. The workflow names it. The tag is
-`latest`. Jobs do not pin a digest.
+Errand's runner image is `autobutlerci.azurecr.io/quark/ci-full:latest`. A job that does not set
+`container:` runs there. That image is Flutter, the Linux desktop packages, the Docker client, and the
+Actions runner. The tag is `latest`. Jobs do not pin a digest.
+
+A job that should not carry that whole image names a smaller one:
 
 ```yaml
 container:
@@ -203,8 +206,7 @@ container:
 - `quark/ci-backend` is Go, Node, Docker, sqlc, swag, golangci-lint, and govulncheck. Backend jobs and
   GoReleaser use it.
 - `quark/ci-frontend` is Flutter and Node. Frontend checks, the web build, and Android use it.
-- `quark/ci-full` is the frontend image plus `linux/apt-packages.txt`. The Linux desktop build and the
-  AppImage use it.
+- `quark/ci-full` is the default runner. Do not also set `container:` to it.
 
 `.github/workflows/ci-image.yml` builds all three for amd64 (`errand-x64`) and arm64 (`errand`). A pull
 request that changes `ci/**`, `linux/apt-packages.txt`, `go.mod`, `pubspec.yaml`, `.nvmrc`, the Makefile, or
