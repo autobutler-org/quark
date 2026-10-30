@@ -113,10 +113,14 @@ jobs:
         run: |
           set -euo pipefail
           az acr login --name "${REGISTRY_NAME}"
+          docker pull "${IMAGE}:${GITHUB_SHA}-amd64"
+          docker pull "${IMAGE}:${GITHUB_SHA}-arm64"
+          docker manifest rm "${IMAGE}:latest" >/dev/null 2>&1 || true
           docker manifest create "${IMAGE}:latest" \
             "${IMAGE}:${GITHUB_SHA}-amd64" \
             "${IMAGE}:${GITHUB_SHA}-arm64"
           docker manifest push "${IMAGE}:latest"
+          docker manifest rm "${IMAGE}:${GITHUB_SHA}" >/dev/null 2>&1 || true
           docker manifest create "${IMAGE}:${GITHUB_SHA}" \
             "${IMAGE}:${GITHUB_SHA}-amd64" \
             "${IMAGE}:${GITHUB_SHA}-arm64"
