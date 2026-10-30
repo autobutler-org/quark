@@ -82,33 +82,39 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Read tool versions
+        run: |
+          set -euo pipefail
+          GO_VERSION=$(awk '/^go /{print $2; exit}' go.mod)
+          FLUTTER_VERSION=$(awk '/^  flutter:/{print $2; exit}' pubspec.yaml)
+          NODE_VERSION=$(tr -d '[:space:]' < .nvmrc)
+          GOLANGCI_LINT_VERSION=$(sed -n 's/^GOLANGCI_LINT_VERSION := //p' Makefile)
+          GOVULNCHECK_VERSION=$(sed -n 's/^GOVULNCHECK_VERSION := //p' Makefile)
+          SQLC_VERSION=$(sed -n 's/^SQLC_VERSION := //p' Makefile)
+          SWAG_VERSION=$(sed -n 's/^SWAG_VERSION := //p' Makefile)
+          for name in GO_VERSION FLUTTER_VERSION NODE_VERSION GOLANGCI_LINT_VERSION GOVULNCHECK_VERSION SQLC_VERSION SWAG_VERSION; do
+            value="${!name}"
+            if [ -z "${value}" ]; then
+              echo "${name} is empty. Check go.mod, pubspec.yaml, .nvmrc, and the Makefile."
+              exit 1
+            fi
+            echo "${name}=${value}" | tee -a "$GITHUB_ENV"
+          done
+
       - name: Build and push
         run: |
           set -euo pipefail
-          go_version=$(awk '/^go /{print $2; exit}' go.mod)
-          flutter_version=$(awk '/^  flutter:/{print $2; exit}' pubspec.yaml)
-          node_version=$(tr -d '[:space:]' < .nvmrc)
-          golangci=$(sed -n 's/^GOLANGCI_LINT_VERSION := //p' Makefile)
-          govuln=$(sed -n 's/^GOVULNCHECK_VERSION := //p' Makefile)
-          sqlc=$(sed -n 's/^SQLC_VERSION := //p' Makefile)
-          swag=$(sed -n 's/^SWAG_VERSION := //p' Makefile)
-          for value in "${go_version}" "${flutter_version}" "${node_version}" "${golangci}" "${govuln}" "${sqlc}" "${swag}"; do
-            if [ -z "${value}" ]; then
-              echo "A tool version was empty. Check go.mod, pubspec.yaml, .nvmrc, and the Makefile."
-              exit 1
-            fi
-          done
           cp linux/apt-packages.txt ci/apt-packages.txt
           az acr login --name "${REGISTRY_NAME}"
           docker build \
             --file "${{ matrix.dockerfile }}" \
-            --build-arg "GO_VERSION=${go_version}" \
-            --build-arg "FLUTTER_VERSION=${flutter_version}" \
-            --build-arg "NODE_VERSION=${node_version}" \
-            --build-arg "GOLANGCI_LINT_VERSION=${golangci}" \
-            --build-arg "GOVULNCHECK_VERSION=${govuln}" \
-            --build-arg "SQLC_VERSION=${sqlc}" \
-            --build-arg "SWAG_VERSION=${swag}" \
+            --build-arg "GO_VERSION=${GO_VERSION}" \
+            --build-arg "FLUTTER_VERSION=${FLUTTER_VERSION}" \
+            --build-arg "NODE_VERSION=${NODE_VERSION}" \
+            --build-arg "GOLANGCI_LINT_VERSION=${GOLANGCI_LINT_VERSION}" \
+            --build-arg "GOVULNCHECK_VERSION=${GOVULNCHECK_VERSION}" \
+            --build-arg "SQLC_VERSION=${SQLC_VERSION}" \
+            --build-arg "SWAG_VERSION=${SWAG_VERSION}" \
             --tag "${REGISTRY}/${{ matrix.name }}:${GITHUB_SHA}-${{ matrix.arch }}" \
             ci
           docker push "${REGISTRY}/${{ matrix.name }}:${GITHUB_SHA}-${{ matrix.arch }}"
