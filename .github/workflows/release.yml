@@ -13,15 +13,10 @@ env:
   WORKING_DIR: ${{ github.workspace }}
 
 jobs:
-  web:
-    runs-on:
-      group: errand
-      labels: errand-x64
-    container:
-      image: autobutlerci.azurecr.io/quark/ci-frontend:latest
+  release:
+    runs-on: ubuntu-latest
     permissions:
-      contents: read
-      actions: write
+      contents: write
     steps:
       - name: Check tag format
         run: |
@@ -33,49 +28,23 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Setup Flutter
+        uses: ./.github/actions/setup-flutter
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
       - name: Build frontend [web]
         env:
           FLUTTER_BUILD_MODE: release
-        run: make build/frontend/web
-      - name: Upload the web build
-        uses: actions/upload-artifact@v7
-        with:
-          name: web
-          path: internal/server/public/
-          if-no-files-found: error
-          retention-days: 1
-
-  release:
-    needs: web
-    runs-on:
-      group: errand
-      labels: errand-x64
-    container:
-      image: autobutlerci.azurecr.io/quark/ci-backend:latest
-    permissions:
-      contents: write
-      actions: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.ref_name }}
-          fetch-depth: 0
-          fetch-tags: true
-      - name: Download the web build
-        uses: actions/download-artifact@v7
-        with:
-          name: web
-          path: internal/server/public
-      # go:embed reads this directory at compile time. The upload stores the
-      # directory contents, so index.html has to land here and not under a
-      # second public/ directory.
-      - name: Require the embedded web app
-        run: test -f internal/server/public/index.html
+        run: |
+          make build/frontend/web
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
+          # either 'goreleaser' (default) or 'goreleaser-pro'
           distribution: goreleaser
+          # 'latest', 'nightly', or a semver
           version: ~> v2
           args: release --clean
           workdir: ${{ env.WORKING_DIR }}

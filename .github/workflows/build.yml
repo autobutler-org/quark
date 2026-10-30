@@ -35,11 +35,7 @@ jobs:
   # 'false', so pushes to main and manual runs, where the filter is skipped and its
   # outputs are empty, build everything and the badges stay accurate.
   changes:
-    runs-on:
-      group: errand
-      labels: errand-x64
-    container:
-      image: autobutlerci.azurecr.io/quark/ci-backend:latest
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
@@ -65,11 +61,7 @@ jobs:
   build-backend:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    runs-on:
-      group: errand
-      labels: errand-x64
-    container:
-      image: autobutlerci.azurecr.io/quark/ci-backend:latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -104,11 +96,7 @@ jobs:
   build-web:
     needs: changes
     if: needs.changes.outputs.web != 'false'
-    runs-on:
-      group: errand
-      labels: errand-x64
-    container:
-      image: autobutlerci.azurecr.io/quark/ci-frontend:latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -125,11 +113,7 @@ jobs:
   build-android:
     needs: changes
     if: needs.changes.outputs.android != 'false'
-    runs-on:
-      group: errand
-      labels: errand-x64
-    container:
-      image: autobutlerci.azurecr.io/quark/ci-frontend:latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -184,14 +168,13 @@ jobs:
       matrix:
         include:
           - arch: x64
-            label: errand-x64
+            runner: ubuntu-22.04
           - arch: arm64
-            label: errand
-    # Same legs as release-linux.yml. The Errand group is private-repo only until
-    # we allow public repositories, so this pull request is the check.
-    runs-on:
-      group: errand
-      labels: ${{ matrix.label }}
+            runner: ubuntu-22.04-arm
+    # Pinned, not ubuntu-latest: linux/AppImageBuilder.yml bundles libraries from
+    # this release's apt archive, so the runner has to be the release its `sources` name.
+    # release-linux.yml uses the same ones.
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

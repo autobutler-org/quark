@@ -29,11 +29,7 @@ on:
 jobs:
   armbian-build:
     name: Build Armbian image
-    runs-on:
-      group: errand
-      labels: errand-x64
-    container:
-      image: autobutlerci.azurecr.io/quark/ci-backend:latest
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
