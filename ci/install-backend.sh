@@ -16,4 +16,4 @@ golangci-lint version
 govulncheck -version
 sqlc version
 swag --version
-wrk --version
+command -v wrk
