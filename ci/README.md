@@ -25,5 +25,7 @@ reads it at compile time.
 
 `.github/workflows/ci-image.yml` reads versions from `go.mod`, `pubspec.yaml`,
 `.nvmrc`, and the Makefile. It builds all three images for amd64 and arm64.
-A pull request that changes those files builds and does not push. Push uses
-`CI_IMAGE_AZURE_CLIENT_ID` and only runs from `main`.
+The workflow runs on every pull request. The builds skip when those files did
+not change, and the six build jobs are required checks, so a skip still reports
+and a failure does not merge. Push uses `CI_IMAGE_AZURE_CLIENT_ID` and only
+runs from `main`.

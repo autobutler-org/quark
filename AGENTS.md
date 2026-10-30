@@ -208,9 +208,11 @@ container:
 - `quark/ci-frontend` is Flutter and Node. Frontend checks, the web build, and Android use it.
 - `quark/ci-full` is the default runner. Do not also set `container:` to it.
 
-`.github/workflows/ci-image.yml` builds all three for amd64 (`errand-x64`) and arm64 (`errand`). A pull
-request that changes `ci/**`, `linux/apt-packages.txt`, `go.mod`, `pubspec.yaml`, `.nvmrc`, the Makefile, or
-that workflow builds and does not push. Push uses `CI_IMAGE_AZURE_CLIENT_ID` and runs from `main`. The runner
+`.github/workflows/ci-image.yml` builds all three for amd64 (`errand-x64`) and arm64 (`errand`). The
+workflow starts on every pull request and in the merge queue. The six build jobs skip themselves with `if:`
+when `image` in `.github/path-filters.yml` did not match, and a skipped job still reports a status. Those six
+job names are required checks. A workflow-level `paths` filter would leave them pending and block the merge.
+A failed build does not merge. Push uses `CI_IMAGE_AZURE_CLIENT_ID` and runs from `main`. The runner
 image stays the upstream Actions image. Logging it into the registry is an iac change, not a change here.
 
 The release builds the web app on `ci-frontend` and uploads `internal/server/public`. The backend job
