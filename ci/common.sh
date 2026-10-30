@@ -75,8 +75,8 @@ install_flutter() {
 
 install_runner() {
 	groupadd --gid 123 docker
-	useradd --create-home --uid 1001 --gid docker --shell /bin/bash runner
-	usermod -aG sudo runner
+	groupadd --gid 1001 runner
+	useradd --create-home --uid 1001 --gid 1001 --groups docker,sudo --shell /bin/bash runner
 	echo '%sudo ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/runner
 	chmod 440 /etc/sudoers.d/runner
 	curl -fsSL -o /tmp/runner.tar.gz \
