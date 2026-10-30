@@ -7,7 +7,7 @@ source /tmp/common.sh
 apt-get update
 apt-get install -y --no-install-recommends \
 	ca-certificates curl git jq sudo unzip zip xz-utils \
-	build-essential python3 python3-venv libglu1-mesa
+	build-essential python3 python3-venv libglu1-mesa passwd
 xargs -a /tmp/apt-packages.txt apt-get install -y --no-install-recommends
 cleanup_packages
 install_node
