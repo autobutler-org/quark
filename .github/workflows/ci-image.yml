@@ -1,3 +1,4 @@
+# cspell:words autobutlerci
 name: CI image
 
 permissions:

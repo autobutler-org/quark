@@ -1,5 +1,5 @@
 # cspell:words TARGETARCH nodearch dockerarch goarch
-# Shared install steps for the CI job images. The Dockerfiles pass versions
+# Shared install steps for the CI job images. The image files pass versions
 # as build args, which become environment variables for these scripts.
 
 set -euo pipefail

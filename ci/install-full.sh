@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cspell:words libmpv
+# cspell:words libmpv patchelf
 # Flutter plus the Linux desktop and AppImage packages.
 
 source /tmp/common.sh
