@@ -23,5 +23,6 @@ and the backend job downloads that directory before GoReleaser. `//go:embed publ
 reads it at compile time.
 
 `.github/workflows/ci-image.yml` reads versions from `go.mod`, `pubspec.yaml`,
-`.nvmrc`, and the Makefile. It publishes all three images for amd64 and arm64.
-Push uses `CI_IMAGE_AZURE_CLIENT_ID` and only works from `main`.
+`.nvmrc`, and the Makefile. It builds all three images for amd64 and arm64.
+A pull request that changes those files builds and does not push. Push uses
+`CI_IMAGE_AZURE_CLIENT_ID` and only runs from `main`.

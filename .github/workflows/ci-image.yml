@@ -17,9 +17,18 @@ on:
       - .nvmrc
       - Makefile
       - .github/workflows/ci-image.yml
+  pull_request:
+    paths:
+      - ci/**
+      - linux/apt-packages.txt
+      - go.mod
+      - pubspec.yaml
+      - .nvmrc
+      - Makefile
+      - .github/workflows/ci-image.yml
 
 concurrency:
-  group: ci-image
+  group: ci-image-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -31,6 +40,8 @@ env:
 jobs:
   build:
     name: build ${{ matrix.name }} ${{ matrix.arch }}
+    # A fork pull request would build its Dockerfile on the privileged runners.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on:
       group: errand
       labels: ${{ matrix.label }}
@@ -66,23 +77,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Require the image publisher client id
-        env:
-          CLIENT_ID: ${{ vars.CI_IMAGE_AZURE_CLIENT_ID }}
-        run: |
-          if [ -z "${CLIENT_ID}" ]; then
-            echo "CI_IMAGE_AZURE_CLIENT_ID is not set on autobutler-org/quark."
-            echo "Set it to output ci_image_identity_client_id:"
-            echo "  gh variable set CI_IMAGE_AZURE_CLIENT_ID --repo autobutler-org/quark --body <client-id>"
-            exit 1
-          fi
-
-      - uses: azure/login@v3
-        with:
-          client-id: ${{ vars.CI_IMAGE_AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
-
       - name: Read tool versions
         run: |
           set -euo pipefail
@@ -102,11 +96,10 @@ jobs:
             echo "${name}=${value}" | tee -a "$GITHUB_ENV"
           done
 
-      - name: Build and push
+      - name: Build
         run: |
           set -euo pipefail
           cp linux/apt-packages.txt ci/apt-packages.txt
-          az acr login --name "${REGISTRY_NAME}"
           docker build \
             --file "${{ matrix.dockerfile }}" \
             --build-arg "GO_VERSION=${GO_VERSION}" \
@@ -118,11 +111,37 @@ jobs:
             --build-arg "SWAG_VERSION=${SWAG_VERSION}" \
             --tag "${REGISTRY}/${{ matrix.name }}:${GITHUB_SHA}-${{ matrix.arch }}" \
             ci
+
+      - name: Require the image publisher client id
+        if: github.event_name != 'pull_request'
+        env:
+          CLIENT_ID: ${{ vars.CI_IMAGE_AZURE_CLIENT_ID }}
+        run: |
+          if [ -z "${CLIENT_ID}" ]; then
+            echo "CI_IMAGE_AZURE_CLIENT_ID is not set on autobutler-org/quark."
+            echo "Set it to output ci_image_identity_client_id:"
+            echo "  gh variable set CI_IMAGE_AZURE_CLIENT_ID --repo autobutler-org/quark --body <client-id>"
+            exit 1
+          fi
+
+      - uses: azure/login@v3
+        if: github.event_name != 'pull_request'
+        with:
+          client-id: ${{ vars.CI_IMAGE_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Push
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          az acr login --name "${REGISTRY_NAME}"
           docker push "${REGISTRY}/${{ matrix.name }}:${GITHUB_SHA}-${{ matrix.arch }}"
 
   publish:
     name: publish latest
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on:
       group: errand
       labels: errand-x64
