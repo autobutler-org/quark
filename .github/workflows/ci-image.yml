@@ -1,4 +1,4 @@
-# cspell:words autobutlerci
+# cspell:words autobutlerci InstallAzureCLIDeb
 name: CI image
 
 permissions:
@@ -124,6 +124,22 @@ jobs:
             exit 1
           fi
 
+      # The public Actions runner does not ship az. azure/login runs az, so
+      # install it here until the runner image has it.
+      - name: Install Azure CLI
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          if command -v az >/dev/null 2>&1; then
+            exit 0
+          fi
+          if ! sudo -n true; then
+            echo "az is missing and passwordless sudo is not available."
+            echo "Install Azure CLI on the Errand runner image, then re-run this job."
+            exit 1
+          fi
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
       - uses: azure/login@v3
         if: github.event_name != 'pull_request'
         with:
@@ -147,6 +163,21 @@ jobs:
       labels: errand-x64
     timeout-minutes: 20
     steps:
+      # The public Actions runner does not ship az. azure/login runs az, so
+      # install it here until the runner image has it.
+      - name: Install Azure CLI
+        run: |
+          set -euo pipefail
+          if command -v az >/dev/null 2>&1; then
+            exit 0
+          fi
+          if ! sudo -n true; then
+            echo "az is missing and passwordless sudo is not available."
+            echo "Install Azure CLI on the Errand runner image, then re-run this job."
+            exit 1
+          fi
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
       - uses: azure/login@v3
         with:
           client-id: ${{ vars.CI_IMAGE_AZURE_CLIENT_ID }}
