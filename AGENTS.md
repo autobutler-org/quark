@@ -192,11 +192,17 @@ right tool for reproducing a CI failure locally.
 
 ### CI images
 
-Errand's runner image is `autobutlerci.azurecr.io/quark/ci-full:latest`. A job that does not set
-`container:` runs there. That image is Flutter, the Linux desktop packages, the Docker client, and the
-Actions runner. The tag is `latest`. Jobs do not pin a digest.
+The runner pod is the public Actions image. The kubelet pulls that, not the CI image. A job names the
+image it wants, and Docker pulls it after the runner logs into the registry:
 
-A job that should not carry that whole image names a smaller one:
+```yaml
+container:
+  image: autobutlerci.azurecr.io/quark/ci-full:latest
+```
+
+The tag is `latest`. Jobs do not pin a digest. Do not set the scale set's runner image to one of these.
+`ci-full:latest` is not always published, and the kubelet pull of a missing private tag leaves every
+runner pod in `ImagePullBackOff` before the job's container is considered.
 
 ```yaml
 container:
@@ -206,7 +212,7 @@ container:
 - `quark/ci-backend` is Go, Node, Docker, sqlc, swag, golangci-lint, and govulncheck. Backend jobs and
   GoReleaser use it.
 - `quark/ci-frontend` is Flutter and Node. Frontend checks, the web build, and Android use it.
-- `quark/ci-full` is the default runner. Do not also set `container:` to it.
+- `quark/ci-full` is Flutter plus `linux/apt-packages.txt`. The Linux build and the AppImage name it with `container:`.
 
 Runner sizes come later. A label will mean small, medium, or large, and each size will be its own scale set with its own CPU and memory request. Until that is asked for, every runner is the current 4-core node. Do not add a size label or a second scale set ahead of that.
 
@@ -214,8 +220,8 @@ Runner sizes come later. A label will mean small, medium, or large, and each siz
 workflow starts on every pull request and in the merge queue. The six build jobs skip themselves with `if:`
 when `image` in `.github/path-filters.yml` did not match, and a skipped job still reports a status. Those six
 job names are required checks. A workflow-level `paths` filter would leave them pending and block the merge.
-A failed build does not merge. Push uses `CI_IMAGE_AZURE_CLIENT_ID` and runs from `main`. Pointing the
-scale sets at `ci-full` and logging the runner into the registry are iac changes, not changes here.
+A failed build does not merge. Push uses `CI_IMAGE_AZURE_CLIENT_ID` and runs from `main`. The scale sets
+stay on the public runner image. Logging that runner into the registry is an iac change, not a change here.
 
 The release builds the web app on `ci-frontend` and uploads `internal/server/public`. The backend job
 downloads that directory and then runs GoReleaser. `//go:embed public` in `internal/server/routes.go` reads
