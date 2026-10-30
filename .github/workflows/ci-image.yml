@@ -39,27 +39,27 @@ jobs:
       matrix:
         include:
           - name: ci-backend
-            dockerfile: ci/Dockerfile.backend
+            dockerfile: ci/backend.Dockerfile
             arch: amd64
             label: errand-x64
           - name: ci-backend
-            dockerfile: ci/Dockerfile.backend
+            dockerfile: ci/backend.Dockerfile
             arch: arm64
             label: errand
           - name: ci-frontend
-            dockerfile: ci/Dockerfile.frontend
+            dockerfile: ci/frontend.Dockerfile
             arch: amd64
             label: errand-x64
           - name: ci-frontend
-            dockerfile: ci/Dockerfile.frontend
+            dockerfile: ci/frontend.Dockerfile
             arch: arm64
             label: errand
           - name: ci-full
-            dockerfile: ci/Dockerfile.full
+            dockerfile: ci/full.Dockerfile
             arch: amd64
             label: errand-x64
           - name: ci-full
-            dockerfile: ci/Dockerfile.full
+            dockerfile: ci/full.Dockerfile
             arch: arm64
             label: errand
     steps:
