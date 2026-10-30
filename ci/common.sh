@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # cspell:words TARGETARCH nodearch dockerarch goarch
 # Shared install steps for the CI job images. The image files pass versions
 # as build args, which become environment variables for these scripts.

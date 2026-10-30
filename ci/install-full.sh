@@ -2,6 +2,7 @@
 # cspell:words libmpv patchelf
 # Flutter plus the Linux desktop and AppImage packages.
 
+# shellcheck source=ci/common.sh
 source /tmp/common.sh
 apt-get update
 apt-get install -y --no-install-recommends \
