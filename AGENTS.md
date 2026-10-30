@@ -28,6 +28,7 @@ packages/                     independent Dart/Flutter packages (see Packages Di
 test/                         Flutter tests; Go tests sit beside the code they cover
 docs/                         contributor documentation
 scripts/                      CI and layout-check scripts
+ci/                           Errand job images: ci-backend, ci-frontend, ci-full
 datalinks/                    symlinks to system directories, an in-repo view of app data
 ```
 
@@ -186,6 +187,43 @@ An agent running under saddle leans on GitHub Actions for the full gate rather t
 
 Every target stays available to humans, and the full `make check` or a single `make test/...` target is the
 right tool for reproducing a CI failure locally.
+
+<!-- cspell:words autobutlerci -->
+
+### CI images
+
+Errand runs the job inside an image from `autobutlerci.azurecr.io/quark`. The workflow names it. The tag is
+`latest`. Jobs do not pin a digest.
+
+```yaml
+container:
+  image: autobutlerci.azurecr.io/quark/ci-backend:latest
+```
+
+- `quark/ci-backend` is Go, Node, Docker, sqlc, swag, golangci-lint, and govulncheck. Backend jobs and
+  GoReleaser use it.
+- `quark/ci-frontend` is Flutter and Node. Frontend checks, the web build, and Android use it.
+- `quark/ci-full` is the frontend image plus `linux/apt-packages.txt`. The Linux desktop build and the
+  AppImage use it.
+
+`.github/workflows/ci-image.yml` builds all three for amd64 (`errand-x64`) and arm64 (`errand`). A pull
+request that changes `ci/**`, `linux/apt-packages.txt`, `go.mod`, `pubspec.yaml`, `.nvmrc`, the Makefile, or
+that workflow builds and does not push. Push uses `CI_IMAGE_AZURE_CLIENT_ID` and runs from `main`. The runner
+image stays the upstream Actions image. Logging it into the registry is an iac change, not a change here.
+
+The release builds the web app on `ci-frontend` and uploads `internal/server/public`. The backend job
+downloads that directory and then runs GoReleaser. `//go:embed public` in `internal/server/routes.go` reads
+it at compile time, so `index.html` has to land at `internal/server/public/index.html` and not under a second
+`public/` directory.
+
+`ci/common.sh` installs into the image. It is not a developer setup, and `make setup` is not an image build.
+Do not point one at the other. A laptop install goes to `$HOME`, uses nvm, and on Linux ARM unpacks Flutter's
+x86_64 tarball and swaps in the apt Dart SDK. The image clones the Flutter tag into `/opt/flutter` so the
+engine matches the architecture it is building. Versions are already shared: the Makefile pins the Go tools,
+`pubspec.yaml` pins Flutter, `go.mod` pins Go, and `.nvmrc` pins Node. The workflow reads those and passes
+them as build args. The only duplicated commands are the four `go install` lines in `install_go_tools` and
+`setup/gotools/golangci-lint`, `setup/govulncheck`, `setup/sqlc`, and `setup/swag`. If those are unified, the
+image calls those Makefile targets. Nothing else moves.
 
 ### The schmeide factory
 
