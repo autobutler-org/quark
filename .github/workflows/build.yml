@@ -192,8 +192,6 @@ jobs:
     runs-on:
       group: errand
       labels: ${{ matrix.label }}
-    container:
-      image: autobutlerci.azurecr.io/quark/ci-full:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
