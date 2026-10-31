@@ -134,6 +134,7 @@ check_backend() {
 
 FRONTEND_PACKAGES=libglu1-mesa
 install_frontend() {
+	apt-get update
 	xargs -a /tmp/apt-packages.txt apt-get install -y --no-install-recommends
 	cleanup_packages
 	install_node
