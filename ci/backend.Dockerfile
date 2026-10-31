@@ -11,6 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 COPY common.sh install-backend.sh /tmp/
 ARG TARGETARCH
+# Backend tool versions
 ARG GO_VERSION=1.27.3
 ARG NODE_VERSION=24.22.2
 ARG DOCKER_VERSION=28.0.4

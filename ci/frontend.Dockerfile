@@ -12,6 +12,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 COPY apt-packages.txt /tmp/apt-packages.txt
 COPY common.sh install-frontend.sh /tmp/
 ARG TARGETARCH
+# Frontend tool versions
 ARG NODE_VERSION=24.22.2
 ARG FLUTTER_VERSION=3.47.8
 RUN /tmp/install-frontend.sh && rm -f /tmp/common.sh /tmp/install-frontend.sh
