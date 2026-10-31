@@ -26,7 +26,9 @@ jobs:
   # workflow_dispatch run everything. See the same job in build.yml for why
   # jobs skip with `if:` rather than `on: paths:`.
   changes:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64
     permissions:
       contents: read
       pull-requests: read
@@ -45,26 +47,18 @@ jobs:
   performance-loadtest:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.performance == 'true'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     # Room for run_gated.sh to rerun a scenario once.
     timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Setup go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
 
-      - name: Setup sqlc
-        uses: ./.github/actions/setup-sqlc
 
-      - name: Setup swag
-        uses: ./.github/actions/setup-swag
 
-      - name: Setup wrk
-        uses: ./.github/actions/setup-wrk
 
       - name: Run load test profile
         run: |
@@ -81,26 +75,18 @@ jobs:
   performance-stress:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.performance == 'true'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     # Room for run_gated.sh to rerun a scenario once.
     timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Setup go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
 
-      - name: Setup sqlc
-        uses: ./.github/actions/setup-sqlc
 
-      - name: Setup swag
-        uses: ./.github/actions/setup-swag
 
-      - name: Setup wrk
-        uses: ./.github/actions/setup-wrk
 
       - name: Test the performance gate
         run: |
@@ -119,7 +105,9 @@ jobs:
           if-no-files-found: warn
 
   performance-summary:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     needs:
       - changes
       - performance-loadtest

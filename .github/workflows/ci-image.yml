@@ -55,8 +55,12 @@ jobs:
   build:
     name: build ${{ matrix.name }} ${{ matrix.arch }}
     needs: changes
-    # The merge queue does not build: the pull request already did.
-    if: github.event_name != 'merge_group' && needs.changes.outputs.ci_image != 'false'
+    # The merge queue does not build: the pull request already did. A fork pull
+    # request would build its Dockerfile on the privileged runners.
+    if: >-
+      github.event_name != 'merge_group' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      needs.changes.outputs.ci_image != 'false'
     runs-on:
       group: errand
       labels: ${{ matrix.label }}

@@ -57,7 +57,9 @@ defaults:
 jobs:
   release-android:
     # Android builds are Linux-native, so unlike iOS this needs no macOS runner.
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-full
     timeout-minutes: 45
     permissions:
       contents: read
@@ -71,8 +73,6 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
 
       - name: Setup GNU make
         uses: ./.github/actions/setup-gnu-make
