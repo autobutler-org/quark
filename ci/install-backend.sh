@@ -1,19 +1,9 @@
 #!/usr/bin/env bash
-# Go, Node, Docker, and the backend CI tools. No Flutter.
+
+set -euo pipefail
 
 # shellcheck source=ci/common.sh
 source /tmp/common.sh
-base_packages wrk
-install_go
-install_node
-install_docker
-install_go_tools
-
-go version
-node --version
-docker --version
-golangci-lint version
-govulncheck -version
-sqlc version
-swag --version
-command -v wrk
+base_packages ${BACKEND_PACKAGES}
+install_backend
+check_backend

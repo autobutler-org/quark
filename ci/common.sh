@@ -35,17 +35,18 @@ cleanup_packages() {
 
 base_packages() {
 	install_packages \
+		build-essential \
 		ca-certificates \
 		curl \
 		git \
 		jq \
-		sudo \
-		unzip \
-		zip \
-		xz-utils \
-		build-essential \
+		passwd \
 		python3 \
 		python3-venv \
+		sudo \
+		unzip \
+		xz-utils \
+		zip \
 		"$@"
 	cleanup_packages
 }
@@ -96,4 +97,59 @@ install_go_tools() {
 	go install "github.com/sqlc-dev/sqlc/cmd/sqlc@${SQLC_VERSION}"
 	go install "github.com/swaggo/swag/cmd/swag@${SWAG_VERSION}"
 	rm -rf /tmp/gopath /tmp/gocache /root/.cache
+}
+
+install_yq() {
+	local PLATFORM=$(uname -m)
+	curl -L "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${PLATFORM}" -o /usr/local/bin/yq
+	chmod +x /usr/local/bin/yq
+}
+
+BACKEND_PACKAGES=wrk
+install_backend() {
+	install_go
+	install_node
+	install_docker
+	install_go_tools
+}
+
+check_backend() {
+	command -v docker
+	docker --version
+	command -v go
+	go version
+	command -v golangci-lint
+	golangci-lint version
+	command -v govulncheck
+	govulncheck -version
+	command -v node
+	node --version
+	command -v sqlc
+	sqlc version
+	command -v swag
+	swag --version
+	command -v wrk
+	wrk --version || true
+}
+
+FRONTEND_PACKAGES=libglu1-mesa
+install_frontend() {
+	xargs -a /tmp/apt-packages.txt apt-get install -y --no-install-recommends
+	cleanup_packages
+	install_node
+	install_flutter
+	install_yq
+}
+
+check_frontend() {
+	command -v cmake
+	cmake --version
+	command -v flutter
+	flutter --version
+	command -v node
+	node --version
+	command -v patchelf
+	patchelf --version
+	command -v yq
+	yq --version
 }
