@@ -74,6 +74,13 @@ SWAG_VERSION := v1.16.6
 GOLANGCI_LINT_VERSION := v2.15.0
 # renovate: datasource=go depName=golang.org/x/vuln
 GOVULNCHECK_VERSION := v1.9.0
+# The CI images install these. ci-image.yml reads them and passes them as build args.
+# renovate: datasource=github-tags depName=docker/cli extractVersion=^v(?<version>.+)$
+DOCKER_VERSION := 28.0.4
+# renovate: datasource=github-releases depName=actions/runner extractVersion=^v(?<version>.+)$
+RUNNER_VERSION := 2.338.2
+# renovate: datasource=github-releases depName=mikefarah/yq
+YQ_VERSION := v4.54.1
 # The Android command-line tools in the CI images, by Google's build number. Renovate has no
 # datasource for the Android SDK, so this is bumped by hand.
 ANDROID_CMDLINE_TOOLS_VERSION := 13114758

@@ -20,14 +20,14 @@ ARG TARGETARCH
 # Frontend tool versions
 ARG NODE_VERSION=24.22.2
 ARG FLUTTER_VERSION=3.47.8
-ARG YQ_VERSION=v4.54.1
+ARG YQ_VERSION
 # Android SDK, no defaults: ci-image.yml passes compileSdk and buildToolsVersion from
 # android/app/build.gradle.kts and the command-line tools from the Makefile.
 ARG ANDROID_PLATFORM
 ARG ANDROID_BUILD_TOOLS_VERSION
 ARG ANDROID_CMDLINE_TOOLS_VERSION
-ARG DOCKER_VERSION=28.0.4
-ARG RUNNER_VERSION=2.338.2
+ARG DOCKER_VERSION
+ARG RUNNER_VERSION
 RUN /tmp/install-frontend.sh && rm -f /tmp/common.sh /tmp/install-frontend.sh
 
 WORKDIR /home/runner
