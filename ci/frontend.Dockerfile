@@ -1,5 +1,5 @@
 # The x64-quark-frontend / arm-quark-frontend runner. Flutter, Node, the
-# Linux desktop packages, and the Actions runner.
+# Linux desktop packages, the Docker client, and the Actions runner.
 
 FROM debian:stable-slim
 
@@ -16,6 +16,7 @@ ARG TARGETARCH
 ARG NODE_VERSION=24.22.2
 ARG FLUTTER_VERSION=3.47.8
 ARG YQ_VERSION=v4.54.1
+ARG DOCKER_VERSION=28.0.4
 ARG RUNNER_VERSION=2.338.2
 RUN /tmp/install-frontend.sh && rm -f /tmp/common.sh /tmp/install-frontend.sh
 
