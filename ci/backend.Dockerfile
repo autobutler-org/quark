@@ -6,7 +6,7 @@ FROM debian:stable-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
-    PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin \
+    PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     GOBIN=/usr/local/bin
 
 COPY common.sh install-backend.sh /tmp/

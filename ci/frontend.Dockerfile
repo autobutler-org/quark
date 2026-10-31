@@ -5,7 +5,7 @@ FROM debian:stable-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
-    PATH=/opt/flutter/bin:/usr/local/bin:/usr/bin:/bin \
+    PATH=/opt/flutter/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     PUB_CACHE=/home/runner/.pub-cache \
     FLUTTER_HOME=/opt/flutter
 
