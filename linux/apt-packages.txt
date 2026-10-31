@@ -17,5 +17,6 @@ squashfs-tools
 zsync
 gtk-update-icon-cache
 libglib2.0-bin
+librsvg2-common
 patchelf
 python3-venv
