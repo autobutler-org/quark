@@ -17,20 +17,12 @@ permissions:
   contents: read
 jobs:
   check-backend:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-      - name: Setup sqlc
-        uses: ./.github/actions/setup-sqlc
-      - name: Setup swag
-        uses: ./.github/actions/setup-swag
-      - name: Setup golangci-lint
-        uses: ./.github/actions/setup-golangci-lint
       - name: Generate code
         run: |
           make generate/backend
@@ -60,12 +52,12 @@ jobs:
             exit 1;
           fi
   check-frontend:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-frontend
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
       - name: Tidy
         run: |
           make tidy/flutter
@@ -85,7 +77,9 @@ jobs:
             exit 1
           fi
   check-misc:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     # Job-level permissions replace the workflow's, so contents: read is repeated.
     # pull-requests: read is what lets check/attribution read the pull request.
     permissions:
@@ -108,7 +102,9 @@ jobs:
           make check/attribution PR=${{ github.event.pull_request.number }}
 
   check-migrations:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -123,18 +119,14 @@ jobs:
           make check/migrations MIGRATION_BASE_REF=origin/${{ github.base_ref || 'main' }}
 
   security-backend:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Setup go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
 
-      - name: Setup govulncheck
-        uses: ./.github/actions/setup-govulncheck
 
       - name: Check for vulnerabilities
         run: make check/vuln/backend
