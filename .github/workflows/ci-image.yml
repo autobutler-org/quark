@@ -15,8 +15,13 @@ on:
   pull_request:
   merge_group:
 
+# Only publishing runs (push and workflow_dispatch) share a lock, so two never
+# push latest at once. Every other run gets its own group and never waits.
 concurrency:
-  group: ci-image-${{ github.event_name }}-${{ github.ref }}
+  group: >-
+    ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    && format('ci-image-publish-{0}', github.ref)
+    || format('ci-image-{0}', github.run_id) }}
   cancel-in-progress: false
 
 env:
