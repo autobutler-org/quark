@@ -42,7 +42,7 @@ jobs:
   build:
     name: build ${{ matrix.name }} ${{ matrix.arch }}
     # A fork pull request would build its Dockerfile on the privileged runners.
-    if: (github.event_name != 'pull_request' && github.event_name != 'merge_group') || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'merge_group'
     runs-on:
       group: errand
       labels: ${{ matrix.label }}
