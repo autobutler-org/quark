@@ -105,7 +105,10 @@ jobs:
           ANDROID_PLATFORM=$(sed -n 's/^ *compileSdk = \([0-9]*\)$/\1/p' android/app/build.gradle.kts)
           ANDROID_BUILD_TOOLS_VERSION=$(sed -n 's/^ *buildToolsVersion = "\([^"]*\)"$/\1/p' android/app/build.gradle.kts)
           ANDROID_CMDLINE_TOOLS_VERSION=$(sed -n 's/^ANDROID_CMDLINE_TOOLS_VERSION := //p' Makefile)
-          for name in GO_VERSION FLUTTER_VERSION NODE_VERSION GOLANGCI_LINT_VERSION GOVULNCHECK_VERSION SQLC_VERSION SWAG_VERSION ANDROID_PLATFORM ANDROID_BUILD_TOOLS_VERSION ANDROID_CMDLINE_TOOLS_VERSION; do
+          DOCKER_VERSION=$(sed -n 's/^DOCKER_VERSION := //p' Makefile)
+          RUNNER_VERSION=$(sed -n 's/^RUNNER_VERSION := //p' Makefile)
+          YQ_VERSION=$(sed -n 's/^YQ_VERSION := //p' Makefile)
+          for name in GO_VERSION FLUTTER_VERSION NODE_VERSION GOLANGCI_LINT_VERSION GOVULNCHECK_VERSION SQLC_VERSION SWAG_VERSION ANDROID_PLATFORM ANDROID_BUILD_TOOLS_VERSION ANDROID_CMDLINE_TOOLS_VERSION DOCKER_VERSION RUNNER_VERSION YQ_VERSION; do
             value="${!name}"
             if [ -z "${value}" ]; then
               echo "${name} is empty. Check go.mod, pubspec.yaml, .nvmrc, the Makefile, and android/app/build.gradle.kts."
@@ -130,6 +133,9 @@ jobs:
             --build-arg "ANDROID_PLATFORM=${ANDROID_PLATFORM}" \
             --build-arg "ANDROID_BUILD_TOOLS_VERSION=${ANDROID_BUILD_TOOLS_VERSION}" \
             --build-arg "ANDROID_CMDLINE_TOOLS_VERSION=${ANDROID_CMDLINE_TOOLS_VERSION}" \
+            --build-arg "DOCKER_VERSION=${DOCKER_VERSION}" \
+            --build-arg "RUNNER_VERSION=${RUNNER_VERSION}" \
+            --build-arg "YQ_VERSION=${YQ_VERSION}" \
             --tag "${REGISTRY}/${{ matrix.name }}:${GITHUB_SHA}-${{ matrix.arch }}" \
             ci
 
