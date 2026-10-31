@@ -63,27 +63,27 @@ jobs:
           - name: ci-backend
             dockerfile: ci/backend.Dockerfile
             arch: amd64
-            label: errand-x64
+            label: x64
           - name: ci-backend
             dockerfile: ci/backend.Dockerfile
             arch: arm64
-            label: errand
+            label: arm
           - name: ci-frontend
             dockerfile: ci/frontend.Dockerfile
             arch: amd64
-            label: errand-x64
+            label: x64
           - name: ci-frontend
             dockerfile: ci/frontend.Dockerfile
             arch: arm64
-            label: errand
+            label: arm
           - name: ci-full
             dockerfile: ci/full.Dockerfile
             arch: amd64
-            label: errand-x64
+            label: x64
           - name: ci-full
             dockerfile: ci/full.Dockerfile
             arch: arm64
-            label: errand
+            label: arm
     steps:
       - uses: actions/checkout@v7
 
@@ -183,7 +183,7 @@ jobs:
     if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
     runs-on:
       group: errand
-      labels: errand-x64
+      labels: x64
     timeout-minutes: 20
     steps:
       # The public Actions runner does not ship az. azure/login runs az, so

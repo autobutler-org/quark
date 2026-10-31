@@ -1,7 +1,6 @@
-# Default Errand runner image. Flutter, the Linux desktop packages, the
-# Docker client, and the Actions runner. The workflow copies
+# The x64-quark-full / arm-quark-full runner. Flutter, the Linux desktop
+# packages, the Docker client, and the Actions runner. The workflow copies
 # linux/apt-packages.txt into this directory before docker build.
-# Jobs that need a smaller image set container: to ci-backend or ci-frontend.
 
 FROM debian:stable-slim
 
