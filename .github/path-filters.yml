@@ -1,4 +1,4 @@
-# What each job in build.yml, test.yml and performance.yml reads, for
+# What each job in build.yml, test.yml, performance.yml and ci-image.yml reads, for
 # dorny/paths-filter. On a pull request and in the merge queue a job runs only when its
 # set matched; pushes to main run everything. A path missing here means a pull request
 # that breaks that job merges green and fails on main afterwards, so when a job starts
@@ -72,3 +72,13 @@ frontend:
   - test/**
   # test/web_index_html_test.dart reads web/index.html.
   - web/**
+# ci-image.yml: the CI job images and the versions they read.
+ci_image:
+  - ci/**
+  - linux/apt-packages.txt
+  - go.mod
+  - pubspec.yaml
+  - .nvmrc
+  - Makefile
+  - .github/path-filters.yml
+  - .github/workflows/ci-image.yml
