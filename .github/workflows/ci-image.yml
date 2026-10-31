@@ -183,7 +183,7 @@ jobs:
     if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
     runs-on:
       group: errand
-      labels: errand-x64
+      labels: x64
     timeout-minutes: 20
     steps:
       # The public Actions runner does not ship az. azure/login runs az, so

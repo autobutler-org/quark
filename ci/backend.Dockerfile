@@ -1,6 +1,6 @@
 # cspell:words GOBIN
-# Job image for Go CI. Not the Actions runner. Workflows name this image
-# with container:.
+# The x64-quark-backend / arm-quark-backend runner. Go, Node, Docker, the
+# backend tools, and the Actions runner.
 
 FROM debian:stable-slim
 
@@ -19,4 +19,9 @@ ARG GOLANGCI_LINT_VERSION=v2.15.0
 ARG GOVULNCHECK_VERSION=v1.9.0
 ARG SQLC_VERSION=v1.31.1
 ARG SWAG_VERSION=v1.16.6
+ARG RUNNER_VERSION=2.338.2
 RUN /tmp/install-backend.sh && rm -f /tmp/common.sh /tmp/install-backend.sh
+
+WORKDIR /home/runner
+USER runner
+CMD ["/home/runner/run.sh"]

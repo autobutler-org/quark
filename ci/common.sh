@@ -85,7 +85,10 @@ install_runner() {
 	rm /tmp/runner.tar.gz
 	/home/runner/bin/installdependencies.sh
 	mkdir -p /home/runner/.pub-cache /home/runner/go /home/runner/.cache
-	chown -R runner:runner /home/runner /opt/flutter
+	chown -R runner:runner /home/runner
+	if [ -d /opt/flutter ]; then
+		chown -R runner:runner /opt/flutter
+	fi
 }
 
 install_go_tools() {
