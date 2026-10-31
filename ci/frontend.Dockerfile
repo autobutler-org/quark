@@ -9,6 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PUB_CACHE=/root/.pub-cache \
     FLUTTER_HOME=/opt/flutter
 
+COPY apt-packages.txt /tmp/apt-packages.txt
 COPY common.sh install-frontend.sh /tmp/
 ARG TARGETARCH
 ARG NODE_VERSION=24.22.2
