@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Flutter and Node for the web, Android, and frontend test jobs.
+
+set -euo pipefail
 
 # shellcheck source=ci/common.sh
 source /tmp/common.sh
-base_packages libglu1-mesa
-install_node
-install_flutter
+base_packages
+install_frontend
+check_frontend
+# Last, so it owns whatever the checks wrote.
+install_runner
 
-node --version
-flutter --version
+test -x /home/runner/run.sh

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cspell:words TARGETARCH nodearch dockerarch goarch runnerarch installdependencies
+# cspell:words TARGETARCH nodearch dockerarch goarch runnerarch installdependencies patchelf GOBIN
 # Shared install steps for the CI job images. The image files pass versions
 # as build args, which become environment variables for these scripts.
 
@@ -35,18 +35,18 @@ cleanup_packages() {
 
 base_packages() {
 	install_packages \
+		build-essential \
 		ca-certificates \
 		curl \
 		git \
 		jq \
-		sudo \
-		unzip \
-		zip \
-		xz-utils \
-		build-essential \
+		passwd \
 		python3 \
 		python3-venv \
-		"$@"
+		sudo \
+		unzip \
+		xz-utils \
+		zip
 	cleanup_packages
 }
 
@@ -85,10 +85,14 @@ install_runner() {
 	rm /tmp/runner.tar.gz
 	/home/runner/bin/installdependencies.sh
 	mkdir -p /home/runner/.pub-cache /home/runner/go /home/runner/.cache
-	chown -R runner:runner /home/runner /opt/flutter
+	chown -R runner:runner /home/runner
+	if [ -d /opt/flutter ]; then
+		chown -R runner:runner /opt/flutter
+	fi
 }
 
 install_go_tools() {
+	export GOBIN=/usr/local/bin
 	export GOPATH=/tmp/gopath
 	export GOCACHE=/tmp/gocache
 	go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
@@ -96,4 +100,62 @@ install_go_tools() {
 	go install "github.com/sqlc-dev/sqlc/cmd/sqlc@${SQLC_VERSION}"
 	go install "github.com/swaggo/swag/cmd/swag@${SWAG_VERSION}"
 	rm -rf /tmp/gopath /tmp/gocache /root/.cache
+}
+
+install_yq() {
+	curl -fsSL -o /usr/local/bin/yq \
+		"https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${goarch}"
+	chmod +x /usr/local/bin/yq
+}
+
+# Each component installs its own packages and tools, so the full image is
+# install_backend and install_frontend together.
+install_backend() {
+	install_packages wrk
+	cleanup_packages
+	install_go
+	install_node
+	install_docker
+	install_go_tools
+}
+
+check_backend() {
+	command -v docker
+	docker --version
+	command -v go
+	go version
+	command -v golangci-lint
+	golangci-lint version
+	command -v govulncheck
+	govulncheck -version
+	command -v node
+	node --version
+	command -v sqlc
+	sqlc version
+	command -v swag
+	swag --version
+	command -v wrk
+}
+
+install_frontend() {
+	local linux_packages
+	mapfile -t linux_packages < /tmp/apt-packages.txt
+	install_packages libglu1-mesa "${linux_packages[@]}"
+	cleanup_packages
+	install_node
+	install_flutter
+	install_yq
+}
+
+check_frontend() {
+	command -v cmake
+	cmake --version
+	command -v flutter
+	flutter --version
+	command -v node
+	node --version
+	command -v patchelf
+	patchelf --version
+	command -v yq
+	yq --version
 }
