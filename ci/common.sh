@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cspell:words TARGETARCH nodearch dockerarch goarch runnerarch installdependencies
+# cspell:words TARGETARCH nodearch dockerarch goarch runnerarch installdependencies patchelf GOBIN
 # Shared install steps for the CI job images. The image files pass versions
 # as build args, which become environment variables for these scripts.
 
@@ -46,8 +46,7 @@ base_packages() {
 		sudo \
 		unzip \
 		xz-utils \
-		zip \
-		"$@"
+		zip
 	cleanup_packages
 }
 
@@ -90,6 +89,7 @@ install_runner() {
 }
 
 install_go_tools() {
+	export GOBIN=/usr/local/bin
 	export GOPATH=/tmp/gopath
 	export GOCACHE=/tmp/gocache
 	go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
@@ -100,13 +100,16 @@ install_go_tools() {
 }
 
 install_yq() {
-	local PLATFORM=$(uname -m)
-	curl -L "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${PLATFORM}" -o /usr/local/bin/yq
+	curl -fsSL -o /usr/local/bin/yq \
+		"https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${goarch}"
 	chmod +x /usr/local/bin/yq
 }
 
-BACKEND_PACKAGES=wrk
+# Each component installs its own packages and tools, so the full image is
+# install_backend and install_frontend together.
 install_backend() {
+	install_packages wrk
+	cleanup_packages
 	install_go
 	install_node
 	install_docker
@@ -129,13 +132,12 @@ check_backend() {
 	command -v swag
 	swag --version
 	command -v wrk
-	wrk --version || true
 }
 
-FRONTEND_PACKAGES=libglu1-mesa
 install_frontend() {
-	apt-get update
-	xargs -a /tmp/apt-packages.txt apt-get install -y --no-install-recommends
+	local linux_packages
+	mapfile -t linux_packages < /tmp/apt-packages.txt
+	install_packages libglu1-mesa "${linux_packages[@]}"
 	cleanup_packages
 	install_node
 	install_flutter

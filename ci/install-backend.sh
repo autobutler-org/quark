@@ -4,6 +4,6 @@ set -euo pipefail
 
 # shellcheck source=ci/common.sh
 source /tmp/common.sh
-base_packages ${BACKEND_PACKAGES}
+base_packages
 install_backend
 check_backend
