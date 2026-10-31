@@ -38,6 +38,8 @@ android {
     // the SDK levels a published app is compiled and tested against. Play enforces a
     // rolling minimum targetSdk, so raising these stays a deliberate commit.
     compileSdk = 36
+    // The CI images install exactly this version; ci-image.yml reads it from here.
+    buildToolsVersion = "36.0.0"
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

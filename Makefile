@@ -74,6 +74,9 @@ SWAG_VERSION := v1.16.6
 GOLANGCI_LINT_VERSION := v2.15.0
 # renovate: datasource=go depName=golang.org/x/vuln
 GOVULNCHECK_VERSION := v1.9.0
+# The Android command-line tools in the CI images, by Google's build number. Renovate has no
+# datasource for the Android SDK, so this is bumped by hand.
+ANDROID_CMDLINE_TOOLS_VERSION := 13114758
 AIR := $(shell which air)
 # Only ask Go for its defaults when Go is actually installed. On a macOS CI runner
 # without it, $(GO) is empty and the shell call becomes `env GOOS`, which floods the

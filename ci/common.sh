@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cspell:words TARGETARCH nodearch dockerarch goarch runnerarch installdependencies patchelf GOBIN
+# cspell:words TARGETARCH nodearch dockerarch goarch runnerarch installdependencies patchelf GOBIN sdkmanager cmdline
 # Shared install steps for the CI job images. The image files pass versions
 # as build args, which become environment variables for these scripts.
 
@@ -38,7 +38,9 @@ base_packages() {
 		build-essential \
 		ca-certificates \
 		curl \
+		gh \
 		git \
+		gnupg \
 		jq \
 		passwd \
 		python3 \
@@ -73,6 +75,33 @@ install_flutter() {
 	/opt/flutter/bin/flutter precache --linux
 }
 
+# Google publishes the Android build tools and NDK for x86_64 Linux only, so the
+# SDK goes into the amd64 images. The NDK is the version Flutter pins.
+install_android() {
+	if [ "${TARGETARCH}" != amd64 ]; then
+		return
+	fi
+	install_packages openjdk-21-jdk-headless
+	cleanup_packages
+	local ndk
+	ndk="$(sed -n "s/.*const ndkVersion = '\\([^']*\\)'.*/\\1/p" \
+		/opt/flutter/packages/flutter_tools/lib/src/android/gradle_utils.dart)"
+	curl -fsSL -o /tmp/cmdline-tools.zip \
+		"https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_VERSION}_latest.zip"
+	mkdir -p "${ANDROID_HOME}/cmdline-tools"
+	unzip -q /tmp/cmdline-tools.zip -d "${ANDROID_HOME}/cmdline-tools"
+	mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest"
+	rm /tmp/cmdline-tools.zip
+	local sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+	{ yes || true; } | "${sdkmanager}" --licenses >/dev/null
+	"${sdkmanager}" --install \
+		platform-tools \
+		"platforms;android-${ANDROID_PLATFORM}" \
+		"build-tools;${ANDROID_BUILD_TOOLS_VERSION}" \
+		"ndk;${ndk}"
+	/opt/flutter/bin/flutter precache --android
+}
+
 # Every image is a runner, and the runner's hooks log in to the registry with
 # docker, so the client comes with the runner.
 install_runner() {
@@ -90,9 +119,12 @@ install_runner() {
 	/home/runner/bin/installdependencies.sh
 	mkdir -p /home/runner/.pub-cache /home/runner/go /home/runner/.cache
 	chown -R runner:runner /home/runner
-	if [ -d /opt/flutter ]; then
-		chown -R runner:runner /opt/flutter
-	fi
+	# Gradle installs any SDK component the build asks for and the image lacks.
+	for dir in /opt/flutter /opt/android-sdk; do
+		if [ -d "${dir}" ]; then
+			chown -R runner:runner "${dir}"
+		fi
+	done
 }
 
 install_go_tools() {
@@ -145,6 +177,7 @@ install_frontend() {
 	cleanup_packages
 	install_node
 	install_flutter
+	install_android
 	install_yq
 }
 
@@ -159,4 +192,8 @@ check_frontend() {
 	patchelf --version
 	command -v yq
 	yq --version
+	if [ "${TARGETARCH}" = amd64 ]; then
+		java -version
+		test -f "${ANDROID_HOME}/platforms/android-${ANDROID_PLATFORM}/android.jar"
+	fi
 }

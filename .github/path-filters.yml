@@ -80,5 +80,6 @@ ci_image:
   - pubspec.yaml
   - .nvmrc
   - Makefile
+  - android/app/build.gradle.kts
   - .github/path-filters.yml
   - .github/workflows/ci-image.yml

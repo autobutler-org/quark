@@ -4,6 +4,9 @@
 
 FROM debian:stable-slim
 
+# Debian 13 dropped apt-key, and appimage-builder runs it for key_url.
+COPY --from=debian:bookworm-slim /usr/bin/apt-key /usr/bin/apt-key
+
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
