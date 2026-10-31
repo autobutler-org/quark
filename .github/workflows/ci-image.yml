@@ -9,23 +9,10 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - ci/**
-      - linux/apt-packages.txt
-      - go.mod
-      - pubspec.yaml
-      - .nvmrc
-      - Makefile
-      - .github/workflows/ci-image.yml
+  # No `on: paths:`: a workflow skipped by paths never reports its checks, and the
+  # required ci-image check would wait forever. The `changes` job skips the builds
+  # instead, and a job skipped by `if:` reports success.
   pull_request:
-    paths:
-      - ci/**
-      - linux/apt-packages.txt
-      - go.mod
-      - pubspec.yaml
-      - .nvmrc
-      - Makefile
-      - .github/workflows/ci-image.yml
   merge_group:
 
 concurrency:
@@ -39,10 +26,32 @@ env:
   AZURE_SUBSCRIPTION_ID: 8add0a4f-6638-4cf3-95bd-cd46ab3ca970
 
 jobs:
+  # Works out whether a change touches the images, from .github/path-filters.yml.
+  # Pushes to main compare against the previous commit. Manual runs skip the filter,
+  # its output is empty, and everything builds.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      ci_image: ${{ steps.filter.outputs.ci_image }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Filter paths
+        id: filter
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        # A filter that fails leaves the output empty, and every image builds.
+        continue-on-error: true
+        uses: dorny/paths-filter@v4
+        with:
+          filters: .github/path-filters.yml
+
   build:
     name: build ${{ matrix.name }} ${{ matrix.arch }}
-    # A fork pull request would build its Dockerfile on the privileged runners.
-    if: github.event_name != 'merge_group'
+    needs: changes
+    # The merge queue does not build: the pull request already did.
+    if: github.event_name != 'merge_group' && needs.changes.outputs.ci_image != 'false'
     runs-on:
       group: errand
       labels: ${{ matrix.label }}
@@ -154,6 +163,19 @@ jobs:
           set -euo pipefail
           az acr login --name "${REGISTRY_NAME}"
           docker push "${REGISTRY}/${{ matrix.name }}:${GITHUB_SHA}-${{ matrix.arch }}"
+
+  # The ruleset requires a check named ci-image. A matrix leg skipped by `if:`
+  # reports under its unexpanded name, so the per-leg names would never arrive on a
+  # skipped run; this job carries the name and fails when any leg did.
+  ci-image:
+    needs: [changes, build]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check every image built
+        run: |
+          [[ "${{ needs.changes.result }}" == success ]]
+          [[ "${{ needs.build.result }}" =~ ^(success|skipped)$ ]]
 
   publish:
     name: publish latest
