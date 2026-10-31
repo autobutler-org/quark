@@ -26,6 +26,7 @@ on:
       - .nvmrc
       - Makefile
       - .github/workflows/ci-image.yml
+  merge_group:
 
 concurrency:
   group: ci-image-${{ github.event_name }}-${{ github.ref }}
@@ -41,7 +42,7 @@ jobs:
   build:
     name: build ${{ matrix.name }} ${{ matrix.arch }}
     # A fork pull request would build its Dockerfile on the privileged runners.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: (github.event_name != 'pull_request' && github.event_name != 'merge_group') || github.event.pull_request.head.repo.full_name == github.repository
     runs-on:
       group: errand
       labels: ${{ matrix.label }}
@@ -157,7 +158,7 @@ jobs:
   publish:
     name: publish latest
     needs: build
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
     runs-on:
       group: errand
       labels: errand-x64
