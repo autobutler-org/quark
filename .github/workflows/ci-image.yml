@@ -1,4 +1,4 @@
-# cspell:words autobutlerci InstallAzureCLIDeb
+# cspell:words autobutlerci InstallAzureCLIDeb imagetools
 name: CI image
 
 permissions:
@@ -188,19 +188,22 @@ jobs:
       - name: Point latest at both architectures
         run: |
           set -euo pipefail
+          if ! docker buildx version >/dev/null 2>&1; then
+            echo "docker buildx is required to publish the multi-arch tag."
+            echo "The Errand runner image should include the buildx CLI plugin."
+            exit 1
+          fi
           az acr login --name "${REGISTRY_NAME}"
           for name in ci-backend ci-frontend ci-full; do
             image="${REGISTRY}/${name}"
-            docker pull "${image}:${GITHUB_SHA}-amd64"
-            docker pull "${image}:${GITHUB_SHA}-arm64"
-            docker manifest rm "${image}:latest" >/dev/null 2>&1 || true
-            docker manifest create "${image}:latest" \
+            # Each arch tag is a manifest list: the image plus a BuildKit
+            # attestation. docker pull of the arm64 list on this amd64
+            # daemon asks for linux/amd64 and fails. imagetools reads the
+            # registry and does not pull.
+            docker buildx imagetools create --tag "${image}:latest" \
               "${image}:${GITHUB_SHA}-amd64" \
               "${image}:${GITHUB_SHA}-arm64"
-            docker manifest push "${image}:latest"
-            docker manifest rm "${image}:${GITHUB_SHA}" >/dev/null 2>&1 || true
-            docker manifest create "${image}:${GITHUB_SHA}" \
+            docker buildx imagetools create --tag "${image}:${GITHUB_SHA}" \
               "${image}:${GITHUB_SHA}-amd64" \
               "${image}:${GITHUB_SHA}-arm64"
-            docker manifest push "${image}:${GITHUB_SHA}"
           done
