@@ -73,7 +73,11 @@ install_flutter() {
 	/opt/flutter/bin/flutter precache --linux
 }
 
+# Every image is a runner, and the runner's hooks log in to the registry with
+# docker, so the client comes with the runner.
 install_runner() {
+	install_docker
+	docker --version
 	groupadd --gid 123 docker
 	groupadd --gid 1001 runner
 	useradd --create-home --uid 1001 --gid 1001 --groups docker,sudo --shell /bin/bash runner
@@ -115,13 +119,10 @@ install_backend() {
 	cleanup_packages
 	install_go
 	install_node
-	install_docker
 	install_go_tools
 }
 
 check_backend() {
-	command -v docker
-	docker --version
 	command -v go
 	go version
 	command -v golangci-lint
