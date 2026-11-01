@@ -77,9 +77,12 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
         QuarkDisconnectedView.turnOnRemoteAccess = paused
             ? () => unawaited(connection.resumeRemoteAccess())
             : null;
-        QuarkDisconnectedView.reason = onDevice
-            ? connection.offlineReason
-            : null;
+        QuarkDisconnectedView.reason = quarkUnreachableReason(
+          onDevice: onDevice,
+          mode: mode,
+          paused: connection.remoteAccessPaused,
+          phone: connection.phoneRemoteAccess,
+        );
         return QuarkAppBarTrailing(
           actions: [
             if (mode != null || paused)
@@ -114,4 +117,26 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
       },
     );
   }
+}
+
+/// Which away-screen reason a phone already knows, or null when this device
+/// is not a phone or the Quark is still reachable.
+///
+/// A browser cannot use remote access, so it keeps the checklist. The screen
+/// can also say there is no internet or that the network wants a sign-in;
+/// those are passed in by whoever measured them. This returns only the three
+/// a [ConnectionController] can already tell apart: not set up, paused, or
+/// the Quark not answering.
+QuarkUnreachableReason? quarkUnreachableReason({
+  required bool onDevice,
+  required ConnectionMode? mode,
+  required bool paused,
+  required PhoneRemoteAccess phone,
+}) {
+  if (!onDevice || mode != ConnectionMode.offline) return null;
+  if (paused) return QuarkUnreachableReason.paused;
+  if (phone == PhoneRemoteAccess.notSetUp) {
+    return QuarkUnreachableReason.notSetUp;
+  }
+  return QuarkUnreachableReason.notAnswering;
 }

@@ -140,11 +140,12 @@ abstract final class Errors {
   /// The device has nowhere safe to keep a sign-in. On a Linux desktop that
   /// is a Secret Service (GNOME Keyring, KWallet) that is missing or locked
   /// (#3148); the Quark accepted the password, so this is not a credentials
-  /// error.
+  /// error. The sentence does not name those products: a phone shows this
+  /// same string, and the UI names no vendor (#3778).
   static const String keyringUnavailable =
       "Couldn't save your sign-in on this computer. Quark keeps it in the "
-      "system keyring, so check that one (like GNOME Keyring or KWallet) is "
-      'installed and unlocked, then try again.';
+      'system keyring, so check that one is installed and unlocked, then '
+      'try again.';
 
   /// Headline above a [message], where a page has room for both.
   static const String somethingWentWrong = 'Something went wrong';

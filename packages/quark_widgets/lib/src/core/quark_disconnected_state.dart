@@ -3,7 +3,7 @@
 /// to load, and [QuarkDisconnectedBanner] sits above a page that stays usable.
 ///
 /// Both are for the case where a Quark *is* configured and simply cannot be
-/// reached — off the local network, Tailscale down, device asleep. The
+/// reached — off the local network, remote access down, device asleep. The
 /// zero-config case belongs to the app's connect form; that is not this.
 ///
 /// The copy says only what the app actually knows. It does not guess between
@@ -41,15 +41,17 @@ const String quarkDisconnectedInline =
 /// same page already carries the explanation and the steps.
 const String quarkDisconnectedShort = 'Not connected';
 
-/// The troubleshooting steps, in the order they are worth checking.
+/// What a browser can check when the Quark is unreachable.
 ///
-/// Deliberately static: v1 does not autodetect *why* the Quark is unreachable,
-/// so every step here has to hold for every cause.
+/// A browser cannot use remote access, and it cannot tell why the Quark is
+/// out of reach, so each step has to hold for every cause. A phone passes
+/// [QuarkUnreachableReason] instead of this list. Nothing here asks the
+/// person to retry: the app retries by itself, and the retry button is the
+/// only control that tries again.
 const List<String> quarkTroubleshootingSteps = [
-  "Check you're on the same network as your Quark, or connected to it through "
-      'Tailscale or another remote access route.',
-  'Confirm the Quark address in Settings is correct.',
-  'Confirm your Quark is powered on.',
+  "Make sure you're on your home Wi‑Fi.",
+  'Make sure your Quark is switched on.',
+  'Check the Quark address in Settings.',
 ];
 
 /// [quarkTroubleshootingSteps] for pages that already show host management —
@@ -61,16 +63,85 @@ const List<String> quarkTroubleshootingSteps = [
 /// a destination the user navigates to ("in Settings") is stable; pointing at
 /// a screen position is not.
 const List<String> quarkTroubleshootingStepsInPlace = [
-  "Check you're on the same network as your Quark, or connected to it through "
-      'Tailscale or another remote access route.',
-  'Confirm the Quark address is correct.',
-  'Confirm your Quark is powered on.',
+  "Make sure you're on your home Wi‑Fi.",
+  'Make sure your Quark is switched on.',
+  'Check the Quark address.',
 ];
+
+/// Why a phone cannot reach its Quark, when the phone already knows (#3776).
+///
+/// Shown in place of [quarkTroubleshootingSteps]. A browser cannot tell these
+/// apart and does not use remote access, so it keeps the checklist.
+enum QuarkUnreachableReason {
+  /// This phone has not finished setting up remote access.
+  notSetUp(
+    'Finish setting up at home.',
+    "This phone isn't set up for remote access yet. Next time you're on "
+        'your home Wi‑Fi, open Quark. It sets itself up in a few seconds, '
+        'and then works away from home.',
+  ),
+
+  /// Remote access is paused on this phone.
+  paused('Remote access is paused.', 'You paused it on this phone.'),
+
+  /// The phone can use remote access, but the Quark is not answering.
+  notAnswering(
+    "Your Quark isn't answering.",
+    'It may be switched off, or your home internet may be down. '
+        "We'll reconnect by ourselves.",
+  ),
+
+  /// This phone has no internet connection.
+  noInternet(
+    'No internet on this phone.',
+    "Quark will reconnect as soon as you're back online.",
+  ),
+
+  /// This network wants a sign-in before it lets traffic through.
+  needsSignIn(
+    'This Wi‑Fi needs a sign-in first.',
+    "Sign in or accept the network's terms in your browser, or switch to "
+        'mobile data. Quark reconnects by itself.',
+  );
+
+  /// Creates a reason with the headline and the sentence under it.
+  const QuarkUnreachableReason(this.headline, this.body);
+
+  /// The line that replaces [quarkDisconnectedHeadline].
+  final String headline;
+
+  /// The sentence that replaces [quarkDisconnectedBody] and the checklist.
+  final String body;
+}
+
+/// The words both shapes show: a phone's reason, or the browser checklist.
+({String headline, String body, List<String>? steps}) _disconnectedCopy({
+  required QuarkUnreachableReason? unreachableReason,
+  required List<String> steps,
+}) {
+  if (unreachableReason != null) {
+    return (
+      headline: unreachableReason.headline,
+      body: unreachableReason.body,
+      steps: null,
+    );
+  }
+  return (
+    headline: quarkDisconnectedHeadline,
+    body: quarkDisconnectedBody,
+    steps: steps,
+  );
+}
 
 /// Full-page disconnected state, for a page with nothing left to show.
 ///
-/// Key prefixes: `disconnected_retry` and `disconnected_manage_hosts` on the
-/// two buttons, each rendered only when its callback is supplied.
+/// A browser shows [quarkTroubleshootingSteps]. A phone that already knows
+/// why passes [unreachableReason], or the app sets [reason], and that
+/// reason replaces the checklist, including on a view already on screen.
+///
+/// Key prefixes: `disconnected_retry`, `disconnected_manage_hosts`, and
+/// `disconnected_turn_on_remote_access` on the buttons, each rendered only
+/// when its callback is supplied.
 ///
 /// ```dart
 /// QuarkDisconnectedView(
@@ -89,6 +160,7 @@ class QuarkDisconnectedView extends StatelessWidget {
     this.manageHostsLabel = 'Check the address',
     this.steps = quarkTroubleshootingSteps,
     this.onTurnOnRemoteAccess,
+    this.unreachableReason,
   });
 
   /// The address the app tried and could not reach, shown under the body so a
@@ -108,6 +180,9 @@ class QuarkDisconnectedView extends StatelessWidget {
   final String manageHostsLabel;
 
   /// The troubleshooting checklist, in the order it is worth checking.
+  ///
+  /// Ignored when [unreachableReason] or [reason] is set. A phone shows
+  /// that reason instead of a checklist.
   final List<String> steps;
 
   /// Ends a pause of remote access on this phone. Null hides the button
@@ -116,110 +191,148 @@ class QuarkDisconnectedView extends StatelessWidget {
   /// Key: `disconnected_turn_on_remote_access`.
   final VoidCallback? onTurnOnRemoteAccess;
 
+  /// Why this phone cannot reach the Quark, when the phone already knows.
+  ///
+  /// Replaces the checklist with that reason's own words. Null keeps
+  /// [steps]. Wins over [reason] when both are set.
+  final QuarkUnreachableReason? unreachableReason;
+
   /// Set while remote access is paused on this phone, so a page that already
   /// builds this view can offer the button without a new argument.
   static VoidCallback? turnOnRemoteAccess;
 
-  /// Why the Quark is out of reach when the app knows, in the caller's words,
-  /// shown in place of the general body. Set while this phone has not
-  /// finished setting up remote access, so a page that already builds this
-  /// view says so without a new argument.
-  static String? reason;
+  // Assigned while an ancestor builds. Listening rebuilds the screens that
+  // are already up; the page around them stays mounted.
+  static final ValueNotifier<QuarkUnreachableReason?> _reason =
+      ValueNotifier<QuarkUnreachableReason?>(null);
+
+  /// [unreachableReason] for pages that already build this view.
+  ///
+  /// The app sets it on a phone, from the reason the phone already knows,
+  /// and leaves it null on a browser. Null keeps [steps]. Assigning a new
+  /// value rebuilds every mounted [QuarkDisconnectedView] and
+  /// [QuarkDisconnectedBanner].
+  static QuarkUnreachableReason? get reason => _reason.value;
+
+  /// Replaces the checklist on every disconnected screen already showing.
+  ///
+  /// The same value again does nothing, so an ancestor can assign this on
+  /// every rebuild.
+  static set reason(QuarkUnreachableReason? value) {
+    _reason.value = value;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final tokens = QuarkTokens.of(context);
-    final address = hostAddress;
-    final turnOn = onTurnOnRemoteAccess ?? turnOnRemoteAccess;
-    final body = reason ?? quarkDisconnectedBody;
+    return ValueListenableBuilder<QuarkUnreachableReason?>(
+      valueListenable: _reason,
+      builder: (context, reason, _) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final tokens = QuarkTokens.of(context);
+        final address = hostAddress;
+        final turnOn = onTurnOnRemoteAccess ?? turnOnRemoteAccess;
+        final copy = _disconnectedCopy(
+          unreachableReason: unreachableReason ?? reason,
+          steps: steps,
+        );
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.symmetric(
-        horizontal: tokens.spacingXl,
-        vertical: tokens.spacingLg,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                QuarkIcons.cloud_off_outlined,
-                size: 56,
-                color: colorScheme.onSurface.withValues(alpha: 0.4),
-              ),
-              SizedBox(height: tokens.spacingMd),
-              Text(
-                quarkDisconnectedHeadline,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-              SizedBox(height: tokens.spacingSm),
-              Text(
-                body,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  height: 1.5,
-                  color: colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-              ),
-              if (address != null && address.isNotEmpty) ...[
-                SizedBox(height: tokens.spacingXs),
-                Text(
-                  address,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colorScheme.onSurface.withValues(alpha: 0.5),
-                  ),
-                ),
-              ],
-              SizedBox(height: tokens.spacingLg),
-              TroubleshootingList(steps: steps),
-              SizedBox(height: tokens.spacingLg),
-              Wrap(
-                spacing: tokens.spacingSm + tokens.spacingXs,
-                runSpacing: tokens.spacingSm + tokens.spacingXs,
-                alignment: WrapAlignment.center,
+        return SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: tokens.spacingXl,
+            vertical: tokens.spacingLg,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (turnOn != null)
-                    FilledButton(
-                      key: const ValueKey('disconnected_turn_on_remote_access'),
-                      onPressed: turnOn,
-                      child: const Text('Turn on remote access'),
+                  Icon(
+                    QuarkIcons.cloud_off_outlined,
+                    size: 56,
+                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                  SizedBox(height: tokens.spacingMd),
+                  Text(
+                    copy.headline,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
                     ),
-                  if (onRetry != null)
-                    FilledButton.icon(
-                      key: const ValueKey('disconnected_retry'),
-                      onPressed: onRetry,
-                      icon: const Icon(QuarkIcons.refresh),
-                      label: const Text('Try again'),
+                  ),
+                  SizedBox(height: tokens.spacingSm),
+                  Text(
+                    copy.body,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.5,
+                      color: colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
-                  if (onManageHosts != null)
-                    OutlinedButton(
-                      key: const ValueKey('disconnected_manage_hosts'),
-                      onPressed: onManageHosts,
-                      child: Text(manageHostsLabel),
+                  ),
+                  if (address != null && address.isNotEmpty) ...[
+                    SizedBox(height: tokens.spacingXs),
+                    Text(
+                      address,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
                     ),
+                  ],
+                  if (copy.steps case final checklist?) ...[
+                    SizedBox(height: tokens.spacingLg),
+                    TroubleshootingList(steps: checklist),
+                  ],
+                  SizedBox(height: tokens.spacingLg),
+                  Wrap(
+                    spacing: tokens.spacingSm + tokens.spacingXs,
+                    runSpacing: tokens.spacingSm + tokens.spacingXs,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      if (turnOn != null)
+                        FilledButton(
+                          key: const ValueKey(
+                            'disconnected_turn_on_remote_access',
+                          ),
+                          onPressed: turnOn,
+                          child: const Text('Turn on remote access'),
+                        ),
+                      if (onRetry != null)
+                        FilledButton.icon(
+                          key: const ValueKey('disconnected_retry'),
+                          onPressed: onRetry,
+                          icon: const Icon(QuarkIcons.refresh),
+                          label: const Text('Try again'),
+                        ),
+                      if (onManageHosts != null)
+                        OutlinedButton(
+                          key: const ValueKey('disconnected_manage_hosts'),
+                          onPressed: onManageHosts,
+                          child: Text(manageHostsLabel),
+                        ),
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
 /// Compact disconnected state, for a page that stays usable while
 /// disconnected — Settings and login, where the fix lives on the page itself.
+///
+/// Uses [quarkTroubleshootingStepsInPlace] unless [unreachableReason] or
+/// [QuarkDisconnectedView.reason] names why this phone cannot reach the
+/// Quark. That reason replaces the checklist, including on a banner already
+/// on screen.
 ///
 /// Key prefixes: `disconnected_banner_retry` on the retry button, rendered
 /// only when [onRetry] is supplied.
@@ -233,6 +346,7 @@ class QuarkDisconnectedBanner extends StatelessWidget {
     super.key,
     this.onRetry,
     this.steps = quarkTroubleshootingStepsInPlace,
+    this.unreachableReason,
   });
 
   /// Re-runs whatever load failed. The retry button is hidden when null.
@@ -240,72 +354,93 @@ class QuarkDisconnectedBanner extends StatelessWidget {
 
   /// The troubleshooting checklist. Defaults to the in-place wording, which
   /// does not send the user to a page they are already on.
+  ///
+  /// Ignored when [unreachableReason] or [QuarkDisconnectedView.reason] is
+  /// set.
   final List<String> steps;
+
+  /// Why this phone cannot reach the Quark, when the phone already knows.
+  ///
+  /// Replaces the checklist. Null reads [QuarkDisconnectedView.reason], and
+  /// null there keeps [steps]. A banner already on screen rebuilds when
+  /// that reason changes.
+  final QuarkUnreachableReason? unreachableReason;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final tokens = QuarkTokens.of(context);
+    return ValueListenableBuilder<QuarkUnreachableReason?>(
+      valueListenable: QuarkDisconnectedView._reason,
+      builder: (context, reason, _) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final tokens = QuarkTokens.of(context);
+        final copy = _disconnectedCopy(
+          unreachableReason: unreachableReason ?? reason,
+          steps: steps,
+        );
 
-    return Semantics(
-      liveRegion: true,
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(tokens.spacingMd),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(tokens.radiusMd),
-          border: Border.all(color: colorScheme.outlineVariant),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        return Semantics(
+          liveRegion: true,
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(tokens.spacingMd),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(tokens.radiusMd),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  QuarkIcons.cloud_off_outlined,
-                  size: 20,
-                  color: colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-                SizedBox(width: tokens.spacingSm),
-                Expanded(
-                  child: Text(
-                    quarkDisconnectedHeadline,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
+                Row(
+                  children: [
+                    Icon(
+                      QuarkIcons.cloud_off_outlined,
+                      size: 20,
+                      color: colorScheme.onSurface.withValues(alpha: 0.7),
                     ),
+                    SizedBox(width: tokens.spacingSm),
+                    Expanded(
+                      child: Text(
+                        copy.headline,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: tokens.spacingSm),
+                Text(
+                  copy.body,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.5,
+                    color: colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
+                if (copy.steps case final checklist?) ...[
+                  SizedBox(height: tokens.spacingSm + tokens.spacingXs),
+                  TroubleshootingList(steps: checklist),
+                ],
+                if (onRetry != null) ...[
+                  SizedBox(height: tokens.spacingXs),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const ValueKey('disconnected_banner_retry'),
+                      onPressed: onRetry,
+                      icon: const Icon(QuarkIcons.refresh, size: 18),
+                      label: const Text('Try again'),
+                    ),
+                  ),
+                ],
               ],
             ),
-            SizedBox(height: tokens.spacingSm),
-            Text(
-              quarkDisconnectedBody,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.5,
-                color: colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-            ),
-            SizedBox(height: tokens.spacingSm + tokens.spacingXs),
-            TroubleshootingList(steps: steps),
-            if (onRetry != null) ...[
-              SizedBox(height: tokens.spacingXs),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  key: const ValueKey('disconnected_banner_retry'),
-                  onPressed: onRetry,
-                  icon: const Icon(QuarkIcons.refresh, size: 18),
-                  label: const Text('Try again'),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
