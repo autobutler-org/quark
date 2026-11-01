@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -41,6 +42,9 @@ Future<void> _run() async {
   AppLog.instance.info('App started');
   usePathUrlStrategy();
   final binding = WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb && const bool.fromEnvironment('FLIGHTHOUSE_SEMANTICS')) {
+    SemanticsBinding.instance.ensureSemantics();
+  }
   // Linux has no video_player backend of its own (#3151).
   installVideoPlaybackBackend();
   await maybeStartProbeAgent();
