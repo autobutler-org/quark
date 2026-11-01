@@ -36,11 +36,21 @@ void main() {
     // Turning the semantics tree on at startup stopped typing in Docs and
     // Slides on web (#3743). main() loads settings and starts controllers
     // before runApp, so it cannot run under a test; this guards the call
-    // against coming back before #3743 is fixed.
+    // against coming back for release builds. Audit builds pass
+    // FLIGHTHOUSE_SEMANTICS, because Lighthouse and axe read the DOM and see
+    // nothing without the tree.
     test('do not get the semantics tree forced on at startup', () {
       final main = File('lib/main.dart').readAsStringSync();
 
-      expect(main, isNot(contains('ensureSemantics()')));
+      expect('ensureSemantics()'.allMatches(main), hasLength(1));
+      expect(
+        main,
+        contains(
+          "if (kIsWeb && const bool.fromEnvironment('FLIGHTHOUSE_SEMANTICS')) {\n"
+          '    SemanticsBinding.instance.ensureSemantics();\n'
+          '  }',
+        ),
+      );
     });
   });
 
