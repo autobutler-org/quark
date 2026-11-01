@@ -25,12 +25,12 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Go tool versions pinned in the Makefile, each under a `# renovate:` comment.",
+      "description": "Tool versions pinned in the Makefile, each under a `# renovate:` comment.",
       "managerFilePatterns": [
         "/^Makefile$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[A-Z_]+ := (?<currentValue>\\S+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\n[A-Z_]+ := (?<currentValue>\\S+)"
       ]
     }
   ]

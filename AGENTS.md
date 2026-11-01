@@ -220,6 +220,7 @@ it at compile time, so `index.html` has to land at `internal/server/public/index
 Do not point one at the other. A laptop install goes to `$HOME`, uses nvm, and on Linux ARM unpacks Flutter's
 x86_64 tarball and swaps in the apt Dart SDK. The image clones the Flutter tag into `/opt/flutter` so the
 engine matches the architecture it is building. Versions are already shared: the Makefile pins the Go tools,
+Docker, the Actions runner, yq, and the Android command-line tools,
 `pubspec.yaml` pins Flutter, `go.mod` pins Go, and `.nvmrc` pins Node. The workflow reads those and passes
 them as build args. The only duplicated commands are the four `go install` lines in `install_go_tools` and
 `setup/gotools/golangci-lint`, `setup/govulncheck`, `setup/sqlc`, and `setup/swag`. If those are unified, the
