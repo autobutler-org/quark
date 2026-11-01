@@ -275,8 +275,7 @@ setup/gotools: setup/gotools/golangci-lint setup/gotools/govulncheck ## Install 
 	$(GO) install github.com/haya14busa/goplay/cmd/goplay@latest
 	$(GO) install github.com/go-delve/delve/cmd/dlv@latest
 
-# CI installs only these two (not the editor tools above), through .github/actions/setup-golangci-lint
-# and setup-govulncheck.
+# CI images install only these two (not the editor tools above), through ci/common.sh.
 .PHONY: setup/gotools/golangci-lint
 setup/gotools/golangci-lint: ## Install the pinned golangci-lint
 	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
