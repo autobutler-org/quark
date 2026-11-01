@@ -2,7 +2,7 @@
 
 # CI images
 
-Three Debian stable slim job images. Errand stays on the upstream Actions
+Three Ubuntu 22.04 job images, the release the AppImage bundles from. Errand stays on the upstream Actions
 runner. A workflow says which image the job runs in:
 
 ```yaml
