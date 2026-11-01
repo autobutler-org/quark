@@ -2,10 +2,10 @@
 # together, plus the Actions runner. The workflow copies
 # linux/apt-packages.txt into this directory before docker build.
 
-FROM debian:stable-slim
-
-# Debian 13 dropped apt-key, and appimage-builder runs it for key_url.
-COPY --from=debian:bookworm-slim /usr/bin/apt-key /usr/bin/apt-key
+# Ubuntu 22.04, the release linux/AppImageBuilder.yml bundles libraries from. The
+# Linux bundle links against the build host's glibc and GTK, so it has to be built on
+# the release it ships with.
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \

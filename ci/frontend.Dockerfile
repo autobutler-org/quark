@@ -1,10 +1,10 @@
 # The x64-quark-frontend / arm-quark-frontend runner. Flutter, Node, the
 # Linux desktop packages, the Docker client, and the Actions runner.
 
-FROM debian:stable-slim
-
-# Debian 13 dropped apt-key, and appimage-builder runs it for key_url.
-COPY --from=debian:bookworm-slim /usr/bin/apt-key /usr/bin/apt-key
+# Ubuntu 22.04, the release linux/AppImageBuilder.yml bundles libraries from. The
+# Linux bundle links against the build host's glibc and GTK, so it has to be built on
+# the release it ships with.
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cspell:words TARGETARCH nodearch dockerarch goarch runnerarch installdependencies patchelf GOBIN sdkmanager cmdline
+# cspell:words TARGETARCH nodearch dockerarch goarch runnerarch installdependencies patchelf GOBIN sdkmanager cmdline githubcli
 # Shared install steps for the CI job images. The image files pass versions
 # as build args, which become environment variables for these scripts.
 
@@ -38,7 +38,6 @@ base_packages() {
 		build-essential \
 		ca-certificates \
 		curl \
-		gh \
 		git \
 		gnupg \
 		jq \
@@ -49,7 +48,17 @@ base_packages() {
 		unzip \
 		xz-utils \
 		zip
+	install_gh
 	cleanup_packages
+}
+
+# jammy's own gh is 2.4.0, from 2022. GitHub's apt repository carries the current one.
+install_gh() {
+	curl -fsSL -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+		https://cli.github.com/packages/githubcli-archive-keyring.gpg
+	echo "deb [signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+		> /etc/apt/sources.list.d/github-cli.list
+	install_packages gh
 }
 
 install_go() {
