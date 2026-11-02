@@ -45,18 +45,31 @@ jobs:
   performance-loadtest:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.performance == 'true'
-    runs-on:
-      group: errand
-      labels: x64-quark-backend
+    # errand: group errand, label x64-quark-backend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    runs-on: ubuntu-latest
     # Room for run_gated.sh to rerun a scenario once.
     timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # errand: remove on x64-quark-backend; ci-backend carries Go.
+      - name: Setup go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
 
+      # errand: remove on x64-quark-backend; ci-backend carries sqlc.
+      - name: Setup sqlc
+        uses: ./.github/actions/setup-sqlc
 
+      # errand: remove on x64-quark-backend; ci-backend carries swag.
+      - name: Setup swag
+        uses: ./.github/actions/setup-swag
 
+      # errand: remove on x64-quark-backend; ci-backend carries wrk.
+      - name: Setup wrk
+        uses: ./.github/actions/setup-wrk
 
       - name: Run load test profile
         run: |
@@ -73,18 +86,31 @@ jobs:
   performance-stress:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.performance == 'true'
-    runs-on:
-      group: errand
-      labels: x64-quark-backend
+    # errand: group errand, label x64-quark-backend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    runs-on: ubuntu-latest
     # Room for run_gated.sh to rerun a scenario once.
     timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # errand: remove on x64-quark-backend; ci-backend carries Go.
+      - name: Setup go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
 
+      # errand: remove on x64-quark-backend; ci-backend carries sqlc.
+      - name: Setup sqlc
+        uses: ./.github/actions/setup-sqlc
 
+      # errand: remove on x64-quark-backend; ci-backend carries swag.
+      - name: Setup swag
+        uses: ./.github/actions/setup-swag
 
+      # errand: remove on x64-quark-backend; ci-backend carries wrk.
+      - name: Setup wrk
+        uses: ./.github/actions/setup-wrk
 
       - name: Test the performance gate
         run: |

@@ -31,9 +31,8 @@ defaults:
 
 jobs:
   release-docker:
-    runs-on:
-      group: errand
-      labels: x64
+    # errand: group errand, label x64. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read

@@ -14,6 +14,8 @@ runs-on:
 
 The tag is `latest`. Jobs do not pin a digest.
 
+Jobs run on GitHub-hosted runners until the Azure vCPU quota is raised. `AGENTS.md` says how to move them back.
+
 | Image | Labels | Use |
 | --- | --- | --- |
 | `quark/ci-backend` | `x64-quark-backend`, `arm-quark-backend` | Go, Node, Docker, sqlc, swag, golangci-lint, govulncheck |

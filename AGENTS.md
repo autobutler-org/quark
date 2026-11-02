@@ -203,6 +203,12 @@ runs-on:
   labels: x64-quark-backend
 ```
 
+Until the Azure vCPU quota is raised, every job runs on a GitHub-hosted runner instead, and this section
+describes the setup the jobs return to. A `# errand:` comment above each `runs-on:`, or above a matrix entry's
+`label:`, records the group and label the job moves back to. One above each setup step names the label whose
+image makes the step unnecessary. To move back, set each marked `runs-on:` to the recorded group and label and
+delete each marked step; `grep -rn "# errand:" .github` lists them all.
+
 - `x64-quark-backend` / `arm-quark-backend` run `quark/ci-backend`: Go, Node, Docker, sqlc, swag,
   golangci-lint, and govulncheck. Backend jobs and GoReleaser use it.
 - `x64-quark-frontend` / `arm-quark-frontend` run `quark/ci-frontend`: Flutter, Node, and
