@@ -53,12 +53,22 @@ jobs:
   test-backend:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    runs-on:
-      group: errand
-      labels: x64-quark-backend
+    # errand: group errand, label x64-quark-backend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+      # errand: remove on x64-quark-backend; ci-backend carries Go.
+      - name: Setup go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # errand: remove on x64-quark-backend; ci-backend carries sqlc.
+      - name: Setup sqlc
+        uses: ./.github/actions/setup-sqlc
+      # errand: remove on x64-quark-backend; ci-backend carries swag.
+      - name: Setup swag
+        uses: ./.github/actions/setup-swag
       - name: Run unit tests
         env:
           PRINT_COVERAGE: true
@@ -74,9 +84,8 @@ jobs:
   test-postgres:
     needs: changes
     if: needs.changes.outputs.postgres != 'false'
-    runs-on:
-      group: errand
-      labels: arm-medium-quark-backend
+    # errand: group errand, label arm-medium-quark-backend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
       # The image major, user, password, database and port compose.yaml gives a developer,
@@ -97,6 +106,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+      # errand: remove on arm-medium-quark-backend; ci-backend carries Go.
+      - name: Setup go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
       - name: Download Go modules
         run: |
           # The module proxy drops connections often enough that one download
@@ -118,13 +132,23 @@ jobs:
   api-chaos:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    runs-on:
-      group: errand
-      labels: arm-medium-quark-backend
+    # errand: group errand, label arm-medium-quark-backend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+      # errand: remove on arm-medium-quark-backend; ci-backend carries Go.
+      - name: Setup go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # errand: remove on arm-medium-quark-backend; ci-backend carries sqlc.
+      - name: Setup sqlc
+        uses: ./.github/actions/setup-sqlc
+      # errand: remove on arm-medium-quark-backend; ci-backend carries swag.
+      - name: Setup swag
+        uses: ./.github/actions/setup-swag
       - name: Run API stress suite
         run: |
           make test/chaos/local
@@ -138,13 +162,17 @@ jobs:
   power-cut:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    runs-on:
-      group: errand
-      labels: arm-medium-quark-backend
+    # errand: group errand, label arm-medium-quark-backend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+      # errand: remove on arm-medium-quark-backend; ci-backend carries Go.
+      - name: Setup go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
       - name: Cut the power under uploads
         run: |
           # A pull request built from main still pins public.ecr.aws in the
@@ -165,9 +193,8 @@ jobs:
   test-frontend-suite:
     needs: changes
     if: needs.changes.outputs.frontend != 'false'
-    runs-on:
-      group: errand
-      labels: arm-quark-frontend
+    # errand: group errand, label arm-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    runs-on: ubuntu-latest
     # A leg takes about six minutes; a stuck `flutter test` would otherwise
     # hold the runner for the six-hour default (#2768).
     timeout-minutes: 20
@@ -191,6 +218,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+      # errand: remove on arm-quark-frontend; ci-frontend carries Flutter.
+      - name: Setup Flutter
+        uses: ./.github/actions/setup-flutter
       # generate/frontend's quark-icons step runs `npx fantasticon`.
       - name: Setup Node
         uses: ./.github/actions/setup-node

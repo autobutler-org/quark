@@ -1,0 +1,9 @@
+# errand: delete with the marked steps that use it; ci-backend carries wrk.
+name: Setup wrk
+runs:
+  using: composite
+  steps:
+    - name: Install wrk
+      shell: bash
+      run: |
+        make setup/wrk

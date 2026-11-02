@@ -61,9 +61,7 @@ jobs:
       github.event_name != 'merge_group' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
       needs.changes.outputs.ci_image != 'false'
-    runs-on:
-      group: errand
-      labels: ${{ matrix.label }}
+    runs-on: ${{ matrix.label }}
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -72,27 +70,33 @@ jobs:
           - name: ci-backend
             dockerfile: ci/backend.Dockerfile
             arch: amd64
-            label: x64-medium
+            # errand: group errand, label x64-medium. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+            label: ubuntu-latest
           - name: ci-backend
             dockerfile: ci/backend.Dockerfile
             arch: arm64
-            label: arm-medium
+            # errand: group errand, label arm-medium. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+            label: ubuntu-24.04-arm
           - name: ci-frontend
             dockerfile: ci/frontend.Dockerfile
             arch: amd64
-            label: x64-medium
+            # errand: group errand, label x64-medium. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+            label: ubuntu-latest
           - name: ci-frontend
             dockerfile: ci/frontend.Dockerfile
             arch: arm64
-            label: arm-medium
+            # errand: group errand, label arm-medium. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+            label: ubuntu-24.04-arm
           - name: ci-full
             dockerfile: ci/full.Dockerfile
             arch: amd64
-            label: x64-medium
+            # errand: group errand, label x64-medium. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+            label: ubuntu-latest
           - name: ci-full
             dockerfile: ci/full.Dockerfile
             arch: arm64
-            label: arm-medium
+            # errand: group errand, label arm-medium. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+            label: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
 
