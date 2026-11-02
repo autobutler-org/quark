@@ -231,6 +231,13 @@ Flutter, Gradle, golangci-lint, the Docker release, or the performance suites st
 the limit, and performance numbers are only comparable on the same size. A new job starts large and moves
 down once a run shows its peak.
 
+The x64 and arm pools are the same size, so jobs are split between them. The Flutter checks and tests,
+spelling, the wiki lint, and the PostgreSQL, chaos and power-cut tests run on arm. The backend checks,
+tests and builds, the web build, and the path filters stay on x64, along with three groups that have to:
+Android, whose SDK the image carries only for amd64; the performance suites, whose numbers are only
+comparable on one architecture; and the releases. The Linux build and the image builds run once per
+architecture.
+
 `.github/workflows/ci-image.yml` builds all three for amd64 (`x64`) and arm64 (`arm`). The
 workflow starts on every pull request and in the merge queue. The six build jobs skip themselves with `if:`
 in the merge queue, on a fork pull request, and when `ci_image` in `.github/path-filters.yml` did not match. The

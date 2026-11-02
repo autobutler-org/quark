@@ -20,7 +20,7 @@ jobs:
   check-wiki:
     runs-on:
       group: errand
-      labels: x64-small-quark-backend
+      labels: arm-small-quark-backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
