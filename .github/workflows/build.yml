@@ -37,7 +37,7 @@ jobs:
   changes:
     runs-on:
       group: errand
-      labels: x64
+      labels: x64-small
     permissions:
       contents: read
       pull-requests: read
@@ -65,7 +65,7 @@ jobs:
     if: needs.changes.outputs.backend != 'false'
     runs-on:
       group: errand
-      labels: x64-quark-backend
+      labels: x64-medium-quark-backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

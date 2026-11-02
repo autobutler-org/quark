@@ -212,7 +212,24 @@ runs-on:
 - `x64` / `arm` run the upstream Actions runner image, which has Docker but no `make` or Node. Path filters,
   result gates, the image builds, and the Docker release use them.
 
-Runner sizes come later. A label will mean small, medium, or large, and each size will be its own scale set with its own CPU and memory request. Until that is asked for, every runner is the current 4-core node. Do not add a size label or a second scale set ahead of that.
+A size goes between the architecture and the image: `x64-small`, `x64-medium-quark-backend`. Each size is its
+own scale set, and its CPU and memory are both the request and the limit, so the scheduler packs runners by
+them. A runner node is 4 vCPUs and 16 GiB.
+
+| Size               | CPU   | Memory | Runners per node |
+| ------------------ | ----- | ------ | ---------------- |
+| `small`            | 875m  | 2.5Gi  | 4                |
+| `medium`           | 1750m | 5Gi    | 2                |
+| `large` or unsized | 3500m | 10Gi   | 1                |
+
+Give a job the smallest size its peak memory fits in, with headroom. Too little CPU only slows a job down, but
+going over the memory limit kills it. Path filters, result gates, spelling, the migration check, the wiki
+lint, and the tag publish are small. govulncheck, the backend cross-compile, the CI image builds, and the
+PostgreSQL, chaos and power-cut tests are medium. An image build runs in the Docker sidecar, which has no
+limit and is not counted when pods are packed, so its runner container needs little. Everything that runs
+Flutter, Gradle, golangci-lint, the Docker release, or the performance suites stays large. Flutter and Dart size their worker pools from the node's CPU count rather than
+the limit, and performance numbers are only comparable on the same size. A new job starts large and moves
+down once a run shows its peak.
 
 `.github/workflows/ci-image.yml` builds all three for amd64 (`x64`) and arm64 (`arm`). The
 workflow starts on every pull request and in the merge queue. The six build jobs skip themselves with `if:`

@@ -28,7 +28,7 @@ jobs:
   changes:
     runs-on:
       group: errand
-      labels: x64
+      labels: x64-small
     permissions:
       contents: read
       pull-requests: read
@@ -107,7 +107,7 @@ jobs:
   performance-summary:
     runs-on:
       group: errand
-      labels: x64-quark-backend
+      labels: x64-small-quark-backend
     needs:
       - changes
       - performance-loadtest
