@@ -5,7 +5,7 @@
 # Ubuntu 22.04, the release linux/AppImageBuilder.yml bundles libraries from. The
 # Linux bundle links against the build host's glibc and GTK, so it has to be built on
 # the release it ships with.
-FROM ubuntu:22.04
+FROM ubuntu:26.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
