@@ -35,9 +35,7 @@ jobs:
   # 'false', so pushes to main and manual runs, where the filter is skipped and its
   # outputs are empty, build everything and the badges stay accurate.
   changes:
-    runs-on:
-      group: errand
-      labels: x64-small
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read

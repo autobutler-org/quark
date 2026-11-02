@@ -18,12 +18,12 @@ permissions:
   contents: read
 jobs:
   check-wiki:
-    runs-on:
-      group: errand
-      labels: arm-small-quark-backend
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
       # The wiki is a real git repo at <repo>.wiki.git. This repo is public, so
       # it clones anonymously and needs no token. Note the branch is `master`:
       # GitHub never migrated wikis to `main`.
