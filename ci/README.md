@@ -20,6 +20,9 @@ The tag is `latest`. Jobs do not pin a digest.
 | `quark/ci-frontend` | `x64-quark-frontend`, `arm-quark-frontend` | Flutter, Node, Linux desktop packages, Docker |
 | `quark/ci-full` | `x64-quark-full`, `arm-quark-full` | `ci-backend` and `ci-frontend` together |
 
+Each label also comes in `small` and `medium` sizes, such as `x64-small-quark-backend`.
+`AGENTS.md` says what each size gets and which jobs use it.
+
 The release builds the web app in `ci-frontend`, uploads `internal/server/public`,
 and the backend job downloads that directory before GoReleaser. `//go:embed public`
 reads it at compile time.
