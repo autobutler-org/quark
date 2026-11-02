@@ -1,8 +1,0 @@
-name: Setup wrk
-runs:
-  using: composite
-  steps:
-    - name: Install wrk
-      shell: bash
-      run: |
-        make setup/wrk

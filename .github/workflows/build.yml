@@ -35,7 +35,9 @@ jobs:
   # 'false', so pushes to main and manual runs, where the filter is skipped and its
   # outputs are empty, build everything and the badges stay accurate.
   changes:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64
     permissions:
       contents: read
       pull-requests: read
@@ -61,18 +63,12 @@ jobs:
   build-backend:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      - name: Setup go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-      - name: Setup sqlc
-        uses: ./.github/actions/setup-sqlc
-      - name: Setup swag
-        uses: ./.github/actions/setup-swag
       - name: Build
         run: |
           make build/backend
@@ -96,12 +92,12 @@ jobs:
   build-web:
     needs: changes
     if: needs.changes.outputs.web != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-frontend
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
       - name: Setup Node
         uses: ./.github/actions/setup-node
       - name: Tidy
@@ -113,7 +109,9 @@ jobs:
   build-android:
     needs: changes
     if: needs.changes.outputs.android != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-full
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -123,8 +121,6 @@ jobs:
           # silently falls back to Flutter's 1.0.0 default.
           fetch-tags: true
           fetch-depth: 0
-      - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
       - name: Setup Node
         uses: ./.github/actions/setup-node
       - name: Restore Gradle caches
@@ -168,13 +164,14 @@ jobs:
       matrix:
         include:
           - arch: x64
-            runner: ubuntu-22.04
+            label: x64-quark-frontend
           - arch: arm64
-            runner: ubuntu-22.04-arm
-    # Pinned, not ubuntu-latest: linux/AppImageBuilder.yml bundles libraries from
-    # this release's apt archive, so the runner has to be the release its `sources` name.
-    # release-linux.yml uses the same ones.
-    runs-on: ${{ matrix.runner }}
+            label: arm-quark-frontend
+    # Same legs as release-linux.yml. The Errand group is private-repo only until
+    # we allow public repositories, so this pull request is the check.
+    runs-on:
+      group: errand
+      labels: ${{ matrix.label }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -183,15 +180,6 @@ jobs:
           # the default checkout is shallow with no tags.
           fetch-tags: true
           fetch-depth: 0
-      - name: Install Linux build dependencies
-        run: |
-          # The hosted x64 image enables Microsoft's apt feed, but this build uses
-          # only Ubuntu packages. Do not let an outage there block the Linux build.
-          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
-          sudo apt-get update
-          xargs sudo apt-get install -y < linux/apt-packages.txt
-      - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
       - name: Setup Node
         uses: ./.github/actions/setup-node
       - name: Tidy

@@ -29,7 +29,9 @@ jobs:
   # .github/path-filters.yml. See the same job in build.yml for what each is compared
   # against and why jobs skip with `if:` rather than `on: paths:`.
   changes:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64
     permissions:
       contents: read
       pull-requests: read
@@ -53,18 +55,12 @@ jobs:
   test-backend:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      - name: Setup go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-      - name: Setup sqlc
-        uses: ./.github/actions/setup-sqlc
-      - name: Setup swag
-        uses: ./.github/actions/setup-swag
       - name: Run unit tests
         env:
           PRINT_COVERAGE: true
@@ -80,7 +76,9 @@ jobs:
   test-postgres:
     needs: changes
     if: needs.changes.outputs.postgres != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     timeout-minutes: 10
     services:
       # The image major, user, password, database and port compose.yaml gives a developer,
@@ -101,10 +99,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      - name: Setup go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
       - name: Download Go modules
         run: |
           # The module proxy drops connections often enough that one download
@@ -126,19 +120,13 @@ jobs:
   api-chaos:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     timeout-minutes: 10
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      - name: Setup go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-      - name: Setup sqlc
-        uses: ./.github/actions/setup-sqlc
-      - name: Setup swag
-        uses: ./.github/actions/setup-swag
       - name: Run API stress suite
         run: |
           make test/chaos/local
@@ -152,15 +140,13 @@ jobs:
   power-cut:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-backend
     timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      - name: Setup go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
       - name: Cut the power under uploads
         run: |
           # A pull request built from main still pins public.ecr.aws in the
@@ -181,7 +167,9 @@ jobs:
   test-frontend-suite:
     needs: changes
     if: needs.changes.outputs.frontend != 'false'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64-quark-frontend
     # A leg takes about six minutes; a stuck `flutter test` would otherwise
     # hold the runner for the six-hour default (#2768).
     timeout-minutes: 20
@@ -205,8 +193,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      - name: Setup Flutter
-        uses: ./.github/actions/setup-flutter
       # generate/frontend's quark-icons step runs `npx fantasticon`.
       - name: Setup Node
         uses: ./.github/actions/setup-node
@@ -231,7 +217,9 @@ jobs:
   test-frontend:
     needs: test-frontend-suite
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on:
+      group: errand
+      labels: x64
     steps:
       - name: Check every suite passed
         run: |

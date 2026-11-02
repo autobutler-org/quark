@@ -192,24 +192,35 @@ right tool for reproducing a CI failure locally.
 
 ### CI images
 
-Errand runs the job inside an image from `autobutlerci.azurecr.io/quark`. The workflow names it. The tag is
+A job picks its image through its runner label, in the `errand` runner group. Each `*-quark-*` scale set
+runs its image as the runner pod, so every image carries the Actions runner and a workflow names no
+`container:`. Jobs run as the `runner` user, so a root-only step needs `sudo`. The tag is
 `latest`. Jobs do not pin a digest.
 
 ```yaml
-container:
-  image: autobutlerci.azurecr.io/quark/ci-backend:latest
+runs-on:
+  group: errand
+  labels: x64-quark-backend
 ```
 
-- `quark/ci-backend` is Go, Node, Docker, sqlc, swag, golangci-lint, and govulncheck. Backend jobs and
-  GoReleaser use it.
-- `quark/ci-frontend` is Flutter and Node. Frontend checks, the web build, and Android use it.
-- `quark/ci-full` is the frontend image plus `linux/apt-packages.txt`. The Linux desktop build and the
-  AppImage use it.
+- `x64-quark-backend` / `arm-quark-backend` run `quark/ci-backend`: Go, Node, Docker, sqlc, swag,
+  golangci-lint, and govulncheck. Backend jobs and GoReleaser use it.
+- `x64-quark-frontend` / `arm-quark-frontend` run `quark/ci-frontend`: Flutter, Node, and
+  `linux/apt-packages.txt`. Frontend checks, the web build, the Linux build, and the AppImage use it.
+- `x64-quark-full` / `arm-quark-full` run `quark/ci-full`: both images together. Android uses it, because the
+  build hook compiles the Go tailnet library for Android.
+- `x64` / `arm` run the upstream Actions runner image, which has Docker but no `make` or Node. Path filters,
+  result gates, the image builds, and the Docker release use them.
 
-`.github/workflows/ci-image.yml` builds all three for amd64 (`errand-x64`) and arm64 (`errand`). A pull
-request that changes `ci/**`, `linux/apt-packages.txt`, `go.mod`, `pubspec.yaml`, `.nvmrc`, the Makefile, or
-that workflow builds and does not push. Push uses `CI_IMAGE_AZURE_CLIENT_ID` and runs from `main`. The runner
-image stays the upstream Actions image. Logging it into the registry is an iac change, not a change here.
+Runner sizes come later. A label will mean small, medium, or large, and each size will be its own scale set with its own CPU and memory request. Until that is asked for, every runner is the current 4-core node. Do not add a size label or a second scale set ahead of that.
+
+`.github/workflows/ci-image.yml` builds all three for amd64 (`x64`) and arm64 (`arm`). The
+workflow starts on every pull request and in the merge queue. The six build jobs skip themselves with `if:`
+in the merge queue, on a fork pull request, and when `ci_image` in `.github/path-filters.yml` did not match. The
+required check is the `ci-image` job, which passes when every build succeeded or was skipped. A workflow-level
+`paths` filter would leave it pending and block the merge. A failed build does not merge. Push uses
+`CI_IMAGE_AZURE_CLIENT_ID` and runs from `main`. The scale sets and labels live in the iac repository
+(`gitops/autobutler/apps/errand/`); a new label is an iac change, not a change here.
 
 The release builds the web app on `ci-frontend` and uploads `internal/server/public`. The backend job
 downloads that directory and then runs GoReleaser. `//go:embed public` in `internal/server/routes.go` reads
