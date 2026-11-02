@@ -78,7 +78,7 @@ jobs:
     if: needs.changes.outputs.postgres != 'false'
     runs-on:
       group: errand
-      labels: x64-medium-quark-backend
+      labels: arm-medium-quark-backend
     timeout-minutes: 10
     services:
       # The image major, user, password, database and port compose.yaml gives a developer,
@@ -122,7 +122,7 @@ jobs:
     if: needs.changes.outputs.backend != 'false'
     runs-on:
       group: errand
-      labels: x64-medium-quark-backend
+      labels: arm-medium-quark-backend
     timeout-minutes: 10
     steps:
       - name: Checkout code
@@ -142,7 +142,7 @@ jobs:
     if: needs.changes.outputs.backend != 'false'
     runs-on:
       group: errand
-      labels: x64-medium-quark-backend
+      labels: arm-medium-quark-backend
     timeout-minutes: 30
     steps:
       - name: Checkout code
@@ -169,7 +169,7 @@ jobs:
     if: needs.changes.outputs.frontend != 'false'
     runs-on:
       group: errand
-      labels: x64-quark-frontend
+      labels: arm-quark-frontend
     # A leg takes about six minutes; a stuck `flutter test` would otherwise
     # hold the runner for the six-hour default (#2768).
     timeout-minutes: 20
@@ -219,7 +219,7 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on:
       group: errand
-      labels: x64-small
+      labels: arm-small
     steps:
       - name: Check every suite passed
         run: |

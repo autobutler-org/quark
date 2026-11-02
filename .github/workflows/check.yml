@@ -54,7 +54,7 @@ jobs:
   check-frontend:
     runs-on:
       group: errand
-      labels: x64-quark-frontend
+      labels: arm-quark-frontend
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -79,7 +79,7 @@ jobs:
   check-misc:
     runs-on:
       group: errand
-      labels: x64-small-quark-backend
+      labels: arm-small-quark-backend
     # Job-level permissions replace the workflow's, so contents: read is repeated.
     # pull-requests: read is what lets check/attribution read the pull request.
     permissions:
