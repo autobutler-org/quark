@@ -29,9 +29,7 @@ jobs:
   # .github/path-filters.yml. See the same job in build.yml for what each is compared
   # against and why jobs skip with `if:` rather than `on: paths:`.
   changes:
-    runs-on:
-      group: errand
-      labels: x64-small
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
@@ -217,9 +215,7 @@ jobs:
   test-frontend:
     needs: test-frontend-suite
     if: ${{ !cancelled() }}
-    runs-on:
-      group: errand
-      labels: arm-small
+    runs-on: ubuntu-latest
     steps:
       - name: Check every suite passed
         run: |

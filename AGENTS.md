@@ -209,8 +209,14 @@ runs-on:
   `linux/apt-packages.txt`. Frontend checks, the web build, the Linux build, and the AppImage use it.
 - `x64-quark-full` / `arm-quark-full` run `quark/ci-full`: both images together. Android uses it, because the
   build hook compiles the Go tailnet library for Android.
-- `x64` / `arm` run the upstream Actions runner image, which has Docker but no `make` or Node. Path filters,
-  result gates, the image builds, and the Docker release use them.
+- `x64` / `arm` run the upstream Actions runner image, which has Docker but no `make` or Node. The image
+  builds and the Docker release use them.
+
+Jobs that need none of the project tools run on GitHub's `ubuntu-latest`: the path filters, the result gates,
+spelling and attribution, the migration check, the wiki lint, the performance summary, and the image tag
+publish. The repository is public, so those runners cost nothing and leave the Errand nodes to the jobs that
+need the images. A job that would have to install a toolchain the images already carry (Go, Flutter, the
+Android SDK) runs on Errand.
 
 A size goes between the architecture and the image: `x64-small`, `x64-medium-quark-backend`. Each size is its
 own scale set, and its CPU and memory are both the request and the limit, so the scheduler packs runners by
@@ -223,17 +229,16 @@ them. A runner node is 4 vCPUs and 16 GiB.
 | `large` or unsized | 3500m | 10Gi   | 1                |
 
 Give a job the smallest size its peak memory fits in, with headroom. Too little CPU only slows a job down, but
-going over the memory limit kills it. Path filters, result gates, spelling, the migration check, the wiki
-lint, and the tag publish are small. govulncheck, the backend cross-compile, the CI image builds, and the
-PostgreSQL, chaos and power-cut tests are medium. An image build runs in the Docker sidecar, which has no
-limit and is not counted when pods are packed, so its runner container needs little. Everything that runs
-Flutter, Gradle, golangci-lint, the Docker release, or the performance suites stays large. Flutter and Dart size their worker pools from the node's CPU count rather than
-the limit, and performance numbers are only comparable on the same size. A new job starts large and moves
-down once a run shows its peak.
+going over the memory limit kills it. Nothing runs on small, because a job that light goes to
+`ubuntu-latest`. govulncheck, the backend cross-compile, the CI image builds, and the PostgreSQL, chaos and
+power-cut tests are medium. Everything that runs Flutter, Gradle, golangci-lint, the Docker release, or the
+performance suites stays large. Flutter and Dart size their worker pools from the node's CPU count rather
+than the limit, and performance numbers are only comparable on the same size. A new job starts large and
+moves down once a run shows its peak.
 
 The x64 and arm pools are the same size, so jobs are split between them. The Flutter checks and tests,
-spelling, the wiki lint, and the PostgreSQL, chaos and power-cut tests run on arm. The backend checks,
-tests and builds, the web build, and the path filters stay on x64, along with three groups that have to:
+and the PostgreSQL, chaos and power-cut tests run on arm. The backend checks, tests and builds, and the web
+build stay on x64, along with three groups that have to:
 Android, whose SDK the image carries only for amd64; the performance suites, whose numbers are only
 comparable on one architecture; and the releases. The Linux build and the image builds run once per
 architecture.

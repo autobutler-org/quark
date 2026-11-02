@@ -196,9 +196,7 @@ jobs:
     name: publish latest
     needs: build
     if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
-    runs-on:
-      group: errand
-      labels: x64-small
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       # The public Actions runner does not ship az. azure/login runs az, so
