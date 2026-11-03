@@ -14,6 +14,7 @@ import 'package:quark/models/trim_result.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/file_save.dart';
+import 'package:quark/services/thumbnail_backfill.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/file_kind.dart';
@@ -864,11 +865,14 @@ class FilesService with AuthenticatedService {
     String? serial,
     String? fileName,
   }) async {
+    if (heicImageExtensions.contains(fileExtension(filePath))) {
+      return _storedPreviewBytes(filePath, serial: serial);
+    }
     var uri = _buildDownloadUri(filePath, serial: serial);
     if (serverConvertedImageExtensions.contains(fileExtension(filePath))) {
       // Not just a web concern: Flutter's built-in image decoder (Skia, via
-      // Image.memory) can't decode HEIC/TIFF/BMP/RAW on any platform without
-      // a dedicated codec plugin, which this app doesn't bundle. Request the
+      // Image.memory) can't decode TIFF/BMP/RAW on any platform without a
+      // dedicated codec plugin, which this app doesn't bundle. Request the
       // server-side JPEG conversion everywhere, not only on web (#1567).
       final params = Map<String, String>.from(uri.queryParameters);
       params['format'] = 'jpeg';
@@ -879,6 +883,25 @@ class FilesService with AuthenticatedService {
       throw ApiException(response.statusCode, 'Failed to download file');
     }
 
+    return response.bodyBytes;
+  }
+
+  /// The stored preview of the HEIC at [filePath]: its largest thumbnail, a
+  /// JPEG a client rendered, since the Quark decodes no HEIC (#2382). With
+  /// none stored yet, this client renders and uploads one first.
+  static Future<Uint8List> _storedPreviewBytes(
+    String filePath, {
+    String? serial,
+  }) async {
+    final uri = constructThumbnailUrl(filePath, serial: serial, size: 'lg');
+    var response = await instance.authenticatedGet(uri);
+    if (response.statusCode == 404 &&
+        await ThumbnailBackfill.instance.fill(path: filePath, serial: serial)) {
+      response = await instance.authenticatedGet(uri);
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to load the preview');
+    }
     return response.bodyBytes;
   }
 

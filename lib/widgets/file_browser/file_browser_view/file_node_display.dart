@@ -5,9 +5,9 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark_widgets/quark_widgets.dart' show CalendarLabels;
 
-/// Whether the server can render a thumbnail for this node. Videos go
-/// through ffmpeg frame extraction on the backend and come back as JPEG,
-/// so they use the same thumbnail URL as images.
+/// Whether the server can serve a thumbnail for this node. A video's is a
+/// keyframe the Quark decodes or one a client rendered, served as JPEG, so it
+/// uses the same thumbnail URL as images.
 bool hasServerThumbnail(FileNode node) =>
     !node.isDir &&
     (fileKindForName(node.name) == FileKind.video ||
