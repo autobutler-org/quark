@@ -11,14 +11,14 @@ import (
 // r, read from the start of r, because the decode has already consumed it.
 //
 // It is the one place that decision is made, because whether orientation
-// *should* be applied depends on the decoder: libheif — behind image.Decode
-// for HEIC/HEIF — applies the container's rotate and mirror transforms itself
-// and hands back pixels that are already upright, leaving the EXIF tag
-// informational (gen2brain/heic says so on DecodeExif). Applying the tag on top
-// of that rotates the image a second time, which is why iPhone portrait photos
-// came back sideways (#1798). Every other decoder registered here — Go's JPEG,
-// PNG and GIF, x/image's BMP, TIFF and WebP — ignores orientation, so those
-// still need it applied.
+// *should* be applied depends on the decoder. HEIC/HEIF never gets this far:
+// the device has no decoder for it (#2382), and its thumbnail is one a client
+// rendered already upright. Its EXIF tag is informational — the libheif
+// decoder the device once had applied the container's transforms itself, and
+// applying the tag on top turned iPhone portrait photos sideways (#1798) — so
+// it is never applied. Every decoder registered here — Go's JPEG, PNG and GIF,
+// x/image's BMP, TIFF and WebP — ignores orientation, so those still need it
+// applied.
 func sourceOrientation(r io.ReadSeeker, format imagemeta.ImageFormat) int {
 	if format == 0 || format == imagemeta.HEIF {
 		return 1

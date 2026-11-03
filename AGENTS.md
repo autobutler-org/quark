@@ -505,7 +505,7 @@ Streaming and memory above.
   (`vfs.FilesNamespace`); `fileutil.FilesVFS` picks a request's namespace from its serial. The storage service
   only finds devices: it has no file operations, and the disk work behind a device namespace is private to
   `pkg/vfs`.
-- **`HostPather` has two permitted uses:** handing a path to an external process (dcraw, exiftool, ffmpeg)
+- **`HostPather` has two permitted uses:** handing a path to an external process (dcraw, exiftool)
   and symlink resolution in `accessutil`. Never pass its result to `os.Open`; that is what `VFS.Open` is for.
 - **`make check/lint/go` enforces this.** `scripts/check-go-structure.bash` fails a handler that imports `os`,
   and any read of the files directory, any `HostPather`, or any `os` file call under `pkg/util/` or

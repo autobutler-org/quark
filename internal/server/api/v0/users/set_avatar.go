@@ -12,7 +12,7 @@ import (
 
 // setAvatar godoc
 // @Summary Set your profile picture
-// @Description Replaces the caller's profile picture with the image in the multipart field "file" (JPEG, PNG, WebP, HEIC, GIF, BMP or TIFF, at most 10 MiB). The Quark center-crops and resizes it to 256x256 and keeps only the re-encoded file, so EXIF and location data are dropped. Publishes account_changed.
+// @Description Replaces the caller's profile picture with the image in the multipart field "file" (JPEG, PNG, WebP, GIF, BMP or TIFF, at most 10 MiB). The Quark center-crops and resizes it to 256x256 and keeps only the re-encoded file, so EXIF and location data are dropped. Publishes account_changed.
 // @Tags users
 // @Accept multipart/form-data
 // @Produce json

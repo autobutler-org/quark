@@ -1,7 +1,7 @@
 // Package memutil sizes Quark's memory limits from the board's RAM (#2761). The Go runtime gets a soft limit, set
 // by `quark serve`, so the heap collects near its live set instead of growing to twice it; the service's cgroup gets
 // a systemd MemoryHigh and MemoryMax, written by `quark install`, so the kernel throttles and then stops Quark and
-// its ffmpeg children before the whole board swaps or the OOM killer picks a victim.
+// its child processes before the whole board swaps or the OOM killer picks a victim.
 package memutil
 
 import (
@@ -13,8 +13,8 @@ import (
 
 const (
 	// GoLimitPercent of RAM is the Go runtime's soft memory limit. The rest
-	// is for ffmpeg children (0.7–2.5 GiB for a transcode), the page cache
-	// and the OS.
+	// is for child processes (dcraw and exiftool for camera RAW), the page
+	// cache and the OS.
 	GoLimitPercent = 60
 	// MemoryHighPercent of RAM is where systemd starts throttling and
 	// reclaiming from the service's cgroup, Quark and its children together.

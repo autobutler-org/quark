@@ -587,7 +587,8 @@ photo frame or a tablet, on the same network as the Quark.
   order, a new one about every fifteen seconds, fading from one to the next. A photo is shown whole, never cropped.
 - The next time `/frame` opens, it starts the album you last picked without asking. The sign-in lasts as long as an
   app sign-in does (30 days, renewed as the screen uses it).
-- Photos that are HEIC or RAW are shown as JPEG. Videos and other files in the album are skipped.
+- RAW photos are shown as JPEG, and HEIC photos as their stored thumbnail; a HEIC no app has made a thumbnail for
+  yet is skipped. Videos and other files in the album are skipped.
 - If the Quark cannot be reached, the screen keeps the picture it has, says so at the bottom, and tries again every
   thirty seconds. If the sign-in has ended, the screen goes back to the sign-in form.
 - The menu has **Albums**, **Full screen**, **Sign out** and **Close**, and closes itself after ten seconds.

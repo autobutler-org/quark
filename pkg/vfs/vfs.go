@@ -48,7 +48,7 @@ type File interface {
 
 // HostPather is implemented by namespaces backed by a host directory. It
 // exists for two uses only: handing a path to an external process (dcraw,
-// exiftool, ffmpeg) and symlink resolution in accessutil. A caller never passes
+// exiftool) and symlink resolution in accessutil. A caller never passes
 // the result to os.Open; that is what [VFS.Open] is for.
 type HostPather interface {
 	// HostPath returns the absolute host path of path, which need not exist.

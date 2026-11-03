@@ -5820,7 +5820,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Output format conversion (e.g. 'jpeg' to convert HEIC to JPEG)",
+                        "description": "Output format conversion: 'jpeg' converts camera RAW and other decodable images to JPEG. HEIC and HEIF are served as they are; the device does not decode them",
                         "name": "format",
                         "in": "query"
                     },
@@ -5878,7 +5878,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Reads the specified entry from the archive and streams it to the client. No data is extracted to disk. With format=jpeg an image entry other than camera RAW is converted and served as image/jpeg; every other entry is served as it is. An archive that trips a safety limit (entry count, entry or total decompressed size, folder depth), names an entry outside itself, or needs a password is refused with 400 and a message saying which.",
+                "description": "Reads the specified entry from the archive and streams it to the client. No data is extracted to disk. With format=jpeg an image entry other than camera RAW, HEIC or HEIF is converted and served as image/jpeg; every other entry is served as it is. An archive that trips a safety limit (entry count, entry or total decompressed size, folder depth), names an entry outside itself, or needs a password is refused with 400 and a message saying which.",
                 "produces": [
                     "application/octet-stream",
                     "image/jpeg"
@@ -5910,7 +5910,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Output format conversion ('jpeg' converts HEIC, TIFF, BMP and other decodable images to JPEG)",
+                        "description": "Output format conversion ('jpeg' converts TIFF, BMP and other decodable images to JPEG)",
                         "name": "format",
                         "in": "query"
                     },
@@ -10474,7 +10474,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Replaces the caller's profile picture with the image in the multipart field \"file\" (JPEG, PNG, WebP, HEIC, GIF, BMP or TIFF, at most 10 MiB). The Quark center-crops and resizes it to 256x256 and keeps only the re-encoded file, so EXIF and location data are dropped. Publishes account_changed.",
+                "description": "Replaces the caller's profile picture with the image in the multipart field \"file\" (JPEG, PNG, WebP, GIF, BMP or TIFF, at most 10 MiB). The Quark center-crops and resizes it to 256x256 and keeps only the re-encoded file, so EXIF and location data are dropped. Publishes account_changed.",
                 "consumes": [
                     "multipart/form-data"
                 ],

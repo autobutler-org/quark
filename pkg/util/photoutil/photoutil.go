@@ -16,8 +16,6 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
-	// Registers the HEIC decoder with image.Decode.
-	_ "github.com/gen2brain/heic"
 	// Registers the BMP decoder with image.Decode.
 	_ "golang.org/x/image/bmp"
 	// Registers the TIFF decoder with image.Decode.
@@ -25,6 +23,17 @@ import (
 	// Registers the WebP decoder with image.Decode.
 	_ "golang.org/x/image/webp"
 )
+
+// IsHEICFile reports whether filePath names a HEIC or HEIF image. The device
+// has no HEIC decoder (#2382): such a file is served as it is, and its
+// thumbnail is one a client rendered.
+func IsHEICFile(filePath string) bool {
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".heic", ".heif":
+		return true
+	}
+	return false
+}
 
 // ExifData holds extracted EXIF fields in a format-agnostic way.
 // Works for JPEG, HEIC/HEIF, PNG, WebP, TIFF, and RAW formats.

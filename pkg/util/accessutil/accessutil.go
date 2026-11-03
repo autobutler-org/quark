@@ -716,7 +716,7 @@ func (a Access) CanSeeJob(job jobutil.Job) bool {
 }
 
 // RedactJob is a job as the principal is shown it. Only an admin sees its
-// Error, which can hold host paths and ffmpeg output.
+// Error, which can hold host paths and tool output.
 func (a Access) RedactJob(job jobutil.Job) jobutil.Job {
 	if !a.principal.IsAdmin {
 		job.Error = ""

@@ -62,7 +62,7 @@ func newAccessHarness(t *testing.T) accessHarness {
 	queue := jobutil.NewQueue(jobutil.NewQueueParams{Database: database})
 	queue.Register(jobutil.RegisterParams{Kind: testKind, Handler: jobutil.Handler{
 		Run: func(context.Context, json.RawMessage, func(float64)) error {
-			return errors.New("ffmpeg: " + filesDir + "/shared/a.mkv: boom")
+			return errors.New("remux: " + filesDir + "/shared/a.mkv: boom")
 		},
 	}})
 	deps := deputil.NewDependencies().
