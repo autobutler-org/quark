@@ -11,6 +11,7 @@ import (
 	"log"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -757,4 +758,125 @@ func repeatedPost(params PostMessageParams) (PostMessageResult, error) {
 		return PostMessageResult{}, ErrDuplicateMessage
 	}
 	return PostMessageResult{Message: messageFromRow(row), Repeated: true}, nil
+}
+
+// readPoll is a message's poll row, or ErrNotPoll.
+func readPoll(ctx context.Context, queries db.Querier, messageID int64) (db.ChatPoll, error) {
+	poll, err := queries.GetChatPoll(ctx, messageID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return db.ChatPoll{}, ErrNotPoll
+	}
+	return poll, err
+}
+
+// pollClosed is whether a poll has stopped taking answers at now: its author
+// closed it or its closing time has passed.
+func pollClosed(poll db.ChatPoll, now time.Time) bool {
+	return poll.ClosedAt.Valid || (poll.ClosesAt.Valid && !now.Before(poll.ClosesAt.Time))
+}
+
+// pollFromRow maps a chat_polls row, closed as of now.
+func pollFromRow(row db.ChatPoll, now time.Time) Poll {
+	poll := Poll{
+		PollSettings: PollSettings{AllowChange: row.AllowChange, Anonymous: row.Anonymous, ResultsAfterClose: row.ResultsAfterClose},
+		Closed:       pollClosed(row, now),
+	}
+	if row.ClosesAt.Valid {
+		poll.ClosesAt = &row.ClosesAt.Time
+	}
+	if row.ClosedAt.Valid {
+		poll.ClosedAt = &row.ClosedAt.Time
+	}
+	return poll
+}
+
+// answerFor maps an answer as viewer sees it: theirs or not, and nobody's on
+// an anonymous poll. A viewer of 0 owns nothing.
+func answerFor(poll db.ChatPoll, row db.ChatPollAnswer, viewer int64) PollAnswer {
+	answer := PollAnswer{
+		ID:         row.ID,
+		MessageID:  row.MessageID,
+		UserID:     row.UserID,
+		Mine:       viewer != 0 && row.UserID == viewer,
+		KeyVersion: row.KeyVersion,
+		Ciphertext: row.Ciphertext,
+		CreatedAt:  row.CreatedAt,
+		UpdatedAt:  row.UpdatedAt,
+	}
+	if poll.Anonymous {
+		answer.UserID = 0
+	}
+	return answer
+}
+
+// visibleAnswers is the answers viewer may see: all of them, but only their
+// own while a results-after-close poll is open and they didn't write it.
+func visibleAnswers(poll db.ChatPoll, authorID, viewer int64, rows []db.ChatPollAnswer, now time.Time) []PollAnswer {
+	ownOnly := poll.ResultsAfterClose && !pollClosed(poll, now) && viewer != authorID
+	answers := []PollAnswer{}
+	for _, row := range rows {
+		if !ownOnly || row.UserID == viewer {
+			answers = append(answers, answerFor(poll, row, viewer))
+		}
+	}
+	return answers
+}
+
+// withPoll is message with its poll, if it is one, as the viewer sees it.
+func withPoll(ctx context.Context, queries db.Querier, viewer int64, message Message) (Message, error) {
+	messages := []Message{message}
+	err := attachPolls(ctx, queries, message.ChannelID, viewer, messages)
+	return messages[0], err
+}
+
+// attachPolls fills in the polls among messages, one page of a channel's
+// messages sorted by id, with the answers viewer may see.
+func attachPolls(ctx context.Context, queries db.Querier, channelID, viewer int64, messages []Message) error {
+	if len(messages) == 0 {
+		return nil
+	}
+	first, last := messages[0].ID, messages[len(messages)-1].ID
+	polls, err := queries.ListChatPollsBetween(ctx, db.ListChatPollsBetweenParams{ChannelID: channelID, FirstID: first, LastID: last})
+	if err != nil || len(polls) == 0 {
+		return err
+	}
+	rows, err := queries.ListChatPollAnswersBetween(ctx, db.ListChatPollAnswersBetweenParams{ChannelID: channelID, FirstID: first, LastID: last})
+	if err != nil {
+		return err
+	}
+	answers := map[int64][]db.ChatPollAnswer{}
+	for _, row := range rows {
+		answers[row.MessageID] = append(answers[row.MessageID], row)
+	}
+	now := time.Now()
+	for _, row := range polls {
+		i, found := slices.BinarySearchFunc(messages, row.MessageID, func(m Message, id int64) int { return cmp.Compare(m.ID, id) })
+		if !found {
+			continue
+		}
+		poll := pollFromRow(row, now)
+		poll.Answers = visibleAnswers(row, messages[i].AuthorID, viewer, answers[row.MessageID], now)
+		messages[i].Poll = &poll
+	}
+	return nil
+}
+
+// publishPollAnswer sends an answer, as nobody's own, to the readers who may
+// see it: every reader, or while a results-after-close poll is open only its
+// author and whoever answered.
+func publishPollAnswer(ctx context.Context, queries db.Querier, bus *eventbus.Bus, message db.ChatMessage, poll db.ChatPoll, row db.ChatPollAnswer, now time.Time) error {
+	if bus == nil {
+		return nil
+	}
+	audience, err := readers(ctx, queries, message.ChannelID)
+	if err != nil {
+		return err
+	}
+	if poll.ResultsAfterClose && !pollClosed(poll, now) {
+		audience = slices.DeleteFunc(audience, func(id int64) bool { return id != message.AuthorID.Int64 && id != row.UserID })
+	}
+	bus.Publish(eventbus.Event{Kind: eventbus.EventChatPollAnswerChanged, Data: eventbus.ChatPollAnswerChanged{
+		ChannelID: message.ChannelID, MessageID: message.ID, Answer: answerFor(poll, row, 0), Audience: audience,
+	}})
+	return nil
 }

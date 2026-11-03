@@ -37,6 +37,9 @@ type Querier interface {
 	// time.
 	ClaimMaintenanceRun(ctx context.Context, arg ClaimMaintenanceRunParams) (int64, error)
 	ClearDefaultStorageRole(ctx context.Context) error
+	// CloseChatPoll closes a poll by hand, once: a poll already closed keeps its
+	// first closed_at and the count is 0.
+	CloseChatPoll(ctx context.Context, messageID int64) (int64, error)
 	// A disabled admin cannot sign in, so only active admins count (#1908).
 	CountActiveAdmins(ctx context.Context) (int64, error)
 	CountAlbumItems(ctx context.Context, albumID int64) (int64, error)
@@ -69,6 +72,12 @@ type Querier interface {
 	// bytes, unique per channel and key version (#2487). client_message_id, when
 	// the client sent one, is unique per channel and author (#3531).
 	CreateChatMessage(ctx context.Context, arg CreateChatMessageParams) (ChatMessage, error)
+	// Chat polls (#3893). The Quark enforces a poll's settings and stores its
+	// answers as ciphertext it never opens.
+	CreateChatPoll(ctx context.Context, arg CreateChatPollParams) error
+	// CreateChatPollAnswer stores an account's first answer to a poll, and
+	// returns no row when it already answered or the poll is gone.
+	CreateChatPollAnswer(ctx context.Context, arg CreateChatPollAnswerParams) (ChatPollAnswer, error)
 	// Chat reactions (#2426). The Quark stores ciphertext and never opens it.
 	// CreateChatReaction stores a reaction on a message that isn't deleted, and
 	// returns no row when it is, so a reaction can't slip in after the tombstone.
@@ -204,6 +213,7 @@ type Querier interface {
 	GetChatMessageByClientID(ctx context.Context, arg GetChatMessageByClientIDParams) (ChatMessage, error)
 	// GetChatMessageByNonce finds the message a post's nonce already names.
 	GetChatMessageByNonce(ctx context.Context, arg GetChatMessageByNonceParams) (ChatMessage, error)
+	GetChatPoll(ctx context.Context, messageID int64) (ChatPoll, error)
 	GetChatReaction(ctx context.Context, id int64) (ChatReaction, error)
 	GetChatReadMarker(ctx context.Context, arg GetChatReadMarkerParams) (int64, error)
 	GetConnectedDevice(ctx context.Context, id int64) (ConnectedDevice, error)
@@ -318,6 +328,13 @@ type Querier interface {
 	ListChatMessagesAfter(ctx context.Context, arg ListChatMessagesAfterParams) ([]ChatMessage, error)
 	// ListChatMessagesBefore pages a channel backward from an id, newest first.
 	ListChatMessagesBefore(ctx context.Context, arg ListChatMessagesBeforeParams) ([]ChatMessage, error)
+	ListChatPollAnswers(ctx context.Context, messageID int64) ([]ChatPollAnswer, error)
+	// ListChatPollAnswersBetween is the answers to a channel's polls whose ids
+	// fall in [first_id, last_id], one page of ListChatMessages*.
+	ListChatPollAnswersBetween(ctx context.Context, arg ListChatPollAnswersBetweenParams) ([]ChatPollAnswer, error)
+	// ListChatPollsBetween is the polls among a channel's messages whose ids fall
+	// in [first_id, last_id], one page of ListChatMessages*.
+	ListChatPollsBetween(ctx context.Context, arg ListChatPollsBetweenParams) ([]ChatPoll, error)
 	// ListChatReactionsBetween is the reactions on a channel's messages whose ids
 	// fall in [first_id, last_id], one page of ListChatMessages*.
 	ListChatReactionsBetween(ctx context.Context, arg ListChatReactionsBetweenParams) ([]ChatReaction, error)
@@ -520,6 +537,9 @@ type Querier interface {
 	// SetChatChannelUserMember gives an account a set on a channel, replacing the
 	// set any earlier row for it carried.
 	SetChatChannelUserMember(ctx context.Context, arg SetChatChannelUserMemberParams) error
+	// SetChatPollAnswer stores or replaces an account's answer to a poll that
+	// still exists, and returns no row once the poll went with its message.
+	SetChatPollAnswer(ctx context.Context, arg SetChatPollAnswerParams) (ChatPollAnswer, error)
 	// Chat read markers (#2424): how far each account has read in each channel.
 	// SetChatReadMarker moves an account's marker in a channel forward, never
 	// backward: it changes no row when the marker is already at or past the id.

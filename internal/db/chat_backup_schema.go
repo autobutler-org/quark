@@ -3,7 +3,7 @@ package db
 // ChatBackupVersion is the format of the chat backup file, stored in its
 // user_version. It moves when ChatBackupSchemaDDL does, and a restore refuses
 // a version it does not know rather than guess at its columns.
-const ChatBackupVersion = 1
+const ChatBackupVersion = 2
 
 // ChatBackupSchemaDDL is the schema of the chat backup file pkg/backup writes
 // beside a snapshot (#2428). It is a transport format, not a database anyone
@@ -20,9 +20,9 @@ const ChatBackupVersion = 1
 // TestChatBackupSchema_MatchesLiveTables in pkg/backup fails until the columns
 // agree. chat_messages.client_message_id (#3531) is exported but never
 // restored, so it left the version at 1: a file with or without it restores
-// the same.
+// the same. Version 2 added chat_polls and chat_poll_answers (#3893).
 const ChatBackupSchemaDDL = `
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;
 
 CREATE TABLE users (
     id       INTEGER PRIMARY KEY,
@@ -123,5 +123,24 @@ CREATE TABLE chat_reactions (
     key_version INTEGER NOT NULL,
     ciphertext  BLOB NOT NULL,
     created_at  DATETIME NOT NULL
+);
+
+CREATE TABLE chat_polls (
+    message_id          INTEGER PRIMARY KEY,
+    closes_at           DATETIME,
+    closed_at           DATETIME,
+    allow_change        BOOLEAN NOT NULL,
+    anonymous           BOOLEAN NOT NULL,
+    results_after_close BOOLEAN NOT NULL
+);
+
+CREATE TABLE chat_poll_answers (
+    id          INTEGER PRIMARY KEY,
+    message_id  INTEGER NOT NULL,
+    user_id     INTEGER NOT NULL,
+    key_version INTEGER NOT NULL,
+    ciphertext  BLOB NOT NULL,
+    created_at  DATETIME NOT NULL,
+    updated_at  DATETIME NOT NULL
 );
 `

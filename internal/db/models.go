@@ -106,6 +106,25 @@ type ChatMessage struct {
 	ClientMessageID sql.NullString
 }
 
+type ChatPoll struct {
+	MessageID         int64
+	ClosesAt          sql.NullTime
+	ClosedAt          sql.NullTime
+	AllowChange       bool
+	Anonymous         bool
+	ResultsAfterClose bool
+}
+
+type ChatPollAnswer struct {
+	ID         int64
+	MessageID  int64
+	UserID     int64
+	KeyVersion int64
+	Ciphertext []byte
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
 type ChatReaction struct {
 	ID         int64
 	MessageID  int64

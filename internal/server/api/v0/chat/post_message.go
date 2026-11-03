@@ -12,7 +12,7 @@ import (
 
 // postMessage godoc
 // @Summary Post an encrypted message to a chat channel
-// @Description Stores ciphertext, base64, that the caller's client encrypted under the channel key of keyVersion, and sends the stored row to the channel's readers as chat_message_created. The Quark never sees the text. A ciphertext's 24-byte nonce is taken once per channel and key version: repeating your own live post byte for byte returns it with 200 and stores nothing, and any other reuse is 409. clientMessageId, up to 64 bytes, names the send: a retry encrypts again under a fresh nonce, so it carries the same clientMessageId, and one the caller already sent to this channel returns that message with 200 and stores nothing, whatever the ciphertext. Ciphertext is at most 16 KiB. Needs send_messages; a reader without it gets 403, and anyone without read_messages 404, delegated managers and admins included.
+// @Description Stores ciphertext, base64, that the caller's client encrypted under the channel key of keyVersion, and sends the stored row to the channel's readers as chat_message_created. The Quark never sees the text. A ciphertext's 24-byte nonce is taken once per channel and key version: repeating your own live post byte for byte returns it with 200 and stores nothing, and any other reuse is 409. clientMessageId, up to 64 bytes, names the send: a retry encrypts again under a fresh nonce, so it carries the same clientMessageId, and one the caller already sent to this channel returns that message with 200 and stores nothing, whatever the ciphertext. Ciphertext is at most 16 KiB. poll, when set, makes the message a poll whose question and options are in the ciphertext: closesAt, when set, is when it stops taking answers; allowChange lets an account replace its answer; anonymous serves answers without who gave them, to everyone; resultsAfterClose shows answers only to the author until it closes. Needs send_messages; a reader without it gets 403, and anyone without read_messages 404, delegated managers and admins included.
 // @Tags chat
 // @Accept json
 // @Produce json
@@ -53,6 +53,7 @@ func postMessage(c *gin.Context) *serverutil.Response {
 	result, err := chatutil.PostMessage(chatutil.PostMessageParams{
 		Ctx: c.Request.Context(), Database: deps.Database(), EventBus: deps.EventBus(), Principal: principal,
 		ChannelID: id, KeyVersion: body.KeyVersion, Ciphertext: body.Ciphertext, ClientMessageID: body.ClientMessageID,
+		Poll: body.Poll,
 	})
 	if err != nil {
 		return chatError(err)

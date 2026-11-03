@@ -136,4 +136,10 @@ var chatRestoreSteps = []restoreStep{
 		SELECT r.id, r.message_id, u.live_id, r.key_version, r.ciphertext, r.created_at
 		FROM chat_backup.chat_reactions AS r
 		JOIN temp.restore_users AS u ON u.backup_id = r.user_id`},
+	{"chat_polls", `INSERT INTO main.chat_polls SELECT * FROM chat_backup.chat_polls`},
+	{"chat_poll_answers", `
+		INSERT INTO main.chat_poll_answers (id, message_id, user_id, key_version, ciphertext, created_at, updated_at)
+		SELECT a.id, a.message_id, u.live_id, a.key_version, a.ciphertext, a.created_at, a.updated_at
+		FROM chat_backup.chat_poll_answers AS a
+		JOIN temp.restore_users AS u ON u.backup_id = a.user_id`},
 }

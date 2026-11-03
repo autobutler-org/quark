@@ -38,6 +38,9 @@ func (r *router) Routes() []*serverutil.Route {
 		markReadRoute,
 		addReactionRoute,
 		deleteReactionRoute,
+		answerPollRoute,
+		listPollAnswersRoute,
+		closePollRoute,
 	}
 }
 
@@ -91,15 +94,24 @@ type signEventBody struct {
 // postMessageBody is a message the caller's client encrypted. Ciphertext is
 // base64 nonce || XChaCha20-Poly1305 output. ClientMessageID is optional, the
 // client's own id for this send, kept the same across its retries (#3531).
+// Poll, when set, makes the message a poll with those settings (#3893).
 type postMessageBody struct {
-	Ciphertext      []byte `json:"ciphertext"`
-	KeyVersion      int64  `json:"keyVersion"`
-	ClientMessageID string `json:"clientMessageId,omitempty"`
+	Ciphertext      []byte                 `json:"ciphertext"`
+	KeyVersion      int64                  `json:"keyVersion"`
+	ClientMessageID string                 `json:"clientMessageId,omitempty"`
+	Poll            *chatutil.PollSettings `json:"poll,omitempty"`
 }
 
 // markReadBody names the newest message the caller has read in a channel.
 type markReadBody struct {
 	MessageID int64 `json:"messageId"`
+}
+
+// pollAnswerBody is a poll answer the caller's client padded to 4 KiB and
+// encrypted. Ciphertext is base64 nonce || XChaCha20-Poly1305 output.
+type pollAnswerBody struct {
+	Ciphertext []byte `json:"ciphertext"`
+	KeyVersion int64  `json:"keyVersion"`
 }
 
 // reactionBody is a reaction the caller's client encrypted. Ciphertext is
