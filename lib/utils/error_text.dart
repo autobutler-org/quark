@@ -639,6 +639,16 @@ abstract final class Errors {
   static const String chatMessageTooLong =
       'That message is too long. Split it into shorter ones.';
 
+  /// A poll whose question and options don't fit the Quark's 16 KiB cap
+  /// once encrypted (#3894).
+  static const String chatPollTooLong =
+      'That poll is too long. Shorten the question or its options.';
+
+  /// A written poll answer that doesn't fit the 4 KiB every answer is padded
+  /// to (#3894).
+  static const String chatPollAnswerTooLong =
+      'That answer is too long. Shorten it and try again.';
+
   /// A sign-in the Quark refused with a 401.
   ///
   /// The same sentence for a wrong password and an unknown username, so the

@@ -17,6 +17,7 @@ import 'package:quark/widgets/chat/chat_channel_not_found.dart';
 import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
 import 'package:quark/widgets/chat/chat_search_bar.dart';
 import 'package:quark/widgets/chat/chat_unlock_prompt.dart';
+import 'package:quark/widgets/chat/show_chat_poll_editor.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
@@ -60,6 +61,10 @@ import 'package:url_launcher/url_launcher.dart';
 /// without their messages. The author of a message, or a holder of
 /// `delete_messages`, deletes it after confirming. A holder of `add_reactions`
 /// reacts to a message, and taps a reaction of their own to take it back.
+///
+/// The poll button beside the composer opens a form for a poll (#3894). A
+/// holder of `add_reactions` answers one, and its author closes it. Each
+/// card is tallied on this device from the answers it can open.
 ///
 /// Typing `@` in the composer suggests the open channel's members, and a
 /// message that mentions the signed-in account is highlighted (#2623). A
@@ -184,6 +189,18 @@ class _ChatPageState extends State<ChatPage>
     final error = await _controller.toggleReaction(id, emoji);
     if (error == null || !mounted) return;
     showMessage(context, Errors.message(error, 'react to the message'));
+  }
+
+  Future<void> _answerPoll(String id, ChatPollAnswer answer) async {
+    final error = await _controller.answerPoll(id, answer);
+    if (error == null || !mounted) return;
+    showMessage(context, Errors.message(error, 'answer the poll'));
+  }
+
+  Future<void> _closePoll(String id) async {
+    final error = await _controller.closePoll(id);
+    if (error == null || !mounted) return;
+    showMessage(context, Errors.message(error, 'close the poll'));
   }
 
   void _openChannel(String id) {
@@ -547,6 +564,8 @@ class _ChatPageState extends State<ChatPage>
                                 onCopy: _copyMessage,
                                 onDelete: _deleteMessage,
                                 onReact: _react,
+                                onAnswerPoll: _answerPoll,
+                                onClosePoll: _closePoll,
                                 onEncryptionHelp: _explainEncryption,
                                 onOpenLink: (uri) => launchUrl(
                                   uri,
@@ -584,27 +603,41 @@ class _ChatPageState extends State<ChatPage>
                       // rounded display corners and the home indicator
                       // (#2788).
                       QuarkEdgeInset(
-                        child: QuarkMessageComposer(
-                          // A new state per channel. The text is that
-                          // channel's draft, kept for this app session.
-                          key: ValueKey('chat_composer_${channel?.id}'),
-                          initialText: channel == null
-                              ? ''
-                              : c.draftFor(channel.id),
-                          onChanged: channel == null
-                              ? null
-                              : (text) => c.setDraft(channel.id, text),
-                          hintText: channel == null
-                              ? 'Message'
-                              : 'Message ${c.titleOf(channel)}',
-                          permissions: channel == null
-                              ? null
-                              : c.selectedPermissions,
-                          isWaitingForKey: c.isWaitingForKey,
-                          disabledReason: c.composerDisabledReason,
-                          maxLength: ChatConfig.maxMessageLength,
-                          mentionNames: c.mentionNames,
-                          onSend: c.send,
+                        child: Row(
+                          children: [
+                            if (c.canPostPoll)
+                              QuarkBarIconButton(
+                                key: const ValueKey('chat_new_poll'),
+                                icon: QuarkIcons.poll,
+                                tooltip: 'New poll',
+                                onPressed: () =>
+                                    showChatPollEditor(context, chat: c),
+                              ),
+                            Expanded(
+                              child: QuarkMessageComposer(
+                                // A new state per channel. The text is that
+                                // channel's draft, kept for this app session.
+                                key: ValueKey('chat_composer_${channel?.id}'),
+                                initialText: channel == null
+                                    ? ''
+                                    : c.draftFor(channel.id),
+                                onChanged: channel == null
+                                    ? null
+                                    : (text) => c.setDraft(channel.id, text),
+                                hintText: channel == null
+                                    ? 'Message'
+                                    : 'Message ${c.titleOf(channel)}',
+                                permissions: channel == null
+                                    ? null
+                                    : c.selectedPermissions,
+                                isWaitingForKey: c.isWaitingForKey,
+                                disabledReason: c.composerDisabledReason,
+                                maxLength: ChatConfig.maxMessageLength,
+                                mentionNames: c.mentionNames,
+                                onSend: c.send,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

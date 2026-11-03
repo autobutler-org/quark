@@ -449,3 +449,88 @@ on two devices or browsers, one with `general` open and one on **Files**.
 - Chat is end-to-end encrypted, so a mention is only the text `@name` inside the message. The app finds it after
   decrypting; the Quark is never told who was mentioned ([`docs/chat-security.md`](../chat-security.md)).
 - A mention sends no notification and adds no badge to a channel that isn't open.
+
+---
+
+### JN-CHAT-021: Create a poll
+
+**Preconditions:** Two accounts, `bob` and `carol`, are **Member**s of a channel, each with it open.
+
+**Steps:**
+
+1. As `carol`, tap **New poll**, the poll button beside the composer.
+2. Type `Where for lunch?` as the question, and `Tacos` and `Pho` as the two options.
+3. Tap **Post poll**.
+4. As `bob`, look at the channel.
+
+**Expected result:**
+
+- After step 1, a form titled "New poll" opens: a sheet on a phone, a dialog on a wider screen. It offers **One
+  choice**, **Several choices** and **Written answer**, and the settings **Close at a set time**, **Allow
+  changing an answer**, **Anonymous** and **Show results after it closes**.
+- **Post poll** stays disabled until there is a question and, for a choice poll, two options.
+- After step 3, the form closes and the poll shows in the channel as a card with its question and options.
+- After step 4, `bob` sees the same card, with nobody's answer yet.
+
+**Notes:**
+
+- The question and options are encrypted like any message; the Quark sees only that the message is a poll and
+  its settings, which it enforces ([`docs/chat-security.md`](../chat-security.md)).
+- The poll button is there only where the composer is: not for a **Viewer** without **Send messages**, and not
+  while waiting for the channel's key (JN-CHAT-005).
+- A failed post keeps the form open with the reason above **Post poll**.
+
+---
+
+### JN-CHAT-022: Answer a poll and change the answer
+
+**Preconditions:** `carol` posted a one-choice poll with **Allow changing an answer** on (JN-CHAT-021). `bob`
+and `carol` have the channel open.
+
+**Steps:**
+
+1. As `bob`, pick `Tacos` and tap **Answer**.
+2. As `bob`, pick `Pho` and tap **Change answer**.
+
+**Expected result:**
+
+- After step 1, both see `Tacos` with one answer of one, and `bob`'s pick stays selected for him.
+- After step 2, both see `Pho` with one answer of one and `Tacos` with none: the answer was replaced, not added.
+
+**Edge cases:**
+
+- With **Allow changing an answer** off, the inputs lock once `bob` has answered.
+- On an **Anonymous** poll the card says so, and nobody, `carol` included, sees who gave which answer. `bob`
+  still sees his own pick.
+- With **Show results after it closes** on, `bob` sees only his own answer and the line "Results appear when
+  the poll closes." until it closes. `carol`, its author, sees the tally all along.
+- A **Viewer** without **Add reactions** sees the card but can't answer.
+
+**Notes:**
+
+- Each answer is encrypted and padded to one size, so the Quark learns who answered and when, never what. The
+  tally is counted on each device from the answers it can open
+  ([`docs/chat-security.md`](../chat-security.md)).
+
+---
+
+### JN-CHAT-023: Close a poll
+
+**Preconditions:** `carol` posted a poll that `bob` has answered (JN-CHAT-022). Both have the channel open.
+
+**Steps:**
+
+1. As `carol`, tap **Close poll** on the card.
+2. As `bob`, try to answer.
+
+**Expected result:**
+
+- After step 1, both cards read "Closed" and take no more answers. On a poll that shows results after it
+  closes, `bob` now sees every answer.
+- After step 2, the inputs are disabled.
+
+**Notes:**
+
+- Only the poll's author gets **Close poll**.
+- A poll with **Close at a set time** closes on its own then. Nothing announces it: a card shows it closed the
+  next time it is drawn, and a results-after-close poll shows everyone's answers once the channel is refreshed.

@@ -3,12 +3,13 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:quark/models/chat_message.dart';
+import 'package:quark/models/chat_poll.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 
 /// The chat message routes (#2418): paging a channel's messages, posting
-/// one, and deleting one; and reacting to one and taking a reaction back
-/// (#2426).
+/// one, and deleting one; reacting to one and taking a reaction back
+/// (#2426); and posting, answering and closing a poll (#3894).
 ///
 /// Everything here is ciphertext; `ChatMessagesController` encrypts and
 /// decrypts.
@@ -49,12 +50,14 @@ class ChatMessagesService with AuthenticatedService {
 
   /// Posts [ciphertext], encrypted under [keyVersion], and returns the stored
   /// message. A [clientMessageId] the Quark already has from this account in
-  /// this channel returns that message instead of storing a second one.
+  /// this channel returns that message instead of storing a second one. With
+  /// [poll], the message is a poll with its settings.
   static Future<ChatMessage> postMessage(
     int channelId,
     int keyVersion,
     Uint8List ciphertext, {
     String? clientMessageId,
+    ChatPoll? poll,
   }) async {
     final response = await instance.authenticatedPost(
       _channelUri(channelId),
@@ -63,6 +66,7 @@ class ChatMessagesService with AuthenticatedService {
         'keyVersion': keyVersion,
         'ciphertext': base64Encode(ciphertext),
         'clientMessageId': ?clientMessageId,
+        'poll': ?poll?.settingsJson(),
       }),
     );
     throwUnlessOk(response, 'post to channel $channelId');
@@ -86,7 +90,7 @@ class ChatMessagesService with AuthenticatedService {
     Uint8List ciphertext,
   ) async {
     final response = await instance.authenticatedPost(
-      apiBaseUri.resolve('/api/v0/chat/messages/$messageId/reactions'),
+      _messageUri(messageId, 'reactions'),
       headers: const {'Content-Type': 'application/json'},
       body: jsonEncode({
         'keyVersion': keyVersion,
@@ -104,6 +108,52 @@ class ChatMessagesService with AuthenticatedService {
     );
     throwUnlessOk(response, 'remove reaction $reactionId');
   }
+
+  /// Stores [ciphertext], this account's padded answer encrypted under
+  /// [keyVersion], as its answer to poll [messageId], and returns it. The
+  /// Quark refuses a closed poll, and a second answer to one that doesn't
+  /// allow changing it, with a 409 and a sentence of its own.
+  static Future<ChatPollResponse> answerPoll(
+    int messageId,
+    int keyVersion,
+    Uint8List ciphertext,
+  ) async {
+    final response = await instance.authenticatedPut(
+      _messageUri(messageId, 'answer'),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'keyVersion': keyVersion,
+        'ciphertext': base64Encode(ciphertext),
+      }),
+    );
+    throwUnlessOk(response, 'answer poll $messageId');
+    return ChatPollResponse.fromJson(_json(response));
+  }
+
+  /// The answers to poll [messageId] this account may see, oldest first.
+  static Future<List<ChatPollResponse>> fetchPollAnswers(int messageId) async {
+    final response = await instance.authenticatedGet(
+      _messageUri(messageId, 'answers'),
+    );
+    throwUnlessOk(response, 'fetch answers of poll $messageId');
+    return [
+      for (final a in _json(response)['answers'] as List? ?? const [])
+        ChatPollResponse.fromJson(a as Map<String, dynamic>),
+    ];
+  }
+
+  /// Closes poll [messageId], which only its author may, and returns its
+  /// settings and state, without answers.
+  static Future<ChatPoll> closePoll(int messageId) async {
+    final response = await instance.authenticatedPost(
+      _messageUri(messageId, 'close'),
+    );
+    throwUnlessOk(response, 'close poll $messageId');
+    return ChatPoll.fromJson(_json(response));
+  }
+
+  static Uri _messageUri(int messageId, String action) =>
+      apiBaseUri.resolve('/api/v0/chat/messages/$messageId/$action');
 
   static Uri _channelUri(int channelId, [Map<String, String>? query]) =>
       apiBaseUri

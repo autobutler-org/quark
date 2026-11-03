@@ -417,6 +417,13 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   /// open and chat is unlocked.
   bool get canSearch => _messages != null && !isLocked;
 
+  /// Whether a poll can be posted in the open channel: it is read and
+  /// written in, and its key is here (#3894).
+  bool get canPostPoll =>
+      canSearch &&
+      selectedPermissions.contains(ChatPermission.sendMessages) &&
+      !isWaitingForKey;
+
   /// Whether the open channel's search bar is showing (#2429).
   bool get isSearching => _isSearching;
 
@@ -437,7 +444,9 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       for (final entry in _messages?.entries ?? const <ChatTimelineEntry>[])
         if (entry is ChatTimelineMessage &&
             entry.state == ChatMessageState.ready &&
-            foldForSearch(entry.text ?? '').contains(needle))
+            foldForSearch(
+              entry.question?.prompt ?? entry.text ?? '',
+            ).contains(needle))
           entry,
     ];
   }
@@ -765,32 +774,53 @@ class ChatController extends ChangeNotifier with SafeNotifier {
 
   /// Deletes message [messageId], an id from [messageItems], in the open
   /// channel. Null on success, otherwise the failure, for `Errors.message`.
-  Future<Object?> deleteMessage(String messageId) async {
+  Future<Object?> deleteMessage(String messageId) =>
+      _onMessage(messageId, (messages, id) => messages.delete(id));
+
+  /// Adds or takes back this account's [emoji] reaction on message
+  /// [messageId], an id from [messageItems], in the open channel. Null on
+  /// success, otherwise the failure, for `Errors.message`.
+  Future<Object?> toggleReaction(String messageId, String emoji) => _onMessage(
+    messageId,
+    (messages, id) => messages.toggleReaction(id, emoji),
+  );
+
+  /// Runs [action] on message [messageId], an id from [messageItems], in the
+  /// open channel. Null on success, otherwise the failure.
+  Future<Object?> _onMessage(
+    String messageId,
+    Future<void> Function(ChatMessagesController messages, int id) action,
+  ) async {
     final messages = _messages;
     final id = int.tryParse(messageId);
     if (messages == null || id == null) return null;
     try {
-      await messages.delete(id);
+      await action(messages, id);
       return null;
     } catch (e) {
       return e;
     }
   }
 
-  /// Adds or takes back this account's [emoji] reaction on message
-  /// [messageId], an id from [messageItems], in the open channel. Null on
-  /// success, otherwise the failure, for `Errors.message`.
-  Future<Object?> toggleReaction(String messageId, String emoji) async {
-    final messages = _messages;
-    final id = int.tryParse(messageId);
-    if (messages == null || id == null) return null;
-    try {
-      await messages.toggleReaction(id, emoji);
-      return null;
-    } catch (e) {
-      return e;
-    }
-  }
+  /// Answers poll [messageId], an id from [messageItems], in the open channel
+  /// with [answer]. Null on success, otherwise the failure, for
+  /// `Errors.message`.
+  Future<Object?> answerPoll(String messageId, ChatPollAnswer answer) =>
+      _onMessage(messageId, (messages, id) => messages.answerPoll(id, answer));
+
+  /// Closes poll [messageId], one of this account's in the open channel.
+  /// Null on success, otherwise the failure, for `Errors.message`.
+  Future<Object?> closePoll(String messageId) =>
+      _onMessage(messageId, (messages, id) => messages.closePoll(id));
+
+  /// Posts [draft] as a poll in the open channel through [isSaving] and
+  /// [saveError]. True once it is posted and its form can close.
+  Future<bool> postPoll(ChatPollDraft draft) async =>
+      await _save(() async {
+        await _messages?.sendPoll(draft);
+        return true;
+      }) ??
+      false;
 
   /// Creates channel [name] with [topic], owned by this account, sets up its
   /// first key, and lists it. The Quark makes every channel private; unless
@@ -990,17 +1020,20 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   }
 
   /// [entry] as `QuarkMessageList` draws it, with authors named by [nameOf]
-  /// and reactions grouped by emoji, marked where account [me] reacted.
+  /// and reactions grouped by emoji, marked where account [me] reacted. A
+  /// poll is tallied as of [now] (`ChatMessagesController.pollItemFor`).
   static ChatMessageItem itemFor(
     ChatTimelineEntry entry,
     String Function(int userId) nameOf, {
     int? me,
+    DateTime? now,
   }) => switch (entry) {
     ChatTimelineMessage(
       :final message,
       :final state,
       :final text,
       :final reactions,
+      :final question,
     ) =>
       ChatMessageItem(
         id: '${message.id}',
@@ -1008,11 +1041,12 @@ class ChatController extends ChangeNotifier with SafeNotifier {
         authorName: nameOf(message.authorId),
         sentAt: message.createdAt.toLocal(),
         body: switch (state) {
-          ChatMessageState.ready => text ?? '',
+          ChatMessageState.ready => question?.prompt ?? text ?? '',
           ChatMessageState.unreadable => unreadableBody,
           _ => '',
         },
         kind: switch (state) {
+          ChatMessageState.ready when question != null => ChatMessageKind.poll,
           ChatMessageState.ready ||
           ChatMessageState.unreadable => ChatMessageKind.text,
           ChatMessageState.waiting => ChatMessageKind.waitingForKey,
@@ -1020,6 +1054,9 @@ class ChatController extends ChangeNotifier with SafeNotifier {
         },
         isUnverified: state == ChatMessageState.unreadable,
         reactions: reactionItems(reactions, me),
+        poll: question == null
+            ? null
+            : ChatMessagesController.pollItemFor(entry, me: me, now: now),
       ),
     ChatTimelineSystem(:final event, :final isUnverified) => ChatMessageItem(
       id: 'event_${event.id}',

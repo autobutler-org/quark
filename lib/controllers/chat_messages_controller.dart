@@ -7,6 +7,7 @@ import 'package:quark/controllers/chat_channel_keys_controller.dart';
 import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
+import 'package:quark/models/chat_poll.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_channel_keys_service.dart';
 import 'package:quark/services/chat_crypto.dart';
@@ -14,6 +15,7 @@ import 'package:quark/services/chat_messages_service.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:sodium/sodium_sumo.dart';
 
 /// One open channel's timeline (#2418): its messages, decrypted in memory,
@@ -34,6 +36,12 @@ import 'package:sodium/sodium_sumo.dart';
 ///   encrypted like a message and bound to the message and account too, and
 ///   `chat_reaction_changed` keeps everyone's reactions current. A
 ///   tombstone has none.
+/// - [sendPoll] posts a poll (#3894): its question in the encrypted text,
+///   its settings beside it for the Quark to enforce. [answerPoll] encrypts
+///   this account's answer, padded so every answer is one size, and
+///   [closePoll] closes one of this account's own. `chat_poll_answer_changed`
+///   and `chat_poll_closed` keep every poll current, and [pollItemFor]
+///   tallies one on this device.
 /// - A message under a key version this account has no grant of yet is
 ///   [ChatMessageState.waiting], and opens by itself once the grant lands
 ///   (the keys controller notifies).
@@ -60,6 +68,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       int keyVersion,
       Uint8List ciphertext, {
       String? clientMessageId,
+      ChatPoll? poll,
     })?
     postMessage,
     Future<ChatMessage> Function(int messageId)? deleteMessage,
@@ -70,6 +79,14 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     )?
     addReaction,
     Future<void> Function(int reactionId)? deleteReaction,
+    Future<ChatPollResponse> Function(
+      int messageId,
+      int keyVersion,
+      Uint8List ciphertext,
+    )?
+    answerPoll,
+    Future<List<ChatPollResponse>> Function(int messageId)? fetchPollAnswers,
+    Future<ChatPoll> Function(int messageId)? closePoll,
     int? Function()? currentUserId,
     Future<List<ChatChannelEvent>> Function(int channelId, {int after})?
     fetchEvents,
@@ -82,6 +99,10 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
        _deleteMessage = deleteMessage ?? ChatMessagesService.deleteMessage,
        _addReaction = addReaction ?? ChatMessagesService.addReaction,
        _deleteReaction = deleteReaction ?? ChatMessagesService.deleteReaction,
+       _answerPoll = answerPoll ?? ChatMessagesService.answerPoll,
+       _fetchPollAnswers =
+           fetchPollAnswers ?? ChatMessagesService.fetchPollAnswers,
+       _closePoll = closePoll ?? ChatMessagesService.closePoll,
        _currentUserId =
            currentUserId ?? (() => AppSettings.instance.userId.value),
        _fetchEvents = fetchEvents ?? ChatChannelKeysService.fetchEvents,
@@ -111,6 +132,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     int keyVersion,
     Uint8List ciphertext, {
     String? clientMessageId,
+    ChatPoll? poll,
   })
   _postMessage;
   final Future<ChatMessage> Function(int messageId) _deleteMessage;
@@ -121,6 +143,15 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   )
   _addReaction;
   final Future<void> Function(int reactionId) _deleteReaction;
+  final Future<ChatPollResponse> Function(
+    int messageId,
+    int keyVersion,
+    Uint8List ciphertext,
+  )
+  _answerPoll;
+  final Future<List<ChatPollResponse>> Function(int messageId)
+  _fetchPollAnswers;
+  final Future<ChatPoll> Function(int messageId) _closePoll;
   final int? Function() _currentUserId;
   final Future<List<ChatChannelEvent>> Function(int channelId, {int after})
   _fetchEvents;
@@ -228,7 +259,31 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   /// A retry encrypts again under a fresh nonce, so it passes the
   /// [clientMessageId] its first attempt did: that is how the Quark knows a
   /// send whose response was lost and answers with the stored message.
-  Future<void> send(String text, {String? clientMessageId}) async {
+  Future<void> send(String text, {String? clientMessageId}) => _post(
+    text,
+    clientMessageId: clientMessageId,
+    tooLong: Errors.chatMessageTooLong,
+  );
+
+  /// Posts [draft] as a poll: its question encrypted like a message, its
+  /// settings in the clear for the Quark to enforce. Throws like [send].
+  Future<void> sendPoll(ChatPollDraft draft) => _post(
+    ChatPollQuestion.fromDraft(draft).toPayload(),
+    poll: ChatPoll(
+      closesAt: draft.closesAt,
+      allowChange: draft.allowChange,
+      anonymous: draft.anonymous,
+      resultsAfterClose: draft.resultsAfterClose,
+    ),
+    tooLong: Errors.chatPollTooLong,
+  );
+
+  Future<void> _post(
+    String text, {
+    required String tooLong,
+    String? clientMessageId,
+    ChatPoll? poll,
+  }) async {
     final (crypto, version, key) = await _currentKey();
     final ciphertext = crypto.encrypt(
       Uint8List.fromList(utf8.encode(text)),
@@ -239,16 +294,98 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       ),
     );
     if (ciphertext.length > ChatMessagesService.maxCiphertextBytes) {
-      throw const MessageException(Errors.chatMessageTooLong);
+      throw MessageException(tooLong);
     }
     final stored = await _postMessage(
       channelId,
       version,
       ciphertext,
       clientMessageId: clientMessageId,
+      poll: poll,
     );
     _put(stored, text: text);
     notifyListeners();
+  }
+
+  /// Answers poll [messageId] with [answer], padded to one size and
+  /// encrypted under the channel's current key, bound to the poll and,
+  /// unless it is anonymous, this account. Throws like [send]; the Quark's
+  /// refusals of a closed poll or a second answer come back as it words them.
+  Future<void> answerPoll(int messageId, ChatPollAnswer answer) async {
+    final held = _messages[messageId];
+    final poll = held?.message.poll;
+    final question = held?.question;
+    final me = _currentUserId();
+    if (poll == null || question == null || me == null) return;
+    final (crypto, version, key) = await _currentKey();
+    final ciphertext = crypto.encrypt(
+      ChatCrypto.padPollAnswer(question.encodeAnswer(answer)),
+      key,
+      additionalData: crypto.pollAnswerAad(
+        channelId: channelId,
+        keyVersion: version,
+        messageId: messageId,
+        userId: poll.anonymous ? null : me,
+      ),
+    );
+    _putAnswer(
+      messageId,
+      (await _answerPoll(messageId, version, ciphertext)).asMine(),
+    );
+  }
+
+  /// Closes poll [messageId], one this account posted.
+  Future<void> closePoll(int messageId) async {
+    final closed = await _closePoll(messageId);
+    _changePoll(messageId, (poll) => poll.copyWith(closed: closed.closed));
+  }
+
+  /// [entry]'s poll as `QuarkPollCard` draws it, tallied here from the
+  /// answers that opened: a count per option, the written answers, and
+  /// account [me]'s own. Its results are visible unless it shows them after
+  /// it closes, is still open at [now], and [me] isn't its author. Call it
+  /// only for an entry with a [ChatTimelineMessage.question].
+  static ChatPollItem pollItemFor(
+    ChatTimelineMessage entry, {
+    int? me,
+    DateTime? now,
+  }) {
+    final question = entry.question!;
+    final poll = entry.message.poll!;
+    final isClosed = poll.isClosedAt(now ?? DateTime.now());
+    final counts = List.filled(question.options.length, 0);
+    final texts = <String>[];
+    ChatPollAnswer? mine;
+    var responses = 0;
+    for (final ChatOpenPollAnswer(:response, :answer) in entry.pollAnswers) {
+      if (answer == null) continue;
+      responses++;
+      for (final choice in answer.choices) {
+        counts[choice]++;
+      }
+      if (question.type == ChatPollType.text) texts.add(answer.text);
+      if (response.mine || (me != null && response.userId == me)) {
+        mine = answer;
+      }
+    }
+    return ChatPollItem(
+      prompt: question.prompt,
+      type: question.type,
+      options: question.options,
+      counts: counts,
+      textAnswers: texts,
+      responseCount: responses,
+      myAnswer: mine,
+      isClosed: isClosed,
+      closesAt: poll.closesAt?.toLocal(),
+      allowChange: poll.allowChange,
+      anonymous: poll.anonymous,
+      resultsAfterClose: poll.resultsAfterClose,
+      resultsVisible:
+          !poll.resultsAfterClose ||
+          isClosed ||
+          (me != null && entry.message.authorId == me),
+    );
   }
 
   /// Deletes message [messageId]: this account's own, or anyone's in a
@@ -373,13 +510,122 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   void _put(ChatMessage message, {String? text}) {
     if (message.channelId != channelId) return;
     _messages[message.id] = text != null && !message.isDeleted
-        ? ChatTimelineMessage(
-            message: message,
-            state: ChatMessageState.ready,
-            text: text,
-            reactions: _openReactions(message),
-          )
+        ? _entry(message, ChatMessageState.ready, text)
         : _open(message);
+  }
+
+  /// [message] in the timeline as [state], with [text] when it opened, and
+  /// its reactions and, for a poll whose text carries a question, its
+  /// answers opened.
+  ChatTimelineMessage _entry(
+    ChatMessage message,
+    ChatMessageState state, [
+    String? text,
+  ]) {
+    final poll = message.poll;
+    final question = poll == null || text == null
+        ? null
+        : ChatPollQuestion.parse(text);
+    return ChatTimelineMessage(
+      message: message,
+      state: state,
+      text: text,
+      reactions: _openReactions(message),
+      question: question,
+      pollAnswers: poll == null || question == null
+          ? const []
+          : _openPollAnswers(message.id, poll, question),
+    );
+  }
+
+  /// Puts [answer] among poll [messageId]'s answers, over the one with its
+  /// id, which an answer keeps when it changes. An event never says the
+  /// answer is this account's, so one already marked so stays marked.
+  void _putAnswer(int messageId, ChatPollResponse answer) =>
+      _changePoll(messageId, (poll) {
+        final held = poll.answers.where((a) => a.id == answer.id).firstOrNull;
+        final next = held != null && held.mine ? answer.asMine() : answer;
+        return poll.copyWith(
+          answers: [
+            for (final a in poll.answers) a.id == answer.id ? next : a,
+            if (held == null) next,
+          ],
+        );
+      });
+
+  /// Replaces poll [messageId]'s state with [change] of it, reusing the
+  /// message's decrypted text.
+  void _changePoll(int messageId, ChatPoll Function(ChatPoll poll) change) {
+    final held = _messages[messageId];
+    final poll = held?.message.poll;
+    if (held == null || poll == null) return;
+    _messages[messageId] = _entry(
+      held.message.copyWith(poll: change(poll)),
+      held.state,
+      held.text,
+    );
+    notifyListeners();
+  }
+
+  /// Fetches poll [messageId]'s answers again, as a results-after-close poll
+  /// closing makes everyone's visible.
+  Future<void> _reloadAnswers(int messageId) async {
+    final answers = await _fetchPollAnswers(messageId);
+    if (isDisposed) return;
+    _changePoll(messageId, (poll) => poll.copyWith(answers: answers));
+  }
+
+  /// Decrypts [poll]'s answers to [question]; one without its key, that
+  /// won't open, or that doesn't fit the question has no answer.
+  List<ChatOpenPollAnswer> _openPollAnswers(
+    int messageId,
+    ChatPoll poll,
+    ChatPollQuestion question,
+  ) {
+    final crypto = _crypto();
+    return List.unmodifiable([
+      for (final response in poll.answers)
+        ChatOpenPollAnswer(
+          response: response,
+          answer: crypto == null
+              ? null
+              : _openPollAnswer(crypto, messageId, poll, question, response),
+        ),
+    ]);
+  }
+
+  ChatPollAnswer? _openPollAnswer(
+    ChatCrypto crypto,
+    int messageId,
+    ChatPoll poll,
+    ChatPollQuestion question,
+    ChatPollResponse response,
+  ) {
+    final key = _keys.keyFor(channelId, response.keyVersion);
+    final userId = response.userId;
+    if (key == null || (!poll.anonymous && userId == null)) return null;
+    try {
+      return question.decodeAnswer(
+        ChatCrypto.stripPadding(
+          crypto.decrypt(
+            response.ciphertext,
+            key,
+            additionalData: crypto.pollAnswerAad(
+              channelId: channelId,
+              keyVersion: response.keyVersion,
+              messageId: messageId,
+              userId: poll.anonymous ? null : userId,
+            ),
+          ),
+        ),
+      );
+    } on Object catch (e) {
+      debugPrint(
+        '[chat_messages_controller.dart] poll answer ${response.id} in '
+        'channel $channelId won\'t open: $e',
+      );
+      return null;
+    }
   }
 
   /// Adds [add] to, or drops the ids in [remove] from, message [messageId]'s
@@ -396,12 +642,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
         if (!remove.contains(r.id) && r.id != add?.id) r,
       ?add,
     ]);
-    _messages[messageId] = ChatTimelineMessage(
-      message: message,
-      state: held.state,
-      text: held.text,
-      reactions: _openReactions(message),
-    );
+    _messages[messageId] = _entry(message, held.state, held.text);
     notifyListeners();
   }
 
@@ -423,7 +664,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     final key = _keys.keyFor(channelId, reaction.keyVersion);
     if (key == null) return null;
     try {
-      return ChatCrypto.stripReaction(
+      return ChatCrypto.stripPadding(
         crypto.decrypt(
           reaction.ciphertext,
           key,
@@ -445,20 +686,15 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   }
 
   ChatTimelineMessage _open(ChatMessage message) {
-    ChatTimelineMessage as(ChatMessageState state, [String? text]) =>
-        ChatTimelineMessage(
-          message: message,
-          state: state,
-          text: text,
-          reactions: _openReactions(message),
-        );
     final ciphertext = message.ciphertext;
     if (message.isDeleted || ciphertext == null) {
-      return as(ChatMessageState.deleted);
+      return _entry(message, ChatMessageState.deleted);
     }
     final key = _keys.keyFor(channelId, message.keyVersion);
     final crypto = _crypto();
-    if (key == null || crypto == null) return as(ChatMessageState.waiting);
+    if (key == null || crypto == null) {
+      return _entry(message, ChatMessageState.waiting);
+    }
     try {
       final plain = crypto.decrypt(
         ciphertext,
@@ -468,13 +704,13 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
           keyVersion: message.keyVersion,
         ),
       );
-      return as(ChatMessageState.ready, utf8.decode(plain));
+      return _entry(message, ChatMessageState.ready, utf8.decode(plain));
     } on Object catch (e) {
       debugPrint(
         '[chat_messages_controller.dart] message ${message.id} in channel '
         '$channelId won\'t open: $e',
       );
-      return as(ChatMessageState.unreadable);
+      return _entry(message, ChatMessageState.unreadable);
     }
   }
 
@@ -494,6 +730,9 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
           } ||
           entry.reactions.any(
             (r) => (r.emoji == null) != keyless(r.reaction.keyVersion),
+          ) ||
+          entry.pollAnswers.any(
+            (a) => (a.answer == null) != keyless(a.response.keyVersion),
           );
       if (!stale) continue;
       _messages[entry.message.id] = _open(entry.message);
@@ -531,6 +770,20 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
               : null,
           remove: {reactionId},
         );
+      case 'chat_poll_answer_changed':
+        final messageId = (data['messageId'] as num?)?.toInt();
+        final answer = data['answer'];
+        if (messageId == null || answer is! Map<String, dynamic>) return;
+        _putAnswer(messageId, ChatPollResponse.fromJson(answer));
+      case 'chat_poll_closed':
+        final messageId = (data['messageId'] as num?)?.toInt();
+        final poll = _messages[messageId]?.message.poll;
+        if (messageId == null || poll == null) return;
+        _changePoll(messageId, (poll) => poll.copyWith(closed: true));
+        if (!poll.resultsAfterClose) return;
+        _reloadAnswers(messageId).catchError((Object e) {
+          debugPrint('[chat_messages_controller.dart] poll $messageId: $e');
+        });
       case 'chat_channel_changed':
         _reloadEvents().then((_) => notifyListeners()).catchError((Object e) {
           debugPrint('[chat_messages_controller.dart] channel $channelId: $e');
