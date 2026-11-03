@@ -97,7 +97,7 @@ type mediaStore struct {
 	fail error
 }
 
-func (m *mediaStore) store(name string, r io.Reader) (string, error) {
+func (m *mediaStore) store(_, name string, r io.Reader) (string, error) {
 	if m.fail != nil {
 		return "", m.fail
 	}

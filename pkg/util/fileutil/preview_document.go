@@ -111,13 +111,13 @@ type OpenDocumentPartResult struct {
 // and present in the document's directory, is served. Anything else is a
 // [NotFoundError].
 func OpenDocumentPart(params OpenDocumentPartParams) (OpenDocumentPartResult, error) {
-	format, ok := docreadutil.FormatForName(params.FilePath)
+	mediaDir, ok := documentMediaDir(params.FilePath)
 	if !ok {
 		return OpenDocumentPartResult{}, &UnsupportedError{
 			Err: fmt.Errorf("not a document Quark can show: %s", filepath.Base(params.FilePath)),
 		}
 	}
-	contentType, ok := documentPartContentType(format, params.Part)
+	contentType, ok := documentPartContentType(mediaDir, params.Part)
 	if !ok {
 		return OpenDocumentPartResult{}, notFoundf("no image %q in the document", params.Part)
 	}
@@ -154,24 +154,32 @@ func OpenDocumentPart(params OpenDocumentPartParams) (OpenDocumentPartResult, er
 	}, nil
 }
 
-// documentPartContentType reports whether part names an image the part
-// endpoint may serve from a document of format, and its media type: an
-// entry under the format's media folder, already in clean form, with an
-// extension the client decodes. Each format's media folder joins here as
-// its reader lands.
-func documentPartContentType(format docreadutil.Format, part string) (string, bool) {
-	var mediaDir string
+// documentMediaDir returns the folder, lowercased, that a document of
+// filePath's kind keeps its pictures in, "" for one with no media folder
+// (RTF), and whether it is a kind Quark previews at all. Each format's media
+// folder joins here as its reader lands.
+func documentMediaDir(filePath string) (string, bool) {
+	if IsPptxPath(filePath) {
+		return "ppt/media/", true
+	}
+	format, ok := docreadutil.FormatForName(filePath)
 	switch format {
 	case docreadutil.FormatDOCX, docreadutil.FormatDOCM:
-		mediaDir = "word/media/"
+		return "word/media/", true
 	case docreadutil.FormatODT:
 		// Matched lowercased; ODF writes Pictures/.
-		mediaDir = "pictures/"
-	default:
-		return "", false
+		return "pictures/", true
 	}
+	return "", ok
+}
+
+// documentPartContentType reports whether part names an image the part
+// endpoint may serve from a document whose media folder is mediaDir, and its
+// media type: an entry under that folder, already in clean form, with an
+// extension the client decodes.
+func documentPartContentType(mediaDir, part string) (string, bool) {
 	lower := strings.ToLower(part)
-	if part == "" || strings.ContainsAny(part, "\\\x00") || path.Clean(part) != part ||
+	if mediaDir == "" || part == "" || strings.ContainsAny(part, "\\\x00") || path.Clean(part) != part ||
 		strings.Contains(part, "..") || !strings.HasPrefix(lower, mediaDir) || len(lower) == len(mediaDir) {
 		return "", false
 	}
@@ -184,6 +192,9 @@ func documentPartContentType(format docreadutil.Format, part string) (string, bo
 		return "image/gif", true
 	case ".webp":
 		return "image/webp", true
+	case ".bmp":
+		// PowerPoint shows BMP, and pptxutil brings it in.
+		return "image/bmp", true
 	}
 	return "", false
 }

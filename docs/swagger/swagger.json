@@ -8567,12 +8567,13 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Streams one image a document preview's image block names. This is not a general zip browser: only a PNG, JPEG, GIF or WebP entry under the document's media folder (word/media/ for .docx and .docm, Pictures/ for .odt), named without any climbing, is served, and anything else is a 404. Needs read access on the document.",
+                "description": "Streams one image a document preview's image block names. This is not a general zip browser: only a PNG, JPEG, GIF, WebP or BMP entry under the document's media folder (word/media/ for .docx and .docm, ppt/media/ for .pptx, .pptm and .ppsx, Pictures/ for .odt), named without any climbing, is served, and anything else is a 404. Needs read access on the document.",
                 "produces": [
                     "image/png",
                     "image/jpeg",
                     "image/gif",
-                    "image/webp"
+                    "image/webp",
+                    "image/bmp"
                 ],
                 "tags": [
                     "previews"
@@ -8679,6 +8680,76 @@
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/previews/slides": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams a .pptx, .pptm or .ppsx presentation as .qslide JSON, a slide at a time, for the read-only presentation viewer: what \"Open as Quark slides\" would write, but stored nowhere. A picture is named by its entry in the package, as part:ppt/media/image3.png, which GET /previews/part serves. Macros are never opened. The import's warnings are counted in the X-Quark-Import-Warnings trailer, sent after the body because they are known only once the last slide is read; a stream without it was cut off by a server error. A file that is not what its name says is a 400. Needs read access on the presentation.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "previews"
+                ],
+                "summary": "Preview a presentation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Path to the presentation",
+                        "name": "filePath",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device serial number",
+                        "name": "serial",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ".qslide JSON",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "headers": {
+                            "X-Quark-Import-Warnings": {
+                                "type": "integer",
+                                "description": "How many things the import left out or approximated, sent as a trailer"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "503": {
+                        "description": "Server busy converting other documents",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

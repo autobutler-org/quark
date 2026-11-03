@@ -16,6 +16,7 @@ func (r *router) Routes() []*serverutil.Route {
 		previewDocumentRoute,
 		getPartRoute,
 		getPropertiesRoute,
+		previewSlidesRoute,
 	}
 }
 
@@ -26,6 +27,11 @@ const previewDeadline = 30 * time.Second
 // errNoAccess is what a caller hears about a document they may not read: the
 // same as one that does not exist.
 var errNoAccess = errors.New("file not found")
+
+// importWarningsTrailer counts what a slides preview left out or
+// approximated. It is a trailer because the count is known only after the
+// last slide has streamed.
+const importWarningsTrailer = "X-Quark-Import-Warnings"
 
 // streamWriter writes a streamed response, setting its Content-Type only
 // when the first byte goes out. A conversion that fails before then answers

@@ -9180,10 +9180,10 @@ paths:
   /previews/part:
     get:
       description: 'Streams one image a document preview''s image block names. This
-        is not a general zip browser: only a PNG, JPEG, GIF or WebP entry under the
-        document''s media folder (word/media/ for .docx and .docm, Pictures/ for .odt),
-        named without any climbing, is served, and anything else is a 404. Needs read
-        access on the document.'
+        is not a general zip browser: only a PNG, JPEG, GIF, WebP or BMP entry under
+        the document''s media folder (word/media/ for .docx and .docm, ppt/media/
+        for .pptx, .pptm and .ppsx, Pictures/ for .odt), named without any climbing,
+        is served, and anything else is a 404. Needs read access on the document.'
       parameters:
       - description: Path to the document
         in: query
@@ -9204,6 +9204,7 @@ paths:
       - image/jpeg
       - image/gif
       - image/webp
+      - image/bmp
       responses:
         "200":
           description: Image content
@@ -9270,6 +9271,59 @@ paths:
       security:
       - BearerAuth: []
       summary: Get a document's properties
+      tags:
+      - previews
+  /previews/slides:
+    get:
+      description: 'Streams a .pptx, .pptm or .ppsx presentation as .qslide JSON,
+        a slide at a time, for the read-only presentation viewer: what "Open as Quark
+        slides" would write, but stored nowhere. A picture is named by its entry in
+        the package, as part:ppt/media/image3.png, which GET /previews/part serves.
+        Macros are never opened. The import''s warnings are counted in the X-Quark-Import-Warnings
+        trailer, sent after the body because they are known only once the last slide
+        is read; a stream without it was cut off by a server error. A file that is
+        not what its name says is a 400. Needs read access on the presentation.'
+      parameters:
+      - description: Path to the presentation
+        in: query
+        name: filePath
+        required: true
+        type: string
+      - description: Device serial number
+        in: query
+        name: serial
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: .qslide JSON
+          headers:
+            X-Quark-Import-Warnings:
+              description: How many things the import left out or approximated, sent
+                as a trailer
+              type: integer
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Server busy converting other documents
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Preview a presentation
       tags:
       - previews
   /sbom:
