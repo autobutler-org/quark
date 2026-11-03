@@ -21,7 +21,7 @@ import (
 // @Produce application/octet-stream
 // @Param filePath query string false "File path to download"
 // @Param serial query string false "Device serial number to filter by"
-// @Param format query string false "Output format conversion (e.g. 'jpeg' to convert HEIC to JPEG)"
+// @Param format query string false "Output format conversion: 'jpeg' converts camera RAW and other decodable images to JPEG. HEIC and HEIF are served as they are; the device does not decode them"
 // @Param downloadToken query string false "Token from POST /files/download-token, for a browser link that cannot send an Authorization header. It is good for one download: the first request, then retries that resume it with a Range header or start it over without one, until the file is delivered or 10 minutes pass with no request. The response is then always an attachment."
 // @Success 200 {file} file
 // @Failure 404 {object} serverutil.Response "Not Found"

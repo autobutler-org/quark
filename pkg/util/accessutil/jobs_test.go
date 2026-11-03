@@ -14,7 +14,7 @@ import (
 )
 
 func job(userID int64, params string) jobutil.Job {
-	return jobutil.Job{ID: 7, UserID: userID, Params: json.RawMessage(params), Error: "ffmpeg: /srv/quark/files/a.mkv: boom"}
+	return jobutil.Job{ID: 7, UserID: userID, Params: json.RawMessage(params), Error: "remux: /srv/quark/files/a.mkv: boom"}
 }
 
 func TestCanSeeJob(t *testing.T) {

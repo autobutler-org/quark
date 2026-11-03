@@ -59,6 +59,7 @@ process.stdout.write(JSON.stringify([
   frame.photoUrl({ relPath: 'users/ann/a b&c.jpg', deviceSerial: '' }),
   frame.photoUrl({ relPath: 'Camera/IMG_1.HEIC', deviceSerial: 'ABC 1' }),
   frame.photoUrl({ relPath: 'x/ü.png', deviceSerial: 'S' }),
+  frame.photoUrl({ relPath: 'raw/a.dng', deviceSerial: '' }),
 ]));`)
 	var got []string
 	if err := json.Unmarshal(out, &got); err != nil {
@@ -68,8 +69,10 @@ process.stdout.write(JSON.stringify([
 	const slash = "%2F"
 	want := []string{
 		"/api/v0/files/download?filePath=users" + slash + "ann" + slash + "a%20b%26c.jpg",
-		"/api/v0/files/download?filePath=Camera" + slash + "IMG_1.HEIC&serial=ABC%201&format=jpeg",
+		// The Quark does not decode HEIC, so the frame shows its stored thumbnail (#2382).
+		"/api/v0/thumbnails/Camera/IMG_1.HEIC?size=lg&serial=ABC%201",
 		"/api/v0/files/download?filePath=x" + slash + "%C3%BC.png&serial=S",
+		"/api/v0/files/download?filePath=raw" + slash + "a.dng&format=jpeg",
 	}
 	for i := range want {
 		if got[i] != want[i] {

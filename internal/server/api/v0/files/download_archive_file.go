@@ -16,13 +16,13 @@ import (
 
 // downloadArchiveFile godoc
 // @Summary Download a single file from inside an archive
-// @Description Reads the specified entry from the archive and streams it to the client. No data is extracted to disk. With format=jpeg an image entry other than camera RAW is converted and served as image/jpeg; every other entry is served as it is. An archive that trips a safety limit (entry count, entry or total decompressed size, folder depth), names an entry outside itself, or needs a password is refused with 400 and a message saying which.
+// @Description Reads the specified entry from the archive and streams it to the client. No data is extracted to disk. With format=jpeg an image entry other than camera RAW, HEIC or HEIF is converted and served as image/jpeg; every other entry is served as it is. An archive that trips a safety limit (entry count, entry or total decompressed size, folder depth), names an entry outside itself, or needs a password is refused with 400 and a message saying which.
 // @Tags files
 // @Produce octet-stream,jpeg
 // @Param filePath query string true "Path to the archive file (relative to device files directory)"
 // @Param entryPath query string true "Path of the entry inside the archive"
 // @Param serial query string false "Device serial number"
-// @Param format query string false "Output format conversion ('jpeg' converts HEIC, TIFF, BMP and other decodable images to JPEG)"
+// @Param format query string false "Output format conversion ('jpeg' converts TIFF, BMP and other decodable images to JPEG)"
 // @Param downloadToken query string false "Token from POST /files/download-token, for a browser link that cannot send an Authorization header. It is good for one download: the first request, then retries that resume it with a Range header or start it over without one, until the file is delivered or 10 minutes pass with no request. The response is then always an attachment."
 // @Success 200 {file} binary "File content"
 // @Failure 400 {object} serverutil.Response "Bad Request"

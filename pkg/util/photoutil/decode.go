@@ -24,7 +24,7 @@ var ErrImageTooLarge = errors.New("image is too large to decode")
 //
 // A seekable r is rewound after the header is read. A stream is replayed from
 // the bytes the header read consumed, which for JPEG, PNG, GIF, WebP and BMP
-// is the header; TIFF and HEIC decoders read a stream whole either way.
+// is the header; the TIFF decoder reads a stream whole either way.
 func DecodeImage(r io.Reader) (image.Image, string, error) {
 	var head bytes.Buffer
 	rs, seekable := r.(io.ReadSeeker)

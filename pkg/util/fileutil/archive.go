@@ -299,9 +299,10 @@ func OpenArchiveEntry(params OpenArchiveEntryParams) (OpenArchiveEntryResult, er
 
 	// RAW previews come from an external tool that needs an OS path, and an
 	// entry is only a stream, so RAW entries are served as they are (#1851).
+	// The device has no HEIC decoder, so HEIC entries are too (#2382).
 	if params.WantsJPEG &&
 		storageutil.DetermineFileTypeFromPath(params.EntryPath) == storageutil.FileTypeImage &&
-		!photoutil.IsRawFile(params.EntryPath) {
+		!photoutil.IsRawFile(params.EntryPath) && !photoutil.IsHEICFile(params.EntryPath) {
 		entry.Kind = DownloadJPEG
 		entry.FileName = JPEGFileName(params.EntryPath)
 		entry.ContentType = "image/jpeg"

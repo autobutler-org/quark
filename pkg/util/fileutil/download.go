@@ -15,8 +15,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 
-	// Registers the HEIC decoder with image.Decode.
-	_ "github.com/gen2brain/heic"
 	// Register the BMP, TIFF and WebP decoders with image.Decode.
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/tiff"
@@ -35,7 +33,8 @@ const (
 	DownloadFolder DownloadKind = "folder"
 	// DownloadRawJPEG converts a camera RAW file to JPEG in memory.
 	DownloadRawJPEG DownloadKind = "raw-jpeg"
-	// DownloadJPEG decodes the source image and re-encodes it as JPEG.
+	// DownloadJPEG decodes the source image and re-encodes it as JPEG. HEIC is
+	// never converted: the device has no decoder for it (#2382).
 	DownloadJPEG DownloadKind = "jpeg"
 	// DownloadContents serves the file as it is on disk.
 	DownloadContents DownloadKind = "contents"
@@ -50,7 +49,8 @@ type OpenVFSDownloadParams struct {
 	FS vfs.VFS
 	// FilePath is the requested path inside the namespace.
 	FilePath string
-	// WantsJPEG asks for an image to come back as JPEG.
+	// WantsJPEG asks for an image to come back as JPEG. A HEIC comes back as
+	// it is either way.
 	WantsJPEG bool
 }
 
@@ -109,7 +109,7 @@ func OpenVFSDownload(params OpenVFSDownloadParams) (OpenVFSDownloadResult, error
 		}, nil
 	}
 
-	if params.WantsJPEG && strings.HasPrefix(mimeType, "image/") {
+	if params.WantsJPEG && strings.HasPrefix(mimeType, "image/") && !photoutil.IsHEICFile(params.FilePath) {
 		return OpenVFSDownloadResult{
 			Kind:        DownloadJPEG,
 			Info:        fi,
@@ -203,8 +203,8 @@ func WriteRawJPEG(w io.Writer, fullPath string) error {
 
 // DecodeImage decodes an image stream, refusing one over
 // photoutil.MaxDecodePixels with photoutil.ErrImageTooLarge before decoding
-// it. Importing this package registers the HEIC, BMP, TIFF and WebP decoders
-// alongside the standard library's.
+// it. Importing this package registers the BMP, TIFF and WebP decoders
+// alongside the standard library's; there is no HEIC decoder (#2382).
 func DecodeImage(r io.Reader) (image.Image, error) {
 	img, _, err := photoutil.DecodeImage(r)
 	if err != nil {

@@ -18,9 +18,11 @@
   var MENU_MS = 10 * 1000;
   var FADE_MS = 1500;
 
-  // Shown as they are. HEIC and RAW are asked for as a JPEG. Anything else (video, documents) is skipped.
+  // Shown as they are. RAW is asked for as a JPEG, and HEIC shows its stored thumbnail: the Quark does not decode
+  // HEIC (#2382). Anything else (video, documents) is skipped.
   var SHOWN = /\.(jpe?g|png|gif|webp|bmp|avif)$/i;
-  var CONVERTED = /\.(heic|heif|dng|cr2|cr3|nef|arw|orf|rw2|raf)$/i;
+  var CONVERTED = /\.(dng|cr2|cr3|nef|arw|orf|rw2|raf)$/i;
+  var HEIC = /\.hei[cf]$/i;
 
   var state = {
     album: null,
@@ -51,14 +53,16 @@
   // ---- Photos ----
 
   function playable(item) {
-    return !!item && typeof item.relPath === 'string' && (SHOWN.test(item.relPath) || CONVERTED.test(item.relPath));
+    return !!item && typeof item.relPath === 'string' && (SHOWN.test(item.relPath) || CONVERTED.test(item.relPath) || HEIC.test(item.relPath));
   }
 
   function photoUrl(item) {
-    var url = API + '/files/download?filePath=' + encodeURIComponent(item.relPath);
-    if (item.deviceSerial) {
-      url += '&serial=' + encodeURIComponent(item.deviceSerial);
+    var serial = item.deviceSerial ? '&serial=' + encodeURIComponent(item.deviceSerial) : '';
+    if (HEIC.test(item.relPath)) {
+      var path = item.relPath.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
+      return API + '/thumbnails/' + path + '?size=lg' + serial;
     }
+    var url = API + '/files/download?filePath=' + encodeURIComponent(item.relPath) + serial;
     return CONVERTED.test(item.relPath) ? url + '&format=jpeg' : url;
   }
 

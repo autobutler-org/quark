@@ -35,8 +35,8 @@ change). Past that, the client's refresh-on-every-event turned each shared uploa
 | Filename index (`indexutil.FileIndex`) | one folder tree per device, each folder's file names sorted end to end in one string; linear scan per search under `RLock`, stopping at 500 readable matches | ~30 B per file, about the name's length plus 4 (#2760) |
 
 Streaming is in good shape: uploads, downloads and archive entries go through `io.Copy`/`http.ServeContent`, and
-no handler on a file path buffers a whole body (the one unbounded read is inside `gen2brain/heic`, which #2378
-removes). The events socket returns when its client goes away (`conn.CloseRead`), so a closed app does not leave
+no handler on a file path buffers a whole body (the one unbounded read was inside `gen2brain/heic`, which #2382
+removed). The events socket returns when its client goes away (`conn.CloseRead`), so a closed app does not leave
 its goroutines behind.
 
 ## Measured
@@ -144,7 +144,7 @@ the filename index costs ~30 B per file on the appliance, 30 MB per million (#27
 PNG), and the decode class admits two at once on a 4-core board. `quark serve` sets a Go soft memory limit of 60% of RAM unless `GOMEMLIMIT` is
 set, so the heap collects near its live set, and `quark install` writes a systemd drop-in
 (`/etc/systemd/system/quark.service.d/50-memory.conf`) with `MemoryHigh` at 80% and `MemoryMax` at 90% of RAM, which
-cover ffmpeg children too: the kernel throttles and then kills inside the service before the board swaps (#2761).
+cover its dcraw and exiftool children too: the kernel throttles and then kills inside the service before the board swaps (#2761).
 
 ## Known limits
 
@@ -171,7 +171,6 @@ cover ffmpeg children too: the kernel throttles and then kills inside the servic
   ~0.8 s and allocate ~120 MB of short-lived garbage, against ~0.1 s and 24 MB reading names straight off the
   disk. The live index is the same size either way. A library of millions of files still costs tens of MB and a scan per search; an on-disk index
   is the step past that.
-- **Uncached HEIC view conversion** goes away with #2378.
 - **bcrypt on every Basic-auth request** (#2765).
 
 ## Fixed in this audit
@@ -203,7 +202,8 @@ other race; the existing tests rarely run these paths concurrently, which is why
 3. **Never drop events for internal subscribers** (#2753). A correctness bug at any N.
 4. **Replace whole-tree walks with an indexed, paged query, and give filename search one** (#2759; #2760 cut the
    index to ~30 B a file). These set the limit past ~1,000 accounts, by file count rather than by request rate.
-5. **Drop server-side HEIC conversion** (#2378). Folder zips are bounded since #2757: compressed formats are stored and at most half the cores' worth run at once.
+5. **Drop server-side HEIC conversion** (#2378). Done in #2382: a HEIC is served as stored, and viewers show its
+   client-rendered thumbnail. Folder zips are bounded since #2757: compressed formats are stored and at most half the cores' worth run at once.
 6. **Stop running bcrypt per Basic-auth request** (#2765).
 7. **Measure on a board.** The last open item of #2507: run the harness against an A55 board before and after (1)
    (`go test -tags stress ./internal/server/stress/` with `QUARK_BASE_URL`, `QUARK_USER` and `QUARK_PASSWORD`

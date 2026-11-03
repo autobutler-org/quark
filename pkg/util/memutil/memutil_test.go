@@ -18,7 +18,7 @@ func ram(total uint64) func() (uint64, error) {
 
 // TestLimitsFor pins the fractions: the Go heap collects well before the
 // cgroup is throttled, and the cgroup is throttled before it is killed, with
-// room left over for ffmpeg children and the page cache.
+// room left over for child processes and the page cache.
 func TestLimitsFor(t *testing.T) {
 	got := LimitsFor(4 * gib)
 	want := Limits{GoLimit: 4 * gib * 60 / 100, MemoryHigh: 4 * gib * 80 / 100, MemoryMax: 4 * gib * 90 / 100}

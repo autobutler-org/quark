@@ -30,7 +30,7 @@ const (
 	// thumbnail. It is CPU-bound and holds one decoded frame, so it gets half
 	// the cores, at least one.
 	Video
-	// Raw is a camera RAW converted through dcraw, exiftool or ffmpeg. Each
+	// Raw is a camera RAW converted through dcraw or exiftool. Each
 	// runs a child process and decodes a full-size preview, so it gets a
 	// quarter of the cores, at least one.
 	Raw

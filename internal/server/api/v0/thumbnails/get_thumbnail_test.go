@@ -320,7 +320,7 @@ func TestGetThumbnail_DeviceFile(t *testing.T) {
 }
 
 // TestGetThumbnail_VideoKeyframe: the device renders an AV1 or VP8 video's
-// thumbnail itself, with no ffmpeg to run, and still asks a client to render
+// thumbnail itself, with no external decoder, and still asks a client to render
 // a codec it has no decoder for (#2865).
 func TestGetThumbnail_VideoKeyframe(t *testing.T) {
 	// Nothing on PATH, so no external process can have rendered it.

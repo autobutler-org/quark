@@ -15,7 +15,7 @@ The image carries no `ffmpeg` (#2382). A video's thumbnail is a keyframe decoded
 AV1 and VP8, and one a client renders for every other codec; probing, trimming, and converting
 video copy streams in pure Go. A RAW photo's preview comes from `dcraw`, then `exiftool`, and
 nothing else. With `ffmpeg` and Debian's full codec set the image was around 600 MB, most of it
-that package; the size without it has not been measured yet.
+that package; without it, 0.56.5 for `linux/arm64` measures 315 MB.
 
 To build it yourself for the host architecture, `make build/docker`. It packages the most recent
 git tag; pass `BUILD_NAME=X.Y.Z` for a different released version. The image cannot be built for a

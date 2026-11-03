@@ -229,7 +229,7 @@ namespace (listing, walking, moving, the trash) is private to `pkg/vfs`.
 
 The compiler keeps the storage service's file operations out of reach; `scripts/check-go-structure.bash` covers
 what it cannot see, a path built by hand. Handlers may not import `os`, and the files directory, a namespace's
-host path (`vfs.HostPather`, for external tools such as dcraw and ffmpeg) and `os` file calls under `pkg/util/`
+host path (`vfs.HostPather`, for external tools such as dcraw and exiftool) and `os` file calls under `pkg/util/`
 are each confined to a commented allowlist in that script. The packages on the `os` list own data outside the
 user's files: the thumbnail cache, upload and transcode staging, settings, system configuration.
 
@@ -293,7 +293,7 @@ Every implementation keeps one contract, which `pkg/vfs/conformance_test.go` hol
   cannot both win. `Copy` within a namespace and `vfs.CopyBetween` across two stream through that same write
   path, so a copy is never visible half-written.
 - `Delete` of a non-empty directory without `Recursive` is `ErrNotEmpty`.
-- `HostPather` gives a host-backed namespace's path to an external process (dcraw, exiftool, ffmpeg) or to
+- `HostPather` gives a host-backed namespace's path to an external process (dcraw, exiftool) or to
   symlink resolution. It is never a way around `Open`.
 - `Trasher` is the trash of a device namespace. A user delete moves an item there; `Delete` stays the permanent
   removal. A trashed item keeps an address, `.trash/<trash name>/...`, which `Stat`, `Open` and `HostPath`
