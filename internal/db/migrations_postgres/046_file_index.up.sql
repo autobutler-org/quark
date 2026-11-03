@@ -1,4 +1,4 @@
--- The filename index (#2956), the PostgreSQL half of 044_file_index; that
+-- The filename index (#2956), the PostgreSQL half of 046_file_index; that
 -- file says what the columns hold.
 --
 -- dir and name sort and compare byte by byte, as SQLite's do: a folder's

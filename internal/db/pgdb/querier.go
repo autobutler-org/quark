@@ -377,7 +377,7 @@ type Querier interface {
 	// caller and query is already lowered; the empty query matches every file.
 	// instr rather than LIKE, so % and _ in a query are only characters: sqlc's
 	// SQLite parser takes no ESCAPE, and PostgreSQL's instr is defined in
-	// 044_file_index.
+	// 046_file_index.
 	ListIndexedFilesPage(ctx context.Context, arg ListIndexedFilesPageParams) ([]ListIndexedFilesPageRow, error)
 	ListIndexedSerials(ctx context.Context) ([]string, error)
 	// ListJobs lists every job of the given kinds, newest first. It and
@@ -633,7 +633,7 @@ type Querier interface {
 	UpsertDeviceName(ctx context.Context, arg UpsertDeviceNameParams) error
 	UpsertDeviceRole(ctx context.Context, arg UpsertDeviceRoleParams) error
 	UpsertFileContent(ctx context.Context, arg UpsertFileContentParams) error
-	// The filename index (044_file_index), written and read by pkg/util/indexutil.
+	// The filename index (046_file_index), written and read by pkg/util/indexutil.
 	//
 	// A path is (dir, name). The subtree under a folder at path is every row whose
 	// dir is path or starts with path/, which the queries take as dir = path or

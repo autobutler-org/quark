@@ -339,7 +339,7 @@ func exerciseQuerier(t *testing.T, conn *sql.DB) {
 	exerciseFileIndex(ctx, t, conn, q)
 }
 
-// exerciseFileIndex runs the filename index's shared queries (044_file_index):
+// exerciseFileIndex runs the filename index's shared queries (046_file_index):
 // the byte order of (dir, name) and subtree ranges, a folder move, a folder
 // total, and a substring search whose query carries LIKE's wildcards.
 func exerciseFileIndex(ctx context.Context, t *testing.T, conn *sql.DB, q db.Querier) {

@@ -174,7 +174,7 @@ join. `path_access.level` is `read`, `write` or `owner`, and each row names exac
 | `038_drop_household_vault` | drops `005_vault`'s tables                                          |
 | `041_content_search`   | PostgreSQL only: `file_content.search_vector` (a generated `tsvector`) and its GIN index; nothing on SQLite |
 | `042_feeds`            | `feeds`, `feed_entries`                                                     |
-| `044_file_index`       | `file_index`, `file_index_fts` (FTS5 trigram, SQLite only); PostgreSQL's `instr` |
+| `046_file_index`       | `file_index`, `file_index_fts` (FTS5 trigram, SQLite only); PostgreSQL's `instr` |
 
 `music_tracks` (#2982) is a cache built from audio files, not a record: every column is derived, and a rescan
 rebuilds it. `music_tracks_fts` is its FTS5 mirror and exists only on SQLite, like `file_content_fts`, whose

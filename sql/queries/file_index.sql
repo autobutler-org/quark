@@ -1,4 +1,4 @@
--- The filename index (044_file_index), written and read by pkg/util/indexutil.
+-- The filename index (046_file_index), written and read by pkg/util/indexutil.
 --
 -- A path is (dir, name). The subtree under a folder at path is every row whose
 -- dir is path or starts with path/, which the queries take as dir = path or
@@ -88,7 +88,7 @@ WHERE serial = sqlc.arg(serial)
 -- caller and query is already lowered; the empty query matches every file.
 -- instr rather than LIKE, so % and _ in a query are only characters: sqlc's
 -- SQLite parser takes no ESCAPE, and PostgreSQL's instr is defined in
--- 044_file_index.
+-- 046_file_index.
 -- name: ListIndexedFilesPage :many
 SELECT dir, name, size, mod_time FROM file_index
 WHERE serial = sqlc.arg(serial)

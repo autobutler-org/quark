@@ -158,7 +158,7 @@ type ListIndexedFilesPageRow struct {
 // caller and query is already lowered; the empty query matches every file.
 // instr rather than LIKE, so % and _ in a query are only characters: sqlc's
 // SQLite parser takes no ESCAPE, and PostgreSQL's instr is defined in
-// 044_file_index.
+// 046_file_index.
 func (q *Queries) ListIndexedFilesPage(ctx context.Context, arg ListIndexedFilesPageParams) ([]ListIndexedFilesPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listIndexedFilesPage,
 		arg.Serial,
@@ -398,7 +398,7 @@ type UpsertIndexedEntryParams struct {
 	IndexedAt  int64
 }
 
-// The filename index (044_file_index), written and read by pkg/util/indexutil.
+// The filename index (046_file_index), written and read by pkg/util/indexutil.
 //
 // A path is (dir, name). The subtree under a folder at path is every row whose
 // dir is path or starts with path/, which the queries take as dir = path or

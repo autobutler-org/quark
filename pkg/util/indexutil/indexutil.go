@@ -1,6 +1,6 @@
 // Package indexutil keeps the file index behind filename search: one row per
 // file and folder on every managed device, with each file's name, size and
-// mtime, in the database's file_index table (044_file_index). It is brought in
+// mtime, in the database's file_index table (046_file_index). It is brought in
 // line with each device's files namespace in the VFS registry at startup and
 // kept current from file events. It also answers a folder's total size
 // without a walk. The trash and the other internal names are never indexed.

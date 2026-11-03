@@ -9,7 +9,7 @@ import (
 )
 
 // SearchIndexedFiles returns the next page of files in the filename index
-// (044_file_index) on one device whose lowered name holds params.Query, which
+// (046_file_index) on one device whose lowered name holds params.Query, which
 // the caller lowers with strings.ToLower. The page is in (dir, name) order
 // after (AfterDir, AfterName), so a caller pages by passing the last row back.
 //
