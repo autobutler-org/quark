@@ -338,16 +338,17 @@ type Setting struct {
 }
 
 type User struct {
-	ID                 int64
-	Username           string
-	PasswordHash       string
-	RecoveryPhraseHash string
-	CreatedAt          time.Time
-	IsAdmin            int64
-	Status             string
-	AuthSalt           string
-	AuthKeyHash        string
-	RecoveryKeyHash    string
+	ID                  int64
+	Username            string
+	PasswordHash        string
+	RecoveryPhraseHash  string
+	CreatedAt           time.Time
+	IsAdmin             int64
+	Status              string
+	AuthSalt            string
+	AuthKeyHash         string
+	RecoveryKeyHash     string
+	RecoveryPhraseWords int64
 }
 
 type UserChatKey struct {

@@ -244,6 +244,11 @@ class AppSettings {
   /// `UsersService.avatarUrl` so a changed picture is a new URL.
   final ValueNotifier<int?> avatarUpdatedAt = ValueNotifier(null);
 
+  /// Whether the signed-in account's recovery phrase is shorter than a new
+  /// one, so Settings → Account offers to make a new one (#3183). Kept
+  /// current like [userId]; false without a session.
+  final ValueNotifier<bool> shortRecoveryPhrase = ValueNotifier(false);
+
   /// The current [activeHost]'s beta feature flags (#2542). The Features tab
   /// lists them. Kept current by `FeatureFlagsService.refresh` whenever
   /// [isAdmin] is, and when an admin flips one.

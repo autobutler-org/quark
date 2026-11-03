@@ -17,11 +17,15 @@ void main() {
   final changePasswordRow = find.byKey(
     const ValueKey('settings_account_change_password'),
   );
+  final newPhraseButton = find.byKey(
+    const ValueKey('new_recovery_phrase_button'),
+  );
 
   Future<List<String>> pumpTab(
     WidgetTester tester, {
     required bool isAdmin,
     bool signedIn = true,
+    bool shortRecoveryPhrase = false,
     Size size = wideViewport,
   }) async {
     setViewport(tester, size);
@@ -34,6 +38,8 @@ void main() {
             isAdmin: isAdmin,
             onSignOut: () => calls.add('sign out'),
             onChangePassword: () => calls.add('change password'),
+            shortRecoveryPhrase: shortRecoveryPhrase,
+            onNewRecoveryPhrase: () => calls.add('new recovery phrase'),
             onOpenAccountAndData: () => calls.add('account and data'),
             onOpenUsers: () => calls.add('users'),
           ),
@@ -83,7 +89,34 @@ void main() {
         expect(calls, ['change password']);
       });
     }
+
+    // #3183: an account still on a short phrase is asked to make a new one.
+    testWidgets('a short recovery phrase gets a prompt at $size', (
+      tester,
+    ) async {
+      final calls = await pumpTab(
+        tester,
+        isAdmin: false,
+        shortRecoveryPhrase: true,
+        size: size,
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.text('Your recovery phrase is short; make a new one.'),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(newPhraseButton);
+      await tester.tap(newPhraseButton);
+      expect(calls, ['new recovery phrase']);
+    });
   }
+
+  testWidgets('a full-length recovery phrase gets no prompt', (tester) async {
+    await pumpTab(tester, isAdmin: false);
+
+    expect(newPhraseButton, findsNothing);
+  });
 
   testWidgets('nobody signed in has no password to change', (tester) async {
     await pumpTab(tester, isAdmin: false, signedIn: false);

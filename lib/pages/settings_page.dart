@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/change_password_controller.dart';
 import 'package:quark/controllers/feature_flags_controller.dart';
+import 'package:quark/controllers/new_recovery_phrase_controller.dart';
 import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/controllers/remote_access_controller.dart';
 import 'package:quark/router.dart';
@@ -27,6 +28,7 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/notifications/notification_preferences_card.dart';
 import 'package:quark/widgets/settings/change_password/change_password_dialog.dart';
 import 'package:quark/widgets/settings/connected_devices_card.dart';
+import 'package:quark/widgets/settings/new_recovery_phrase/new_recovery_phrase_dialog.dart';
 import 'package:quark/widgets/settings/remote_access_card.dart';
 import 'package:quark/widgets/settings/remote_access_setup_sheet.dart';
 import 'package:quark/widgets/settings/settings_about_tab.dart';
@@ -676,33 +678,38 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           QuarkTab(
             label: 'Account',
-            child: SettingsAccountTab(
-              header: banner,
-              profile: ListenableBuilder(
-                listenable: Listenable.merge([
-                  AppSettings.instance.userId,
-                  AppSettings.instance.avatarUpdatedAt,
-                ]),
-                builder: (context, _) => SettingsProfileCard(
-                  userId: AppSettings.instance.userId.value,
-                  username: AppSettings.instance.username ?? '',
-                  avatarVersion: AppSettings.instance.avatarUpdatedAt.value,
-                  isBusy: _avatarBusy,
-                  error: _avatarError,
-                  onPick: _pickAvatar,
-                  onRemove: _removeAvatar,
+            child: ValueListenableBuilder<bool>(
+              valueListenable: settings.shortRecoveryPhrase,
+              builder: (context, shortRecoveryPhrase, _) => SettingsAccountTab(
+                header: banner,
+                shortRecoveryPhrase: shortRecoveryPhrase,
+                onNewRecoveryPhrase: _newRecoveryPhrase,
+                profile: ListenableBuilder(
+                  listenable: Listenable.merge([
+                    AppSettings.instance.userId,
+                    AppSettings.instance.avatarUpdatedAt,
+                  ]),
+                  builder: (context, _) => SettingsProfileCard(
+                    userId: AppSettings.instance.userId.value,
+                    username: AppSettings.instance.username ?? '',
+                    avatarVersion: AppSettings.instance.avatarUpdatedAt.value,
+                    isBusy: _avatarBusy,
+                    error: _avatarError,
+                    onPick: _pickAvatar,
+                    onRemove: _removeAvatar,
+                  ),
                 ),
+                signedIn: AppSettings.instance.sessionToken != null,
+                isAdmin: isAdmin,
+                onSignOut: _signOut,
+                onChangePassword: _changePassword,
+                sessions: SessionsSection(
+                  onSignedOut: () => context.go(AppRoutes.files),
+                ),
+                onOpenAccountAndData: () =>
+                    context.push(AppRoutes.accountAndData),
+                onOpenUsers: () => context.go(AppRoutes.users),
               ),
-              signedIn: AppSettings.instance.sessionToken != null,
-              isAdmin: isAdmin,
-              onSignOut: _signOut,
-              onChangePassword: _changePassword,
-              sessions: SessionsSection(
-                onSignedOut: () => context.go(AppRoutes.files),
-              ),
-              onOpenAccountAndData: () =>
-                  context.push(AppRoutes.accountAndData),
-              onOpenUsers: () => context.go(AppRoutes.users),
             ),
           ),
           QuarkTab(
@@ -922,6 +929,29 @@ class _SettingsPageState extends State<SettingsPage> {
     if (changed == true) {
       messenger.showSnackBar(const SnackBar(content: Text('Password changed')));
     }
+  }
+
+  /// Shows the new-recovery-phrase dialog (#3183): the password, then the
+  /// new phrase once, which stays up until its saving is acknowledged.
+  Future<void> _newRecoveryPhrase() async {
+    final controller = NewRecoveryPhraseController();
+    await showDialog<void>(
+      context: context,
+      // A stray tap outside must not drop a phrase that is never shown again.
+      barrierDismissible: false,
+      builder: (ctx) => ListenableBuilder(
+        listenable: controller,
+        builder: (ctx, _) => NewRecoveryPhraseDialog(
+          isWorking: controller.isWorking,
+          error: controller.error,
+          phrase: controller.phrase,
+          onSubmit: controller.rotate,
+          onCancel: () => Navigator.of(ctx).pop(),
+          onDone: () => Navigator.of(ctx).pop(),
+        ),
+      ),
+    );
+    controller.dispose();
   }
 
   Future<void> _signOut() async {

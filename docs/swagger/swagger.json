@@ -2218,7 +2218,7 @@
         },
         "/auth/recover": {
             "post": {
-                "description": "Resets the named account's password using its recoveryKey, the standard base64 of the 32-byte key the client derived from the phrase and the salt GET /auth/salt returned. A wrong key, an unknown username and an account with no recovery key all read as a wrong phrase. newAuthKey, the standard base64 of the 32-byte key the client derived from the new password and the same salt, replaces the account's auth key and clears its password hash. An account GET /auth/salt calls legacyRecovery recovers once with its raw recoveryPhrase in place of recoveryKey, beside newAuthKey and newRecoveryKey, the key of a phrase the client just generated: the reset stores both keys and clears the phrase and password hashes. An account with a recovery key refuses every phrase as a wrong one. A recoveryPhrase without both new keys, or a newPassword, is what only an app from before auth keys sends, and is refused with 426 (#2430). chatKeys, when sent, replaces the account's chat identity in the same transaction: the client fetched it from /auth/recover/keys, opened it with the phrase and re-wrapped it under the new password (#2416). vaultKey, when sent, likewise replaces the wraps of the account's vault key in the same transaction, fetched from /auth/recover/vault-key and re-wrapped the same way (storing it as the first when the account has none), and publishes vault_changed to the account's sessions (#3459). The body is at most 8 KiB.",
+                "description": "Resets the named account's password using its recoveryKey, the standard base64 of the 32-byte key the client derived from the phrase and the salt GET /auth/salt returned. A wrong key, an unknown username and an account with no recovery key all read as a wrong phrase. newAuthKey, the standard base64 of the 32-byte key the client derived from the new password and the same salt, replaces the account's auth key and clears its password hash. An account GET /auth/salt calls legacyRecovery recovers once with its raw recoveryPhrase in place of recoveryKey, beside newAuthKey and newRecoveryKey, the key of a phrase the client just generated, and optionally recoveryPhraseWords, how many words that phrase had (0 to 64, missing is 0, unknown): the reset stores both keys, the count and clears the phrase and password hashes. An account with a recovery key refuses every phrase as a wrong one. A recoveryPhrase without both new keys, or a newPassword, is what only an app from before auth keys sends, and is refused with 426 (#2430). chatKeys, when sent, replaces the account's chat identity in the same transaction: the client fetched it from /auth/recover/keys, opened it with the phrase and re-wrapped it under the new password (#2416). vaultKey, when sent, likewise replaces the wraps of the account's vault key in the same transaction, fetched from /auth/recover/vault-key and re-wrapped the same way (storing it as the first when the account has none), and publishes vault_changed to the account's sessions (#3459). The body is at most 8 KiB.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2403,7 +2403,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Re-confirms the caller with password, which carries the auth key, exactly as DELETE /auth/account takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is written. Then gives the signed-in account the recovery key its client derived from a recovery phrase the client generated, (#2430). recoveryKey is the standard base64 of the 32-byte key derived from the phrase and the salt GET /auth/salt returned. chatKeys, when sent, replaces the account's chat identity in the same transaction, re-wrapped under the new phrase, exactly as /auth/recover stores it, and vaultKey likewise replaces the wraps of the account's vault key (storing it as the first when the account has none) and publishes vault_changed to the account's sessions; nothing changes if any part fails. The client calls this after a sign-in whose response says legacyRecovery, such as the first sign-in of an account an admin created. Shares the sign-in rate limit, and the body is at most 8 KiB.",
+                "description": "Re-confirms the caller with password, which carries the auth key, exactly as DELETE /auth/account takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is written. Then gives the signed-in account the recovery key its client derived from a recovery phrase the client generated, (#2430). recoveryKey is the standard base64 of the 32-byte key derived from the phrase and the salt GET /auth/salt returned. recoveryPhraseWords, optional, is how many words that phrase had, between 0 and 64, stored with the key; missing is 0, unknown, which GET /auth/status reports as shortRecoveryPhrase (#3183). chatKeys, when sent, replaces the account's chat identity in the same transaction, re-wrapped under the new phrase, exactly as /auth/recover stores it, and vaultKey likewise replaces the wraps of the account's vault key (storing it as the first when the account has none) and publishes vault_changed to the account's sessions; nothing changes if any part fails. The client calls this after a sign-in whose response says legacyRecovery, such as the first sign-in of an account an admin created, and when GET /auth/status says shortRecoveryPhrase. Shares the sign-in rate limit, and the body is at most 8 KiB.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2430,7 +2430,7 @@
                         "description": "No Content"
                     },
                     "400": {
-                        "description": "a malformed recoveryKey, chatKeys or vaultKey",
+                        "description": "a malformed recoveryKey, recoveryPhraseWords, chatKeys or vaultKey",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2476,7 +2476,7 @@
         },
         "/auth/request-account": {
             "post": {
-                "description": "Creates a pending account that can sign in once an admin approves it. Needs no session and is rate-limited per IP. A pending request keeps its username taken until it is denied. The body carries authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned, and recoveryKey, the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt; the Quark makes no phrase, and the response is an empty object. Without recoveryKey the account cannot recover until a sign-in gives it one. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430).",
+                "description": "Creates a pending account that can sign in once an admin approves it. Needs no session and is rate-limited per IP. A pending request keeps its username taken until it is denied. The body carries authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned, and recoveryKey, the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt; the Quark makes no phrase, and the response is an empty object. recoveryPhraseWords, optional, is how many words that phrase had, between 0 and 64; missing is 0, unknown, which GET /auth/status reports as shortRecoveryPhrase (#3183). Without recoveryKey the account cannot recover until a sign-in gives it one. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2506,7 +2506,7 @@
                         }
                     },
                     "400": {
-                        "description": "invalid username, authKey or recoveryKey",
+                        "description": "invalid username, authKey, recoveryKey or recoveryPhraseWords",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2735,7 +2735,7 @@
         },
         "/auth/setup": {
             "post": {
-                "description": "Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once. The body carries authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned, and recoveryKey, the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt; the Quark makes no phrase. Without recoveryKey the account cannot recover until a sign-in gives it one. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430). The response carries token.",
+                "description": "Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once. The body carries authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned, and recoveryKey, the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt; the Quark makes no phrase. recoveryPhraseWords, optional, is how many words that phrase had, between 0 and 64; missing is 0, unknown, which GET /auth/status reports as shortRecoveryPhrase (#3183). Without recoveryKey the account cannot recover until a sign-in gives it one. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430). The response carries token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2781,7 +2781,7 @@
         },
         "/auth/status": {
             "get": {
-                "description": "Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.",
+                "description": "Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username, userId, isAdmin flag and shortRecoveryPhrase, true when the account has a recovery key whose phrase had fewer than 16 words or an unknown count (one stored before #3183), so the app prompts for a new phrase through PUT /auth/recovery-key, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.",
                 "produces": [
                     "application/json"
                 ],
@@ -13816,6 +13816,10 @@
                     "description": "RecoveryKey is the standard base64 of the 32-byte key the client derived\nfrom its recovery phrase and the same salt (#2430). Without it the\naccount has no recovery credential until a sign-in gives it one.",
                     "type": "string"
                 },
+                "recoveryPhraseWords": {
+                    "description": "RecoveryPhraseWords is how many words the phrase behind RecoveryKey had\n(#3183). Missing reads as 0, unknown, which GET /auth/status calls\nshort. Between 0 and 64.",
+                    "type": "integer"
+                },
                 "username": {
                     "type": "string"
                 }
@@ -13854,6 +13858,10 @@
                 "recoveryPhrase": {
                     "description": "RecoveryPhrase is a legacy account's raw phrase, taken once in place of\nRecoveryKey beside NewAuthKey and NewRecoveryKey (#2430). Without both it\nis an old app's recovery, refused with 426.",
                     "type": "string"
+                },
+                "recoveryPhraseWords": {
+                    "description": "RecoveryPhraseWords is how many words the phrase behind NewRecoveryKey had\n(#3183). Missing reads as 0, unknown, which GET /auth/status calls\nshort. Between 0 and 64.",
+                    "type": "integer"
                 },
                 "username": {
                     "type": "string"
@@ -13924,6 +13932,10 @@
                 "recoveryKey": {
                     "description": "RecoveryKey is the standard base64 of the 32-byte key the client derived\nfrom the phrase it generated and the account's auth salt.",
                     "type": "string"
+                },
+                "recoveryPhraseWords": {
+                    "description": "RecoveryPhraseWords is how many words the phrase behind RecoveryKey had\n(#3183). Missing reads as 0, unknown, which GET /auth/status calls\nshort. Between 0 and 64.",
+                    "type": "integer"
                 },
                 "vaultKey": {
                     "description": "VaultKey is the account's vault key re-wrapped under the new phrase,\nstored in the same transaction. Absent leaves it as it is.",

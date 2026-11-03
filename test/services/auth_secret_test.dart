@@ -368,7 +368,8 @@ void main() {
           reason: request.url.path,
         );
       }
-      expect(request.body, isNot(contains('recoveryPhrase')));
+      // Its length goes out as recoveryPhraseWords (#3183); the phrase never.
+      expect(request.body, isNot(contains('"recoveryPhrase"')));
     }
 
     // Every value the Quark was sent, tried every way a wrap could open: as a
@@ -450,6 +451,8 @@ void main() {
       expect(jsonDecode(put.body), {
         'password': authKey,
         'recoveryKey': await testRecoveryKey(phrase),
+        // #3183: the Quark records how long the phrase is.
+        'recoveryPhraseWords': 16,
       });
       expect(put.body, isNot(contains(phrase)));
       expect(put.body, isNot(contains(_password)));
@@ -722,9 +725,11 @@ void main() {
         'recoveryPhrase',
         'newAuthKey',
         'newRecoveryKey',
+        'recoveryPhraseWords',
         'chatKeys',
       });
       expect(quark.lastBody['recoveryPhrase'], 'old-quark-phrase');
+      expect(quark.lastBody['recoveryPhraseWords'], 16);
       expect(quark.lastBody['newAuthKey'], authKey);
       expect(quark.lastBody['newRecoveryKey'], await testRecoveryKey(phrase));
       expect(quark.lastBody.toString(), isNot(contains(phrase)));
@@ -767,6 +772,7 @@ void main() {
         'username': 'grace',
         'authKey': authKey,
         'recoveryKey': await testRecoveryKey(result.recoveryPhrase),
+        'recoveryPhraseWords': 16,
       });
       expect(result.recoveryPhrase.split('-'), hasLength(16));
       expect(quark.sent.single.body, isNot(contains(result.recoveryPhrase)));
@@ -788,6 +794,7 @@ void main() {
         'username': 'grace',
         'authKey': authKey,
         'recoveryKey': await testRecoveryKey(phrase),
+        'recoveryPhraseWords': 16,
       });
       expect(phrase.split('-'), hasLength(16));
       expect(quark.sent.single.body, isNot(contains(phrase)));

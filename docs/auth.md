@@ -213,6 +213,12 @@ for an account that has no recovery key. An account that has one refuses every r
   is written. `chatKeys` and `vaultKey` are the chat identity and the vault key re-wrapped under the new phrase,
   stored in the same transaction, as `/auth/recover` takes them. The login response carries `legacyRecovery: true`
   for an account with no recovery key, which tells the app to do this.
+- **Phrase length.** The Quark never sees the phrase, so every body that carries a new recovery key (`/auth/setup`,
+  `/auth/request-account`, `PUT /auth/recovery-key`, and `/auth/recover` beside `newRecoveryKey`) also takes
+  `recoveryPhraseWords`, how many words that phrase had, from 0 to 64; anything else is a 400 (#3183). It is stored
+  with the key, and missing is 0, unknown. `GET /auth/status` answers a signed-in caller with `shortRecoveryPhrase:
+  true` when the account has a recovery key and fewer than 16 words, which covers every 6-word phrase from before
+  #3141 and every key stored before #3183, and the app offers a new phrase through `PUT /auth/recovery-key`.
 
 ### Changing a password
 
@@ -231,6 +237,8 @@ curl http://localhost:8080/api/v0/auth/status
 ```
 
 Returns `{"setup": true}` or `{"setup": false}`. Useful for the frontend to know whether to show the onboarding flow.
+A caller with a session also gets `username`, `userId`, `isAdmin` and `shortRecoveryPhrase` (see
+[Recovery keys](#recovery-keys)).
 
 ## Notes
 

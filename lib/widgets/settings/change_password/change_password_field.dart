@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-/// One of the change-password dialog's three password fields (#3022).
+/// One of the change-password dialog's three password fields (#3022), and
+/// the new-recovery-phrase dialog's one (#3183).
 ///
 /// Hidden by default, with a toggle to show it, so someone typing on a phone
 /// can check what they typed. It only collects: the dialog reads

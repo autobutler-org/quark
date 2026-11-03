@@ -234,16 +234,25 @@ func isRawSecret(secret string) bool {
 	return secret != "" && validateAuthKey(secret) != nil
 }
 
-// recoveryKeyHashFor validates a new account's recovery key and returns its
-// hash, or "" when there is none (#2430).
-func recoveryKeyHashFor(recoveryKey string) (string, error) {
+// maxRecoveryPhraseWords bounds the word count a client may report beside a
+// recovery key (#3183), well above any phrase the app makes.
+const maxRecoveryPhraseWords = 64
+
+// recoveryKeyHashFor validates a new recovery key and returns its hash, or ""
+// when there is none (#2430), with the word count of the phrase behind it, 0
+// without a key (#3183).
+func recoveryKeyHashFor(recoveryKey string, phraseWords int) (string, int64, error) {
+	if phraseWords < 0 || phraseWords > maxRecoveryPhraseWords {
+		return "", 0, ErrInvalidRecoveryPhraseWords
+	}
 	if recoveryKey == "" {
-		return "", nil
+		return "", 0, nil
 	}
 	if err := validateKey(recoveryKey, ErrInvalidRecoveryKey); err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return HashKey(recoveryKey)
+	hash, err := HashKey(recoveryKey)
+	return hash, int64(phraseWords), err
 }
 
 // errUpgradeFailed refuses a sign-in whose password was right but whose move

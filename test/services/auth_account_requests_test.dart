@@ -129,6 +129,7 @@ void main() {
         'username': 'bob',
         'authKey': await testAuthKey('hunter2hunter2'),
         'recoveryKey': await testRecoveryKey(phrase),
+        'recoveryPhraseWords': 16,
       });
       // An admin approves the account before it can sign in.
       expect(settings.sessionToken, isNull);

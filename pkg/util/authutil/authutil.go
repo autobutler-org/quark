@@ -98,6 +98,9 @@ var (
 	// ErrInvalidAuthKey refuses an auth key that is missing or is not the
 	// standard base64 of exactly 32 bytes (#2430).
 	ErrInvalidAuthKey = errors.New("authKey must be the base64 of 32 bytes")
+	// ErrInvalidRecoveryPhraseWords refuses a recoveryPhraseWords below zero
+	// or above any phrase a client makes (#3183).
+	ErrInvalidRecoveryPhraseWords = errors.New("recoveryPhraseWords must be between 0 and 64")
 	// ErrInvalidRecoveryKey refuses a recovery key that is missing or is not
 	// the standard base64 of exactly 32 bytes (#2430).
 	ErrInvalidRecoveryKey = errors.New("a recovery key must be the base64 of 32 bytes")
@@ -216,6 +219,10 @@ type RequestAccountParams struct {
 	// generated (#2430). Without it the account has no recovery credential
 	// until its client gives it one with SetRecoveryKey.
 	RecoveryKey string
+	// RecoveryPhraseWords is how many words the phrase behind RecoveryKey
+	// had, 0 when the client did not say (#3183). The Quark never sees the
+	// phrase, so this is how GetAuthStatus tells a short one.
+	RecoveryPhraseWords int
 	// RequestsEnabled is the admin's access-request setting.
 	RequestsEnabled bool
 }
@@ -310,6 +317,10 @@ type SetupParams struct {
 	// generated (#2430). Without it the account has no recovery credential
 	// until its client gives it one with SetRecoveryKey.
 	RecoveryKey string
+	// RecoveryPhraseWords is how many words the phrase behind RecoveryKey
+	// had, 0 when the client did not say (#3183). The Quark never sees the
+	// phrase, so this is how GetAuthStatus tells a short one.
+	RecoveryPhraseWords int
 	// Files is the internal drive's files namespace, where the founding
 	// admin's home is made.
 	Files vfs.VFS
@@ -445,6 +456,10 @@ type SetRecoveryKeyParams struct {
 	// RecoveryKey is the standard base64 of the 32-byte key the client derived
 	// from the phrase it generated and the account's auth salt.
 	RecoveryKey string
+	// RecoveryPhraseWords is how many words the phrase behind RecoveryKey
+	// had, 0 when the client did not say (#3183). The Quark never sees the
+	// phrase, so this is how GetAuthStatus tells a short one.
+	RecoveryPhraseWords int
 	// AfterSet, when set, runs in the transaction that stores the key, with
 	// that transaction's queries and the account's id. An error rolls the key
 	// back. Chat uses it to store the identity re-wrapped under the new phrase.
@@ -494,6 +509,12 @@ type GetAuthStatusResult struct {
 	// UserID is the caller's account id, zero without a valid session.
 	UserID  int64
 	IsAdmin bool
+	// ShortRecoveryPhrase is true when the caller's account has a recovery
+	// key whose phrase had fewer than RecoveryPhraseWords words, or an unknown
+	// count: a key stored before #3183 (#3183). The app prompts it to make a
+	// new phrase. An account with no recovery key reads false: LoginResult's
+	// LegacyRecovery covers it.
+	ShortRecoveryPhrase bool
 }
 
 // RecoverParams contains parameters for password recovery. Exactly one of
@@ -512,6 +533,9 @@ type RecoverParams struct {
 	// transaction: a legacy phrase recovery hands the account the key of a
 	// phrase its client just generated (#2430).
 	NewRecoveryKey string
+	// NewRecoveryPhraseWords is how many words the phrase behind
+	// NewRecoveryKey had, 0 when the client did not say (#3183).
+	NewRecoveryPhraseWords int
 	// SaltSecret returns the install's salt secret, for an account that has no
 	// stored salt.
 	SaltSecret func() ([]byte, error)
@@ -641,14 +665,15 @@ func GetAuthStatus(ctx context.Context, queries db.Querier, params GetAuthStatus
 	if err != nil {
 		return result, nil
 	}
-	isAdmin, err := IsAdmin(ctx, queries, username)
+	user, err := queries.GetUserByID(ctx, userID)
 	if err != nil {
-		return GetAuthStatusResult{}, err
+		return GetAuthStatusResult{}, fmt.Errorf("look up the account: %w", err)
 	}
 	result.Authenticated = true
 	result.Username = username
 	result.UserID = userID
-	result.IsAdmin = isAdmin
+	result.IsAdmin = user.IsAdmin == 1
+	result.ShortRecoveryPhrase = user.RecoveryKeyHash != "" && user.RecoveryPhraseWords < RecoveryPhraseWords
 	return result, nil
 }
 
@@ -679,7 +704,7 @@ func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	recoveryKeyHash, err := recoveryKeyHashFor(params.RecoveryKey)
+	recoveryKeyHash, recoveryPhraseWords, err := recoveryKeyHashFor(params.RecoveryKey, params.RecoveryPhraseWords)
 	if err != nil {
 		return nil, err
 	}
@@ -696,10 +721,11 @@ func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 			return err
 		}
 		user, err := q.CreateUser(ctx, db.CreateUserParams{
-			Username:        params.Username,
-			AuthKeyHash:     authKeyHash,
-			AuthSalt:        authSalt,
-			RecoveryKeyHash: recoveryKeyHash,
+			Username:            params.Username,
+			AuthKeyHash:         authKeyHash,
+			AuthSalt:            authSalt,
+			RecoveryKeyHash:     recoveryKeyHash,
+			RecoveryPhraseWords: recoveryPhraseWords,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
@@ -754,15 +780,16 @@ func RequestAccount(ctx context.Context, queries db.Querier, params RequestAccou
 	if err != nil {
 		return RequestAccountResult{}, err
 	}
-	recoveryKeyHash, err := recoveryKeyHashFor(params.RecoveryKey)
+	recoveryKeyHash, recoveryPhraseWords, err := recoveryKeyHashFor(params.RecoveryKey, params.RecoveryPhraseWords)
 	if err != nil {
 		return RequestAccountResult{}, err
 	}
 	if _, err := queries.CreatePendingUser(ctx, db.CreatePendingUserParams{
-		Username:        params.Username,
-		AuthKeyHash:     authKeyHash,
-		AuthSalt:        authSalt,
-		RecoveryKeyHash: recoveryKeyHash,
+		Username:            params.Username,
+		AuthKeyHash:         authKeyHash,
+		AuthSalt:            authSalt,
+		RecoveryKeyHash:     recoveryKeyHash,
+		RecoveryPhraseWords: recoveryPhraseWords,
 	}); err != nil {
 		if sqlutil.IsUniqueConstraintErr(err) {
 			return RequestAccountResult{}, ErrUsernameTaken
@@ -1163,10 +1190,10 @@ func CheckRecovery(ctx context.Context, queries db.Querier, params CheckRecovery
 // is gone, and ErrNoAuthSalt for an account with no auth salt, since the key
 // is derived with it.
 func SetRecoveryKey(ctx context.Context, database *db.DatabaseSqlc, params SetRecoveryKeyParams) (SetRecoveryKeyResult, error) {
-	if err := validateKey(params.RecoveryKey, ErrInvalidRecoveryKey); err != nil {
-		return SetRecoveryKeyResult{}, err
+	if params.RecoveryKey == "" {
+		return SetRecoveryKeyResult{}, ErrInvalidRecoveryKey
 	}
-	hash, err := HashKey(params.RecoveryKey)
+	hash, words, err := recoveryKeyHashFor(params.RecoveryKey, params.RecoveryPhraseWords)
 	if err != nil {
 		return SetRecoveryKeyResult{}, err
 	}
@@ -1185,7 +1212,7 @@ func SetRecoveryKey(ctx context.Context, database *db.DatabaseSqlc, params SetRe
 		return SetRecoveryKeyResult{}, ErrNoAuthSalt
 	}
 	err = db.InTx(ctx, database.Db, func(q db.Querier) error {
-		if err := q.SetRecoveryKey(ctx, db.SetRecoveryKeyParams{RecoveryKeyHash: hash, ID: user.ID}); err != nil {
+		if err := q.SetRecoveryKey(ctx, db.SetRecoveryKeyParams{RecoveryKeyHash: hash, RecoveryPhraseWords: words, ID: user.ID}); err != nil {
 			return fmt.Errorf("store the recovery key: %w", err)
 		}
 		if params.AfterSet != nil {
@@ -1269,7 +1296,7 @@ func Recover(ctx context.Context, database *db.DatabaseSqlc, params RecoverParam
 	if err != nil {
 		return nil, err
 	}
-	recoveryKeyHash, err := recoveryKeyHashFor(params.NewRecoveryKey)
+	recoveryKeyHash, recoveryPhraseWords, err := recoveryKeyHashFor(params.NewRecoveryKey, params.NewRecoveryPhraseWords)
 	if err != nil {
 		return nil, err
 	}
@@ -1301,7 +1328,7 @@ func Recover(ctx context.Context, database *db.DatabaseSqlc, params RecoverParam
 			return fmt.Errorf("failed to update password: %w", err)
 		}
 		if recoveryKeyHash != "" {
-			if err := q.SetRecoveryKey(ctx, db.SetRecoveryKeyParams{RecoveryKeyHash: recoveryKeyHash, ID: userID}); err != nil {
+			if err := q.SetRecoveryKey(ctx, db.SetRecoveryKeyParams{RecoveryKeyHash: recoveryKeyHash, RecoveryPhraseWords: recoveryPhraseWords, ID: userID}); err != nil {
 				return fmt.Errorf("store the recovery key: %w", err)
 			}
 		}

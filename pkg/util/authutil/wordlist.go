@@ -5,13 +5,19 @@ package authutil
 // distinct, so each word carries 8 bits and a draw is unbiased. TestWordlist
 // enforces both; it held 232 while its comments claimed 256 (#2153).
 //
-// A phrase is 16 of these words, 128 bits (#2783); one made before that is 6
-// words, 48 bits, and still recovers its account, because the Quark never
-// checks a phrase's length or its words: it compares a key derived from it.
+// A phrase is RecoveryPhraseWords of these words, 128 bits (#2783); one made
+// before that is 6 words, 48 bits, and still recovers its account, because the
+// Quark never checks a phrase's length or its words: it compares a key derived
+// from it. The client says how many words the phrase behind a key had, and
+// GET /auth/status calls an account with fewer short, so the app can prompt it
+// to make a new one (#3183).
 //
 // The Quark no longer makes phrases: the app does, from its copy in
 // lib/utils/recovery_phrase.dart, which test/utils/recovery_phrase_test.dart
 // checks against this one (#2430). This stays the canonical list.
+// RecoveryPhraseWords is how many words a recovery phrase has (#2783).
+const RecoveryPhraseWords = 16
+
 var wordlist = []string{
 	"abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract",
 	"absurd", "abuse", "access", "accident", "account", "accuse", "achieve", "acid",

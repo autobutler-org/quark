@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 /// The Account tab of Settings (#2350): the [profile] card (#2419), a
+/// prompt to make a new recovery phrase while the account's is short (#3183), a
 /// Change password row (#3022), sign out, the [sessions] card (#1663), who manages accounts (#2474), with an
 /// Account and data row at the bottom that leads to Delete account and, for an admin, Reset
 /// this Quark (#2346).
@@ -19,7 +20,7 @@ import 'package:quark_icons/quark_icons.dart';
 /// Changing the password is for members and admins alike: it is the one
 /// change to an account its owner makes without an admin.
 ///
-/// Keys: `settings_account_change_password`, `settings_account_users`, `settings_account_admin_note` and
+/// Keys: `new_recovery_phrase_button`, `settings_account_change_password`, `settings_account_users`, `settings_account_admin_note` and
 /// `settings_account_and_data`.
 class SettingsAccountTab extends StatelessWidget {
   /// Creates the tab.
@@ -28,8 +29,10 @@ class SettingsAccountTab extends StatelessWidget {
     required this.isAdmin,
     required this.onSignOut,
     required this.onChangePassword,
+    required this.onNewRecoveryPhrase,
     required this.onOpenAccountAndData,
     required this.onOpenUsers,
+    this.shortRecoveryPhrase = false,
     this.header,
     this.profile,
     this.sessions,
@@ -49,6 +52,13 @@ class SettingsAccountTab extends StatelessWidget {
 
   /// Called when the user taps Change password.
   final VoidCallback onChangePassword;
+
+  /// Whether the account's recovery phrase is shorter than a new one, which
+  /// shows a prompt to make a new one until it is (#3183).
+  final bool shortRecoveryPhrase;
+
+  /// Called when the user taps New recovery phrase on that prompt.
+  final VoidCallback onNewRecoveryPhrase;
 
   /// Called when the user taps Account and data.
   final VoidCallback onOpenAccountAndData;
@@ -76,6 +86,43 @@ class SettingsAccountTab extends StatelessWidget {
           const Text('Not signed in')
         else ...[
           if (profile != null) ...[profile!, const SizedBox(height: 16)],
+          if (shortRecoveryPhrase) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(QuarkIcons.key_rounded),
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            'Your recovery phrase is short; make a new one.',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: Tooltip(
+                        message:
+                            'Replace your recovery phrase with a longer one',
+                        child: FilledButton(
+                          key: const ValueKey('new_recovery_phrase_button'),
+                          onPressed: onNewRecoveryPhrase,
+                          child: const Text('New recovery phrase'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           Card(
             child: Tooltip(
               message: 'Change the password you sign in with',
