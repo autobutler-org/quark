@@ -674,3 +674,51 @@ func TestRecentAndByTypeFromTheIndex(t *testing.T) {
 		t.Errorf("after a removal no event reported: walked %d, indexed %d; the index should not walk", len(walked), len(indexed))
 	}
 }
+
+// TestListFilesFolderSizesFromTheIndex: with an index a folder listing sizes
+// each folder from memory, and reports what the walk would, at the root and a
+// level down, a folder on two devices included (#2759).
+func TestListFilesFolderSizesFromTheIndex(t *testing.T) {
+	registry, dirs := listOnUSBDevices(t, "one", "two")
+	for _, f := range []struct{ dir, rel string }{
+		{dirs[0], "docs/a.txt"}, {dirs[0], "docs/deep/b.txt"}, {dirs[0], "top.txt"},
+		{dirs[1], "docs/c.txt"}, {dirs[1], "music/d.mp3"},
+	} {
+		full := filepath.Join(f.dir, filepath.FromSlash(f.rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(f.rel), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	index := indexutil.NewFileIndex()
+	index.Build(context.Background(), registry)
+	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rootDir := range []string{"", "docs"} {
+		list := func(index *indexutil.FileIndex) []FileNode {
+			result, err := ListFiles(ListFilesParams{
+				Ctx: context.Background(), Registry: registry, Access: system.Access, RootDir: rootDir, Index: index,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return result.Files
+		}
+		// A folder's time is when it was listed, so it is left out.
+		sameButTime := func(a, b FileNode) bool {
+			a.ModifiedAt, b.ModifiedAt = time.Time{}, time.Time{}
+			return reflect.DeepEqual(a, b)
+		}
+		walked, indexed := list(nil), list(index)
+		if !slices.EqualFunc(walked, indexed, sameButTime) {
+			t.Errorf("%q:\n walked  %+v\n indexed %+v", rootDir, walked, indexed)
+		}
+		if rootDir == "" && (walked[0].Name != "docs/" || walked[0].Size != int64(len("docs/a.txt")+len("docs/deep/b.txt"))) {
+			t.Errorf("first folder %q sized %d, want docs on the first device", walked[0].Name, walked[0].Size)
+		}
+	}
+}

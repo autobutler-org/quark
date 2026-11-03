@@ -33,6 +33,7 @@ func listFiles(c *gin.Context) *serverutil.Response {
 		Access:   access,
 		RootDir:  c.Query("rootDir"),
 		Serials:  c.QueryArray("serial"),
+		Index:    deps.FileIndex(),
 	})
 	if err != nil {
 		return fileError(err)
