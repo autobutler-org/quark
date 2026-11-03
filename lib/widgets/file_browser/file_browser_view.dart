@@ -4,11 +4,11 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_browser_list_tile.dart';
-import 'package:quark/widgets/file_browser/file_browser_view/file_device_tags.dart';
-import 'package:quark/widgets/file_browser/file_browser_view/file_grid_preview.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_device_group.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_grid_layout.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_grid_tile.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_grid_sort_header.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_menu.dart';
-import 'package:quark/widgets/file_browser/file_browser_view/file_menu_button.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_sort_header.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/folder_drop_wrapper.dart';
@@ -331,14 +331,133 @@ class _FileBrowserViewState extends State<FileBrowserView> {
               column,
         ];
 
-        if (!widget.isUnifiedView && !widget.isSearchMode) {
+        Widget listItem(FileNode item) => FolderDropWrapper(
+          key: fileThumbnailKey(item),
+          item: item,
+          currentPath: widget.currentPath,
+          onDropToFolder: widget.onDropToFolder,
+          onFolderDragEnter: widget.onFolderDragEnter,
+          onFolderDragExit: widget.onFolderDragExit,
+          child: FileBrowserListTile(
+            item: item,
+            isSelected: widget.selectedPaths.contains(item.apiPath),
+            extractingPaths: _extractingPaths,
+            showFileSizeAndMenu: widget.showFileSizeAndMenu,
+            columns: columns,
+            inArchive: widget.inArchive,
+            isSearchMode: widget.isSearchMode,
+            isAdmin: widget.isAdmin,
+            selectionMode: widget.selectionMode,
+            onDispatchMenuAction: _dispatchMenuAction,
+            onOpenDirectory: widget.onOpenDirectory,
+            menuActions: widget.menuActions,
+            subtitle: widget.subtitleFor?.call(item),
+            onNavigateToFolder: widget.onNavigateToFolder,
+            onVersionHistory: widget.onVersionHistory,
+            onSelectionChanged: widget.onSelectionChanged,
+          ),
+        );
+
+        Widget gridItem(FileNode item) => FolderDropWrapper(
+          key: fileThumbnailKey(item),
+          item: item,
+          currentPath: widget.currentPath,
+          onDropToFolder: widget.onDropToFolder,
+          onFolderDragEnter: widget.onFolderDragEnter,
+          onFolderDragExit: widget.onFolderDragExit,
+          child: FileGridTile(
+            item: item,
+            menu: FileMenu(
+              item: item,
+              menuActions: widget.menuActions,
+              extractingPaths: _extractingPaths,
+              inArchive: widget.inArchive,
+              isSearchMode: widget.isSearchMode,
+              isAdmin: widget.isAdmin,
+              onDispatchMenuAction: _dispatchMenuAction,
+              onNavigateToFolder: widget.onNavigateToFolder,
+              onVersionHistory: widget.onVersionHistory,
+            ),
+            isSelected: widget.selectedPaths.contains(item.apiPath),
+            selectionMode: widget.selectionMode,
+            showFileSizeAndMenu: widget.showFileSizeAndMenu,
+            onTap: widget.selectionMode
+                ? () => widget.onSelectionChanged?.call(item)
+                : widget.onOpenDirectory == null
+                ? null
+                : () => widget.onOpenDirectory!(item),
+          ),
+        );
+
+        final gridDelegate = FileGridLayout.delegateFor(
+          MediaQuery.sizeOf(context).width,
+        );
+
+        final Widget body;
+        if (!widget.isUnifiedView) {
+          // A folder on several drives is listed under each of them (#1868);
+          // search results are grouped the same way (#1870).
           final groups = <FileDevice, List<FileNode>>{};
           for (final f in files) {
-            final key = f.onDevices.firstOrNull ?? _unknownDevice;
-            groups.putIfAbsent(key, () => []).add(f);
+            final devices = f.onDevices;
+            for (final device in devices.isEmpty ? [_unknownDevice] : devices) {
+              groups.putIfAbsent(device, () => []).add(f);
+            }
           }
-          return Column(
+          body = ListView(
+            controller: widget.scrollController,
             children: [
+              for (final MapEntry(key: device, value: items) in groups.entries)
+                FileDeviceGroup(
+                  device: device,
+                  itemCount: items.length,
+                  children: widget.isGridView
+                      ? [
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            padding: const EdgeInsets.all(
+                              FileGridLayout.padding,
+                            ),
+                            itemCount: items.length,
+                            gridDelegate: gridDelegate,
+                            itemBuilder: (context, index) =>
+                                gridItem(items[index]),
+                          ),
+                        ]
+                      : [for (final item in items) listItem(item)],
+                ),
+            ],
+          );
+        } else if (widget.isGridView) {
+          body = GridView.builder(
+            controller: widget.scrollController,
+            padding: const EdgeInsets.all(FileGridLayout.padding),
+            itemCount: files.length,
+            gridDelegate: gridDelegate,
+            itemBuilder: (context, index) => gridItem(files[index]),
+          );
+        } else {
+          body = ListView.separated(
+            controller: widget.scrollController,
+            itemCount: files.length,
+            separatorBuilder: (_, _) => Divider(
+              height: 1,
+              color: colors.outlineVariant.withValues(alpha: 0.5),
+            ),
+            itemBuilder: (context, index) => listItem(files[index]),
+          );
+        }
+
+        return Column(
+          children: [
+            if (widget.isGridView)
+              FileGridSortHeader(
+                sortColumn: _sortColumn,
+                sortDirection: _sortDirection,
+                onToggleSort: _toggleSort,
+              )
+            else
               FileSortHeader(
                 sortColumn: _sortColumn,
                 sortDirection: _sortDirection,
@@ -346,320 +465,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                 showFileSizeAndMenu: widget.showFileSizeAndMenu,
                 columns: columns,
               ),
-              Expanded(
-                child: ListView(
-                  controller: widget.scrollController,
-                  children: [
-                    for (final entry in groups.entries)
-                      ExpansionTile(
-                        initiallyExpanded: true,
-                        leading: const Icon(QuarkIcons.storage_rounded),
-                        title: Align(
-                          alignment: AlignmentDirectional.centerStart,
-                          child: DeviceTag(
-                            key: ValueKey(
-                              'device_group_tag_${entry.key.serial}',
-                            ),
-                            label: entry.key.name,
-                            color: DeviceTag.colorFor(
-                              context,
-                              entry.key.serial,
-                            ),
-                          ),
-                        ),
-                        subtitle: Text(
-                          '${entry.value.length} '
-                          'item${entry.value.length == 1 ? '' : 's'}',
-                        ),
-                        children: [
-                          for (final item in entry.value)
-                            FolderDropWrapper(
-                              key: fileThumbnailKey(item),
-                              item: item,
-                              currentPath: widget.currentPath,
-                              onDropToFolder: widget.onDropToFolder,
-                              onFolderDragEnter: widget.onFolderDragEnter,
-                              onFolderDragExit: widget.onFolderDragExit,
-                              child: FileBrowserListTile(
-                                item: item,
-                                isSelected: widget.selectedPaths.contains(
-                                  item.apiPath,
-                                ),
-                                extractingPaths: _extractingPaths,
-                                showFileSizeAndMenu: widget.showFileSizeAndMenu,
-                                columns: columns,
-                                inArchive: widget.inArchive,
-                                isSearchMode: widget.isSearchMode,
-                                isAdmin: widget.isAdmin,
-                                selectionMode: widget.selectionMode,
-                                onDispatchMenuAction: _dispatchMenuAction,
-                                onOpenDirectory: widget.onOpenDirectory,
-                                menuActions: widget.menuActions,
-                                subtitle: widget.subtitleFor?.call(item),
-                                onNavigateToFolder: widget.onNavigateToFolder,
-                                onVersionHistory: widget.onVersionHistory,
-                                onSelectionChanged: widget.onSelectionChanged,
-                              ),
-                            ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        }
-
-        if (widget.isGridView) {
-          final screenWidth = MediaQuery.sizeOf(context).width;
-          const horizontalPadding = 16.0;
-          const crossAxisSpacing = 8.0;
-          const minTileWidth = 180.0;
-          const cardPadding = 8.0;
-          const slotGap = 8.0;
-          const nameSlotHeight = 24.0;
-          // PopupMenuButton's tap target is 48 on mobile. A shorter row
-          // overflows the tile.
-          const menuRowHeight = 48.0;
-          final usableWidth = screenWidth - horizontalPadding;
-          final calculatedCount =
-              ((usableWidth + crossAxisSpacing) /
-                      (minTileWidth + crossAxisSpacing))
-                  .floor();
-          final crossAxisCount = calculatedCount < 1 ? 1 : calculatedCount;
-          // The preview is a square of the tile width minus the 8px padding
-          // on each side. The card's margin is uniform, so it shortens the
-          // width and the height by the same amount and must not be
-          // subtracted again. A fixed aspect ratio left this slot wide and
-          // short, and BoxFit.cover cropped the thumbnail to a strip (#2347).
-          final tileWidth =
-              (usableWidth - crossAxisSpacing * (crossAxisCount - 1)) /
-              crossAxisCount;
-          final previewExtent = tileWidth - cardPadding * 2;
-          const footerExtent =
-              slotGap + nameSlotHeight + slotGap + menuRowHeight;
-          final mainAxisExtent = cardPadding * 2 + previewExtent + footerExtent;
-
-          return Column(
-            children: [
-              FileGridSortHeader(
-                sortColumn: _sortColumn,
-                sortDirection: _sortDirection,
-                onToggleSort: _toggleSort,
-              ),
-              Expanded(
-                child: GridView.builder(
-                  controller: widget.scrollController,
-                  padding: const EdgeInsets.all(8),
-                  itemCount: files.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    mainAxisExtent: mainAxisExtent,
-                    crossAxisSpacing: crossAxisSpacing,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemBuilder: (context, index) {
-                    final item = files[index];
-                    final isSelected = widget.selectedPaths.contains(
-                      item.apiPath,
-                    );
-                    final menu = FileMenu(
-                      item: item,
-                      menuActions: widget.menuActions,
-                      extractingPaths: _extractingPaths,
-                      inArchive: widget.inArchive,
-                      isSearchMode: widget.isSearchMode,
-                      isAdmin: widget.isAdmin,
-                      onDispatchMenuAction: _dispatchMenuAction,
-                      onNavigateToFolder: widget.onNavigateToFolder,
-                      onVersionHistory: widget.onVersionHistory,
-                    );
-                    return FolderDropWrapper(
-                      key: fileThumbnailKey(item),
-                      item: item,
-                      currentPath: widget.currentPath,
-                      onDropToFolder: widget.onDropToFolder,
-                      onFolderDragEnter: widget.onFolderDragEnter,
-                      onFolderDragExit: widget.onFolderDragExit,
-                      child: Card(
-                        clipBehavior: Clip.hardEdge,
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primaryContainer
-                                  .withValues(alpha: 0.55)
-                            : null,
-                        // InkWell.onLongPress hands over no position, so the
-                        // gesture is caught outside it; the tile's context is
-                        // what the entries dispatch against, since it outlives
-                        // the menu.
-                        child: GestureDetector(
-                          onLongPressStart:
-                              !widget.showFileSizeAndMenu ||
-                                  widget.selectionMode
-                              ? null
-                              : (details) => menu.showAt(
-                                  context,
-                                  details.globalPosition,
-                                ),
-                          // A right-click opens the same menu (#2276).
-                          onSecondaryTapUp:
-                              !widget.showFileSizeAndMenu ||
-                                  widget.selectionMode
-                              ? null
-                              : (details) => menu.showAt(
-                                  context,
-                                  details.globalPosition,
-                                ),
-                          child: InkWell(
-                            onTap: widget.selectionMode
-                                ? () => widget.onSelectionChanged?.call(item)
-                                : widget.onOpenDirectory == null
-                                ? null
-                                : () => widget.onOpenDirectory!(item),
-                            child: Stack(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(cardPadding),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      AspectRatio(
-                                        aspectRatio: 1,
-                                        child: FileGridPreview(item: item),
-                                      ),
-                                      const SizedBox(height: slotGap),
-                                      SizedBox(
-                                        height: nameSlotHeight,
-                                        child: Text(
-                                          item.name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(height: slotGap),
-                                      SizedBox(
-                                        height: menuRowHeight,
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            if (widget.showFileSizeAndMenu)
-                                              Flexible(
-                                                child: Text(
-                                                  formatFileSize(
-                                                    item.size,
-                                                    item.isDir,
-                                                    compressedSize:
-                                                        item.compressedSize,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            Flexible(
-                                              child: FileDeviceTags(item: item),
-                                            ),
-                                            if (widget.showFileSizeAndMenu)
-                                              FileMenuButton(menu: menu),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (widget.selectionMode)
-                                  Positioned(
-                                    top: 4,
-                                    left: 4,
-                                    child: IgnorePointer(
-                                      child: Container(
-                                        width: 24,
-                                        height: 24,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .surface
-                                              .withValues(alpha: 0.75),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          isSelected
-                                              ? Icons.check_circle
-                                              : Icons.radio_button_unchecked,
-                                          size: 20,
-                                          color: isSelected
-                                              ? Theme.of(
-                                                  context,
-                                                ).colorScheme.primary
-                                              : Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        }
-
-        return Column(
-          children: [
-            FileSortHeader(
-              sortColumn: _sortColumn,
-              sortDirection: _sortDirection,
-              onToggleSort: _toggleSort,
-              showFileSizeAndMenu: widget.showFileSizeAndMenu,
-              columns: columns,
-            ),
-            Expanded(
-              child: ListView.separated(
-                controller: widget.scrollController,
-                itemCount: files.length,
-                separatorBuilder: (_, _) => Divider(
-                  height: 1,
-                  color: colors.outlineVariant.withValues(alpha: 0.5),
-                ),
-                itemBuilder: (context, index) {
-                  final item = files[index];
-                  return FolderDropWrapper(
-                    key: fileThumbnailKey(item),
-                    item: item,
-                    currentPath: widget.currentPath,
-                    onDropToFolder: widget.onDropToFolder,
-                    onFolderDragEnter: widget.onFolderDragEnter,
-                    onFolderDragExit: widget.onFolderDragExit,
-                    child: FileBrowserListTile(
-                      item: item,
-                      isSelected: widget.selectedPaths.contains(item.apiPath),
-                      extractingPaths: _extractingPaths,
-                      showFileSizeAndMenu: widget.showFileSizeAndMenu,
-                      columns: columns,
-                      inArchive: widget.inArchive,
-                      isSearchMode: widget.isSearchMode,
-                      isAdmin: widget.isAdmin,
-                      selectionMode: widget.selectionMode,
-                      onDispatchMenuAction: _dispatchMenuAction,
-                      onOpenDirectory: widget.onOpenDirectory,
-                      menuActions: widget.menuActions,
-                      subtitle: widget.subtitleFor?.call(item),
-                      onNavigateToFolder: widget.onNavigateToFolder,
-                      onVersionHistory: widget.onVersionHistory,
-                      onSelectionChanged: widget.onSelectionChanged,
-                    ),
-                  );
-                },
-              ),
-            ),
+            Expanded(child: body),
           ],
         );
       },
