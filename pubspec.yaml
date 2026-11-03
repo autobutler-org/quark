@@ -4,7 +4,7 @@ publish_to: "none"
 
 environment:
   sdk: ^3.11.0
-  flutter: 3.47.8
+  flutter: 3.47.9
 
 # Dart pub workspace: one shared pubspec.lock and one resolution for the app,
 # every package under packages/, and every example app. Members declare
