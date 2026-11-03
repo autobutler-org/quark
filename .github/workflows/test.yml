@@ -165,6 +165,61 @@ jobs:
       - name: Check the database layer and a first run of the server on PostgreSQL
         run: |
           make test/db/postgres
+  # Two instances of this build on one PostgreSQL and one files directory, behind a balancer
+  # with no affinity, through the cases epic #2964 names (test/multiinstance/README.md). A case
+  # whose fix has not landed is marked knownBroken and skips; one that passes while still marked
+  # fails, so every case that works stays working.
+  test-multiinstance:
+    needs: changes
+    if: needs.changes.outputs.backend != 'false'
+    # errand: group errand, label errand-x64-medium-quark-backend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      # The same database test-postgres gets; keep the two in step with compose.yaml.
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: quark
+          POSTGRES_PASSWORD: quark
+          POSTGRES_DB: quark
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U quark -d quark"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      # errand: remove on errand-x64-medium-quark-backend; ci-backend carries Go.
+      - name: Setup go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # errand: remove on errand-x64-medium-quark-backend; ci-backend carries sqlc.
+      - name: Setup sqlc
+        uses: ./.github/actions/setup-sqlc
+      # errand: remove on errand-x64-medium-quark-backend; ci-backend carries swag.
+      - name: Setup swag
+        uses: ./.github/actions/setup-swag
+      # The rolling upgrade starts on the latest release and moves to this build. x86_64
+      # because the runner is; the checksum is the release's own.
+      - name: Download the previous release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/previous"
+          cd "$RUNNER_TEMP/previous"
+          gh release download --repo "$GITHUB_REPOSITORY" \
+            --pattern 'quark_Linux_x86_64.tar.gz' --pattern 'quark_*_checksums.txt'
+          sha256sum --ignore-missing -c quark_*_checksums.txt
+          tar xzf quark_Linux_x86_64.tar.gz quark
+          echo "QUARK_PREVIOUS_BINARY=$PWD/quark" >> "$GITHUB_ENV"
+      - name: Run the multi-instance cases
+        run: |
+          make test/multiinstance
   api-chaos:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
