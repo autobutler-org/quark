@@ -183,9 +183,9 @@ the same thing.
 
 #### CI-first for agents
 
-An agent running under saddle leans on GitHub Actions for the full gate rather than running it locally. The
+An agent leans on GitHub Actions for the full gate rather than running it locally. The
 `check`, `test`, `build` and CodeQL workflows (`check-*`, `security-backend`, `test-backend`, `test-postgres`,
-`test-frontend`, `api-chaos`, `power-cut`, `build-*`) run on the PR, and a red job comes back as a repair task.
+`test-frontend`, `api-chaos`, `power-cut`, `build-*`) run on the PR, and a red job is the agent's to fix.
 
 - **Run the cheap checks CI keeps failing on**, each of which finishes in seconds: `gofmt` and `dart format` on
   what you changed, the one test file or package you touched, `make check/spelling` when you touched words, and
