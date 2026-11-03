@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:quark/widgets/image_viewer/shortcut_row.dart';
 import 'package:quark/widgets/video_viewer/player_controls.dart';
 import 'package:video_player/video_player.dart';
 
@@ -9,7 +10,7 @@ import 'package:video_player/video_player.dart';
 /// and come back on a tap.
 ///
 /// Keyboard: Space plays and pauses, ← and → skip back and forward ten
-/// seconds.
+/// seconds, and ? lists those shortcuts.
 class VideoSurfaceWithControls extends StatefulWidget {
   final VideoPlayerController controller;
   final bool isFullscreen;
@@ -116,6 +117,15 @@ class _VideoSurfaceWithControlsState extends State<VideoSurfaceWithControls> {
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
     if (event is KeyUpEvent) return KeyEventResult.ignored;
+    // "?" arrives as the question key, or as slash with the character "?"
+    // (US Shift+/).
+    if (event.logicalKey == LogicalKeyboardKey.question ||
+        event.character == '?') {
+      // A held ? would otherwise stack the dialog.
+      if (event is KeyDownEvent) _showShortcuts();
+      _onControlsInteraction();
+      return KeyEventResult.handled;
+    }
     final controller = widget.controller;
     switch (event.logicalKey) {
       case LogicalKeyboardKey.space:
@@ -131,6 +141,39 @@ class _VideoSurfaceWithControlsState extends State<VideoSurfaceWithControls> {
     }
     _onControlsInteraction();
     return KeyEventResult.handled;
+  }
+
+  /// The same short list the image viewer opens on ?, for the keys this
+  /// surface actually handles.
+  void _showShortcuts() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('video_shortcuts_dialog'),
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text(
+          'Keyboard shortcuts',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ShortcutRow(shortcut: 'Space', description: 'Play / Pause'),
+              ShortcutRow(shortcut: '←', description: 'Back 10 seconds'),
+              ShortcutRow(shortcut: '→', description: 'Forward 10 seconds'),
+              ShortcutRow(shortcut: '?', description: 'Show this help'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: Colors.white70)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _onSurfaceTap() {

@@ -6,6 +6,10 @@ import 'package:video_player/video_player.dart';
 
 /// The control strip overlaid on the video: progress (or the trim bar),
 /// transport buttons, volume, speed and the fullscreen toggle.
+///
+/// Every icon button carries a tooltip, which is also the name a screen
+/// reader announces. Play, pause and the ten-second skips include their key.
+/// The seek bar is named "Playback position".
 class PlayerControls extends StatelessWidget {
   final VideoPlayerController controller;
   final bool isFullscreen;
@@ -93,14 +97,21 @@ class PlayerControls extends StatelessWidget {
                   },
                 )
               else
-                VideoProgressIndicator(
-                  controller,
-                  allowScrubbing: !trimMode,
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  colors: VideoProgressColors(
-                    playedColor: Theme.of(context).colorScheme.primary,
-                    bufferedColor: Colors.white54,
-                    backgroundColor: Colors.white24,
+                // The scrubber's drag is a tap target. Merge this label onto it
+                // (#3938).
+                MergeSemantics(
+                  child: Semantics(
+                    label: 'Playback position',
+                    child: VideoProgressIndicator(
+                      controller,
+                      allowScrubbing: !trimMode,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      colors: VideoProgressColors(
+                        playedColor: Theme.of(context).colorScheme.primary,
+                        bufferedColor: Colors.white54,
+                        backgroundColor: Colors.white24,
+                      ),
+                    ),
                   ),
                 ),
               SingleChildScrollView(
@@ -108,6 +119,9 @@ class PlayerControls extends StatelessWidget {
                 child: Row(
                   children: [
                     IconButton(
+                      tooltip: value.isPlaying
+                          ? 'Pause (Space)'
+                          : 'Play (Space)',
                       onPressed: () {
                         onInteraction();
                         value.isPlaying
@@ -122,6 +136,7 @@ class PlayerControls extends StatelessWidget {
                       ),
                     ),
                     IconButton(
+                      tooltip: 'Back 10 seconds (←)',
                       onPressed: () {
                         onInteraction();
                         _seekBy(const Duration(seconds: -10));
@@ -132,6 +147,7 @@ class PlayerControls extends StatelessWidget {
                       ),
                     ),
                     IconButton(
+                      tooltip: 'Forward 10 seconds (→)',
                       onPressed: () {
                         onInteraction();
                         _seekBy(const Duration(seconds: 10));
@@ -146,6 +162,7 @@ class PlayerControls extends StatelessWidget {
                       style: const TextStyle(color: Colors.white),
                     ),
                     IconButton(
+                      tooltip: isMuted ? 'Unmute' : 'Mute',
                       onPressed: () {
                         onInteraction();
                         controller.setVolume(isMuted ? 1 : 0);
@@ -179,6 +196,9 @@ class PlayerControls extends StatelessWidget {
                       ),
                     ),
                     IconButton(
+                      tooltip: isFullscreen
+                          ? 'Exit full screen'
+                          : 'Full screen',
                       onPressed: () {
                         onInteraction();
                         onToggleFullscreen();
