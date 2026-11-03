@@ -75,6 +75,9 @@ class PlayerControls extends StatelessWidget {
                 TrimBar(
                   start: trimStart,
                   end: trimEnd,
+                  position: duration > Duration.zero
+                      ? position.inMilliseconds / duration.inMilliseconds
+                      : 0.0,
                   duration: controller.value.duration,
                   onStartChanged: (v) {
                     onTrimStartChanged?.call(v);
