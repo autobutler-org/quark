@@ -100,7 +100,7 @@ func newSearchHarness(t *testing.T) searchHarness {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	bus := eventbus.New()
-	index := indexutil.NewFileIndex()
+	index := indexutil.NewFileIndex(dbtest.NewDB(t))
 	index.BuildAndWatch(indexutil.BuildAndWatchParams{Ctx: ctx, Bus: bus, Registry: registry})
 	h.index = index
 

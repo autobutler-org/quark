@@ -126,6 +126,13 @@ type Querier interface {
 	DeleteGroup(ctx context.Context, id int64) (int64, error)
 	// DeleteGroupPathAccess drops a group's row on exactly one path.
 	DeleteGroupPathAccess(ctx context.Context, arg DeleteGroupPathAccessParams) (int64, error)
+	// DeleteIndexedDescendants drops everything under the folder at path, but not
+	// the entry for path itself.
+	DeleteIndexedDescendants(ctx context.Context, arg DeleteIndexedDescendantsParams) error
+	// DeleteIndexedPath drops the entry at (parent, name) and, when it is a
+	// folder at path, everything under it, in one statement (#2754).
+	DeleteIndexedPath(ctx context.Context, arg DeleteIndexedPathParams) (int64, error)
+	DeleteIndexedSerial(ctx context.Context, serial string) error
 	// DeleteMusicTrack drops the one row for a file, nothing under it: a
 	// backfill's unseen rows.
 	DeleteMusicTrack(ctx context.Context, arg DeleteMusicTrackParams) error
@@ -157,6 +164,8 @@ type Querier interface {
 	DeletePhotoHashesUnder(ctx context.Context, arg DeletePhotoHashesUnderParams) error
 	DeletePhotoRotation(ctx context.Context, arg DeletePhotoRotationParams) error
 	DeleteSession(ctx context.Context, token string) error
+	// DeleteStaleIndexedSerial drops what a reconcile of the device did not write.
+	DeleteStaleIndexedSerial(ctx context.Context, arg DeleteStaleIndexedSerialParams) error
 	// Deletes one user. sessions.user_id is ON DELETE CASCADE (001_auth) and
 	// connections set _foreign_keys=on, so the user's sessions go with the row.
 	DeleteUser(ctx context.Context, id int64) error
@@ -360,6 +369,17 @@ type Querier interface {
 	// grants (#2016). Like ListAccountsMissingHome it keys on the row rather than
 	// the directory, and it spells the path the way grouputil does.
 	ListGroupsMissingFolder(ctx context.Context) ([]ListGroupsMissingFolderRow, error)
+	ListIndexedChildFolders(ctx context.Context, arg ListIndexedChildFoldersParams) ([]string, error)
+	// ListIndexedFilesPage returns the next page of files on a device whose
+	// search_name holds query, in (dir, name) order after (after_dir,
+	// after_name). The leading dir >= after_dir lets the index seek to the page
+	// rather than read past every earlier row. db.SearchIndexedFiles is the
+	// caller and query is already lowered; the empty query matches every file.
+	// instr rather than LIKE, so % and _ in a query are only characters: sqlc's
+	// SQLite parser takes no ESCAPE, and PostgreSQL's instr is defined in
+	// 044_file_index.
+	ListIndexedFilesPage(ctx context.Context, arg ListIndexedFilesPageParams) ([]ListIndexedFilesPageRow, error)
+	ListIndexedSerials(ctx context.Context) ([]string, error)
 	// ListJobs lists every job of the given kinds, newest first. It and
 	// ListUserJobs are written once per engine, because an IN-list over a
 	// parameter has no form both accept (rule 15 in sql/queries/AGENTS.md). This
@@ -422,6 +442,8 @@ type Querier interface {
 	ListPhotoTakenAt(ctx context.Context) ([]ListPhotoTakenAtRow, error)
 	ListRootAlbums(ctx context.Context, userID int64) ([]PhotoAlbum, error)
 	ListSettings(ctx context.Context) ([]Setting, error)
+	// ListStaleIndexedChildren names what directly in dir a rescan did not write.
+	ListStaleIndexedChildren(ctx context.Context, arg ListStaleIndexedChildrenParams) ([]string, error)
 	// ListJobs for one account, so a non-admin's listing never loads every other
 	// account's jobs (#2756).
 	ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]Job, error)
@@ -476,6 +498,10 @@ type Querier interface {
 	// and not NOT EXISTS: sqlc v1.30.0's SQLite engine leaves a parameter under a
 	// NOT unexpanded (sqlc-dev/sqlc#4110; v1.31.1 expands it).
 	MoveFavorites(ctx context.Context, arg MoveFavoritesParams) error
+	// MoveIndexedDescendants rewrites the dir of everything under the folder at
+	// path to sit under new_path instead. LENGTH and SUBSTR count characters on
+	// both engines.
+	MoveIndexedDescendants(ctx context.Context, arg MoveIndexedDescendantsParams) (int64, error)
 	// MoveMusicTracks rewrites rel_path for old_rel_path and everything under it.
 	// album_key embeds the folder and is not recomputed here: the hash is built
 	// in Go, and a move does not re-read the file. The library service updates
@@ -515,6 +541,7 @@ type Querier interface {
 	RemovePhotoFromAlbum(ctx context.Context, arg RemovePhotoFromAlbumParams) error
 	RenameAlbum(ctx context.Context, arg RenameAlbumParams) (PhotoAlbum, error)
 	RenameGroup(ctx context.Context, arg RenameGroupParams) (Group, error)
+	RenameIndexedEntry(ctx context.Context, arg RenameIndexedEntryParams) (int64, error)
 	// Slides a session's expiry forward on use (#1647). The new expiry is computed
 	// in Go so the cap against created_at stays testable; this only writes it.
 	RenewSession(ctx context.Context, arg RenewSessionParams) error
@@ -570,6 +597,10 @@ type Querier interface {
 	SetUserStatus(ctx context.Context, arg SetUserStatusParams) (int64, error)
 	// SignChatChannelEvent attaches the actor's signature to an event, once.
 	SignChatChannelEvent(ctx context.Context, arg SignChatChannelEventParams) (int64, error)
+	// SumIndexedFolder totals the folder at path. entries counts its own row
+	// with what is under it, so zero means the index holds no such folder.
+	SumIndexedFolder(ctx context.Context, arg SumIndexedFolderParams) (SumIndexedFolderRow, error)
+	SumIndexedSerial(ctx context.Context, serial string) (SumIndexedSerialRow, error)
 	// TombstoneChatMessage wipes a message's ciphertext and marks it deleted,
 	// keeping the first deletion time when it is deleted twice.
 	TombstoneChatMessage(ctx context.Context, id int64) (ChatMessage, error)
@@ -602,6 +633,14 @@ type Querier interface {
 	UpsertDeviceName(ctx context.Context, arg UpsertDeviceNameParams) error
 	UpsertDeviceRole(ctx context.Context, arg UpsertDeviceRoleParams) error
 	UpsertFileContent(ctx context.Context, arg UpsertFileContentParams) error
+	// The filename index (044_file_index), written and read by pkg/util/indexutil.
+	//
+	// A path is (dir, name). The subtree under a folder at path is every row whose
+	// dir is path or starts with path/, which the queries take as dir = path or
+	// dir in [dir_from, dir_to), with dir_from = path + '/' and dir_to = path + '0'
+	// ('0' is the byte after '/'), so the (serial, dir, name) index serves it as a
+	// range on both engines.
+	UpsertIndexedEntry(ctx context.Context, arg UpsertIndexedEntryParams) error
 	// Music library cache (#2982). pkg/util/musicutil is the caller. Search is
 	// FTS5 (SQLite only, #2958) and is raw SQL there, not a query here.
 	//

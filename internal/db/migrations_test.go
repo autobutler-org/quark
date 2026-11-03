@@ -153,6 +153,7 @@ func TestMigrationsApplyCleanly(t *testing.T) {
 		"photo_albums", "photo_album_items", "photo_rotations", "photo_favorites", "photo_hashes",
 		"vault_keys", "vault_items",
 		"file_content", "file_content_fts",
+		"file_index", "file_index_fts",
 		"music_tracks", "music_tracks_fts",
 		"vfs_metadata", "vfs_db_entries",
 		"groups", "group_members", "path_access",

@@ -3,25 +3,35 @@ package indexutil
 import (
 	"context"
 	"errors"
+	"io/fs"
+	"log"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
-// Build walks every device's files namespace in registry and replaces the
-// index with what it finds. The walks run before the lock is taken, so
-// searches keep answering from the old index while they do.
+// pageSize is how many files a search reads from the database at a time, and
+// batchSize how many rows a walk writes in one transaction.
+const (
+	pageSize  = 500
+	batchSize = 500
+)
+
+// Build brings the index in line with every device's files namespace in
+// registry: each device is walked and what the walk did not find is dropped,
+// as is every device no longer in registry. Searches keep answering from the
+// rows already there while it runs.
 func (idx *FileIndex) Build(ctx context.Context, registry vfs.Registry) {
-	roots := make(map[string]*indexDir)
-	for serial, fsys := range vfs.FilesNamespaces(registry) {
-		roots[serial] = scanTree(ctx, fsys, "")
+	present := vfs.FilesNamespaces(registry)
+	for _, serial := range slices.Sorted(maps.Keys(present)) {
+		idx.reconcile(ctx, present[serial], serial)
 	}
-	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	idx.roots = roots
+	idx.dropAbsent(ctx, present)
 }
 
 // Sync brings the set of indexed devices in line with registry: a device
@@ -29,19 +39,16 @@ func (idx *FileIndex) Build(ctx context.Context, registry vfs.Registry) {
 // gone is dropped. Devices already indexed are left as they are.
 func (idx *FileIndex) Sync(ctx context.Context, registry vfs.Registry) {
 	present := vfs.FilesNamespaces(registry)
-	idx.mu.RLock()
-	var missing []string
-	for serial := range present {
-		if idx.roots[serial] == nil {
-			missing = append(missing, serial)
+	indexed := make(map[string]bool)
+	for _, serial := range idx.serials(ctx) {
+		indexed[serial] = true
+	}
+	for _, serial := range slices.Sorted(maps.Keys(present)) {
+		if !indexed[serial] {
+			idx.reconcile(ctx, present[serial], serial)
 		}
 	}
-	idx.mu.RUnlock()
-	added := make(map[string]*indexDir, len(missing))
-	for _, serial := range missing {
-		added[serial] = scanTree(ctx, present[serial], "")
-	}
-	idx.syncRoots(present, added)
+	idx.dropAbsent(ctx, present)
 }
 
 // Search returns all indexed files whose Name contains query (case-insensitive).
@@ -59,55 +66,87 @@ func (idx *FileIndex) Search(query string, serials map[string]bool) []IndexedFil
 // SearchEach calls visit for each file Search would return, stopping as soon
 // as visit returns false, so a caller filtering or capping the matches never
 // builds the full list. Devices come in serial order, the internal drive
-// first, and each folder's files, then its subfolders, in name order. visit
-// runs under the index's read lock and must not call back into the index.
+// first, and on each the files in order of the folder they sit in, then of
+// their names, comparing bytes: a folder's files come before those of its
+// subfolders (#2817's order, but a folder named "a b" now sorts before "a/c"). The rows are read a page at a time and no connection is held
+// while visit runs, so visit may query the database.
 func (idx *FileIndex) SearchEach(query string, serials map[string]bool, visit func(IndexedFile) bool) {
-	match := newNameMatcher(query)
-	idx.mu.RLock()
-	defer idx.mu.RUnlock()
-	for _, serial := range slices.Sorted(maps.Keys(idx.roots)) {
-		if len(serials) > 0 && !serials[serial] {
-			continue
-		}
-		more := idx.roots[serial].collect("", match, func(name, relPath string, size, mtime int64) bool {
-			return visit(IndexedFile{
-				Name: name, RelPath: relPath, DeviceSerial: serial,
-				Size: size, ModTime: time.Unix(0, mtime),
-			})
-		})
-		if !more {
-			return
+	ctx := context.Background()
+	order := slices.Sorted(maps.Keys(serials))
+	if len(order) == 0 {
+		order = idx.serials(ctx)
+	}
+	lower := strings.ToLower(query)
+	for _, serial := range order {
+		params := db.ListIndexedFilesPageParams{Serial: serial, Query: lower, Limit: pageSize}
+		for {
+			page, err := db.SearchIndexedFiles(ctx, idx.database.Db, params)
+			if err != nil {
+				log.Printf("[file-index] search %q on %q: %v", query, serial, err)
+				return
+			}
+			for _, row := range page {
+				if !visit(IndexedFile{
+					Name: row.Name, RelPath: joinRel(row.Dir, row.Name), DeviceSerial: serial,
+					Size: row.Size, ModTime: time.Unix(0, row.ModTime),
+				}) {
+					return
+				}
+			}
+			if len(page) < pageSize {
+				break
+			}
+			params.AfterDir, params.AfterName = page[len(page)-1].Dir, page[len(page)-1].Name
 		}
 	}
 }
 
 // HandleAdd adds a file to the index with its size and mtime (Unix nanoseconds),
-// or updates them for a file the index already holds.
+// or updates them for a file the index already holds. It takes the place of a
+// folder at that path, and of a file at any folder above it.
 func (idx *FileIndex) HandleAdd(serial, relPath string, size, mtime int64) {
 	parts := splitRel(relPath)
 	if len(parts) == 0 || isInternalPath(parts) {
 		return
 	}
-	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	root := idx.root(serial)
-	root.ensure(parts[:len(parts)-1]).putFile(parts[len(parts)-1], size, mtime)
-	root.forgetSize(parts)
+	stamp := idx.stamp()
+	idx.write(context.Background(), "add "+relPath, func(q db.Querier) error {
+		if err := ensureFolders(q, serial, parts[:len(parts)-1], stamp); err != nil {
+			return err
+		}
+		if err := q.DeleteIndexedDescendants(context.Background(), descendantsParams(serial, parts)); err != nil {
+			return err
+		}
+		return q.UpsertIndexedEntry(context.Background(), entry(serial, parts, false, size, mtime, stamp))
+	})
 }
 
 // FolderSize returns the sum of every file's size under the folder at relPath
 // on the device with serial, the root for "", and false when the index holds
-// no such folder. Each folder remembers its total until a change below it, so
-// asking again costs a lookup.
+// no such folder.
+//
+// ponytail: sums the rows under the folder on every call, so listing a root
+// whose folders hold a million files reads a million sizes; remember totals
+// per folder if that listing shows up slow.
 func (idx *FileIndex) FolderSize(serial, relPath string) (int64, bool) {
-	// The write lock, because the totals are remembered as they are summed.
-	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	dir := idx.roots[serial].lookup(splitRel(relPath))
-	if dir == nil {
-		return 0, false
+	ctx := context.Background()
+	parts := splitRel(relPath)
+	if len(parts) == 0 {
+		row, err := idx.database.Queries.SumIndexedSerial(ctx, serial)
+		if err != nil {
+			log.Printf("[file-index] size of %q: %v", serial, err)
+		}
+		return row.Total, row.Entries > 0
 	}
-	return dir.totalSize(), true
+	d := descendantsParams(serial, parts)
+	row, err := idx.database.Queries.SumIndexedFolder(ctx, db.SumIndexedFolderParams{
+		Serial: serial, Parent: joinParts(parts[:len(parts)-1]), Name: parts[len(parts)-1],
+		Path: d.Path, DirFrom: d.DirFrom, DirTo: d.DirTo,
+	})
+	if err != nil {
+		log.Printf("[file-index] size of %q on %q: %v", relPath, serial, err)
+	}
+	return row.Total, row.Entries > 0
 }
 
 // HandleDelete removes a file or a folder, and everything in the folder,
@@ -117,12 +156,10 @@ func (idx *FileIndex) HandleDelete(serial, relPath string) {
 	if len(parts) == 0 {
 		return
 	}
-	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	if root := idx.roots[serial]; root != nil {
-		root.forgetSize(parts)
-		root.lookup(parts[:len(parts)-1]).remove(parts[len(parts)-1])
-	}
+	idx.write(context.Background(), "delete "+relPath, func(q db.Querier) error {
+		_, err := q.DeleteIndexedPath(context.Background(), pathParams(serial, parts))
+		return err
+	})
 }
 
 // HandleMove renames a file or a folder in the index; a folder takes
@@ -130,10 +167,44 @@ func (idx *FileIndex) HandleDelete(serial, relPath string) {
 // device's namespace, at its new location instead.
 func (idx *FileIndex) HandleMove(ctx context.Context, fsys vfs.VFS, serial, oldRelPath, newRelPath string) {
 	oldParts, newParts := splitRel(oldRelPath), splitRel(newRelPath)
-	if len(oldParts) == 0 || len(newParts) == 0 {
+	if len(oldParts) == 0 || len(newParts) == 0 || slices.Equal(oldParts, newParts) {
 		return
 	}
-	if !idx.reattach(serial, oldParts, newParts) {
+	stamp := idx.stamp()
+	moved := false
+	idx.write(ctx, "move "+oldRelPath, func(q db.Querier) error {
+		moved = false
+		if isInternalPath(newParts) {
+			// A move into the trash only drops it.
+			n, err := q.DeleteIndexedPath(ctx, pathParams(serial, oldParts))
+			moved = n > 0
+			return err
+		}
+		if _, err := q.DeleteIndexedPath(ctx, pathParams(serial, newParts)); err != nil {
+			return err
+		}
+		from := descendantsParams(serial, oldParts)
+		under, err := q.MoveIndexedDescendants(ctx, db.MoveIndexedDescendantsParams{
+			NewPath: joinParts(newParts), Serial: serial, Path: from.Path, DirFrom: from.DirFrom, DirTo: from.DirTo,
+		})
+		if err != nil {
+			return err
+		}
+		self, err := q.RenameIndexedEntry(ctx, db.RenameIndexedEntryParams{
+			NewDir: joinParts(newParts[:len(newParts)-1]), NewName: newParts[len(newParts)-1],
+			NewSearchName: strings.ToLower(newParts[len(newParts)-1]),
+			Serial:        serial, Dir: joinParts(oldParts[:len(oldParts)-1]), Name: oldParts[len(oldParts)-1],
+		})
+		if err != nil {
+			return err
+		}
+		moved = under+self > 0
+		if !moved {
+			return nil
+		}
+		return ensureFolders(q, serial, newParts[:len(newParts)-1], stamp)
+	})
+	if !moved {
 		idx.HandleRescan(ctx, fsys, serial, newRelPath)
 	}
 }
@@ -165,20 +236,18 @@ func (idx *FileIndex) HandleRescan(ctx context.Context, fsys vfs.VFS, serial, re
 		}
 	}
 
-	// The subfolders the index already holds are not walked again; the rest
-	// are walked whole, before the write lock is taken.
-	idx.mu.RLock()
-	var held map[string]bool
-	if root := idx.roots[serial]; root != nil {
-		if known := root.lookup(parts); known != nil {
-			held = make(map[string]bool, len(known.dirs))
-			for _, dir := range known.dirs {
-				held[dir.name] = true
-			}
-		}
+	dir := joinParts(parts)
+	names, err := idx.database.Queries.ListIndexedChildFolders(ctx, db.ListIndexedChildFoldersParams{Serial: serial, Dir: dir})
+	if err != nil {
+		log.Printf("[file-index] rescan %q on %q: %v", relPath, serial, err)
+		return
 	}
-	idx.mu.RUnlock()
-	fresh, err := scanFolder(ctx, fsys, parts, held)
+	held := make(map[string]bool, len(names))
+	for _, name := range names {
+		held[name] = true
+	}
+	stamp := idx.stamp()
+	err = idx.walk(ctx, fsys, serial, parts, held, stamp)
 	if errors.Is(err, vfs.ErrNotFound) {
 		idx.HandleDelete(serial, relPath)
 		return
@@ -186,38 +255,30 @@ func (idx *FileIndex) HandleRescan(ctx context.Context, fsys vfs.VFS, serial, re
 	if err != nil {
 		return
 	}
-
-	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	root := idx.root(serial)
-	var parent *indexDir
-	old := root
-	if len(parts) > 0 {
-		parent = root.ensure(parts[:len(parts)-1])
-		old = parent.child(parts[len(parts)-1])
-	}
-	// A held folder a rebuild dropped in between stays empty.
-	for i, dir := range fresh.dirs {
-		if !held[dir.name] {
-			continue
+	idx.write(ctx, "rescan "+relPath, func(q db.Querier) error {
+		if err := ensureFolders(q, serial, parts, stamp); err != nil {
+			return err
 		}
-		if kept := old.child(dir.name); kept != nil {
-			fresh.dirs[i] = kept
+		gone, err := q.ListStaleIndexedChildren(ctx, db.ListStaleIndexedChildrenParams{Serial: serial, Dir: dir, IndexedAt: stamp})
+		if err != nil {
+			return err
 		}
-	}
-	if parent == nil {
-		idx.roots[serial] = fresh
-	} else {
-		parent.putDir(parts[len(parts)-1], fresh)
-	}
-	root.forgetSize(parts)
+		for _, name := range gone {
+			if _, err := q.DeleteIndexedPath(ctx, pathParams(serial, append(slices.Clone(parts), name))); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
-// BuildAndWatch builds the index from every device namespace in the
-// registry, then starts a background goroutine that subscribes to the event
-// bus and keeps the index current on upload, delete, move and new folder
-// events, rebuilding it whole on a resync. An event for a device with no
-// registered namespace is dropped.
+// BuildAndWatch subscribes to the event bus, brings the index in line with
+// every device namespace in the registry, then starts a background goroutine
+// that keeps the index current on upload, delete, move and new folder events,
+// rebuilding it whole on a resync. An event for a device with no registered
+// namespace is dropped. The server runs it off the path to binding its
+// listener: until it finishes, searches answer from what the index held when
+// the last process stopped.
 //
 // Call this once at startup. The goroutine runs until the event bus channel
 // is closed (i.e. when the bus is shut down).
@@ -226,14 +287,13 @@ func (idx *FileIndex) BuildAndWatch(params BuildAndWatchParams) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	// Subscribe before the walk, so no event published while it runs is
+	// missed.
+	events, unsub := params.Bus.Subscribe("file-index")
 	idx.Build(ctx, params.Registry)
 	if params.Storage != nil {
 		params.Storage.OnDevicesChanged(func() { go idx.Sync(ctx, params.Registry) })
 	}
-
-	// Subscribe before returning, so no event published after the build is
-	// missed while the goroutine starts.
-	events, unsub := params.Bus.Subscribe("file-index")
 	go func() {
 		defer unsub()
 		for evt := range events {
@@ -264,63 +324,111 @@ func (idx *FileIndex) handleEvent(ctx context.Context, registry vfs.Registry, ev
 	}
 }
 
-// reattach moves the node at oldParts to newParts, reporting whether there was
-// one. A move into an internal folder, the trash, only drops it.
-func (idx *FileIndex) reattach(serial string, oldParts, newParts []string) bool {
-	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	root := idx.root(serial)
-	oldParent, oldName := root.lookup(oldParts[:len(oldParts)-1]), oldParts[len(oldParts)-1]
-	if oldParent == nil {
-		return false
-	}
-	i, isFile := oldParent.findFile(oldName)
-	dir := oldParent.child(oldName)
-	if !isFile && dir == nil {
-		return false
-	}
-	var size, mtime int64
-	if isFile {
-		size, mtime = oldParent.sizes[i], oldParent.modTimes[i]
-	}
-	root.forgetSize(oldParts)
-	oldParent.remove(oldName)
-	if isInternalPath(newParts) {
-		return true
-	}
-	newParent, newName := root.ensure(newParts[:len(newParts)-1]), newParts[len(newParts)-1]
-	if isFile {
-		newParent.putFile(newName, size, mtime)
-	} else {
-		newParent.putDir(newName, dir)
-	}
-	root.forgetSize(newParts)
-	return true
+// reconcile walks the device with serial whole and drops every row the walk
+// did not write. A walk that fails part way keeps only what it read, as the
+// in-memory index did.
+func (idx *FileIndex) reconcile(ctx context.Context, fsys vfs.VFS, serial string) {
+	stamp := idx.stamp()
+	_ = idx.walk(ctx, fsys, serial, nil, nil, stamp)
+	idx.write(ctx, "reconcile", func(q db.Querier) error {
+		return q.DeleteStaleIndexedSerial(ctx, db.DeleteStaleIndexedSerialParams{Serial: serial, IndexedAt: stamp})
+	})
 }
 
-// syncRoots drops the devices not in present and adds the walked ones not
-// indexed yet.
-func (idx *FileIndex) syncRoots(present map[string]vfs.VFS, added map[string]*indexDir) {
-	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	for serial := range idx.roots {
+// walk writes every entry under the folder at parts in fsys, stamped with
+// stamp, a batch per transaction. A subfolder directly in it named in held is
+// written but not walked: its rows are kept as they are. One held name that is
+// now a file loses what the index held under it.
+func (idx *FileIndex) walk(ctx context.Context, fsys vfs.VFS, serial string, parts []string, held map[string]bool, stamp int64) error {
+	var batch []db.UpsertIndexedEntryParams
+	var dropped [][]string
+	flush := func() {
+		if len(batch) == 0 && len(dropped) == 0 {
+			return
+		}
+		idx.write(ctx, "walk", func(q db.Querier) error {
+			for _, p := range dropped {
+				if err := q.DeleteIndexedDescendants(ctx, descendantsParams(serial, p)); err != nil {
+					return err
+				}
+			}
+			for _, row := range batch {
+				if err := q.UpsertIndexedEntry(ctx, row); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		batch, dropped = batch[:0], dropped[:0]
+	}
+	depth := len(parts)
+	err := vfs.Walk(ctx, fsys, joinParts(parts), func(fi vfs.FileInfo) error {
+		rel := splitRel(fi.Path)
+		if len(rel) <= depth {
+			return nil
+		}
+		if isInternalPath(rel[depth:]) {
+			if fi.IsDir {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		size := fi.Size
+		if fi.IsDir {
+			size = 0
+		}
+		batch = append(batch, entry(serial, rel, fi.IsDir, size, fi.ModTime.UnixNano(), stamp))
+		direct := len(rel) == depth+1 && held[rel[depth]]
+		if direct && !fi.IsDir {
+			dropped = append(dropped, rel)
+		}
+		if len(batch) >= batchSize {
+			flush()
+		}
+		if direct && fi.IsDir {
+			return fs.SkipDir
+		}
+		return nil
+	})
+	flush()
+	return err
+}
+
+// dropAbsent drops every device not in present.
+func (idx *FileIndex) dropAbsent(ctx context.Context, present map[string]vfs.VFS) {
+	for _, serial := range idx.serials(ctx) {
 		if _, ok := present[serial]; !ok {
-			delete(idx.roots, serial)
-		}
-	}
-	for serial, dir := range added {
-		if idx.roots[serial] == nil {
-			idx.roots[serial] = dir
+			idx.write(ctx, "drop device", func(q db.Querier) error { return q.DeleteIndexedSerial(ctx, serial) })
 		}
 	}
 }
 
-// root returns the tree for serial, creating it. Callers hold the write lock.
-func (idx *FileIndex) root(serial string) *indexDir {
-	root := idx.roots[serial]
-	if root == nil {
-		root = &indexDir{}
-		idx.roots[serial] = root
+// serials lists the devices the index holds rows for, in order.
+func (idx *FileIndex) serials(ctx context.Context) []string {
+	serials, err := idx.database.Queries.ListIndexedSerials(ctx)
+	if err != nil {
+		log.Printf("[file-index] list devices: %v", err)
 	}
-	return root
+	return serials
+}
+
+// write runs fn in one transaction, logging a failure: an index that missed a
+// change is brought back in line by the next reconcile.
+func (idx *FileIndex) write(ctx context.Context, what string, fn func(db.Querier) error) {
+	if err := db.InTx(ctx, idx.database.Db, fn); err != nil {
+		log.Printf("[file-index] %s: %v", what, err)
+	}
+}
+
+// stamp returns an indexed_at later than any this index handed out before.
+func (idx *FileIndex) stamp() int64 {
+	for {
+		last, now := idx.lastStamp.Load(), time.Now().UnixNano()
+		if now <= last {
+			now = last + 1
+		}
+		if idx.lastStamp.CompareAndSwap(last, now) {
+			return now
+		}
+	}
 }

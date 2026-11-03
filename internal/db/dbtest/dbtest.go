@@ -39,7 +39,7 @@ import (
 //
 // The returned value carries both halves callers need: Db for raw SQL and
 // Queries for the generated ones.
-func NewDB(t *testing.T) *db.DatabaseSqlc {
+func NewDB(t testing.TB) *db.DatabaseSqlc {
 	t.Helper()
 
 	// A file rather than :memory:, because database/sql pools connections and

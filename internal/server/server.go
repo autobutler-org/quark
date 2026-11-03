@@ -114,10 +114,12 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	})
 	syncWorker.Start()
 
-	// Build the file index and start watching for changes.
-	// All event-dispatch logic lives in FileIndex.BuildAndWatch.
-	idx := indexutil.NewFileIndex()
-	idx.BuildAndWatch(indexutil.BuildAndWatchParams{
+	// Bring the file index in line with the disk and start watching for
+	// changes, off the path to binding the listener: until the walk is done,
+	// searches answer from what the database already holds (#2956). All
+	// event-dispatch logic lives in FileIndex.BuildAndWatch.
+	idx := indexutil.NewFileIndex(deps.Database())
+	go idx.BuildAndWatch(indexutil.BuildAndWatchParams{
 		Bus: deps.EventBus(), Registry: deps.VFSRegistry(), Storage: deps.StorageService(),
 	})
 	deps.WithFileIndex(idx)

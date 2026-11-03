@@ -336,6 +336,72 @@ func exerciseQuerier(t *testing.T, conn *sql.DB) {
 	// Music-library queries have no service caller yet; the next ticket adds
 	// one. Run them here so both engines stay in step until then.
 	exerciseMusic(ctx, t, q)
+	exerciseFileIndex(ctx, t, conn, q)
+}
+
+// exerciseFileIndex runs the filename index's shared queries (044_file_index):
+// the byte order of (dir, name) and subtree ranges, a folder move, a folder
+// total, and a substring search whose query carries LIKE's wildcards.
+func exerciseFileIndex(ctx context.Context, t *testing.T, conn *sql.DB, q db.Querier) {
+	t.Helper()
+	put := func(dir, name string, isDir bool, size int64) {
+		t.Helper()
+		if err := q.UpsertIndexedEntry(ctx, db.UpsertIndexedEntryParams{
+			Serial: "S", Dir: dir, Name: name, SearchName: strings.ToLower(name), IsDir: isDir, Size: size, IndexedAt: 1,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("", "a", true, 0)
+	put("a", "B_1%.txt", false, 10)
+	put("a", "c", true, 0)
+	put("a/c", "d.txt", false, 20)
+	put("", "a b.txt", false, 5)
+	search := func(query string) []string {
+		t.Helper()
+		var got []string
+		params := db.ListIndexedFilesPageParams{Serial: "S", Query: query, Limit: 2}
+		for {
+			page, err := db.SearchIndexedFiles(ctx, conn, params)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, r := range page {
+				got = append(got, r.Dir+"|"+r.Name)
+			}
+			if len(page) < 2 {
+				return got
+			}
+			params.AfterDir, params.AfterName = page[len(page)-1].Dir, page[len(page)-1].Name
+		}
+	}
+	if got, want := search(""), []string{"|a b.txt", "a|B_1%.txt", "a/c|d.txt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("every file: %v, want %v", got, want)
+	}
+	for _, query := range []string{"_1%", "%", "b_1%.t"} {
+		if got := search(query); !reflect.DeepEqual(got, []string{"a|B_1%.txt"}) {
+			t.Fatalf("search %q: %v, want only a|B_1%%.txt", query, got)
+		}
+	}
+	total, err := q.SumIndexedFolder(ctx, db.SumIndexedFolderParams{Serial: "S", Parent: "", Name: "a", Path: "a", DirFrom: "a/", DirTo: "a0"})
+	if err != nil || total.Total != 30 || total.Entries != 4 {
+		t.Fatalf("SumIndexedFolder(a) = %+v, %v, want 30 over 4 entries", total, err)
+	}
+	if n, err := q.MoveIndexedDescendants(ctx, db.MoveIndexedDescendantsParams{NewPath: "x", Path: "a", Serial: "S", DirFrom: "a/", DirTo: "a0"}); err != nil || n != 3 {
+		t.Fatalf("MoveIndexedDescendants = %d, %v, want 3", n, err)
+	}
+	if n, err := q.RenameIndexedEntry(ctx, db.RenameIndexedEntryParams{NewDir: "", NewName: "x", NewSearchName: "x", Serial: "S", Dir: "", Name: "a"}); err != nil || n != 1 {
+		t.Fatalf("RenameIndexedEntry = %d, %v, want 1", n, err)
+	}
+	if got, want := search(""), []string{"|a b.txt", "x|B_1%.txt", "x/c|d.txt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("after the move: %v, want %v", got, want)
+	}
+	if n, err := q.DeleteIndexedPath(ctx, db.DeleteIndexedPathParams{Serial: "S", Parent: "", Name: "x", Path: "x", DirFrom: "x/", DirTo: "x0"}); err != nil || n != 4 {
+		t.Fatalf("DeleteIndexedPath(x) = %d, %v, want 4", n, err)
+	}
+	if serials, err := q.ListIndexedSerials(ctx); err != nil || !reflect.DeepEqual(serials, []string{"S"}) {
+		t.Fatalf("ListIndexedSerials = %v, %v", serials, err)
+	}
 }
 
 // exerciseMusic checks the music cache: upsert, the path prefix, a move, a

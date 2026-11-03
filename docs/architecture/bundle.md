@@ -93,6 +93,6 @@ Rebuilt rather than copied, as for [the in-place move](postgres-move.md#derived-
 
 - **Content search** (`file_content`) is left empty in the bundle and on the target. The server's startup
   backfill extracts it again from the files.
-- **Filename search** is in memory and built from the files when the server starts.
-- **SQLite's FTS5 indexes** (`file_content_fts`, `music_tracks_fts`) are filled by their triggers as the rows
+- **Filename search** (`file_index`) is left empty too, and walked again from the files when the server starts.
+- **SQLite's FTS5 indexes** (`file_content_fts`, `file_index_fts`, `music_tracks_fts`) are filled by their triggers as the rows
   arrive on a SQLite target, and are not in the PostgreSQL schema at all.

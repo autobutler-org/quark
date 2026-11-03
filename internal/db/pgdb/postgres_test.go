@@ -133,9 +133,11 @@ func TestPostgresSchemaMatchesSQLite(t *testing.T) {
 	// FTS5 virtual tables and the shadow tables SQLite creates beside them are
 	// not in the PostgreSQL schema. A new one has to be named here:
 	// file_content_fts (content search, whose PostgreSQL counterpart is the
-	// search_vector column skipped below) and music_tracks_fts (music search).
+	// search_vector column skipped below), music_tracks_fts (music search) and
+	// file_index_fts (filename search, which reads file_index directly there).
 	tables, err := sqlite.Query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
-		AND name != 'schema_migrations' AND name NOT LIKE 'file_content_fts%' AND name NOT LIKE 'music_tracks_fts%'`)
+		AND name != 'schema_migrations' AND name NOT LIKE 'file_content_fts%' AND name NOT LIKE 'music_tracks_fts%'
+		AND name NOT LIKE 'file_index_fts%'`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,6 +265,25 @@ func TestSQLiteNamedFunctions(t *testing.T) {
 		}
 		if got != tc.want {
 			t.Errorf("json_extract(%s, %s) = %+v, want %+v", tc.doc, tc.path, got, tc.want)
+		}
+	}
+
+	for _, tc := range []struct {
+		haystack, needle string
+		want             int64
+	}{
+		{"photos 2024", "2024", 8},
+		{"photos 2024", "", 1},
+		{"日本語.txt", ".txt", 4},
+		{"a%b_c", "%b_", 2},
+		{"abc", "x", 0},
+	} {
+		var got int64
+		if err := conn.QueryRow(`SELECT instr($1, $2)`, tc.haystack, tc.needle).Scan(&got); err != nil {
+			t.Fatalf("instr(%q, %q): %v", tc.haystack, tc.needle, err)
+		}
+		if got != tc.want {
+			t.Errorf("instr(%q, %q) = %d, want %d", tc.haystack, tc.needle, got, tc.want)
 		}
 	}
 }

@@ -1,15 +1,17 @@
-// Package indexutil keeps the in-memory file index behind filename search:
-// one tree of folders per managed device, holding each file's name, size and
-// mtime, built by walking each device's files namespace in the VFS registry
-// and kept current from file events. It also answers a folder's total size
+// Package indexutil keeps the file index behind filename search: one row per
+// file and folder on every managed device, with each file's name, size and
+// mtime, in the database's file_index table (044_file_index). It is brought in
+// line with each device's files namespace in the VFS registry at startup and
+// kept current from file events. It also answers a folder's total size
 // without a walk. The trash and the other internal names are never indexed.
 package indexutil
 
 import (
 	"context"
-	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -31,28 +33,25 @@ type IndexedFile struct {
 	ModTime time.Time
 }
 
-// FileIndex is a thread-safe in-memory index of the files on every managed
-// device, keyed by device serial. It is built once at startup and kept
-// current from file events.
+// FileIndex is the file index of every managed device, keyed by device
+// serial, held in the database rather than in process memory (#2956), so every
+// process on one database answers from the same index and a restart starts
+// from what the last one left.
 //
-// Each device is a tree of folders, so an event naming a folder reaches
-// everything under it in one step: a delete unlinks the folder's node and a
-// move reattaches it, whatever it holds (#2754). Paths are never stored; a
-// search rebuilds them on the way down, and only for the files it returns.
-//
-// A folder keeps the names of its files sorted and end to end in one string,
-// so a file costs its name's bytes and a 4-byte offset (#2760), plus 16 bytes
-// of size and mtime that let photos, recent files and folder sizes be served
-// without a walk (#2759): ~48 B a file against ~100 B for a map per folder
-// (BenchmarkFileIndexHeap).
+// A path is stored as the folder it sits in and its name, and folders have
+// rows of their own, so an event naming a folder reaches everything under it
+// in one statement: a delete drops the range of rows under it and a move
+// rewrites their folder (#2754).
 type FileIndex struct {
-	mu    sync.RWMutex
-	roots map[string]*indexDir // key: device serial, "" for the internal drive
+	database *db.DatabaseSqlc
+	// lastStamp is the last indexed_at handed out, so two writes in one
+	// nanosecond still stamp in order.
+	lastStamp atomic.Int64
 }
 
-// NewFileIndex creates and returns an empty FileIndex.
-func NewFileIndex() *FileIndex {
-	return &FileIndex{roots: make(map[string]*indexDir)}
+// NewFileIndex returns the file index held in database.
+func NewFileIndex(database *db.DatabaseSqlc) *FileIndex {
+	return &FileIndex{database: database}
 }
 
 // BuildAndWatchParams wires a FileIndex to the server.

@@ -691,6 +691,7 @@
     "strikethrough",
     "stringutil",
     "stripspace",
+    "strpos",
     "strs",
     "stylesheet",
     "subchunks",
