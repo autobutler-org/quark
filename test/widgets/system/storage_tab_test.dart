@@ -8,6 +8,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/storage_devices/credentials_dialog.dart';
+import 'package:quark/widgets/storage_devices/eject_drive_dialog.dart';
 import 'package:quark/widgets/storage_devices/snapshot_backup_dialog.dart';
 import 'package:quark/widgets/system/storage_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,18 +18,22 @@ import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// The Storage tab's dialogs: the credentials dialog owns its text
 /// controllers, so closing it and letting it animate out never rebuilds a
-/// field with a disposed controller (#3102), and a snapshot backup asks for
-/// no password at all (#3460).
+/// field with a disposed controller (#3102), a snapshot backup asks for
+/// no password at all (#3460), and Eject asks before it unmounts (#1664).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   /// The body of the last snapshot backup the tab started.
   Object? backupBody;
 
+  /// The method and path of every unmount the tab sent.
+  final ejectRequests = <String>[];
+
   setUpAll(mockSecureStorage);
 
   setUp(() async {
     backupBody = null;
+    ejectRequests.clear();
     SharedPreferences.setMockInitialValues({
       'hosts': jsonEncode([
         {'name': 'Home', 'hostAddress': 'http://quark.local'},
@@ -55,6 +60,10 @@ void main() {
           }),
           200,
         );
+      }
+      if (request.url.path == '/api/v0/storage/devices/usb/USB2') {
+        ejectRequests.add('${request.method} ${request.url.path}');
+        return http.Response(jsonEncode({'message': 'ok'}), 200);
       }
       if (request.url.path == '/api/v0/storage/devices/snapshot-backup') {
         backupBody = jsonDecode(request.body);
@@ -134,5 +143,25 @@ void main() {
     expect(backupBody, {'targetDeviceSerial': 'USB2'});
     // Unmounts the tab, which stops its status poll.
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Eject asks first, then unmounts the drive', (tester) async {
+    await openFromCard(tester, 'Eject');
+    expect(find.byType(EjectDriveDialog), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('eject_dialog_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(ejectRequests, ['DELETE /api/v0/storage/devices/usb/USB2']);
+    expect(find.text('Backups is safe to unplug'), findsOneWidget);
+  });
+
+  testWidgets('canceling Eject sends nothing', (tester) async {
+    await openFromCard(tester, 'Eject');
+
+    await closeWith(tester, 'Cancel');
+
+    expect(find.byType(EjectDriveDialog), findsNothing);
+    expect(ejectRequests, isEmpty);
   });
 }

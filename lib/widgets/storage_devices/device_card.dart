@@ -16,6 +16,8 @@ class DeviceCard extends StatelessWidget {
     this.onSetRole,
     this.onBackup,
     this.onVerify,
+    this.onEject,
+    this.isEjecting = false,
     this.isBackupRunning = false,
     this.protectionBadge,
     super.key,
@@ -27,6 +29,13 @@ class DeviceCard extends StatelessWidget {
   final VoidCallback? onSetRole;
   final VoidCallback? onBackup;
   final VoidCallback? onVerify;
+
+  /// Unmounts a plugged-in drive so it can be unplugged. Shown only for an
+  /// enabled external drive, and disabled while a backup runs.
+  final VoidCallback? onEject;
+
+  /// Whether this drive's eject is in flight.
+  final bool isEjecting;
   final bool isBackupRunning;
 
   /// The protection level, drawn beside **Back Up** when that button is
@@ -120,6 +129,17 @@ class DeviceCard extends StatelessWidget {
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 2),
+
+            if (device.isUnmounted) ...[
+              Text(
+                key: const ValueKey('device_card_safe_to_remove'),
+                'Not mounted · safe to unplug',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 2),
+            ],
 
             Text(
               '${device.mountPoint}  ·  ${device.fileSystem}',
@@ -227,6 +247,15 @@ class DeviceCard extends StatelessWidget {
                       onPressed: isBackupRunning ? null : onVerify,
                       icon: const Icon(QuarkIcons.verified_outlined, size: 16),
                       label: const Text('Verify'),
+                    ),
+                  if (!device.isInternal && onEject != null)
+                    OutlinedButton.icon(
+                      key: ValueKey('device_card_eject_${device.serial}'),
+                      onPressed: isEjecting || isBackupRunning ? null : onEject,
+                      icon: isEjecting
+                          ? const QuarkLoader(size: 14)
+                          : const Icon(QuarkIcons.eject_outlined, size: 16),
+                      label: Text(isEjecting ? 'Ejecting…' : 'Eject'),
                     ),
                 ],
               ),

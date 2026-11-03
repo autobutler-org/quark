@@ -283,3 +283,23 @@ including one that is not mounted.
 
 - The page shows the verdict, the sentence, and whether the drive is worse than the current default storage, as the Quark sent them. It does not score the drive again.
 - A future action that formats or erases a drive has to come through this same health check and acknowledgment. This journey does not erase a drive.
+
+---
+
+### JN-SD-014: Eject a plugged-in drive
+
+**Preconditions:** User is signed in as an admin. A USB storage drive is connected and mounted.
+
+**Steps:**
+
+1. Navigate to `/system/storage`.
+2. Tap **Eject** on the drive.
+3. Read the confirmation, then tap **Eject**.
+
+**Expected result:**
+
+- The confirmation says Quark stops using the drive and its files leave Files until it is mounted again. On the default storage drive it also warns that new uploads will fail until then.
+- Canceling leaves the drive mounted.
+- After **Eject**, a message says the drive is safe to unplug, and its card reads **Not mounted · safe to unplug** with a **Mount** button.
+- **Eject** is disabled while a backup runs. When the drive's files are still in use, the Quark refuses and the page shows the error.
+- A non-admin is not offered **Eject**.
