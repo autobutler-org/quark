@@ -1,5 +1,5 @@
 # cspell:words GOBIN
-# The x64-quark-backend / arm-quark-backend runner. Go, Node, Docker, the
+# The errand-x64-quark-backend / errand-arm-quark-backend runner. Go, Node, Docker, the
 # backend tools, and the Actions runner.
 
 # Ubuntu 22.04, the release linux/AppImageBuilder.yml bundles libraries from. The

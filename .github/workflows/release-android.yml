@@ -57,7 +57,7 @@ defaults:
 jobs:
   release-android:
     # Android builds are Linux-native, so unlike iOS this needs no macOS runner.
-    # errand: group errand, label x64-quark-full. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    # errand: group errand, label errand-x64-quark-full. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -72,12 +72,12 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      # errand: remove on x64-quark-full; ci-full carries Go.
+      # errand: remove on errand-x64-quark-full; ci-full carries Go.
       - name: Setup go
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      # errand: remove on x64-quark-full; ci-full carries Flutter.
+      # errand: remove on errand-x64-quark-full; ci-full carries Flutter.
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
 
