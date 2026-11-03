@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/chat_controller.dart';
@@ -7,8 +8,12 @@ import 'package:quark/controllers/chat_unread_controller.dart';
 import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
+import 'package:quark/models/chat_poll.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark/utils/chat_poll_export.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/fake_chat.dart';
@@ -1639,6 +1644,79 @@ void main() {
 
     expect(chat.controller.mentionNames, ['ada', 'bob', 'Carol']);
     expect(chat.controller.currentUserName, 'ada');
+    chat.controller.dispose();
+  });
+
+  // #3894: export goes where it was asked, the Quark copy beside any file
+  // of the same name, with the answers this device opened.
+  test('exports a poll to a download or the home folder', () async {
+    final chat = FakeChat();
+    chat.entries[1] = [
+      ChatTimelineMessage(
+        message: ChatMessage(
+          id: 5,
+          channelId: 1,
+          authorId: 7,
+          keyVersion: 1,
+          ciphertext: null,
+          createdAt: DateTime.utc(2026, 9, 25),
+          poll: const ChatPoll(),
+        ),
+        state: ChatMessageState.ready,
+        question: const ChatPollQuestion(
+          prompt: 'Lunch?',
+          options: ['Soup', 'Salad'],
+        ),
+        pollAnswers: [
+          ChatOpenPollAnswer(
+            response: ChatPollResponse(
+              id: 1,
+              messageId: 5,
+              userId: 7,
+              keyVersion: 1,
+              ciphertext: Uint8List(0),
+            ),
+            answer: const ChatPollAnswer(choices: [1]),
+          ),
+        ],
+      ),
+    ];
+    chat.controller.select('general');
+    await chat.controller.refresh();
+
+    expect(
+      await chat.controller.exportPoll(
+        '5',
+        ChatPollExportFormat.csv,
+        ChatPollExportDestination.download,
+      ),
+      'Lunch.csv',
+    );
+    expect(chat.exported, 'Name,Lunch?\nada,Salad');
+
+    final home = homePath(AppSettings.instance.username);
+    expect(
+      await chat.controller.exportPoll(
+        '5',
+        ChatPollExportFormat.qsheet,
+        ChatPollExportDestination.quark,
+      ),
+      '$home/Lunch.qsheet',
+    );
+    expect(chat.calls, [
+      'download Lunch.csv',
+      'upload "$home" Lunch.qsheet keepBoth=true',
+    ]);
+
+    expect(
+      await chat.controller.exportPoll(
+        '6',
+        ChatPollExportFormat.json,
+        ChatPollExportDestination.download,
+      ),
+      isNull,
+      reason: 'not a loaded poll',
+    );
     chat.controller.dispose();
   });
 }

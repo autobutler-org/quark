@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:quark/models/vault_item.dart';
+import 'package:quark/utils/csv_writer.dart';
 
 /// The two plaintext export formats the vault writes (#3461), in the shapes
 /// the Quark's old `GET /vault/export` wrote, so an export from before reads
@@ -50,7 +51,7 @@ String vaultExport(List<VaultItem> items, VaultExportFormat format) {
       ],
       'folders': folders.values.toList(),
     }),
-    VaultExportFormat.csv => [
+    VaultExportFormat.csv => csvFromRows([
       ['name', 'url', 'username', 'password', 'notes', 'totp_secret', 'folder'],
       for (final e in entries)
         [
@@ -62,13 +63,6 @@ String vaultExport(List<VaultItem> items, VaultExportFormat format) {
           e.totpSecret,
           folderOf(e),
         ],
-    ].map((row) => row.map(_csvField).join(',')).join('\n'),
+    ]),
   };
 }
-
-/// [value] as one CSV field: quoted when it holds a comma, a quote, a line
-/// break or a leading space, with quotes doubled.
-String _csvField(String value) =>
-    value.contains(RegExp(r'[",\r\n]')) || value.startsWith(' ')
-    ? '"${value.replaceAll('"', '""')}"'
-    : value;

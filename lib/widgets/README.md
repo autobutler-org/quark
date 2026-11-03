@@ -50,6 +50,8 @@ lib/widgets/
                                 in place of the messages; reads Errors
     show_chat_poll_editor.dart  opens QuarkPollEditor as a sheet or a dialog
                                 and posts through ChatController (#3894)
+    show_chat_poll_export.dart  asks a poll export's format and destination;
+                                the package has no export dialog (#3894)
   code_viewer/
     code_viewer_body.dart       QuarkCodeViewer fed from a
                                 CodeViewerController; reads AppSettings for
