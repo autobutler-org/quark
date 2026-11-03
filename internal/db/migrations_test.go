@@ -2,7 +2,9 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -963,5 +965,83 @@ INSERT INTO settings (key, value) VALUES
 	}
 	if err := m.Migrate(dropSlidesFeatureFlagVersion); err != nil {
 		t.Fatalf("migrate up again: %v", err)
+	}
+}
+
+// millisecondTimestampsVersion is 044_millisecond_timestamps, the migration
+// that makes column defaults stamp milliseconds (#3170).
+const millisecondTimestampsVersion = 44
+
+// TestMillisecondTimestampsMigration checks every DATETIME default stamps
+// milliseconds after 044, on the connection that ran it and on one opened
+// before it, that the edited schema passes SQLite's integrity check, and that
+// the migration rolls back to second-precision defaults and forward again.
+func TestMillisecondTimestampsMigration(t *testing.T) {
+	conn, m := migrateTo(t, millisecondTimestampsVersion-1)
+
+	// A second handle on the same file, its schema read before the migration.
+	path := ""
+	if err := conn.QueryRow(`SELECT file FROM pragma_database_list WHERE name = 'main'`).Scan(&path); err != nil {
+		t.Fatalf("database path: %v", err)
+	}
+	other, err := sql.Open("sqlite", DSN(path))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { other.Close() })
+	other.SetMaxOpenConns(1)
+	if count(t, other, `SELECT COUNT(*) FROM device_names`) != 0 {
+		t.Fatal("device_names not empty")
+	}
+
+	defaults := func(spelling string) int {
+		return count(t, conn, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND instr(sql, ?) > 0`, spelling)
+	}
+	const seconds = `DEFAULT (datetime('now'))`
+	const millis = `DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))`
+	tables := defaults(seconds)
+	if tables == 0 {
+		t.Fatal("no table carries a datetime('now') default before 044")
+	}
+
+	if err := m.Migrate(millisecondTimestampsVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", millisecondTimestampsVersion, err)
+	}
+	if n := defaults(seconds); n != 0 {
+		t.Errorf("%d tables still default to datetime('now')", n)
+	}
+	if n := defaults(millis); n != tables {
+		t.Errorf("%d tables default to milliseconds, want %d", n, tables)
+	}
+	var check string
+	if err := conn.QueryRow(`PRAGMA integrity_check`).Scan(&check); err != nil || check != "ok" {
+		t.Fatalf("integrity_check = %q, %v", check, err)
+	}
+
+	for i, db := range []*sql.DB{conn, other} {
+		serial := fmt.Sprintf("serial-%d", i)
+		if _, err := db.Exec(`INSERT INTO device_names (device_serial, display_name) VALUES (?, 'disk')`, serial); err != nil {
+			t.Fatalf("insert %s: %v", serial, err)
+		}
+		var stamp string
+		if err := db.QueryRow(`SELECT CAST(updated_at AS TEXT) FROM device_names WHERE device_serial = ?`, serial).Scan(&stamp); err != nil {
+			t.Fatalf("read %s: %v", serial, err)
+		}
+		if !regexp.MustCompile(`^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$`).MatchString(stamp) {
+			t.Errorf("connection %d stamped %q, want milliseconds", i, stamp)
+		}
+	}
+
+	if err := m.Migrate(millisecondTimestampsVersion - 1); err != nil {
+		t.Fatalf("roll back: %v", err)
+	}
+	if n := defaults(seconds); n != tables {
+		t.Errorf("%d tables default to datetime('now') after rollback, want %d", n, tables)
+	}
+	if err := m.Migrate(millisecondTimestampsVersion); err != nil {
+		t.Fatalf("migrate forward again: %v", err)
+	}
+	if n := defaults(millis); n != tables {
+		t.Errorf("%d tables default to milliseconds after migrating again, want %d", n, tables)
 	}
 }

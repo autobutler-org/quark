@@ -39,9 +39,9 @@ UPDATE jobs
 SET
     status = 'running',
     attempts = attempts + 1,
-    started_at = CURRENT_TIMESTAMP,
+    started_at = strftime('%Y-%m-%d %H:%M:%f', 'now'),
     owner = sqlc.arg(owner),
-    heartbeat_at = CURRENT_TIMESTAMP
+    heartbeat_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     jobs.id = sqlc.arg(id)
     AND jobs.status = 'pending'
@@ -77,7 +77,7 @@ SET
     status = sqlc.arg(status),
     error = sqlc.arg(error),
     progress = sqlc.arg(progress),
-    finished_at = CURRENT_TIMESTAMP
+    finished_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = sqlc.arg(id)
     AND status = 'running'
@@ -89,7 +89,7 @@ RETURNING *;
 -- name: HeartbeatJobs :many
 UPDATE jobs
 SET
-    heartbeat_at = CURRENT_TIMESTAMP
+    heartbeat_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     owner = sqlc.arg(owner)
     AND status = 'running'
@@ -132,7 +132,7 @@ RETURNING *;
 UPDATE jobs
 SET
     status = 'canceled',
-    finished_at = CURRENT_TIMESTAMP
+    finished_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = sqlc.arg(id)
     AND status IN ('pending', 'running')
@@ -148,7 +148,7 @@ UPDATE jobs
 SET
     status = 'failed',
     error = sqlc.arg(reason),
-    finished_at = CURRENT_TIMESTAMP
+    finished_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     status = 'running'
     AND attempts >= sqlc.arg(max_attempts)

@@ -11,7 +11,7 @@ import (
 )
 
 const closeChatPoll = `-- name: CloseChatPoll :execrows
-UPDATE chat_polls SET closed_at = CURRENT_TIMESTAMP
+UPDATE chat_polls SET closed_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE message_id = ?1 AND closed_at IS NULL
 `
 
@@ -248,7 +248,7 @@ WHERE chat_polls.message_id = ?4
 ON CONFLICT (message_id, user_id) DO UPDATE SET
     key_version = excluded.key_version,
     ciphertext = excluded.ciphertext,
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 RETURNING id, message_id, user_id, key_version, ciphertext, created_at, updated_at
 `
 

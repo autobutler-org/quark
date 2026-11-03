@@ -80,8 +80,9 @@ A shared query may call a SQLite function only when the PostgreSQL schema define
 name for the form the query uses (rule 16 in `sql/queries/AGENTS.md`). Such a function is part of the
 PostgreSQL schema: it is created by a migration, it carries a comment naming the queries that rely on it and
 the forms it does not support, and it rejects an unsupported form rather than returning something
-plausible. `032_baseline.up.sql` defines two, `datetime(text, text)` and `json_extract(text, text)`;
-`TestSQLiteNamedFunctions` covers each form in use.
+plausible. `032_baseline.up.sql` defines `datetime(text, text)` and `json_extract(text, text)`, and
+`044_millisecond_timestamps.up.sql` defines `strftime(text, text)`; `TestSQLiteNamedFunctions` covers each
+form in use.
 
 An index on such an expression calls the same function in both schemas, as `idx_jobs_backup_target` does with
 `json_extract`, or the planner cannot match the query to the index.
@@ -159,8 +160,9 @@ SQLite import fill it table by table from the target's catalog (`fillSQLite`); a
 
 The schema and the queries are held equal by the tests. These are not, and code has to allow for them:
 
-- **A `TIMESTAMPTZ` keeps microseconds**, where SQLite's `DATETIME` text keeps whole seconds. Never rely on two
-  rows made in the same second tying, or on a time read back being equal to the second.
+- **A `TIMESTAMPTZ` keeps microseconds**, where SQLite's `DATETIME` text keeps milliseconds when SQL stamped
+  it and whole seconds when Go wrote a `time.Time`. Never rely on two rows made in the same second tying, or on
+  a time read back being equal to the second.
 - **A sequence does not give an id back.** A refused insert still uses one up.
 - **There is no single writer.** A guard that counts and then changes is exact on SQLite and can race on
   PostgreSQL at `READ COMMITTED` unless it takes a row lock first. The last-admin and last-channel-owner guards

@@ -45,7 +45,7 @@ ON CONFLICT (user_id) DO UPDATE SET
     wrapped_by_phrase = excluded.wrapped_by_phrase,
     salt_rp = excluded.salt_rp,
     kdf_params = excluded.kdf_params,
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 RETURNING
     *;
 

@@ -257,7 +257,7 @@ SET
     ciphertext = $1,
     nonce = $2,
     format_version = $3,
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = $4
     AND user_id = $5
@@ -304,7 +304,7 @@ SET
     wrapped_by_phrase = $3,
     salt_rp = $4,
     kdf_params = $5,
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     user_id = $6
 `

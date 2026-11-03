@@ -16,7 +16,7 @@ ON CONFLICT (name) DO NOTHING;
 UPDATE maintenance_runs
 SET
     owner = sqlc.arg(owner),
-    started_at = CURRENT_TIMESTAMP
+    started_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     name = sqlc.arg(name)
     AND started_at <= datetime('now', '-' || CAST(sqlc.arg(interval_seconds) AS BIGINT) || ' seconds');

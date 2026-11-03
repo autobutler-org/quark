@@ -228,7 +228,7 @@ func (q *Queries) ListChatMessagesBefore(ctx context.Context, arg ListChatMessag
 
 const tombstoneChatMessage = `-- name: TombstoneChatMessage :one
 UPDATE chat_messages
-SET ciphertext = NULL, deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP)
+SET ciphertext = NULL, deleted_at = COALESCE(deleted_at, strftime('%Y-%m-%d %H:%M:%f', 'now'))
 WHERE id = $1
 RETURNING id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at, nonce, client_message_id
 `

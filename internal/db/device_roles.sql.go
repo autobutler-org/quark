@@ -10,7 +10,7 @@ import (
 )
 
 const clearDefaultStorageRole = `-- name: ClearDefaultStorageRole :exec
-UPDATE device_roles SET role = 'unassigned', updated_at = CURRENT_TIMESTAMP
+UPDATE device_roles SET role = 'unassigned', updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE role = 'default-storage'
 `
 
@@ -73,10 +73,10 @@ func (q *Queries) GetDeviceRole(ctx context.Context, deviceSerial string) (strin
 
 const upsertDeviceRole = `-- name: UpsertDeviceRole :exec
 INSERT INTO device_roles (device_serial, role, updated_at)
-VALUES (?1, ?2, CURRENT_TIMESTAMP)
+VALUES (?1, ?2, strftime('%Y-%m-%d %H:%M:%f', 'now'))
 ON CONFLICT(device_serial) DO UPDATE SET
     role = excluded.role,
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 `
 
 type UpsertDeviceRoleParams struct {

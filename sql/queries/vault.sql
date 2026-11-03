@@ -40,7 +40,7 @@ SET
     wrapped_by_phrase = sqlc.arg(wrapped_by_phrase),
     salt_rp = sqlc.arg(salt_rp),
     kdf_params = sqlc.arg(kdf_params),
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     user_id = sqlc.arg(user_id);
 
@@ -93,7 +93,7 @@ SET
     ciphertext = sqlc.arg(ciphertext),
     nonce = sqlc.arg(nonce),
     format_version = sqlc.arg(format_version),
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = sqlc.arg(id)
     AND user_id = sqlc.arg(user_id)

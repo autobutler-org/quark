@@ -14,7 +14,7 @@ const cancelJob = `-- name: CancelJob :one
 UPDATE jobs
 SET
     status = 'canceled',
-    finished_at = CURRENT_TIMESTAMP
+    finished_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = $1
     AND status IN ('pending', 'running')
@@ -50,9 +50,9 @@ UPDATE jobs
 SET
     status = 'running',
     attempts = attempts + 1,
-    started_at = CURRENT_TIMESTAMP,
+    started_at = strftime('%Y-%m-%d %H:%M:%f', 'now'),
     owner = $1,
-    heartbeat_at = CURRENT_TIMESTAMP
+    heartbeat_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     jobs.id = $2
     AND jobs.status = 'pending'
@@ -156,7 +156,7 @@ UPDATE jobs
 SET
     status = 'failed',
     error = $1,
-    finished_at = CURRENT_TIMESTAMP
+    finished_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     status = 'running'
     AND attempts >= $2
@@ -224,7 +224,7 @@ SET
     status = $1,
     error = $2,
     progress = $3,
-    finished_at = CURRENT_TIMESTAMP
+    finished_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = $4
     AND status = 'running'
@@ -350,7 +350,7 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 const heartbeatJobs = `-- name: HeartbeatJobs :many
 UPDATE jobs
 SET
-    heartbeat_at = CURRENT_TIMESTAMP
+    heartbeat_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     owner = $1
     AND status = 'running'

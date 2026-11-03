@@ -14,7 +14,7 @@ WHERE
 INSERT INTO
     vfs_metadata (namespace, path, key, value, updated_at)
 VALUES
-    (sqlc.arg(namespace), sqlc.arg(path), sqlc.arg(key), sqlc.arg(value), CURRENT_TIMESTAMP)
+    (sqlc.arg(namespace), sqlc.arg(path), sqlc.arg(key), sqlc.arg(value), strftime('%Y-%m-%d %H:%M:%f', 'now'))
 ON CONFLICT (namespace, path, key) DO UPDATE SET
     value = excluded.value,
     updated_at = excluded.updated_at;

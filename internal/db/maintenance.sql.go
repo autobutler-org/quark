@@ -13,7 +13,7 @@ const claimMaintenanceRun = `-- name: ClaimMaintenanceRun :execrows
 UPDATE maintenance_runs
 SET
     owner = ?1,
-    started_at = CURRENT_TIMESTAMP
+    started_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     name = ?2
     AND started_at <= datetime('now', '-' || CAST(?3 AS BIGINT) || ' seconds')

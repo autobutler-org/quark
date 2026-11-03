@@ -32,6 +32,6 @@ SELECT * FROM chat_messages WHERE id = sqlc.arg(id);
 -- keeping the first deletion time when it is deleted twice.
 -- name: TombstoneChatMessage :one
 UPDATE chat_messages
-SET ciphertext = NULL, deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP)
+SET ciphertext = NULL, deleted_at = COALESCE(deleted_at, strftime('%Y-%m-%d %H:%M:%f', 'now'))
 WHERE id = sqlc.arg(id)
 RETURNING *;

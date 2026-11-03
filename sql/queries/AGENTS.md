@@ -60,19 +60,26 @@ LIMIT sqlc.arg(limit)
 LIMIT CAST(sqlc.arg('limit') AS BIGINT)
 ```
 
-### 3. `CURRENT_TIMESTAMP`, not `datetime('now')`
+### 3. Stamp a row with `strftime('%Y-%m-%d %H:%M:%f', 'now')`
 
 ```sql
 -- before
 UPDATE vault_keys SET updated_at = datetime('now') WHERE user_id = sqlc.arg(user_id);
--- after
 UPDATE vault_keys SET updated_at = CURRENT_TIMESTAMP WHERE user_id = sqlc.arg(user_id);
+-- after
+UPDATE vault_keys SET updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE user_id = sqlc.arg(user_id);
 ```
 
-On SQLite the two store the same text, `YYYY-MM-DD HH:MM:SS` in UTC, which is also what the DSN's
-`_time_format=datetime&_timezone=UTC` makes the driver write for a `time.Time` (`internal/db/dsn.go`). That
-matters because every SQLite `DATETIME` comparison is a text comparison: one value in another format would
-sort wrongly against the rest.
+`datetime('now')` and `CURRENT_TIMESTAMP` have one-second resolution on SQLite, so rows written within the
+same second would tie there and not on PostgreSQL. The `strftime` form is the finest SQLite offers,
+`YYYY-MM-DD HH:MM:SS.SSS` in UTC, and PostgreSQL has a function of the same name for exactly that form
+(rule 16). Column defaults use it too, from migration 044 on.
+
+Comparing against the current time still writes `CURRENT_TIMESTAMP` (`expires_at > CURRENT_TIMESTAMP`), which
+needs no function on PostgreSQL. Every SQLite `DATETIME` comparison is a text comparison, and the forms in use
+sort correctly against each other: SQL stamps `…:05.123`, and the DSN's `_time_format=datetime&_timezone=UTC`
+makes the driver write a `time.Time` as `…:05` (`internal/db/dsn.go`), which sorts before it. Any other
+format would sort wrongly against the rest.
 
 ### 4. `CAST(... AS BIGINT)`, never `AS INTEGER`
 
@@ -225,16 +232,17 @@ shared form, so such a query is a [per-engine query](#per-engine-queries).
 ### 16. A SQLite function needs a PostgreSQL function of the same name
 
 A query may call a function PostgreSQL lacks only when the PostgreSQL schema defines a function of that name
-for the form the query uses. Two are in use, both only where the value depends on the database's own clock or
-on JSON stored in a column:
+for the form the query uses. Three are in use, each only where the value depends on the database's own clock
+or on JSON stored in a column:
 
 - `datetime('now', '-' || CAST(sqlc.arg(seconds) AS BIGINT) || ' seconds')` — the job lease and maintenance
   interval comparisons. The seconds are never negative: `'--60 seconds'` is NULL on SQLite and an error on
   PostgreSQL.
 - `json_extract(column, '$.key')` — `GetActiveBackupJob`.
+- `strftime('%Y-%m-%d %H:%M:%f', 'now')` — every query that stamps a row with the current time (rule 3).
 
-Both are defined in `internal/db/migrations_postgres/032_baseline.up.sql`, each with a comment listing what it
-does not support. Adding a use, or a new form of an existing one, means adding or extending the function in a
+The first two are defined in `internal/db/migrations_postgres/032_baseline.up.sql` and `strftime` in
+`044_millisecond_timestamps.up.sql`, each with a comment listing what it does not support. Adding a use, or a new form of an existing one, means adding or extending the function in a
 PostgreSQL migration and its case in `TestSQLiteNamedFunctions` (`internal/db/pgdb/postgres_test.go`).
 
 Prefer computing the value in Go and passing it in as a parameter, so that neither engine needs a function

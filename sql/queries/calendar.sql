@@ -113,7 +113,7 @@ SET
     color_index = sqlc.arg(color_index),
     repeat_until = sqlc.arg(repeat_until),
     excluded_starts = sqlc.arg(excluded_starts),
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = sqlc.arg(id)
 RETURNING *;

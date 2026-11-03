@@ -218,7 +218,7 @@ func TestPostgresMigrationsRunDownAndUpAgain(t *testing.T) {
 	migrate(t, conn, "up")
 }
 
-// The functions the baseline defines under SQLite's names: the forms the
+// The functions the migrations define under SQLite's names: the forms the
 // shared queries use, and a refusal for a form they do not implement.
 func TestSQLiteNamedFunctions(t *testing.T) {
 	conn := openPostgres(t)
@@ -232,6 +232,20 @@ func TestSQLiteNamedFunctions(t *testing.T) {
 	}
 	if err := conn.QueryRow(`SELECT datetime('2026-01-01 00:00:00', '-90 seconds')`).Scan(&ago); err == nil {
 		t.Error("datetime() accepted a base other than 'now'")
+	}
+
+	var stamped time.Time
+	if err := conn.QueryRow(`SELECT strftime('%Y-%m-%d %H:%M:%f', 'now'), CURRENT_TIMESTAMP`).Scan(&stamped, &now); err != nil {
+		t.Fatalf("strftime('%%Y-%%m-%%d %%H:%%M:%%f', 'now'): %v", err)
+	}
+	if !stamped.Equal(now) {
+		t.Errorf("strftime('%%Y-%%m-%%d %%H:%%M:%%f', 'now') = %v, want CURRENT_TIMESTAMP %v", stamped, now)
+	}
+	if err := conn.QueryRow(`SELECT strftime('%Y-%m-%d', 'now')`).Scan(&stamped); err == nil {
+		t.Error("strftime() accepted a format other than milliseconds")
+	}
+	if err := conn.QueryRow(`SELECT strftime('%Y-%m-%d %H:%M:%f', '2026-01-01')`).Scan(&stamped); err == nil {
+		t.Error("strftime() accepted a base other than 'now'")
 	}
 
 	for _, tc := range []struct {

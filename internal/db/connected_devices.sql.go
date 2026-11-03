@@ -135,9 +135,9 @@ const upsertConnectedDevice = `-- name: UpsertConnectedDevice :one
 INSERT INTO
     connected_devices (ip_address, user_agent, first_seen_at, last_seen_at, request_count)
 VALUES
-    (?1, ?2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)
+    (?1, ?2, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'), 1)
 ON CONFLICT (ip_address, user_agent) DO UPDATE SET
-    last_seen_at = CURRENT_TIMESTAMP,
+    last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now'),
     request_count = connected_devices.request_count + 1
 RETURNING id, ip_address, user_agent, first_seen_at, last_seen_at, request_count
 `

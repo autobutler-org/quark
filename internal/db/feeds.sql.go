@@ -192,7 +192,7 @@ UPDATE feeds
 SET
     name = ?1,
     folder = ?2,
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = ?3
     AND user_id = ?4

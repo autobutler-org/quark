@@ -73,9 +73,10 @@ and re-runs the migrations in one transaction and keeps the same tables SQLite's
 
 ### What behaves differently
 
-- **Timestamps keep microseconds.** SQLite stores whole seconds. A handler that prints a time at full precision
-  shows the fraction, and rows made within one second, which tie on SQLite and come back in insertion order,
-  sort by their real order.
+- **Timestamps keep microseconds.** SQLite keeps milliseconds where SQL stamps a row (#3170), and whole seconds
+  where Go writes a `time.Time`. A handler that prints a time at full precision shows a longer fraction, and
+  rows made within one millisecond, which tie on SQLite and come back in insertion order, sort by their real
+  order.
 - **An id is not reused after a refused insert.** A PostgreSQL sequence moves on even when the insert fails, so
   ids can have gaps where SQLite's would not.
 - **A failed statement ends its transaction.** SQLite carries on to the next statement; PostgreSQL refuses every
