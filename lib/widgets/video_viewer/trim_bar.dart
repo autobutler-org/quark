@@ -7,9 +7,17 @@ import 'package:flutter/material.dart';
 /// - A highlighted selected region between start and end
 /// - Draggable circular handles at start and end positions
 /// - Timestamp labels above each handle
+/// - A thin playhead line at [position], drawn under the handles and deaf to
+///   touch, so it never covers or steals a drag from a handle (#3431)
+///
+/// Key prefixes: `trim_bar_start_handle`, `trim_bar_end_handle` and
+/// `trim_bar_playhead`.
 class TrimBar extends StatelessWidget {
   final double start; // 0.0–1.0 fraction
   final double end; // 0.0–1.0 fraction
+
+  /// Where playback is, as a 0.0–1.0 fraction of [duration].
+  final double position;
   final Duration duration;
   final ValueChanged<double> onStartChanged;
   final ValueChanged<double> onEndChanged;
@@ -18,6 +26,7 @@ class TrimBar extends StatelessWidget {
     super.key,
     required this.start,
     required this.end,
+    this.position = 0.0,
     required this.duration,
     required this.onStartChanged,
     required this.onEndChanged,
@@ -25,6 +34,10 @@ class TrimBar extends StatelessWidget {
 
   static const _handleSize = 24.0;
   static const _trackHeight = 6.0;
+  // Each handle answers touches across a full Material touch target, larger
+  // than the circle drawn for it.
+  static const _touchSize = kMinInteractiveDimension;
+  static const _playheadWidth = 2.0;
 
   // The label sits in a slot above the handle. Reserving the slot (rather than
   // letting the label size itself around the handle) is what keeps the
@@ -70,10 +83,16 @@ class TrimBar extends StatelessWidget {
           final width = constraints.maxWidth;
           final startX = start * width;
           final endX = end * width;
+          // The handles never get closer than one handle width, so the two
+          // circles cannot sit on top of each other.
+          final minGap = width > 0
+              ? (_handleSize / width).clamp(0.01, 1.0)
+              : 0.01;
 
           return SizedBox(
-            height: centerY + _handleSize / 2,
+            height: centerY + _touchSize / 2,
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
                 Positioned(
                   left: 0,
@@ -96,7 +115,21 @@ class TrimBar extends StatelessWidget {
                     color: primary.withValues(alpha: 0.7),
                   ),
                 ),
+                Positioned(
+                  left: (position.clamp(0.0, 1.0) * width - _playheadWidth / 2)
+                      .clamp(0.0, (width - _playheadWidth).clamp(0.0, width)),
+                  top: centerY - _handleSize / 2,
+                  child: IgnorePointer(
+                    child: Container(
+                      key: const ValueKey('trim_bar_playhead'),
+                      width: _playheadWidth,
+                      height: _handleSize,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
                 ..._buildHandle(
+                  key: const ValueKey('trim_bar_start_handle'),
                   centerX: startX,
                   width: width,
                   centerY: centerY,
@@ -105,10 +138,14 @@ class TrimBar extends StatelessWidget {
                   label: startLabel,
                   color: primary,
                   onDragDelta: (dx) => onStartChanged(
-                    ((startX + dx) / width).clamp(0.0, end - 0.01),
+                    ((startX + dx) / width).clamp(
+                      0.0,
+                      (end - minGap).clamp(0.0, 1.0),
+                    ),
                   ),
                 ),
                 ..._buildHandle(
+                  key: const ValueKey('trim_bar_end_handle'),
                   centerX: endX,
                   width: width,
                   centerY: centerY,
@@ -117,7 +154,10 @@ class TrimBar extends StatelessWidget {
                   label: endLabel,
                   color: primary,
                   onDragDelta: (dx) => onEndChanged(
-                    ((endX + dx) / width).clamp(start + 0.01, 1.0),
+                    ((endX + dx) / width).clamp(
+                      (start + minGap).clamp(0.0, 1.0),
+                      1.0,
+                    ),
                   ),
                 ),
               ],
@@ -158,6 +198,7 @@ class TrimBar extends StatelessWidget {
   /// being positioned, so the handle inherited the label's width and height
   /// and drifted right and down off the track.
   List<Widget> _buildHandle({
+    required Key key,
     required double centerX,
     required double width,
     required double centerY,
@@ -171,6 +212,7 @@ class TrimBar extends StatelessWidget {
     // bounds ordered so they stay valid.
     final labelLeftMax = (width - labelSize.width).clamp(0.0, double.infinity);
     final handleLeftMax = (width - _handleSize).clamp(0.0, double.infinity);
+    final handleLeft = (centerX - _handleSize / 2).clamp(0.0, handleLeftMax);
 
     return [
       Positioned(
@@ -186,22 +228,29 @@ class TrimBar extends StatelessWidget {
         ),
       ),
       Positioned(
-        top: centerY - _handleSize / 2,
-        left: (centerX - _handleSize / 2).clamp(0.0, handleLeftMax),
+        top: centerY - _touchSize / 2,
+        left: handleLeft - (_touchSize - _handleSize) / 2,
         child: GestureDetector(
+          key: key,
+          behavior: HitTestBehavior.opaque,
           onHorizontalDragUpdate: (details) => onDragDelta(details.delta.dx),
-          child: Container(
-            width: _handleSize,
-            height: _handleSize,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 4,
+          child: SizedBox.square(
+            dimension: _touchSize,
+            child: Center(
+              child: Container(
+                width: _handleSize,
+                height: _handleSize,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 4,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
