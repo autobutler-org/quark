@@ -45,9 +45,9 @@ enum ChatPollExportDestination {
 }
 
 /// [entry]'s results as rows: a header, then one row per answer that opened,
-/// oldest first. The first column is who answered, named through [nameOf],
-/// and is left out of an anonymous poll altogether; then one column per
-/// question, a choice as its option's label and text as written.
+/// in the order the poll lists them. The first column is who answered, named
+/// through [nameOf], and is left out of an anonymous poll altogether; then one
+/// column per question, a choice as its option's label and text as written.
 ///
 /// Call it only for an entry with a [ChatTimelineMessage.question].
 List<List<String>> chatPollExportRows(

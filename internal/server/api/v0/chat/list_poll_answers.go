@@ -9,7 +9,7 @@ import (
 
 // listPollAnswers godoc
 // @Summary List the answers to a chat poll the caller may see
-// @Description Returns the poll's answers, oldest first, as ciphertext. While a results-after-close poll is open, anyone but its author gets only their own answer. An anonymous poll's answers carry no userId, for the author too; the caller's own is marked mine. Needs read_messages; anyone else gets 404.
+// @Description Returns the answers the caller may see, as ciphertext: oldest first, or by ciphertext when the poll is anonymous. An anonymous poll's answers carry no userId, createdAt or updatedAt, for the author too, and an id that does not follow arrival order; the caller's own is marked mine. While a results-after-close poll is open, anyone but its author gets only their own answer. Needs read_messages; anyone else gets 404.
 // @Tags chat
 // @Produce json
 // @Param id path int true "Poll message id"

@@ -40,8 +40,10 @@ import 'package:sodium/sodium_sumo.dart';
 ///   its settings beside it for the Quark to enforce. [answerPoll] encrypts
 ///   this account's answer, padded so every answer is one size, and
 ///   [closePoll] closes one of this account's own. `chat_poll_answer_changed`
-///   and `chat_poll_closed` keep every poll current, and [pollItemFor]
-///   tallies one on this device.
+///   keeps a poll that names respondents current. An anonymous poll sends
+///   `chat_poll_answers_changed` with no answer, and the answers are read
+///   again. `chat_poll_closed` closes it here, and [pollItemFor] tallies one
+///   on this device.
 /// - A message under a key version this account has no grant of yet is
 ///   [ChatMessageState.waiting], and opens by itself once the grant lands
 ///   (the keys controller notifies).
@@ -775,6 +777,12 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
         final answer = data['answer'];
         if (messageId == null || answer is! Map<String, dynamic>) return;
         _putAnswer(messageId, ChatPollResponse.fromJson(answer));
+      case 'chat_poll_answers_changed':
+        final messageId = (data['messageId'] as num?)?.toInt();
+        if (messageId == null) return;
+        _reloadAnswers(messageId).catchError((Object e) {
+          debugPrint('[chat_messages_controller.dart] poll $messageId: $e');
+        });
       case 'chat_poll_closed':
         final messageId = (data['messageId'] as num?)?.toInt();
         final poll = _messages[messageId]?.message.poll;

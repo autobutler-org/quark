@@ -4669,7 +4669,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Stores the caller's answer to a poll, base64 ciphertext of the answer padded to 4 KiB and encrypted under the channel key of keyVersion, so it is exactly 4136 bytes. When the poll allows changing an answer a second one replaces the first; otherwise it is 409. The stored row goes as chat_poll_answer_changed to the readers who may see it: everyone, or while a results-after-close poll is open only its author and the caller. The Quark never sees the answer. Needs read_messages and add_reactions; a reader without add_reactions gets 403, and anyone without read_messages 404.",
+                "description": "Stores the caller's answer to a poll, base64 ciphertext of the answer padded to 4 KiB and encrypted under the channel key of keyVersion, so it is exactly 4136 bytes. When the poll allows changing an answer a second one replaces the first; otherwise it is 409. On a poll that names who answered, the stored row goes as chat_poll_answer_changed to the readers who may see it: everyone, or while a results-after-close poll is open only its author and the caller. An anonymous poll sends chat_poll_answers_changed with no answer instead, and while a results-after-close anonymous poll is open that note reaches the author on a delay. The returned answer of an anonymous poll has no timestamps and an id that does not follow arrival order. The Quark never sees the answer. Needs read_messages and add_reactions; a reader without add_reactions gets 403, and anyone without read_messages 404.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4751,7 +4751,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the poll's answers, oldest first, as ciphertext. While a results-after-close poll is open, anyone but its author gets only their own answer. An anonymous poll's answers carry no userId, for the author too; the caller's own is marked mine. Needs read_messages; anyone else gets 404.",
+                "description": "Returns the answers the caller may see, as ciphertext: oldest first, or by ciphertext when the poll is anonymous. An anonymous poll's answers carry no userId, createdAt or updatedAt, for the author too, and an id that does not follow arrival order; the caller's own is marked mine. While a results-after-close poll is open, anyone but its author gets only their own answer. Needs read_messages; anyone else gets 404.",
                 "produces": [
                     "application/json"
                 ],
@@ -12611,11 +12611,11 @@
                     "type": "boolean"
                 },
                 "anonymous": {
-                    "description": "Anonymous serves answers without the account that gave them, to\neveryone, the author included. The Quark still knows.",
+                    "description": "Anonymous serves answers without the account that gave them, and without\nthe time they arrived, to everyone, the author included. The Quark\nstill knows.",
                     "type": "boolean"
                 },
                 "answers": {
-                    "description": "Answers are the answers the caller may see, oldest first, in a\nListMessages page.",
+                    "description": "Answers are the answers the caller may see in a ListMessages page, oldest\nfirst, or by ciphertext when the poll is anonymous.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/chatutil.PollAnswer"
@@ -12650,9 +12650,11 @@
                     }
                 },
                 "createdAt": {
+                    "description": "CreatedAt is when the answer was stored, omitted on an anonymous poll.",
                     "type": "string"
                 },
                 "id": {
+                    "description": "ID is the stored row on a poll that names who answered. On an anonymous\npoll it is an opaque id, stable when that account changes its answer,\nthat does not follow arrival order.",
                     "type": "integer"
                 },
                 "keyVersion": {
@@ -12666,6 +12668,7 @@
                     "type": "boolean"
                 },
                 "updatedAt": {
+                    "description": "UpdatedAt is when the answer last changed, omitted on an anonymous poll.",
                     "type": "string"
                 },
                 "userId": {
@@ -12682,7 +12685,7 @@
                     "type": "boolean"
                 },
                 "anonymous": {
-                    "description": "Anonymous serves answers without the account that gave them, to\neveryone, the author included. The Quark still knows.",
+                    "description": "Anonymous serves answers without the account that gave them, and without\nthe time they arrived, to everyone, the author included. The Quark\nstill knows.",
                     "type": "boolean"
                 },
                 "closesAt": {

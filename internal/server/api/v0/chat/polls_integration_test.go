@@ -1,6 +1,7 @@
 package v0_chat_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"slices"
 	"strconv"
@@ -29,19 +30,23 @@ func pollPath(id int64, suffix string) string {
 }
 
 // drainPollEvents empties the bus and returns the chat_poll_answer_changed
-// events it held, in order, and how many chat_poll_closed it held.
-func (h harness) drainPollEvents() ([]eventbus.ChatPollAnswerChanged, int) {
+// events it held, the chat_poll_answers_changed notes, and how many
+// chat_poll_closed it held, each in order.
+func (h harness) drainPollEvents() ([]eventbus.ChatPollAnswerChanged, []eventbus.ChatPollAnswersChanged, int) {
 	var answers []eventbus.ChatPollAnswerChanged
+	var notes []eventbus.ChatPollAnswersChanged
 	closed := 0
 	for _, evt := range h.drain() {
 		switch evt.Kind {
 		case eventbus.EventChatPollAnswerChanged:
 			answers = append(answers, evt.Data.(eventbus.ChatPollAnswerChanged))
+		case eventbus.EventChatPollAnswersChanged:
+			notes = append(notes, evt.Data.(eventbus.ChatPollAnswersChanged))
 		case eventbus.EventChatPollClosed:
 			closed++
 		}
 	}
-	return answers, closed
+	return answers, notes, closed
 }
 
 // pollRoom has bob make a keyed channel where carol and dave are members, and
@@ -73,12 +78,12 @@ func TestChatPolls_AnswerCloseTombstone(t *testing.T) {
 
 	var carols chatutil.PollAnswer
 	h.expect(t, http.StatusOK, http.MethodPut, answer, "carol", answerBody('c'), &carols)
-	if carols.UserID != h.users["carol"] || !carols.Mine || carols.MessageID != poll.ID {
+	if carols.UserID != h.users["carol"] || !carols.Mine || carols.MessageID != poll.ID || carols.CreatedAt.IsZero() {
 		t.Errorf("stored = %+v", carols)
 	}
-	if heard, _ := h.drainPollEvents(); len(heard) != 1 || len(heard[0].Audience) != 2 ||
+	if heard, notes, _ := h.drainPollEvents(); len(heard) != 1 || len(notes) != 0 || len(heard[0].Audience) != 2 ||
 		heard[0].Answer.(chatutil.PollAnswer).UserID != h.users["carol"] {
-		t.Errorf("heard = %+v", heard)
+		t.Errorf("heard = %+v, notes = %+v", heard, notes)
 	}
 	h.expect(t, http.StatusConflict, http.MethodPut, answer, "carol", answerBody('c'), nil)
 
@@ -128,7 +133,7 @@ func TestChatPolls_AnswerCloseTombstone(t *testing.T) {
 		t.Errorf("closed = %+v", closed)
 	}
 	h.expect(t, http.StatusOK, http.MethodPost, closePath, "bob", "", nil)
-	if _, n := h.drainPollEvents(); n != 1 {
+	if _, _, n := h.drainPollEvents(); n != 1 {
 		t.Errorf("chat_poll_closed heard %d times, want 1", n)
 	}
 	h.expect(t, http.StatusConflict, http.MethodPut, answer, "bob", answerBody('b'), nil)
@@ -188,19 +193,26 @@ func TestChatPolls_AnonymousHidesUserIDs(t *testing.T) {
 		pollBody('p', `{"allowChange":false,"anonymous":true,"resultsAfterClose":false}`), &poll)
 	h.drainPollEvents()
 	for _, as := range []string{"carol", "dave"} {
-		if code, body := h.do(t, http.MethodPut, pollPath(poll.ID, "/answer"), as, answerBody('a')); code != http.StatusOK || strings.Contains(body, "userId") {
+		if code, body := h.do(t, http.MethodPut, pollPath(poll.ID, "/answer"), as, answerBody('a')); code != http.StatusOK || strings.Contains(body, "userId") || strings.Contains(body, "createdAt") {
 			t.Errorf("%s answering = %d %s", as, code, body)
 		}
 	}
-	heard, _ := h.drainPollEvents()
-	for _, evt := range heard {
-		if evt.Answer.(chatutil.PollAnswer).UserID != 0 {
-			t.Errorf("event names %d", evt.Answer.(chatutil.PollAnswer).UserID)
+	heard, notes, _ := h.drainPollEvents()
+	if len(heard) != 0 || len(notes) != 2 {
+		t.Errorf("heard %d per-answer events and %d notes, want 0 and 2", len(heard), len(notes))
+	}
+	for _, note := range notes {
+		raw, err := json.Marshal(note)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(raw), "userId") || strings.Contains(string(raw), "answer") || strings.Contains(string(raw), "createdAt") || len(note.Audience) != 3 {
+			t.Errorf("note = %s audience %v", raw, note.Audience)
 		}
 	}
 	for _, as := range []string{"bob", "carol"} {
 		code, body := h.do(t, http.MethodGet, pollPath(poll.ID, "/answers"), as, "")
-		if code != http.StatusOK || strings.Contains(body, "userId") || strings.Count(body, `"id"`) != 2 {
+		if code != http.StatusOK || strings.Contains(body, "userId") || strings.Contains(body, "createdAt") || strings.Contains(body, "updatedAt") || strings.Count(body, `"id"`) != 2 {
 			t.Errorf("%s listing = %d %s", as, code, body)
 		}
 		code, body = h.do(t, http.MethodGet, room+"/messages?after=0", as, "")
@@ -227,7 +239,10 @@ func TestChatPolls_ResultsAfterClose(t *testing.T) {
 	h.expect(t, http.StatusOK, http.MethodPut, pollPath(poll.ID, "/answer"), "carol", answerBody('c'), nil)
 	h.drainPollEvents()
 	h.expect(t, http.StatusOK, http.MethodPut, pollPath(poll.ID, "/answer"), "dave", answerBody('d'), nil)
-	heard, _ := h.drainPollEvents()
+	heard, notes, _ := h.drainPollEvents()
+	if len(notes) != 0 {
+		t.Errorf("named poll sent %d anonymous notes", len(notes))
+	}
 	if len(heard) != 1 || len(heard[0].Audience) != 2 ||
 		!slices.Contains(heard[0].Audience, h.users["bob"]) || !slices.Contains(heard[0].Audience, h.users["dave"]) {
 		t.Errorf("dave's answer heard by %+v, want bob and dave", heard)
@@ -249,4 +264,145 @@ func TestChatPolls_ResultsAfterClose(t *testing.T) {
 	if listed, paged := count("carol"); listed != 2 || paged != 2 {
 		t.Errorf("carol sees %d listed, %d paged once closed, want 2", listed, paged)
 	}
+}
+
+// TestChatPolls_AnonymousHidesArrival serves an anonymous poll's answers with
+// no timestamps and in ciphertext order, under an id that is not the row id
+// and that stays put when the answer changes (#3943).
+func TestChatPolls_AnonymousHidesArrival(t *testing.T) {
+	h := newHarness(t)
+	room := pollRoom(t, h)
+	var poll chatutil.Message
+	h.expect(t, http.StatusCreated, http.MethodPost, room+"/messages", "bob",
+		pollBody('p', `{"allowChange":true,"anonymous":true,"resultsAfterClose":false}`), &poll)
+	h.drainPollEvents()
+
+	var carols chatutil.PollAnswer
+	h.expect(t, http.StatusOK, http.MethodPut, pollPath(poll.ID, "/answer"), "carol", answerBody('c'), &carols)
+	h.expect(t, http.StatusOK, http.MethodPut, pollPath(poll.ID, "/answer"), "dave", answerBody('a'), nil)
+	h.expect(t, http.StatusOK, http.MethodPut, pollPath(poll.ID, "/answer"), "bob", answerBody('b'), nil)
+
+	code, body := h.do(t, http.MethodGet, pollPath(poll.ID, "/answers"), "bob", "")
+	if code != http.StatusOK || strings.Contains(body, "createdAt") || strings.Contains(body, "updatedAt") || strings.Contains(body, "userId") {
+		t.Fatalf("listing = %d %s", code, body)
+	}
+	var seen chatutil.ListPollAnswersResult
+	if err := json.Unmarshal([]byte(body), &seen); err != nil {
+		t.Fatal(err)
+	}
+	if got := answerFills(seen.Answers); got != "abc" {
+		t.Fatalf("order = %q, want ciphertext order abc, not insertion c, a, b", got)
+	}
+	for _, answer := range seen.Answers {
+		if !answer.CreatedAt.IsZero() || !answer.UpdatedAt.IsZero() || answer.UserID != 0 {
+			t.Errorf("answer = %+v", answer)
+		}
+	}
+	rowIDs := pollAnswerRowIDs(t, h, poll.ID)
+	for _, answer := range seen.Answers {
+		if slices.Contains(rowIDs, answer.ID) {
+			t.Errorf("served id %d is a row id %v", answer.ID, rowIDs)
+		}
+	}
+	carolsListed := seen.Answers[2]
+	if carolsListed.ID != carols.ID || carolsListed.Ciphertext[0] != 'c' {
+		t.Errorf("carol's list id %d != stored %d", carolsListed.ID, carols.ID)
+	}
+
+	var changed chatutil.PollAnswer
+	h.expect(t, http.StatusOK, http.MethodPut, pollPath(poll.ID, "/answer"), "carol", answerBody('d'), &changed)
+	if changed.ID != carols.ID || !changed.CreatedAt.IsZero() {
+		t.Errorf("changed = %+v, want id %d and no timestamp", changed, carols.ID)
+	}
+	var after chatutil.ListPollAnswersResult
+	h.expect(t, http.StatusOK, http.MethodGet, pollPath(poll.ID, "/answers"), "dave", "", &after)
+	if got := answerFills(after.Answers); got != "abd" {
+		t.Fatalf("order after change = %q, want abd", got)
+	}
+	if after.Answers[2].ID != carols.ID {
+		t.Errorf("carol's id became %d, want %d", after.Answers[2].ID, carols.ID)
+	}
+
+	var page chatutil.ListMessagesResult
+	h.expect(t, http.StatusOK, http.MethodGet, room+"/messages?after=0", "bob", "", &page)
+	if page.Messages[0].Poll == nil || answerFills(page.Messages[0].Poll.Answers) != "abd" {
+		t.Fatalf("page answers = %+v", page.Messages[0].Poll)
+	}
+	for _, answer := range page.Messages[0].Poll.Answers {
+		if !answer.CreatedAt.IsZero() || !answer.UpdatedAt.IsZero() {
+			t.Errorf("page answer carries a timestamp: %+v", answer)
+		}
+	}
+}
+
+// TestChatPolls_AnonymousResultsAreBatched holds an anonymous
+// results-after-close poll's note to its author until a clock boundary, and
+// tells the person who answered at once, with no answer attached (#3943).
+func TestChatPolls_AnonymousResultsAreBatched(t *testing.T) {
+	window := chatutil.AnonymousResultsWindow
+	chatutil.AnonymousResultsWindow = 400 * time.Millisecond
+	t.Cleanup(func() { chatutil.AnonymousResultsWindow = window })
+
+	h := newHarness(t)
+	room := pollRoom(t, h)
+	var poll chatutil.Message
+	h.expect(t, http.StatusCreated, http.MethodPost, room+"/messages", "bob",
+		pollBody('p', `{"allowChange":false,"anonymous":true,"resultsAfterClose":true}`), &poll)
+	h.drainPollEvents()
+
+	h.expect(t, http.StatusOK, http.MethodPut, pollPath(poll.ID, "/answer"), "carol", answerBody('c'), nil)
+	h.expect(t, http.StatusOK, http.MethodPut, pollPath(poll.ID, "/answer"), "dave", answerBody('d'), nil)
+	heard, notes, _ := h.drainPollEvents()
+	if len(heard) != 0 || len(notes) != 2 {
+		t.Fatalf("immediate = %d answers and %d notes, want the two answerers only", len(heard), len(notes))
+	}
+	for _, note := range notes {
+		if len(note.Audience) != 1 || (note.Audience[0] != h.users["carol"] && note.Audience[0] != h.users["dave"]) {
+			t.Errorf("immediate audience = %v", note.Audience)
+		}
+		raw, err := json.Marshal(eventbus.Event{Kind: eventbus.EventChatPollAnswersChanged, Data: note})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(raw), `"answer"`) || strings.Contains(string(raw), "userId") || strings.Contains(string(raw), "createdAt") {
+			t.Errorf("note JSON = %s", raw)
+		}
+	}
+
+	time.Sleep(time.Second)
+	heard, notes, _ = h.drainPollEvents()
+	if len(heard) != 0 || len(notes) != 1 || len(notes[0].Audience) != 1 || notes[0].Audience[0] != h.users["bob"] {
+		t.Fatalf("batched = %d answers and %+v, want one note to bob", len(heard), notes)
+	}
+}
+
+// answerFills is the first byte of each answer's ciphertext, in list order.
+func answerFills(answers []chatutil.PollAnswer) string {
+	out := make([]byte, len(answers))
+	for i, answer := range answers {
+		out[i] = answer.Ciphertext[0]
+	}
+	return string(out)
+}
+
+// pollAnswerRowIDs is the stored row ids of a poll's answers.
+func pollAnswerRowIDs(t *testing.T, h harness, messageID int64) []int64 {
+	t.Helper()
+	rows, err := h.deps.Database().Db.Query(`SELECT id FROM chat_poll_answers WHERE message_id = ?`, messageID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return ids
 }

@@ -396,16 +396,23 @@ Quark holds settings for it; anything else shows as text. It tallies the answers
   when `allowChange` is off.
 - Reading the answers needs `read_messages`, and follows `anonymous` and `resultsAfterClose`. The caller's own
   answer is marked `mine`.
+- An anonymous poll's answers omit `createdAt` and `updatedAt`. Their `id` stays put when that account changes
+  its answer, and it is not the row id, so it does not show who arrived first. The list is ordered by
+  ciphertext, not by arrival.
 - Only the author closes a poll, and closing it again changes nothing.
 - Deleting a poll message deletes its settings and its answers in the statement that tombstones it.
 
 ### Delivery
 
-`chat_poll_answer_changed` carries the stored answer, with no account on an anonymous poll and never marked
-`mine`. It goes only to the readers who may see that answer: every reader, or while a `resultsAfterClose` poll
-is open only its author and whoever answered. `chat_poll_closed` goes to the channel's readers when the author
-closes it; a poll that closes by time sends nothing. A page of messages carries each poll's settings, whether
-it is closed, and the answers the caller may see.
+`chat_poll_answer_changed` carries the stored answer, never marked `mine`, for a poll that names who answered.
+It goes only to the readers who may see that answer: every reader, or while a `resultsAfterClose` poll is open
+only its author and whoever answered. An anonymous poll sends `chat_poll_answers_changed` instead, naming the
+poll and not the answer, so a client reads the answers again; while a `resultsAfterClose` anonymous poll is
+open, that note waits for a clock boundary a minute or two out before it reaches the author, and the person
+who answered hears it at once so their other devices catch up. The note still says that the set of answers
+changed around the time it arrives. `chat_poll_closed` goes to the channel's readers when the author closes
+it; a poll that closes by time sends nothing. A page of messages carries each poll's settings, whether it is
+closed, and the answers the caller may see.
 
 ### Routes
 

@@ -36,7 +36,9 @@ class ChatPoll {
   /// or [closesAt] had passed when it answered.
   final bool closed;
 
-  /// The answers this account may see, oldest first.
+  /// The answers this account may see. A poll that names respondents lists
+  /// them oldest first; an anonymous one lists them in an order that is not
+  /// arrival order.
   final List<ChatPollResponse> answers;
 
   /// Whether it takes no more answers at [now]: [closed], or [closesAt] has
@@ -98,7 +100,9 @@ class ChatPollResponse {
     this.mine = false,
   });
 
-  /// Increasing within the Quark. A changed answer keeps its id.
+  /// Stable for one account's answer on this poll, including when they change
+  /// it. On an anonymous poll it is not the stored row id and does not follow
+  /// arrival order.
   final int id;
 
   /// The poll message answered.
@@ -127,7 +131,8 @@ class ChatPollResponse {
   );
 
   /// Reads one answer as the API or a `chat_poll_answer_changed` event sends
-  /// it.
+  /// it. An anonymous poll's `chat_poll_answers_changed` event carries no
+  /// answer; the list is read again.
   factory ChatPollResponse.fromJson(Map<String, dynamic> json) =>
       ChatPollResponse(
         id: (json['id'] as num).toInt(),

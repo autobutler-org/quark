@@ -2189,8 +2189,9 @@ type PollSettings struct {
 	// AllowChange lets an account replace its answer; without it a second
 	// answer is refused.
 	AllowChange bool `json:"allowChange"`
-	// Anonymous serves answers without the account that gave them, to
-	// everyone, the author included. The Quark still knows.
+	// Anonymous serves answers without the account that gave them, and without
+	// the time they arrived, to everyone, the author included. The Quark
+	// still knows.
 	Anonymous bool `json:"anonymous"`
 	// ResultsAfterClose shows the answers only to the author until the poll
 	// closes; everyone else sees only their own.
@@ -2205,14 +2206,24 @@ type Poll struct {
 	// Closed is whether the poll has stopped taking answers: ClosedAt is set
 	// or ClosesAt has passed.
 	Closed bool `json:"closed"`
-	// Answers are the answers the caller may see, oldest first, in a
-	// ListMessages page.
+	// Answers are the answers the caller may see in a ListMessages page, oldest
+	// first, or by ciphertext when the poll is anonymous.
 	Answers []PollAnswer `json:"answers,omitempty"`
 }
 
+// AnonymousResultsWindow is how wide a bucket an anonymous results-after-close
+// poll uses before it tells its author that answers changed (#3943). The note
+// waits until a bucket boundary at least this long away, so it is not a fixed
+// offset from an answer. Tests shorten it.
+var AnonymousResultsWindow = time.Minute
+
 // PollAnswer is one stored answer. The Quark sees who answered which poll
-// and when, never what. Byte fields travel as base64.
+// and when, never what. Byte fields travel as base64. On an anonymous poll
+// the id is not the row id, and createdAt and updatedAt are left out.
 type PollAnswer struct {
+	// ID is the stored row on a poll that names who answered. On an anonymous
+	// poll it is an opaque id, stable when that account changes its answer,
+	// that does not follow arrival order.
 	ID        int64 `json:"id"`
 	MessageID int64 `json:"messageId"`
 	// UserID is who answered, absent when the poll is anonymous.
@@ -2223,16 +2234,19 @@ type PollAnswer struct {
 	// Ciphertext is nonce || XChaCha20-Poly1305 output over the answer
 	// padded to PollAnswerPlaintextBytes, under the channel key of
 	// KeyVersion (docs/chat-security.md).
-	Ciphertext []byte    `json:"ciphertext"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	Ciphertext []byte `json:"ciphertext"`
+	// CreatedAt is when the answer was stored, omitted on an anonymous poll.
+	CreatedAt time.Time `json:"createdAt,omitzero"`
+	// UpdatedAt is when the answer last changed, omitted on an anonymous poll.
+	UpdatedAt time.Time `json:"updatedAt,omitzero"`
 }
 
 // AnswerPollParams answers a poll with ciphertext.
 type AnswerPollParams struct {
 	Ctx      context.Context
 	Database *db.DatabaseSqlc
-	// EventBus hears chat_poll_answer_changed. Nil skips it.
+	// EventBus hears chat_poll_answer_changed, or chat_poll_answers_changed
+	// when the poll is anonymous. Nil skips it.
 	EventBus   *eventbus.Bus
 	Principal  accessutil.Principal
 	MessageID  int64
@@ -2246,11 +2260,13 @@ type AnswerPollResult struct {
 }
 
 // AnswerPoll stores the caller's answer to a poll, or replaces it when the
-// poll allows changing one, and sends it as chat_poll_answer_changed to the
-// readers who may see it. Anyone without read_messages gets
-// ErrMessageNotFound; a reader without add_reactions ErrNoAnswers; a message
-// that isn't a poll ErrNotPoll; a closed poll ErrPollClosed; and a second
-// answer to a poll without AllowChange ErrAlreadyAnswered.
+// poll allows changing one, and tells the readers who may see it. A poll that
+// names who answered sends chat_poll_answer_changed with the answer. An
+// anonymous poll sends chat_poll_answers_changed with no answer. Anyone
+// without read_messages gets ErrMessageNotFound; a reader without
+// add_reactions ErrNoAnswers; a message that isn't a poll ErrNotPoll; a
+// closed poll ErrPollClosed; and a second answer to a poll without
+// AllowChange ErrAlreadyAnswered.
 func AnswerPoll(params AnswerPollParams) (AnswerPollResult, error) {
 	if len(params.Ciphertext) != PollAnswerCiphertextBytes {
 		return AnswerPollResult{}, ErrInvalidPollAnswer
@@ -2274,6 +2290,13 @@ func AnswerPoll(params AnswerPollParams) (AnswerPollResult, error) {
 	now := time.Now()
 	if pollClosed(poll, now) {
 		return AnswerPollResult{}, ErrPollClosed
+	}
+	var installID string
+	if poll.Anonymous {
+		installID, err = queries.GetInstallID(params.Ctx)
+		if err != nil {
+			return AnswerPollResult{}, err
+		}
 	}
 	versions, err := queries.ListChatChannelKeys(params.Ctx, message.ChannelID)
 	if err != nil {
@@ -2300,10 +2323,10 @@ func AnswerPoll(params AnswerPollParams) (AnswerPollResult, error) {
 	case err != nil:
 		return AnswerPollResult{}, err
 	}
-	if err := publishPollAnswer(params.Ctx, queries, params.EventBus, message, poll, row, now); err != nil {
+	if err := publishPollAnswer(params.Ctx, queries, params.EventBus, message, poll, row, now, installID); err != nil {
 		log.Printf("chat: poll answer %d stored but not announced: %v", row.ID, err)
 	}
-	return AnswerPollResult{Answer: answerFor(poll, row, userID)}, nil
+	return AnswerPollResult{Answer: answerFor(poll, row, userID, installID)}, nil
 }
 
 // ListPollAnswersParams reads a poll's answers.
@@ -2314,7 +2337,8 @@ type ListPollAnswersParams struct {
 	MessageID int64
 }
 
-// ListPollAnswersResult is the answers the caller may see, oldest first.
+// ListPollAnswersResult is the answers the caller may see, oldest first, or
+// by ciphertext when the poll is anonymous.
 type ListPollAnswersResult struct {
 	Answers []PollAnswer `json:"answers"`
 }
@@ -2322,9 +2346,10 @@ type ListPollAnswersResult struct {
 // ListPollAnswers is every answer to a poll the caller may see, for a holder
 // of read_messages: all of them, unless the poll shows results after close
 // and is still open, when anyone but its author sees only their own. An
-// anonymous poll's answers carry no account; the caller's own is Mine.
-// Anyone without read_messages gets ErrMessageNotFound and a message that
-// isn't a poll ErrNotPoll.
+// anonymous poll's answers carry no account and no timestamps, under an id
+// that does not follow arrival, ordered by ciphertext; the caller's own is
+// Mine. Anyone without read_messages gets ErrMessageNotFound and a message
+// that isn't a poll ErrNotPoll.
 func ListPollAnswers(params ListPollAnswersParams) (ListPollAnswersResult, error) {
 	if params.Database == nil {
 		return ListPollAnswersResult{}, accessutil.ErrNoDatabase
@@ -2342,8 +2367,15 @@ func ListPollAnswers(params ListPollAnswersParams) (ListPollAnswersResult, error
 	if err != nil {
 		return ListPollAnswersResult{}, err
 	}
+	var installID string
+	if poll.Anonymous {
+		installID, err = queries.GetInstallID(params.Ctx)
+		if err != nil {
+			return ListPollAnswersResult{}, err
+		}
+	}
 	return ListPollAnswersResult{
-		Answers: visibleAnswers(poll, message.AuthorID.Int64, params.Principal.UserID, rows, time.Now()),
+		Answers: visibleAnswers(poll, message.AuthorID.Int64, params.Principal.UserID, rows, time.Now(), installID),
 	}, nil
 }
 
