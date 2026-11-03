@@ -219,6 +219,8 @@ for an account that has no recovery key. An account that has one refuses every r
   with the key, and missing is 0, unknown. `GET /auth/status` answers a signed-in caller with `shortRecoveryPhrase:
   true` when the account has a recovery key and fewer than 16 words, which covers every 6-word phrase from before
   #3141 and every key stored before #3183, and the app offers a new phrase through `PUT /auth/recovery-key`.
+  `GET /admin/users` gives each account the same `shortRecoveryPhrase` flag, and the Users page shows it on the
+  account's row, so an admin can see who still holds a short phrase. It never returns the key's hash.
 
 ### Changing a password
 

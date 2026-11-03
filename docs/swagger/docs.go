@@ -1163,7 +1163,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns all registered users. Admin-only.",
+                "description": "Returns all registered users. Admin-only. shortRecoveryPhrase is true for an account whose recovery key's phrase had fewer than 16 words or an unknown count (a key stored before #3183), the accounts still to rotate; an account with no recovery key reads false.",
                 "produces": [
                     "application/json"
                 ],
@@ -13608,6 +13608,10 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "isAdmin": {
+                    "type": "boolean"
+                },
+                "shortRecoveryPhrase": {
+                    "description": "ShortRecoveryPhrase is true when the account has a recovery key whose\nphrase had fewer than 16 words or an unknown count, one stored before\n#3183: the same rule GET /auth/status prompts the owner with. The key's\nhash itself is never returned.",
                     "type": "boolean"
                 },
                 "status": {

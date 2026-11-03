@@ -122,15 +122,17 @@ func (q *Queries) IsUserAdmin(ctx context.Context, username string) (int64, erro
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, is_admin, status, created_at FROM users ORDER BY created_at ASC
+SELECT id, username, is_admin, status, created_at, recovery_key_hash != '' AS has_recovery_key, recovery_phrase_words FROM users ORDER BY created_at ASC
 `
 
 type ListUsersRow struct {
-	ID        int64
-	Username  string
-	IsAdmin   int64
-	Status    string
-	CreatedAt time.Time
+	ID                  int64
+	Username            string
+	IsAdmin             int64
+	Status              string
+	CreatedAt           time.Time
+	HasRecoveryKey      bool
+	RecoveryPhraseWords int64
 }
 
 func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
@@ -148,6 +150,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 			&i.IsAdmin,
 			&i.Status,
 			&i.CreatedAt,
+			&i.HasRecoveryKey,
+			&i.RecoveryPhraseWords,
 		); err != nil {
 			return nil, err
 		}

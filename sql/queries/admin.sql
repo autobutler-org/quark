@@ -43,7 +43,7 @@ DELETE FROM users WHERE status = 'pending';
 SELECT is_admin FROM users WHERE username = sqlc.arg(username);
 
 -- name: ListUsers :many
-SELECT id, username, is_admin, status, created_at FROM users ORDER BY created_at ASC;
+SELECT id, username, is_admin, status, created_at, recovery_key_hash != '' AS has_recovery_key, recovery_phrase_words FROM users ORDER BY created_at ASC;
 
 -- Only an active account can be promoted; anything else matches no row.
 -- name: PromoteToAdmin :one

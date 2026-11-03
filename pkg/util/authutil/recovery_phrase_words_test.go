@@ -95,3 +95,25 @@ func TestRecoveryPhraseWords(t *testing.T) {
 		t.Errorf("Recover stored %d words, want %d", got, authutil.RecoveryPhraseWords)
 	}
 }
+
+// TestIsShortRecoveryPhrase pins the rule GetAuthStatus and GET /admin/users
+// share (#3183).
+func TestIsShortRecoveryPhrase(t *testing.T) {
+	for _, tc := range []struct {
+		hasKey bool
+		words  int64
+		want   bool
+	}{
+		{false, 0, false},
+		{false, 6, false},
+		{true, 0, true},
+		{true, 6, true},
+		{true, authutil.RecoveryPhraseWords - 1, true},
+		{true, authutil.RecoveryPhraseWords, false},
+		{true, 24, false},
+	} {
+		if got := authutil.IsShortRecoveryPhrase(tc.hasKey, tc.words); got != tc.want {
+			t.Errorf("IsShortRecoveryPhrase(%v, %d) = %v, want %v", tc.hasKey, tc.words, got, tc.want)
+		}
+	}
+}

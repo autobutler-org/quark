@@ -645,6 +645,14 @@ func IsSetupComplete(ctx context.Context, queries db.Querier) (bool, error) {
 	return count > 0, nil
 }
 
+// IsShortRecoveryPhrase reports whether an account should be asked to make a
+// new recovery phrase (#3183): it has a recovery key, and the phrase behind it
+// had fewer than RecoveryPhraseWords words or an unknown count (0, every key
+// stored before #3183). An account with no recovery key is not short.
+func IsShortRecoveryPhrase(hasRecoveryKey bool, phraseWords int64) bool {
+	return hasRecoveryKey && phraseWords < RecoveryPhraseWords
+}
+
 // GetAuthStatus reports whether setup is complete and, when the session token
 // is valid, the caller's username and admin flag. An invalid or missing token
 // is not an error: the caller is simply anonymous. A token the database could
@@ -673,7 +681,7 @@ func GetAuthStatus(ctx context.Context, queries db.Querier, params GetAuthStatus
 	result.Username = username
 	result.UserID = userID
 	result.IsAdmin = user.IsAdmin == 1
-	result.ShortRecoveryPhrase = user.RecoveryKeyHash != "" && user.RecoveryPhraseWords < RecoveryPhraseWords
+	result.ShortRecoveryPhrase = IsShortRecoveryPhrase(user.RecoveryKeyHash != "", user.RecoveryPhraseWords)
 	return result, nil
 }
 

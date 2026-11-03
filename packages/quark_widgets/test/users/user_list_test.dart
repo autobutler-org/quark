@@ -58,6 +58,22 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('says when an account has a short recovery phrase (#3183)', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      const UserList(
+        users: [
+          UserAccountItem(username: 'eve', shortRecoveryPhrase: true),
+          UserAccountItem(username: 'bob'),
+        ],
+      ),
+    );
+
+    expect(find.text('Short recovery phrase'), findsOneWidget);
+  });
+
   testWidgets('offers promote for an active non-admin', (tester) async {
     final promoted = <String>[];
     await pumpAt(

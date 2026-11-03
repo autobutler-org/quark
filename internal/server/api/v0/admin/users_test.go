@@ -197,6 +197,56 @@ func TestListUsers_IncludesStatus(t *testing.T) {
 	}
 }
 
+// TestListUsers_ShortRecoveryPhrase checks each account carries the same
+// short-phrase rule GET /auth/status prompts with (#3183): a recovery key with
+// fewer than 16 words or an unknown count is short, a 16-word one and no key
+// at all are not, and the key's hash is never in the body.
+func TestListUsers_ShortRecoveryPhrase(t *testing.T) {
+	h := newAdminHarness(t)
+	ctx := context.Background()
+	hash, err := authutil.HashKey(dbtest.AuthKey("recovery"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := map[string]int64{"unknown": 0, "six": 6, "sixteen": authutil.RecoveryPhraseWords}
+	for name, count := range words {
+		h.addUser(t, name, authutil.StatusActive, false)
+		user, err := h.database.Queries.GetUserByUsername(ctx, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := h.database.Queries.SetRecoveryKey(ctx, db.SetRecoveryKeyParams{RecoveryKeyHash: hash, RecoveryPhraseWords: count, ID: user.ID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.addUser(t, "keyless", authutil.StatusActive, false)
+
+	w := h.do(http.MethodGet, "/api/v0/admin/users")
+	if w.Code != http.StatusOK {
+		t.Fatalf("list = %d: %s", w.Code, w.Body.String())
+	}
+	var users []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &users); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]any{}
+	for _, u := range users {
+		for _, field := range []string{"recoveryKeyHash", "recovery_key_hash", "RecoveryKeyHash", "recoveryPhraseWords"} {
+			if _, ok := u[field]; ok {
+				t.Errorf("%v carries %s", u["username"], field)
+			}
+		}
+		got[u["username"].(string)] = u["shortRecoveryPhrase"]
+	}
+	// The founding admin was set up without a recovery key.
+	want := map[string]bool{"admin": false, "unknown": true, "six": true, "sixteen": false, "keyless": false}
+	for name, short := range want {
+		if got[name] != short {
+			t.Errorf("%s shortRecoveryPhrase = %v, want %v", name, got[name], short)
+		}
+	}
+}
+
 // TestDemoteUser_LastActiveAdminIsConflict checks the last active admin cannot
 // be demoted, with the sentinel's own text and no event, and that a disabled
 // admin does not count as a second one. A second active admin makes it work.
