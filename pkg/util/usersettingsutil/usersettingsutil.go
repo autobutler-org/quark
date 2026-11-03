@@ -3,7 +3,8 @@
 // account has one row in the user_settings table holding the JSON of its
 // Settings, so every instance on one database reads the same choice (#3083).
 // An account with no row has chosen nothing, and the row goes with its
-// account: the foreign key deletes it. Import moves in the files they used to
+// account: the foreign key deletes it. A new account starts from a one-time
+// Copy of the admin's who made or approved it (#1914). Import moves in the files they used to
 // be, user-settings/<user id>.json in the Quark's data directory.
 package usersettingsutil
 
@@ -43,14 +44,41 @@ type Settings struct {
 	// DisabledNotifications is the notification types this account turned
 	// off. Empty means every type is on.
 	DisabledNotifications []notificationutil.Type `json:"disabledNotifications,omitempty"`
+	// ThemeMode is the brightness the app uses: "system", "light" or "dark".
+	// Nil means this account never chose, and the app keeps its own.
+	ThemeMode *string `json:"themeMode,omitempty"`
+	// RefreshIntervalSeconds is how often the app refreshes the page on
+	// screen, 0 (auto-refresh off) through MaxRefreshIntervalSeconds. Nil
+	// means this account never chose.
+	RefreshIntervalSeconds *int `json:"refreshIntervalSeconds,omitempty"`
+	// DocumentAutoSave is whether the document editor saves as the account
+	// types. Nil means this account never chose.
+	DocumentAutoSave *bool `json:"documentAutoSave,omitempty"`
+	// DocumentDarkPage is whether the document editor draws its page dark in
+	// a dark theme. Nil means this account never chose.
+	DocumentDarkPage *bool `json:"documentDarkPage,omitempty"`
 }
 
+// MaxRefreshIntervalSeconds is the longest RefreshIntervalSeconds accepts:
+// an hour.
+const MaxRefreshIntervalSeconds = 3600
+
+// ThemeModes is every value ThemeMode accepts.
+var ThemeModes = []string{"system", "light", "dark"}
+
 // Validate reports settings with a value its field rejects as ErrInvalid: a
-// malformed theme color, or a notification type that is unknown or listed
-// twice.
+// malformed theme color, a notification type that is unknown or listed
+// twice, a theme mode not in ThemeModes, or a refresh interval outside 0
+// through MaxRefreshIntervalSeconds.
 func (s Settings) Validate() error {
 	if err := settingsutil.ValidateThemeColor(s.ThemeColor); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalid, err)
+	}
+	if s.ThemeMode != nil && !slices.Contains(ThemeModes, *s.ThemeMode) {
+		return fmt.Errorf("%w: unknown theme mode %q", ErrInvalid, *s.ThemeMode)
+	}
+	if n := s.RefreshIntervalSeconds; n != nil && (*n < 0 || *n > MaxRefreshIntervalSeconds) {
+		return fmt.Errorf("%w: refresh interval %d is outside 0 through %d seconds", ErrInvalid, *n, MaxRefreshIntervalSeconds)
 	}
 	for i, t := range s.DisabledNotifications {
 		if !t.Valid() {
@@ -86,6 +114,21 @@ type SaveParams struct {
 // SaveResult is the settings as stored.
 type SaveResult struct {
 	Settings Settings
+}
+
+// CopyParams names the account whose settings a new account starts from.
+type CopyParams struct {
+	Queries    db.Querier
+	FromUserID int64
+	ToUserID   int64
+}
+
+// CopyResult reports whether Copy wrote anything.
+type CopyResult struct {
+	// Copied is false when the source has no settings, or when the target
+	// already had its own. A target account that does not exist gets nothing
+	// either way.
+	Copied bool
 }
 
 // ImportParams locates the settings files of a Quark from before the
@@ -155,6 +198,30 @@ func Save(ctx context.Context, params SaveParams) (SaveResult, error) {
 		return SaveResult{}, fmt.Errorf("write user settings: %w", err)
 	}
 	return SaveResult{Settings: params.Settings}, nil
+}
+
+// Copy starts one account from another's settings, once (#1914): later
+// changes to the source do not reach the copy. A source with no row copies
+// nothing, so the target keeps following the Quark, and a target that already
+// has settings keeps them. The row goes over as stored, fields a newer build
+// wrote included.
+func Copy(ctx context.Context, params CopyParams) (CopyResult, error) {
+	stored, err := params.Queries.GetUserSettings(ctx, params.FromUserID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return CopyResult{}, nil
+	}
+	if err != nil {
+		return CopyResult{}, fmt.Errorf("read user settings: %w", err)
+	}
+	if _, err := params.Queries.GetUserSettings(ctx, params.ToUserID); err == nil {
+		return CopyResult{}, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return CopyResult{}, fmt.Errorf("read user settings: %w", err)
+	}
+	if err := params.Queries.AddUserSettings(ctx, db.AddUserSettingsParams{UserID: params.ToUserID, Settings: stored}); err != nil {
+		return CopyResult{}, fmt.Errorf("copy user settings: %w", err)
+	}
+	return CopyResult{Copied: true}, nil
 }
 
 // Import moves the settings files of an older Quark into the database and

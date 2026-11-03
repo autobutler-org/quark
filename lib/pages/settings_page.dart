@@ -640,7 +640,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: SettingsGeneralTab(
               header: banner,
               theme: settings.themeMode.value,
-              onThemeChanged: settings.setThemeMode,
+              onThemeChanged: _setThemeMode,
               highContrast: _highContrast,
               onHighContrastChanged: _setHighContrast,
               leftHanded: settings.leftHanded.value,
@@ -808,9 +808,29 @@ class _SettingsPageState extends State<SettingsPage> {
     await AppSettings.instance.setHighContrast(enabled);
   }
 
+  Future<void> _setThemeMode(ThemeMode mode) =>
+      _savePersonalSetting(SettingsService.setMyThemeMode(mode));
+
   Future<void> _setRefreshInterval(int seconds) async {
-    await AppSettings.instance.setRefreshIntervalSeconds(seconds);
-    if (mounted) setState(() => _refreshIntervalSeconds = seconds);
+    setState(() => _refreshIntervalSeconds = seconds);
+    await _savePersonalSetting(
+      SettingsService.setMyRefreshIntervalSeconds(seconds),
+    );
+  }
+
+  /// Awaits [save], a preference that follows the account (#1914). A failed
+  /// save to the account is shown; the change stays on this device.
+  Future<void> _savePersonalSetting(Future<void> save) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await save;
+    } catch (e) {
+      debugPrint('[settings_page.dart] Error saving a setting: $e');
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(Errors.message(e, 'save your settings'))),
+      );
+    }
   }
 
   Future<void> _setDemoMode(bool enabled) async {

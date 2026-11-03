@@ -98,6 +98,27 @@ func (h adminHarness) saveSettings(t *testing.T, userID int64) {
 	}
 }
 
+// saveAppSettings gives an account every kind of setting and returns them.
+func (h adminHarness) saveAppSettings(t *testing.T, userID int64) usersettingsutil.Settings {
+	t.Helper()
+	mode, interval, on := "dark", 60, true
+	settings := usersettingsutil.Settings{ThemeColor: "teal", ThemeMode: &mode, RefreshIntervalSeconds: &interval, DocumentAutoSave: &on, DocumentDarkPage: &on}
+	if _, err := usersettingsutil.Save(context.Background(), usersettingsutil.SaveParams{Queries: h.database.Queries, UserID: userID, Settings: settings}); err != nil {
+		t.Fatal(err)
+	}
+	return settings
+}
+
+// settingsOf reads an account's settings.
+func (h adminHarness) settingsOf(t *testing.T, userID int64) usersettingsutil.Settings {
+	t.Helper()
+	result, err := usersettingsutil.Load(context.Background(), usersettingsutil.LoadParams{Queries: h.database.Queries, UserID: userID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result.Settings
+}
+
 // hasSettings reports whether an account id has a settings row.
 func (h adminHarness) hasSettings(t *testing.T, userID int64) bool {
 	t.Helper()

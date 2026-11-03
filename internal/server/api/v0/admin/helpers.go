@@ -12,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/requestlogutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -77,5 +78,19 @@ func recordDecision(c *gin.Context, username, outcome string) {
 	}
 	if err != nil {
 		slog.Error("admin: could not record account request decision", "username", username, "outcome", outcome, "err", err)
+	}
+}
+
+// copyCallerSettings starts a new account from the acting admin's settings
+// (#1914). The account exists either way, so a copy that fails is logged
+// rather than failing the request.
+func copyCallerSettings(c *gin.Context, deps deputil.Dependencies, toUserID int64) {
+	fromUserID, _ := ctxutil.Get[int64](c, "userID")
+	if _, err := usersettingsutil.Copy(c.Request.Context(), usersettingsutil.CopyParams{
+		Queries:    deps.Database().Queries,
+		FromUserID: fromUserID,
+		ToUserID:   toUserID,
+	}); err != nil {
+		slog.Warn("admin: could not copy the admin's settings to a new account", "from", fromUserID, "to", toUserID, "err", err)
 	}
 }

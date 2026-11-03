@@ -22,7 +22,8 @@ import 'package:quark/widgets/document_editor/document_editor_body.dart';
 import 'package:quark/widgets/document_editor/highlight_picker_dialog.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/settings_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Swallows Ctrl/Cmd+F inside a [QuillEditor] and runs [onToggle] instead.
@@ -92,13 +93,10 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   bool _hintEditButton = false;
   Timer? _hintTimer;
 
-  // Dark page mode (#938)
-  static const _prefKeyDarkPage = 'document_editor_dark_page';
-  bool _editorDarkPage = false;
-
-  static const _prefKeyAutoSave = 'document_editor_auto_save';
+  // Dark page mode (#938) and auto-save follow the account (#1914).
+  bool get _editorDarkPage => AppSettings.instance.documentDarkPage.value;
+  bool get _autoSaveEnabled => AppSettings.instance.documentAutoSave.value;
   static const _autoSaveDelay = Duration(seconds: 2);
-  bool _autoSaveEnabled = true;
   Timer? _autoSaveTimer;
 
   // Word count. `toPlainText()` walks the whole document, so it is recomputed
@@ -122,13 +120,16 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _controller = QuillController.basic()..readOnly = _isReadOnly;
-    _loadPrefs();
+    AppSettings.instance.documentDarkPage.addListener(_onPrefsChanged);
+    AppSettings.instance.documentAutoSave.addListener(_onPrefsChanged);
     _loadDocument();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    AppSettings.instance.documentDarkPage.removeListener(_onPrefsChanged);
+    AppSettings.instance.documentAutoSave.removeListener(_onPrefsChanged);
     _autoSaveTimer?.cancel();
     _hintTimer?.cancel();
     _wordCountTimer?.cancel();
@@ -168,25 +169,16 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     );
   }
 
-  Future<void> _loadPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() {
-      _autoSaveEnabled = prefs.getBool(_prefKeyAutoSave) ?? true;
-      _editorDarkPage = prefs.getBool(_prefKeyDarkPage) ?? false;
-    });
-  }
-
-  Future<void> _setAutoSaveEnabled(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefKeyAutoSave, value);
-    if (!mounted) return;
-    setState(() => _autoSaveEnabled = value);
-    if (!value) {
+  void _onPrefsChanged() {
+    if (!_autoSaveEnabled) {
       _autoSaveTimer?.cancel();
       _autoSaveTimer = null;
     }
+    setState(() {});
   }
+
+  Future<void> _setAutoSaveEnabled(bool value) =>
+      SettingsService.logFailure(SettingsService.setMyDocumentAutoSave(value));
 
   // Read-only / edit toggle (#939).
 
@@ -692,11 +684,9 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
 
   void _toggleFindBar() => setState(() => _showFindBar = !_showFindBar);
 
-  Future<void> _toggleDarkPage() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => _editorDarkPage = !_editorDarkPage);
-    await prefs.setBool(_prefKeyDarkPage, _editorDarkPage);
-  }
+  Future<void> _toggleDarkPage() => SettingsService.logFailure(
+    SettingsService.setMyDocumentDarkPage(!_editorDarkPage),
+  );
 
   KeyEventResult? _handleEditorKey(KeyEvent event, Node? node) =>
       quillFindKeyInterceptor(event, _toggleFindBar);

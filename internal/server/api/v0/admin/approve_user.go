@@ -15,7 +15,7 @@ import (
 
 // approveUser godoc
 // @Summary Approve an account request
-// @Description Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing folder of that name under users/ becomes the home. The approval is added to the account request history. Admin-only.
+// @Description Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing folder of that name under users/ becomes the home. The account starts with a one-time copy of the calling admin's own settings (GET /settings/me), if the admin has any; later changes by either do not reach the other. The approval is added to the account request history. Admin-only.
 // @Tags admin
 // @Param username path string true "Username of the pending request"
 // @Success 200
@@ -48,6 +48,7 @@ func approveUser(c *gin.Context) *serverutil.Response {
 		return accountErrorResponse(err)
 	}
 	recordDecision(c, c.Param("username"), requestlogutil.OutcomeApproved)
+	copyCallerSettings(c, deps, result.UserID)
 	if bus := deps.EventBus(); bus != nil {
 		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})
 		bus.Publish(eventbus.Event{Kind: eventbus.EventNewFolder, Path: result.FolderPath})

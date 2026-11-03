@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -140,5 +141,32 @@ func TestListAccountRequestHistory_RecordsDecisions(t *testing.T) {
 		if entry.DecidedAt.Before(before) || entry.DecidedAt.After(time.Now().Add(time.Second)) {
 			t.Errorf("history[%d] decided at %v, want about now", i, entry.DecidedAt)
 		}
+	}
+}
+
+// TestApproveUser_StartsFromTheAdminsSettings checks an approved account gets
+// a copy of the acting admin's settings, and none when the admin has none
+// (#1914).
+func TestApproveUser_StartsFromTheAdminsSettings(t *testing.T) {
+	h := newAdminHarness(t)
+	approve := func(username string) int64 {
+		t.Helper()
+		h.addUser(t, username, authutil.StatusPending, false)
+		if w := h.do(http.MethodPut, "/api/v0/admin/approve/"+username); w.Code != http.StatusOK {
+			t.Fatalf("approve %s = %d: %s", username, w.Code, w.Body.String())
+		}
+		user, err := h.database.Queries.GetUserByUsername(context.Background(), username)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return user.ID
+	}
+
+	if id := approve("plain"); h.hasSettings(t, id) {
+		t.Error("an account approved by an admin with no settings got some")
+	}
+	want := h.saveAppSettings(t, h.adminID)
+	if got := h.settingsOf(t, approve("asker")); !reflect.DeepEqual(got, want) {
+		t.Errorf("approved account's settings = %+v, want the admin's %+v", got, want)
 	}
 }

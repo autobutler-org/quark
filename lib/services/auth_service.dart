@@ -528,7 +528,8 @@ class AuthService {
   /// into [AppSettings.shortRecoveryPhrase] (#3183), the beta feature flags into
   /// [AppSettings.featureFlags], and the Quark's theme color and the user's own
   /// into [AppSettings.themeColor] (#2740). The Quark's theme color needs no session,
-  /// so it is fetched for the sign-in page too.
+  /// so it is fetched for the sign-in page too. With a session, the personal
+  /// preferences are synced with the account (#1914).
   ///
   /// Without a session there is no admin and no account. A failed call keeps
   /// the last known value: it only decides what the app shows, and the Quark
@@ -556,6 +557,7 @@ class AuthService {
       return;
     }
     unawaited(FeatureFlagsService.refresh());
+    unawaited(SettingsService.refreshPersonalSettings());
     try {
       final status = await checkStatus();
       settings.isAdmin.value = status.isAdmin;

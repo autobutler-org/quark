@@ -344,3 +344,141 @@ func TestSave_TwoInstancesShareSettings(t *testing.T) {
 		t.Errorf("the first instance loads %+v, want theme color #112233", got)
 	}
 }
+
+func ptr[T any](v T) *T { return &v }
+
+// TestAppSettings_RoundTrip checks theme mode, refresh interval and the two
+// document choices are stored and read back, including the zero values, and
+// that an account that never chose them stores none of the fields.
+func TestAppSettings_RoundTrip(t *testing.T) {
+	queries := dbtest.NewDB(t).Queries
+	id := addUser(t, queries, "first")
+	for _, settings := range []usersettingsutil.Settings{
+		{ThemeMode: ptr("dark"), RefreshIntervalSeconds: ptr(30), DocumentAutoSave: ptr(true), DocumentDarkPage: ptr(true)},
+		{ThemeMode: ptr("system"), RefreshIntervalSeconds: ptr(0), DocumentAutoSave: ptr(false), DocumentDarkPage: ptr(false)},
+		{ThemeMode: ptr("light"), RefreshIntervalSeconds: ptr(usersettingsutil.MaxRefreshIntervalSeconds)},
+	} {
+		save(t, queries, id, settings)
+		if got := load(t, queries, id); !reflect.DeepEqual(got, settings) {
+			t.Errorf("Load = %+v, want %+v", got, settings)
+		}
+	}
+	save(t, queries, id, usersettingsutil.Settings{ThemeColor: "teal"})
+	row, _ := stored(t, queries, id)
+	for _, field := range []string{"themeMode", "refreshIntervalSeconds", "documentAutoSave", "documentDarkPage"} {
+		if strings.Contains(row, field) {
+			t.Errorf("settings that never chose %s store it: %s", field, row)
+		}
+	}
+}
+
+// TestAppSettings_RefusesOutOfRange checks an unknown theme mode and a refresh
+// interval outside 0 through 3600 are ErrInvalid from Decode and from Save,
+// and that Save stores nothing.
+func TestAppSettings_RefusesOutOfRange(t *testing.T) {
+	queries := dbtest.NewDB(t).Queries
+	id := addUser(t, queries, "first")
+	for _, tc := range []struct {
+		body     string
+		settings usersettingsutil.Settings
+	}{
+		{`{"themeMode":"dim"}`, usersettingsutil.Settings{ThemeMode: ptr("dim")}},
+		{`{"themeMode":""}`, usersettingsutil.Settings{ThemeMode: ptr("")}},
+		{`{"themeMode":"Dark"}`, usersettingsutil.Settings{ThemeMode: ptr("Dark")}},
+		{`{"refreshIntervalSeconds":-1}`, usersettingsutil.Settings{RefreshIntervalSeconds: ptr(-1)}},
+		{`{"refreshIntervalSeconds":3601}`, usersettingsutil.Settings{RefreshIntervalSeconds: ptr(3601)}},
+	} {
+		if got, err := usersettingsutil.Decode(strings.NewReader(tc.body)); !errors.Is(err, usersettingsutil.ErrInvalid) {
+			t.Errorf("Decode(%s) = %+v, %v; want ErrInvalid", tc.body, got, err)
+		}
+		if _, err := usersettingsutil.Save(context.Background(), usersettingsutil.SaveParams{Queries: queries, UserID: id, Settings: tc.settings}); !errors.Is(err, usersettingsutil.ErrInvalid) {
+			t.Errorf("Save(%s) = %v, want ErrInvalid", tc.body, err)
+		}
+		if row, ok := stored(t, queries, id); ok {
+			t.Errorf("a refused save of %s stored %s", tc.body, row)
+		}
+	}
+	for _, body := range []string{`{"documentAutoSave":"yes"}`, `{"refreshIntervalSeconds":1.5}`} {
+		if _, err := usersettingsutil.Decode(strings.NewReader(body)); !errors.Is(err, usersettingsutil.ErrInvalid) {
+			t.Errorf("Decode(%s) = %v, want ErrInvalid", body, err)
+		}
+	}
+}
+
+func copySettings(t *testing.T, queries db.Querier, from, to int64) bool {
+	t.Helper()
+	result, err := usersettingsutil.Copy(context.Background(), usersettingsutil.CopyParams{Queries: queries, FromUserID: from, ToUserID: to})
+	if err != nil {
+		t.Fatalf("Copy(%d, %d): %v", from, to, err)
+	}
+	return result.Copied
+}
+
+// TestCopy_StartsFromTheAdmins checks a new account gets the admin's settings,
+// that a later save by the admin does not reach it, and that the copy can be
+// changed without touching the admin's.
+func TestCopy_StartsFromTheAdmins(t *testing.T) {
+	queries := dbtest.NewDB(t).Queries
+	admin, member := addUser(t, queries, "admin"), addUser(t, queries, "member")
+	adminSettings := usersettingsutil.Settings{ThemeColor: "teal", ThemeMode: ptr("dark"), RefreshIntervalSeconds: ptr(60), DocumentAutoSave: ptr(false)}
+	save(t, queries, admin, adminSettings)
+
+	if !copySettings(t, queries, admin, member) {
+		t.Fatal("Copy reported nothing copied")
+	}
+	if got := load(t, queries, member); !reflect.DeepEqual(got, adminSettings) {
+		t.Fatalf("copied settings = %+v, want %+v", got, adminSettings)
+	}
+
+	save(t, queries, admin, usersettingsutil.Settings{ThemeMode: ptr("light")})
+	if got := load(t, queries, member); !reflect.DeepEqual(got, adminSettings) {
+		t.Errorf("the admin's later save reached the copy: %+v", got)
+	}
+}
+
+// TestCopy_NoSourceRow checks an admin who chose nothing leaves the new
+// account with no row, so it keeps following the Quark.
+func TestCopy_NoSourceRow(t *testing.T) {
+	queries := dbtest.NewDB(t).Queries
+	admin, member := addUser(t, queries, "admin"), addUser(t, queries, "member")
+	if copySettings(t, queries, admin, member) {
+		t.Error("Copy from an account with no settings reported a copy")
+	}
+	if row, ok := stored(t, queries, member); ok {
+		t.Errorf("the new account got settings: %s", row)
+	}
+}
+
+// TestCopy_KeepsTheTargetsOwn checks Copy never replaces settings the target
+// already has.
+func TestCopy_KeepsTheTargetsOwn(t *testing.T) {
+	queries := dbtest.NewDB(t).Queries
+	admin, member := addUser(t, queries, "admin"), addUser(t, queries, "member")
+	save(t, queries, admin, usersettingsutil.Settings{ThemeMode: ptr("dark")})
+	own := usersettingsutil.Settings{ThemeMode: ptr("light")}
+	save(t, queries, member, own)
+	if copySettings(t, queries, admin, member) {
+		t.Error("Copy over existing settings reported a copy")
+	}
+	if got := load(t, queries, member); !reflect.DeepEqual(got, own) {
+		t.Errorf("Copy replaced the target's settings with %+v", got)
+	}
+}
+
+// TestCopy_GoesWithTheAccount checks a copied row is deleted with its account
+// like any other, and the source's is not.
+func TestCopy_GoesWithTheAccount(t *testing.T) {
+	queries := dbtest.NewDB(t).Queries
+	admin, member := addUser(t, queries, "admin"), addUser(t, queries, "member")
+	save(t, queries, admin, usersettingsutil.Settings{ThemeMode: ptr("dark")})
+	copySettings(t, queries, admin, member)
+	if err := queries.DeleteUser(context.Background(), member); err != nil {
+		t.Fatal(err)
+	}
+	if row, ok := stored(t, queries, member); ok {
+		t.Errorf("the deleted account still has settings: %s", row)
+	}
+	if _, ok := stored(t, queries, admin); !ok {
+		t.Error("deleting the copy took the admin's settings")
+	}
+}

@@ -345,7 +345,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing folder of that name under users/ becomes the home. The approval is added to the account request history. Admin-only.",
+                "description": "Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing folder of that name under users/ becomes the home. The account starts with a one-time copy of the calling admin's own settings (GET /settings/me), if the admin has any; later changes by either do not reach the other. The approval is added to the account request history. Admin-only.",
                 "tags": [
                     "admin"
                 ],
@@ -1200,7 +1200,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates an active account with authKey: the standard base64 of the 32-byte key the admin's client derived from the password and the salt GET /auth/salt returned for the new username. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430). The admin never sees a recovery phrase: the account's client gives it one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it. An existing folder of that name under users/ becomes the home, and a top-level folder of that name does not collide. Admin-only.",
+                "description": "Creates an active account with authKey: the standard base64 of the 32-byte key the admin's client derived from the password and the salt GET /auth/salt returned for the new username. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430). The admin never sees a recovery phrase: the account's client gives it one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it. An existing folder of that name under users/ becomes the home, and a top-level folder of that name does not collide. The account starts with a one-time copy of the calling admin's own settings (GET /settings/me), if the admin has any; later changes by either do not reach the other. Admin-only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8900,7 +8900,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the settings the caller chose for their own account. themeColor overrides the Quark's theme color; the empty string, which is also what an account that has chosen nothing gets, means follow the Quark. disabledNotifications lists the notification types the caller turned off, and is left out when every type is on.",
+                "description": "Returns the settings the caller chose for their own account. themeColor overrides the Quark's theme color; the empty string, which is also what an account that has chosen nothing gets, means follow the Quark. disabledNotifications lists the notification types the caller turned off, and is left out when every type is on. themeMode (system, light or dark), refreshIntervalSeconds (0, auto-refresh off, through 3600), documentAutoSave and documentDarkPage are each left out when the account never chose one, and the app then keeps its own. A new account starts with a copy of the settings of the admin who created or approved it.",
                 "produces": [
                     "application/json"
                 ],
@@ -8935,7 +8935,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Replaces the settings of the caller's own account with the body. themeColor is a preset name (a lowercase letter, then up to 31 lowercase letters, digits or hyphens) or a custom color as lowercase #rrggbb; the empty string, or leaving it out, means follow the Quark. disabledNotifications lists the notification types (backup_due, backup_stale) the caller does not want, each at most once; because the body replaces the settings whole, leaving it out turns every type back on. A field the settings do not have, an unknown notification type and a repeated one are refused. Publishes no event: the change concerns only the caller.",
+                "description": "Replaces the settings of the caller's own account with the body. themeColor is a preset name (a lowercase letter, then up to 31 lowercase letters, digits or hyphens) or a custom color as lowercase #rrggbb; the empty string, or leaving it out, means follow the Quark. disabledNotifications lists the notification types (backup_due, backup_stale) the caller does not want, each at most once; because the body replaces the settings whole, leaving it out turns every type back on. themeMode is system, light or dark; refreshIntervalSeconds is 0 (auto-refresh off) through 3600; documentAutoSave and documentDarkPage are booleans. Leaving any of those four out stores it as never chosen. A field the settings do not have, an unknown notification type, a repeated one, an unknown theme mode and a refresh interval out of range are refused. Publishes no event: the change concerns only the caller.",
                 "consumes": [
                     "application/json"
                 ],
@@ -13498,8 +13498,24 @@
                         "$ref": "#/definitions/notificationutil.Type"
                     }
                 },
+                "documentAutoSave": {
+                    "description": "DocumentAutoSave is whether the document editor saves as the account\ntypes. Nil means this account never chose.",
+                    "type": "boolean"
+                },
+                "documentDarkPage": {
+                    "description": "DocumentDarkPage is whether the document editor draws its page dark in\na dark theme. Nil means this account never chose.",
+                    "type": "boolean"
+                },
+                "refreshIntervalSeconds": {
+                    "description": "RefreshIntervalSeconds is how often the app refreshes the page on\nscreen, 0 (auto-refresh off) through MaxRefreshIntervalSeconds. Nil\nmeans this account never chose.",
+                    "type": "integer"
+                },
                 "themeColor": {
                     "description": "ThemeColor overrides the Quark's theme color for this account. Empty means\nfollow the Quark. See settingsutil.ValidateThemeColor for what it may hold.",
+                    "type": "string"
+                },
+                "themeMode": {
+                    "description": "ThemeMode is the brightness the app uses: \"system\", \"light\" or \"dark\".\nNil means this account never chose, and the app keeps its own.",
                     "type": "string"
                 }
             }

@@ -158,6 +158,14 @@ class AppSettings {
 
   final ValueNotifier<ThemeMode> themeMode = ValueNotifier(ThemeMode.system);
 
+  /// Whether the document editor saves on its own a moment after each edit.
+  /// On by default. Follows the account across devices (#1914).
+  final ValueNotifier<bool> documentAutoSave = ValueNotifier(true);
+
+  /// Whether the document editor draws its page dark (#938). Off by default.
+  /// Follows the account across devices (#1914).
+  final ValueNotifier<bool> documentDarkPage = ValueNotifier(false);
+
   /// Whether the user asked for the high-contrast themes in Settings (#2601),
   /// for a platform with no contrast setting of its own, such as the web.
   /// Off still honors the platform's setting.
@@ -331,6 +339,9 @@ class AppSettings {
   static const _acceptedTermsHostsKey = 'acceptedTermsHosts';
   static const _ownerWelcomeHostsKey = 'ownerWelcomeHosts';
   static const _demoModeKey = 'demoMode';
+  // The document editor's keys predate AppSettings holding them (#1914).
+  static const _documentAutoSaveKey = 'document_editor_auto_save';
+  static const _documentDarkPageKey = 'document_editor_dark_page';
   static const _highContrastKey = 'highContrast';
   static const _leftHandedKey = 'leftHanded';
 
@@ -405,12 +416,11 @@ class AppSettings {
 
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    final theme = _prefs!.getString('themeMode') ?? 'system';
-    themeMode.value = theme == 'light'
-        ? ThemeMode.light
-        : theme == 'dark'
-        ? ThemeMode.dark
-        : ThemeMode.system;
+    themeMode.value =
+        ThemeMode.values.asNameMap()[_prefs!.getString('themeMode')] ??
+        ThemeMode.system;
+    documentAutoSave.value = _prefs!.getBool(_documentAutoSaveKey) ?? true;
+    documentDarkPage.value = _prefs!.getBool(_documentDarkPageKey) ?? false;
     highContrast.value = _prefs!.getBool(_highContrastKey) ?? false;
     leftHanded.value = _prefs!.getBool(_leftHandedKey) ?? false;
     final calendarViewRaw = _prefs!.getString(_defaultCalendarViewKey);
@@ -1183,12 +1193,17 @@ class AppSettings {
 
   Future<void> setThemeMode(ThemeMode mode) async {
     themeMode.value = mode;
-    final key = mode == ThemeMode.light
-        ? 'light'
-        : mode == ThemeMode.dark
-        ? 'dark'
-        : 'system';
-    await _prefs?.setString('themeMode', key);
+    await _prefs?.setString('themeMode', mode.name);
+  }
+
+  Future<void> setDocumentAutoSave(bool enabled) async {
+    documentAutoSave.value = enabled;
+    await _prefs?.setBool(_documentAutoSaveKey, enabled);
+  }
+
+  Future<void> setDocumentDarkPage(bool enabled) async {
+    documentDarkPage.value = enabled;
+    await _prefs?.setBool(_documentDarkPageKey, enabled);
   }
 
   Future<void> setHighContrast(bool enabled) async {

@@ -240,8 +240,9 @@ type ApproveRequestParams struct {
 	Files vfs.VFS
 }
 
-// ApproveRequestResult is the approved account's home.
+// ApproveRequestResult is the approved account and its home.
 type ApproveRequestResult struct {
+	UserID int64
 	// FolderPath is the home's path relative to the files root — users/<username>.
 	FolderPath string
 }
@@ -841,6 +842,7 @@ func ApproveRequest(ctx context.Context, params ApproveRequestParams) (ApproveRe
 		if err != nil {
 			return err
 		}
+		result.UserID = user.ID
 		result.FolderPath = relPath
 		return nil
 	})
