@@ -29,9 +29,10 @@ encrypted on the client under keys the Quark never holds, and the rest of what t
 keys, signatures, and who posted in which channel when. The copy is exactly as private as the database it came
 from, so it is not encrypted a second time.
 
-`chat_backup.db` is a SQLite file whose schema is `internal/db/chat_backup_schema.go`: the nine chat tables
+`chat_backup.db` is a SQLite file whose schema is `internal/db/chat_backup_schema.go`: the eleven chat tables
 (`chat_servers`, `chat_channels`, `chat_channel_members`, `user_chat_keys`, `chat_channel_keys`,
-`chat_key_grants`, `chat_channel_events`, `chat_messages`, `chat_reactions`) with the live columns and none of
+`chat_key_grants`, `chat_channel_events`, `chat_messages`, `chat_reactions`, `chat_polls`,
+`chat_poll_answers`) with the live columns and none of
 the constraints, plus a `users` and a `groups` table that hold only an id and a name. Its `user_version` is the
 format version, `db.ChatBackupVersion`.
 

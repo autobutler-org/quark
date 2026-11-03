@@ -23,6 +23,8 @@ var chatBackupTables = []string{
 	"chat_channel_events",
 	"chat_messages",
 	"chat_reactions",
+	"chat_polls",
+	"chat_poll_answers",
 }
 
 // chatBackup is the chat's ciphertext backup, chat_backup.db.
@@ -46,7 +48,7 @@ var chatBackup = ciphertextBackup{
 
 // ExportChat writes the chat tables of liveDB to chat_backup.db in targetDir
 // and returns its path (#2428). It asks for no password: message bodies,
-// reactions and channel keys are ciphertext the Quark cannot open, and the
+// reactions, poll answers and channel keys are ciphertext the Quark cannot open, and the
 // rest is public keys, so the copy is as private as the database it came from.
 //
 // A failed export leaves the previous backup whole, and a PostgreSQL-backed

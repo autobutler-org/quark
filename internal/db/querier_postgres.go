@@ -57,6 +57,10 @@ func (a *postgresQueries) ClearDefaultStorageRole(ctx context.Context) error {
 	return a.q.ClearDefaultStorageRole(ctx)
 }
 
+func (a *postgresQueries) CloseChatPoll(ctx context.Context, messageID int64) (int64, error) {
+	return a.q.CloseChatPoll(ctx, messageID)
+}
+
 func (a *postgresQueries) CountActiveAdmins(ctx context.Context) (int64, error) {
 	return a.q.CountActiveAdmins(ctx)
 }
@@ -129,6 +133,15 @@ func (a *postgresQueries) CreateChatChannelKey(ctx context.Context, arg CreateCh
 func (a *postgresQueries) CreateChatMessage(ctx context.Context, arg CreateChatMessageParams) (ChatMessage, error) {
 	row, err := a.q.CreateChatMessage(ctx, pgdb.CreateChatMessageParams(arg))
 	return ChatMessage(row), err
+}
+
+func (a *postgresQueries) CreateChatPoll(ctx context.Context, arg CreateChatPollParams) error {
+	return a.q.CreateChatPoll(ctx, pgdb.CreateChatPollParams(arg))
+}
+
+func (a *postgresQueries) CreateChatPollAnswer(ctx context.Context, arg CreateChatPollAnswerParams) (ChatPollAnswer, error) {
+	row, err := a.q.CreateChatPollAnswer(ctx, pgdb.CreateChatPollAnswerParams(arg))
+	return ChatPollAnswer(row), err
 }
 
 func (a *postgresQueries) CreateChatReaction(ctx context.Context, arg CreateChatReactionParams) (ChatReaction, error) {
@@ -422,6 +435,11 @@ func (a *postgresQueries) GetChatMessageByClientID(ctx context.Context, arg GetC
 func (a *postgresQueries) GetChatMessageByNonce(ctx context.Context, arg GetChatMessageByNonceParams) (ChatMessage, error) {
 	row, err := a.q.GetChatMessageByNonce(ctx, pgdb.GetChatMessageByNonceParams(arg))
 	return ChatMessage(row), err
+}
+
+func (a *postgresQueries) GetChatPoll(ctx context.Context, messageID int64) (ChatPoll, error) {
+	row, err := a.q.GetChatPoll(ctx, messageID)
+	return ChatPoll(row), err
 }
 
 func (a *postgresQueries) GetChatReaction(ctx context.Context, id int64) (ChatReaction, error) {
@@ -797,6 +815,42 @@ func (a *postgresQueries) ListChatMessagesBefore(ctx context.Context, arg ListCh
 	items := make([]ChatMessage, len(rows))
 	for i, row := range rows {
 		items[i] = ChatMessage(row)
+	}
+	return items, nil
+}
+
+func (a *postgresQueries) ListChatPollAnswers(ctx context.Context, messageID int64) ([]ChatPollAnswer, error) {
+	rows, err := a.q.ListChatPollAnswers(ctx, messageID)
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ChatPollAnswer, len(rows))
+	for i, row := range rows {
+		items[i] = ChatPollAnswer(row)
+	}
+	return items, nil
+}
+
+func (a *postgresQueries) ListChatPollAnswersBetween(ctx context.Context, arg ListChatPollAnswersBetweenParams) ([]ChatPollAnswer, error) {
+	rows, err := a.q.ListChatPollAnswersBetween(ctx, pgdb.ListChatPollAnswersBetweenParams(arg))
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ChatPollAnswer, len(rows))
+	for i, row := range rows {
+		items[i] = ChatPollAnswer(row)
+	}
+	return items, nil
+}
+
+func (a *postgresQueries) ListChatPollsBetween(ctx context.Context, arg ListChatPollsBetweenParams) ([]ChatPoll, error) {
+	rows, err := a.q.ListChatPollsBetween(ctx, pgdb.ListChatPollsBetweenParams(arg))
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ChatPoll, len(rows))
+	for i, row := range rows {
+		items[i] = ChatPoll(row)
 	}
 	return items, nil
 }
@@ -1269,6 +1323,11 @@ func (a *postgresQueries) SetChatChannelGroupMember(ctx context.Context, arg Set
 
 func (a *postgresQueries) SetChatChannelUserMember(ctx context.Context, arg SetChatChannelUserMemberParams) error {
 	return a.q.SetChatChannelUserMember(ctx, pgdb.SetChatChannelUserMemberParams(arg))
+}
+
+func (a *postgresQueries) SetChatPollAnswer(ctx context.Context, arg SetChatPollAnswerParams) (ChatPollAnswer, error) {
+	row, err := a.q.SetChatPollAnswer(ctx, pgdb.SetChatPollAnswerParams(arg))
+	return ChatPollAnswer(row), err
 }
 
 func (a *postgresQueries) SetChatReadMarker(ctx context.Context, arg SetChatReadMarkerParams) (int64, error) {

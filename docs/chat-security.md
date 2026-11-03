@@ -3,8 +3,8 @@
 Chat messages are end-to-end encrypted: only the members of a channel can read them, and the Quark stores
 ciphertext it can't open. This page covers the identity keys that make that possible (#2416) and what they
 protect against, then the channel keys and key grants built on them (#2417), then the messages encrypted under
-those keys (#2418) and the reactions on them (#2426). The password vault is encrypted with the same account keys,
-and [The vault](#the-vault) covers it.
+those keys (#2418), the reactions on them (#2426) and the answers to polls (#3893). The password vault is
+encrypted with the same account keys, and [The vault](#the-vault) covers it.
 
 ## Identity keys
 
@@ -344,6 +344,69 @@ the oldest, which also picks up deletions the socket dropped.
 
 - `POST /api/v0/chat/messages/:id/reactions` takes `{ciphertext, keyVersion}`.
 - `DELETE /api/v0/chat/reactions/:id` removes one.
+
+## Polls
+
+A poll is a message (#3893): its question and options are in the message's ciphertext like any text, and a
+`chat_polls` row beside it holds the settings the Quark enforces, in plaintext, because it has to read them.
+
+- `closesAt`, optional: answers after it are refused. Nothing runs at that time; an answer is checked when it
+  arrives.
+- `allowChange`: a second answer from the same account replaces the first, or is refused.
+- `anonymous`: answers are served without the account that gave them, to every member, the author included.
+- `resultsAfterClose`: until the poll closes, the author sees every answer and everyone else only their own.
+
+A poll is closed once its author closes it by hand or `closesAt` has passed.
+
+An answer is encrypted like a reaction: XChaCha20-Poly1305 under the channel's current key, a random nonce,
+`nonce || ciphertext` on the Quark. The plaintext is padded to 4 KiB, so every answer's ciphertext is exactly
+4136 bytes and the Quark refuses any other size: its length doesn't say which options were picked or how much
+was written. The additional data binds it to its poll:
+
+```text
+"quark-chat-poll-answer-v1" 0x00 || be64(channelId) || be64(keyVersion) || be64(messageId)
+```
+
+It leaves the account out, because the members reading an anonymous poll don't know whose answer they are
+opening. So the Quark can't move an answer to another poll or channel, but could swap answers between the
+accounts that answered one poll; on a poll that isn't anonymous the app can only show what the Quark says.
+
+### What the Quark sees
+
+- **That a message is a poll, its settings and its close time**, and when its author closed it.
+- **Who answered which poll, and when**, and when an answer was changed. One row per account and poll.
+- Never the question, the options, or what anyone answered.
+- **Anonymity hides names from the members, the author included, never from the Quark.** It still stores who
+  gave each answer, because it has to refuse a second one and serve each account its own. Whoever can read the
+  Quark's database can see who answered an anonymous poll, though not what.
+- **A saved export is plaintext on the Quark.** When a member saves a poll's results as a file, the app has
+  decrypted them, and the file in their Quark files is as readable to the Quark as any other file.
+
+### Rules
+
+- Posting a poll needs `send_messages`, as any post does; the settings go in the same transaction as the message.
+- Answering needs `read_messages` and `add_reactions`. A closed poll answers 409, and so does a second answer
+  when `allowChange` is off.
+- Reading the answers needs `read_messages`, and follows `anonymous` and `resultsAfterClose`. The caller's own
+  answer is marked `mine`.
+- Only the author closes a poll, and closing it again changes nothing.
+- Deleting a poll message deletes its settings and its answers in the statement that tombstones it.
+
+### Delivery
+
+`chat_poll_answer_changed` carries the stored answer, with no account on an anonymous poll and never marked
+`mine`. It goes only to the readers who may see that answer: every reader, or while a `resultsAfterClose` poll
+is open only its author and whoever answered. `chat_poll_closed` goes to the channel's readers when the author
+closes it; a poll that closes by time sends nothing. A page of messages carries each poll's settings, whether
+it is closed, and the answers the caller may see.
+
+### Routes
+
+- `POST /api/v0/chat/channels/:id/messages` takes an optional
+  `poll: {closesAt?, allowChange, anonymous, resultsAfterClose}`.
+- `PUT /api/v0/chat/messages/:id/answer` takes `{ciphertext, keyVersion}`.
+- `GET /api/v0/chat/messages/:id/answers` lists the answers the caller may see.
+- `POST /api/v0/chat/messages/:id/close` closes a poll for its author.
 
 ## Read markers
 

@@ -1,8 +1,6 @@
 package v0_chat
 
 import (
-	"strconv"
-
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
@@ -27,9 +25,9 @@ func deleteMessage(c *gin.Context) *serverutil.Response {
 	if failed != nil {
 		return failed
 	}
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || id <= 0 {
-		return serverutil.NotFound(chatutil.ErrMessageNotFound)
+	id, failed := messageID(c)
+	if failed != nil {
+		return failed
 	}
 	result, err := chatutil.DeleteMessage(chatutil.DeleteMessageParams{
 		Ctx: c.Request.Context(), Database: deps.Database(), EventBus: deps.EventBus(), Principal: principal, MessageID: id,

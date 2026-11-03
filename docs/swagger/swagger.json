@@ -4160,7 +4160,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Stores ciphertext, base64, that the caller's client encrypted under the channel key of keyVersion, and sends the stored row to the channel's readers as chat_message_created. The Quark never sees the text. A ciphertext's 24-byte nonce is taken once per channel and key version: repeating your own live post byte for byte returns it with 200 and stores nothing, and any other reuse is 409. clientMessageId, up to 64 bytes, names the send: a retry encrypts again under a fresh nonce, so it carries the same clientMessageId, and one the caller already sent to this channel returns that message with 200 and stores nothing, whatever the ciphertext. Ciphertext is at most 16 KiB. Needs send_messages; a reader without it gets 403, and anyone without read_messages 404, delegated managers and admins included.",
+                "description": "Stores ciphertext, base64, that the caller's client encrypted under the channel key of keyVersion, and sends the stored row to the channel's readers as chat_message_created. The Quark never sees the text. A ciphertext's 24-byte nonce is taken once per channel and key version: repeating your own live post byte for byte returns it with 200 and stores nothing, and any other reuse is 409. clientMessageId, up to 64 bytes, names the send: a retry encrypts again under a fresh nonce, so it carries the same clientMessageId, and one the caller already sent to this channel returns that message with 200 and stores nothing, whatever the ciphertext. Ciphertext is at most 16 KiB. poll, when set, makes the message a poll whose question and options are in the ciphertext: closesAt, when set, is when it stops taking answers; allowChange lets an account replace its answer; anonymous serves answers without who gave them, to everyone; resultsAfterClose shows answers only to the author until it closes. Needs send_messages; a reader without it gets 403, and anyone without read_messages 404, delegated managers and admins included.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4524,6 +4524,198 @@
                     },
                     "404": {
                         "description": "no such message, or the caller lacks read_messages in its channel",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/messages/{id}/answer": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores the caller's answer to a poll, base64 ciphertext of the answer padded to 4 KiB and encrypted under the channel key of keyVersion, so it is exactly 4136 bytes. When the poll allows changing an answer a second one replaces the first; otherwise it is 409. The stored row goes as chat_poll_answer_changed to the readers who may see it: everyone, or while a results-after-close poll is open only its author and the caller. The Quark never sees the answer. Needs read_messages and add_reactions; a reader without add_reactions gets 403, and anyone without read_messages 404.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Answer a chat poll",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Poll message id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The encrypted answer",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.pollAnswerBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.PollAnswer"
+                        }
+                    },
+                    "400": {
+                        "description": "ciphertext not exactly 4136 bytes, or a key version the channel doesn't have",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller reads the channel but lacks add_reactions",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such message, the message isn't a poll, or the caller lacks read_messages in its channel",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the poll is closed, or the caller already answered and the poll doesn't allow changing an answer",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/messages/{id}/answers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the poll's answers, oldest first, as ciphertext. While a results-after-close poll is open, anyone but its author gets only their own answer. An anonymous poll's answers carry no userId, for the author too; the caller's own is marked mine. Needs read_messages; anyone else gets 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "List the answers to a chat poll the caller may see",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Poll message id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ListPollAnswersResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such message, the message isn't a poll, or the caller lacks read_messages in its channel",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/messages/{id}/close": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stops the poll taking answers and tells the channel's readers with chat_poll_closed. Closing a closed poll returns it unchanged and announces nothing. Only the poll's author may close it, and only while they hold read_messages; anyone else who reads the channel gets 403, and anyone without read_messages 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Close a chat poll",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Poll message id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Poll"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller isn't the poll's author",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such message, the message isn't a poll, or the caller lacks read_messages in its channel",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -12061,6 +12253,17 @@
                 }
             }
         },
+        "chatutil.ListPollAnswersResult": {
+            "type": "object",
+            "properties": {
+                "answers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.PollAnswer"
+                    }
+                }
+            }
+        },
         "chatutil.MarkReadResult": {
             "type": "object",
             "properties": {
@@ -12170,6 +12373,14 @@
                 "keyVersion": {
                     "type": "integer"
                 },
+                "poll": {
+                    "description": "Poll is set when the message is a poll (#3893): its settings, whether\nit is closed, and in a ListMessages page the answers the caller may\nsee. A deleted poll has none of it.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/chatutil.Poll"
+                        }
+                    ]
+                },
                 "reactions": {
                     "description": "Reactions are the message's reactions, oldest first, in a\nListMessages page. A deleted message has none: they go with its\nciphertext.",
                     "type": "array",
@@ -12193,6 +12404,98 @@
                 },
                 "version": {
                     "type": "integer"
+                }
+            }
+        },
+        "chatutil.Poll": {
+            "type": "object",
+            "properties": {
+                "allowChange": {
+                    "description": "AllowChange lets an account replace its answer; without it a second\nanswer is refused.",
+                    "type": "boolean"
+                },
+                "anonymous": {
+                    "description": "Anonymous serves answers without the account that gave them, to\neveryone, the author included. The Quark still knows.",
+                    "type": "boolean"
+                },
+                "answers": {
+                    "description": "Answers are the answers the caller may see, oldest first, in a\nListMessages page.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.PollAnswer"
+                    }
+                },
+                "closed": {
+                    "description": "Closed is whether the poll has stopped taking answers: ClosedAt is set\nor ClosesAt has passed.",
+                    "type": "boolean"
+                },
+                "closedAt": {
+                    "description": "ClosedAt is when the author closed the poll by hand.",
+                    "type": "string"
+                },
+                "closesAt": {
+                    "description": "ClosesAt, when set, is when the poll stops taking answers.",
+                    "type": "string"
+                },
+                "resultsAfterClose": {
+                    "description": "ResultsAfterClose shows the answers only to the author until the poll\ncloses; everyone else sees only their own.",
+                    "type": "boolean"
+                }
+            }
+        },
+        "chatutil.PollAnswer": {
+            "type": "object",
+            "properties": {
+                "ciphertext": {
+                    "description": "Ciphertext is nonce || XChaCha20-Poly1305 output over the answer\npadded to PollAnswerPlaintextBytes, under the channel key of\nKeyVersion (docs/chat-security.md).",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "keyVersion": {
+                    "type": "integer"
+                },
+                "messageId": {
+                    "type": "integer"
+                },
+                "mine": {
+                    "description": "Mine is whether the caller gave this answer. It is false on an event.",
+                    "type": "boolean"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "userId": {
+                    "description": "UserID is who answered, absent when the poll is anonymous.",
+                    "type": "integer"
+                }
+            }
+        },
+        "chatutil.PollSettings": {
+            "type": "object",
+            "properties": {
+                "allowChange": {
+                    "description": "AllowChange lets an account replace its answer; without it a second\nanswer is refused.",
+                    "type": "boolean"
+                },
+                "anonymous": {
+                    "description": "Anonymous serves answers without the account that gave them, to\neveryone, the author included. The Quark still knows.",
+                    "type": "boolean"
+                },
+                "closesAt": {
+                    "description": "ClosesAt, when set, is when the poll stops taking answers.",
+                    "type": "string"
+                },
+                "resultsAfterClose": {
+                    "description": "ResultsAfterClose shows the answers only to the author until the poll\ncloses; everyone else sees only their own.",
+                    "type": "boolean"
                 }
             }
         },
@@ -13727,6 +14030,20 @@
                 }
             }
         },
+        "v0_chat.pollAnswerBody": {
+            "type": "object",
+            "properties": {
+                "ciphertext": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "keyVersion": {
+                    "type": "integer"
+                }
+            }
+        },
         "v0_chat.postMessageBody": {
             "type": "object",
             "properties": {
@@ -13741,6 +14058,9 @@
                 },
                 "keyVersion": {
                     "type": "integer"
+                },
+                "poll": {
+                    "$ref": "#/definitions/chatutil.PollSettings"
                 }
             }
         },

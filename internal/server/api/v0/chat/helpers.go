@@ -56,6 +56,16 @@ func channelID(c *gin.Context) (int64, *serverutil.Response) {
 	return id, nil
 }
 
+// messageID reads the :id path parameter of a message route. One that isn't
+// a positive integer names no message.
+func messageID(c *gin.Context) (int64, *serverutil.Response) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, serverutil.NotFound(chatutil.ErrMessageNotFound)
+	}
+	return id, nil
+}
+
 // chatError maps an error from chatutil to its status code. The sentinels'
 // text is written for the app to show, so it goes out unwrapped.
 func chatError(err error) *serverutil.Response {
@@ -64,13 +74,15 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, accessutil.ErrPrincipalNotFound), errors.Is(err, chatutil.ErrKeysNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, chatutil.ErrEventNotFound), errors.Is(err, chatutil.ErrMessageNotFound),
-		errors.Is(err, chatutil.ErrReactionNotFound), errors.Is(err, chatutil.ErrGrantNotFound):
+		errors.Is(err, chatutil.ErrReactionNotFound), errors.Is(err, chatutil.ErrGrantNotFound),
+		errors.Is(err, chatutil.ErrNotPoll):
 		return serverutil.NotFound(err)
 	case errors.Is(err, chatutil.ErrForbidden), errors.Is(err, chatutil.ErrNotHeld),
 		errors.Is(err, chatutil.ErrNotSubset), errors.Is(err, chatutil.ErrCreatorRow),
 		errors.Is(err, chatutil.ErrNotHolder), errors.Is(err, chatutil.ErrAdminOnly),
 		errors.Is(err, chatutil.ErrReadOnly), errors.Is(err, chatutil.ErrNotMessageAuthor),
-		errors.Is(err, chatutil.ErrNoReactions), errors.Is(err, chatutil.ErrNotReactionAuthor):
+		errors.Is(err, chatutil.ErrNoReactions), errors.Is(err, chatutil.ErrNotReactionAuthor),
+		errors.Is(err, chatutil.ErrNoAnswers), errors.Is(err, chatutil.ErrNotPollAuthor):
 		return serverutil.Forbidden(err)
 	case errors.Is(err, chatutil.ErrInvalidPerms), errors.Is(err, chatutil.ErrNoPerms):
 		return serverutil.NewResponse().WithStatusCode(http.StatusUnprocessableEntity).WithError(err)
@@ -79,14 +91,15 @@ func chatError(err error) *serverutil.Response {
 	case errors.Is(err, chatutil.ErrNameTaken), errors.Is(err, chatutil.ErrVersionConflict), errors.Is(err, chatutil.ErrRotationNotNeeded),
 		errors.Is(err, chatutil.ErrEventSigned),
 		errors.Is(err, chatutil.ErrMessageDeleted), errors.Is(err, chatutil.ErrTooManyReactions),
-		errors.Is(err, chatutil.ErrDuplicateMessage):
+		errors.Is(err, chatutil.ErrDuplicateMessage),
+		errors.Is(err, chatutil.ErrPollClosed), errors.Is(err, chatutil.ErrAlreadyAnswered):
 		return serverutil.Conflict(err)
 	case errors.Is(err, chatutil.ErrInvalidName), errors.Is(err, chatutil.ErrInvalidTopic),
 		errors.Is(err, chatutil.ErrDefaultChannel), errors.Is(err, chatutil.ErrDefaultEveryone), errors.Is(err, chatutil.ErrLastOwner),
 		errors.Is(err, accessutil.ErrGrantTarget),
 		errors.Is(err, chatutil.ErrInvalidKeys), errors.Is(err, chatutil.ErrInvalidGrant), errors.Is(err, chatutil.ErrGrantSignature),
 		errors.Is(err, chatutil.ErrInvalidMessage), errors.Is(err, chatutil.ErrInvalidReaction),
-		errors.Is(err, chatutil.ErrInvalidClientMessageID):
+		errors.Is(err, chatutil.ErrInvalidClientMessageID), errors.Is(err, chatutil.ErrInvalidPollAnswer):
 		return serverutil.BadRequest(err)
 	default:
 		return serverutil.InternalServerError(err)

@@ -1661,6 +1661,10 @@ type Message struct {
 	// ListMessages page. A deleted message has none: they go with its
 	// ciphertext.
 	Reactions []Reaction `json:"reactions,omitempty"`
+	// Poll is set when the message is a poll (#3893): its settings, whether
+	// it is closed, and in a ListMessages page the answers the caller may
+	// see. A deleted poll has none of it.
+	Poll *Poll `json:"poll,omitempty"`
 }
 
 // PostMessageParams posts ciphertext to a channel.
@@ -1677,6 +1681,9 @@ type PostMessageParams struct {
 	// (#3531). A retry encrypts the text again under a fresh nonce, so this,
 	// not the ciphertext, is what tells the Quark it already has the message.
 	ClientMessageID string
+	// Poll, when set, makes the message a poll with these settings (#3893),
+	// stored in the same transaction as the message.
+	Poll *PollSettings
 }
 
 // PostMessageResult is the message as stored.
@@ -1726,23 +1733,49 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 	if !slices.ContainsFunc(versions, func(k db.ChatChannelKey) bool { return k.Version == params.KeyVersion }) {
 		return PostMessageResult{}, ErrInvalidMessage
 	}
-	row, err := queries.CreateChatMessage(params.Ctx, db.CreateChatMessageParams{
-		ChannelID:  params.ChannelID,
-		AuthorID:   sql.NullInt64{Int64: params.Principal.UserID, Valid: true},
-		KeyVersion: params.KeyVersion,
-		Ciphertext: params.Ciphertext,
-		Nonce:      params.Ciphertext[:NonceBytes],
-		ClientMessageID: sql.NullString{
-			String: params.ClientMessageID, Valid: params.ClientMessageID != "",
-		},
+	var row db.ChatMessage
+	err = db.InTx(params.Ctx, params.Database.Db, func(tx db.Querier) error {
+		var err error
+		row, err = tx.CreateChatMessage(params.Ctx, db.CreateChatMessageParams{
+			ChannelID:  params.ChannelID,
+			AuthorID:   sql.NullInt64{Int64: params.Principal.UserID, Valid: true},
+			KeyVersion: params.KeyVersion,
+			Ciphertext: params.Ciphertext,
+			Nonce:      params.Ciphertext[:NonceBytes],
+			ClientMessageID: sql.NullString{
+				String: params.ClientMessageID, Valid: params.ClientMessageID != "",
+			},
+		})
+		if err != nil || params.Poll == nil {
+			return err
+		}
+		closesAt := sql.NullTime{Valid: params.Poll.ClosesAt != nil}
+		if closesAt.Valid {
+			closesAt.Time = params.Poll.ClosesAt.UTC()
+		}
+		return tx.CreateChatPoll(params.Ctx, db.CreateChatPollParams{
+			MessageID:         row.ID,
+			ClosesAt:          closesAt,
+			AllowChange:       params.Poll.AllowChange,
+			Anonymous:         params.Poll.Anonymous,
+			ResultsAfterClose: params.Poll.ResultsAfterClose,
+		})
 	})
 	if sqlutil.IsUniqueConstraintErr(err) {
-		return repeatedPost(params)
+		result, err := repeatedPost(params)
+		if err != nil {
+			return PostMessageResult{}, err
+		}
+		result.Message, err = withPoll(params.Ctx, queries, params.Principal.UserID, result.Message)
+		return result, err
 	}
 	if err != nil {
 		return PostMessageResult{}, err
 	}
-	message := messageFromRow(row)
+	message, err := withPoll(params.Ctx, queries, params.Principal.UserID, messageFromRow(row))
+	if err != nil {
+		return PostMessageResult{}, err
+	}
 	if err := publishMessage(params.Ctx, queries, params.EventBus, eventbus.EventChatMessageCreated, message); err != nil {
 		log.Printf("chat: message %d stored but not announced: %v", row.ID, err)
 	}
@@ -1764,7 +1797,8 @@ type ListMessagesParams struct {
 }
 
 // ListMessagesResult is a page of messages, oldest first, tombstones
-// included, each with its reactions.
+// included, each with its reactions and, for a poll, the answers the caller
+// may see.
 type ListMessagesResult struct {
 	Messages []Message `json:"messages"`
 }
@@ -1808,6 +1842,9 @@ func ListMessages(params ListMessagesParams) (ListMessagesResult, error) {
 		messages = append(messages, messageFromRow(row))
 	}
 	if err := attachReactions(params.Ctx, queries, params.ChannelID, messages); err != nil {
+		return ListMessagesResult{}, err
+	}
+	if err := attachPolls(params.Ctx, queries, params.ChannelID, params.Principal.UserID, messages); err != nil {
 		return ListMessagesResult{}, err
 	}
 	return ListMessagesResult{Messages: messages}, nil
@@ -2111,4 +2148,257 @@ func RemoveReaction(params RemoveReactionParams) (RemoveReactionResult, error) {
 		log.Printf("chat: reaction %d removed but not announced: %v", row.ID, err)
 	}
 	return RemoveReactionResult{Reaction: reactionFromRow(row)}, nil
+}
+
+// Poll limits (#3893). An answer's plaintext is padded to
+// PollAnswerPlaintextBytes before it is encrypted, so every answer has
+// exactly PollAnswerCiphertextBytes of ciphertext and its size says nothing
+// about what it chose.
+const (
+	PollAnswerPlaintextBytes  = 4 << 10
+	PollAnswerCiphertextBytes = NonceBytes + PollAnswerPlaintextBytes + 16
+	// MaxPollAnswerRequestBytes caps an answer's body: the ciphertext in
+	// base64 plus room for the JSON around it.
+	MaxPollAnswerRequestBytes = 8 << 10
+)
+
+var (
+	// ErrNotPoll reports a message that isn't a poll, or a poll deleted with
+	// its message.
+	ErrNotPoll = errors.New("that message isn't a poll")
+	// ErrPollClosed reports answering a poll its author closed or whose
+	// closing time has passed.
+	ErrPollClosed = errors.New("that poll is closed")
+	// ErrAlreadyAnswered reports a second answer to a poll that doesn't allow
+	// changing one.
+	ErrAlreadyAnswered = errors.New("you already answered this poll, and it doesn't allow changing an answer")
+	// ErrInvalidPollAnswer reports ciphertext that isn't exactly
+	// PollAnswerCiphertextBytes, or a key version the channel doesn't have.
+	ErrInvalidPollAnswer = errors.New("a poll answer needs a padded answer encrypted under one of the channel's key versions")
+	// ErrNoAnswers reports a reader without add_reactions answering a poll.
+	ErrNoAnswers = errors.New("you can read this channel but not answer polls in it")
+	// ErrNotPollAuthor reports closing someone else's poll.
+	ErrNotPollAuthor = errors.New("only its author can close a poll")
+)
+
+// PollSettings are the rules the Quark enforces on a poll. Its question and
+// options are in the message's ciphertext, which the Quark never opens.
+type PollSettings struct {
+	// ClosesAt, when set, is when the poll stops taking answers.
+	ClosesAt *time.Time `json:"closesAt,omitempty"`
+	// AllowChange lets an account replace its answer; without it a second
+	// answer is refused.
+	AllowChange bool `json:"allowChange"`
+	// Anonymous serves answers without the account that gave them, to
+	// everyone, the author included. The Quark still knows.
+	Anonymous bool `json:"anonymous"`
+	// ResultsAfterClose shows the answers only to the author until the poll
+	// closes; everyone else sees only their own.
+	ResultsAfterClose bool `json:"resultsAfterClose"`
+}
+
+// Poll is a poll message's settings and state.
+type Poll struct {
+	PollSettings
+	// ClosedAt is when the author closed the poll by hand.
+	ClosedAt *time.Time `json:"closedAt,omitempty"`
+	// Closed is whether the poll has stopped taking answers: ClosedAt is set
+	// or ClosesAt has passed.
+	Closed bool `json:"closed"`
+	// Answers are the answers the caller may see, oldest first, in a
+	// ListMessages page.
+	Answers []PollAnswer `json:"answers,omitempty"`
+}
+
+// PollAnswer is one stored answer. The Quark sees who answered which poll
+// and when, never what. Byte fields travel as base64.
+type PollAnswer struct {
+	ID        int64 `json:"id"`
+	MessageID int64 `json:"messageId"`
+	// UserID is who answered, absent when the poll is anonymous.
+	UserID int64 `json:"userId,omitempty"`
+	// Mine is whether the caller gave this answer. It is false on an event.
+	Mine       bool  `json:"mine"`
+	KeyVersion int64 `json:"keyVersion"`
+	// Ciphertext is nonce || XChaCha20-Poly1305 output over the answer
+	// padded to PollAnswerPlaintextBytes, under the channel key of
+	// KeyVersion (docs/chat-security.md).
+	Ciphertext []byte    `json:"ciphertext"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+// AnswerPollParams answers a poll with ciphertext.
+type AnswerPollParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_poll_answer_changed. Nil skips it.
+	EventBus   *eventbus.Bus
+	Principal  accessutil.Principal
+	MessageID  int64
+	KeyVersion int64
+	Ciphertext []byte
+}
+
+// AnswerPollResult is the caller's answer as stored.
+type AnswerPollResult struct {
+	Answer PollAnswer
+}
+
+// AnswerPoll stores the caller's answer to a poll, or replaces it when the
+// poll allows changing one, and sends it as chat_poll_answer_changed to the
+// readers who may see it. Anyone without read_messages gets
+// ErrMessageNotFound; a reader without add_reactions ErrNoAnswers; a message
+// that isn't a poll ErrNotPoll; a closed poll ErrPollClosed; and a second
+// answer to a poll without AllowChange ErrAlreadyAnswered.
+func AnswerPoll(params AnswerPollParams) (AnswerPollResult, error) {
+	if len(params.Ciphertext) != PollAnswerCiphertextBytes {
+		return AnswerPollResult{}, ErrInvalidPollAnswer
+	}
+	if params.Database == nil {
+		return AnswerPollResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	userID := params.Principal.UserID
+	message, perms, err := readableMessage(params.Ctx, queries, params.Principal, params.MessageID)
+	if err != nil {
+		return AnswerPollResult{}, err
+	}
+	if !perms.Has(PermAddReactions) {
+		return AnswerPollResult{}, ErrNoAnswers
+	}
+	poll, err := readPoll(params.Ctx, queries, params.MessageID)
+	if err != nil {
+		return AnswerPollResult{}, err
+	}
+	now := time.Now()
+	if pollClosed(poll, now) {
+		return AnswerPollResult{}, ErrPollClosed
+	}
+	versions, err := queries.ListChatChannelKeys(params.Ctx, message.ChannelID)
+	if err != nil {
+		return AnswerPollResult{}, err
+	}
+	if !slices.ContainsFunc(versions, func(k db.ChatChannelKey) bool { return k.Version == params.KeyVersion }) {
+		return AnswerPollResult{}, ErrInvalidPollAnswer
+	}
+	write := db.SetChatPollAnswerParams{
+		MessageID: params.MessageID, UserID: userID, KeyVersion: params.KeyVersion, Ciphertext: params.Ciphertext,
+	}
+	var row db.ChatPollAnswer
+	if poll.AllowChange {
+		row, err = queries.SetChatPollAnswer(params.Ctx, write)
+	} else {
+		row, err = queries.CreateChatPollAnswer(params.Ctx, db.CreateChatPollAnswerParams(write))
+	}
+	switch {
+	case errors.Is(err, sql.ErrNoRows) && !poll.AllowChange:
+		return AnswerPollResult{}, ErrAlreadyAnswered
+	case errors.Is(err, sql.ErrNoRows):
+		// Deleted between the read above and the write.
+		return AnswerPollResult{}, ErrNotPoll
+	case err != nil:
+		return AnswerPollResult{}, err
+	}
+	if err := publishPollAnswer(params.Ctx, queries, params.EventBus, message, poll, row, now); err != nil {
+		log.Printf("chat: poll answer %d stored but not announced: %v", row.ID, err)
+	}
+	return AnswerPollResult{Answer: answerFor(poll, row, userID)}, nil
+}
+
+// ListPollAnswersParams reads a poll's answers.
+type ListPollAnswersParams struct {
+	Ctx       context.Context
+	Database  *db.DatabaseSqlc
+	Principal accessutil.Principal
+	MessageID int64
+}
+
+// ListPollAnswersResult is the answers the caller may see, oldest first.
+type ListPollAnswersResult struct {
+	Answers []PollAnswer `json:"answers"`
+}
+
+// ListPollAnswers is every answer to a poll the caller may see, for a holder
+// of read_messages: all of them, unless the poll shows results after close
+// and is still open, when anyone but its author sees only their own. An
+// anonymous poll's answers carry no account; the caller's own is Mine.
+// Anyone without read_messages gets ErrMessageNotFound and a message that
+// isn't a poll ErrNotPoll.
+func ListPollAnswers(params ListPollAnswersParams) (ListPollAnswersResult, error) {
+	if params.Database == nil {
+		return ListPollAnswersResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	message, _, err := readableMessage(params.Ctx, queries, params.Principal, params.MessageID)
+	if err != nil {
+		return ListPollAnswersResult{}, err
+	}
+	poll, err := readPoll(params.Ctx, queries, params.MessageID)
+	if err != nil {
+		return ListPollAnswersResult{}, err
+	}
+	rows, err := queries.ListChatPollAnswers(params.Ctx, params.MessageID)
+	if err != nil {
+		return ListPollAnswersResult{}, err
+	}
+	return ListPollAnswersResult{
+		Answers: visibleAnswers(poll, message.AuthorID.Int64, params.Principal.UserID, rows, time.Now()),
+	}, nil
+}
+
+// ClosePollParams closes a poll by hand.
+type ClosePollParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_poll_closed. Nil skips it.
+	EventBus  *eventbus.Bus
+	Principal accessutil.Principal
+	MessageID int64
+}
+
+// ClosePollResult is the poll once closed.
+type ClosePollResult struct {
+	Poll Poll
+}
+
+// ClosePoll closes a poll for its author, who must still hold read_messages,
+// and tells the channel's readers with chat_poll_closed. Closing a closed
+// poll changes nothing and announces nothing. Anyone without read_messages
+// gets ErrMessageNotFound, a message that isn't a poll ErrNotPoll, and anyone
+// but the author ErrNotPollAuthor.
+func ClosePoll(params ClosePollParams) (ClosePollResult, error) {
+	if params.Database == nil {
+		return ClosePollResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	message, _, err := readableMessage(params.Ctx, queries, params.Principal, params.MessageID)
+	if err != nil {
+		return ClosePollResult{}, err
+	}
+	if _, err := readPoll(params.Ctx, queries, params.MessageID); err != nil {
+		return ClosePollResult{}, err
+	}
+	if message.AuthorID.Int64 != params.Principal.UserID {
+		return ClosePollResult{}, ErrNotPollAuthor
+	}
+	closed, err := queries.CloseChatPoll(params.Ctx, params.MessageID)
+	if err != nil {
+		return ClosePollResult{}, err
+	}
+	poll, err := readPoll(params.Ctx, queries, params.MessageID)
+	if err != nil {
+		return ClosePollResult{}, err
+	}
+	if closed > 0 && params.EventBus != nil {
+		audience, err := readers(params.Ctx, queries, message.ChannelID)
+		if err != nil {
+			log.Printf("chat: poll %d closed but not announced: %v", message.ID, err)
+		} else {
+			params.EventBus.Publish(eventbus.Event{Kind: eventbus.EventChatPollClosed, Data: eventbus.ChatMessageChanged{
+				ChannelID: message.ChannelID, MessageID: message.ID, Audience: audience,
+			}})
+		}
+	}
+	return ClosePollResult{Poll: pollFromRow(poll, time.Now())}, nil
 }

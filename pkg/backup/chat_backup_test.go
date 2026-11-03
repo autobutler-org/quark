@@ -91,6 +91,13 @@ func seedChat(t *testing.T, d *sql.DB) {
 		[]byte("nonce-4|dm"), at, []byte("nonce-4"))
 	chatExec(t, d, `INSERT INTO chat_reactions (message_id, user_id, key_version, ciphertext, created_at) VALUES (1, 2, 1, ?, ?), (1, 3, 1, ?, ?)`,
 		[]byte("react-bob"), at, []byte("react-carol"), at)
+	chatExec(t, d, `
+		INSERT INTO chat_polls (message_id, closes_at, closed_at, allow_change, anonymous, results_after_close)
+		VALUES (1, ?, NULL, 1, 0, 1), (4, NULL, ?, 0, 1, 0)`, at, at)
+	chatExec(t, d, `
+		INSERT INTO chat_poll_answers (message_id, user_id, key_version, ciphertext, created_at, updated_at)
+		VALUES (1, 3, 1, ?, ?, ?), (4, 1, 1, ?, ?, ?)`,
+		[]byte("answer-carol"), at, at, []byte("answer-alice"), at, at)
 }
 
 // dumpChat reads every row of every chat table, keyed by table.

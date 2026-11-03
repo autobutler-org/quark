@@ -96,6 +96,13 @@ const (
 	// EventChatReactionChanged fires when a reaction is added to or removed
 	// from a chat message (#2426). Data is a ChatReactionChanged.
 	EventChatReactionChanged EventKind = "chat_reaction_changed"
+	// EventChatPollAnswerChanged fires when an account answers a chat poll or
+	// changes its answer (#3893). Data is a ChatPollAnswerChanged.
+	EventChatPollAnswerChanged EventKind = "chat_poll_answer_changed"
+	// EventChatPollClosed fires when a poll's author closes it (#3893). Data
+	// is a ChatMessageChanged with no Message. A poll that closes by time
+	// fires nothing.
+	EventChatPollClosed EventKind = "chat_poll_closed"
 	// EventChatReadMarkerChanged fires when an account's read marker in a
 	// channel moves forward (#2424), so its other sessions clear their unread
 	// count. Data is a ChatReadMarkerChanged.
@@ -172,6 +179,20 @@ type ChatReactionChanged struct {
 	Reaction any `json:"reaction,omitempty"`
 	// Audience is the channel's readers, the accounts holding read_messages.
 	// It is never sent.
+	Audience []int64 `json:"-"`
+}
+
+// ChatPollAnswerChanged is the data of a chat_poll_answer_changed event. It
+// reaches only the readers allowed to see the answer: every reader, or while
+// a results-after-close poll is open only its author and the one who
+// answered.
+type ChatPollAnswerChanged struct {
+	ChannelID int64 `json:"channelId"`
+	MessageID int64 `json:"messageId"`
+	// Answer is the stored row, a chatutil.PollAnswer, with no user id when
+	// the poll is anonymous.
+	Answer any `json:"answer"`
+	// Audience is who may see the answer. It is never sent.
 	Audience []int64 `json:"-"`
 }
 

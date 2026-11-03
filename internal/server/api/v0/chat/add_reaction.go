@@ -2,7 +2,6 @@ package v0_chat
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -32,9 +31,9 @@ func addReaction(c *gin.Context) *serverutil.Response {
 	if failed != nil {
 		return failed
 	}
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || id <= 0 {
-		return serverutil.NotFound(chatutil.ErrMessageNotFound)
+	id, failed := messageID(c)
+	if failed != nil {
+		return failed
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, chatutil.MaxReactionRequestBytes)
 	var body reactionBody
