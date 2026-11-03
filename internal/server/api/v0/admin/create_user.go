@@ -17,7 +17,7 @@ import (
 
 // createUser godoc
 // @Summary Add an account
-// @Description Creates an active account with authKey: the standard base64 of the 32-byte key the admin's client derived from the password and the salt GET /auth/salt returned for the new username. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430). The admin never sees a recovery phrase: the account's client gives it one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it. An existing folder of that name under users/ becomes the home, and a top-level folder of that name does not collide. Admin-only.
+// @Description Creates an active account with authKey: the standard base64 of the 32-byte key the admin's client derived from the password and the salt GET /auth/salt returned for the new username. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430). The admin never sees a recovery phrase: the account's client gives it one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it. An existing folder of that name under users/ becomes the home, and a top-level folder of that name does not collide. The account starts with a one-time copy of the calling admin's own settings (GET /settings/me), if the admin has any; later changes by either do not reach the other. Admin-only.
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -63,6 +63,7 @@ func createUser(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return accountErrorResponse(err)
 	}
+	copyCallerSettings(c, deps, result.UserID)
 
 	if bus := deps.EventBus(); bus != nil {
 		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})

@@ -236,8 +236,6 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isLoadingSbom = false;
   String? _sbomError;
 
-  int _refreshIntervalSeconds = 15;
-
   /// Remote access on the Network tab (#2857).
   final RemoteAccessController _remoteAccess = RemoteAccessController();
 
@@ -275,12 +273,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// Everything the theme controls show: the mode the app bar toggle also
   /// changes (#2053), and the theme color pickers' state (#2740). The
-  /// left-handed switch (#1812) and the view Calendar opens on (#2521) ride
-  /// along.
+  /// left-handed switch (#1812), the view Calendar opens on (#2521) and the
+  /// auto-refresh interval, which follows the account (#1914), ride along.
   final Listenable _themeColors = Listenable.merge([
     AppSettings.instance.themeMode,
     AppSettings.instance.leftHanded,
     AppSettings.instance.defaultCalendarView,
+    AppSettings.instance.refreshInterval,
     AppSettings.instance.themeColor,
     AppSettings.instance.quarkThemeColor,
     AppSettings.instance.userThemeColor,
@@ -303,7 +302,6 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _load() {
-    _refreshIntervalSeconds = AppSettings.instance.refreshIntervalSeconds;
     _highContrast = AppSettings.instance.highContrast.value;
     _demoMode = AppSettings.instance.demoMode.value;
     // Cleared up front so removing the last host retires the banner: with no
@@ -640,7 +638,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: SettingsGeneralTab(
               header: banner,
               theme: settings.themeMode.value,
-              onThemeChanged: settings.setThemeMode,
+              onThemeChanged: _setThemeMode,
               highContrast: _highContrast,
               onHighContrastChanged: _setHighContrast,
               leftHanded: settings.leftHanded.value,
@@ -666,7 +664,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       controller: NotificationsController.instance,
                     )
                   : null,
-              refreshIntervalSeconds: _refreshIntervalSeconds,
+              refreshIntervalSeconds: settings.refreshIntervalSeconds,
               onRefreshIntervalChanged: _setRefreshInterval,
               demoMode: _demoMode,
               onDemoModeChanged: _setDemoMode,
@@ -808,9 +806,26 @@ class _SettingsPageState extends State<SettingsPage> {
     await AppSettings.instance.setHighContrast(enabled);
   }
 
-  Future<void> _setRefreshInterval(int seconds) async {
-    await AppSettings.instance.setRefreshIntervalSeconds(seconds);
-    if (mounted) setState(() => _refreshIntervalSeconds = seconds);
+  Future<void> _setThemeMode(ThemeMode mode) =>
+      _savePersonalSetting(SettingsService.setMyThemeMode(mode));
+
+  Future<void> _setRefreshInterval(int seconds) => _savePersonalSetting(
+    SettingsService.setMyRefreshIntervalSeconds(seconds),
+  );
+
+  /// Awaits [save], a preference that follows the account (#1914). A failed
+  /// save to the account is shown; the change stays on this device.
+  Future<void> _savePersonalSetting(Future<void> save) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await save;
+    } catch (e) {
+      debugPrint('[settings_page.dart] Error saving a setting: $e');
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(Errors.message(e, 'save your settings'))),
+      );
+    }
   }
 
   Future<void> _setDemoMode(bool enabled) async {

@@ -1,13 +1,14 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
 /// Calls `/api/v0/settings` for the Quark's settings and the signed-in user's
-/// own, such as the theme color (#2740).
+/// own, such as the theme color (#2740) and the personal preferences that
+/// follow the account across devices (#1914).
 class SettingsService with AuthenticatedService {
   static final SettingsService _instance = SettingsService._();
   SettingsService._();
@@ -125,5 +126,107 @@ class SettingsService with AuthenticatedService {
       load(getQuarkThemeColor, settings.setQuarkThemeColor),
       if (token != null) load(getMyThemeColor, settings.setUserThemeColor),
     ]);
+  }
+
+  /// Sets the theme mode on this device and, signed in, on the account.
+  ///
+  /// This and its siblings apply the change locally first, so it stays even
+  /// when the save to the account then throws.
+  static Future<void> setMyThemeMode(ThemeMode mode) async {
+    await AppSettings.instance.setThemeMode(mode);
+    await _saveMyPersonalSettings({_themeModeKey: mode.name});
+  }
+
+  /// Sets the auto-refresh interval, see [setMyThemeMode].
+  static Future<void> setMyRefreshIntervalSeconds(int seconds) async {
+    await AppSettings.instance.setRefreshIntervalSeconds(seconds);
+    await _saveMyPersonalSettings({_refreshIntervalKey: seconds});
+  }
+
+  /// Sets the document editor's auto-save, see [setMyThemeMode].
+  static Future<void> setMyDocumentAutoSave(bool enabled) async {
+    await AppSettings.instance.setDocumentAutoSave(enabled);
+    await _saveMyPersonalSettings({_documentAutoSaveKey: enabled});
+  }
+
+  /// Sets the document editor's dark page, see [setMyThemeMode].
+  static Future<void> setMyDocumentDarkPage(bool enabled) async {
+    await AppSettings.instance.setDocumentDarkPage(enabled);
+    await _saveMyPersonalSettings({_documentDarkPageKey: enabled});
+  }
+
+  /// Awaits [save], one of the `setMy…` calls, for a caller with nowhere to
+  /// show a failed save to the account: it is logged, and the change stays
+  /// on this device.
+  static Future<void> logFailure(Future<void> save) async {
+    try {
+      await save;
+    } catch (e) {
+      debugPrint('[settings_service.dart] saving a personal setting: $e');
+    }
+  }
+
+  /// Syncs the personal preferences with the signed-in account (#1914).
+  ///
+  /// Each one the account holds replaces this device's. Each one it lacks is
+  /// sent from this device, all in one save, so the first device an account
+  /// signs in on after an upgrade sets its values. [AppSettings] keeps the
+  /// result on the device for the first frame, offline, and the sign-in page.
+  ///
+  /// Never throws, and drops an answer that arrives after the host or the
+  /// session or the account changed, as [refreshThemeColor] does. Reads and
+  /// writes the current Quark and account's slot through [AppSettings].
+  static Future<void> refreshPersonalSettings() async {
+    final settings = AppSettings.instance;
+    final host = settings.activeHost;
+    final token = settings.sessionToken;
+    final user = settings.username;
+    if (host == null || token == null) return;
+    bool current() =>
+        settings.activeHost == host &&
+        settings.sessionToken == token &&
+        settings.username == user;
+    try {
+      final mine = await getMySettings();
+      if (!current()) return;
+      final missing = {
+        for (final entry in _localPersonalSettings(settings).entries)
+          if (!mine.containsKey(entry.key)) entry.key: entry.value,
+      };
+      final themeMode = ThemeMode.values.asNameMap()[mine[_themeModeKey]];
+      if (themeMode != null) await settings.setThemeMode(themeMode);
+      final interval = mine[_refreshIntervalKey];
+      if (interval is int) await settings.setRefreshIntervalSeconds(interval);
+      final autoSave = mine[_documentAutoSaveKey];
+      if (autoSave is bool) await settings.setDocumentAutoSave(autoSave);
+      final darkPage = mine[_documentDarkPageKey];
+      if (darkPage is bool) await settings.setDocumentDarkPage(darkPage);
+      if (missing.isEmpty || !current()) return;
+      // What another device saved in the meantime wins over this one's.
+      await updateMySettings((latest) => {...missing, ...latest});
+    } catch (e) {
+      debugPrint('[settings_service.dart] refreshPersonalSettings failed: $e');
+    }
+  }
+
+  static const _themeModeKey = 'themeMode';
+  static const _refreshIntervalKey = 'refreshIntervalSeconds';
+  static const _documentAutoSaveKey = 'documentAutoSave';
+  static const _documentDarkPageKey = 'documentDarkPage';
+
+  static Map<String, Object> _localPersonalSettings(AppSettings settings) => {
+    _themeModeKey: settings.themeMode.value.name,
+    _refreshIntervalKey: settings.refreshIntervalSeconds,
+    _documentAutoSaveKey: settings.documentAutoSave.value,
+    _documentDarkPageKey: settings.documentDarkPage.value,
+  };
+
+  /// Merges [fields] into the signed-in account's settings. Signed out it
+  /// does nothing: [refreshPersonalSettings] uploads them at sign-in.
+  static Future<void> _saveMyPersonalSettings(
+    Map<String, Object> fields,
+  ) async {
+    if (AppSettings.instance.sessionToken == null) return;
+    await updateMySettings((current) => {...current, ...fields});
   }
 }

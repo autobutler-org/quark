@@ -127,6 +127,10 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
   offers the other mode.
 - UI theme changes immediately.
 - Setting is persisted across app restarts.
+- The theme belongs to the account (#1914): signing in to the same account on another device picks it up there. The
+  sign-in page and an offline start show the last theme for that Quark and account on this device, and switching
+  hosts (JN-ST-003) or accounts switches it at once, before the Quark answers. A change made while signed out is kept
+  for that Quark and account until the next sign-in, which takes the account's theme if it has one.
 
 ---
 
@@ -336,6 +340,10 @@ nobody needs to type or paste it.
 **Expected result:**
 
 - The new interval is applied to auto-refreshing pages (health, devices, etc.).
+- The interval belongs to the account (#1914), like the theme (JN-ST-006): the same account on another device uses
+  it too, and it is restored per Quark and account the same way. Pages already open, and the control here, switch to
+  the account's interval as soon as it arrives. A refused save says so ("Couldn't save your settings…") and the new
+  interval still applies on this device.
 
 ---
 
@@ -593,7 +601,7 @@ The Quark has at least one feature still in beta.
 - The sign-in page keeps the color the member last saw on this Quark. A Quark the app has never signed in to shows
   that Quark's default.
 - The theme color belongs to the account and the Quark: the same account on another device gets the same color, and
-  switching hosts (JN-ST-003) switches color with it. Light, dark and system mode stay per device (JN-ST-006).
+  switching hosts (JN-ST-003) switches color with it. Light, dark and system mode follow the account too (JN-ST-006).
 
 **Notes:**
 
@@ -651,7 +659,7 @@ The Quark has at least one feature still in beta.
   left with the rest of its top bar.
 - Only the controls change sides. Text, lists and the inside of each button read the way they always do.
 - Step 4 puts everything back.
-- Setting is persisted across app restarts. It is per device, like the theme (JN-ST-006).
+- Setting is persisted across app restarts. It is per device, unlike the theme (JN-ST-006).
 
 **Notes:**
 
@@ -743,3 +751,47 @@ IP) that it has connected to before.
 - There is no "connect anyway": a changed certificate is also what a network impersonating the Quark looks like.
 - Nothing is pinned in the browser, which owns TLS there, or for a remote-access or public address, whose
   certificate is verified the ordinary way.
+
+---
+
+### JN-ST-037: A new account starts with the admin's settings
+
+**Preconditions:** An admin is signed in. They have picked **Dark** theme (JN-ST-006), a 60 s auto-refresh interval
+(JN-ST-021), and turned the document editor's dark page on and auto-save off.
+
+**Steps:**
+
+1. The admin creates an account, or approves one that signed up.
+2. Sign in to the new account on another device.
+
+**Expected result:**
+
+- After step 2 the new account starts on the admin's theme, theme color, auto-refresh interval, and document editor
+  dark page and auto-save, whatever that device had before.
+- From then on the account's settings are its own: changing one does not touch the admin's.
+
+**Notes:**
+
+- The copy is taken once, when the account is created or approved (#1914).
+- An account that existed before the upgrade, or whose settings the Quark has never held, sends this device's
+  values the first time it signs in, so the first device used after the upgrade sets them.
+
+---
+
+### JN-ST-038: The admin changing their theme does not change an existing account's
+
+**Preconditions:** An admin and a member account both exist and have each signed in once (JN-ST-037).
+
+**Steps:**
+
+1. As the admin, switch **Theme** to **Light** and change the auto-refresh interval.
+2. Sign in as the member, on any device.
+
+**Expected result:**
+
+- After step 2 the member keeps the theme and interval they had. Only an account created or approved after step 1
+  starts with the admin's new values.
+
+**Notes:**
+
+- The Quark's default theme color (JN-ST-031) is the exception: a member who follows it sees the admin's change.

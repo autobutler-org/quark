@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/settings_service.dart';
 import 'package:quark/widgets/setup/theme_option.dart';
 import 'package:quark_icons/quark_icons.dart';
 
@@ -60,7 +61,9 @@ class ThemeStep extends StatelessWidget {
               label: 'System',
               description: 'Follows your device setting',
               isSelected: currentMode == ThemeMode.system,
-              onTap: () => AppSettings.instance.setThemeMode(ThemeMode.system),
+              onTap: () => SettingsService.logFailure(
+                SettingsService.setMyThemeMode(ThemeMode.system),
+              ),
             ),
             const SizedBox(height: 12),
             ThemeOption(
@@ -68,7 +71,9 @@ class ThemeStep extends StatelessWidget {
               label: 'Light',
               description: 'Always use light theme',
               isSelected: currentMode == ThemeMode.light,
-              onTap: () => AppSettings.instance.setThemeMode(ThemeMode.light),
+              onTap: () => SettingsService.logFailure(
+                SettingsService.setMyThemeMode(ThemeMode.light),
+              ),
             ),
             const SizedBox(height: 12),
             ThemeOption(
@@ -76,7 +81,9 @@ class ThemeStep extends StatelessWidget {
               label: 'Dark',
               description: 'Always use dark theme',
               isSelected: currentMode == ThemeMode.dark,
-              onTap: () => AppSettings.instance.setThemeMode(ThemeMode.dark),
+              onTap: () => SettingsService.logFailure(
+                SettingsService.setMyThemeMode(ThemeMode.dark),
+              ),
             ),
 
             const SizedBox(height: 32),

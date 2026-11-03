@@ -8,7 +8,7 @@ import (
 
 // getMySettings godoc
 // @Summary Get your own settings
-// @Description Returns the settings the caller chose for their own account. themeColor overrides the Quark's theme color; the empty string, which is also what an account that has chosen nothing gets, means follow the Quark. disabledNotifications lists the notification types the caller turned off, and is left out when every type is on.
+// @Description Returns the settings the caller chose for their own account. themeColor overrides the Quark's theme color; the empty string, which is also what an account that has chosen nothing gets, means follow the Quark. disabledNotifications lists the notification types the caller turned off, and is left out when every type is on. themeMode (system, light or dark), refreshIntervalSeconds (0, auto-refresh off, through 3600), documentAutoSave and documentDarkPage are each left out when the account never chose one, and the app then keeps its own. A new account starts with a copy of the settings of the admin who created or approved it.
 // @Tags settings
 // @Produce json
 // @Success 200 {object} usersettingsutil.Settings

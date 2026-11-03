@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db/dbtest"
@@ -91,5 +92,34 @@ func TestCreateUser_Endpoint(t *testing.T) {
 	}
 	if n := h.drainEvents(); n != 0 {
 		t.Errorf("refused creates published %d account_changed events", n)
+	}
+}
+
+// TestCreateUser_StartsFromTheAdminsSettings checks a created account gets a
+// copy of the acting admin's settings, and none when the admin has none
+// (#1914).
+func TestCreateUser_StartsFromTheAdminsSettings(t *testing.T) {
+	h := newAdminHarness(t)
+	create := func(username string) int64 {
+		t.Helper()
+		w := h.postJSON("/api/v0/admin/users", map[string]any{"username": username, "authKey": dbtest.AuthKey("initial-password")})
+		if w.Code != http.StatusCreated {
+			t.Fatalf("create %s = %d: %s", username, w.Code, w.Body.String())
+		}
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+			t.Fatal(err)
+		}
+		return created.ID
+	}
+
+	if id := create("plain"); h.hasSettings(t, id) {
+		t.Error("an account made by an admin with no settings got some")
+	}
+	want := h.saveAppSettings(t, h.adminID)
+	if got := h.settingsOf(t, create("bob")); !reflect.DeepEqual(got, want) {
+		t.Errorf("new account's settings = %+v, want the admin's %+v", got, want)
 	}
 }

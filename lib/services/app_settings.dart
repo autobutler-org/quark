@@ -156,7 +156,26 @@ class AppSettings {
   AppSettings._();
   static final AppSettings instance = AppSettings._();
 
+  /// Light, dark or system. Follows the account across devices (#1914): the
+  /// value shown is the one last kept for the current Quark and account.
   final ValueNotifier<ThemeMode> themeMode = ValueNotifier(ThemeMode.system);
+
+  /// Auto-refresh interval in seconds, 0 for disabled. Follows the account
+  /// like [themeMode]. Change it with [setRefreshIntervalSeconds].
+  final ValueNotifier<int> refreshInterval = ValueNotifier(15);
+
+  /// Whether the document editor saves on its own a moment after each edit.
+  /// On by default. Follows the account like [themeMode].
+  final ValueNotifier<bool> documentAutoSave = ValueNotifier(true);
+
+  /// Whether the document editor draws its page dark (#938). Off by default.
+  /// Follows the account like [themeMode].
+  final ValueNotifier<bool> documentDarkPage = ValueNotifier(false);
+
+  /// The personal preferences last used on each Quark by each account, keyed
+  /// by [_hostKey] and then username, each slot keyed like the device-wide
+  /// prefs. Restored by [_restorePersonalSettings] (#1914).
+  Map<String, Map<String, Map<String, Object>>> _personalSettings = {};
 
   /// Whether the user asked for the high-contrast themes in Settings (#2601),
   /// for a platform with no contrast setting of its own, such as the web.
@@ -331,6 +350,12 @@ class AppSettings {
   static const _acceptedTermsHostsKey = 'acceptedTermsHosts';
   static const _ownerWelcomeHostsKey = 'ownerWelcomeHosts';
   static const _demoModeKey = 'demoMode';
+  // The personal preferences' device-wide keys, also the fields of a
+  // [_personalSettings] slot. The editor's predate AppSettings holding them.
+  static const _themeModeKey = 'themeMode';
+  static const _refreshIntervalKey = 'refreshIntervalSeconds';
+  static const _documentAutoSaveKey = 'document_editor_auto_save';
+  static const _documentDarkPageKey = 'document_editor_dark_page';
   static const _highContrastKey = 'highContrast';
   static const _leftHandedKey = 'leftHanded';
 
@@ -345,6 +370,9 @@ class AppSettings {
   /// Holds a JSON object of host key -> username. Absent for a session that
   /// predates it.
   static const _usernamesKey = 'usernames';
+
+  /// Holds [_personalSettings] as JSON.
+  static const _personalSettingsKey = 'personalSettings';
 
   /// Holds a JSON object of host key -> resolved theme color storage string.
   static const _themeColorsKey = 'themeColors';
@@ -405,12 +433,6 @@ class AppSettings {
 
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    final theme = _prefs!.getString('themeMode') ?? 'system';
-    themeMode.value = theme == 'light'
-        ? ThemeMode.light
-        : theme == 'dark'
-        ? ThemeMode.dark
-        : ThemeMode.system;
     highContrast.value = _prefs!.getBool(_highContrastKey) ?? false;
     leftHanded.value = _prefs!.getBool(_leftHandedKey) ?? false;
     final calendarViewRaw = _prefs!.getString(_defaultCalendarViewKey);
@@ -483,6 +505,9 @@ class AppSettings {
 
     _usernames = _decodeHostMap(_prefs!.getString(_usernamesKey));
     _themeColors = _decodeHostMap(_prefs!.getString(_themeColorsKey));
+    _personalSettings = _decodePersonalSettings(
+      _prefs!.getString(_personalSettingsKey),
+    );
     _certificates.value = _decodeHostMap(
       _prefs!.getString(_hostCertificatesKey),
     );
@@ -632,7 +657,81 @@ class AppSettings {
     } else {
       _usernames.remove(_hostKey(host));
     }
+    // Another account on this Quark wears its own preferences from here on.
+    _restorePersonalSettings();
     await _prefs?.setString(_usernamesKey, jsonEncode(_usernames));
+  }
+
+  /// Puts the current Quark and account's personal preferences into
+  /// [themeMode], [refreshInterval], [documentAutoSave] and
+  /// [documentDarkPage], before anything is fetched, so the sign-in page and
+  /// an unreachable Quark show them too (#1914).
+  ///
+  /// An account with no slot yet takes this device's own values, which is
+  /// what it had before #1914, and they become its slot: that is what
+  /// `SettingsService.refreshPersonalSettings` then sends the account once.
+  void _restorePersonalSettings() {
+    final host = activeHost;
+    final user = username;
+    final slot = host == null || user == null
+        ? null
+        : _personalSettings[_hostKey(host)]?[user];
+    Object? read(String key) => slot?[key] ?? _prefs?.get(key);
+    final interval = read(_refreshIntervalKey);
+    final autoSave = read(_documentAutoSaveKey);
+    final darkPage = read(_documentDarkPageKey);
+    themeMode.value =
+        ThemeMode.values.asNameMap()[read(_themeModeKey)] ?? ThemeMode.system;
+    refreshInterval.value = interval is int ? interval : 15;
+    documentAutoSave.value = autoSave is bool ? autoSave : true;
+    documentDarkPage.value = darkPage is bool ? darkPage : false;
+    if (slot != null || host == null || user == null) return;
+    (_personalSettings[_hostKey(host)] ??= {})[user] = {
+      _themeModeKey: themeMode.value.name,
+      _refreshIntervalKey: refreshInterval.value,
+      _documentAutoSaveKey: documentAutoSave.value,
+      _documentDarkPageKey: documentDarkPage.value,
+    };
+    unawaited(_persistPersonalSettings());
+  }
+
+  /// Records [value] under [key] in the current Quark and account's slot. A
+  /// Quark with no username stored has no slot; the device-wide value its
+  /// setter also writes is what stands.
+  Future<void> _savePersonalSetting(String key, Object value) async {
+    final host = activeHost;
+    final user = username;
+    if (host == null || user == null) return;
+    ((_personalSettings[_hostKey(host)] ??= {})[user] ??= {})[key] = value;
+    await _persistPersonalSettings();
+  }
+
+  Future<void> _persistPersonalSettings() async {
+    await _prefs?.setString(
+      _personalSettingsKey,
+      jsonEncode(_personalSettings),
+    );
+  }
+
+  /// Reads a stored [_personalSettings], empty when there is none or it
+  /// cannot be read.
+  Map<String, Map<String, Map<String, Object>>> _decodePersonalSettings(
+    String? stored,
+  ) {
+    if (stored == null || stored.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(stored) as Map<String, dynamic>;
+      return {
+        for (final host in decoded.entries)
+          host.key: {
+            for (final user in (host.value as Map<String, dynamic>).entries)
+              user.key: Map<String, Object>.from(user.value as Map),
+          },
+      };
+    } catch (_) {
+      debugPrint('[app_settings.dart] Unreadable personal settings store');
+      return {};
+    }
   }
 
   /// Reads a stored JSON object of host key -> string, empty when there is
@@ -852,6 +951,7 @@ class AppSettings {
       _userThemeColor.value = null;
     }
     unawaited(_resolveThemeColor());
+    _restorePersonalSettings();
     // Tokens are per-host, so switching Quarks changes what [sessionToken]
     // reports; republish so no listener is left holding the old host's.
     sessionTokenNotifier.value = sessionToken;
@@ -1117,6 +1217,8 @@ class AppSettings {
     if (username != null) _usernames[newKey] = username;
     final themeColor = _themeColors.remove(oldKey);
     if (themeColor != null) _themeColors[newKey] = themeColor;
+    final personal = _personalSettings.remove(oldKey);
+    if (personal != null) _personalSettings[newKey] = personal;
     final acceptedTerms = _acceptedTermsHosts.remove(oldKey);
     if (acceptedTerms) _acceptedTermsHosts.add(newKey);
     final ownerWelcome = _ownerWelcomeHosts.remove(oldKey);
@@ -1129,6 +1231,7 @@ class AppSettings {
       await _prefs?.setString(_usernamesKey, jsonEncode(_usernames));
     }
     if (themeColor != null) await _persistThemeColors();
+    if (personal != null) await _persistPersonalSettings();
     if (acceptedTerms) await _persistAcceptedTermsHosts();
     if (ownerWelcome) await _persistOwnerWelcomeHosts();
     await _saveHosts();
@@ -1163,6 +1266,9 @@ class AppSettings {
       if (_themeColors.remove(_hostKey(_hosts[idx].hostAddress)) != null) {
         await _persistThemeColors();
       }
+      if (_personalSettings.remove(_hostKey(_hosts[idx].hostAddress)) != null) {
+        await _persistPersonalSettings();
+      }
       _hosts.removeAt(idx);
       if (_activeIndex >= _hosts.length) {
         _activeIndex = _hosts.length - 1;
@@ -1181,14 +1287,25 @@ class AppSettings {
     }
   }
 
+  // The personal preferences' setters keep the value for this device and for
+  // the current Quark and account, signed in or not (#1914).
+
   Future<void> setThemeMode(ThemeMode mode) async {
     themeMode.value = mode;
-    final key = mode == ThemeMode.light
-        ? 'light'
-        : mode == ThemeMode.dark
-        ? 'dark'
-        : 'system';
-    await _prefs?.setString('themeMode', key);
+    await _prefs?.setString(_themeModeKey, mode.name);
+    await _savePersonalSetting(_themeModeKey, mode.name);
+  }
+
+  Future<void> setDocumentAutoSave(bool enabled) async {
+    documentAutoSave.value = enabled;
+    await _prefs?.setBool(_documentAutoSaveKey, enabled);
+    await _savePersonalSetting(_documentAutoSaveKey, enabled);
+  }
+
+  Future<void> setDocumentDarkPage(bool enabled) async {
+    documentDarkPage.value = enabled;
+    await _prefs?.setBool(_documentDarkPageKey, enabled);
+    await _savePersonalSetting(_documentDarkPageKey, enabled);
   }
 
   Future<void> setHighContrast(bool enabled) async {
@@ -1304,11 +1421,12 @@ class AppSettings {
     if (wasOwner) await _persistOwnerWelcomeHosts();
   }
 
-  /// Auto-refresh interval in seconds. 0 = disabled.
-  int get refreshIntervalSeconds =>
-      _prefs?.getInt('refreshIntervalSeconds') ?? 15;
+  /// Auto-refresh interval in seconds. 0 = disabled. See [refreshInterval].
+  int get refreshIntervalSeconds => refreshInterval.value;
 
   Future<void> setRefreshIntervalSeconds(int seconds) async {
-    await _prefs?.setInt('refreshIntervalSeconds', seconds);
+    refreshInterval.value = seconds;
+    await _prefs?.setInt(_refreshIntervalKey, seconds);
+    await _savePersonalSetting(_refreshIntervalKey, seconds);
   }
 }

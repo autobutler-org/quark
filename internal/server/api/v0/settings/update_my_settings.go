@@ -11,7 +11,7 @@ import (
 
 // updateMySettings godoc
 // @Summary Replace your own settings
-// @Description Replaces the settings of the caller's own account with the body. themeColor is a preset name (a lowercase letter, then up to 31 lowercase letters, digits or hyphens) or a custom color as lowercase #rrggbb; the empty string, or leaving it out, means follow the Quark. disabledNotifications lists the notification types (backup_due, backup_stale) the caller does not want, each at most once; because the body replaces the settings whole, leaving it out turns every type back on. A field the settings do not have, an unknown notification type and a repeated one are refused. Publishes no event: the change concerns only the caller.
+// @Description Replaces the settings of the caller's own account with the body. themeColor is a preset name (a lowercase letter, then up to 31 lowercase letters, digits or hyphens) or a custom color as lowercase #rrggbb; the empty string, or leaving it out, means follow the Quark. disabledNotifications lists the notification types (backup_due, backup_stale) the caller does not want, each at most once; because the body replaces the settings whole, leaving it out turns every type back on. themeMode is system, light or dark; refreshIntervalSeconds is 0 (auto-refresh off) through 3600; documentAutoSave and documentDarkPage are booleans. Leaving any of those four out stores it as never chosen. A field the settings do not have, an unknown notification type, a repeated one, an unknown theme mode and a refresh interval out of range are refused. Publishes no event: the change concerns only the caller.
 // @Tags settings
 // @Accept json
 // @Produce json

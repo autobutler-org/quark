@@ -96,4 +96,19 @@ void main() {
       expect(selectedRadio(tester), ThemeMode.system);
     });
   }
+
+  // #1914: signing in brings the account's interval, and the control shows it.
+  testWidgets('the interval control follows the setting', (tester) async {
+    addTearDown(() => settings.refreshInterval.value = 15);
+    await pumpSettings(tester, const Size(1280, 800));
+    int? shown() => tester
+        .state<FormFieldState<int>>(find.byType(DropdownButtonFormField<int>))
+        .value;
+    expect(shown(), 15);
+
+    settings.refreshInterval.value = 60;
+    await tester.pump();
+
+    expect(shown(), 60);
+  });
 }

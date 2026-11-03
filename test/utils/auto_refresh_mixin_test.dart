@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 
 /// The reload button stops working for the rest of the session if one refresh
@@ -90,6 +91,37 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  // #1914: signing in to an account with its own interval reaches pages that
+  // are already open.
+  testWidgets('the timer restarts when the interval setting changes', (
+    tester,
+  ) async {
+    final interval = AppSettings.instance.refreshInterval;
+    final prior = interval.value;
+    addTearDown(() => interval.value = prior);
+    interval.value = 0;
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: _RefreshProbe(completeImmediately: true, followSettings: true),
+      ),
+    );
+    final state = tester.state<_RefreshProbeState>(find.byType(_RefreshProbe));
+    expect(state.starts, 1);
+
+    // Real timers, for the debounce reads DateTime.now().
+    await tester.runAsync(() async {
+      interval.value = 1;
+      await Future<void>.delayed(const Duration(milliseconds: 1300));
+    });
+    expect(state.starts, 2, reason: 'the new interval started a timer');
+
+    await tester.runAsync(() async {
+      interval.value = 0;
+      await Future<void>.delayed(const Duration(milliseconds: 1300));
+    });
+    expect(state.starts, 2, reason: 'disabling it stopped the timer');
+  });
+
   testWidgets('a manual refresh inside the debounce runs when it lapses', (
     tester,
   ) async {
@@ -117,10 +149,14 @@ class _RefreshProbe extends StatefulWidget {
   const _RefreshProbe({
     this.throwOnRefresh = false,
     this.completeImmediately = false,
+    this.followSettings = false,
   });
 
   final bool throwOnRefresh;
   final bool completeImmediately;
+
+  /// Uses the interval from settings rather than none.
+  final bool followSettings;
 
   @override
   State<_RefreshProbe> createState() => _RefreshProbeState();
@@ -131,9 +167,11 @@ class _RefreshProbeState extends State<_RefreshProbe>
   int starts = 0;
   final List<Completer<void>> _pending = [];
 
-  // No periodic timer: this is about the in-flight guard, not the schedule.
+  // No periodic timer unless asked: most of these are about the in-flight
+  // guard, not the schedule.
   @override
-  Duration? get refreshInterval => null;
+  Duration? get refreshInterval =>
+      widget.followSettings ? super.refreshInterval : null;
 
   @override
   Duration get refreshTimeout => const Duration(seconds: 2);
