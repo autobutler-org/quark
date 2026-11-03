@@ -68,7 +68,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Download the web build
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: web
           path: internal/server/public
