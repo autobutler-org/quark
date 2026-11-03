@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -31,6 +32,8 @@ type BackfillHashesParams struct {
 	// EventBus, when set, hears photo_index_changed as the pass starts,
 	// makes progress, and finishes.
 	EventBus *eventbus.Bus
+	// Index, when set, lists the library from memory instead of walking it.
+	Index *indexutil.FileIndex
 }
 
 // BackfillHashesResult counts what the backfill did.
@@ -68,7 +71,7 @@ func BackfillHashes(params BackfillHashesParams) (BackfillHashesResult, error) {
 	}
 	library, err := ListPhotos(ListPhotosParams{
 		Ctx: params.Ctx, Registry: params.Registry,
-		Access: system.Access, Limit: math.MaxInt,
+		Access: system.Access, Limit: math.MaxInt, Index: params.Index,
 	})
 	if err != nil {
 		return BackfillHashesResult{}, fmt.Errorf("list photos: %w", err)

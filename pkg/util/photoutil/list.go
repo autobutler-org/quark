@@ -13,6 +13,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/pptxutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -75,6 +76,9 @@ type ListPhotosParams struct {
 	// Offset and Limit page the sorted result.
 	Offset int
 	Limit  int
+	// Index answers the listing from memory when one has been built; nil
+	// walks the VFS.
+	Index *indexutil.FileIndex
 }
 
 // ListPhotosResult is a page of photos plus the pagination metadata.
@@ -151,6 +155,45 @@ func ParseOrder(raw string) string {
 	return OrderDesc
 }
 
+// eachLibraryFile calls visit for every file ListPhotos considers, with
+// DeviceSerial set: from params.Index when there is one, under its read lock,
+// and from a recursive VFS listing otherwise.
+func eachLibraryFile(params ListPhotosParams, visit func(vfs.FileInfo)) error {
+	if params.Index != nil {
+		var serials map[string]bool
+		if params.Serial != "" {
+			serials = map[string]bool{params.Serial: true}
+		}
+		params.Index.SearchEach("", serials, func(f indexutil.IndexedFile) bool {
+			visit(vfs.FileInfo{
+				Name: f.Name, Path: f.RelPath, Size: f.Size, ModTime: f.ModTime,
+				MimeType: vfs.MimeTypeForName(f.Name), DeviceSerial: f.DeviceSerial,
+			})
+			return true
+		})
+		return nil
+	}
+	serialFilter := []string{}
+	if params.Serial != "" {
+		serialFilter = []string{params.Serial}
+	}
+	infos, err := vfs.ListDevices(vfs.ListDevicesParams{
+		Ctx:      params.Ctx,
+		Registry: params.Registry,
+		Filter:   &vfs.ListFilter{Recursive: true, SerialFilter: serialFilter},
+	})
+	if err != nil {
+		return err
+	}
+	for _, fi := range infos {
+		if !fi.IsDir {
+			fi.DeviceSerial = deviceSerial(fi)
+			visit(fi)
+		}
+	}
+	return nil
+}
+
 // deviceSerial is the device a listed file is on, read from the namespace that
 // listed it, which every namespace reports, and from the file's own device
 // fields otherwise.
@@ -208,56 +251,48 @@ func sortPhotos(photos []PhotoSummary, sortBy, order string) {
 // are the presentation's, and are left out. Query narrows the page to photos whose file name contains that text, and
 // Total counts those matches.
 //
-// TODO: For very large collections, an index/cache would be needed instead
-// of walking the entire directory tree on every request. The walk itself is
-// fast — it's downstream operations like thumbnail generation that are slow.
+// With an Index the library is read from memory, so paging through the grid
+// no longer walks every device on every request (#2759); without one it is
+// walked through the VFS.
 func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
-	serialFilter := []string{}
-	if params.Serial != "" {
-		serialFilter = []string{params.Serial}
-	}
 	// Videos are listed too, only to mark the photos that are Live Photos, and
 	// presentations, only to leave out the pictures an import copied out of
 	// them: a slide's diagrams and icons are not photos.
-	infos, err := vfs.ListDevices(vfs.ListDevicesParams{
-		Ctx:      params.Ctx,
-		Registry: params.Registry,
-		Filter:   &vfs.ListFilter{Recursive: true, SerialFilter: serialFilter},
-	})
-	if err != nil {
-		return ListPhotosResult{}, err
-	}
 	liveVideos := map[DuplicatePhoto]bool{}
 	slideMedia := map[DuplicatePhoto]bool{}
-	for _, fi := range infos {
-		if fi.IsDir {
-			continue
-		}
-		serial := deviceSerial(fi)
+	var candidates []PhotoSummary
+	err := eachLibraryFile(params, func(fi vfs.FileInfo) {
+		serial := fi.DeviceSerial
 		if strings.HasPrefix(fi.MimeType, "video/") {
 			liveVideos[liveVideoKey(serial, fi.Path)] = true
 		}
 		for _, dir := range pptxutil.MediaDirsOf(fi.Path) {
 			slideMedia[DuplicatePhoto{DeviceSerial: serial, RelPath: dir}] = true
 		}
-	}
-	var allPhotos []PhotoSummary
-	for _, fi := range infos {
-		serial := deviceSerial(fi)
-		if fi.IsDir || !strings.HasPrefix(fi.MimeType, "image/") ||
-			slideMedia[DuplicatePhoto{DeviceSerial: serial, RelPath: path.Dir(fi.Path)}] ||
+		if !strings.HasPrefix(fi.MimeType, "image/") ||
 			!params.Access.Check(serial, fi.Path, accessutil.Read).Readable ||
 			!nameMatches(fi.Name, params.Query) {
+			return
+		}
+		candidates = append(candidates, PhotoSummary{
+			RelPath:  fi.Path,
+			FileName: fi.Name,
+			Size:     fi.Size,
+			MTime:    fi.ModTime.Unix(),
+			Serial:   serial,
+		})
+	})
+	if err != nil {
+		return ListPhotosResult{}, err
+	}
+	// Both need every file seen first.
+	var allPhotos []PhotoSummary
+	for _, photo := range candidates {
+		if slideMedia[DuplicatePhoto{DeviceSerial: photo.Serial, RelPath: path.Dir(photo.RelPath)}] {
 			continue
 		}
-		allPhotos = append(allPhotos, PhotoSummary{
-			RelPath:      fi.Path,
-			FileName:     fi.Name,
-			Size:         fi.Size,
-			MTime:        fi.ModTime.Unix(),
-			Serial:       serial,
-			HasLiveVideo: canHaveLiveVideo(fi.Name) && liveVideos[liveVideoKey(serial, fi.Path)],
-		})
+		photo.HasLiveVideo = canHaveLiveVideo(photo.FileName) && liveVideos[liveVideoKey(photo.Serial, photo.RelPath)]
+		allPhotos = append(allPhotos, photo)
 	}
 
 	pending := 0

@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"io/fs"
-	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -183,20 +182,6 @@ func (v *StorageServiceVFS) filesDir() (string, error) {
 	return storageutil.GetFilesDir()
 }
 
-// mimeTypeForName returns the MIME type for a file name. Image formats
-// (including HEIC/HEIF/TIFF/BMP, which Go's stdlib mime package doesn't
-// recognize — see #1567) are resolved via storageutil's own extension table
-// rather than mime.TypeByExtension, which returns "" for them and silently
-// disables server-side JPEG conversion for image previews.
-func mimeTypeForName(name string) string {
-	ext := filepath.Ext(name)
-	switch storageutil.DetermineFileTypeFromPath(name) {
-	case storageutil.FileTypeImage, storageutil.FileTypeSvg:
-		return storageutil.ImageMIMETypeFromExtension(ext)
-	}
-	return mime.TypeByExtension(ext)
-}
-
 // Stat returns metadata for a single path. Only a path that does not exist
 // is [ErrNotFound]; a permission failure is [ErrPermissionDenied] (#2640). A
 // ".trash/..." path names something in the trash (see [Trasher]).
@@ -215,7 +200,7 @@ func (v *StorageServiceVFS) Stat(_ context.Context, path string) (FileInfo, erro
 		IsDir:        fi.IsDir(),
 		Size:         fi.Size(),
 		ModTime:      fi.ModTime(),
-		MimeType:     mimeTypeForName(fi.Name()),
+		MimeType:     MimeTypeForName(fi.Name()),
 		Namespace:    v.namespaceID,
 		DeviceSerial: v.serial,
 	}
@@ -365,7 +350,7 @@ func (v *StorageServiceVFS) Watch(_ context.Context, _ string) (<-chan WatchEven
 // the folder-download zip builder trim the requested path off Path to get an
 // archive-relative name, so it has to carry the full subtree path.
 func deviceFileInfoToVFS(f *storageutil.DeviceFileInfo, nsID, dirPath, relPath string) FileInfo {
-	mimeType := mimeTypeForName(f.Name())
+	mimeType := MimeTypeForName(f.Name())
 	return FileInfo{
 		Name:      f.Name(),
 		Path:      cleanPath(filepath.Join(dirPath, relPath)),

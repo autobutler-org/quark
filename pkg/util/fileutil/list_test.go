@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -44,6 +45,9 @@ func (u *serialOnlyUsbDevice) GetSerial() string { return u.serial }
 // drive as "files" and one namespace per other device.
 func newDeviceRegistry(t testing.TB, svc *storageutil.StorageService) vfs.Registry {
 	t.Helper()
+	// The internal drive lives under $HOME, so a developer's real files would
+	// otherwise reach the index.
+	t.Setenv("HOME", t.TempDir())
 	registry := vfs.NewRegistry()
 	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace(""))); err != nil {
 		t.Fatal(err)
@@ -99,7 +103,18 @@ func TestVFSListingsCarryTheDevice(t *testing.T) {
 		t.Fatalf("indexed SearchFiles failed: %v", err)
 	}
 
+	indexedRecent, err := ListRecent(ListRecentParams{Ctx: ctx, Registry: registry, Access: system.Access, Index: index})
+	if err != nil {
+		t.Fatalf("indexed ListRecent failed: %v", err)
+	}
+	indexedByType, err := ListByType(ListByTypeParams{Ctx: ctx, Registry: registry, FileType: storageutil.FileTypeImage, Access: system.Access, Index: index})
+	if err != nil {
+		t.Fatalf("indexed ListByType failed: %v", err)
+	}
+
 	cases := map[string][]FileNode{
+		"indexed ListRecent":  indexedRecent.Files,
+		"indexed ListByType":  indexedByType.Files,
 		"ListFiles":           listed.Files,
 		"SearchFiles":         searched.Files,
 		"ListRecent":          recent.Files,
@@ -587,5 +602,75 @@ func TestListByType_HidesTheDefaultStorageMirror(t *testing.T) {
 	want = []string{"docs/hello.qdoc@" + ssd, "ssd-only.qdoc@" + ssd}
 	if got := list(ssd, ssd); !slices.Equal(got, want) {
 		t.Errorf("SSD alone: got %v, want %v", got, want)
+	}
+}
+
+// TestRecentAndByTypeFromTheIndex: with an index, the recent and by-type
+// listings read memory and answer what the walk does, on every device or on
+// the ones Serials names; a file gone from the disk without an event is still
+// listed, which only a listing that did not walk can do (#2759).
+func TestRecentAndByTypeFromTheIndex(t *testing.T) {
+	registry, dirs := listOnUSBDevices(t, "one", "two")
+	files := map[string]string{
+		"a.jpg": dirs[0], "docs/b.pdf": dirs[0], "c.txt": dirs[0], "d.jpg": dirs[1], "x/e.jpg": dirs[1],
+	}
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for rel, dir := range files {
+		full := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(rel), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		at = at.Add(time.Hour + 123*time.Nanosecond)
+		if err := os.Chtimes(full, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	index := indexutil.NewFileIndex()
+	index.Build(context.Background(), registry)
+	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := func(index *indexutil.FileIndex, serials []string, recent bool) []FileNode {
+		t.Helper()
+		ctx := context.Background()
+		if recent {
+			result, err := ListRecent(ListRecentParams{Ctx: ctx, Registry: registry, Access: system.Access, Serials: serials, Index: index})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return result.Files
+		}
+		result, err := ListByType(ListByTypeParams{
+			Ctx: ctx, Registry: registry, Access: system.Access, Serials: serials, Index: index,
+			FileType: storageutil.FileTypeImage,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result.Files
+	}
+	same := func(a, b FileNode) bool {
+		modA, modB := a.ModifiedAt, b.ModifiedAt
+		a.ModifiedAt, b.ModifiedAt = time.Time{}, time.Time{}
+		return reflect.DeepEqual(a, b) && modA.Equal(modB)
+	}
+	for _, serials := range [][]string{nil, {"USB-two"}} {
+		for _, recent := range []bool{true, false} {
+			walked, indexed := list(nil, serials, recent), list(index, serials, recent)
+			if len(walked) == 0 || !slices.EqualFunc(walked, indexed, same) {
+				t.Errorf("serials %v, recent %v:\n walked  %+v\n indexed %+v", serials, recent, walked, indexed)
+			}
+		}
+	}
+
+	if err := os.Remove(filepath.Join(dirs[1], "d.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	if walked, indexed := list(nil, nil, true), list(index, nil, true); len(indexed) != len(walked)+1 {
+		t.Errorf("after a removal no event reported: walked %d, indexed %d; the index should not walk", len(walked), len(indexed))
 	}
 }

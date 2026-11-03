@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"os"
 	"path/filepath"
 	"sync"
@@ -467,4 +468,18 @@ func CopyBetween(ctx context.Context, src VFS, srcPath string, dst VFS, dstPath 
 // part of a walk of the user tree.
 func Walk(ctx context.Context, fsys VFS, path string, visit WalkFunc) error {
 	return walk(ctx, fsys, path, visit)
+}
+
+// MimeTypeForName returns the MIME type for a file name. Image formats
+// (including HEIC/HEIF/TIFF/BMP, which Go's stdlib mime package doesn't
+// recognize — see #1567) are resolved via storageutil's own extension table
+// rather than mime.TypeByExtension, which returns "" for them and silently
+// disables server-side JPEG conversion for image previews.
+func MimeTypeForName(name string) string {
+	ext := filepath.Ext(name)
+	switch storageutil.DetermineFileTypeFromPath(name) {
+	case storageutil.FileTypeImage, storageutil.FileTypeSvg:
+		return storageutil.ImageMIMETypeFromExtension(ext)
+	}
+	return mime.TypeByExtension(ext)
 }

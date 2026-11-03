@@ -30,6 +30,7 @@ func listRecentFiles(c *gin.Context) *serverutil.Response {
 		Serials:  c.QueryArray("serial"),
 		Access:   access,
 		Limit:    fileutil.ParseRecentLimit(c.Query("limit")),
+		Index:    deps.FileIndex(),
 	})
 	if err != nil {
 		return fileError(err)

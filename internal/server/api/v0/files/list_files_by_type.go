@@ -53,6 +53,7 @@ func listFilesByType(c *gin.Context) *serverutil.Response {
 		FileType:     storageutil.FileType(fileTypeParam),
 		Cache:        deps.ByTypeCache(),
 		MirrorSerial: mirror.Serial,
+		Index:        deps.FileIndex(),
 	})
 	if err != nil {
 		return fileError(err)

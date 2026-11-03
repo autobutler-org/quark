@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -223,4 +225,81 @@ func readAll(t *testing.T, fsys vfs.VFS, p string) string {
 		t.Fatal(err)
 	}
 	return string(data)
+}
+
+// TestListPhotos_FromTheIndex: a listing answered by the file index returns
+// what the walk does, sizes and dates included, through the access filter, a
+// Live Photo pairing, a presentation's pictures, a name query and a device
+// scope (#2759).
+func TestListPhotos_FromTheIndex(t *testing.T) {
+	registry := twoDevices(t,
+		map[string]string{
+			"shared/a.jpg": "photo", "shared/a.mov": "video", "shared/b.png": "png",
+			"private/c.jpg": "secret", "Talk.qslide": "deck", "Talk_media/image1.png": "slide",
+			"notes.txt": "text",
+		},
+		map[string]string{"a.jpg": "usb photo", "x/b.jpg": "b"},
+	)
+	index := indexutil.NewFileIndex()
+	index.Build(context.Background(), registry)
+	user := userAccess(t, dbtest.NewDB(t), "shared")
+
+	for _, tc := range []struct {
+		name   string
+		params photoutil.ListPhotosParams
+	}{
+		{"everything", photoutil.ListPhotosParams{Access: systemAccess(t)}},
+		{"one device", photoutil.ListPhotosParams{Access: systemAccess(t), Serial: usbSerial}},
+		{"a user's share", photoutil.ListPhotosParams{Access: user}},
+		{"a name query", photoutil.ListPhotosParams{Access: systemAccess(t), Query: "A"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			list := func(index *indexutil.FileIndex) photoutil.ListPhotosResult {
+				params := tc.params
+				params.Ctx, params.Registry, params.Index, params.Limit = context.Background(), registry, index, 50
+				result, err := photoutil.ListPhotos(params)
+				if err != nil {
+					t.Fatal(err)
+				}
+				slices.SortFunc(result.Photos, func(a, b photoutil.PhotoSummary) int {
+					return strings.Compare(a.Serial+"|"+a.RelPath, b.Serial+"|"+b.RelPath)
+				})
+				return result
+			}
+			walked, indexed := list(nil), list(index)
+			if len(walked.Photos) == 0 {
+				t.Fatal("the walk listed nothing")
+			}
+			if indexed.Total != walked.Total || !slices.Equal(indexed.Photos, walked.Photos) {
+				t.Errorf("from the index: %d %+v\nwalked: %d %+v", indexed.Total, indexed.Photos, walked.Total, walked.Photos)
+			}
+		})
+	}
+}
+
+// TestListPhotos_IndexDoesNotWalk: with an index the listing reads memory, so
+// a file removed behind the index's back is still listed until an event says
+// otherwise, while a walk no longer finds it.
+func TestListPhotos_IndexDoesNotWalk(t *testing.T) {
+	registry := twoDevices(t, map[string]string{"a.jpg": "x", "b.jpg": "x"}, nil)
+	index := indexutil.NewFileIndex()
+	index.Build(context.Background(), registry)
+	fsys, _ := registry.Get(vfs.FilesNamespace(""))
+	if err := fsys.Delete(context.Background(), "b.jpg", vfs.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		index *indexutil.FileIndex
+		want  int
+	}{{index, 2}, {nil, 1}} {
+		page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
+			Ctx: context.Background(), Registry: registry, Access: systemAccess(t), Limit: 50, Index: tc.index,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if page.Total != tc.want {
+			t.Errorf("index %v: listed %d, want %d", tc.index != nil, page.Total, tc.want)
+		}
+	}
 }

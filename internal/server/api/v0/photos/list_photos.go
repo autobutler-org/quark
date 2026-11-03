@@ -70,6 +70,7 @@ func listPhotos(c *gin.Context) *serverutil.Response {
 		Queries:  queries,
 		Offset:   offset,
 		Limit:    limit,
+		Index:    deps.FileIndex(),
 	})
 	if err != nil {
 		return serverutil.InternalServerError(err)
