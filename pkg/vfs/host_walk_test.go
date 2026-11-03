@@ -240,7 +240,7 @@ func TestListingsSkipInternalEntriesButNotDotfiles(t *testing.T) {
 		t.Errorf("hostWalkDir visited %s, want %s", got, want)
 	}
 
-	files, err := hostListDir(root, "dev", "/data", "SERIAL")
+	files, err := hostListDir(root, "dev", "/data", "SERIAL", false)
 	if err != nil {
 		t.Fatalf("hostListDir: %v", err)
 	}
@@ -253,12 +253,13 @@ func TestListingsSkipInternalEntriesButNotDotfiles(t *testing.T) {
 	}
 }
 
-// A single-level listing puts folders before files.
+// A single-level listing puts folders before files, and sizes a folder by
+// everything under it unless told to skip that walk (#2759).
 func TestHostListDir_FoldersFirst(t *testing.T) {
 	root := t.TempDir()
-	seedTree(t, root, "file1.txt", "file2.txt", "subdir/")
+	seedTree(t, root, "file1.txt", "file2.txt", "subdir/a.txt", "subdir/deep/b.txt")
 
-	files, err := hostListDir(root, "TestDevice", "/test", "")
+	files, err := hostListDir(root, "TestDevice", "/test", "", false)
 	if err != nil {
 		t.Fatalf("hostListDir: %v", err)
 	}
@@ -267,6 +268,17 @@ func TestHostListDir_FoldersFirst(t *testing.T) {
 	}
 	if !files[0].IsDir() {
 		t.Error("want the folder first")
+	}
+	if want := int64(len("subdir/a.txt") + len("subdir/deep/b.txt")); files[0].Size() != want {
+		t.Errorf("folder size %d, want %d", files[0].Size(), want)
+	}
+
+	skipped, err := hostListDir(root, "TestDevice", "/test", "", true)
+	if err != nil {
+		t.Fatalf("hostListDir: %v", err)
+	}
+	if !skipped[0].IsDir() || skipped[0].Size() != 0 {
+		t.Errorf("with SkipFolderSizes the folder reports %d, want 0", skipped[0].Size())
 	}
 }
 
@@ -285,7 +297,7 @@ func TestVersionStoreIsHidden(t *testing.T) {
 		"docs/"+storageutil.VersionsDirName+"/pitch.qslide/index.json",
 	)
 
-	listed, err := hostListDir(filepath.Join(filesDir, "docs"), "versions", filesDir, "")
+	listed, err := hostListDir(filepath.Join(filesDir, "docs"), "versions", filesDir, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

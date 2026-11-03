@@ -32,6 +32,9 @@ type ListFilesParams struct {
 	RootDir string
 	// Serials scopes the listing to those devices, empty for all of them.
 	Serials []string
+	// Index sizes each folder from memory when one has been built; nil walks
+	// every folder listed to size it.
+	Index *indexutil.FileIndex
 }
 
 // ListFilesResult is one directory level.
@@ -51,9 +54,17 @@ func ListFiles(params ListFilesParams) (ListFilesResult, error) {
 		return ListFilesResult{}, notFoundf("folder not found: %s", params.RootDir)
 	}
 
-	files, err := listFilesVFS(params.Ctx, params.Registry, params.RootDir, params.Serials)
+	files, err := listFilesVFS(params.Ctx, params.Registry, params.RootDir, params.Serials, params.Index != nil)
 	if err != nil {
 		return ListFilesResult{}, err
+	}
+	if params.Index != nil {
+		for i, f := range files {
+			if f.IsDir {
+				// A folder the index does not hold stays at zero.
+				files[i].Size, _ = params.Index.FolderSize(f.DeviceSerial, f.DirPath)
+			}
+		}
 	}
 	return ListFilesResult{Files: visibleFiles(params.Access, files)}, nil
 }
@@ -75,14 +86,16 @@ func readable(access accessutil.Access, serial, relPath string) bool {
 	return access.Check(serial, relPath, accessutil.Read).Readable
 }
 
-// listFilesVFS lists files via the VFS registry, optionally scoped to specific device serials.
-func listFilesVFS(ctx context.Context, registry vfs.Registry, rootDir string, serials []string) ([]FileNode, error) {
+// listFilesVFS lists files via the VFS registry, optionally scoped to specific
+// device serials. skipFolderSizes leaves each folder's Size zero rather than
+// walking it.
+func listFilesVFS(ctx context.Context, registry vfs.Registry, rootDir string, serials []string, skipFolderSizes bool) ([]FileNode, error) {
 	if _, err := FilesVFS(registry, ""); err != nil {
 		return nil, err
 	}
 	infos, err := vfs.ListDevices(vfs.ListDevicesParams{
 		Ctx: ctx, Registry: registry, Path: rootDir,
-		Filter: &vfs.ListFilter{Recursive: false, SerialFilter: serials},
+		Filter: &vfs.ListFilter{Recursive: false, SerialFilter: serials, SkipFolderSizes: skipFolderSizes},
 	})
 	if err != nil {
 		if errors.Is(err, vfs.ErrNotFound) {

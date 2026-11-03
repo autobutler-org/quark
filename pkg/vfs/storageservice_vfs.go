@@ -43,6 +43,7 @@ func (v *StorageServiceVFS) List(ctx context.Context, path string, filter *ListF
 	}
 
 	recursive := filter != nil && filter.Recursive
+	skipFolderSizes := filter != nil && filter.SkipFolderSizes
 	maxResults := 0
 	if filter != nil {
 		maxResults = filter.MaxResults
@@ -88,7 +89,7 @@ func (v *StorageServiceVFS) List(ctx context.Context, path string, filter *ListF
 			continue
 		}
 
-		err = v.listDevice(ctx, fullDir, device, serial, recursive, add, full)
+		err = v.listDevice(ctx, fullDir, device, serial, recursive, skipFolderSizes, add, full)
 		if err != nil {
 			if ctx != nil && ctx.Err() != nil {
 				return nil, ctx.Err()
@@ -109,18 +110,19 @@ func (v *StorageServiceVFS) List(ctx context.Context, path string, filter *ListF
 
 // listDevice feeds one device's entries under fullDir to add, walking the whole
 // subtree when recursive is set and stopping as soon as full reports the result
-// budget is spent.
+// budget is spent. skipFolderSizes leaves a single level's folders unsized.
 func (v *StorageServiceVFS) listDevice(
 	ctx context.Context,
 	fullDir string,
 	device storageutil.ManagedDevice,
 	serial string,
 	recursive bool,
+	skipFolderSizes bool,
 	add func(walkedFile),
 	full func() bool,
 ) error {
 	if !recursive {
-		files, err := hostListDir(fullDir, device.Name, device.DataDir, serial)
+		files, err := hostListDir(fullDir, device.Name, device.DataDir, serial, skipFolderSizes)
 		if err != nil {
 			return err
 		}

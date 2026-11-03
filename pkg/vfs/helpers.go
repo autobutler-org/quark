@@ -236,8 +236,8 @@ func hostMkdirAll(filesDir, rel string) error {
 
 // hostListDir lists dir one level deep, directories first and then by name,
 // skipping Quark's own bookkeeping. A directory reports the size of
-// everything under it.
-func hostListDir(dir string, deviceName string, devicePath string, deviceSerial string) ([]*storageutil.DeviceFileInfo, error) {
+// everything under it, or zero with skipFolderSizes.
+func hostListDir(dir string, deviceName string, devicePath string, deviceSerial string, skipFolderSizes bool) ([]*storageutil.DeviceFileInfo, error) {
 	entries, err := os.ReadDir(dir)
 	files := make([]*storageutil.DeviceFileInfo, 0, len(entries))
 	if err != nil {
@@ -253,9 +253,12 @@ func hostListDir(dir string, deviceName string, devicePath string, deviceSerial 
 		var fileInfo fs.FileInfo
 		fullPath := filepath.Join(dir, entry.Name())
 		if entry.IsDir() {
-			folderSize, err := storageutil.GetFolderSize(fullPath)
-			if err != nil {
-				return nil, fmt.Errorf("error getting size for folder %s: %w", entry.Name(), err) // coverage: ignore - requires filesystem errors during folder traversal
+			folderSize := int64(0)
+			if !skipFolderSizes {
+				folderSize, err = storageutil.GetFolderSize(fullPath)
+				if err != nil {
+					return nil, fmt.Errorf("error getting size for folder %s: %w", entry.Name(), err) // coverage: ignore - requires filesystem errors during folder traversal
+				}
 			}
 			fileInfo = storageutil.NewCustomFileInfo().WithName(entry.Name()).WithSize(folderSize)
 		} else {

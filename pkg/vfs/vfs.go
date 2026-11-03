@@ -178,6 +178,9 @@ type ListFilter struct {
 	MaxResults   int
 	AfterPath    string
 	SerialFilter []string // if non-empty, restrict to devices with these serials
+	// SkipFolderSizes leaves a folder's Size zero instead of walking it; a
+	// caller with an index fills it in.
+	SkipFolderSizes bool
 }
 
 type WriteOptions struct {
