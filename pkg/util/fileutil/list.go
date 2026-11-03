@@ -147,6 +147,9 @@ type ListRecentParams struct {
 	Access accessutil.Access
 	// Limit caps how many files come back.
 	Limit int
+	// Index answers the listing from memory when one has been built; nil
+	// walks the VFS.
+	Index *indexutil.FileIndex
 }
 
 // ListRecentResult is the newest-first page of files.
@@ -156,7 +159,7 @@ type ListRecentResult struct {
 
 // ListRecent returns the most recently modified files, newest first.
 func ListRecent(params ListRecentParams) (ListRecentResult, error) {
-	files, err := listAllFiles(params.Ctx, params.Registry, params.Serials, func(vfs.FileInfo) bool { return true })
+	files, err := listAllFiles(params.Ctx, params.Registry, params.Index, params.Serials, func(vfs.FileInfo) bool { return true })
 	if err != nil {
 		return ListRecentResult{}, err
 	}
@@ -199,6 +202,9 @@ type ListByTypeParams struct {
 	// at the same path as one on the internal drive is that file's mirror,
 	// and is left out so each document is listed once (#3338).
 	MirrorSerial string
+	// Index answers the listing from memory when one has been built; nil
+	// walks the VFS.
+	Index *indexutil.FileIndex
 }
 
 // ListByTypeResult is every file of the requested type, newest first.
@@ -213,7 +219,7 @@ func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 	files, gen, ok := params.Cache.get(key)
 	if !ok {
 		var err error
-		files, err = listAllFiles(params.Ctx, params.Registry, params.Serials, func(fi vfs.FileInfo) bool {
+		files, err = listAllFiles(params.Ctx, params.Registry, params.Index, params.Serials, func(fi vfs.FileInfo) bool {
 			return storageutil.DetermineFileTypeFromPath(fi.Path) == params.FileType
 		})
 		if err != nil {
@@ -246,11 +252,43 @@ func withoutMirrorCopies(files []FileNode, mirrorSerial string) []FileNode {
 	})
 }
 
-// listAllFiles walks every device Serials selects and returns the files keep
-// accepts, unsorted and unfiltered by access. Folders are left out.
-func listAllFiles(ctx context.Context, registry vfs.Registry, serials []string, keep func(vfs.FileInfo) bool) ([]FileNode, error) {
+// listAllFiles lists every file on the devices Serials selects and returns
+// the ones keep accepts, unsorted and unfiltered by access. Folders are left
+// out. With an index the files come from memory and each device's root is
+// stated once for its name and path; without one every device is walked.
+func listAllFiles(ctx context.Context, registry vfs.Registry, index *indexutil.FileIndex, serials []string, keep func(vfs.FileInfo) bool) ([]FileNode, error) {
 	if _, err := FilesVFS(registry, ""); err != nil {
 		return nil, err
+	}
+	// make() rather than var, so an empty listing encodes as [] and not null.
+	files := make([]FileNode, 0)
+	if index != nil {
+		var selected map[string]bool
+		if len(serials) > 0 {
+			selected = make(map[string]bool, len(serials))
+			for _, serial := range serials {
+				selected[serial] = true
+			}
+		}
+		index.SearchEach("", selected, func(f indexutil.IndexedFile) bool {
+			fi := vfs.FileInfo{Name: f.Name, Path: f.RelPath, Size: f.Size, ModTime: f.ModTime, DeviceSerial: f.DeviceSerial}
+			if keep(fi) {
+				files = append(files, vfsFileNode(fi))
+			}
+			return true
+		})
+		devices := map[string]vfs.FileInfo{}
+		for i, f := range files {
+			device, ok := devices[f.DeviceSerial]
+			if !ok {
+				if fsys, err := FilesVFS(registry, f.DeviceSerial); err == nil {
+					device, _ = fsys.Stat(ctx, "")
+				}
+				devices[f.DeviceSerial] = device
+			}
+			files[i].DeviceName, files[i].DevicePath = device.DeviceName, device.DevicePath
+		}
+		return files, nil
 	}
 	infos, err := vfs.ListDevices(vfs.ListDevicesParams{
 		Ctx: ctx, Registry: registry,
@@ -259,8 +297,6 @@ func listAllFiles(ctx context.Context, registry vfs.Registry, serials []string, 
 	if err != nil {
 		return nil, err
 	}
-	// make() rather than var, so an empty listing encodes as [] and not null.
-	files := make([]FileNode, 0)
 	for _, fi := range infos {
 		if !fi.IsDir && keep(fi) {
 			files = append(files, vfsFileNode(fi))

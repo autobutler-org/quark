@@ -27,6 +27,7 @@ func backfillPhotoHashes(deps deputil.Dependencies) {
 		IOSemaphore: deps.IOSemaphore().For(iosemutil.Decode),
 		Control:     deps.PhotoIndex(),
 		EventBus:    deps.EventBus(),
+		Index:       deps.FileIndex(),
 	})
 	if err != nil {
 		log.Printf("[photo-hashes] backfill: %v", err)

@@ -67,6 +67,9 @@ type searchHarness struct {
 	userID    int64
 	principal *accessutil.Principal
 	jpeg      []byte
+	// index learns of a file written once it is built, as an upload's event
+	// would tell it.
+	index *indexutil.FileIndex
 }
 
 func newSearchHarness(t *testing.T) searchHarness {
@@ -99,6 +102,7 @@ func newSearchHarness(t *testing.T) searchHarness {
 	bus := eventbus.New()
 	index := indexutil.NewFileIndex()
 	index.BuildAndWatch(indexutil.BuildAndWatchParams{Ctx: ctx, Bus: bus, Registry: registry})
+	h.index = index
 
 	h.database = dbtest.NewDB(t)
 	user, err := h.database.Queries.CreateUser(context.Background(), db.CreateUserParams{
@@ -141,6 +145,9 @@ func (h searchHarness) write(t *testing.T, rel string, mtime time.Time) {
 	}
 	if err := os.Chtimes(full, mtime, mtime); err != nil {
 		t.Fatal(err)
+	}
+	if h.index != nil {
+		h.index.HandleAdd("", rel, int64(len(h.jpeg)), mtime.UnixNano())
 	}
 }
 
