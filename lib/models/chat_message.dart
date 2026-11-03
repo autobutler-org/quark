@@ -2,14 +2,15 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:quark/models/chat_channel_keys.dart';
+import 'package:quark/models/chat_poll.dart';
 
 /// One chat message as the Quark stores it (#2418): who sent it, when, under
 /// which channel key version, and ciphertext the Quark can't open.
 ///
 /// [ciphertext] is `nonce || XChaCha20-Poly1305 output`, with the channel id
 /// and key version bound as additional data (`ChatCrypto.messageAad`). A
-/// deleted message is a tombstone: [deletedAt] set, no ciphertext and no
-/// [reactions].
+/// deleted message is a tombstone: [deletedAt] set, no ciphertext, no
+/// [reactions] and no [poll].
 class ChatMessage {
   /// Builds a message explicitly; tests use it.
   const ChatMessage({
@@ -22,6 +23,7 @@ class ChatMessage {
     this.editedAt,
     this.deletedAt,
     this.reactions = const [],
+    this.poll,
   });
 
   /// Increasing within the Quark, across every channel.
@@ -51,6 +53,9 @@ class ChatMessage {
   /// Its reactions, oldest first (#2426), still encrypted.
   final List<ChatReaction> reactions;
 
+  /// Its settings, state and visible answers when it is a poll (#3893).
+  final ChatPoll? poll;
+
   /// Whether this is a tombstone.
   bool get isDeleted => deletedAt != null;
 
@@ -67,18 +72,26 @@ class ChatMessage {
     deletedAt: deletedAt ?? at,
   );
 
+  /// This message with [reactions] or [poll] in place of its own.
+  ChatMessage copyWith({List<ChatReaction>? reactions, ChatPoll? poll}) =>
+      ChatMessage(
+        id: id,
+        channelId: channelId,
+        authorId: authorId,
+        keyVersion: keyVersion,
+        ciphertext: ciphertext,
+        createdAt: createdAt,
+        editedAt: editedAt,
+        deletedAt: deletedAt,
+        reactions: reactions == null
+            ? this.reactions
+            : List.unmodifiable(reactions),
+        poll: poll ?? this.poll,
+      );
+
   /// This message with [reactions] in place of its own.
-  ChatMessage withReactions(List<ChatReaction> reactions) => ChatMessage(
-    id: id,
-    channelId: channelId,
-    authorId: authorId,
-    keyVersion: keyVersion,
-    ciphertext: ciphertext,
-    createdAt: createdAt,
-    editedAt: editedAt,
-    deletedAt: deletedAt,
-    reactions: List.unmodifiable(reactions),
-  );
+  ChatMessage withReactions(List<ChatReaction> reactions) =>
+      copyWith(reactions: reactions);
 
   /// Reads one message as the API or a `chat_message_created` event sends it.
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -101,6 +114,9 @@ class ChatMessage {
         for (final r in json['reactions'] as List? ?? const [])
           ChatReaction.fromJson(r as Map<String, dynamic>),
       ]),
+      poll: json['poll'] is Map<String, dynamic>
+          ? ChatPoll.fromJson(json['poll'] as Map<String, dynamic>)
+          : null,
     );
   }
 }
@@ -201,6 +217,8 @@ final class ChatTimelineMessage extends ChatTimelineEntry {
     required this.state,
     this.text,
     this.reactions = const [],
+    this.question,
+    this.pollAnswers = const [],
   });
 
   /// The stored message.
@@ -214,6 +232,13 @@ final class ChatTimelineMessage extends ChatTimelineEntry {
 
   /// The message's reactions, each with its emoji when it opened.
   final List<ChatOpenReaction> reactions;
+
+  /// The poll's question when the message is a poll whose [text] carries
+  /// one (#3894); null for text, which a poll that won't parse is too.
+  final ChatPollQuestion? question;
+
+  /// A poll's visible answers, each with what it opened to.
+  final List<ChatOpenPollAnswer> pollAnswers;
 
   @override
   DateTime get createdAt => message.createdAt;

@@ -48,6 +48,8 @@ lib/widgets/
                                 settings menu
     chat_channel_not_found.dart a link to a channel the account can't open,
                                 in place of the messages; reads Errors
+    show_chat_poll_editor.dart  opens QuarkPollEditor as a sheet or a dialog
+                                and posts through ChatController (#3894)
   code_viewer/
     code_viewer_body.dart       QuarkCodeViewer fed from a
                                 CodeViewerController; reads AppSettings for

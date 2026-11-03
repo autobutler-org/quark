@@ -364,12 +364,19 @@ An answer is encrypted like a reaction: XChaCha20-Poly1305 under the channel's c
 was written. The additional data binds it to its poll:
 
 ```text
-"quark-chat-poll-answer-v1" 0x00 || be64(channelId) || be64(keyVersion) || be64(messageId)
+"quark-chat-poll-answer-v1" 0x00 || be64(channelId) || be64(keyVersion) || be64(messageId) [|| be64(userId)]
 ```
 
-It leaves the account out, because the members reading an anonymous poll don't know whose answer they are
-opening. So the Quark can't move an answer to another poll or channel, but could swap answers between the
-accounts that answered one poll; on a poll that isn't anonymous the app can only show what the Quark says.
+On a poll that isn't anonymous, the answering account's id ends it, so the Quark can't pin an answer on
+another account. An anonymous poll leaves it out, because its readers don't know whose answer they are
+opening. So the Quark can't move any answer to another poll or channel, but on an anonymous poll it could swap
+answers between the accounts that answered.
+
+The plaintext is JSON keyed by the question's id, `{"q1":[0,2]}` for the options picked or `{"q1":"text"}`
+for a written answer, zero-padded. The question itself is the poll message's text:
+`{"quark":"poll/1","questions":[{"id":"q1","type":"single","prompt":"…","options":["…"]}]}`, where `type` is
+`single`, `multiple` or `text`. The app treats a message as a poll only when its text parses as that and the
+Quark holds settings for it; anything else shows as text. It tallies the answers on the device.
 
 ### What the Quark sees
 

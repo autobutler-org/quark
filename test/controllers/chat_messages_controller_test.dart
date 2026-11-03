@@ -8,6 +8,7 @@ import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/controllers/chat_messages_controller.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
+import 'package:quark/models/chat_poll.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -54,6 +55,15 @@ class _FakeQuark {
   final List<ChatMessage> messages = [];
   final List<ChatChannelEvent> events = [];
   final Map<int, List<ChatReaction>> reactions = {};
+
+  /// Each poll's settings and state, by message id.
+  final Map<int, ChatPoll> polls = {};
+
+  /// Each poll's answers by the account that gave them.
+  final Map<int, Map<int, ChatPollResponse>> answers = {};
+
+  /// Who hears an event on [live]; everyone when unset.
+  final audience = Expando<Set<int>>();
   final live = StreamController<FileEvent>.broadcast();
   final reconnects = StreamController<void>.broadcast();
   bool drop = false;
@@ -78,8 +88,10 @@ class _FakeQuark {
     fetchMessages: (channelId, {before, after, limit}) async {
       final n = limit ?? 50;
       final inChannel = messages.where((m) => m.channelId == channelId);
-      ChatMessage withReactions(ChatMessage m) =>
-          m.withReactions(reactions[m.id] ?? const []);
+      ChatMessage withReactions(ChatMessage m) => m.copyWith(
+        reactions: reactions[m.id] ?? const [],
+        poll: polls[m.id]?.copyWith(answers: visibleAnswers(m.id, userId)),
+      );
       if (after != null) {
         return inChannel
             .where((m) => m.id > after)
@@ -93,17 +105,18 @@ class _FakeQuark {
           .toList();
       return older.sublist(older.length > n ? older.length - n : 0);
     },
-    postMessage: (channelId, keyVersion, ciphertext, {clientMessageId}) async {
-      final stored = byClientId[clientMessageId];
-      if (stored != null) return stored;
-      final message = post(channelId, keyVersion, ciphertext);
-      if (clientMessageId != null) byClientId[clientMessageId] = message;
-      if (loseResponse) {
-        loseResponse = false;
-        throw Exception('timed out');
-      }
-      return message;
-    },
+    postMessage:
+        (channelId, keyVersion, ciphertext, {clientMessageId, poll}) async {
+          final stored = byClientId[clientMessageId];
+          if (stored != null) return stored;
+          final message = post(channelId, keyVersion, ciphertext, poll: poll);
+          if (clientMessageId != null) byClientId[clientMessageId] = message;
+          if (loseResponse) {
+            loseResponse = false;
+            throw Exception('timed out');
+          }
+          return message;
+        },
     deleteMessage: (id) async {
       final i = messages.indexWhere((m) => m.id == id);
       messages[i] = messages[i].tombstone(_epoch);
@@ -113,10 +126,14 @@ class _FakeQuark {
     addReaction: (messageId, keyVersion, ciphertext) async =>
         react(messageId, userId, keyVersion, ciphertext),
     deleteReaction: (id) async => removeReaction(id),
+    answerPoll: (messageId, keyVersion, ciphertext) async =>
+        answer(messageId, userId, keyVersion, ciphertext),
+    fetchPollAnswers: (messageId) async => visibleAnswers(messageId, userId),
+    closePoll: (messageId) async => close(messageId),
     currentUserId: () => userId,
     fetchEvents: (channelId, {after = 0}) async =>
         events.where((e) => e.id > after).toList(),
-    events: live.stream,
+    events: live.stream.where((e) => audience[e]?.contains(userId) ?? true),
     reconnects: reconnects.stream,
   );
 
@@ -174,7 +191,89 @@ class _FakeQuark {
     );
   }
 
-  ChatMessage post(int channelId, int keyVersion, Uint8List ciphertext) {
+  /// [row] as account [viewer] is served it: no account on an anonymous
+  /// poll, and marked when it is the viewer's own.
+  ChatPollResponse served(ChatPollResponse row, int viewer) => ChatPollResponse(
+    id: row.id,
+    messageId: row.messageId,
+    keyVersion: row.keyVersion,
+    ciphertext: row.ciphertext,
+    userId: polls[row.messageId]!.anonymous ? null : row.userId,
+    mine: row.userId == viewer,
+  );
+
+  /// The answers to poll [messageId] that account [viewer] may see: only
+  /// its own while a results-after-close poll is open and it isn't the
+  /// author.
+  List<ChatPollResponse> visibleAnswers(int messageId, int viewer) {
+    final poll = polls[messageId]!;
+    final ownOnly = poll.resultsAfterClose && !poll.closed && viewer != 2;
+    return [
+      for (final row in answers[messageId]?.values ?? <ChatPollResponse>[])
+        if (!ownOnly || row.userId == viewer) served(row, viewer),
+    ];
+  }
+
+  ChatPollResponse answer(
+    int messageId,
+    int userId,
+    int keyVersion,
+    Uint8List ciphertext,
+  ) {
+    final poll = polls[messageId];
+    if (poll == null) throw const ApiException(404);
+    expect(ciphertext, hasLength(4136));
+    final held = answers[messageId]?[userId];
+    if (poll.closed || (held != null && !poll.allowChange)) {
+      throw const ApiException(409);
+    }
+    final row = ChatPollResponse(
+      id: held?.id ?? _nextId++,
+      messageId: messageId,
+      userId: userId,
+      keyVersion: keyVersion,
+      ciphertext: ciphertext,
+    );
+    (answers[messageId] ??= {})[userId] = row;
+    final event = served(row, 0);
+    _emit('chat_poll_answer_changed', {
+      'channelId': _channel,
+      'messageId': messageId,
+      'answer': {
+        'id': event.id,
+        'messageId': messageId,
+        'userId': ?event.userId,
+        'mine': false,
+        'keyVersion': keyVersion,
+        'ciphertext': base64Encode(ciphertext),
+      },
+    }, hears: poll.resultsAfterClose ? {2, userId} : null);
+    return served(row, userId);
+  }
+
+  ChatPoll close(int messageId) {
+    final poll = polls[messageId] = polls[messageId]!.copyWith(closed: true);
+    _emit('chat_poll_closed', {'channelId': _channel, 'messageId': messageId});
+    return poll;
+  }
+
+  void _emit(String kind, Map<String, Object> data, {Set<int>? hears}) {
+    if (drop) return;
+    final event = FileEvent(
+      kind: kind,
+      path: '',
+      data: jsonDecode(jsonEncode(data)),
+    );
+    audience[event] = hears;
+    live.add(event);
+  }
+
+  ChatMessage post(
+    int channelId,
+    int keyVersion,
+    Uint8List ciphertext, {
+    ChatPoll? poll,
+  }) {
     final id = _nextId++;
     final message = ChatMessage(
       id: id,
@@ -183,7 +282,9 @@ class _FakeQuark {
       keyVersion: keyVersion,
       ciphertext: ciphertext,
       createdAt: _epoch.add(Duration(minutes: id * 2)),
+      poll: poll,
     );
+    if (poll != null) polls[id] = poll;
     messages.add(message);
     if (!drop) {
       live.add(
@@ -201,6 +302,7 @@ class _FakeQuark {
                 'keyVersion': keyVersion,
                 'ciphertext': base64Encode(ciphertext),
                 'createdAt': message.createdAt.toIso8601String(),
+                'poll': ?poll?.settingsJson(),
               },
             }),
           ),
@@ -525,6 +627,182 @@ void main() {
       final last = reader.entries.whereType<ChatTimelineMessage>().last;
       expect(last.reactions.single.emoji, isNull);
       expect(ChatController.reactionItems(last.reactions, 2), isEmpty);
+    });
+  });
+
+  group('polls (#3894)', () {
+    late SecureKey key;
+    _FakeKeys keys() =>
+        _FakeKeys()..grant(1, crypto.channelKeyFromBytes(key.extractBytes()));
+
+    setUp(() => key = crypto.newChannelKey());
+
+    ChatTimelineMessage only(ChatMessagesController c) =>
+        c.entries.whereType<ChatTimelineMessage>().single;
+    ChatPollItem pollOf(ChatMessagesController c, int me) =>
+        ChatMessagesController.pollItemFor(only(c), me: me);
+
+    const lunch = ChatPollDraft(
+      prompt: ' Where for lunch? ',
+      options: ['Tacos', '', 'Pho', 'Pizza'],
+    );
+
+    /// The author, alice (2), posts [draft]; bob (3) and carol (4) open it.
+    Future<List<ChatMessagesController>> postAndOpen(
+      ChatPollDraft draft,
+    ) async {
+      final alice = quark.client(keys(), crypto);
+      await alice.open();
+      await alice.sendPoll(draft);
+      final bob = quark.client(keys(), crypto, userId: 3);
+      final carol = quark.client(keys(), crypto, userId: 4);
+      await bob.open();
+      await carol.open();
+      return [alice, bob, carol];
+    }
+
+    test('a poll is tallied on every device from the answers', () async {
+      final [alice, bob, carol] = await postAndOpen(lunch);
+      final id = only(alice).message.id;
+      expect(quark.polls[id]!.allowChange, isTrue);
+
+      await bob.answerPoll(id, const ChatPollAnswer(choices: [1]));
+      await carol.answerPoll(id, const ChatPollAnswer(choices: [1]));
+      await pumpEventQueue();
+
+      final item = ChatController.itemFor(only(alice), (_) => '', me: 2);
+      expect(item.kind, ChatMessageKind.poll);
+      expect(item.body, 'Where for lunch?');
+      expect(item.poll!.options, ['Tacos', 'Pho', 'Pizza']);
+      expect(item.poll!.counts, [0, 2, 0]);
+      expect(item.poll!.responseCount, 2);
+      expect(item.poll!.myAnswer, isNull);
+      expect(pollOf(bob, 3).myAnswer, const ChatPollAnswer(choices: [1]));
+      expect(pollOf(carol, 4).counts, [0, 2, 0]);
+    });
+
+    test('changing an answer replaces it; a poll without that refuses '
+        'it', () async {
+      final [alice, bob, _] = await postAndOpen(lunch);
+      final id = only(alice).message.id;
+
+      await bob.answerPoll(id, const ChatPollAnswer(choices: [0]));
+      await bob.answerPoll(id, const ChatPollAnswer(choices: [2]));
+      await pumpEventQueue();
+      expect(pollOf(alice, 2).counts, [0, 0, 1]);
+      expect(pollOf(bob, 3).myAnswer, const ChatPollAnswer(choices: [2]));
+      expect(pollOf(bob, 3).responseCount, 1);
+
+      await alice.sendPoll(
+        const ChatPollDraft(
+          prompt: 'Once only',
+          type: ChatPollType.multiple,
+          options: ['a', 'b'],
+          allowChange: false,
+        ),
+      );
+      final fixed = alice.entries.whereType<ChatTimelineMessage>().last;
+      await pumpEventQueue();
+      await bob.answerPoll(
+        fixed.message.id,
+        const ChatPollAnswer(choices: [0, 1]),
+      );
+      await expectLater(
+        bob.answerPoll(fixed.message.id, const ChatPollAnswer(choices: [0])),
+        throwsA(isA<ApiException>()),
+      );
+    });
+
+    test('an anonymous poll names nobody, and still knows your own', () async {
+      final [alice, bob, _] = await postAndOpen(
+        lunch.copyWith(anonymous: true),
+      );
+      final id = only(alice).message.id;
+      await bob.answerPoll(id, const ChatPollAnswer(choices: [2]));
+      await pumpEventQueue();
+
+      final seen = only(alice).pollAnswers.single;
+      expect(seen.response.userId, isNull);
+      expect(seen.answer, const ChatPollAnswer(choices: [2]));
+      expect(pollOf(alice, 2).anonymous, isTrue);
+      expect(pollOf(bob, 3).myAnswer, const ChatPollAnswer(choices: [2]));
+
+      // A fresh page marks bob's own the same way.
+      final again = quark.client(keys(), crypto, userId: 3);
+      await again.open();
+      expect(pollOf(again, 3).myAnswer, const ChatPollAnswer(choices: [2]));
+    });
+
+    test('results after close stay hidden from readers until it '
+        'closes', () async {
+      final [alice, bob, carol] = await postAndOpen(
+        lunch.copyWith(resultsAfterClose: true),
+      );
+      final id = only(alice).message.id;
+      await bob.answerPoll(id, const ChatPollAnswer(choices: [0]));
+      await carol.answerPoll(id, const ChatPollAnswer(choices: [1]));
+      await pumpEventQueue();
+
+      expect(pollOf(alice, 2).resultsVisible, isTrue);
+      expect(pollOf(alice, 2).responseCount, 2);
+      expect(pollOf(carol, 4).resultsVisible, isFalse);
+      expect(pollOf(carol, 4).responseCount, 1);
+      expect(pollOf(carol, 4).myAnswer, const ChatPollAnswer(choices: [1]));
+
+      await alice.closePoll(id);
+      await pumpEventQueue();
+      expect(pollOf(carol, 4).isClosed, isTrue);
+      expect(pollOf(carol, 4).resultsVisible, isTrue);
+      expect(pollOf(carol, 4).counts, [1, 1, 0]);
+    });
+
+    test('a closed poll says so and takes no answer', () async {
+      final [alice, bob, _] = await postAndOpen(
+        lunch.copyWith(closesAt: DateTime.utc(2030)),
+      );
+      final id = only(alice).message.id;
+      expect(pollOf(bob, 3).isClosed, isFalse);
+      expect(
+        ChatMessagesController.pollItemFor(
+          only(bob),
+          me: 3,
+          now: DateTime.utc(2031),
+        ).isClosed,
+        isTrue,
+      );
+
+      await alice.closePoll(id);
+      await pumpEventQueue();
+      expect(pollOf(alice, 2).isClosed, isTrue);
+      expect(pollOf(bob, 3).isClosed, isTrue);
+      await expectLater(
+        bob.answerPoll(id, const ChatPollAnswer(choices: [0])),
+        throwsA(isA<ApiException>()),
+      );
+    });
+
+    test('a written answer is tallied as text', () async {
+      final [alice, bob, _] = await postAndOpen(
+        const ChatPollDraft(prompt: 'Ideas?', type: ChatPollType.text),
+      );
+      final id = only(alice).message.id;
+      await bob.answerPoll(id, const ChatPollAnswer(text: ' a picnic '));
+      await pumpEventQueue();
+      expect(pollOf(alice, 2).textAnswers, ['a picnic']);
+      expect(pollOf(alice, 2).options, isEmpty);
+    });
+
+    test('poll-shaped text without settings, and other JSON, stay '
+        'text', () async {
+      final alice = quark.client(keys(), crypto);
+      await alice.open();
+      await alice.send(ChatPollQuestion.fromDraft(lunch).toPayload());
+      await alice.send('{"quark":"poll/9","questions":[]}');
+      await alice.send('{"a":1}');
+      expect([
+        for (final e in alice.entries)
+          ChatController.itemFor(e, (_) => '', me: 2).kind,
+      ], everyElement(ChatMessageKind.text));
     });
   });
 }

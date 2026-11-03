@@ -25,6 +25,8 @@ import 'package:sodium/sodium_sumo.dart';
 ///   [messageAad].
 /// - Reactions (#2426): the same [encrypt] and [decrypt] over [padReaction],
 ///   bound to [reactionAad].
+/// - Poll answers (#3894): the same over [padPollAnswer], bound to
+///   [pollAnswerAad].
 class ChatCrypto {
   /// Wraps an initialized libsodium.
   ChatCrypto(this.sodium) : account = AccountCrypto(sodium);
@@ -245,6 +247,44 @@ class ChatCrypto {
     ..._be64(userId),
   ]);
 
+  /// The additional data a poll answer's ciphertext is bound to (#3894):
+  ///
+  /// `"quark-chat-poll-answer-v1" 0x00 || be64(channelId) || be64(keyVersion)
+  /// || be64(messageId) [|| be64(userId)]`
+  ///
+  /// So the Quark can't move an answer to another poll or channel. [userId]
+  /// is the account that answered, and is left out on an anonymous poll,
+  /// whose readers don't know whose answer they are opening; on any other
+  /// poll it stops the Quark pinning an answer on another account.
+  Uint8List pollAnswerAad({
+    required int channelId,
+    required int keyVersion,
+    required int messageId,
+    int? userId,
+  }) => Uint8List.fromList([
+    ...utf8.encode('quark-chat-poll-answer-v1'),
+    0,
+    ..._be64(channelId),
+    ..._be64(keyVersion),
+    ..._be64(messageId),
+    if (userId != null) ..._be64(userId),
+  ]);
+
+  /// How long every poll answer's plaintext is, so its ciphertext is the
+  /// 4136 bytes the Quark insists on and says nothing of what was chosen.
+  static const pollAnswerPlaintextBytes = 4 << 10;
+
+  /// [json], an answer's plaintext, in UTF-8 zero-padded to
+  /// [pollAnswerPlaintextBytes]. Throws a [MessageException] for one that
+  /// doesn't fit.
+  static Uint8List padPollAnswer(String json) {
+    final bytes = utf8.encode(json);
+    if (bytes.length > pollAnswerPlaintextBytes) {
+      throw const MessageException(Errors.chatPollAnswerTooLong);
+    }
+    return Uint8List(pollAnswerPlaintextBytes)..setAll(0, bytes);
+  }
+
   /// How long every reaction's plaintext is, so the ciphertext's length
   /// doesn't tell the Quark which emoji it is.
   static const reactionPlaintextBytes = 64;
@@ -259,8 +299,8 @@ class ChatCrypto {
     return Uint8List(reactionPlaintextBytes)..setAll(0, bytes);
   }
 
-  /// The emoji [padReaction] padded, with the zeros dropped.
-  static String stripReaction(Uint8List padded) {
+  /// What [padReaction] or [padPollAnswer] padded, with the zeros dropped.
+  static String stripPadding(Uint8List padded) {
     final end = padded.indexOf(0);
     return utf8.decode(
       end < 0 ? padded : Uint8List.sublistView(padded, 0, end),

@@ -3,8 +3,10 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/account_keys.dart';
+import 'package:quark/models/chat_poll.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Argon2id's floor, so the suite spends its time on logic rather than the
 /// KDF. The shipped cost is [KdfParams.standard].
@@ -319,7 +321,7 @@ void main() {
     for (final emoji in ['👍', '❤️', '👩‍👩‍👧‍👦']) {
       final padded = ChatCrypto.padReaction(emoji);
       expect(padded.length, ChatCrypto.reactionPlaintextBytes);
-      expect(ChatCrypto.stripReaction(padded), emoji);
+      expect(ChatCrypto.stripPadding(padded), emoji);
     }
     expect(() => ChatCrypto.padReaction(''), throwsFormatException);
     expect(() => ChatCrypto.padReaction('👍' * 17), throwsFormatException);
@@ -337,7 +339,7 @@ void main() {
       additionalData: aad(3, 2),
     );
     expect(
-      ChatCrypto.stripReaction(
+      ChatCrypto.stripPadding(
         crypto.decrypt(sealed, key, additionalData: aad(3, 2)),
       ),
       '🎉',
@@ -348,6 +350,57 @@ void main() {
             crypto.decrypt(sealed, key, additionalData: aad(messageId, userId)),
         throwsA(anything),
       );
+    }
+  });
+
+  test('a poll answer is padded to the size the Quark takes and opens only '
+      'on its poll and account', () {
+    const question = ChatPollQuestion(
+      prompt: 'Where?',
+      type: ChatPollType.text,
+    );
+    final longest = question.encodeAnswer(
+      ChatPollAnswer(text: '👩' * QuarkPollCard.maxTextLength),
+    );
+    final padded = ChatCrypto.padPollAnswer(longest);
+    expect(padded.length, ChatCrypto.pollAnswerPlaintextBytes);
+    expect(ChatCrypto.stripPadding(padded), longest);
+    expect(
+      () => ChatCrypto.padPollAnswer('x' * 4097),
+      throwsA(isA<MessageException>()),
+    );
+
+    final key = crypto.newChannelKey();
+    Uint8List aad(int messageId, int? userId) => crypto.pollAnswerAad(
+      channelId: 7,
+      keyVersion: 1,
+      messageId: messageId,
+      userId: userId,
+    );
+    for (final userId in [2, null]) {
+      final sealed = crypto.encrypt(
+        padded,
+        key,
+        additionalData: aad(3, userId),
+      );
+      // nonce || ciphertext || tag, what the Quark insists on (#3893).
+      expect(sealed, hasLength(4136));
+      expect(
+        ChatCrypto.stripPadding(
+          crypto.decrypt(sealed, key, additionalData: aad(3, userId)),
+        ),
+        longest,
+      );
+      for (final (messageId, other) in [(4, userId), (3, 5)]) {
+        expect(
+          () => crypto.decrypt(
+            sealed,
+            key,
+            additionalData: aad(messageId, other),
+          ),
+          throwsA(anything),
+        );
+      }
     }
   });
 }
