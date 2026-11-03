@@ -217,6 +217,16 @@ class FakeChat {
       currentUserId: () => 7,
       events: events.stream,
       now: () => DateTime(2026, 9, 25, 12),
+      saveBytes: (bytes, name) async {
+        calls.add('download $name');
+        exported = utf8.decode(bytes);
+        return name;
+      },
+      uploadBytes: (folder, name, bytes, {keepBoth = false}) async {
+        calls.add('upload "$folder" $name keepBoth=$keepBoth');
+        exported = utf8.decode(bytes);
+        return ['$folder/$name'];
+      },
       unread: unread,
       unreadMentions: ChatUnreadMentionsController(
         unread: unread,
@@ -235,6 +245,9 @@ class FakeChat {
   /// The newest messages of each channel never opened, their text as their
   /// ciphertext, which the unread mentions are counted from.
   final Map<int, List<ChatMessage>> unreadMessages = {};
+
+  /// The text of the last poll export, downloaded or uploaded.
+  String? exported;
 
   /// Every `channelId messageId` the read marker was moved to.
   final List<String> marked = [];

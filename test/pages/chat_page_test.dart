@@ -9,6 +9,7 @@ import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
+import 'package:quark/models/chat_poll.dart';
 import 'package:quark/pages/chat_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/utils/chat_config.dart';
@@ -1075,4 +1076,47 @@ void main() {
     expect(fake.opened[1]!.disposed, isTrue);
     expect(find.text('# random'), findsOneWidget);
   });
+
+  // #3894: Export asks for a format and a destination, says a Quark copy
+  // isn't end-to-end encrypted, and says where it went.
+  for (final (label, size) in [('narrow', narrow), ('wide', wide)]) {
+    testWidgets('exports a poll to the Quark ($label)', (tester) async {
+      final chat = FakeChat();
+      chat.entries[1] = [
+        ChatTimelineMessage(
+          message: ChatMessage(
+            id: 5,
+            channelId: 1,
+            authorId: 8,
+            keyVersion: 1,
+            ciphertext: null,
+            createdAt: DateTime.utc(2026, 9, 25, 10),
+            poll: const ChatPoll(),
+          ),
+          state: ChatMessageState.ready,
+          question: const ChatPollQuestion(
+            prompt: 'Lunch?',
+            options: ['Soup', 'Salad'],
+          ),
+        ),
+      ];
+      await pumpChat(tester, size, chat: chat);
+
+      await tester.tap(find.byKey(const ValueKey('poll_export_5')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('A copy saved to your Quark is not end-to-end encrypted.'),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('poll_export_dialog_format_qsheet')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('poll_export_dialog_quark')));
+      await tester.pumpAndSettle();
+
+      expect(chat.calls.last, endsWith('Lunch.qsheet keepBoth=true'));
+      expect(find.textContaining('Exported to '), findsOneWidget);
+    });
+  }
 }

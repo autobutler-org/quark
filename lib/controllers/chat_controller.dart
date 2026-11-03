@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -15,7 +16,10 @@ import 'package:quark/models/path_grant.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_channels_service.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark/services/files_service.dart';
 import 'package:quark/services/sharing_service.dart';
+import 'package:quark/utils/chat_poll_export.dart';
+import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark/utils/search_fold.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -171,6 +175,16 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     ChatUnreadController? unread,
     ChatUnreadMentionsController? unreadMentions,
     String Function()? deviceKey,
+    Future<String?> Function(Uint8List bytes, String fileName) saveBytes =
+        FilesService.saveBytesToFile,
+    Future<List<String>> Function(
+          String folder,
+          String name,
+          List<int> bytes, {
+          bool keepBoth,
+        })
+        uploadBytes =
+        FilesService.uploadBytes,
   }) : _listChannels = listChannels,
        _listMembers = listMembers,
        _listAllChannels = listAllChannels,
@@ -204,7 +218,9 @@ class ChatController extends ChangeNotifier with SafeNotifier {
            currentUserId ?? (() => AppSettings.instance.userId.value),
        _now = now ?? DateTime.now,
        _unread = unread ?? ChatUnreadController.instance,
-       _deviceKey = deviceKey ?? (() => AppSettings.instance.activeHost ?? '') {
+       _deviceKey = deviceKey ?? (() => AppSettings.instance.activeHost ?? ''),
+       _saveBytes = saveBytes,
+       _uploadBytes = uploadBytes {
     _unreadMentions =
         unreadMentions ?? ChatUnreadMentionsController(unread: _unread);
     _wasUnlocked = _isUnlocked();
@@ -257,6 +273,14 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   /// The Quark these drafts belong to. The active host, unless a test
   /// names one, so two Quarks on this device do not share a channel's text.
   final String Function() _deviceKey;
+  final Future<String?> Function(Uint8List bytes, String fileName) _saveBytes;
+  final Future<List<String>> Function(
+    String folder,
+    String name,
+    List<int> bytes, {
+    bool keepBoth,
+  })
+  _uploadBytes;
 
   late final ChatUnreadMentionsController _unreadMentions;
   late final StreamSubscription<FileEvent> _events;
@@ -812,6 +836,40 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   /// Null on success, otherwise the failure, for `Errors.message`.
   Future<Object?> closePoll(String messageId) =>
       _onMessage(messageId, (messages, id) => messages.closePoll(id));
+
+  /// Exports poll [messageId]'s results, an id from [messageItems] in the
+  /// open channel, as [format] to [destination]: a download that never
+  /// touches the Quark, or a copy in this account's home folder kept beside
+  /// any file of the same name. A snapshot of the answers this device has
+  /// opened. Where it landed, or null when the save dialog was canceled or
+  /// the poll isn't loaded. Throws when the save or upload fails.
+  Future<String?> exportPoll(
+    String messageId,
+    ChatPollExportFormat format,
+    ChatPollExportDestination destination,
+  ) async {
+    final id = int.tryParse(messageId);
+    final entry = _messages?.entries
+        .whereType<ChatTimelineMessage>()
+        .where((e) => e.message.id == id && e.question != null)
+        .firstOrNull;
+    if (entry == null) return null;
+    final bytes = utf8.encode(
+      chatPollExport(chatPollExportRows(entry, nameOf), format),
+    );
+    final fileName = format.fileNameFor(entry.question!.prompt);
+    return switch (destination) {
+      ChatPollExportDestination.download => _saveBytes(bytes, fileName),
+      ChatPollExportDestination.quark =>
+        (await _uploadBytes(
+              homePath(AppSettings.instance.username),
+              fileName,
+              bytes,
+              keepBoth: true,
+            )).firstOrNull ??
+            fileName,
+    };
+  }
 
   /// Posts [draft] as a poll in the open channel through [isSaving] and
   /// [saveError]. True once it is posted and its form can close.

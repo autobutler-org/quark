@@ -534,3 +534,34 @@ and `carol` have the channel open.
 - Only the poll's author gets **Close poll**.
 - A poll with **Close at a set time** closes on its own then. Nothing announces it: a card shows it closed the
   next time it is drawn, and a results-after-close poll shows everyone's answers once the channel is refreshed.
+
+---
+
+### JN-CHAT-024: Export poll results
+
+**Preconditions:** `carol` posted a poll that `bob` and `dave` have answered (JN-CHAT-022). `carol` has the
+channel open.
+
+**Steps:**
+
+1. As `carol`, tap **Export** on the card.
+2. Pick **CSV** and tap **Download**.
+3. Tap **Export** again, pick **Sheet** and tap **Save to Quark**.
+
+**Expected result:**
+
+- After step 1, a dialog titled "Export results" offers **CSV**, **JSON** and **Sheet**, then **Download** and
+  **Save to Quark**, and says a copy saved to your Quark is not end-to-end encrypted.
+- After step 2, `Where for lunch.csv` downloads, named after the question, (the browser's download, or the save dialog in the app), with a
+  `Name` column and one column for the question, and one row each for `bob` and `dave`, their choices by label.
+  Nothing is sent to the Quark.
+- After step 3, `Where for lunch.qsheet` lands in `carol`'s home folder, beside any file of that name rather than
+  over it, and opens in Sheets with the same rows on a `Results` tab. A message says where it went.
+
+**Notes:**
+
+- **Export** shows only to someone who can see the results: on a poll that shows results after it closes, its
+  author, or anyone once it closes.
+- An anonymous poll's export has no `Name` column: nobody is named, the exporter included.
+- The export is a snapshot of the answers this device has opened. Nothing tracks the file afterward.
+- The saved copy is a plain file on the Quark ([`docs/chat-security.md`](../chat-security.md)).

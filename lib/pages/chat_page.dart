@@ -18,6 +18,7 @@ import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
 import 'package:quark/widgets/chat/chat_search_bar.dart';
 import 'package:quark/widgets/chat/chat_unlock_prompt.dart';
 import 'package:quark/widgets/chat/show_chat_poll_editor.dart';
+import 'package:quark/widgets/chat/show_chat_poll_export.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
@@ -64,7 +65,9 @@ import 'package:url_launcher/url_launcher.dart';
 ///
 /// The poll button beside the composer opens a form for a poll (#3894). A
 /// holder of `add_reactions` answers one, and its author closes it. Each
-/// card is tallied on this device from the answers it can open.
+/// card is tallied on this device from the answers it can open. Anyone who
+/// can see a poll's results exports them as CSV, JSON or a sheet, downloaded
+/// or saved to their home folder on the Quark.
 ///
 /// Typing `@` in the composer suggests the open channel's members, and a
 /// message that mentions the signed-in account is highlighted (#2623). A
@@ -201,6 +204,19 @@ class _ChatPageState extends State<ChatPage>
     final error = await _controller.closePoll(id);
     if (error == null || !mounted) return;
     showMessage(context, Errors.message(error, 'close the poll'));
+  }
+
+  Future<void> _exportPoll(String id) async {
+    final choice = await showChatPollExport(context);
+    if (choice == null) return;
+    final (format, destination) = choice;
+    try {
+      final saved = await _controller.exportPoll(id, format, destination);
+      if (saved != null && mounted) showMessage(context, 'Exported to $saved');
+    } catch (e) {
+      if (!mounted) return;
+      showMessage(context, Errors.message(e, 'export the results'));
+    }
   }
 
   void _openChannel(String id) {
@@ -566,6 +582,7 @@ class _ChatPageState extends State<ChatPage>
                                 onReact: _react,
                                 onAnswerPoll: _answerPoll,
                                 onClosePoll: _closePoll,
+                                onExportPoll: _exportPoll,
                                 onEncryptionHelp: _explainEncryption,
                                 onOpenLink: (uri) => launchUrl(
                                   uri,
