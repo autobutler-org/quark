@@ -480,7 +480,7 @@ func (s *slideReader) storePicture(part string) (string, string, error) {
 		return "", fmt.Sprintf("Pictures in a format the editor cannot show (%s) were left out.", format), nil
 	}
 
-	ref, err := s.params.StoreMedia(mediaName(part, ext), io.MultiReader(bytes.NewReader(head), counted))
+	ref, err := s.params.StoreMedia(part, mediaName(part, ext), io.MultiReader(bytes.NewReader(head), counted))
 	s.mediaBytes += counted.n
 	switch {
 	case errors.Is(counted.err, officezip.ErrTooLarge) || errors.Is(counted.err, ErrTooLarge):
