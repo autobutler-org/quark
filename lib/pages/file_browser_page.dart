@@ -49,6 +49,7 @@ import 'package:quark/widgets/file_browser/file_route_error_state.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer_scope.dart';
 import 'package:quark/widgets/file_browser/file_top_bar.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_path_row.dart';
 import 'package:quark/widgets/file_browser/files_welcome_card.dart';
 import 'package:quark/widgets/file_browser/folder_explainer.dart';
 import 'package:quark/widgets/file_browser/folder_route_error_state.dart';
@@ -2410,7 +2411,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                           ),
                         // Mobile create FAB — inside the file-list Stack so it
                         // sits above the footer rather than over the whole page.
-                        if (MediaQuery.of(context).size.width < 860)
+                        if (MediaQuery.of(context).size.width <
+                            FileTopBarPathRow.collapseBreakpoint)
                           Positioned(
                             left: leftHanded ? 16 : null,
                             right: leftHanded ? null : 16,

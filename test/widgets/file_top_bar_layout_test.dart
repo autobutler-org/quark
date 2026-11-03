@@ -121,6 +121,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // At 1200 the generic bar would stay wide, and Files' chips left the
+  // breadcrumb 39 pixels (#1871): Files collapses at a width of its own.
+  testWidgets('a window too narrow for every chip uses the Views menu', (
+    tester,
+  ) async {
+    await pumpBar(tester, const Size(1200, 800));
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('file_top_bar_home')), findsOneWidget);
+    expect(find.byKey(const ValueKey('file_top_bar_upload')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('app_bar_bottom_menu')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('file_top_bar_grouping_help')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('search swaps the path row for the search field', (tester) async {
     await pumpBar(tester, wide, isSearchMode: true);
 

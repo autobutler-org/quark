@@ -883,6 +883,26 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkHelpButton',
+    group: 'Layout',
+    build: (context, log) => const Align(
+      alignment: Alignment.centerLeft,
+      child: QuarkHelpButton(
+        key: ValueKey('gallery_help'),
+        title: 'Unified and per-device views',
+        topics: _galleryHelpTopics,
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkHelpDialog',
+    group: 'Layout',
+    build: (context, log) => const QuarkHelpDialog(
+      title: 'Unified and per-device views',
+      topics: _galleryHelpTopics,
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkHandedness',
     group: 'Layout',
     build: (context, log) => Column(
@@ -3744,4 +3764,26 @@ const List<String> _galleryJsonLines = [
   '  "description": "A self-hosted personal cloud, served from a device in your home, with a description long enough to wrap.",',
   '  "backup": null',
   '}',
+];
+
+/// Fake copy for the help button and dialog entries.
+const List<QuarkHelpTopic> _galleryHelpTopics = [
+  QuarkHelpTopic(
+    heading: 'Unified',
+    body:
+        'Every drive in one list. A folder that exists on several drives '
+        'shows once, with its contents merged.',
+    icon: QuarkIcons.view_list_rounded,
+  ),
+  QuarkHelpTopic(
+    heading: 'Per-device',
+    body: 'Each drive in its own section, so you can see what lives where.',
+    icon: QuarkIcons.grid_view_rounded,
+  ),
+  QuarkHelpTopic(
+    heading: 'Device tags',
+    body:
+        'The colored tag on a file names the drive it is on. Hover or long '
+        'press a tag to see the full name.',
+  ),
 ];

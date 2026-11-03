@@ -18,7 +18,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Search.
 ///
 /// On a wide bar the device filter, the create chips and the view toggles sit
-/// beside the breadcrumb. Below the bar's breakpoint they give way to the
+/// beside the breadcrumb. Below [collapseBreakpoint] they give way to the
 /// labeled Views menu, and creating moves to the floating button.
 ///
 /// The column picker is live only while a list is on screen: the grid has no
@@ -97,6 +97,12 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
   /// Enters multi-select. Null leaves Select out.
   final VoidCallback? onStartSelection;
 
+  /// The width below which the chips give way to the Views menu. Files has
+  /// more actions than the bar's default breakpoint leaves room for: at 1200
+  /// they squeezed the breadcrumb to 39 pixels (#1871). The page's create
+  /// button shows below it too.
+  static const double collapseBreakpoint = 1240;
+
   @override
   Size get preferredSize => const Size.fromHeight(QuarkAppBarBottom.height);
 
@@ -116,6 +122,7 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
         ? null
         : this.onColumnToggled;
     return QuarkAppBarBottom(
+      collapseBelow: collapseBreakpoint,
       // At the root the breadcrumb is only the home icon: let the pill shrink
       // to it rather than stretch across the row.
       lead: currentPath.isEmpty
