@@ -176,6 +176,7 @@ export 'src/settings/remote_access_turn_off_dialog.dart';
 export 'src/settings/ssh_access_panel.dart';
 export 'src/sharing/share_sheet.dart';
 export 'src/sheets/sheet_tab_strip.dart';
+export 'src/storage/device_tag.dart';
 export 'src/storage/drive_health.dart';
 export 'src/storage/drive_health_acknowledgment.dart';
 export 'src/storage/drive_health_detail.dart';
