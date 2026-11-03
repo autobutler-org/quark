@@ -87,6 +87,9 @@ lib/widgets/
     job_finish_announcer.dart   shows a snack bar for every job JobsController
                                 announces finished, and navigates its action
   layout/
+    admin_map_card.dart         AdminMapCard, an admin's legend of where
+                                people, folder access, clients, disks and
+                                passwords are managed; navigates to each
     app_bar_trailing_host.dart  provides the QuarkAppBarTrailing scope with a
                                 ConnectionSheetButton fed by
                                 ConnectionController, a JobsBadge fed by

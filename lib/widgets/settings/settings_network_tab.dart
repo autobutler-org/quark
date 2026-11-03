@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:quark/services/embedded_tunnel.dart';
+import 'package:quark/widgets/layout/admin_map_card.dart';
 import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
 import 'package:quark/widgets/settings/hostname_section.dart';
 import 'package:quark/widgets/settings/ssh_access_section.dart';
 
 /// The Network tab of Settings (#2350): remote access, the connected
-/// devices, and, for an admin, the device name (#2344) and SSH access.
+/// devices, and, for an admin, the [AdminMapCard] (#2484), the device name
+/// (#2344) and SSH access.
 ///
 /// The page loads the data and builds [remoteAccess] and [connectedDevices];
 /// this tab lays them out and says what is missing while no Quark is set.
@@ -53,6 +55,12 @@ class SettingsNetworkTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         if (header != null) ...[header!, const SizedBox(height: 24)],
+        // Clients, people, disks and folder access each live on their own
+        // page; this says which (#2484).
+        if (isAdmin) ...[
+          const AdminMapCard(here: AdminMapStop.clients),
+          const SizedBox(height: 24),
+        ],
         if (hasHost) ...[
           const Text('Remote access', style: heading),
           const SizedBox(height: 8),

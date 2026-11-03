@@ -455,3 +455,27 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 - The Quark keeps only a 256x256 copy it re-encoded itself, so the photo's EXIF, location included, is not stored.
 - Pictures are not end-to-end encrypted: any signed-in account can see anyone's, as it can see their username.
 - Deleting an account deletes its picture (JN-USR-013), and resetting the Quark deletes them all.
+
+---
+
+### JN-USR-022: See where people, clients, disks and access are managed
+
+**Preconditions:** Signed in as an admin.
+
+**Steps:**
+
+1. Navigate to `/users/accounts` and tap **Where things live**.
+2. Tap **Connected clients**.
+3. On `/settings/network`, open **Where things live** again and tap **Disks**.
+
+**Expected result:**
+
+- The card lists **People**, **Who can access what**, **Connected clients**, **Disks** and **Passwords**, each with a
+  sentence on what it is and the page that manages it: Users, Files, Settings › Network, System › Storage and Vault.
+- The row for the page on screen reads **You are here** and does not link; every other row does.
+- Step 2 opens `/settings/network`, and step 3 opens `/system/storage`, where the same card marks **Disks**.
+
+**Notes:**
+
+- A member sees no card: Network and Storage show it to admins only, and Users is admin-only.
+- Folder access is set from **Share…** in Files (JN-FB-027), not on the Users page.

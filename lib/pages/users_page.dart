@@ -10,6 +10,7 @@ import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
+import 'package:quark/widgets/layout/admin_map_card.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/users/recent_decisions/recent_decisions_list.dart';
@@ -18,7 +19,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The admin-only Users page (#1662), in two tabs.
 ///
-/// **Accounts**: account requests waiting for approval, every account on the
+/// **Accounts**: the [AdminMapCard] (#2484), account requests waiting for
+/// approval, every account on the
 /// Quark with what an admin can do to each, adding an account, whether the
 /// Quark takes requests at all, and the requests admins recently approved or
 /// denied (#2730). **Groups** (#1910): the groups, creating,
@@ -294,6 +296,10 @@ class _UsersPageState extends State<UsersPage>
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    // How accounts relate to clients, disks and folder
+                    // access, and where each is managed (#2484).
+                    const AdminMapCard(here: AdminMapStop.people),
+                    const SizedBox(height: 24),
                     QuarkSection(
                       title: 'Requests',
                       child: PendingRequestList(
