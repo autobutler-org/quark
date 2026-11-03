@@ -23,7 +23,7 @@ Sessions, job claiming, and most row-level work are already safe because they ar
 
 ## Method
 
-- Read from the code at `16f988b9` (`saddle/integration`; `main` was `7edb427d`). Every row cites the line it
+- Read from the code at `16f988b9` (tag `archive/saddle/integration`; `main` was `7edb427d`). Every row cites the line it
   was read from. **Nothing here was checked by running two instances**: the harness that could do that is #2971,
   and the PostgreSQL backend (#2955) it needs has not landed.
 - Read line by line: `deputil`, `internal/server` (boot, middleware, routes, content indexer), `internal/db`
