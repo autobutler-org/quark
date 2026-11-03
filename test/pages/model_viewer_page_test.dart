@@ -61,6 +61,7 @@ void main() {
       listResources: (bytes, format) async =>
           quarkModelResources(bytes, format),
       limits: limits ?? QuarkModelLimits(maxBytes: maxBytes),
+      saveThumbnail: (path, {serial, required mesh}) async => false,
     );
     addTearDown(controller.dispose);
     final router = GoRouter(

@@ -67,7 +67,7 @@ func TestStoredClientThumbnailServesEveryTier(t *testing.T) {
 	_, modTime := writeSource(t, "clip.mov")
 	database := dbtest.NewDB(t)
 	if err := store(t, StoreClientThumbnailParams{
-		Queries: database.Queries, RelPath: "/clip.mov", IsVideo: true,
+		Queries: database.Queries, RelPath: "/clip.mov", SkipHash: true,
 		Reader: bytes.NewReader(clientJPEG(t, 400, 225)),
 	}); err != nil {
 		t.Fatalf("StoreClientThumbnail: %v", err)
@@ -140,21 +140,53 @@ func TestStoreClientThumbnailRecordsHashesForPhotos(t *testing.T) {
 	}
 }
 
-func TestStoreClientThumbnailRejectsWhatIsNotAThumbnail(t *testing.T) {
-	writeSource(t, "clip.mov")
+// TestStoredModelThumbnailPNGIsServedAsJPEG: a 3D model's thumbnail, which
+// a client renders as a PNG (#3227), is stored without a perceptual hash and
+// served as the JPEG tiers every thumbnail is.
+func TestStoredModelThumbnailPNGIsServedAsJPEG(t *testing.T) {
+	_, modTime := writeSource(t, "part.stl")
+	database := dbtest.NewDB(t)
 	var pngBuf bytes.Buffer
-	if err := png.Encode(&pngBuf, image.NewRGBA(image.Rect(0, 0, 4, 4))); err != nil {
+	if err := png.Encode(&pngBuf, image.NewRGBA(image.Rect(0, 0, 400, 400))); err != nil {
 		t.Fatal(err)
 	}
+	if err := store(t, StoreClientThumbnailParams{
+		Queries: database.Queries, RelPath: "part.stl", SkipHash: true,
+		Reader: bytes.NewReader(pngBuf.Bytes()),
+	}); err != nil {
+		t.Fatalf("StoreClientThumbnail: %v", err)
+	}
+	result, err := FromClientThumbnail(FromClientThumbnailParams{
+		Queries: database.Queries, RelPath: "part.stl", FilePath: "/part.stl",
+		SourceModTime: modTime, Size: SizeSm,
+	})
+	if err != nil || !result.Found {
+		t.Fatalf("want the stored thumbnail, got %+v, %v", result, err)
+	}
+	f, err := os.Open(result.CachedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, format, err := image.DecodeConfig(f); err != nil || format != "jpeg" {
+		t.Errorf("got %s (%v), want jpeg", format, err)
+	}
+	rows, err := database.Queries.ListNearDuplicates(context.Background())
+	if err != nil || len(rows) != 0 {
+		t.Errorf("want no hashes for a model, got %+v, %v", rows, err)
+	}
+}
+
+func TestStoreClientThumbnailRejectsWhatIsNotAThumbnail(t *testing.T) {
+	writeSource(t, "clip.mov")
 	for name, body := range map[string][]byte{
-		"png":        pngBuf.Bytes(),
 		"garbage":    []byte("nope"),
 		"too wide":   clientJPEG(t, 3000, 10),
 		"too many B": append(clientJPEG(t, 10, 10), make([]byte, MaxClientThumbnailBytes)...),
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := store(t, StoreClientThumbnailParams{
-				Queries: dbtest.NewDB(t).Queries, RelPath: "clip.mov", IsVideo: true,
+				Queries: dbtest.NewDB(t).Queries, RelPath: "clip.mov", SkipHash: true,
 				Reader: bytes.NewReader(body),
 			})
 			if !errors.Is(err, ErrInvalidThumbnail) {
@@ -167,6 +199,7 @@ func TestStoreClientThumbnailRejectsWhatIsNotAThumbnail(t *testing.T) {
 func TestNeedsClientRender(t *testing.T) {
 	for name, want := range map[string]bool{
 		"clip.mp4": true, "clip.MOV": true, "IMG.HEIC": true, "a.heif": true,
+		"part.stl": true, "part.OBJ": true, "scan.ply": true, "scene.gltf": false,
 		"a.jpg": false, "a.png": false, "scan.dng": false, "notes.txt": false,
 	} {
 		if got := NeedsClientRender(name); got != want {

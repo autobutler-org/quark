@@ -19,8 +19,10 @@ void main() {
   late List<String> paths;
   late List<(int, QuarkModelFormat)> parses;
   late Map<String, Uint8List> parsedResources;
+  late List<(String, String?, QuarkModelMesh)> saved;
 
   setUp(() {
+    saved = [];
     reads = [];
     paths = [];
     parses = [];
@@ -64,10 +66,29 @@ void main() {
       parse: parse ?? parseOk,
       listResources: (bytes, format) async => resources,
       limits: QuarkModelLimits(maxBytes: maxBytes),
+      saveThumbnail: (path, {serial, required mesh}) async {
+        saved.add((path, serial, mesh));
+        return true;
+      },
     );
     addTearDown(controller.dispose);
     return controller;
   }
+
+  test('a model that loads is handed on for its thumbnail (#3227)', () async {
+    final viewer = controller(readRange: quark(500));
+    await viewer.load();
+    final (path, serial, mesh) = saved.single;
+    expect((path, serial), ('prints/part.stl', null));
+    expect(mesh, same(triangle));
+  });
+
+  test('a model over the cap saves no thumbnail', () async {
+    final viewer = controller(readRange: quark(5000));
+    await viewer.load();
+    expect(viewer.fallback, QuarkModelParseIssue.tooLarge);
+    expect(saved, isEmpty);
+  });
 
   test('reads the whole file once its size fits, and parses it', () async {
     final viewer = controller(readRange: quark(500));

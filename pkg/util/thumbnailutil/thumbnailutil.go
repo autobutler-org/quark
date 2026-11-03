@@ -7,7 +7,7 @@
 // A thumbnail a client rendered and uploaded (#2379) is kept in the same
 // cache and comes first: the size tiers are resized from it, and generating
 // from the file is the fallback. A file the device cannot decode itself
-// (H.264, HEVC or VP9 video, HEIC) is answered with [NeedsClientRender] so a client
+// (H.264, HEVC or VP9 video, HEIC, a 3D model) is answered with [NeedsClientRender] so a client
 // can render one and upload it.
 //
 // A track's thumbnail is its cover art (#2982): the picture embedded in it,
@@ -65,14 +65,15 @@ const (
 	ClientRenderUnreadable = "unreadable"
 )
 
-// ErrInvalidThumbnail reports an uploaded thumbnail that is not a JPEG, is
+// ErrInvalidThumbnail reports an uploaded thumbnail that is not a JPEG or PNG, is
 // larger than [MaxClientThumbnailBytes], or is bigger on a side than a
 // thumbnail needs to be.
 var ErrInvalidThumbnail = errors.New("invalid thumbnail")
 
-// ErrNotMedia reports a thumbnail a client sent for a file that is neither a
-// photo nor a video. A track's cover comes from the track, never a client.
-var ErrNotMedia = errors.New("only photos and videos have thumbnails")
+// ErrNotMedia reports a thumbnail a client sent for a file that is not a
+// photo, a video or a 3D model. A track's cover comes from the track, never a
+// client.
+var ErrNotMedia = errors.New("only photos, videos and 3D models have thumbnails")
 
 // ErrNoCover reports a track with no cover art: no library row, a row that
 // names no cover, or a picture that no longer matches the row.
@@ -240,10 +241,11 @@ type StoreClientThumbnailParams struct {
 	// Source is the file the thumbnail is of, already open, streamed for its
 	// content hash. Nil stores only the perceptual hash.
 	Source io.ReadSeeker
-	// Reader is the JPEG, read to EOF or one byte past the size limit.
+	// Reader is the JPEG or PNG, read to EOF or one byte past the size limit.
 	Reader io.Reader
-	// IsVideo skips the perceptual hash, which only photos are compared by.
-	IsVideo bool
+	// SkipHash skips the perceptual hash, which only photos are compared by:
+	// set for a video or a 3D model.
+	SkipHash bool
 }
 
 // StoreClientThumbnailResult reports the stored thumbnail.

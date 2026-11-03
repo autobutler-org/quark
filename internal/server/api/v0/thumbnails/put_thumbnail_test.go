@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"image"
 	"image/jpeg"
+	"image/png"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -133,11 +134,11 @@ func clientRenderBody(t *testing.T, w *httptest.ResponseRecorder) notFoundBody {
 	return body
 }
 
-// TestThumbnail_ClientRenderMarkerThenPut is the loop a client runs: a video
-// or HEIC the device cannot render answers 404 with clientRender, the client
-// PUTs a thumbnail, and every size is then served from it.
+// TestThumbnail_ClientRenderMarkerThenPut is the loop a client runs: a video,
+// HEIC or 3D model the device cannot render answers 404 with clientRender,
+// the client PUTs a thumbnail, and every size is then served from it.
 func TestThumbnail_ClientRenderMarkerThenPut(t *testing.T) {
-	for _, rel := range []string{"clips/clip.mov", "photos/photo.heic"} {
+	for _, rel := range []string{"clips/clip.mov", "photos/photo.heic", "models/part.stl"} {
 		h := newThumbnailHarness(t)
 		writeUndecodable(t, h.filesDir, rel)
 
@@ -154,6 +155,22 @@ func TestThumbnail_ClientRenderMarkerThenPut(t *testing.T) {
 		expectJPEG(t, h.do("/api/v0/thumbnails/"+rel+"?size=md"), 240, 240)
 		expectJPEG(t, h.do("/api/v0/thumbnails/"+rel), 400, 400)
 	}
+}
+
+// TestThumbnail_ModelTakesPNG: the PNG a client renders a 3D model to
+// (#3227) is stored and served as JPEG tiers.
+func TestThumbnail_ModelTakesPNG(t *testing.T) {
+	h := newThumbnailHarness(t)
+	writeUndecodable(t, h.filesDir, "models/part.ply")
+	var thumb bytes.Buffer
+	if err := png.Encode(&thumb, image.NewRGBA(image.Rect(0, 0, 400, 400))); err != nil {
+		t.Fatal(err)
+	}
+	w := h.put(t, "/api/v0/thumbnails/models/part.ply", map[string][]byte{"thumbnail": thumb.Bytes()})
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("PUT = %d: %s", w.Code, w.Body.String())
+	}
+	expectJPEG(t, h.do("/api/v0/thumbnails/models/part.ply?size=md"), 240, 240)
 }
 
 // TestThumbnail_MissingFileHasNoMarker: a file that is not there is a plain

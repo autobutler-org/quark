@@ -2,15 +2,18 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/utils/client_thumbnail_config.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark_widgets/quark_widgets.dart' show CalendarLabels;
 
 /// Whether the server can serve a thumbnail for this node. A video's is a
-/// keyframe the Quark decodes or one a client rendered, served as JPEG, so it
-/// uses the same thumbnail URL as images.
+/// keyframe the Quark decodes or one a client rendered, and a 3D model's is
+/// one a client rendered (#3227), both served as JPEG, so they use the same
+/// thumbnail URL as images.
 bool hasServerThumbnail(FileNode node) =>
     !node.isDir &&
     (fileKindForName(node.name) == FileKind.video ||
+        isRenderedModel(node.name) ||
         thumbnailImageExtensions.contains(fileExtension(node.name)));
 
 bool isArchiveNode(FileNode node) =>
