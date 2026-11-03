@@ -26,6 +26,8 @@ class StorageDevicesBody extends StatelessWidget {
     this.onSetRole,
     this.onBackup,
     this.onVerify,
+    this.onEject,
+    this.ejecting = const {},
     this.header,
     this.protectionBadge,
     super.key,
@@ -52,6 +54,10 @@ class StorageDevicesBody extends StatelessWidget {
   final ValueChanged<StorageDevice>? onSetRole;
   final ValueChanged<StorageDevice>? onBackup;
   final ValueChanged<StorageDevice>? onVerify;
+  final ValueChanged<StorageDevice>? onEject;
+
+  /// Serials whose eject is in progress.
+  final Set<String> ejecting;
 
   /// Drawn above the drive list. Null leaves the list as it was.
   final Widget? header;
@@ -101,6 +107,7 @@ class StorageDevicesBody extends StatelessWidget {
     final onSetRole = this.onSetRole;
     final onBackup = this.onBackup;
     final onVerify = this.onVerify;
+    final onEject = this.onEject;
     final protectionBadge = this.protectionBadge;
     var badgePlaced = false;
     for (final device in devices) {
@@ -124,6 +131,8 @@ class StorageDevicesBody extends StatelessWidget {
           onVerify: onVerify != null && isBackupDrive
               ? () => onVerify(device)
               : null,
+          onEject: onEject != null && isUsb ? () => onEject(device) : null,
+          isEjecting: ejecting.contains(device.serial),
           isBackupRunning: backupStatus?.isRunning == true,
           protectionBadge: placeBadge ? protectionBadge : null,
         ),

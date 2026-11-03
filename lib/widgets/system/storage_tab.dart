@@ -13,14 +13,15 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/widgets/storage_devices/credentials_dialog.dart';
+import 'package:quark/widgets/storage_devices/eject_drive_dialog.dart';
 import 'package:quark/widgets/storage_devices/role_dialog.dart';
 import 'package:quark/widgets/storage_devices/snapshot_backup_dialog.dart';
 import 'package:quark/widgets/storage_devices/storage_devices_body.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The System page's Storage tab: how protected the files are, the drives the
-/// Quark can see, their status and role, and the actions to mount, rename or
-/// back them up.
+/// Quark can see, their status and role, and the actions to mount, eject,
+/// rename or back them up.
 class StorageTab extends StatefulWidget {
   const StorageTab({this.onRefreshingChanged, super.key});
 
@@ -40,6 +41,7 @@ class _StorageTabState extends State<StorageTab>
   /// "your Quark is unreachable" or "the request failed" (#1637).
   Object? _error;
   final Set<String> _mounting = {};
+  final Set<String> _ejecting = {};
   String? _activeBackupJobId;
   BackupJobStatus? _backupStatus;
   Timer? _pollTimer;
@@ -104,6 +106,31 @@ class _StorageTabState extends State<StorageTab>
       showMessage(context, Errors.message(e, 'mount the drive'));
     } finally {
       if (mounted) setState(() => _mounting.remove(device.serial));
+    }
+  }
+
+  /// Asks first, then unmounts [device] so it can be unplugged. The Quark
+  /// refuses while the drive's files are in use, and that error is shown.
+  Future<void> _ejectDevice(StorageDevice device) async {
+    final confirmed = await QuarkWidget.showDialog<bool>(
+      context,
+      builder: (ctx) => EjectDriveDialog(
+        driveName: device.name,
+        isDefaultStorage: device.role == 'default-storage',
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _ejecting.add(device.serial));
+    try {
+      await StorageService.unmountDevice(device.serial);
+      if (!mounted) return;
+      showMessage(context, '${device.name} is safe to unplug');
+      await refresh();
+    } catch (e) {
+      if (!mounted) return;
+      showMessage(context, Errors.message(e, 'eject the drive'));
+    } finally {
+      if (mounted) setState(() => _ejecting.remove(device.serial));
     }
   }
 
@@ -386,6 +413,8 @@ class _StorageTabState extends State<StorageTab>
           onSetRole: isAdmin ? _showRoleDialog : null,
           onBackup: isAdmin ? _startBackup : null,
           onVerify: isAdmin ? _verifyBackup : null,
+          onEject: isAdmin ? _ejectDevice : null,
+          ejecting: _ejecting,
           header: showCard
               ? DataProtectionStatusCard(
                   level: level,

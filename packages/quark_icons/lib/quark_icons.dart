@@ -470,6 +470,7 @@ class QuarkIcons {
   static const IconData link_outlined = Icons.link_outlined;
   static const IconData link_rounded = Icons.link_rounded;
   static const IconData link_off = Icons.link_off;
+  static const IconData eject_outlined = Icons.eject_outlined;
   static const IconData open_in_new = Icons.open_in_new;
   static const IconData download_outlined = Icons.download_outlined;
   static const IconData share_outlined = Icons.share_outlined;
