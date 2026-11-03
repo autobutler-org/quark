@@ -32,7 +32,7 @@ func TestSearchFilesKeepsOnlyReadableMatches(t *testing.T) {
 	}
 	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial})
 	registry := newDeviceRegistry(t, svc)
-	index := indexutil.NewFileIndex()
+	index := indexutil.NewFileIndex(dbtest.NewDB(t))
 	index.Build(context.Background(), registry)
 
 	ctx := context.Background()

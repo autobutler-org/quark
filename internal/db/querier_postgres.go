@@ -258,6 +258,18 @@ func (a *postgresQueries) DeleteGroupPathAccess(ctx context.Context, arg DeleteG
 	return a.q.DeleteGroupPathAccess(ctx, pgdb.DeleteGroupPathAccessParams(arg))
 }
 
+func (a *postgresQueries) DeleteIndexedDescendants(ctx context.Context, arg DeleteIndexedDescendantsParams) error {
+	return a.q.DeleteIndexedDescendants(ctx, pgdb.DeleteIndexedDescendantsParams(arg))
+}
+
+func (a *postgresQueries) DeleteIndexedPath(ctx context.Context, arg DeleteIndexedPathParams) (int64, error) {
+	return a.q.DeleteIndexedPath(ctx, pgdb.DeleteIndexedPathParams(arg))
+}
+
+func (a *postgresQueries) DeleteIndexedSerial(ctx context.Context, serial string) error {
+	return a.q.DeleteIndexedSerial(ctx, serial)
+}
+
 func (a *postgresQueries) DeleteMusicTrack(ctx context.Context, arg DeleteMusicTrackParams) error {
 	return a.q.DeleteMusicTrack(ctx, pgdb.DeleteMusicTrackParams(arg))
 }
@@ -304,6 +316,10 @@ func (a *postgresQueries) DeletePhotoRotation(ctx context.Context, arg DeletePho
 
 func (a *postgresQueries) DeleteSession(ctx context.Context, token string) error {
 	return a.q.DeleteSession(ctx, token)
+}
+
+func (a *postgresQueries) DeleteStaleIndexedSerial(ctx context.Context, arg DeleteStaleIndexedSerialParams) error {
+	return a.q.DeleteStaleIndexedSerial(ctx, pgdb.DeleteStaleIndexedSerialParams(arg))
 }
 
 func (a *postgresQueries) DeleteUser(ctx context.Context, id int64) error {
@@ -975,6 +991,26 @@ func (a *postgresQueries) ListGroupsMissingFolder(ctx context.Context) ([]ListGr
 	return items, nil
 }
 
+func (a *postgresQueries) ListIndexedChildFolders(ctx context.Context, arg ListIndexedChildFoldersParams) ([]string, error) {
+	return a.q.ListIndexedChildFolders(ctx, pgdb.ListIndexedChildFoldersParams(arg))
+}
+
+func (a *postgresQueries) ListIndexedFilesPage(ctx context.Context, arg ListIndexedFilesPageParams) ([]ListIndexedFilesPageRow, error) {
+	rows, err := a.q.ListIndexedFilesPage(ctx, pgdb.ListIndexedFilesPageParams(arg))
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListIndexedFilesPageRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListIndexedFilesPageRow(row)
+	}
+	return items, nil
+}
+
+func (a *postgresQueries) ListIndexedSerials(ctx context.Context) ([]string, error) {
+	return a.q.ListIndexedSerials(ctx)
+}
+
 func (a *postgresQueries) ListJobs(ctx context.Context, kinds []string) ([]Job, error) {
 	rows, err := a.q.ListJobs(ctx, kinds)
 	if err != nil || rows == nil {
@@ -1167,6 +1203,10 @@ func (a *postgresQueries) ListSettings(ctx context.Context) ([]Setting, error) {
 	return items, nil
 }
 
+func (a *postgresQueries) ListStaleIndexedChildren(ctx context.Context, arg ListStaleIndexedChildrenParams) ([]string, error) {
+	return a.q.ListStaleIndexedChildren(ctx, pgdb.ListStaleIndexedChildrenParams(arg))
+}
+
 func (a *postgresQueries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]Job, error) {
 	rows, err := a.q.ListUserJobs(ctx, pgdb.ListUserJobsParams(arg))
 	if err != nil || rows == nil {
@@ -1248,6 +1288,10 @@ func (a *postgresQueries) MoveFavorites(ctx context.Context, arg MoveFavoritesPa
 	return a.q.MoveFavorites(ctx, pgdb.MoveFavoritesParams(arg))
 }
 
+func (a *postgresQueries) MoveIndexedDescendants(ctx context.Context, arg MoveIndexedDescendantsParams) (int64, error) {
+	return a.q.MoveIndexedDescendants(ctx, pgdb.MoveIndexedDescendantsParams(arg))
+}
+
 func (a *postgresQueries) MoveMusicTracks(ctx context.Context, arg MoveMusicTracksParams) error {
 	return a.q.MoveMusicTracks(ctx, pgdb.MoveMusicTracksParams(arg))
 }
@@ -1302,6 +1346,10 @@ func (a *postgresQueries) RenameAlbum(ctx context.Context, arg RenameAlbumParams
 func (a *postgresQueries) RenameGroup(ctx context.Context, arg RenameGroupParams) (Group, error) {
 	row, err := a.q.RenameGroup(ctx, pgdb.RenameGroupParams(arg))
 	return Group(row), err
+}
+
+func (a *postgresQueries) RenameIndexedEntry(ctx context.Context, arg RenameIndexedEntryParams) (int64, error) {
+	return a.q.RenameIndexedEntry(ctx, pgdb.RenameIndexedEntryParams(arg))
 }
 
 func (a *postgresQueries) RenewSession(ctx context.Context, arg RenewSessionParams) error {
@@ -1390,6 +1438,16 @@ func (a *postgresQueries) SignChatChannelEvent(ctx context.Context, arg SignChat
 	return a.q.SignChatChannelEvent(ctx, pgdb.SignChatChannelEventParams(arg))
 }
 
+func (a *postgresQueries) SumIndexedFolder(ctx context.Context, arg SumIndexedFolderParams) (SumIndexedFolderRow, error) {
+	row, err := a.q.SumIndexedFolder(ctx, pgdb.SumIndexedFolderParams(arg))
+	return SumIndexedFolderRow(row), err
+}
+
+func (a *postgresQueries) SumIndexedSerial(ctx context.Context, serial string) (SumIndexedSerialRow, error) {
+	row, err := a.q.SumIndexedSerial(ctx, serial)
+	return SumIndexedSerialRow(row), err
+}
+
 func (a *postgresQueries) TombstoneChatMessage(ctx context.Context, id int64) (ChatMessage, error) {
 	row, err := a.q.TombstoneChatMessage(ctx, id)
 	return ChatMessage(row), err
@@ -1450,6 +1508,10 @@ func (a *postgresQueries) UpsertDeviceRole(ctx context.Context, arg UpsertDevice
 
 func (a *postgresQueries) UpsertFileContent(ctx context.Context, arg UpsertFileContentParams) error {
 	return a.q.UpsertFileContent(ctx, pgdb.UpsertFileContentParams(arg))
+}
+
+func (a *postgresQueries) UpsertIndexedEntry(ctx context.Context, arg UpsertIndexedEntryParams) error {
+	return a.q.UpsertIndexedEntry(ctx, pgdb.UpsertIndexedEntryParams(arg))
 }
 
 func (a *postgresQueries) UpsertMusicTrack(ctx context.Context, arg UpsertMusicTrackParams) (MusicTrack, error) {

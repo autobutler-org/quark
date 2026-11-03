@@ -7,12 +7,11 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -211,19 +210,21 @@ func (s *equivState) compare(after string) {
 	}
 }
 
-// The compact index (#2760) answers every search exactly as the map-per-folder
-// index it replaced did, through randomized trees and randomized event
+// The table (#2956) answers every search exactly as the map-per-folder index
+// the in-memory one replaced did, through randomized trees and randomized event
 // sequences: uploads, adds, new folders, deletes and moves of files and
 // folders, moves into the trash, stale events, unpublished changes, resyncs,
 // and two devices with their own serials.
 func TestFileIndexMatchesReference(t *testing.T) {
 	for seed := range uint64(12) {
 		t.Run(fmt.Sprint("seed", seed), func(t *testing.T) {
+			// Each seed has its own disk and database.
+			t.Parallel()
 			s := &equivState{
 				t:      t,
 				rng:    rand.New(rand.NewPCG(seed, 2760)),
 				mounts: []mount{newMount(t, ""), newMount(t, "USB1")},
-				got:    NewFileIndex(),
+				got:    newIndex(t),
 				want:   newRefIndex(),
 			}
 			s.devices = newDevices(t, s.mounts...)
@@ -256,63 +257,12 @@ func syntheticRel(i int) string {
 	}
 }
 
-// heapAfterGC is the live heap after a full collection.
-func heapAfterGC() uint64 {
-	runtime.GC()
-	runtime.GC()
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	return m.HeapAlloc
-}
-
-// benchHeap reports the bytes of heap one indexed file costs, and how long a
-// miss and a hit take to search, for a generated library of n files.
-func benchHeap(b *testing.B, n int, newIndex func() nameIndex) {
-	rels := make([]string, n)
-	for i := range rels {
-		rels[i] = syntheticRel(i)
-	}
-	b.ResetTimer()
-	var idx nameIndex
-	for range b.N {
-		before := heapAfterGC()
-		start := time.Now()
-		idx = newIndex()
-		for _, rel := range rels {
-			idx.HandleAdd("", rel, 0, 0)
-		}
-		build := time.Since(start)
-		after := heapAfterGC()
-		b.ReportMetric(float64(int64(after)-int64(before))/float64(n), "heapB/file")
-		b.ReportMetric(float64(build.Nanoseconds())/float64(n), "insertNs/file")
-	}
-	b.StopTimer()
-	for _, q := range []string{"zzz-miss", "img_2003"} {
-		start := time.Now()
-		hits := 0
-		idx.SearchEach(q, nil, func(IndexedFile) bool { hits++; return true })
-		b.ReportMetric(float64(time.Since(start).Microseconds())/1000, "searchMs/"+strings.ReplaceAll(q, "_", ""))
-	}
-	runtime.KeepAlive(idx)
-}
-
-// BenchmarkFileIndexHeap measures the index's heap per file at 100k and 1M
-// files, against the reference index. The numbers are reported, not
-// asserted: run with -bench FileIndexHeap -benchtime 1x.
-func BenchmarkFileIndexHeap(b *testing.B) {
-	for _, n := range []int{100_000, 1_000_000} {
-		b.Run(fmt.Sprintf("compact/%d", n), func(b *testing.B) {
-			benchHeap(b, n, func() nameIndex { return NewFileIndex() })
-		})
-		b.Run(fmt.Sprintf("reference/%d", n), func(b *testing.B) {
-			benchHeap(b, n, func() nameIndex { return newRefIndex() })
-		})
-	}
-}
-
 // BenchmarkFileIndexBuild measures Build, the startup and resync cost, over
-// a generated tree of 100k empty files on disk. Point TMPDIR at a disk, not
-// tmpfs, to measure a real walk.
+// a generated tree of 100k empty files on disk, against the in-memory
+// reference, then how long a miss, a hit and a two-letter query take to
+// search the table: a miss and a hit go through the trigram index, the short
+// query reads the rows in order. Point TMPDIR at a disk, not tmpfs, to
+// measure a real walk.
 func BenchmarkFileIndexBuild(b *testing.B) {
 	internal := newMount(b, "")
 	root := internal.filesDir
@@ -330,14 +280,23 @@ func BenchmarkFileIndexBuild(b *testing.B) {
 		}
 	}
 	registry := newDevices(b, internal).registry
+	table := NewFileIndex(dbtest.NewDB(b))
 	for _, impl := range []struct {
 		name string
 		idx  func() nameIndex
-	}{{"compact", func() nameIndex { return NewFileIndex() }}, {"reference", func() nameIndex { return newRefIndex() }}} {
+	}{{"table", func() nameIndex { return table }}, {"reference", func() nameIndex { return newRefIndex() }}} {
 		b.Run(impl.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for range b.N {
 				impl.idx().Build(context.Background(), registry)
+			}
+		})
+	}
+	for _, q := range []string{"zzz-miss", "img_2003", "xq"} {
+		b.Run("search/"+q, func(b *testing.B) {
+			for range b.N {
+				hits := 0
+				table.SearchEach(q, nil, func(IndexedFile) bool { hits++; return hits < 500 })
 			}
 		})
 	}

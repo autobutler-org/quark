@@ -494,7 +494,7 @@ The password travels in the request body, never the URL, and attempts share the 
 - The right one erases what was chosen and returns the Quark to first-boot setup.
 - Every instance of the Quark serving this install then restarts within a few seconds, the one that handled the
   request included, so requests can fail briefly after the reset goes through. Nothing the old install left in
-  memory (caches, the file index) survives the restart.
+  memory (caches) survives the restart, and the file index is walked again from the disk.
 
 **Notes:**
 

@@ -1,7 +1,8 @@
 package indexutil
 
 // The index as it stood before #2760: a map per folder. The equivalence
-// tests in file_index_equiv_test.go hold the compact index to its results.
+// tests in file_index_equiv_test.go hold the database-backed index (#2956) to
+// its results.
 
 import (
 	"context"

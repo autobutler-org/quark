@@ -207,6 +207,18 @@ type FileContent struct {
 	SearchVector interface{}
 }
 
+type FileIndex struct {
+	ID         int64
+	Serial     string
+	Dir        string
+	Name       string
+	SearchName string
+	IsDir      bool
+	Size       int64
+	ModTime    int64
+	IndexedAt  int64
+}
+
 type Group struct {
 	ID      int64
 	Name    string

@@ -88,6 +88,10 @@ and re-runs the migrations in one transaction and keeps the same tables SQLite's
   (`chatutil.keepingAnOwner`) take a row lock as their transaction's first statement, a no-op `UPDATE`, so the
   second request waits for the first and counts what it left (#3171). A job lane's limit (`ClaimJob`) is still
   open, and is tracked with the rest of the multi-instance work in #2964.
+- **Filename search reads every name.** SQLite answers a query of three or more characters from
+  `file_index_fts`, a trigram index; PostgreSQL has no such index yet and reads `file_index` in order until it
+  has a page, so a rare name costs a scan of the device's rows. Both return the same files in the same order
+  (`exerciseFileIndex` in `internal/db/pgdb/adapter_test.go`). `pg_trgm` is the index to add.
 - **Content search ranks by another formula.** Both engines find the same files for the same words
   (`TestContentSearchMatchesOnBothEngines` holds them to it): plain text is one phrase, stemmed the English way
   on both (`porter` on SQLite, the `english` configuration on PostgreSQL), and quotes, `OR`, `AND` and `NOT`
@@ -120,6 +124,7 @@ erDiagram
     photo_albums ||--o{ photo_album_items : contains
     file_content ||--|| file_content_fts : "FTS5 external content"
     music_tracks ||--|| music_tracks_fts : "FTS5 external content, SQLite only"
+    file_index ||--|| file_index_fts : "FTS5 trigram, SQLite only"
 
     users { int id  string username  bool is_admin  string status }
     sessions { string token  int user_id  datetime expires_at  datetime last_used_at }
@@ -133,6 +138,7 @@ erDiagram
     photo_hashes { string device_serial  string rel_path  string dhash  string content_hash }
     file_content { string serial  string rel_path  string extracted }
     music_tracks { string serial  string rel_path  string title  string album_key }
+    file_index { string serial  string dir  string name  bool is_dir  int size  int mod_time }
     jobs { int id  string kind  string status  string lane  real progress  int attempts }
     connected_devices { string ip_address  string user_agent  datetime last_seen_at }
     device_names { string device_serial  string display_name }
@@ -168,10 +174,16 @@ join. `path_access.level` is `read`, `write` or `owner`, and each row names exac
 | `038_drop_household_vault` | drops `005_vault`'s tables                                          |
 | `041_content_search`   | PostgreSQL only: `file_content.search_vector` (a generated `tsvector`) and its GIN index; nothing on SQLite |
 | `042_feeds`            | `feeds`, `feed_entries`                                                     |
+| `046_file_index`       | `file_index`, `file_index_fts` (FTS5 trigram, SQLite only); PostgreSQL's `instr` |
 
 `music_tracks` (#2982) is a cache built from audio files, not a record: every column is derived, and a rescan
 rebuilds it. `music_tracks_fts` is its FTS5 mirror and exists only on SQLite, like `file_content_fts`, whose
 PostgreSQL counterpart is the `search_vector` column of `041_content_search`.
+
+`file_index` (#2956) is the filename index, also a cache: one row per file and folder on every device, addressed
+as `(serial, dir, name)` rather than `rel_path` so that a folder's subtree is a range of `dir`. The server walks
+every device at startup and drops the rows the walk did not write, then keeps it current from file events.
+`file_index_fts` is a trigram index over the lowered names, on SQLite only.
 
 `feeds` (#3714) is one account's feed subscriptions. Each row belongs to one account and nothing is shared, so
 a later unread count has one owner. `url` is the feed address and may carry a private token: it is checked for

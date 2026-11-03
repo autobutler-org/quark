@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -96,7 +97,7 @@ func TestVFSListingsCarryTheDevice(t *testing.T) {
 		t.Fatalf("ListByType failed: %v", err)
 	}
 	// Indexed search (#1896) only knew the serial.
-	index := indexutil.NewFileIndex()
+	index := indexutil.NewFileIndex(dbtest.NewDB(t))
 	index.Build(context.Background(), registry)
 	indexed, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Registry: registry, Query: "photo", Access: system.Access})
 	if err != nil {
@@ -387,7 +388,7 @@ func TestSearchResultsCarrySizeAndPath(t *testing.T) {
 	}
 	want := listed.Files[0]
 
-	index := indexutil.NewFileIndex()
+	index := indexutil.NewFileIndex(dbtest.NewDB(t))
 	index.Build(context.Background(), registry)
 	indexed, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Registry: registry, Access: system.Access, Query: "notes"})
 	if err != nil {
@@ -433,7 +434,7 @@ func TestListingsCarryModifiedAt(t *testing.T) {
 
 	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: "USB-1565"})
 	registry := newDeviceRegistry(t, svc)
-	index := indexutil.NewFileIndex()
+	index := indexutil.NewFileIndex(dbtest.NewDB(t))
 	index.Build(context.Background(), registry)
 	ctx := context.Background()
 	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
@@ -628,7 +629,7 @@ func TestRecentAndByTypeFromTheIndex(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	index := indexutil.NewFileIndex()
+	index := indexutil.NewFileIndex(dbtest.NewDB(t))
 	index.Build(context.Background(), registry)
 	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
 	if err != nil {
@@ -692,7 +693,7 @@ func TestListFilesFolderSizesFromTheIndex(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	index := indexutil.NewFileIndex()
+	index := indexutil.NewFileIndex(dbtest.NewDB(t))
 	index.Build(context.Background(), registry)
 	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
 	if err != nil {

@@ -240,7 +240,7 @@ func TestListPhotos_FromTheIndex(t *testing.T) {
 		},
 		map[string]string{"a.jpg": "usb photo", "x/b.jpg": "b"},
 	)
-	index := indexutil.NewFileIndex()
+	index := indexutil.NewFileIndex(dbtest.NewDB(t))
 	index.Build(context.Background(), registry)
 	user := userAccess(t, dbtest.NewDB(t), "shared")
 
@@ -282,7 +282,7 @@ func TestListPhotos_FromTheIndex(t *testing.T) {
 // otherwise, while a walk no longer finds it.
 func TestListPhotos_IndexDoesNotWalk(t *testing.T) {
 	registry := twoDevices(t, map[string]string{"a.jpg": "x", "b.jpg": "x"}, nil)
-	index := indexutil.NewFileIndex()
+	index := indexutil.NewFileIndex(dbtest.NewDB(t))
 	index.Build(context.Background(), registry)
 	fsys, _ := registry.Get(vfs.FilesNamespace(""))
 	if err := fsys.Delete(context.Background(), "b.jpg", vfs.DeleteOptions{}); err != nil {

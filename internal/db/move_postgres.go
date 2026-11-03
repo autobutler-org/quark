@@ -47,7 +47,9 @@ type MoveToPostgresResult struct {
 // what the index looked like on SQLite. Its search_vector on PostgreSQL is a
 // generated column, which copyTable never writes, and SQLite's FTS5 tables
 // over it and over music_tracks are not in the PostgreSQL schema at all.
-var rebuiltTables = []string{"file_content"}
+// file_index is the filename index, which the server's startup reconcile
+// (indexutil.FileIndex.Build) walks again from every device.
+var rebuiltTables = []string{"file_content", "file_index"}
 
 // moveTimeLayouts are the forms a SQLite DATETIME may hold as text: its own
 // datetime('now') form, which _time_format=datetime writes too, and the forms

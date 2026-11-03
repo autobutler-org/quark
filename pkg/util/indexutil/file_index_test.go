@@ -24,7 +24,7 @@ func TestBuildPopulatesIndex(t *testing.T) {
 	makeFile(t, makeDir(t, storageutil.TrashRoot(internal.filesDir), "x"), "trashed.txt")
 	makeFile(t, makeDir(t, internal.filesDir, storageutil.VersionsDirName), "v1.txt")
 
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.Build(context.Background(), newDevices(t, internal).registry)
 
 	if got := relPaths(idx.Search("", nil)); !slices.Equal(got, []string{"docs/report.pdf", "notes.txt"}) {
@@ -47,7 +47,7 @@ func TestBuildSkipsUnreadableSubtree(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
 
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.Build(context.Background(), newDevices(t, internal).registry)
 
 	if got := relPaths(idx.Search("", nil)); !slices.Equal(got, []string{"a.txt", "z/b.txt"}) {
@@ -68,7 +68,7 @@ func TestBuildFromMemVFS(t *testing.T) {
 	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, mem); err != nil {
 		t.Fatal(err)
 	}
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.Build(ctx, registry)
 	if got := relPaths(idx.Search("", nil)); !slices.Equal(got, []string{"a/c.txt", "b.txt"}) {
 		t.Errorf("index holds %v, want [a/c.txt b.txt]", got)
@@ -81,7 +81,7 @@ func TestSearchByQuery(t *testing.T) {
 	makeFile(t, internal.filesDir, "world.md")
 	makeFile(t, internal.filesDir, "hello_world.go")
 
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.Build(context.Background(), newDevices(t, internal).registry)
 
 	if results := idx.Search("hello", nil); len(results) != 2 {
@@ -100,7 +100,7 @@ func TestSearchBySerial(t *testing.T) {
 	makeFile(t, internal.filesDir, "file_a.txt")
 	makeFile(t, usb.filesDir, "file_b.txt")
 
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.Build(context.Background(), newDevices(t, internal, usb).registry)
 
 	all := idx.Search("", nil)
@@ -121,7 +121,7 @@ func TestSearchBySerial(t *testing.T) {
 }
 
 func TestHandleAdd(t *testing.T) {
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.HandleAdd("", "newfile.txt", 0, 0)
 
 	results := idx.Search("newfile", nil)
@@ -134,7 +134,7 @@ func TestHandleAdd(t *testing.T) {
 }
 
 func TestHandleDelete(t *testing.T) {
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.HandleAdd("", "todelete.txt", 0, 0)
 	idx.HandleDelete("", "todelete.txt")
 
@@ -144,7 +144,7 @@ func TestHandleDelete(t *testing.T) {
 }
 
 func TestHandleMove(t *testing.T) {
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.HandleAdd("ABC", "old_name.txt", 0, 0)
 
 	idx.HandleMove(context.Background(), vfs.NewMemVFS("files:ABC"), "ABC", "old_name.txt", "new_name.txt")
@@ -159,7 +159,7 @@ func TestHandleMove(t *testing.T) {
 }
 
 func TestConcurrentAccess(t *testing.T) {
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	done := make(chan struct{})
 
 	go func() {
@@ -183,7 +183,7 @@ func buildTree(t *testing.T, rels ...string) *FileIndex {
 		full := filepath.Join(internal.filesDir, filepath.FromSlash(rel))
 		makeFile(t, makeDir(t, filepath.Dir(full), ""), filepath.Base(full))
 	}
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.Build(context.Background(), newDevices(t, internal).registry)
 	return idx
 }
@@ -216,7 +216,7 @@ func TestHandleMoveFolderRewritesDescendants(t *testing.T) {
 // Search visits each folder's files in name order, then its folders in name
 // order, and devices in serial order, the internal drive first.
 func TestFileIndexSearchOrder(t *testing.T) {
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	for _, rel := range []string{"b/z.txt", "c.txt", "a/y.txt", "B.txt", "a/x.txt"} {
 		idx.HandleAdd("S", rel, 0, 0)
 		idx.HandleAdd("", rel, 0, 0)
@@ -244,7 +244,7 @@ func TestBuildAndWatchFollowsFolderEvents(t *testing.T) {
 	makeFile(t, makeDir(t, root, "a/c"), "d.txt")
 	makeFile(t, filepath.Join(root, "a"), "b.txt")
 	bus := eventbus.New()
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.BuildAndWatch(BuildAndWatchParams{Bus: bus, Registry: newDevices(t, internal).registry})
 
 	expect := func(step string, want ...string) {
@@ -308,7 +308,7 @@ func TestBuildAndWatchFollowsFolderEvents(t *testing.T) {
 func TestBuildAndWatchRoutesEventsBySerial(t *testing.T) {
 	internal, usb := newMount(t, ""), newMount(t, "USB1")
 	bus := eventbus.New()
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.BuildAndWatch(BuildAndWatchParams{Bus: bus, Registry: newDevices(t, internal, usb).registry})
 
 	makeFile(t, usb.filesDir, "on-usb.txt")
@@ -330,7 +330,7 @@ func TestBuildAndWatchFollowsDevices(t *testing.T) {
 	makeFile(t, internal.filesDir, "inside.txt")
 	makeFile(t, makeDir(t, usb.filesDir, "trip"), "photo.jpg")
 	devs := newDevices(t, internal)
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.BuildAndWatch(BuildAndWatchParams{Bus: eventbus.New(), Registry: devs.registry, Storage: devs.svc})
 
 	serials := func() []string {
@@ -388,7 +388,7 @@ func TestBuildCarriesSizeAndModTime(t *testing.T) {
 	mtime := writeSized(t, internal.filesDir, "a/b.txt", 10)
 	writeSized(t, internal.filesDir, "a/c/d.txt", 20)
 	writeSized(t, internal.filesDir, "e.txt", 5)
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.Build(context.Background(), newDevices(t, internal).registry)
 
 	for _, f := range idx.Search("b.txt", nil) {
@@ -416,7 +416,7 @@ func TestFolderSizeFollowsEvents(t *testing.T) {
 	writeSized(t, root, "a/c/d.txt", 20)
 	writeSized(t, root, "a/c/e.txt", 1)
 	bus := eventbus.New()
-	idx := NewFileIndex()
+	idx := newIndex(t)
 	idx.BuildAndWatch(BuildAndWatchParams{Bus: bus, Registry: newDevices(t, internal).registry})
 	wantFolderSize(t, idx, "", 31)
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -146,4 +147,10 @@ func waitFor(t *testing.T, cond func() bool, what string) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+}
+
+// newIndex is an index over a database of the test's own.
+func newIndex(t testing.TB) *FileIndex {
+	t.Helper()
+	return NewFileIndex(dbtest.NewDB(t))
 }

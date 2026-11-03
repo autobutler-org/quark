@@ -32,7 +32,7 @@ change). Past that, the client's refresh-on-every-event turned each shared uploa
 | Rate limiters (`pkg/util/ratelimitutil`) | map of IP → limiter behind one mutex, auth paths only, swept every 5 min | ~200 B per IP |
 | Upload sessions (`pkg/util/uploadutil`) | map behind one mutex, O(1) lookups; per-session mutex held for one chunk's `io.CopyN` | one fd each, 24 h TTL, 32 per account and 256 overall, then 429 (#2756) |
 | Health collector (`pkg/util/healthutil`) | one `Collector` for every `/health` call | one host read per 5 s, shared (#2750) |
-| Filename index (`indexutil.FileIndex`) | one folder tree per device, each folder's file names sorted end to end in one string; linear scan per search under `RLock`, stopping at 500 readable matches | ~48 B per file: the name's length plus 4 (#2760), plus 16 for the size and mtime that serve photos, recent files and folder sizes without a walk (#2759) |
+| Filename index (`indexutil.FileIndex`) | the `file_index` table, one row per file and folder; a query of three or more characters is looked up in an FTS5 trigram index, a shorter one reads the rows in order, both a page of 500 at a time, stopping at 500 readable matches (#2956) | on disk, not in the heap; each file operation is one database transaction, and a folder delete or move is one statement |
 
 Streaming is in good shape: uploads, downloads and archive entries go through `io.Copy`/`http.ServeContent`, and
 no handler on a file path buffers a whole body (the one unbounded read was inside `gen2brain/heic`, which #2382
@@ -151,7 +151,7 @@ on SD, so 25–100 commits/s. Applied to the measurements above (estimates scale
 | 2,000–3,000 | not viable | not viable on an A55 board without #2763 and #2764; plausible on an 8-core A76 board with them, memory permitting (#2760, #2761) |
 
 Memory is not the first limit. The idle server is 50–100 MB, an app costs a few hundred KiB while connected, and
-the file index costs ~48 B per file on the appliance, 48 MB per million (#2760, #2759). Decodes are refused above 64 MP
+the file index is a database table rather than heap (#2956). Decodes are refused above 64 MP
 (`photoutil.MaxDecodePixels`) from the header alone, so one costs at most 256 MiB at four bytes a pixel (512 MiB for a 16-bit
 PNG), and the decode class admits two at once on a 4-core board. `quark serve` sets a Go soft memory limit of 60% of RAM unless `GOMEMLIMIT` is
 set, so the heap collects near its live set, and `quark install` writes a systemd drop-in
@@ -173,16 +173,17 @@ cover its dcraw and exiftool children too: the kernel throttles and then kills i
   (#2753).
 - **Whole-tree walks per request**: Photos, Recent and folder sizes walk every file on the appliance, so total work
   grows as N² (#2759). By-type is cached between events since #1780, for listings up to 2,048 files.
-- **The filename index lives in the heap** and is scanned linearly (#2760). A folder delete or move now reaches
-  its contents in one step (#2754), and a search checks access before it reads anything about a match from disk
-  and stops at 500 (#2758). Each folder keeps its file names sorted, end to end in one string with a 4-byte
-  offset each, and a search lowercases only non-ASCII names and builds a path only for a match. At 1M generated
-  files (`BenchmarkFileIndexHeap`, `BenchmarkFileIndexBuild` in `pkg/util/indexutil`): 98 B a file and ~200 ms
-  a search with a map per folder, 30 B and ~60 ms after. The build walks each device through `vfs.Walk`
-  since #2647, which stats every entry for the size and time a `vfs.FileInfo` carries: 100,000 files take
-  ~0.8 s and allocate ~120 MB of short-lived garbage, against ~0.1 s and 24 MB reading names straight off the
-  disk. The live index is the same size either way. A library of millions of files still costs tens of MB and a scan per search; an on-disk index
-  is the step past that.
+- **The filename index is a table** (#2956), after living in the heap since #2760. A folder delete or move
+  reaches its contents in one statement (#2754), and a search checks access before it reads anything about a
+  match from disk and stops at 500 (#2758). A query of three or more characters is answered from an FTS5
+  trigram index over the lowered names; a shorter one, and every query on PostgreSQL until it gains `pg_trgm`,
+  reads the rows in (folder, name) order and stops at the page it needs. The startup walk is now a reconcile
+  that runs after the listener is bound, so searches answer from the table the last process left until it
+  finishes; it still stats every entry through `vfs.Walk`, and now writes a row for each, in batches of 500
+  (`BenchmarkFileIndexBuild` in `pkg/util/indexutil` measures it, and the search, against the in-memory
+  reference). Each file operation costs a database write, and a folder's size is a `SUM` over the rows under it
+  on every listing, where the tree remembered it: both are what to measure on a board, and with
+  `make test/stress/capacity`, before a library of millions of files.
 - **bcrypt on every Basic-auth request** (#2765).
 
 ## Fixed in this audit
