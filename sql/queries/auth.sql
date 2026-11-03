@@ -1,13 +1,13 @@
 -- name: CreateUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash)
-VALUES (sqlc.arg(username), sqlc.arg(password_hash), sqlc.arg(recovery_phrase_hash), sqlc.arg(auth_key_hash), sqlc.arg(auth_salt), sqlc.arg(recovery_key_hash))
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash, recovery_phrase_words)
+VALUES (sqlc.arg(username), sqlc.arg(password_hash), sqlc.arg(recovery_phrase_hash), sqlc.arg(auth_key_hash), sqlc.arg(auth_salt), sqlc.arg(recovery_key_hash), sqlc.arg(recovery_phrase_words))
 RETURNING *;
 
 -- CreatePendingUser records an account request from the sign-in page (#1908).
 -- It cannot sign in until an admin approves it.
 -- name: CreatePendingUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash, status)
-VALUES (sqlc.arg(username), sqlc.arg(password_hash), sqlc.arg(recovery_phrase_hash), sqlc.arg(auth_key_hash), sqlc.arg(auth_salt), sqlc.arg(recovery_key_hash), 'pending')
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash, recovery_phrase_words, status)
+VALUES (sqlc.arg(username), sqlc.arg(password_hash), sqlc.arg(recovery_phrase_hash), sqlc.arg(auth_key_hash), sqlc.arg(auth_salt), sqlc.arg(recovery_key_hash), sqlc.arg(recovery_phrase_words), 'pending')
 RETURNING *;
 
 -- DeletePendingUser denies an account request. Only a pending row matches, so
@@ -33,10 +33,11 @@ WHERE username = sqlc.arg(username) AND status = sqlc.arg(from_status);
 
 -- SetRecoveryKey gives an account the recovery key its client derived from a
 -- phrase it generated (#2430), and clears the phrase hash so the old phrase,
--- which the Quark saw, stops recovering the account.
+-- which the Quark saw, stops recovering the account. recovery_phrase_words is
+-- how many words that phrase had, as the client said, 0 when it did not (#3183).
 -- name: SetRecoveryKey :exec
 UPDATE users
-SET recovery_key_hash = sqlc.arg(recovery_key_hash), recovery_phrase_hash = ''
+SET recovery_key_hash = sqlc.arg(recovery_key_hash), recovery_phrase_hash = '', recovery_phrase_words = sqlc.arg(recovery_phrase_words)
 WHERE id = sqlc.arg(id);
 
 -- SetUserCredentials replaces what an account signs in with: the auth key a

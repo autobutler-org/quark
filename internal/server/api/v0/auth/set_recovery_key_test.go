@@ -128,6 +128,8 @@ func TestSetRecoveryKey_Rotation(t *testing.T) {
 		"malformed key":       map[string]string{"password": key, "recoveryKey": "not-base64"},
 		"no key":              map[string]string{"password": key},
 		"malformed chat keys": map[string]any{"password": key, "recoveryKey": recoveryKey, "chatKeys": chatutil.Keys{}},
+		"negative word count": map[string]any{"password": key, "recoveryKey": recoveryKey, "recoveryPhraseWords": -1},
+		"absurd word count":   map[string]any{"password": key, "recoveryKey": recoveryKey, "recoveryPhraseWords": 65},
 	} {
 		if w := putRecoveryKey(t, database, bob, body); w.Code != http.StatusBadRequest {
 			t.Errorf("%s = %d %s, want 400", name, w.Code, w.Body)
@@ -149,11 +151,18 @@ func TestSetRecoveryKey_Rotation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if w := putRecoveryKey(t, database, bob, map[string]any{"password": key, "recoveryKey": recoveryKey, "chatKeys": chatKeysOf(3)}); w.Code != http.StatusNoContent {
+	if w := putRecoveryKey(t, database, bob, map[string]any{"password": key, "recoveryKey": recoveryKey, "recoveryPhraseWords": authutil.RecoveryPhraseWords, "chatKeys": chatKeysOf(3)}); w.Code != http.StatusNoContent {
 		t.Fatalf("rotation = %d %s, want 204", w.Code, w.Body)
 	}
-	if row := userByName(t, queries, "bob"); row.RecoveryKeyHash == "" {
-		t.Error("rotation should store the key")
+	if row := userByName(t, queries, "bob"); row.RecoveryKeyHash == "" || row.RecoveryPhraseWords != authutil.RecoveryPhraseWords {
+		t.Errorf("rotation stored key %q with %d words, want a key with %d", row.RecoveryKeyHash, row.RecoveryPhraseWords, authutil.RecoveryPhraseWords)
+	}
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/v0/auth/status", nil)
+	statusReq.Header.Set("Authorization", "Bearer "+decodeBody(t, login)["token"].(string))
+	status := httptest.NewRecorder()
+	engine.ServeHTTP(status, statusReq)
+	if body := decodeBody(t, status); body["shortRecoveryPhrase"] != false {
+		t.Errorf("status after a 16-word rotation = %s, want shortRecoveryPhrase false", status.Body)
 	}
 	got, err := chatutil.GetKeys(chatutil.GetKeysParams{Ctx: context.Background(), Queries: queries, UserID: bob.ID})
 	if err != nil || !bytes.Equal(got.Keys.WrappedByPhrase, bytes.Repeat([]byte{3}, 104)) {
@@ -192,12 +201,18 @@ func TestRequestAccount_RecoveryKey(t *testing.T) {
 	if w := postJSON(engine, "/api/v0/auth/request-account", map[string]string{"username": "asker", "authKey": authKeyOf(1), "recoveryKey": "not-base64"}); w.Code != http.StatusBadRequest {
 		t.Errorf("malformed recovery key = %d %s, want 400", w.Code, w.Body)
 	}
-	requested := postJSON(engine, "/api/v0/auth/request-account", map[string]string{"username": "asker", "authKey": authKeyOf(1), "recoveryKey": recoveryKey})
+	if w := postJSON(engine, "/api/v0/auth/request-account", map[string]any{"username": "asker", "authKey": authKeyOf(1), "recoveryKey": recoveryKey, "recoveryPhraseWords": 65}); w.Code != http.StatusBadRequest {
+		t.Errorf("absurd word count = %d %s, want 400", w.Code, w.Body)
+	}
+	requested := postJSON(engine, "/api/v0/auth/request-account", map[string]any{"username": "asker", "authKey": authKeyOf(1), "recoveryKey": recoveryKey, "recoveryPhraseWords": 6})
 	if requested.Code != http.StatusCreated {
 		t.Fatalf("request-account = %d %s", requested.Code, requested.Body)
 	}
 	if _, has := decodeBody(t, requested)["recoveryPhrase"]; has {
 		t.Errorf("request with a recovery key returned a phrase: %s", requested.Body)
+	}
+	if row := userByName(t, database.Queries, "asker"); row.RecoveryPhraseWords != 6 {
+		t.Errorf("request-account stored %d words, want 6", row.RecoveryPhraseWords)
 	}
 	setUserStatus(t, database.Queries, "asker", authutil.StatusPending, authutil.StatusActive)
 	if w := getPath(engine, "/api/v0/auth/salt?username=asker"); decodeBody(t, w)["legacyRecovery"] != false {

@@ -66,6 +66,10 @@ type newAccountBody struct {
 	// from its recovery phrase and the same salt (#2430). Without it the
 	// account has no recovery credential until a sign-in gives it one.
 	RecoveryKey string `json:"recoveryKey,omitempty"`
+	// RecoveryPhraseWords is how many words the phrase behind RecoveryKey had
+	// (#3183). Missing reads as 0, unknown, which GET /auth/status calls
+	// short. Between 0 and 64.
+	RecoveryPhraseWords int `json:"recoveryPhraseWords,omitempty"`
 }
 
 // saltResponse is the salt a client derives its auth key with.
@@ -116,6 +120,10 @@ type recoverAccountBody struct {
 	// phrase the client just generated and the same salt. A legacy phrase
 	// recovery must carry it, so the account leaves the phrase the Quark saw.
 	NewRecoveryKey string `json:"newRecoveryKey,omitempty"`
+	// RecoveryPhraseWords is how many words the phrase behind NewRecoveryKey had
+	// (#3183). Missing reads as 0, unknown, which GET /auth/status calls
+	// short. Between 0 and 64.
+	RecoveryPhraseWords int `json:"recoveryPhraseWords,omitempty"`
 	// ChatKeys is the account's chat identity re-wrapped under the new
 	// password, stored in the same transaction as the reset (#2416). Absent
 	// leaves the stored keys as they are.
@@ -145,6 +153,10 @@ type setRecoveryKeyBody struct {
 	// RecoveryKey is the standard base64 of the 32-byte key the client derived
 	// from the phrase it generated and the account's auth salt.
 	RecoveryKey string `json:"recoveryKey" binding:"required"`
+	// RecoveryPhraseWords is how many words the phrase behind RecoveryKey had
+	// (#3183). Missing reads as 0, unknown, which GET /auth/status calls
+	// short. Between 0 and 64.
+	RecoveryPhraseWords int `json:"recoveryPhraseWords,omitempty"`
 	// ChatKeys is the account's chat identity re-wrapped under the new
 	// phrase, stored in the same transaction. Absent leaves the stored keys as
 	// they are.

@@ -58,6 +58,11 @@ type userSummary struct {
 	// Status is pending, active or disabled.
 	Status    string `json:"status"`
 	CreatedAt string `json:"createdAt"`
+	// ShortRecoveryPhrase is true when the account has a recovery key whose
+	// phrase had fewer than 16 words or an unknown count, one stored before
+	// #3183: the same rule GET /auth/status prompts the owner with. The key's
+	// hash itself is never returned.
+	ShortRecoveryPhrase bool `json:"shortRecoveryPhrase"`
 }
 
 // repairStatusResponse is whether repairing the installation will work.

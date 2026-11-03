@@ -13,7 +13,7 @@ enum UserAccountStatus {
 }
 
 /// One account as the user widgets need it: a name, whether it is an admin,
-/// and its status.
+/// its status, and whether its recovery phrase is short.
 ///
 /// The package's own view of an account, so no widget imports the app's
 /// model. Controllers map their account type into this at the edge, and
@@ -25,6 +25,7 @@ class UserAccountItem {
     required this.username,
     this.isAdmin = false,
     this.status = UserAccountStatus.active,
+    this.shortRecoveryPhrase = false,
   });
 
   /// The account's username, unique on the Quark, and what callbacks carry.
@@ -36,14 +37,20 @@ class UserAccountItem {
   /// Whether the account is waiting for approval, active, or turned off.
   final UserAccountStatus status;
 
+  /// Whether the account still holds a recovery phrase too short to keep, so
+  /// an admin can see who has yet to make a new one.
+  final bool shortRecoveryPhrase;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is UserAccountItem &&
           other.username == username &&
           other.isAdmin == isAdmin &&
-          other.status == status;
+          other.status == status &&
+          other.shortRecoveryPhrase == shortRecoveryPhrase;
 
   @override
-  int get hashCode => Object.hash(username, isAdmin, status);
+  int get hashCode =>
+      Object.hash(username, isAdmin, status, shortRecoveryPhrase);
 }

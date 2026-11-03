@@ -15,13 +15,13 @@ import (
 
 // setRecoveryKey godoc
 // @Summary Set the caller's recovery key
-// @Description Re-confirms the caller with password, which carries the auth key, exactly as DELETE /auth/account takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is written. Then gives the signed-in account the recovery key its client derived from a recovery phrase the client generated, (#2430). recoveryKey is the standard base64 of the 32-byte key derived from the phrase and the salt GET /auth/salt returned. chatKeys, when sent, replaces the account's chat identity in the same transaction, re-wrapped under the new phrase, exactly as /auth/recover stores it, and vaultKey likewise replaces the wraps of the account's vault key (storing it as the first when the account has none) and publishes vault_changed to the account's sessions; nothing changes if any part fails. The client calls this after a sign-in whose response says legacyRecovery, such as the first sign-in of an account an admin created. Shares the sign-in rate limit, and the body is at most 8 KiB.
+// @Description Re-confirms the caller with password, which carries the auth key, exactly as DELETE /auth/account takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is written. Then gives the signed-in account the recovery key its client derived from a recovery phrase the client generated, (#2430). recoveryKey is the standard base64 of the 32-byte key derived from the phrase and the salt GET /auth/salt returned. recoveryPhraseWords, optional, is how many words that phrase had, between 0 and 64, stored with the key; missing is 0, unknown, which GET /auth/status reports as shortRecoveryPhrase (#3183). chatKeys, when sent, replaces the account's chat identity in the same transaction, re-wrapped under the new phrase, exactly as /auth/recover stores it, and vaultKey likewise replaces the wraps of the account's vault key (storing it as the first when the account has none) and publishes vault_changed to the account's sessions; nothing changes if any part fails. The client calls this after a sign-in whose response says legacyRecovery, such as the first sign-in of an account an admin created, and when GET /auth/status says shortRecoveryPhrase. Shares the sign-in rate limit, and the body is at most 8 KiB.
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Param body body setRecoveryKeyBody true "The caller's auth key, the new recovery key and optionally the re-wrapped chat keys and vault key"
 // @Success 204
-// @Failure 400 {object} serverutil.Response "a malformed recoveryKey, chatKeys or vaultKey"
+// @Failure 400 {object} serverutil.Response "a malformed recoveryKey, recoveryPhraseWords, chatKeys or vaultKey"
 // @Failure 401 {object} serverutil.Response "no session, or the session's account no longer exists"
 // @Failure 403 {object} serverutil.Response "the auth key is wrong or missing"
 // @Failure 409 {object} serverutil.Response "the account has no auth key yet, so no salt to derive the key with"
@@ -65,12 +65,13 @@ func setRecoveryKey(c *gin.Context) *serverutil.Response {
 	}
 
 	_, err = authutil.SetRecoveryKey(c.Request.Context(), (*deps).Database(), authutil.SetRecoveryKeyParams{
-		UserID:      userID,
-		RecoveryKey: req.RecoveryKey,
-		AfterSet:    afterSet,
+		UserID:              userID,
+		RecoveryKey:         req.RecoveryKey,
+		RecoveryPhraseWords: req.RecoveryPhraseWords,
+		AfterSet:            afterSet,
 	})
 	switch {
-	case errors.Is(err, authutil.ErrInvalidRecoveryKey):
+	case errors.Is(err, authutil.ErrInvalidRecoveryKey), errors.Is(err, authutil.ErrInvalidRecoveryPhraseWords):
 		return serverutil.BadRequest(err)
 	case errors.Is(err, authutil.ErrNoAuthSalt):
 		return serverutil.Conflict(err)

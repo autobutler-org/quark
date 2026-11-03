@@ -27,7 +27,9 @@ import (
 // TestGetAuthStatus_ReportsCaller checks that GET /auth/status tells an
 // authenticated caller who they are and whether they are an admin, and tells
 // an anonymous caller nothing beyond whether setup is done. A caller with a
-// profile picture also gets its version.
+// profile picture also gets its version. shortRecoveryPhrase is false for the
+// admin, who has no recovery key, and true for bob, whose key was stored with
+// no word count (#3183).
 func TestGetAuthStatus_ReportsCaller(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
@@ -97,11 +99,11 @@ func TestGetAuthStatus_ReportsCaller(t *testing.T) {
 	}{
 		{"anonymous", func(*http.Request) {}, map[string]any{"setup": true, "accessRequestsEnabled": true}},
 		{"invalid token", bearer("not-a-session"), map[string]any{"setup": true, "accessRequestsEnabled": true}},
-		{"admin", bearer(founder.SessionToken), map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "admin", "userId": founderID, "isAdmin": true}},
-		{"non-admin", bearer(bob.SessionToken), map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "bob", "userId": bobID, "isAdmin": false, "avatarUpdatedAt": bobAvatar}},
+		{"admin", bearer(founder.SessionToken), map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "admin", "userId": founderID, "isAdmin": true, "shortRecoveryPhrase": false}},
+		{"non-admin", bearer(bob.SessionToken), map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "bob", "userId": bobID, "isAdmin": false, "shortRecoveryPhrase": true, "avatarUpdatedAt": bobAvatar}},
 		{"session cookie", func(r *http.Request) {
 			r.AddCookie(&http.Cookie{Name: "session", Value: bob.SessionToken})
-		}, map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "bob", "userId": bobID, "isAdmin": false, "avatarUpdatedAt": bobAvatar}},
+		}, map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "bob", "userId": bobID, "isAdmin": false, "shortRecoveryPhrase": true, "avatarUpdatedAt": bobAvatar}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

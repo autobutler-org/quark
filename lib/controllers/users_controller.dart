@@ -134,6 +134,7 @@ class UsersController extends ChangeNotifier with SafeNotifier {
       UserAccount.disabled => UserAccountStatus.disabled,
       _ => UserAccountStatus.active,
     },
+    shortRecoveryPhrase: user.shortRecoveryPhrase,
   );
 
   /// Fetches the accounts and the access-requests setting. A newer load

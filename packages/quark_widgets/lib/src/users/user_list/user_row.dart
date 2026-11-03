@@ -8,8 +8,8 @@ import '../../models/user_account_item.dart';
 import '../../models/quark_menu_entry.dart';
 import '../../theme/quark_tokens.dart';
 
-/// One account in a [UserList]: its name, what it is, and a menu of the
-/// actions on offer.
+/// One account in a [UserList]: its name, what it is (including a recovery
+/// phrase too short to keep), and a menu of the actions on offer.
 ///
 /// A part of [UserList], tested through it.
 ///
@@ -80,6 +80,7 @@ class UserRow extends StatelessWidget {
       if (user.isAdmin) 'Admin',
       if (isDisabled) 'Disabled',
       if (user.status == UserAccountStatus.pending) 'Waiting for approval',
+      if (user.shortRecoveryPhrase) 'Short recovery phrase',
     ];
 
     final entries = [

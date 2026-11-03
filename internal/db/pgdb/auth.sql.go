@@ -22,18 +22,19 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 }
 
 const createPendingUser = `-- name: CreatePendingUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash, status)
-VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash, recovery_phrase_words, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash, recovery_phrase_words
 `
 
 type CreatePendingUserParams struct {
-	Username           string
-	PasswordHash       string
-	RecoveryPhraseHash string
-	AuthKeyHash        string
-	AuthSalt           string
-	RecoveryKeyHash    string
+	Username            string
+	PasswordHash        string
+	RecoveryPhraseHash  string
+	AuthKeyHash         string
+	AuthSalt            string
+	RecoveryKeyHash     string
+	RecoveryPhraseWords int64
 }
 
 // CreatePendingUser records an account request from the sign-in page (#1908).
@@ -46,6 +47,7 @@ func (q *Queries) CreatePendingUser(ctx context.Context, arg CreatePendingUserPa
 		arg.AuthKeyHash,
 		arg.AuthSalt,
 		arg.RecoveryKeyHash,
+		arg.RecoveryPhraseWords,
 	)
 	var i User
 	err := row.Scan(
@@ -59,6 +61,7 @@ func (q *Queries) CreatePendingUser(ctx context.Context, arg CreatePendingUserPa
 		&i.AuthSalt,
 		&i.AuthKeyHash,
 		&i.RecoveryKeyHash,
+		&i.RecoveryPhraseWords,
 	)
 	return i, err
 }
@@ -95,18 +98,19 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash, recovery_phrase_words)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash, recovery_phrase_words
 `
 
 type CreateUserParams struct {
-	Username           string
-	PasswordHash       string
-	RecoveryPhraseHash string
-	AuthKeyHash        string
-	AuthSalt           string
-	RecoveryKeyHash    string
+	Username            string
+	PasswordHash        string
+	RecoveryPhraseHash  string
+	AuthKeyHash         string
+	AuthSalt            string
+	RecoveryKeyHash     string
+	RecoveryPhraseWords int64
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -117,6 +121,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.AuthKeyHash,
 		arg.AuthSalt,
 		arg.RecoveryKeyHash,
+		arg.RecoveryPhraseWords,
 	)
 	var i User
 	err := row.Scan(
@@ -130,6 +135,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.AuthSalt,
 		&i.AuthKeyHash,
 		&i.RecoveryKeyHash,
+		&i.RecoveryPhraseWords,
 	)
 	return i, err
 }
@@ -236,7 +242,7 @@ func (q *Queries) GetSession(ctx context.Context, token string) (GetSessionRow, 
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash FROM users WHERE id = $1 LIMIT 1
+SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash, recovery_phrase_words FROM users WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -253,12 +259,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.AuthSalt,
 		&i.AuthKeyHash,
 		&i.RecoveryKeyHash,
+		&i.RecoveryPhraseWords,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash FROM users WHERE username = $1 LIMIT 1
+SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash, recovery_phrase_words FROM users WHERE username = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -275,6 +282,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.AuthSalt,
 		&i.AuthKeyHash,
 		&i.RecoveryKeyHash,
+		&i.RecoveryPhraseWords,
 	)
 	return i, err
 }
@@ -391,20 +399,22 @@ func (q *Queries) RenewSession(ctx context.Context, arg RenewSessionParams) erro
 
 const setRecoveryKey = `-- name: SetRecoveryKey :exec
 UPDATE users
-SET recovery_key_hash = $1, recovery_phrase_hash = ''
-WHERE id = $2
+SET recovery_key_hash = $1, recovery_phrase_hash = '', recovery_phrase_words = $2
+WHERE id = $3
 `
 
 type SetRecoveryKeyParams struct {
-	RecoveryKeyHash string
-	ID              int64
+	RecoveryKeyHash     string
+	RecoveryPhraseWords int64
+	ID                  int64
 }
 
 // SetRecoveryKey gives an account the recovery key its client derived from a
 // phrase it generated (#2430), and clears the phrase hash so the old phrase,
-// which the Quark saw, stops recovering the account.
+// which the Quark saw, stops recovering the account. recovery_phrase_words is
+// how many words that phrase had, as the client said, 0 when it did not (#3183).
 func (q *Queries) SetRecoveryKey(ctx context.Context, arg SetRecoveryKeyParams) error {
-	_, err := q.db.ExecContext(ctx, setRecoveryKey, arg.RecoveryKeyHash, arg.ID)
+	_, err := q.db.ExecContext(ctx, setRecoveryKey, arg.RecoveryKeyHash, arg.RecoveryPhraseWords, arg.ID)
 	return err
 }
 

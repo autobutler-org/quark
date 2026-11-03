@@ -15,7 +15,7 @@ import (
 
 // getAuthStatus godoc
 // @Summary Check auth setup status
-// @Description Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.
+// @Description Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username, userId, isAdmin flag and shortRecoveryPhrase, true when the account has a recovery key whose phrase had fewer than 16 words or an unknown count (one stored before #3183), so the app prompts for a new phrase through PUT /auth/recovery-key, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.
 // @Tags auth
 // @Produce json
 // @Success 200 {object} object
@@ -47,6 +47,7 @@ func getAuthStatus(c *gin.Context) *serverutil.Response {
 		body["username"] = status.Username
 		body["userId"] = status.UserID
 		body["isAdmin"] = status.IsAdmin
+		body["shortRecoveryPhrase"] = status.ShortRecoveryPhrase
 		// Left out rather than failing the status call, which gates sign-in:
 		// the app then shows initials.
 		avatar, err := avatarutil.Stat(avatarutil.StatParams{DataDir: storageutil.GetDataDir(), UserID: status.UserID})

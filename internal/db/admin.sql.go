@@ -83,7 +83,7 @@ func (q *Queries) DemoteFromAdmin(ctx context.Context, username string) (DemoteF
 }
 
 const getOldestActiveAdmin = `-- name: GetOldestActiveAdmin :one
-SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash FROM users
+SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash, recovery_phrase_words FROM users
 WHERE is_admin = 1 AND status = 'active' AND id != ?1
 ORDER BY created_at, id
 LIMIT 1
@@ -105,6 +105,7 @@ func (q *Queries) GetOldestActiveAdmin(ctx context.Context, id int64) (User, err
 		&i.AuthSalt,
 		&i.AuthKeyHash,
 		&i.RecoveryKeyHash,
+		&i.RecoveryPhraseWords,
 	)
 	return i, err
 }
@@ -121,15 +122,17 @@ func (q *Queries) IsUserAdmin(ctx context.Context, username string) (int64, erro
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, is_admin, status, created_at FROM users ORDER BY created_at ASC
+SELECT id, username, is_admin, status, created_at, recovery_key_hash != '' AS has_recovery_key, recovery_phrase_words FROM users ORDER BY created_at ASC
 `
 
 type ListUsersRow struct {
-	ID        int64
-	Username  string
-	IsAdmin   int64
-	Status    string
-	CreatedAt time.Time
+	ID                  int64
+	Username            string
+	IsAdmin             int64
+	Status              string
+	CreatedAt           time.Time
+	HasRecoveryKey      bool
+	RecoveryPhraseWords int64
 }
 
 func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
@@ -147,6 +150,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 			&i.IsAdmin,
 			&i.Status,
 			&i.CreatedAt,
+			&i.HasRecoveryKey,
+			&i.RecoveryPhraseWords,
 		); err != nil {
 			return nil, err
 		}

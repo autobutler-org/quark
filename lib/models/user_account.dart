@@ -6,6 +6,7 @@ class UserAccount {
     this.isAdmin = false,
     this.status = UserAccount.active,
     this.createdAt,
+    this.shortRecoveryPhrase = false,
   });
 
   /// [status] of an account someone requested and no admin has approved.
@@ -27,11 +28,17 @@ class UserAccount {
   /// When the account was created. Null when the Quark did not say.
   final DateTime? createdAt;
 
+  /// Whether the account still holds a recovery phrase shorter than 16 words,
+  /// or one of unknown length from before #3183, and should make a new one.
+  /// False when the account has no recovery key.
+  final bool shortRecoveryPhrase;
+
   factory UserAccount.fromJson(Map<String, dynamic> json) => UserAccount(
     id: (json['id'] as num?)?.toInt() ?? 0,
     username: json['username'] as String? ?? '',
     isAdmin: json['isAdmin'] as bool? ?? false,
     status: json['status'] as String? ?? active,
     createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+    shortRecoveryPhrase: json['shortRecoveryPhrase'] as bool? ?? false,
   );
 }

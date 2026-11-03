@@ -18,6 +18,7 @@ import 'package:quark/services/feature_flags_service.dart';
 import 'package:quark/services/settings_service.dart';
 import 'package:quark/services/vault_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/recovery_phrase.dart';
 import 'package:sodium/sodium_sumo.dart' show SecureKey;
 
 /// Result of a successful [AuthService.checkStatus] call.
@@ -45,6 +46,11 @@ class AuthStatus {
   /// False before setup, and when the Quark does not say.
   final bool accessRequestsEnabled;
 
+  /// Whether the signed-in account's recovery key came from a phrase shorter
+  /// than [recoveryPhraseWords] words, or one of unknown length (#3183).
+  /// False without a session, and from a Quark that does not say.
+  final bool shortRecoveryPhrase;
+
   const AuthStatus({
     required this.setupComplete,
     this.username,
@@ -52,6 +58,7 @@ class AuthStatus {
     this.userId,
     this.avatarUpdatedAt,
     this.accessRequestsEnabled = false,
+    this.shortRecoveryPhrase = false,
   });
 }
 
@@ -138,14 +145,14 @@ Future<bool> Function(String hostAddress) hostReachabilityProbe =
 /// What a sign-in does with chat keys once it has the password (#2416):
 /// unwrap them, or make them when the account has none. Overridable in tests.
 ///
-/// [sessionToken] is the new session, which the app may not have stored yet.
-/// [authSalt] is the salt the sign-in's auth key was derived with (#2430).
+/// [sessionToken] is the new session, which the app may not have stored yet,
+/// or null for the stored one. [authSalt] is the salt the sign-in's auth key was derived with (#2430).
 /// [phraseWrapKey] is the wrap key of a phrase the app generated, and the
 /// result is the keys re-wrapped under it; see [ChatKeysController.signedIn].
 Future<WrappedChatKeys?> Function({
   required String password,
   SecureKey? phraseWrapKey,
-  required String sessionToken,
+  required String? sessionToken,
   Uint8List? authSalt,
 })
 chatKeysOnSignIn =
@@ -341,7 +348,7 @@ Future<WrappedVaultKey?> _vaultKeyForRecovery({
 Future<WrappedVaultKey?> _vaultKeyForNewPhrase({
   required String password,
   required AuthKeys phraseKeys,
-  required String sessionToken,
+  required String? sessionToken,
   required Uint8List authSalt,
 }) async {
   final stored = await vaultKeyFetch(sessionToken: sessionToken);
@@ -476,6 +483,7 @@ class AuthService {
       userId: (body['userId'] as num?)?.toInt(),
       avatarUpdatedAt: (body['avatarUpdatedAt'] as num?)?.toInt(),
       accessRequestsEnabled: body['accessRequestsEnabled'] as bool? ?? false,
+      shortRecoveryPhrase: body['shortRecoveryPhrase'] as bool? ?? false,
     );
   }
 
@@ -516,7 +524,8 @@ class AuthService {
 
   /// Fetches the signed-in user's admin flag again into [AppSettings.isAdmin],
   /// their id and picture version into [AppSettings.userId] and
-  /// [AppSettings.avatarUpdatedAt], the beta feature flags into
+  /// [AppSettings.avatarUpdatedAt], whether their recovery phrase is short
+  /// into [AppSettings.shortRecoveryPhrase] (#3183), the beta feature flags into
   /// [AppSettings.featureFlags], and the Quark's theme color and the user's own
   /// into [AppSettings.themeColor] (#2740). The Quark's theme color needs no session,
   /// so it is fetched for the sign-in page too.
@@ -541,6 +550,7 @@ class AuthService {
       settings.isAdmin.value = false;
       settings.userId.value = null;
       settings.avatarUpdatedAt.value = null;
+      settings.shortRecoveryPhrase.value = false;
       settings.featureFlags.value = const [];
       _accountRefreshError = null;
       return;
@@ -551,6 +561,7 @@ class AuthService {
       settings.isAdmin.value = status.isAdmin;
       settings.userId.value = status.userId;
       settings.avatarUpdatedAt.value = status.avatarUpdatedAt;
+      settings.shortRecoveryPhrase.value = status.shortRecoveryPhrase;
       if (status.username != null) {
         await settings.setUsername(status.username);
       }
@@ -757,27 +768,69 @@ class AuthService {
   /// Gives the account a recovery phrase the app generated, for one that has
   /// no recovery key (#2430), and returns it, or null when that failed.
   ///
-  /// Unlocks the chat keys first, since their phrase wrap has to move to the
-  /// new phrase, then registers the phrase's recovery key with
-  /// `PUT /auth/recovery-key`, which stores the re-wrapped keys in the same
-  /// transaction, as it does the vault key, opened with the password and
-  /// wrapped under both (#3461). The phrase is returned only once the Quark
-  /// answers 204;
-  /// until then the account has none. A failure is logged and nothing else:
-  /// the sign-in stands, and the next one tries again. So does one whose chat
+  /// See [_putNewRecoveryPhrase]. A failure is logged and nothing else: the
+  /// sign-in stands, and the next one tries again. So does one whose chat
   /// keys would not open, since only they can be re-wrapped.
   static Future<String?> _rotateRecoveryPhrase({
     required String password,
     required AuthSecret secret,
     required String sessionToken,
   }) async {
-    final NewRecoveryPhrase mine;
     try {
-      mine = await _newRecoveryPhrase(secret.salt);
+      return await _putNewRecoveryPhrase(
+        password: password,
+        secret: secret,
+        sessionToken: sessionToken,
+      );
     } catch (e) {
       debugPrint('[auth_service.dart] recovery phrase not rotated: $e');
       return null;
     }
+  }
+
+  /// Gives the signed-in account a new recovery phrase from Settings, for
+  /// one whose phrase is short (#3183), and returns it to show once.
+  ///
+  /// [password] is the account's, which re-confirms the caller as
+  /// [changePassword]'s current password does, and opens the chat keys and
+  /// vault key to re-wrap under the new phrase. A wrong one throws
+  /// [Errors.wrongCurrentPassword], and the old phrase stays. On success the
+  /// account is refreshed, so [AppSettings.shortRecoveryPhrase] clears.
+  static Future<String> rotateRecoveryPhrase({required String password}) async {
+    final session = await _sessionAccount();
+    final secret = await AuthSecret.resolve(
+      username: session.username,
+      password: password,
+      use: AuthSecretUse.reconfirm,
+    );
+    final phrase = await _putNewRecoveryPhrase(
+      password: password,
+      secret: secret,
+      sessionToken: AppSettings.instance.bearerToken,
+    );
+    await refreshAccount();
+    return phrase;
+  }
+
+  /// Generates a recovery phrase and registers its recovery key with
+  /// `PUT /auth/recovery-key`, with how many words it has (#3183), and
+  /// returns it.
+  ///
+  /// Unlocks the chat keys first, since their phrase wrap has to move to the
+  /// new phrase. The Quark stores the re-wrapped keys in the same
+  /// transaction, as it does the vault key, opened with [password] and
+  /// wrapped under both (#3461). The phrase is returned only once the Quark
+  /// answers 204; until then the account keeps the one it had.
+  ///
+  /// [sessionToken] is a session the app may not have stored yet, or null for
+  /// the stored one (a cookie session sends none). A 403 `incorrect password`
+  /// throws [Errors.wrongCurrentPassword].
+  static Future<String> _putNewRecoveryPhrase({
+    required String password,
+    required AuthSecret secret,
+    required String? sessionToken,
+  }) async {
+    final mine = await _newRecoveryPhrase(secret.salt);
     try {
       final chatKeys = await chatKeysOnSignIn(
         password: password,
@@ -795,29 +848,31 @@ class AuthService {
           .put(
             _baseUri.resolve('/api/v0/auth/recovery-key'),
             headers: {
-              'Authorization': 'Bearer $sessionToken',
+              'Authorization': ?(sessionToken == null
+                  ? _authorization
+                  : 'Bearer $sessionToken'),
               'Content-Type': 'application/json',
             },
             body: jsonEncode({
               // The re-confirmation takes the auth key, never the password.
               'password': secret.authKey,
               'recoveryKey': mine.keys.authKey,
+              'recoveryPhraseWords': recoveryPhraseWords,
               'chatKeys': ?chatKeys?.toJson(),
               'vaultKey': ?vaultKey?.toJson(),
             }),
           )
           .timeout(kAuthRequestTimeout);
+      if (response.statusCode == 401) throw const UnauthorizedException();
       if (response.statusCode != 204) {
-        debugPrint(
-          '[auth_service.dart] recovery phrase not rotated: '
-          '${response.statusCode}',
-        );
-        return null;
+        final body = serverErrorText(response.body, orMessage: true);
+        // ErrIncorrectPassword in authutil, as [changePassword] reads it.
+        if (response.statusCode == 403 && body == 'incorrect password') {
+          throw const MessageException(Errors.wrongCurrentPassword);
+        }
+        throw ApiException(response.statusCode, 'Recovery phrase not rotated');
       }
       return mine.phrase;
-    } catch (e) {
-      debugPrint('[auth_service.dart] recovery phrase not rotated: $e');
-      return null;
     } finally {
       mine.keys.dispose();
     }
@@ -909,6 +964,7 @@ class AuthService {
                 'recoveryPhrase': recoveryPhrase,
               'newAuthKey': secret.authKey,
               'newRecoveryKey': ?next?.keys.authKey,
+              if (next != null) 'recoveryPhraseWords': recoveryPhraseWords,
               'chatKeys': chatKeys.toJson(),
               'vaultKey': ?vaultKey?.toJson(),
             }),
@@ -1064,6 +1120,7 @@ class AuthService {
             'username': username,
             'authKey': secret.authKey,
             'recoveryKey': mine.keys.authKey,
+            'recoveryPhraseWords': recoveryPhraseWords,
           }),
         )
         .timeout(kAuthRequestTimeout);

@@ -49,6 +49,7 @@ void main() {
         'isAdmin': false,
         'status': 'pending',
         'createdAt': '2026-09-02T12:00:00Z',
+        'shortRecoveryPhrase': true,
       },
     ]);
 
@@ -60,6 +61,9 @@ void main() {
     expect(users.first.isAdmin, isTrue);
     expect(users.first.createdAt, DateTime.utc(2026, 9, 1, 12));
     expect(users.last.status, UserAccount.pending);
+    // Missing reads as false; the Quark sets it for a short phrase (#3183).
+    expect(users.first.shortRecoveryPhrase, isFalse);
+    expect(users.last.shortRecoveryPhrase, isTrue);
   });
 
   for (final (name, call, path) in [

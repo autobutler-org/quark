@@ -272,7 +272,9 @@ const List<String> recoveryWords = [
 /// How many words a new recovery phrase has: 16 words of 8 bits each from
 /// [recoveryWords], 128 bits (#2783).
 ///
-/// Only generation reads this. Phrases made before #2783 have
+/// Generation reads this, and every request that registers a new phrase's
+/// recovery key sends it, so the Quark knows which accounts still hold a
+/// short one (#3183). Phrases made before #2783 have
 /// [legacyRecoveryPhraseWords] words and keep working: nothing checks a typed
 /// phrase's length, and the keys are derived from whatever was typed.
 const int recoveryPhraseWords = 16;

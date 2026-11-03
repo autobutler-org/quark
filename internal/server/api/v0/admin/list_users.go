@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -14,7 +15,7 @@ import (
 
 // listUsers godoc
 // @Summary List all users
-// @Description Returns all registered users. Admin-only.
+// @Description Returns all registered users. Admin-only. shortRecoveryPhrase is true for an account whose recovery key's phrase had fewer than 16 words or an unknown count (a key stored before #3183), the accounts still to rotate; an account with no recovery key reads false.
 // @Tags admin
 // @Produce json
 // @Success 200 {array} userSummary
@@ -41,11 +42,12 @@ func listUsers(c *gin.Context) *serverutil.Response {
 	summaries := make([]userSummary, 0, len(rows))
 	for _, u := range rows {
 		summaries = append(summaries, userSummary{
-			ID:        u.ID,
-			Username:  u.Username,
-			IsAdmin:   u.IsAdmin != 0,
-			Status:    u.Status,
-			CreatedAt: u.CreatedAt.Format(time.RFC3339),
+			ID:                  u.ID,
+			Username:            u.Username,
+			IsAdmin:             u.IsAdmin != 0,
+			Status:              u.Status,
+			CreatedAt:           u.CreatedAt.Format(time.RFC3339),
+			ShortRecoveryPhrase: authutil.IsShortRecoveryPhrase(u.HasRecoveryKey, u.RecoveryPhraseWords),
 		})
 	}
 

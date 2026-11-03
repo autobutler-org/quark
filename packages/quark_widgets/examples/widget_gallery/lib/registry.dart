@@ -2994,7 +2994,7 @@ final List<GalleryEntry> registry = [
       users: const [
         UserAccountItem(username: 'ada', isAdmin: true),
         UserAccountItem(username: 'grace', isAdmin: true),
-        UserAccountItem(username: 'bob'),
+        UserAccountItem(username: 'bob', shortRecoveryPhrase: true),
         UserAccountItem(username: 'cy', status: UserAccountStatus.disabled),
       ],
       selfUsername: 'ada',

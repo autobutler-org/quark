@@ -99,6 +99,15 @@ void main() {
     );
   });
 
+  test('maps a short recovery phrase through (#3183)', () {
+    expect(
+      UsersController.itemFor(
+        const UserAccount(id: 5, username: 'eve', shortRecoveryPhrase: true),
+      ).shortRecoveryPhrase,
+      isTrue,
+    );
+  });
+
   test('offers only accounts that can sign in as group members', () async {
     users = [
       ...users,

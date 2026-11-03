@@ -552,7 +552,8 @@ type Querier interface {
 	SetPhotoTakenAt(ctx context.Context, arg SetPhotoTakenAtParams) error
 	// SetRecoveryKey gives an account the recovery key its client derived from a
 	// phrase it generated (#2430), and clears the phrase hash so the old phrase,
-	// which the Quark saw, stops recovering the account.
+	// which the Quark saw, stops recovering the account. recovery_phrase_words is
+	// how many words that phrase had, as the client said, 0 when it did not (#3183).
 	SetRecoveryKey(ctx context.Context, arg SetRecoveryKeyParams) error
 	SetSetting(ctx context.Context, arg SetSettingParams) error
 	SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error
