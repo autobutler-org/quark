@@ -154,6 +154,9 @@ OS_FILE_ALLOWED=(
     # When the last snapshot backup completed is in the database; this imports,
     # then retires, the file an older Quark kept in the data directory.
     "pkg/backup/last_snapshot.go"
+    # A bundle (#3838) copies the data directory's files, trash and avatars into and out of
+    # one archive, with the service stopped and no namespace registry to go through.
+    "pkg/util/bundleutil/"
 )
 
 violations=0

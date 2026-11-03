@@ -1,6 +1,6 @@
 // Command quark is the Quark binary: quark serve runs the API and the embedded web app, quark install sets it up as
 // a system service, quark auth-key derives the key a script signs in with, quark move-to-postgres copies the SQLite
-// database into PostgreSQL, and quark version reports the build.
+// database into PostgreSQL, quark bundle moves a whole install to a new one, and quark version reports the build.
 package main
 
 import (
@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/autobutler-org/quark/cmd/quark/authkey"
+	"github.com/autobutler-org/quark/cmd/quark/bundle"
 	"github.com/autobutler-org/quark/cmd/quark/install"
 	"github.com/autobutler-org/quark/cmd/quark/movetopostgres"
 	"github.com/autobutler-org/quark/cmd/quark/serve"
@@ -34,7 +35,7 @@ import (
 func main() {
 	// Errors go to stderr, once, so $(quark auth-key ...) never captures one.
 	rootCmd := &cobra.Command{Use: "quark", SilenceErrors: true}
-	rootCmd.AddCommand(install.Cmd(), version.Cmd(), serve.Cmd(), authkey.Cmd(), movetopostgres.Cmd())
+	rootCmd.AddCommand(install.Cmd(), version.Cmd(), serve.Cmd(), authkey.Cmd(), movetopostgres.Cmd(), bundle.Cmd())
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)

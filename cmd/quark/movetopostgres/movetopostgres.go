@@ -33,7 +33,7 @@ The SQLite file is opened read-only and never changed. A failed or interrupted r
 PostgreSQL, and running it again is safe. Until the service is told to use PostgreSQL it starts on SQLite
 as before, so abandoning the move is a matter of not switching.
 
-Moving from PostgreSQL back to SQLite is not supported.`,
+To go from PostgreSQL back to SQLite, start a new install from a bundle: see quark bundle --help.`,
 		Example: `  sudo systemctl stop quark
   sudo -u quark quark move-to-postgres --database-url 'postgres://quark:secret@db.example:5432/quark'`,
 		Args:         cobra.NoArgs,

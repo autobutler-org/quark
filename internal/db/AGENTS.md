@@ -150,6 +150,11 @@ nothing there. A column type outside the mapping above needs a case in `convertF
 server rebuilds from disk goes in `rebuiltTables`. [`docs/architecture/postgres-move.md`](../../docs/architecture/postgres-move.md)
 has the rest.
 
+`db.ExportDatabase` and `db.ImportDatabase` (`bundle.go`, the `quark bundle` command) carry a database in a
+bundle (#3838): a SQLite file at this build's schema, whichever engine it came from or goes to. Export and a
+SQLite import fill it table by table from the target's catalog (`fillSQLite`); a PostgreSQL import is
+`MoveToPostgres`. [`docs/architecture/bundle.md`](../../docs/architecture/bundle.md) has the rest.
+
 ## What PostgreSQL does differently at run time
 
 The schema and the queries are held equal by the tests. These are not, and code has to allow for them:
