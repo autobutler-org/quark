@@ -26,5 +26,6 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 		setDeviceRoleRoute,
 		startSnapshotBackupRoute,
 		verifySnapshotBackupRoute,
+		restoreSnapshotVaultRoute,
 	}
 }

@@ -36,7 +36,7 @@ var (
 // [ErrDatabaseBackedUpSeparately] on a PostgreSQL-backed Quark: a SQLite
 // install's backup restores onto SQLite only.
 func ImportChat(ctx context.Context, liveDB *sql.DB, backupDir string) (ChatImportResult, error) {
-	rows, unmatched, err := chatBackup.restore(ctx, liveDB, backupDir)
+	rows, unmatched, _, err := chatBackup.restore(ctx, liveDB, backupDir)
 	if err != nil {
 		return ChatImportResult{}, err
 	}

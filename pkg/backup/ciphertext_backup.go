@@ -52,6 +52,10 @@ type ciphertextBackup struct {
 	// temp.restore_users, the map from backup account ids to live ones, is
 	// made before the first.
 	steps []restoreStep
+	// settle, when set, runs on the restore's connection after the last step,
+	// before the commit. An error refuses the restore and rolls it back; the
+	// usernames it returns come back as the restore's report.
+	settle func(ctx context.Context, conn *sql.Conn) ([]string, error)
 }
 
 // restoreStep is one statement of a restore. name keys the rows it changed in
@@ -177,39 +181,40 @@ func (b ciphertextBackup) copyTables(ctx context.Context, liveDB *sql.DB, backup
 
 // restore loads the backup in backupDir into liveDB, in one transaction: a
 // refused or failed restore changes nothing. It returns the rows each step
-// changed, by step name, and the backup's usernames that have no account here.
+// changed, by step name, the backup's usernames that have no account here, and
+// what settle reported.
 //
 // The backup does not carry accounts, so every account a row names is looked
 // up by username on this Quark through temp.restore_users. A step treats an
 // account that is not here as the live schema treats a deleted one.
-func (b ciphertextBackup) restore(ctx context.Context, liveDB *sql.DB, backupDir string) (map[string]int64, []string, error) {
+func (b ciphertextBackup) restore(ctx context.Context, liveDB *sql.DB, backupDir string) (map[string]int64, []string, []string, error) {
 	if err := b.require(liveDB); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	dbPath, err := filepath.Abs(filepath.Join(backupDir, b.filename))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// ATTACH would otherwise answer a missing file with a less helpful error.
 	if _, err := os.Stat(dbPath); err != nil {
-		return nil, nil, fmt.Errorf("%s not found on device: %w", b.filename, err)
+		return nil, nil, nil, fmt.Errorf("%s not found on device: %w", b.filename, err)
 	}
 
 	// Read-only, so a restore can never change the file the manifest hashed.
 	backupURI := url.URL{Scheme: "file", Path: dbPath, RawQuery: "mode=ro"}
 	conn, err := b.attach(ctx, liveDB, backupURI.String())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// Also what rolls the transaction below back on every early return.
 	defer discardConn(conn)
 
 	var version int
 	if err := conn.QueryRowContext(ctx, `PRAGMA `+b.schema()+`.user_version`).Scan(&version); err != nil {
-		return nil, nil, fmt.Errorf("read %s version: %w", b.filename, err)
+		return nil, nil, nil, fmt.Errorf("read %s version: %w", b.filename, err)
 	}
 	if version != b.version {
-		return nil, nil, fmt.Errorf("%w: the file is format %d, this Quark reads format %d",
+		return nil, nil, nil, fmt.Errorf("%w: the file is format %d, this Quark reads format %d",
 			b.errVersion, version, b.version)
 	}
 
@@ -217,15 +222,15 @@ func (b ciphertextBackup) restore(ctx context.Context, liveDB *sql.DB, backupDir
 	// writes between the check and the delete that follows it.
 	// database/sql can only begin a deferred transaction, hence the Exec.
 	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
-		return nil, nil, fmt.Errorf("begin %s restore: %w", b.filename, err)
+		return nil, nil, nil, fmt.Errorf("begin %s restore: %w", b.filename, err)
 	}
 
 	var occupied bool
 	if err := conn.QueryRowContext(ctx, b.occupied).Scan(&occupied); err != nil {
-		return nil, nil, fmt.Errorf("check live tables for %s: %w", b.filename, err)
+		return nil, nil, nil, fmt.Errorf("check live tables for %s: %w", b.filename, err)
 	}
 	if occupied {
-		return nil, nil, b.errOccupied
+		return nil, nil, nil, b.errOccupied
 	}
 
 	steps := append([]restoreStep{{"map users", `
@@ -236,7 +241,7 @@ func (b ciphertextBackup) restore(ctx context.Context, liveDB *sql.DB, backupDir
 	for _, step := range steps {
 		res, err := conn.ExecContext(ctx, step.statement)
 		if err != nil {
-			return nil, nil, fmt.Errorf("restore %s (%s): %w", b.filename, step.name, err)
+			return nil, nil, nil, fmt.Errorf("restore %s (%s): %w", b.filename, step.name, err)
 		}
 		// modernc's RowsAffected never fails.
 		rows[step.name], _ = res.RowsAffected()
@@ -244,36 +249,52 @@ func (b ciphertextBackup) restore(ctx context.Context, liveDB *sql.DB, backupDir
 
 	unmatched, err := b.unmatchedUsers(ctx, conn)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
+	}
+	var report []string
+	if b.settle != nil {
+		if report, err = b.settle(ctx, conn); err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
-		return nil, nil, fmt.Errorf("commit %s restore: %w", b.filename, err)
+		return nil, nil, nil, fmt.Errorf("commit %s restore: %w", b.filename, err)
 	}
-	return rows, unmatched, nil
+	return rows, unmatched, report, nil
 }
 
 // unmatchedUsers lists the backup's accounts that have no account of the same
 // username on this Quark. A handful of names, so reading them is fine.
 func (b ciphertextBackup) unmatchedUsers(ctx context.Context, conn *sql.Conn) ([]string, error) {
-	rows, err := conn.QueryContext(ctx, `
+	usernames, err := queryStrings(ctx, conn, `
 		SELECT username FROM `+b.schema()+`.users
 		WHERE id NOT IN (SELECT backup_id FROM temp.restore_users)
 		ORDER BY username`)
 	if err != nil {
 		return nil, fmt.Errorf("list unmatched accounts in %s: %w", b.filename, err)
 	}
+	return usernames, nil
+}
+
+// queryStrings reads the one text column query returns, row by row. It is for
+// short lists, usernames, not for anything a user can make long.
+func queryStrings(ctx context.Context, conn *sql.Conn, query string) ([]string, error) {
+	rows, err := conn.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 
-	var usernames []string
+	var values []string
 	for rows.Next() {
-		var username string
-		if err := rows.Scan(&username); err != nil {
-			return nil, fmt.Errorf("scan unmatched account in %s: %w", b.filename, err)
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return nil, err
 		}
-		usernames = append(usernames, username)
+		values = append(values, value)
 	}
-	return usernames, rows.Err()
+	return values, rows.Err()
 }
 
 // attach takes a connection of its own out of liveDB and attaches the backup

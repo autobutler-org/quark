@@ -1,7 +1,7 @@
 // Package v0_storage serves /api/v0/storage: the storage devices Quark manages, their snapshot backups, and how
 // protected the files are. Reading device status, a backup's progress, and protection status is open to any user;
-// renaming a device, setting its role, enabling or disabling a USB device, and starting or verifying a backup are
-// admin-only.
+// renaming a device, setting its role, enabling or disabling a USB device, starting or verifying a backup, and
+// restoring the vaults from one are admin-only.
 package v0_storage
 
 import "github.com/autobutler-org/quark/pkg/util/serverutil"

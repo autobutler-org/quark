@@ -4,15 +4,19 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
@@ -116,14 +120,14 @@ func TestVaultBackup_RoundTripDecryptsWithTheOwnersKey(t *testing.T) {
 	ctx := context.Background()
 	alice := vaultOwner{"alice", randomBytes(t, chacha20poly1305.KeySize), []string{`{"name":"GitHub"}`, `{"name":"Bank"}`}}
 	bob := vaultOwner{"bob", randomBytes(t, chacha20poly1305.KeySize), []string{`{"name":"Mail"}`}}
-	carol := vaultOwner{"carol", randomBytes(t, chacha20poly1305.KeySize), []string{`{"name":"Gone"}`}}
 
 	source := dbtest.NewDB(t).Db
+	// carol never made a vault, and has no account on the new install: she
+	// is named, and does not hold the restore up.
 	addChatUsers(t, source, "alice", "bob", "carol")
-	seedVault(t, source, alice, bob, carol)
+	seedVault(t, source, alice, bob)
 	chatExec(t, source, `UPDATE vault_keys SET wrapped_by_phrase = ?, salt_rp = ? WHERE user_id = 1`, []byte("alice-phrase"), []byte("alice-rp"))
-	// carol has no account on the new install, so her vault is not restored.
-	want := dumpVault(t, source, "carol")
+	want := dumpVault(t, source, "")
 	dir := exportVault(t, source)
 	sumBefore := fileChecksum(t, filepath.Join(dir, backupVaultFilename))
 
@@ -242,4 +246,115 @@ func TestVaultBackupSchema_MatchesLiveTables(t *testing.T) {
 	// Every live vault table is one the backup knows about.
 	assertRows(t, live, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name LIKE 'vault\_%' ESCAPE '\'`,
 		fmt.Sprintf("[%d]", len(vaultBackup.tables)))
+}
+
+// setAuthSalt gives username's account the auth salt its Quark derives every
+// key over, as users.auth_salt stores it.
+func setAuthSalt(t *testing.T, d *sql.DB, username string, salt []byte) {
+	t.Helper()
+	chatExec(t, d, `UPDATE users SET auth_salt = ? WHERE username = ?`, base64.StdEncoding.EncodeToString(salt), username)
+}
+
+// A restore onto new hardware (#3614). The new install derives each account's
+// auth salt from a secret of its own, so the restored password wrap, made over
+// the old install's salt, opens with the password the account had when the
+// backup was taken and no other. The result names every such account, so the
+// app can say why its login password does not open the vault.
+func TestImportVault_NamesTheAccountsThatOpenWithTheBackupsPassword(t *testing.T) {
+	alice := vaultOwner{"alice", randomBytes(t, chacha20poly1305.KeySize), []string{"a"}}
+	bob := vaultOwner{"bob", randomBytes(t, chacha20poly1305.KeySize), []string{"b"}}
+
+	source := dbtest.NewDB(t).Db
+	addChatUsers(t, source, "alice", "bob")
+	seedVault(t, source, alice, bob)
+	oldSalt := map[string][]byte{"alice": randomBytes(t, 16), "bob": randomBytes(t, 16)}
+	for username, salt := range oldSalt {
+		setAuthSalt(t, source, username, salt)
+		chatExec(t, source, `UPDATE vault_keys SET salt_pw = ? WHERE user_id = (SELECT id FROM users WHERE username = ?)`, salt, username)
+	}
+	dir := exportVault(t, source)
+
+	// alice's new account has a salt of the new install's; bob's happens to
+	// keep his, as a restore onto the same Quark would.
+	live := dbtest.NewDB(t).Db
+	addChatUsers(t, live, "alice", "bob")
+	setAuthSalt(t, live, "alice", randomBytes(t, 16))
+	setAuthSalt(t, live, "bob", oldSalt["bob"])
+
+	result, err := ImportVault(context.Background(), live, dir)
+	if err != nil {
+		t.Fatalf("ImportVault: %v", err)
+	}
+	if !slices.Equal(result.BackupPasswordAccounts, []string{"alice"}) {
+		t.Errorf("BackupPasswordAccounts = %v, want [alice]", result.BackupPasswordAccounts)
+	}
+	// The salt travels with the wrap, so the old password still opens it.
+	assertRows(t, live, `SELECT hex(k.salt_pw) FROM vault_keys k JOIN users u ON u.id = k.user_id WHERE u.username = 'alice'`,
+		fmt.Sprintf(`["%X"]`, oldSalt["alice"]))
+}
+
+// The right account for a backed-up vault is the account on this Quark whose
+// username is byte for byte the backup's, as sign-in looks it up. A vault
+// whose username has no such account is never placed under a near match
+// ("Carol" for "carol") or dropped: the whole restore is refused, naming it,
+// and nothing changes. Dropping it would lose it for good, since a second
+// restore is refused once any vault has items.
+func TestImportVault_RefusesAVaultWithNoAccountOfItsUsername(t *testing.T) {
+	source := dbtest.NewDB(t).Db
+	addChatUsers(t, source, "alice", "carol", "dave")
+	seedVault(t, source,
+		vaultOwner{"alice", randomBytes(t, 32), []string{"a"}},
+		vaultOwner{"carol", randomBytes(t, 32), []string{"c"}},
+		vaultOwner{"dave", randomBytes(t, 32), nil})
+	dir := exportVault(t, source)
+
+	live := dbtest.NewDB(t).Db
+	addChatUsers(t, live, "alice", "Carol")
+	// alice already signed in here and made a key, which a refused restore keeps.
+	seedVault(t, live, vaultOwner{username: "alice", wrapKey: randomBytes(t, 32)})
+	before := dumpVault(t, live, "")
+
+	_, err := ImportVault(context.Background(), live, dir)
+	if !errors.Is(err, ErrVaultAccountMissing) {
+		t.Fatalf("ImportVault = %v, want ErrVaultAccountMissing", err)
+	}
+	if !strings.Contains(err.Error(), "carol, dave") {
+		t.Errorf("error %q does not name carol and dave", err)
+	}
+	if after := dumpVault(t, live, ""); !reflect.DeepEqual(after, before) {
+		t.Errorf("a refused restore changed the live vault\n got %v\nwant %v", after, before)
+	}
+}
+
+// RestoreVault reads the backup from the drive a snapshot wrote it to.
+func TestRestoreVault_ReadsTheBackupDrive(t *testing.T) {
+	source := dbtest.NewDB(t).Db
+	addChatUsers(t, source, "alice")
+	seedVault(t, source, vaultOwner{"alice", randomBytes(t, 32), []string{"a", "b"}})
+	driveDir := exportVault(t, source)
+	drive, err := vfs.NewLocalVFS(driveDir, vfs.FilesNamespace("BACKUP-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := vfs.NewRegistry()
+	for serial, fsys := range map[string]vfs.VFS{"": vfs.NewMemVFS(vfs.FilesNamespace("")), "BACKUP-1": drive} {
+		if err := reg.Register(vfs.Namespace{ID: vfs.FilesNamespace(serial)}, fsys); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	live := dbtest.NewDB(t).Db
+	addChatUsers(t, live, "alice")
+	result, err := RestoreVault(RestoreVaultParams{Ctx: context.Background(), LiveDB: live, Registry: reg, DeviceSerial: "BACKUP-1"})
+	if err != nil {
+		t.Fatalf("RestoreVault: %v", err)
+	}
+	if result.Accounts != 1 || result.Items != 2 {
+		t.Errorf("result = %+v, want 1 account, 2 items", result)
+	}
+
+	var notFound *fileutil.NotFoundError
+	if _, err := RestoreVault(RestoreVaultParams{Ctx: context.Background(), LiveDB: live, Registry: reg, DeviceSerial: "GONE"}); !errors.As(err, &notFound) {
+		t.Errorf("RestoreVault from a drive that is not attached = %v, want *fileutil.NotFoundError", err)
+	}
 }
