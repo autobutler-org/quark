@@ -192,7 +192,7 @@ right tool for reproducing a CI failure locally.
 
 ### CI images
 
-A job picks its image through its runner label, in the `errand` runner group. Each `*-quark-*` scale set
+A job picks its image through its runner label, in the `errand` runner group. Each `errand-*-quark-*` scale set
 runs its image as the runner pod, so every image carries the Actions runner and a workflow names no
 `container:`. Jobs run as the `runner` user, so a root-only step needs `sudo`. The tag is
 `latest`. Jobs do not pin a digest.
@@ -200,7 +200,7 @@ runs its image as the runner pod, so every image carries the Actions runner and 
 ```yaml
 runs-on:
   group: errand
-  labels: x64-quark-backend
+  labels: errand-x64-quark-backend
 ```
 
 Until the Azure vCPU quota is raised, every job runs on a GitHub-hosted runner instead, and this section
@@ -209,13 +209,13 @@ describes the setup the jobs return to. A `# errand:` comment above each `runs-o
 image makes the step unnecessary. To move back, set each marked `runs-on:` to the recorded group and label and
 delete each marked step; `grep -rn "# errand:" .github` lists them all.
 
-- `x64-quark-backend` / `arm-quark-backend` run `quark/ci-backend`: Go, Node, Docker, sqlc, swag,
+- `errand-x64-quark-backend` / `errand-arm-quark-backend` run `quark/ci-backend`: Go, Node, Docker, sqlc, swag,
   golangci-lint, and govulncheck. Backend jobs and GoReleaser use it.
-- `x64-quark-frontend` / `arm-quark-frontend` run `quark/ci-frontend`: Flutter, Node, and
+- `errand-x64-quark-frontend` / `errand-arm-quark-frontend` run `quark/ci-frontend`: Flutter, Node, and
   `linux/apt-packages.txt`. Frontend checks, the web build, the Linux build, and the AppImage use it.
-- `x64-quark-full` / `arm-quark-full` run `quark/ci-full`: both images together. Android uses it, because the
+- `errand-x64-quark-full` / `errand-arm-quark-full` run `quark/ci-full`: both images together. Android uses it, because the
   build hook compiles the Go tailnet library for Android.
-- `x64` / `arm` run the upstream Actions runner image, which has Docker but no `make` or Node. The image
+- `errand-x64` / `errand-arm` run the upstream Actions runner image, which has Docker but no `make` or Node. The image
   builds and the Docker release use them.
 
 Jobs that need none of the project tools run on GitHub's `ubuntu-latest`: the path filters, the result gates,
@@ -224,7 +224,7 @@ publish. The repository is public, so those runners cost nothing and leave the E
 need the images. A job that would have to install a toolchain the images already carry (Go, Flutter, the
 Android SDK) runs on Errand.
 
-A size goes between the architecture and the image: `x64-small`, `x64-medium-quark-backend`. Each size is its
+A size goes between the architecture and the image: `errand-x64-small`, `errand-x64-medium-quark-backend`. Each size is its
 own scale set, and its CPU and memory are both the request and the limit, so the scheduler packs runners by
 them. A runner node is 4 vCPUs and 16 GiB.
 

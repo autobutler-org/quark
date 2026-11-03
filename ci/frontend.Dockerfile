@@ -1,4 +1,4 @@
-# The x64-quark-frontend / arm-quark-frontend runner. Flutter, Node, the
+# The errand-x64-quark-frontend / errand-arm-quark-frontend runner. Flutter, Node, the
 # Linux desktop packages, the Docker client, and the Actions runner.
 
 # Ubuntu 22.04, the release linux/AppImageBuilder.yml bundles libraries from. The

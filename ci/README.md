@@ -9,7 +9,7 @@ so a job picks its image by label and does not name it with `container:`:
 ```yaml
 runs-on:
   group: errand
-  labels: x64-quark-backend
+  labels: errand-x64-quark-backend
 ```
 
 The tag is `latest`. Jobs do not pin a digest.
@@ -18,11 +18,11 @@ Jobs run on GitHub-hosted runners until the Azure vCPU quota is raised. `AGENTS.
 
 | Image | Labels | Use |
 | --- | --- | --- |
-| `quark/ci-backend` | `x64-quark-backend`, `arm-quark-backend` | Go, Node, Docker, sqlc, swag, golangci-lint, govulncheck |
-| `quark/ci-frontend` | `x64-quark-frontend`, `arm-quark-frontend` | Flutter, Node, Linux desktop packages, Docker |
-| `quark/ci-full` | `x64-quark-full`, `arm-quark-full` | `ci-backend` and `ci-frontend` together |
+| `quark/ci-backend` | `errand-x64-quark-backend`, `errand-arm-quark-backend` | Go, Node, Docker, sqlc, swag, golangci-lint, govulncheck |
+| `quark/ci-frontend` | `errand-x64-quark-frontend`, `errand-arm-quark-frontend` | Flutter, Node, Linux desktop packages, Docker |
+| `quark/ci-full` | `errand-x64-quark-full`, `errand-arm-quark-full` | `ci-backend` and `ci-frontend` together |
 
-Each label also comes in `small` and `medium` sizes, such as `x64-small-quark-backend`.
+Each label also comes in `small` and `medium` sizes, such as `errand-x64-small-quark-backend`.
 `AGENTS.md` says what each size gets and which jobs use it.
 
 The release builds the web app in `ci-frontend`, uploads `internal/server/public`,

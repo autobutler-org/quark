@@ -1,4 +1,4 @@
-# The x64-quark-full / arm-quark-full runner: the backend and frontend images
+# The errand-x64-quark-full / errand-arm-quark-full runner: the backend and frontend images
 # together, plus the Actions runner. The workflow copies
 # linux/apt-packages.txt into this directory before docker build.
 

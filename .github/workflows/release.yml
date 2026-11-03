@@ -14,7 +14,7 @@ env:
 
 jobs:
   web:
-    # errand: group errand, label x64-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    # errand: group errand, label errand-x64-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,10 +30,10 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
-      # errand: remove on x64-quark-frontend; ci-frontend carries Flutter.
+      # errand: remove on errand-x64-quark-frontend; ci-frontend carries Flutter.
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
-      # errand: remove on x64-quark-frontend; ci-frontend carries Node.
+      # errand: remove on errand-x64-quark-frontend; ci-frontend carries Node.
       - name: Setup Node
         uses: ./.github/actions/setup-node
       - name: Build frontend [web]
@@ -50,7 +50,7 @@ jobs:
 
   release:
     needs: web
-    # errand: group errand, label x64-quark-backend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    # errand: group errand, label errand-x64-quark-backend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -62,7 +62,7 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
           fetch-tags: true
-      # errand: remove on x64-quark-backend; ci-backend carries Go.
+      # errand: remove on errand-x64-quark-backend; ci-backend carries Go.
       - name: Setup go
         uses: actions/setup-go@v7
         with:

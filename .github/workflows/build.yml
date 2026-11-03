@@ -61,20 +61,20 @@ jobs:
   build-backend:
     needs: changes
     if: needs.changes.outputs.backend != 'false'
-    # errand: group errand, label x64-medium-quark-backend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    # errand: group errand, label errand-x64-medium-quark-backend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      # errand: remove on x64-medium-quark-backend; ci-backend carries Go.
+      # errand: remove on errand-x64-medium-quark-backend; ci-backend carries Go.
       - name: Setup go
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      # errand: remove on x64-medium-quark-backend; ci-backend carries sqlc.
+      # errand: remove on errand-x64-medium-quark-backend; ci-backend carries sqlc.
       - name: Setup sqlc
         uses: ./.github/actions/setup-sqlc
-      # errand: remove on x64-medium-quark-backend; ci-backend carries swag.
+      # errand: remove on errand-x64-medium-quark-backend; ci-backend carries swag.
       - name: Setup swag
         uses: ./.github/actions/setup-swag
       - name: Build
@@ -100,12 +100,12 @@ jobs:
   build-web:
     needs: changes
     if: needs.changes.outputs.web != 'false'
-    # errand: group errand, label x64-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    # errand: group errand, label errand-x64-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-      # errand: remove on x64-quark-frontend; ci-frontend carries Flutter.
+      # errand: remove on errand-x64-quark-frontend; ci-frontend carries Flutter.
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
       - name: Setup Node
@@ -119,7 +119,7 @@ jobs:
   build-android:
     needs: changes
     if: needs.changes.outputs.android != 'false'
-    # errand: group errand, label x64-quark-full. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+    # errand: group errand, label errand-x64-quark-full. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -130,12 +130,12 @@ jobs:
           # silently falls back to Flutter's 1.0.0 default.
           fetch-tags: true
           fetch-depth: 0
-      # errand: remove on x64-quark-full; ci-full carries Go.
+      # errand: remove on errand-x64-quark-full; ci-full carries Go.
       - name: Setup go
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      # errand: remove on x64-quark-full; ci-full carries Flutter.
+      # errand: remove on errand-x64-quark-full; ci-full carries Flutter.
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
       - name: Setup Node
@@ -181,10 +181,10 @@ jobs:
       matrix:
         include:
           - arch: x64
-            # errand: group errand, label x64-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+            # errand: group errand, label errand-x64-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
             runner: ubuntu-22.04
           - arch: arm64
-            # errand: group errand, label arm-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+            # errand: group errand, label errand-arm-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
             runner: ubuntu-22.04-arm
     # Pinned, not ubuntu-latest: linux/AppImageBuilder.yml bundles libraries from
     # this release's apt archive, so the runner has to be the release its `sources` name.
@@ -198,7 +198,7 @@ jobs:
           # the default checkout is shallow with no tags.
           fetch-tags: true
           fetch-depth: 0
-      # errand: remove on x64-quark-frontend/arm-quark-frontend; ci-frontend carries linux/apt-packages.txt.
+      # errand: remove on errand-x64-quark-frontend/errand-arm-quark-frontend; ci-frontend carries linux/apt-packages.txt.
       - name: Install Linux build dependencies
         run: |
           # The hosted x64 image enables Microsoft's apt feed, but this build uses
@@ -206,7 +206,7 @@ jobs:
           sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
           sudo apt-get update
           xargs sudo apt-get install -y < linux/apt-packages.txt
-      # errand: remove on x64-quark-frontend/arm-quark-frontend; ci-frontend carries Flutter.
+      # errand: remove on errand-x64-quark-frontend/errand-arm-quark-frontend; ci-frontend carries Flutter.
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
       - name: Setup Node

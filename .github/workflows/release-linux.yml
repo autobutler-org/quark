@@ -31,10 +31,10 @@ jobs:
       matrix:
         include:
           - arch: x64
-            # errand: group errand, label x64-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+            # errand: group errand, label errand-x64-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
             runner: ubuntu-22.04
           - arch: arm64
-            # errand: group errand, label arm-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
+            # errand: group errand, label errand-arm-quark-frontend. GitHub-hosted until the Azure vCPU quota is raised (AGENTS.md, CI images).
             runner: ubuntu-22.04-arm
     # Pinned, not ubuntu-latest: linux/AppImageBuilder.yml bundles libraries from
     # this release's apt archive, so the runner has to be the release its `sources` name.
@@ -53,13 +53,13 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      # errand: remove on x64-quark-frontend/arm-quark-frontend; ci-frontend carries linux/apt-packages.txt.
+      # errand: remove on errand-x64-quark-frontend/errand-arm-quark-frontend; ci-frontend carries linux/apt-packages.txt.
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
           xargs sudo apt-get install -y < linux/apt-packages.txt
 
-      # errand: remove on x64-quark-frontend/arm-quark-frontend; ci-frontend carries Flutter.
+      # errand: remove on errand-x64-quark-frontend/errand-arm-quark-frontend; ci-frontend carries Flutter.
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
 
