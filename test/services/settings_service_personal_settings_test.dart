@@ -17,16 +17,22 @@ void main() {
   final settings = AppSettings.instance;
 
   /// Boots [AppSettings] on one host with this device's preferences set
-  /// away from their defaults, signed in when [signedIn].
-  Future<void> load({bool signedIn = true}) async {
+  /// away from their defaults, signed in when [signedIn]. [stored] adds to
+  /// or overrides the device's preferences.
+  Future<void> load({
+    bool signedIn = true,
+    Map<String, Object> stored = const {},
+  }) async {
     SharedPreferences.setMockInitialValues({
       'hosts': jsonEncode([
         {'name': 'One', 'hostAddress': 'http://one.local'},
+        {'name': 'Two', 'hostAddress': 'http://two.local'},
       ]),
       'themeMode': 'dark',
       'refreshIntervalSeconds': 30,
       'document_editor_auto_save': false,
       'document_editor_dark_page': true,
+      ...stored,
     });
     await settings.load();
     await settings.setSessionToken(signedIn ? 'token' : null);
@@ -133,6 +139,115 @@ void main() {
       await SettingsService.refreshPersonalSettings();
 
       expect(settings.themeMode.value, ThemeMode.dark);
+    });
+  });
+
+  /// Each Quark and account's last values on this device, as stored.
+  Future<Map<String, dynamic>> slots() async {
+    final prefs = await SharedPreferences.getInstance();
+    return jsonDecode(prefs.getString('personalSettings') ?? '{}')
+        as Map<String, dynamic>;
+  }
+
+  /// One slot holding [theme] and [interval], with the editor prefs on.
+  Map<String, Object> slot(String theme, int interval) => {
+    'themeMode': theme,
+    'refreshIntervalSeconds': interval,
+    'document_editor_auto_save': true,
+    'document_editor_dark_page': false,
+  };
+
+  group('per Quark and account', () {
+    test(
+      'switching host or account restores that pair, with no fetch',
+      () async {
+        await load(
+          stored: {
+            'usernames': jsonEncode({
+              'http://one.local': 'alice',
+              'http://two.local': 'bob',
+            }),
+            'personalSettings': jsonEncode({
+              'http://one.local': {
+                'alice': slot('light', 60),
+                'carol': slot('system', 0),
+              },
+              'http://two.local': {'bob': slot('light', 120)},
+            }),
+          },
+        );
+        serve({});
+
+        expect(settings.themeMode.value, ThemeMode.light);
+        expect(settings.refreshIntervalSeconds, 60);
+        expect(settings.documentAutoSave.value, true);
+        expect(settings.documentDarkPage.value, false);
+
+        await settings.setActiveIndex(1);
+        expect(settings.refreshIntervalSeconds, 120);
+
+        await settings.setActiveIndex(0);
+        await settings.setUsername('carol');
+        expect(settings.themeMode.value, ThemeMode.system);
+        expect(settings.refreshIntervalSeconds, 0);
+        expect(requests, isEmpty);
+      },
+    );
+
+    test("an account with no slot keeps this device's values", () async {
+      await load(
+        stored: {
+          'usernames': jsonEncode({'http://one.local': 'alice'}),
+        },
+      );
+
+      // Not the code defaults: the upgrade upload sends these.
+      expect(settings.themeMode.value, ThemeMode.dark);
+      expect(settings.refreshIntervalSeconds, 30);
+      expect(settings.documentAutoSave.value, false);
+      expect(settings.documentDarkPage.value, true);
+      expect((await slots())['http://one.local']['alice'], {
+        'themeMode': 'dark',
+        'refreshIntervalSeconds': 30,
+        'document_editor_auto_save': false,
+        'document_editor_dark_page': true,
+      });
+    });
+
+    test('a change while signed out is kept for that account', () async {
+      await load(
+        signedIn: false,
+        stored: {
+          'usernames': jsonEncode({'http://one.local': 'alice'}),
+        },
+      );
+      serve({});
+
+      await SettingsService.setMyThemeMode(ThemeMode.light);
+      await settings.setUsername('bob');
+      await settings.setThemeMode(ThemeMode.system);
+      await settings.setUsername('alice');
+
+      expect(settings.themeMode.value, ThemeMode.light);
+      expect(requests, isEmpty);
+    });
+
+    test("the account's values land in its slot", () async {
+      await load(
+        stored: {
+          'usernames': jsonEncode({'http://one.local': 'alice'}),
+        },
+      );
+      serve({
+        'themeMode': 'light',
+        'refreshIntervalSeconds': 0,
+        'documentAutoSave': true,
+        'documentDarkPage': false,
+      });
+
+      await SettingsService.refreshPersonalSettings();
+
+      expect((await slots())['http://one.local']['alice'], slot('light', 0));
     });
   });
 

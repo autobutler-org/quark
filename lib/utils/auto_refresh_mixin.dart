@@ -38,8 +38,9 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
   bool _refreshOwed = false;
   Timer? _owedRefreshTimer;
 
-  /// How often to auto-refresh. Reads from [AppSettings.refreshIntervalSeconds]
-  /// by default. Override to use a fixed interval regardless of settings.
+  /// How often to auto-refresh. Reads from [AppSettings.refreshInterval] by
+  /// default, and the timer restarts when that changes, as on signing in to
+  /// an account with its own (#1914). Override to use a fixed interval regardless of settings.
   /// Return null or [Duration.zero] to disable auto-refresh.
   Duration? get refreshInterval {
     final seconds = AppSettings.instance.refreshIntervalSeconds;
@@ -69,12 +70,14 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    AppSettings.instance.refreshInterval.addListener(_startTimer);
     _triggerRefresh(initial: true);
     _startTimer();
   }
 
   @override
   void dispose() {
+    AppSettings.instance.refreshInterval.removeListener(_startTimer);
     _refreshTimer?.cancel();
     _owedRefreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);

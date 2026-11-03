@@ -174,14 +174,18 @@ class SettingsService with AuthenticatedService {
   /// result on the device for the first frame, offline, and the sign-in page.
   ///
   /// Never throws, and drops an answer that arrives after the host or the
-  /// session changed, as [refreshThemeColor] does.
+  /// session or the account changed, as [refreshThemeColor] does. Reads and
+  /// writes the current Quark and account's slot through [AppSettings].
   static Future<void> refreshPersonalSettings() async {
     final settings = AppSettings.instance;
     final host = settings.activeHost;
     final token = settings.sessionToken;
+    final user = settings.username;
     if (host == null || token == null) return;
     bool current() =>
-        settings.activeHost == host && settings.sessionToken == token;
+        settings.activeHost == host &&
+        settings.sessionToken == token &&
+        settings.username == user;
     try {
       final mine = await getMySettings();
       if (!current()) return;

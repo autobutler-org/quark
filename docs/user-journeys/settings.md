@@ -128,8 +128,9 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 - UI theme changes immediately.
 - Setting is persisted across app restarts.
 - The theme belongs to the account (#1914): signing in to the same account on another device picks it up there. The
-  sign-in page and an offline start show the theme this device last used. A change made while signed out stays on
-  this device until the next sign-in, which takes the account's theme if it has one.
+  sign-in page and an offline start show the last theme for that Quark and account on this device, and switching
+  hosts (JN-ST-003) or accounts switches it at once, before the Quark answers. A change made while signed out is kept
+  for that Quark and account until the next sign-in, which takes the account's theme if it has one.
 
 ---
 
@@ -340,7 +341,9 @@ nobody needs to type or paste it.
 
 - The new interval is applied to auto-refreshing pages (health, devices, etc.).
 - The interval belongs to the account (#1914), like the theme (JN-ST-006): the same account on another device uses
-  it too. A refused save says so ("Couldn't save your settings…") and the new interval still applies on this device.
+  it too, and it is restored per Quark and account the same way. Pages already open, and the control here, switch to
+  the account's interval as soon as it arrives. A refused save says so ("Couldn't save your settings…") and the new
+  interval still applies on this device.
 
 ---
 
