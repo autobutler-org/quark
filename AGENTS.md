@@ -124,6 +124,23 @@ prose. cspell does read Markdown, though.
   on its own (a loop, a scheduled agent, a workflow) applies the same filter and skips external ones.
 - **Working an issue means owning it.** Before starting on a ticket, assign it to the user running you:
   `gh issue edit <N> --add-assignee @me`.
+- **Every issue is on the Autobutler project, in the right column.** The org's
+  [Autobutler project](https://github.com/orgs/autobutler-org/projects/2) (number 2) is the board the team
+  reads. An issue you file goes on it, and an issue you work moves with the work: `In Progress` when you start,
+  and it stays there while the PR is open. Closing the issue moves it to `Done` on its own; an issue closed as
+  not planned or a duplicate goes to `Won't Do` by hand. Never add a column or a field.
+
+  <!-- cspell:ignore Pwld PVTSSF ADODP Xzgw -->
+
+  ```bash
+  gh project item-add 2 --owner autobutler-org --url <issue URL> --format json --jq .id   # the item id
+  gh project item-edit --project-id PVT_kwDODPwld84A8UkX --id <item id> \
+    --field-id PVTSSF_lADODPwld84A8UkXzgwWvYM --single-select-option-id <option>
+  ```
+
+  The options are `f75ad846` (Todo), `47fc9ee4` (In Progress), `98236657` (Done) and `b0f7d18e` (Won't Do).
+  `gh issue view <N> --json projectItems` shows where an issue sits now. The token needs the `project` scope
+  (`gh auth refresh -s project`); if it is missing, say so in the report rather than skipping the step.
 - **Reviewing a PR fills in its issue's owner.** If an issue the PR closes has no assignee, assign the PR's
   author: `gh issue edit <N> --add-assignee "$(gh pr view <PR> --json author --jq .author.login)"`. Leave an
   existing assignee alone.
@@ -296,7 +313,8 @@ trailers in older history are the predecessor's, and new work goes through schme
   `fix/N-...` / `feat/N-...` (see Pull request and commit conventions). A PR on a `<N>_` branch, open or
   closed, stops the factory from opening another for issue N.
 - **Running under schmeide.** A session the factory started works exactly its one issue: it opens no second
-  PR, changes no labels, and picks up no other issue. `.schmeide/review.md` is the reviewer's verdict file; the
+  PR, changes no labels, and picks up no other issue. It does move its issue on the Autobutler project, as
+  any agent working an issue does. `.schmeide/review.md` is the reviewer's verdict file; the
   runner deletes it, and it is never committed.
 
 ### Generated code (never hand-edit)
