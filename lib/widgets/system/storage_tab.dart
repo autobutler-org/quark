@@ -12,6 +12,7 @@ import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/widgets/layout/admin_map_card.dart';
 import 'package:quark/widgets/storage_devices/credentials_dialog.dart';
 import 'package:quark/widgets/storage_devices/eject_drive_dialog.dart';
 import 'package:quark/widgets/storage_devices/role_dialog.dart';
@@ -21,7 +22,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The System page's Storage tab: how protected the files are, the drives the
 /// Quark can see, their status and role, and the actions to mount, eject,
-/// rename or back them up.
+/// rename or back them up. An admin also gets the [AdminMapCard] (#2484).
 class StorageTab extends StatefulWidget {
   const StorageTab({this.onRefreshingChanged, super.key});
 
@@ -416,17 +417,28 @@ class _StorageTabState extends State<StorageTab>
           onEject: isAdmin ? _ejectDevice : null,
           ejecting: _ejecting,
           header: showCard
-              ? DataProtectionStatusCard(
-                  level: level,
-                  sentence: _protection.status?.sentence,
-                  drives: _protection.drives,
-                  nextStepLabel: _nextStepLabel(),
-                  onNextStep: _nextStepAction(isAdmin),
-                  onExplain: _showExplainer,
-                  isLoading: _protection.isLoading,
-                  error: error == null
-                      ? null
-                      : Errors.message(error, 'check the backup'),
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Where the drives sit beside people, clients and
+                    // folder access (#2484).
+                    if (isAdmin) ...[
+                      const AdminMapCard(here: AdminMapStop.disks),
+                      const SizedBox(height: 16),
+                    ],
+                    DataProtectionStatusCard(
+                      level: level,
+                      sentence: _protection.status?.sentence,
+                      drives: _protection.drives,
+                      nextStepLabel: _nextStepLabel(),
+                      onNextStep: _nextStepAction(isAdmin),
+                      onExplain: _showExplainer,
+                      isLoading: _protection.isLoading,
+                      error: error == null
+                          ? null
+                          : Errors.message(error, 'check the backup'),
+                    ),
+                  ],
                 )
               : null,
           protectionBadge: level == null
