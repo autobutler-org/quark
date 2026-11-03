@@ -31,7 +31,7 @@ The constraints come from the issue and the epic:
 | --------------------------------------- | ------------------------------------------------------------------------------------- |
 | `internal/server/content_indexer.go`    | the event-driven indexer: subscribes to the bus, upserts on upload, deletes on delete, both on move, backfills on startup, on `resync`, and when a drive appears; drops a drive's rows when it goes |
 | `pkg/util/searchutil`                   | an FTS5 external-content table kept in step by triggers, the query sanitizer, and the access-filtered paging in `SearchReadable` |
-| `pkg/util/indexutil`                    | the in-memory filename index and its measured heap cost (~30 B a file)                |
+| `pkg/util/indexutil`                    | the in-memory file index and its measured heap cost (~48 B a file, with size and mtime) |
 | `pkg/util/thumbnailutil`                | size tiers, the on-disk cache under `<data>/cache/thumbnails`, ETags, the IO semaphore classes |
 | `pkg/vfs`                               | `vfs.Walk`, `VFS.Open` returning a seekable `vfs.File`, one namespace per device, `MetadataStore` (`vfs_metadata`) |
 | `pkg/util/playbackutil`                 | per-user state in `vfs_metadata` under `playback.<user id>`, with no table of its own |

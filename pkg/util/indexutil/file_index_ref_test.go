@@ -94,8 +94,9 @@ func (idx *refIndex) SearchEach(query string, serials map[string]bool, visit fun
 	}
 }
 
-// HandleAdd adds or updates a file in the index.
-func (idx *refIndex) HandleAdd(serial, relPath string) {
+// HandleAdd adds or updates a file in the index. The reference holds names
+// only, so the size and mtime are dropped.
+func (idx *refIndex) HandleAdd(serial, relPath string, _, _ int64) {
 	parts := splitRel(relPath)
 	if len(parts) == 0 || isInternalPath(parts) {
 		return
@@ -180,7 +181,7 @@ func (idx *refIndex) HandleRescan(ctx context.Context, fsys vfs.VFS, serial, rel
 		idx.HandleDelete(serial, relPath)
 		return
 	case !info.IsDir():
-		idx.HandleAdd(serial, relPath)
+		idx.HandleAdd(serial, relPath, 0, 0)
 		return
 	}
 	entries, err := os.ReadDir(abs)

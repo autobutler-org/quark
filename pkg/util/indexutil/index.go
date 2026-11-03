@@ -5,6 +5,7 @@ import (
 	"errors"
 	"maps"
 	"slices"
+	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -68,8 +69,11 @@ func (idx *FileIndex) SearchEach(query string, serials map[string]bool, visit fu
 		if len(serials) > 0 && !serials[serial] {
 			continue
 		}
-		more := idx.roots[serial].collect("", match, func(name, relPath string) bool {
-			return visit(IndexedFile{Name: name, RelPath: relPath, DeviceSerial: serial})
+		more := idx.roots[serial].collect("", match, func(name, relPath string, size, mtime int64) bool {
+			return visit(IndexedFile{
+				Name: name, RelPath: relPath, DeviceSerial: serial,
+				Size: size, ModTime: time.Unix(0, mtime),
+			})
 		})
 		if !more {
 			return
@@ -77,15 +81,33 @@ func (idx *FileIndex) SearchEach(query string, serials map[string]bool, visit fu
 	}
 }
 
-// HandleAdd adds a file to the index.
-func (idx *FileIndex) HandleAdd(serial, relPath string) {
+// HandleAdd adds a file to the index with its size and mtime (Unix nanoseconds),
+// or updates them for a file the index already holds.
+func (idx *FileIndex) HandleAdd(serial, relPath string, size, mtime int64) {
 	parts := splitRel(relPath)
 	if len(parts) == 0 || isInternalPath(parts) {
 		return
 	}
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
-	idx.root(serial).ensure(parts[:len(parts)-1]).putFile(parts[len(parts)-1])
+	root := idx.root(serial)
+	root.ensure(parts[:len(parts)-1]).putFile(parts[len(parts)-1], size, mtime)
+	root.forgetSize(parts)
+}
+
+// FolderSize returns the sum of every file's size under the folder at relPath
+// on the device with serial, the root for "", and false when the index holds
+// no such folder. Each folder remembers its total until a change below it, so
+// asking again costs a lookup.
+func (idx *FileIndex) FolderSize(serial, relPath string) (int64, bool) {
+	// The write lock, because the totals are remembered as they are summed.
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	dir := idx.roots[serial].lookup(splitRel(relPath))
+	if dir == nil {
+		return 0, false
+	}
+	return dir.totalSize(), true
 }
 
 // HandleDelete removes a file or a folder, and everything in the folder,
@@ -98,6 +120,7 @@ func (idx *FileIndex) HandleDelete(serial, relPath string) {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 	if root := idx.roots[serial]; root != nil {
+		root.forgetSize(parts)
 		root.lookup(parts[:len(parts)-1]).remove(parts[len(parts)-1])
 	}
 }
@@ -137,7 +160,7 @@ func (idx *FileIndex) HandleRescan(ctx context.Context, fsys vfs.VFS, serial, re
 		case err != nil:
 			return
 		case !info.IsDir:
-			idx.HandleAdd(serial, relPath)
+			idx.HandleAdd(serial, relPath, info.Size, info.ModTime.UnixNano())
 			return
 		}
 	}
@@ -187,6 +210,7 @@ func (idx *FileIndex) HandleRescan(ctx context.Context, fsys vfs.VFS, serial, re
 	} else {
 		parent.putDir(parts[len(parts)-1], fresh)
 	}
+	root.forgetSize(parts)
 }
 
 // BuildAndWatch builds the index from every device namespace in the
@@ -250,21 +274,27 @@ func (idx *FileIndex) reattach(serial string, oldParts, newParts []string) bool 
 	if oldParent == nil {
 		return false
 	}
-	_, isFile := oldParent.findFile(oldName)
+	i, isFile := oldParent.findFile(oldName)
 	dir := oldParent.child(oldName)
 	if !isFile && dir == nil {
 		return false
 	}
+	var size, mtime int64
+	if isFile {
+		size, mtime = oldParent.sizes[i], oldParent.modTimes[i]
+	}
+	root.forgetSize(oldParts)
 	oldParent.remove(oldName)
 	if isInternalPath(newParts) {
 		return true
 	}
 	newParent, newName := root.ensure(newParts[:len(newParts)-1]), newParts[len(newParts)-1]
 	if isFile {
-		newParent.putFile(newName)
+		newParent.putFile(newName, size, mtime)
 	} else {
 		newParent.putDir(newName, dir)
 	}
+	root.forgetSize(newParts)
 	return true
 }
 
