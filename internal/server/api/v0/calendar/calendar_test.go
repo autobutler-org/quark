@@ -39,6 +39,7 @@ func newCalendarEngine(t *testing.T) (*gin.Engine, <-chan eventbus.Event) {
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
 		c = ctxutil.With(c, "principal", accessutil.Principal{UserID: member.ID})
+		c = ctxutil.With(c, "sessionToken", "tok")
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), NewRouter())

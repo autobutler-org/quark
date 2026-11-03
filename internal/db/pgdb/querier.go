@@ -289,6 +289,8 @@ type Querier interface {
 	// ListAllChatChannels is every channel on the Quark, for an admin looking
 	// for the ones they are not in (#2422), ordered as ListChatChannelsForUser.
 	ListAllChatChannels(ctx context.Context) ([]ListAllChatChannelsRow, error)
+	// Every event of a calendar, for the iCalendar export and import (#1151).
+	ListCalendarEvents(ctx context.Context, calendarID int64) ([]ListCalendarEventsRow, error)
 	// A one-off event is listed when it overlaps [range_start, range_end). A
 	// repeating event is listed when its series starts before range_end and has
 	// not ended before ended_before (#2535), since any of its occurrences may fall

@@ -58,6 +58,20 @@ WHERE
 LIMIT
     1;
 
+-- Every event of a calendar, for the iCalendar export and import (#1151).
+-- name: ListCalendarEvents :many
+SELECT
+    sqlc.embed(calendar_events),
+    CAST(COALESCE(users.username, '') AS TEXT) AS owner_name
+FROM
+    calendar_events
+    LEFT JOIN users ON users.id = calendar_events.created_by
+WHERE
+    calendar_events.calendar_id = sqlc.arg(calendar_id)
+ORDER BY
+    calendar_events.starts_at,
+    calendar_events.id;
+
 -- A one-off event is listed when it overlaps [range_start, range_end). A
 -- repeating event is listed when its series starts before range_end and has
 -- not ended before ended_before (#2535), since any of its occurrences may fall

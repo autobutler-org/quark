@@ -17,6 +17,11 @@
 // event's own time zone, and ListReminders finds the reminders that fall due
 // in a span of time (#2525): what a push worker asks.
 //
+// ExportICal writes the calendar as an RFC 5545 iCalendar feed that calendar
+// apps subscribe to, and ImportICal stores the events of an .ics file,
+// mapping each rule onto the presets above and skipping what they cannot
+// express (#1151).
+//
 // An event belongs to the account that created it (#2544), which lets the
 // calendar be narrowed to one person. It is not privacy: every account still
 // sees and edits every event.
@@ -31,6 +36,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -300,6 +306,76 @@ func MoveEvent(ctx context.Context, params MoveEventParams) (MoveEventResult, er
 	err := db.InTx(ctx, params.Database.Db, func(q db.Querier) error {
 		var err error
 		result, err = moveEvent(ctx, q, params)
+		return err
+	})
+	return result, err
+}
+
+// ErrInvalidICal reports an import body that is not an iCalendar file: it has
+// no BEGIN:VCALENDAR.
+var ErrInvalidICal = errors.New("not an iCalendar file")
+
+// ExportICalParams writes the default calendar to Writer.
+type ExportICalParams struct {
+	Queries db.Querier
+	Writer  io.Writer
+}
+
+// ExportICalResult counts the events written.
+type ExportICalResult struct {
+	Events int
+}
+
+// ExportICal writes the default calendar to Writer as an RFC 5545 VCALENDAR,
+// one VEVENT per stored event, streamed event by event. Each event's UID is
+// stable, so a subscribing app updates an event rather than adding it again.
+// A series' preset becomes its RRULE and its skipped starts EXDATEs.
+// Reminders and colors are not exported.
+func ExportICal(ctx context.Context, params ExportICalParams) (ExportICalResult, error) {
+	calendar, err := params.Queries.GetDefaultCalendar(ctx)
+	if err != nil {
+		return ExportICalResult{}, err
+	}
+	rows, err := params.Queries.ListCalendarEvents(ctx, calendar.ID)
+	if err != nil {
+		return ExportICalResult{}, err
+	}
+	return ExportICalResult{Events: len(rows)}, writeICal(params.Writer, calendar.Name, rows)
+}
+
+// ImportICalParams stores the events of the iCalendar on Reader, owned by
+// CreatedBy (0 for none). The caller bounds the reader's size.
+type ImportICalParams struct {
+	Database  *db.DatabaseSqlc
+	Reader    io.Reader
+	CreatedBy int64
+}
+
+// ImportICalResult counts the events stored and the ones left out.
+type ImportICalResult struct {
+	Imported int
+	Skipped  int
+}
+
+// ImportICal stores every VEVENT on Reader on the default calendar, in one
+// transaction. A rule the presets cannot express (yearly, an interval, more
+// than the start's own weekday or day of the month), a cancelled event, one
+// that breaks an event rule, and one matching an existing event's title,
+// start, end and all-day flag are skipped, so importing a file twice adds
+// nothing. A modified occurrence (RECURRENCE-ID) is stored as a one-off and
+// skipped by its series. A body with no VCALENDAR is ErrInvalidICal.
+func ImportICal(ctx context.Context, params ImportICalParams) (ImportICalResult, error) {
+	if params.Database == nil || params.Database.Db == nil {
+		return ImportICalResult{}, errors.New("calendar import needs a database")
+	}
+	events, err := parseICal(params.Reader)
+	if err != nil {
+		return ImportICalResult{}, err
+	}
+	var result ImportICalResult
+	err = db.InTx(ctx, params.Database.Db, func(q db.Querier) error {
+		var err error
+		result, err = storeICalEvents(ctx, q, events, params.CreatedBy)
 		return err
 	})
 	return result, err

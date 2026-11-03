@@ -187,6 +187,68 @@ func (q *Queries) GetDefaultCalendar(ctx context.Context) (Calendar, error) {
 	return i, err
 }
 
+const listCalendarEvents = `-- name: ListCalendarEvents :many
+SELECT
+    calendar_events.id, calendar_events.calendar_id, calendar_events.title, calendar_events.notes, calendar_events.location, calendar_events.starts_at, calendar_events.ends_at, calendar_events.all_day, calendar_events.time_zone, calendar_events.repeat, calendar_events.reminder_minutes, calendar_events.color_index, calendar_events.created_at, calendar_events.updated_at, calendar_events.created_by, calendar_events.repeat_until, calendar_events.excluded_starts,
+    CAST(COALESCE(users.username, '') AS TEXT) AS owner_name
+FROM
+    calendar_events
+    LEFT JOIN users ON users.id = calendar_events.created_by
+WHERE
+    calendar_events.calendar_id = $1
+ORDER BY
+    calendar_events.starts_at,
+    calendar_events.id
+`
+
+type ListCalendarEventsRow struct {
+	CalendarEvent CalendarEvent
+	OwnerName     string
+}
+
+// Every event of a calendar, for the iCalendar export and import (#1151).
+func (q *Queries) ListCalendarEvents(ctx context.Context, calendarID int64) ([]ListCalendarEventsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCalendarEvents, calendarID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCalendarEventsRow
+	for rows.Next() {
+		var i ListCalendarEventsRow
+		if err := rows.Scan(
+			&i.CalendarEvent.ID,
+			&i.CalendarEvent.CalendarID,
+			&i.CalendarEvent.Title,
+			&i.CalendarEvent.Notes,
+			&i.CalendarEvent.Location,
+			&i.CalendarEvent.StartsAt,
+			&i.CalendarEvent.EndsAt,
+			&i.CalendarEvent.AllDay,
+			&i.CalendarEvent.TimeZone,
+			&i.CalendarEvent.Repeat,
+			&i.CalendarEvent.ReminderMinutes,
+			&i.CalendarEvent.ColorIndex,
+			&i.CalendarEvent.CreatedAt,
+			&i.CalendarEvent.UpdatedAt,
+			&i.CalendarEvent.CreatedBy,
+			&i.CalendarEvent.RepeatUntil,
+			&i.CalendarEvent.ExcludedStarts,
+			&i.OwnerName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCalendarEventsInRange = `-- name: ListCalendarEventsInRange :many
 SELECT
     calendar_events.id, calendar_events.calendar_id, calendar_events.title, calendar_events.notes, calendar_events.location, calendar_events.starts_at, calendar_events.ends_at, calendar_events.all_day, calendar_events.time_zone, calendar_events.repeat, calendar_events.reminder_minutes, calendar_events.color_index, calendar_events.created_at, calendar_events.updated_at, calendar_events.created_by, calendar_events.repeat_until, calendar_events.excluded_starts,
