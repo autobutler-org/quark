@@ -297,3 +297,29 @@ func TestSubscribeLossyResyncCarriesNewestSeq(t *testing.T) {
 		t.Fatalf("got %q with Seq %d, want a resync with Seq %d", got.Kind, got.Seq, bus.Seq())
 	}
 }
+
+// A second PublishOnceAfter for the same key before the first fires does not
+// send another event. A different key does.
+func TestPublishOnceAfterCoalesces(t *testing.T) {
+	bus := eventbus.New()
+	ch, unsub := bus.Subscribe("once")
+	defer unsub()
+
+	bus.PublishOnceAfter("k", 40*time.Millisecond, eventbus.Event{Kind: eventbus.EventResync, Path: "first"})
+	bus.PublishOnceAfter("k", 40*time.Millisecond, eventbus.Event{Kind: eventbus.EventResync, Path: "second"})
+	bus.PublishOnceAfter("other", 40*time.Millisecond, eventbus.Event{Kind: eventbus.EventResync, Path: "other"})
+
+	got := map[string]int{}
+	deadline := time.After(300 * time.Millisecond)
+	for len(got) < 2 {
+		select {
+		case evt := <-ch:
+			got[evt.Path]++
+		case <-deadline:
+			t.Fatalf("got %v, want first and other", got)
+		}
+	}
+	if got["first"] != 1 || got["other"] != 1 || got["second"] != 0 {
+		t.Fatalf("got %v, want first and other once each", got)
+	}
+}

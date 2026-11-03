@@ -235,6 +235,16 @@ class _FakeQuark {
       ciphertext: ciphertext,
     );
     (answers[messageId] ??= {})[userId] = row;
+    // An anonymous poll names the poll and not the answer. The server holds
+    // the author's copy of a results-after-close note until a clock boundary;
+    // this delivers it now, and the client only reads the answers again.
+    if (poll.anonymous) {
+      _emit('chat_poll_answers_changed', {
+        'channelId': _channel,
+        'messageId': messageId,
+      }, hears: poll.resultsAfterClose ? {2, userId} : null);
+      return served(row, userId);
+    }
     final event = served(row, 0);
     _emit('chat_poll_answer_changed', {
       'channelId': _channel,

@@ -210,6 +210,44 @@ func TestFilterEventChatReactions(t *testing.T) {
 	}
 }
 
+// TestFilterEventChatPollAnswers passes a poll-answer note only to its
+// audience, and chat_poll_answers_changed carries no answer (#3943).
+func TestFilterEventChatPollAnswers(t *testing.T) {
+	f := newFixture(t)
+	stranger := f.load(t, accessutil.Principal{UserID: createUser(t, f.database, "carol")})
+	admin := f.load(t, accessutil.Principal{UserID: createUser(t, f.database, "root"), IsAdmin: true})
+	member := f.load(t, accessutil.Principal{UserID: f.userID})
+	note := eventbus.Event{
+		Kind: eventbus.EventChatPollAnswersChanged,
+		Data: eventbus.ChatPollAnswersChanged{ChannelID: 7, MessageID: 3, Audience: []int64{f.userID}},
+	}
+	for _, tc := range []struct {
+		name   string
+		access accessutil.Access
+		event  eventbus.Event
+		want   bool
+	}{
+		{name: "reader", access: member, event: note, want: true},
+		{name: "non-member admin", access: admin, event: note},
+		{name: "non-member", access: stranger, event: note},
+		{name: "no data", access: member, event: eventbus.Event{Kind: eventbus.EventChatPollAnswersChanged}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := accessutil.FilterEvent(accessutil.FilterEventParams{Access: tc.access, Event: tc.event}); got.Deliver != tc.want {
+				t.Errorf("Deliver = %v, want %v", got.Deliver, tc.want)
+			}
+		})
+	}
+
+	body, err := json.Marshal(note)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"kind":"chat_poll_answers_changed","data":{"channelId":7,"messageId":3}}`; string(body) != want {
+		t.Errorf("event JSON = %s, want %s", body, want)
+	}
+}
+
 // TestFilterEventChatReadMarker passes chat_read_marker_changed only to the
 // account whose marker moved, never to another member or an admin (#2424).
 func TestFilterEventChatReadMarker(t *testing.T) {

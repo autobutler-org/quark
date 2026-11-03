@@ -5,6 +5,7 @@ package eventbus
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type EventKind string
@@ -96,9 +97,14 @@ const (
 	// EventChatReactionChanged fires when a reaction is added to or removed
 	// from a chat message (#2426). Data is a ChatReactionChanged.
 	EventChatReactionChanged EventKind = "chat_reaction_changed"
-	// EventChatPollAnswerChanged fires when an account answers a chat poll or
-	// changes its answer (#3893). Data is a ChatPollAnswerChanged.
+	// EventChatPollAnswerChanged fires when an account answers a chat poll that
+	// names who answered, or changes its answer (#3893). Data is a
+	// ChatPollAnswerChanged. An anonymous poll fires EventChatPollAnswersChanged
+	// instead (#3943).
 	EventChatPollAnswerChanged EventKind = "chat_poll_answer_changed"
+	// EventChatPollAnswersChanged fires when an anonymous poll's answers change
+	// (#3943). Data is a ChatPollAnswersChanged with no answer: clients refetch.
+	EventChatPollAnswersChanged EventKind = "chat_poll_answers_changed"
 	// EventChatPollClosed fires when a poll's author closes it (#3893). Data
 	// is a ChatMessageChanged with no Message. A poll that closes by time
 	// fires nothing.
@@ -185,14 +191,24 @@ type ChatReactionChanged struct {
 // ChatPollAnswerChanged is the data of a chat_poll_answer_changed event. It
 // reaches only the readers allowed to see the answer: every reader, or while
 // a results-after-close poll is open only its author and the one who
-// answered.
+// answered. An anonymous poll uses ChatPollAnswersChanged instead.
 type ChatPollAnswerChanged struct {
 	ChannelID int64 `json:"channelId"`
 	MessageID int64 `json:"messageId"`
-	// Answer is the stored row, a chatutil.PollAnswer, with no user id when
-	// the poll is anonymous.
+	// Answer is the stored row, a chatutil.PollAnswer.
 	Answer any `json:"answer"`
 	// Audience is who may see the answer. It is never sent.
+	Audience []int64 `json:"-"`
+}
+
+// ChatPollAnswersChanged is the data of a chat_poll_answers_changed event
+// (#3943). It names the poll and carries no answer, so a client reads the
+// answers again rather than learning which one just arrived. It reaches only
+// Audience.
+type ChatPollAnswersChanged struct {
+	ChannelID int64 `json:"channelId"`
+	MessageID int64 `json:"messageId"`
+	// Audience is who may hear that the answers changed. It is never sent.
 	Audience []int64 `json:"-"`
 }
 
@@ -257,6 +273,8 @@ type Bus struct {
 	// maxPending bounds each Subscribe queue; tests lower it.
 	maxPending int
 	seq        atomic.Uint64
+	// waiting holds PublishOnceAfter timers by the caller's key.
+	waiting map[string]*time.Timer
 }
 
 // Seq is the sequence number of the newest event published. A publisher
@@ -296,4 +314,36 @@ func (b *Bus) Publish(e Event) {
 	for _, s := range b.subscribers {
 		s.deliver(e)
 	}
+}
+
+// PublishOnceAfter publishes event after delay, and not again for key until
+// that one has gone out. A later call with the same key before then changes
+// nothing: the first event is the one that is sent, which is enough when
+// every one of them only says "this changed, refetch". A delay of 0 or less
+// publishes now, without coalescing. A nil bus does nothing.
+func (b *Bus) PublishOnceAfter(key string, delay time.Duration, event Event) {
+	if b == nil {
+		return
+	}
+	if delay <= 0 || key == "" {
+		b.Publish(event)
+		return
+	}
+	b.mu.Lock()
+	if b.waiting == nil {
+		b.waiting = map[string]*time.Timer{}
+	}
+	if _, ok := b.waiting[key]; ok {
+		b.mu.Unlock()
+		return
+	}
+	// The callback takes the lock only to drop its own timer, then publishes
+	// after releasing it: Publish needs the read lock.
+	b.waiting[key] = time.AfterFunc(delay, func() {
+		b.mu.Lock()
+		delete(b.waiting, key)
+		b.mu.Unlock()
+		b.Publish(event)
+	})
+	b.mu.Unlock()
 }

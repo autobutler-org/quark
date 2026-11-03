@@ -11,7 +11,7 @@ import (
 
 // answerPoll godoc
 // @Summary Answer a chat poll
-// @Description Stores the caller's answer to a poll, base64 ciphertext of the answer padded to 4 KiB and encrypted under the channel key of keyVersion, so it is exactly 4136 bytes. When the poll allows changing an answer a second one replaces the first; otherwise it is 409. The stored row goes as chat_poll_answer_changed to the readers who may see it: everyone, or while a results-after-close poll is open only its author and the caller. The Quark never sees the answer. Needs read_messages and add_reactions; a reader without add_reactions gets 403, and anyone without read_messages 404.
+// @Description Stores the caller's answer to a poll, base64 ciphertext of the answer padded to 4 KiB and encrypted under the channel key of keyVersion, so it is exactly 4136 bytes. When the poll allows changing an answer a second one replaces the first; otherwise it is 409. On a poll that names who answered, the stored row goes as chat_poll_answer_changed to the readers who may see it: everyone, or while a results-after-close poll is open only its author and the caller. An anonymous poll sends chat_poll_answers_changed with no answer instead, and while a results-after-close anonymous poll is open that note reaches the author on a delay. The returned answer of an anonymous poll has no timestamps and an id that does not follow arrival order. The Quark never sees the answer. Needs read_messages and add_reactions; a reader without add_reactions gets 403, and anyone without read_messages 404.
 // @Tags chat
 // @Accept json
 // @Produce json

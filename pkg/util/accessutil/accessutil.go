@@ -527,9 +527,9 @@ type FilterEventResult struct {
 //   - chat_message_created, chat_message_deleted, chat_reaction_changed and
 //     chat_poll_closed pass only to their audience, the channel's readers:
 //     holders of read_messages, never a delegated manager.
-//     chat_poll_answer_changed passes only to the readers who may see that
-//     answer under the poll's settings. Admins get no pass: a message is for the people in
-//     the conversation.
+//     chat_poll_answer_changed and chat_poll_answers_changed pass only to the
+//     readers who may see that answer under the poll's settings. Admins get
+//     no pass: a message is for the people in the conversation.
 //   - chat_read_marker_changed passes only to the account whose marker moved,
 //     so its other sessions clear their unread count. Admins get no pass here
 //     either.
@@ -575,6 +575,10 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 	}
 	if evt.Kind == eventbus.EventChatPollAnswerChanged {
 		changed, ok := evt.Data.(eventbus.ChatPollAnswerChanged)
+		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
+	}
+	if evt.Kind == eventbus.EventChatPollAnswersChanged {
+		changed, ok := evt.Data.(eventbus.ChatPollAnswersChanged)
 		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
 	}
 	if evt.Kind == eventbus.EventChatReadMarkerChanged {

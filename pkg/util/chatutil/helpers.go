@@ -5,11 +5,15 @@ import (
 	"cmp"
 	"context"
 	"crypto/ed25519"
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"log"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -791,8 +795,9 @@ func pollFromRow(row db.ChatPoll, now time.Time) Poll {
 }
 
 // answerFor maps an answer as viewer sees it: theirs or not, and nobody's on
-// an anonymous poll. A viewer of 0 owns nothing.
-func answerFor(poll db.ChatPoll, row db.ChatPollAnswer, viewer int64) PollAnswer {
+// an anonymous poll. A viewer of 0 owns nothing. installID keys the opaque id
+// of an anonymous answer; it is ignored otherwise.
+func answerFor(poll db.ChatPoll, row db.ChatPollAnswer, viewer int64, installID string) PollAnswer {
 	answer := PollAnswer{
 		ID:         row.ID,
 		MessageID:  row.MessageID,
@@ -805,19 +810,66 @@ func answerFor(poll db.ChatPoll, row db.ChatPollAnswer, viewer int64) PollAnswer
 	}
 	if poll.Anonymous {
 		answer.UserID = 0
+		answer.ID = anonymousAnswerID(installID, row.MessageID, row.UserID)
+		answer.CreatedAt = time.Time{}
+		answer.UpdatedAt = time.Time{}
 	}
 	return answer
 }
 
+// anonymousAnswerID is an id for one account's answer on an anonymous poll.
+// It stays put when the answer changes, and it is a keyed hash rather than
+// the row id, so it does not follow arrival order. The key is the install id,
+// which the API never sends, so a member who knows the account list cannot
+// recompute it. The value stays inside a JSON number's exact integers, and
+// is never 0.
+func anonymousAnswerID(installID string, messageID, userID int64) int64 {
+	mac := hmac.New(sha256.New, []byte(installID))
+	var buf [16]byte
+	binary.BigEndian.PutUint64(buf[:8], uint64(messageID))
+	binary.BigEndian.PutUint64(buf[8:], uint64(userID))
+	mac.Write([]byte("quark-chat-poll-answer-id-v1"))
+	mac.Write(buf[:])
+	sum := mac.Sum(nil)
+	n := int64(binary.BigEndian.Uint64(sum[:8]) & ((1 << 52) - 1))
+	if n == 0 {
+		return 1
+	}
+	return n
+}
+
+// anonymousBatchDelay is how long an anonymous results-after-close poll waits
+// before telling its author that answers changed. The note lands on a
+// boundary of AnonymousResultsWindow at least one window away, so subtracting
+// a fixed delay from it does not recover the second the answer arrived.
+func anonymousBatchDelay(now time.Time) time.Duration {
+	window := AnonymousResultsWindow
+	if window <= 0 {
+		return 0
+	}
+	now = now.UTC()
+	return now.Add(window).Truncate(window).Add(window).Sub(now)
+}
+
 // visibleAnswers is the answers viewer may see: all of them, but only their
-// own while a results-after-close poll is open and they didn't write it.
-func visibleAnswers(poll db.ChatPoll, authorID, viewer int64, rows []db.ChatPollAnswer, now time.Time) []PollAnswer {
+// own while a results-after-close poll is open and they didn't write it. An
+// anonymous poll's answers are ordered by ciphertext, not by arrival.
+// installID keys those opaque ids and is ignored otherwise.
+func visibleAnswers(poll db.ChatPoll, authorID, viewer int64, rows []db.ChatPollAnswer, now time.Time, installID string) []PollAnswer {
 	ownOnly := poll.ResultsAfterClose && !pollClosed(poll, now) && viewer != authorID
 	answers := []PollAnswer{}
 	for _, row := range rows {
 		if !ownOnly || row.UserID == viewer {
-			answers = append(answers, answerFor(poll, row, viewer))
+			answers = append(answers, answerFor(poll, row, viewer, installID))
 		}
+	}
+	if poll.Anonymous {
+		slices.SortFunc(answers, func(a, b PollAnswer) int {
+			if c := bytes.Compare(a.Ciphertext, b.Ciphertext); c != 0 {
+				return c
+			}
+			return cmp.Compare(a.ID, b.ID)
+		})
 	}
 	return answers
 }
@@ -848,6 +900,16 @@ func attachPolls(ctx context.Context, queries db.Querier, channelID, viewer int6
 	for _, row := range rows {
 		answers[row.MessageID] = append(answers[row.MessageID], row)
 	}
+	var installID string
+	for _, row := range polls {
+		if row.Anonymous {
+			installID, err = queries.GetInstallID(ctx)
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
 	now := time.Now()
 	for _, row := range polls {
 		i, found := slices.BinarySearchFunc(messages, row.MessageID, func(m Message, id int64) int { return cmp.Compare(m.ID, id) })
@@ -855,16 +917,20 @@ func attachPolls(ctx context.Context, queries db.Querier, channelID, viewer int6
 			continue
 		}
 		poll := pollFromRow(row, now)
-		poll.Answers = visibleAnswers(row, messages[i].AuthorID, viewer, answers[row.MessageID], now)
+		poll.Answers = visibleAnswers(row, messages[i].AuthorID, viewer, answers[row.MessageID], now, installID)
 		messages[i].Poll = &poll
 	}
 	return nil
 }
 
-// publishPollAnswer sends an answer, as nobody's own, to the readers who may
-// see it: every reader, or while a results-after-close poll is open only its
-// author and whoever answered.
-func publishPollAnswer(ctx context.Context, queries db.Querier, bus *eventbus.Bus, message db.ChatMessage, poll db.ChatPoll, row db.ChatPollAnswer, now time.Time) error {
+// publishPollAnswer tells the readers who may see an answer that it changed.
+// A poll that names who answered sends the answer itself, to every reader, or
+// while a results-after-close poll is open only to its author and whoever
+// answered. An anonymous poll sends no answer: a note that names the poll, so
+// clients refetch. While a results-after-close anonymous poll is open, the
+// person who answered hears that note at once and the author hears one note
+// on a later clock boundary, so the arrival second is not the note's time.
+func publishPollAnswer(ctx context.Context, queries db.Querier, bus *eventbus.Bus, message db.ChatMessage, poll db.ChatPoll, row db.ChatPollAnswer, now time.Time, installID string) error {
 	if bus == nil {
 		return nil
 	}
@@ -872,11 +938,35 @@ func publishPollAnswer(ctx context.Context, queries db.Querier, bus *eventbus.Bu
 	if err != nil {
 		return err
 	}
+	if poll.Anonymous {
+		publishAnonymousPollNote(bus, message, poll, row.UserID, audience, now)
+		return nil
+	}
 	if poll.ResultsAfterClose && !pollClosed(poll, now) {
 		audience = slices.DeleteFunc(audience, func(id int64) bool { return id != message.AuthorID.Int64 && id != row.UserID })
 	}
 	bus.Publish(eventbus.Event{Kind: eventbus.EventChatPollAnswerChanged, Data: eventbus.ChatPollAnswerChanged{
-		ChannelID: message.ChannelID, MessageID: message.ID, Answer: answerFor(poll, row, 0), Audience: audience,
+		ChannelID: message.ChannelID, MessageID: message.ID, Answer: answerFor(poll, row, 0, installID), Audience: audience,
 	}})
 	return nil
+}
+
+// publishAnonymousPollNote sends chat_poll_answers_changed for one anonymous
+// poll. who is the only argument that differs between the immediate note and
+// the author's delayed one.
+func publishAnonymousPollNote(bus *eventbus.Bus, message db.ChatMessage, poll db.ChatPoll, userID int64, audience []int64, now time.Time) {
+	note := func(who []int64) eventbus.Event {
+		return eventbus.Event{Kind: eventbus.EventChatPollAnswersChanged, Data: eventbus.ChatPollAnswersChanged{
+			ChannelID: message.ChannelID, MessageID: message.ID, Audience: who,
+		}}
+	}
+	if !poll.ResultsAfterClose || pollClosed(poll, now) {
+		bus.Publish(note(audience))
+		return
+	}
+	bus.Publish(note([]int64{userID}))
+	if userID == message.AuthorID.Int64 {
+		return
+	}
+	bus.PublishOnceAfter("anon-poll:"+strconv.FormatInt(message.ID, 10), anonymousBatchDelay(now), note([]int64{message.AuthorID.Int64}))
 }

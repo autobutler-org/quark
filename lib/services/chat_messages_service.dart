@@ -130,7 +130,8 @@ class ChatMessagesService with AuthenticatedService {
     return ChatPollResponse.fromJson(_json(response));
   }
 
-  /// The answers to poll [messageId] this account may see, oldest first.
+  /// The answers to poll [messageId] this account may see, oldest first, or
+  /// not in arrival order when the poll is anonymous.
   static Future<List<ChatPollResponse>> fetchPollAnswers(int messageId) async {
     final response = await instance.authenticatedGet(
       _messageUri(messageId, 'answers'),
