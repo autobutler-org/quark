@@ -2,9 +2,9 @@
 INSERT INTO
     connected_devices (ip_address, user_agent, first_seen_at, last_seen_at, request_count)
 VALUES
-    (sqlc.arg(ip_address), sqlc.arg(user_agent), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)
+    (sqlc.arg(ip_address), sqlc.arg(user_agent), strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'), 1)
 ON CONFLICT (ip_address, user_agent) DO UPDATE SET
-    last_seen_at = CURRENT_TIMESTAMP,
+    last_seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now'),
     request_count = connected_devices.request_count + 1
 RETURNING *;
 

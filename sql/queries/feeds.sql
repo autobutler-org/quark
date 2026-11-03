@@ -51,7 +51,7 @@ UPDATE feeds
 SET
     name = sqlc.arg(name),
     folder = sqlc.arg(folder),
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = sqlc.arg(id)
     AND user_id = sqlc.arg(user_id)

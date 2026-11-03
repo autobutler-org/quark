@@ -34,7 +34,7 @@ func (q *Queries) DeleteFileContentBySerial(ctx context.Context, serial string) 
 
 const upsertFileContent = `-- name: UpsertFileContent :exec
 INSERT INTO file_content (serial, rel_path, extracted, updated_at)
-VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+VALUES ($1, $2, $3, strftime('%Y-%m-%d %H:%M:%f', 'now'))
 ON CONFLICT(serial, rel_path) DO UPDATE SET
     extracted  = excluded.extracted,
     updated_at = excluded.updated_at

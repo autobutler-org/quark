@@ -11,7 +11,7 @@ SELECT * FROM chat_polls WHERE message_id = sqlc.arg(message_id);
 -- CloseChatPoll closes a poll by hand, once: a poll already closed keeps its
 -- first closed_at and the count is 0.
 -- name: CloseChatPoll :execrows
-UPDATE chat_polls SET closed_at = CURRENT_TIMESTAMP
+UPDATE chat_polls SET closed_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE message_id = sqlc.arg(message_id) AND closed_at IS NULL;
 
 -- ListChatPollsBetween is the polls among a channel's messages whose ids fall
@@ -35,7 +35,7 @@ WHERE chat_polls.message_id = sqlc.arg(message_id)
 ON CONFLICT (message_id, user_id) DO UPDATE SET
     key_version = excluded.key_version,
     ciphertext = excluded.ciphertext,
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 RETURNING *;
 
 -- CreateChatPollAnswer stores an account's first answer to a poll, and

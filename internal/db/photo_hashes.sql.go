@@ -239,7 +239,7 @@ DO UPDATE SET
     content_hash  = excluded.content_hash,
     taken_at      = CASE WHEN excluded.taken_checked THEN excluded.taken_at ELSE photo_hashes.taken_at END,
     taken_checked = photo_hashes.taken_checked OR excluded.taken_checked,
-    computed_at   = CURRENT_TIMESTAMP
+    computed_at   = strftime('%Y-%m-%d %H:%M:%f', 'now')
 `
 
 type UpsertPhotoHashParams struct {

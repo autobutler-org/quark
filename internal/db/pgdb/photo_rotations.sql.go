@@ -54,7 +54,7 @@ const upsertPhotoRotation = `-- name: UpsertPhotoRotation :exec
 INSERT INTO
     photo_rotations (device_serial, rel_path, rotation_quarters, updated_at)
 VALUES
-    ($1, $2, $3, CURRENT_TIMESTAMP)
+    ($1, $2, $3, strftime('%Y-%m-%d %H:%M:%f', 'now'))
 ON CONFLICT (device_serial, rel_path) DO UPDATE SET
     rotation_quarters = excluded.rotation_quarters,
     updated_at = excluded.updated_at

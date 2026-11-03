@@ -388,7 +388,7 @@ const moveAlbum = `-- name: MoveAlbum :one
 UPDATE photo_albums
 SET
     parent_id = $1,
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = $2
     AND user_id = CAST($3 AS BIGINT)
@@ -485,7 +485,7 @@ const renameAlbum = `-- name: RenameAlbum :one
 UPDATE photo_albums
 SET
     name = $1,
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = $2
     AND user_id = CAST($3 AS BIGINT)

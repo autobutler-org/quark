@@ -350,7 +350,7 @@ SET
     color_index = ?10,
     repeat_until = ?11,
     excluded_starts = ?12,
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = ?13
 RETURNING id, calendar_id, title, notes, location, starts_at, ends_at, all_day, time_zone, repeat, reminder_minutes, color_index, created_at, updated_at, created_by, repeat_until, excluded_starts

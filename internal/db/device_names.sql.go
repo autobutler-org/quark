@@ -54,10 +54,10 @@ func (q *Queries) GetDeviceName(ctx context.Context, deviceSerial string) (strin
 
 const upsertDeviceName = `-- name: UpsertDeviceName :exec
 INSERT INTO device_names (device_serial, display_name, updated_at)
-VALUES (?1, ?2, CURRENT_TIMESTAMP)
+VALUES (?1, ?2, strftime('%Y-%m-%d %H:%M:%f', 'now'))
 ON CONFLICT(device_serial) DO UPDATE SET
     display_name = excluded.display_name,
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 `
 
 type UpsertDeviceNameParams struct {

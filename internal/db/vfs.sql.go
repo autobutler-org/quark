@@ -160,7 +160,7 @@ const upsertVFSMetadata = `-- name: UpsertVFSMetadata :exec
 INSERT INTO
     vfs_metadata (namespace, path, key, value, updated_at)
 VALUES
-    (?1, ?2, ?3, ?4, CURRENT_TIMESTAMP)
+    (?1, ?2, ?3, ?4, strftime('%Y-%m-%d %H:%M:%f', 'now'))
 ON CONFLICT (namespace, path, key) DO UPDATE SET
     value = excluded.value,
     updated_at = excluded.updated_at

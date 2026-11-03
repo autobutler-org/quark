@@ -59,7 +59,7 @@ ORDER BY
 UPDATE photo_albums
 SET
     name = sqlc.arg(name),
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = sqlc.arg(id)
     AND user_id = CAST(sqlc.arg(user_id) AS BIGINT)
@@ -69,7 +69,7 @@ RETURNING *;
 UPDATE photo_albums
 SET
     parent_id = sqlc.arg(parent_id),
-    updated_at = CURRENT_TIMESTAMP
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
 WHERE
     id = sqlc.arg(id)
     AND user_id = CAST(sqlc.arg(user_id) AS BIGINT)
