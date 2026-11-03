@@ -106,6 +106,12 @@ type VaultImportResult struct {
 	// it signs in with here, and the recovery phrase it had then does not
 	// recover it, since this Quark checks the account's own phrase.
 	BackupPasswordAccounts []string `json:"backupPasswordAccounts"`
+	// RestoredAccounts is the usernames, sorted, of every account here that
+	// got a vault back.
+	RestoredAccounts []string `json:"restoredAccounts"`
+	// RestoredUserIDs is RestoredAccounts' user ids, in the same order, for
+	// the caller to publish vault_changed to. Not part of the answer.
+	RestoredUserIDs []int64 `json:"-"`
 }
 
 // RestoreVaultParams asks for the vault backup a snapshot wrote to a drive.
@@ -113,6 +119,8 @@ type RestoreVaultParams struct {
 	Ctx context.Context
 	// LiveDB is the live database the vaults are restored into.
 	LiveDB *sql.DB
+	// Queries reads the drive's role, which must be snapshot-backup.
+	Queries db.Querier
 	// Registry holds the backup drive's files namespace.
 	Registry     vfs.Registry
 	DeviceSerial string
