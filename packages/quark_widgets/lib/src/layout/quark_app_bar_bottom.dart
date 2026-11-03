@@ -8,12 +8,14 @@ import 'quark_bar_icon_button.dart';
 /// The second row of a [QuarkAppBar]: where the user is on the left, and the
 /// page's secondary actions on the right.
 ///
-/// This is where the bar's one breakpoint lives. At [collapseBreakpoint] and
-/// wider, [actions] sit in the row. Narrower, they give way to a single chip
+/// This is where the bar's breakpoint lives. At [collapseBelow] and wider,
+/// [actions] sit in the row. Narrower, they give way to a single chip
 /// reading [menuLabel] that opens [menuChildren] — a labeled menu, never an
 /// anonymous `⋮`, so a phone user can still tell what is behind it. Files
 /// used to make that decision itself with an 860 pixel `LayoutBuilder`; it
-/// lives here so every page that needs a second row shares it.
+/// lives here so every page that needs a second row shares it. A page whose
+/// actions need more than [collapseBreakpoint] passes a wider [collapseBelow],
+/// so the lead is never squeezed below what it needs.
 ///
 /// [pinnedActions] sit in the row at every width, ahead of the menu.
 ///
@@ -43,10 +45,11 @@ class QuarkAppBarBottom extends StatelessWidget implements PreferredSizeWidget {
     this.menuChildren = const [],
     this.menuLabel = 'Views',
     this.menuIcon = QuarkIcons.tune_rounded,
+    this.collapseBelow = collapseBreakpoint,
     super.key,
   });
 
-  /// The row's width below which [actions] collapse into the menu.
+  /// The default [collapseBelow], wide enough for most pages' actions.
   static const double collapseBreakpoint = 860;
 
   /// The row's height: one bar button and a small gap above and below it.
@@ -61,10 +64,10 @@ class QuarkAppBarBottom extends StatelessWidget implements PreferredSizeWidget {
   /// Photos' Upload and Search.
   final List<Widget> pinnedActions;
 
-  /// The row's actions at [collapseBreakpoint] and wider, in order.
+  /// The row's actions at [collapseBelow] and wider, in order.
   final List<Widget> actions;
 
-  /// What the menu holds below [collapseBreakpoint]. Empty leaves the menu
+  /// What the menu holds below [collapseBelow]. Empty leaves the menu
   /// out entirely.
   final List<Widget> menuChildren;
 
@@ -73,6 +76,10 @@ class QuarkAppBarBottom extends StatelessWidget implements PreferredSizeWidget {
 
   /// The glyph on the chip that opens the menu, from `QuarkIcons`.
   final IconData menuIcon;
+
+  /// The row's width below which [actions] collapse into the menu: the width
+  /// at which the lead still fits beside every action.
+  final double collapseBelow;
 
   @override
   Size get preferredSize => const Size.fromHeight(height);
@@ -90,7 +97,7 @@ class QuarkAppBarBottom extends StatelessWidget implements PreferredSizeWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < collapseBreakpoint;
+          final compact = constraints.maxWidth < collapseBelow;
           // No spacing: every bar control carries its own margin, the edge of
           // its 48dp touch target (#2605).
           return Row(

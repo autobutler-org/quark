@@ -6,11 +6,15 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  Widget page(void Function(String) log) => Scaffold(
+  Widget page(
+    void Function(String) log, {
+    double collapseBelow = QuarkAppBarBottom.collapseBreakpoint,
+  }) => Scaffold(
     appBar: QuarkAppBar(
       label: 'Files',
       icon: QuarkIcons.folder_outlined,
       bottom: QuarkAppBarBottom(
+        collapseBelow: collapseBelow,
         lead: const Text(
           'Home / Documents',
           maxLines: 1,
@@ -79,6 +83,20 @@ void main() {
 
     expect(log, ['grid']);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a page with more actions collapses at a wider width', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      page((_) {}, collapseBelow: wideViewport.width + 1),
+      size: wideViewport,
+      scaffold: false,
+    );
+
+    expect(find.byKey(const ValueKey('upload')), findsNothing);
+    expect(menu, findsOneWidget);
   });
 
   testBothViewports('keeps its pinned actions in the row at every width', (
