@@ -253,9 +253,11 @@ To restore:
 4. Start Quark. It finds `schema_migrations` and carries the schema forward. A dump from a newer build than
    the image refuses to start, saying so.
 
-A backup does not restore across backends: a dump restores onto PostgreSQL only, and a SQLite install's
-`chat_backup.db` and `vault_items_backup.db` onto SQLite only. Moving a SQLite install to PostgreSQL is
-`quark move-to-postgres` ([Moving to PostgreSQL](architecture/postgres-move.md)).
+A dump restores onto PostgreSQL only, and a SQLite install's `chat_backup.db` and `vault_items_backup.db` onto
+SQLite only. To start a new install on either backend from one on either backend, take a bundle with
+`quark bundle export` and give it to the new install with `quark bundle import`
+([Moving a whole Quark to a new install](architecture/bundle.md)). Moving a SQLite install to PostgreSQL in
+place is `quark move-to-postgres` ([Moving to PostgreSQL](architecture/postgres-move.md)).
 
 ## The data directory
 

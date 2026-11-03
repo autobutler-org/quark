@@ -65,7 +65,8 @@ leaves the rest of the server serving.
 | The backend test suites                                          | Run on SQLite whatever `DB_BACKEND` says, except `make test/db/postgres`                                 | #2960 |
 
 What does work that might be expected not to: moving an existing install's data from SQLite with
-`quark move-to-postgres` ([Moving to PostgreSQL](postgres-move.md); there is no move back), the per-account vault itself, a snapshot backup (the files and
+`quark move-to-postgres` ([Moving to PostgreSQL](postgres-move.md)), starting a new install on either backend
+from one on either backend with `quark bundle` ([Moving a whole Quark](bundle.md)), the per-account vault itself, a snapshot backup (the files and
 the manifest; the database is the operator's to back up), `/health`'s check that the database answers, and the
 factory reset an admin asks for (`db.ResetDatabase`), which on PostgreSQL drops
 and re-runs the migrations in one transaction and keeps the same tables SQLite's does.

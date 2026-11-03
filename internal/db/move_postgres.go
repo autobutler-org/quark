@@ -82,7 +82,7 @@ func MoveToPostgres(ctx context.Context, params MoveToPostgresParams) (MoveToPos
 		return MoveToPostgresResult{}, err
 	}
 	defer source.Close()
-	if err := requireCurrentSQLite(source, params.SQLitePath); err != nil {
+	if err := requireCurrentSchema(source, params.SQLitePath, SQLite); err != nil {
 		return MoveToPostgresResult{}, err
 	}
 
@@ -153,12 +153,13 @@ func openSQLiteForMove(path string) (*sql.DB, error) {
 	return sqlDB, nil
 }
 
-// requireCurrentSQLite refuses a SQLite database that is not at this build's
-// newest migration. The PostgreSQL side is migrated to this build's schema,
-// and the two sets only describe the same tables at the same number. Migrating
-// the file here would break the promise to leave it alone, so the fix is to
-// let the server do it.
-func requireCurrentSQLite(sqlDB *sql.DB, path string) error {
+// requireCurrentSchema refuses a database that is not at this build's newest
+// migration; name is how the error refers to it and backend what it runs on.
+// The two migration sets only describe the same tables at the same number, so
+// a copy between engines needs both sides at it. Migrating the source here
+// would break the promise to leave it alone, so the fix is to let the server
+// do it.
+func requireCurrentSchema(sqlDB *sql.DB, name string, backend Backend) error {
 	migrationSource, err := newMigrationSource()
 	if err != nil {
 		return err
@@ -172,12 +173,13 @@ func requireCurrentSQLite(sqlDB *sql.DB, path string) error {
 	var version uint
 	var dirty bool
 	if err := sqlDB.QueryRow(`SELECT version, dirty FROM schema_migrations LIMIT 1`).Scan(&version, &dirty); err != nil {
-		return fmt.Errorf("%s has no schema version Quark can read (%w): is it a Quark database?", path, err)
+		return fmt.Errorf("%s has no schema version Quark can read (%w): is it a Quark database?", name, err)
 	}
 	if dirty || version != latest {
-		return fmt.Errorf("%s is at schema version %d (dirty: %t), and this build moves version %d. Start this "+
-			"build of Quark on SQLite once so it migrates the database, stop it, and run this again",
-			path, version, dirty, latest)
+		label := map[Backend]string{SQLite: "SQLite", Postgres: "PostgreSQL"}[backend]
+		return fmt.Errorf("%s is at schema version %d (dirty: %t), and this build copies version %d. Start this "+
+			"build of Quark on %s once so it migrates the database, stop it, and run this again",
+			name, version, dirty, latest, label)
 	}
 	return nil
 }

@@ -5,7 +5,8 @@ An install that has been running on SQLite moves to PostgreSQL with one command,
 with as many rows as it started with. The code is `db.MoveToPostgres` in
 [`internal/db/move_postgres.go`](../../internal/db/move_postgres.go); the command is a thin wrapper around it.
 
-**There is no way back.** Moving from PostgreSQL to SQLite is not supported. What keeps the move reversible
+**There is no way back in place.** This command does not move PostgreSQL to SQLite; a bundle does, into a
+new install ([Moving a whole Quark to a new install](bundle.md)). What keeps the move reversible
 is that the SQLite file is never touched: until the service is pointed at PostgreSQL, and for as long as you
 choose to point it back, it starts on SQLite with the data it had when the move ran.
 
@@ -109,4 +110,5 @@ is back.
 - **The admin page.** The backend is chosen by environment variables when the server starts, so a move started
   from the admin page needs a persisted backend choice first. That is #2961; `db.MoveToPostgres` is what it
   will call.
-- **PostgreSQL to SQLite.** Not supported, as above.
+- **PostgreSQL to SQLite.** Not in place. A bundle starts a new SQLite install from a PostgreSQL one
+  ([Moving a whole Quark to a new install](bundle.md)).

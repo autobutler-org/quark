@@ -116,15 +116,18 @@ included. `ExportChat`, `ImportChat`, `ExportVault` and `ImportVault` return `Er
 write nothing, and a snapshot removes the `chat_backup.db` and `vault_items_backup.db` an earlier SQLite snapshot
 left at the drive's root, so the manifest never lists a copy the snapshot did not take. [Running Quark in a container](../container.md#backup-and-restore) has the procedure.
 
-A backup does not restore across backends:
+What each kind of backup restores onto:
 
-| Backup                                       | Restores onto                              |
-| -------------------------------------------- | ------------------------------------------ |
-| a snapshot's device directories              | either backend: they are plain files       |
-| `chat_backup.db`, `vault_items_backup.db`    | SQLite only                                |
-| a `pg_dump` of the database                  | PostgreSQL only                            |
+| Backup                                       | Restores onto                                            |
+| -------------------------------------------- | -------------------------------------------------------- |
+| a snapshot's device directories              | either backend: they are plain files                     |
+| `chat_backup.db`, `vault_items_backup.db`    | SQLite only                                              |
+| a `pg_dump` of the database                  | PostgreSQL only                                          |
+| a bundle (`quark bundle export`)             | a new install on either backend, from either backend     |
 
-Moving a SQLite install to PostgreSQL is #2962.
+A bundle holds every row of the database and the internal drive's files, and starts a new, uninitialized install
+in all four directions: SQLite or PostgreSQL to SQLite or PostgreSQL. See
+[Moving a whole Quark to a new install](bundle.md).
 
 ## Backup reminders
 

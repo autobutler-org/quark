@@ -18,7 +18,8 @@ repository root; everything here expands on it. Diagrams are Mermaid, so GitHub 
 | [Build and tooling](tooling.md)       | code generation, checks, how the knowledge base stays true     |
 | [Music library](music-library.md)    | scan, tags, cover art, and search for local music              |
 | [PostgreSQL for development](postgres-dev.md) | the local instance and the `DB_BACKEND` switch         |
-| [Moving to PostgreSQL](postgres-move.md) | `quark move-to-postgres`: copying an install's SQLite data, and why there is no way back |
+| [Moving to PostgreSQL](postgres-move.md) | `quark move-to-postgres`: copying an install's SQLite data into PostgreSQL in place |
+| [Moving a whole Quark](bundle.md)     | `quark bundle`: a new install on either backend from one on either backend |
 
 These pages describe structure, which changes slowly. For what Quark does feature by feature, the inventory is
 [`docs/user-journeys/`](../user-journeys/README.md); for where files go and what the checks enforce, it is
