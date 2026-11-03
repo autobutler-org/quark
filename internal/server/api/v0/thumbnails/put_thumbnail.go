@@ -21,10 +21,10 @@ var errReadOnly = errors.New("you do not have permission to change this")
 
 // putThumbnail godoc
 // @Summary Upload a client-rendered thumbnail for a file
-// @Description Stores the thumbnail a client rendered for a photo or video, replacing any stored before: a JPEG with a long edge of 400 and rotation applied, in a part named "thumbnail". The sm, md and lg sizes are resized from it, and a photo's thumbnail feeds near-duplicate detection. It lives in the thumbnail cache, so a move, rename or cache clear drops it and a client renders it again on view. Needs write access on the file.
+// @Description Stores the thumbnail a client rendered for a photo, video or 3D model (STL, OBJ, PLY), replacing any stored before: a JPEG with a long edge of 400 and rotation applied, in a part named "thumbnail". The sm, md and lg sizes are resized from it, and a photo's thumbnail feeds near-duplicate detection. It lives in the thumbnail cache, so a move, rename or cache clear drops it and a client renders it again on view. Needs write access on the file.
 // @Tags thumbnails
 // @Accept multipart/form-data
-// @Param filePath path string true "Path to the photo or video"
+// @Param filePath path string true "Path to the photo, video or 3D model"
 // @Param serial query string false "Device serial number (for device-specific files)"
 // @Param thumbnail formData file true "Thumbnail JPEG, long edge 400"
 // @Success 204 "No Content"

@@ -106,6 +106,7 @@ export 'src/model_viewer/quark_model_measurements.dart';
 export 'src/model_viewer/quark_model_mesh.dart';
 export 'src/model_viewer/quark_model_parser.dart';
 export 'src/model_viewer/quark_model_viewer.dart';
+export 'src/model_viewer/quark_model_viewer/model_renderer.dart';
 export 'src/music/album_grid_tile.dart';
 export 'src/music/artist_list_tile.dart';
 export 'src/music/genre_list_tile.dart';

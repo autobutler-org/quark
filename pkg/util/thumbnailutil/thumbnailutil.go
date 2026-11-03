@@ -71,8 +71,9 @@ const (
 var ErrInvalidThumbnail = errors.New("invalid thumbnail")
 
 // ErrNotMedia reports a thumbnail a client sent for a file that is neither a
-// photo nor a video. A track's cover comes from the track, never a client.
-var ErrNotMedia = errors.New("only photos and videos have thumbnails")
+// photo, a video nor a 3D model. A track's cover comes from the track, never
+// a client.
+var ErrNotMedia = errors.New("only photos, videos and 3D models have thumbnails")
 
 // ErrNoCover reports a track with no cover art: no library row, a row that
 // names no cover, or a picture that no longer matches the row.

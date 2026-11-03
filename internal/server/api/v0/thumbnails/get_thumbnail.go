@@ -24,7 +24,7 @@ import (
 
 // getThumbnail godoc
 // @Summary Get thumbnail for an image
-// @Description Returns a thumbnail for the specified photo, video or music track. A track's thumbnail is its cover art, embedded or from its folder as the music library recorded it, and a track with none is a 404. A photo or video's is resized from the thumbnail a client uploaded for it when there is a fresh one, generated from the file otherwise. When the device cannot render a video or HEIC itself, the 404 body carries "clientRender": true, telling a client that may write the file to render a thumbnail (JPEG, long edge 400) and PUT it to this path. For a video, its "reason" says why the device could not: "unsupported" for a codec it has no decoder for, "unreadable" for a file that does not parse as a video.
+// @Description Returns a thumbnail for the specified photo, video, music track or 3D model. A track's thumbnail is its cover art, embedded or from its folder as the music library recorded it, and a track with none is a 404. An STL, OBJ or PLY model's is the one a client rendered and PUT, and a model with none is a 404 without clientRender. A photo or video's is resized from the thumbnail a client uploaded for it when there is a fresh one, generated from the file otherwise. When the device cannot render a video or HEIC itself, the 404 body carries "clientRender": true, telling a client that may write the file to render a thumbnail (JPEG, long edge 400) and PUT it to this path. For a video, its "reason" says why the device could not: "unsupported" for a codec it has no decoder for, "unreadable" for a file that does not parse as a video.
 // @Tags thumbnails
 // @Produce png,jpeg
 // @Param filePath path string true "Path to the image file"
@@ -47,7 +47,9 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	fileType := storageutil.DetermineFileTypeFromPath("file" + ext)
 	// A track's thumbnail is its cover art (#2982).
 	isAudio := musicutil.IsAudioPath(filePath)
-	if fileType != storageutil.FileTypeImage && fileType != storageutil.FileTypeVideo && !isAudio {
+	// A 3D model's is the one a client rendered, or none (#3227).
+	isModel := thumbnailutil.IsClientOnly(filePath)
+	if fileType != storageutil.FileTypeImage && fileType != storageutil.FileTypeVideo && !isAudio && !isModel {
 		return serverutil.NotFound(fmt.Errorf("no thumbnail for file type %q: %s", fileType, filePath))
 	}
 	isVideo := fileType == storageutil.FileTypeVideo
@@ -77,9 +79,10 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
-	// A track inside an archive is not in the music library, so it has no cover.
-	if archive.Found && isAudio {
-		return serverutil.NotFound(fmt.Errorf("no cover for archive entry: %s", filePath))
+	// A track inside an archive is not in the music library, so it has no
+	// cover, and no client uploads a model's thumbnail into an archive.
+	if archive.Found && (isAudio || isModel) {
+		return serverutil.NotFound(fmt.Errorf("no thumbnail for archive entry: %s", filePath))
 	}
 	if archive.Found {
 		return getArchiveThumbnail(c, deps, archive, ext, filePath, serial, isVideo)
@@ -107,6 +110,9 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	// is the fallback.
 	if resp := getClientThumbnail(c, deps, relPath, filePath, serial, srcInfo.ModTime); resp != clientThumbnailFallthrough {
 		return resp
+	}
+	if isModel {
+		return serverutil.NotFound(fmt.Errorf("no thumbnail rendered for model: %s", filePath))
 	}
 
 	prepared, err := thumbnailutil.Prepare(thumbnailutil.PrepareParams{

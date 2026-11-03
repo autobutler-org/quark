@@ -3,15 +3,18 @@ import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/file_kind.dart';
+import 'package:quark/utils/model_thumbnail_config.dart';
 import 'package:quark_widgets/quark_widgets.dart' show CalendarLabels;
 
 /// Whether the server can serve a thumbnail for this node. A video's is a
 /// keyframe the Quark decodes or one a client rendered, served as JPEG, so it
-/// uses the same thumbnail URL as images.
+/// uses the same thumbnail URL as images. A 3D model has the one a client
+/// drew when it was opened or uploaded (#3227).
 bool hasServerThumbnail(FileNode node) =>
     !node.isDir &&
     (fileKindForName(node.name) == FileKind.video ||
-        thumbnailImageExtensions.contains(fileExtension(node.name)));
+        thumbnailImageExtensions.contains(fileExtension(node.name)) ||
+        wantsModelThumbnail(node.name));
 
 bool isArchiveNode(FileNode node) =>
     !node.isDir && fileKindForName(node.name) == FileKind.archive;

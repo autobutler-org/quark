@@ -175,6 +175,17 @@ func TestNeedsClientRender(t *testing.T) {
 	}
 }
 
+func TestIsClientOnly(t *testing.T) {
+	for name, want := range map[string]bool{
+		"part.stl": true, "part.STL": true, "a.obj": true, "scan.ply": true,
+		"scene.gltf": false, "scene.glb": false, "a.3mf": false, "clip.mp4": false, "a.jpg": false,
+	} {
+		if got := IsClientOnly(name); got != want {
+			t.Errorf("IsClientOnly(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
 // TestClientRenderReason: a codec the device cannot decode and a file that is
 // not a video are told apart, and a failure that is neither says nothing
 // (#3559).
