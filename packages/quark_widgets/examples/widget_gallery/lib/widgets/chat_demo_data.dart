@@ -50,10 +50,27 @@ final List<ChatMemberItem> galleryChatMembers = [
 /// [galleryChatMessages].
 const String galleryChatUserId = 'bob';
 
-/// The fake messages the chat entries share, newest first: two days, a run
-/// from one author, a system line, an unverified one, a message waiting for
-/// its key, a deleted one, and one with reactions.
+/// A fake open poll, answered by three people, for the poll entries.
+const ChatPollItem galleryPoll = ChatPollItem(
+  prompt: 'Which weekend works for the cabin?',
+  options: ['Nov 8', 'Nov 15', 'Nov 22'],
+  counts: [2, 1, 0],
+  responseCount: 3,
+  allowChange: true,
+);
+
+/// The fake messages the chat entries share, newest first: two days, a poll,
+/// a run from one author, a system line, an unverified one, a message waiting
+/// for its key, a deleted one, and one with reactions.
 final List<ChatMessageItem> galleryChatMessages = [
+  ChatMessageItem(
+    id: 'm9',
+    authorId: 'bob',
+    authorName: 'Bob Byron',
+    sentAt: DateTime(2026, 9, 24, 9, 40),
+    kind: ChatMessageKind.poll,
+    poll: galleryPoll,
+  ),
   ChatMessageItem(
     id: 'm8',
     authorId: 'ada',

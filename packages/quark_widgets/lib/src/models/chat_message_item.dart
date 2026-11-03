@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'chat_poll_item.dart';
 import 'chat_reaction_item.dart';
 
 /// What a [ChatMessageItem] is, which decides how a message list draws it.
@@ -18,6 +19,10 @@ enum ChatMessageKind {
 
   /// A message its author deleted. Drawn as a tombstone under its author.
   deleted,
+
+  /// A poll, drawn under its author as a `QuarkPollCard` from
+  /// [ChatMessageItem.poll].
+  poll,
 }
 
 /// One line in a chat channel as the chat widgets need it.
@@ -38,6 +43,7 @@ class ChatMessageItem {
     this.isUnverified = false,
     this.isEncryptionEvent = false,
     this.reactions = const [],
+    this.poll,
   });
 
   /// The message's id on the Quark, and what keys and callbacks carry.
@@ -72,6 +78,10 @@ class ChatMessageItem {
   /// Only a [ChatMessageKind.text] message draws them.
   final List<ChatReactionItem> reactions;
 
+  /// The poll a [ChatMessageKind.poll] message carries. Ignored for the other
+  /// kinds; a poll message without one draws nothing in its body.
+  final ChatPollItem? poll;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -84,7 +94,8 @@ class ChatMessageItem {
           other.kind == kind &&
           other.isUnverified == isUnverified &&
           other.isEncryptionEvent == isEncryptionEvent &&
-          listEquals(other.reactions, reactions);
+          listEquals(other.reactions, reactions) &&
+          other.poll == poll;
 
   @override
   int get hashCode => Object.hash(
@@ -97,5 +108,6 @@ class ChatMessageItem {
     isUnverified,
     isEncryptionEvent,
     Object.hashAll(reactions),
+    poll,
   );
 }

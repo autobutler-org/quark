@@ -5,6 +5,7 @@ import '../core/empty_state_widget.dart';
 import '../core/quark_avatar.dart';
 import '../core/quark_loader.dart';
 import '../models/chat_message_item.dart';
+import '../models/chat_poll_answer.dart';
 import '../models/chat_permission.dart';
 import '../theme/quark_tokens.dart';
 import 'quark_message_list/chat_day_separator.dart';
@@ -62,6 +63,12 @@ import 'quark_message_list/chat_system_line.dart';
 /// whether that adds the user's reaction or takes it back. Waiting, deleted
 /// and system lines draw no reactions.
 ///
+/// A poll message draws a `QuarkPollCard`. Its answer fires [onAnswerPoll],
+/// which, like reacting, needs [ChatPermission.addReactions] in
+/// [permissions] (or null permissions). "Close poll" fires [onClosePoll] and
+/// is offered only on the user's own polls, and "Export" fires [onExportPoll]
+/// wherever the results are visible.
+///
 /// With [onOpenLink] set, each `http://`, `https://` or `www.` address in a
 /// text message is drawn as a link, and a tap fires [onOpenLink] with its
 /// [Uri]; the caller opens it. An unverified sender's message, and every
@@ -93,7 +100,8 @@ import 'quark_message_list/chat_system_line.dart';
 /// `message_react_<id>` on its add-reaction button,
 /// `message_react_<id>_<emoji>` on each emoji that button offers,
 /// `message_reaction_<id>_<emoji>` on each reaction chip,
-/// `message_help_<id>` on a system line's "(?)",
+/// `message_help_<id>` on a system line's "(?)", those of `QuarkPollCard`
+/// on a poll,
 /// `message_list_load_older` on the load button,
 /// `message_list_retry` on the retry button, and `message_list_not_member`
 /// on the not-a-member pane.
@@ -133,6 +141,9 @@ class QuarkMessageList extends StatefulWidget {
     this.onDelete,
     this.onReact,
     this.onOpenLink,
+    this.onAnswerPoll,
+    this.onClosePoll,
+    this.onExportPoll,
     this.onEncryptionHelp,
     this.onAtBottomChanged,
     this.avatarBuilder,
@@ -211,6 +222,17 @@ class QuarkMessageList extends StatefulWidget {
   /// Called with a web address in a text message when it is tapped, for the
   /// caller to open. Null draws every message as plain text.
   final ValueChanged<Uri>? onOpenLink;
+
+  /// Called with a poll message's id and the user's answer to it. Null, or
+  /// [permissions] without [ChatPermission.addReactions], draws every poll's
+  /// inputs disabled.
+  final void Function(String messageId, ChatPollAnswer answer)? onAnswerPoll;
+
+  /// Called with the id of a poll the user posted, to close it.
+  final ValueChanged<String>? onClosePoll;
+
+  /// Called with a poll message's id to export its results.
+  final ValueChanged<String>? onExportPoll;
 
   /// Called when an encryption or unverified system line's "(?)" is tapped,
   /// for the caller to explain. Null draws no "(?)".
@@ -355,10 +377,13 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
     final permissions = widget.permissions;
     final deletesAny =
         permissions?.contains(ChatPermission.deleteMessages) ?? false;
-    final onReact =
-        permissions == null || permissions.contains(ChatPermission.addReactions)
-        ? widget.onReact
-        : null;
+    final reacts =
+        permissions == null ||
+        permissions.contains(ChatPermission.addReactions);
+    final onReact = reacts ? widget.onReact : null;
+    final onAnswerPoll = reacts ? widget.onAnswerPoll : null;
+    final onClosePoll = widget.onClosePoll;
+    final onExportPoll = widget.onExportPoll;
 
     if (permissions != null &&
         !permissions.contains(ChatPermission.readMessages)) {
@@ -482,6 +507,17 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
                         ? null
                         : (emoji) => onReact(message.id, emoji),
                     onOpenLink: widget.onOpenLink,
+                    onAnswerPoll: onAnswerPoll == null
+                        ? null
+                        : (answer) => onAnswerPoll(message.id, answer),
+                    onClosePoll:
+                        onClosePoll == null ||
+                            message.authorId != widget.currentUserId
+                        ? null
+                        : () => onClosePoll(message.id),
+                    onExportPoll: onExportPoll == null
+                        ? null
+                        : () => onExportPoll(message.id),
                     mentionNames: widget.mentionNames,
                     selfName: widget.currentUserName,
                     avatar: !QuarkMessageList.startsGroup(message, older)

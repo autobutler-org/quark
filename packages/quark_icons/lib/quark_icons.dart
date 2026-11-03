@@ -330,6 +330,9 @@ class QuarkIcons {
   /// Insert a chart on a slide, and a slide chart's controls.
   static const IconData insert_chart = Icons.insert_chart_outlined;
 
+  /// A chat poll, on its card and the composer's entry for one.
+  static const IconData poll = Icons.poll_outlined;
+
   /// What kind of chart a slide chart is: bars, lines, a pie.
   static const IconData chart_kind = Icons.bar_chart;
 
