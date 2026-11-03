@@ -28,8 +28,13 @@ lib/widgets/
     calendar_swipe_detector.dart
                                 the sideways swipe that steps a span, by
                                 distance or fling
+    calendar_sync_dialog.dart   the subscription link to copy and the .ics
+                                import (#1151); reads the controller, the
+                                clipboard and the file picker
     show_calendar_event_editor.dart
                                 opens that form as a sheet or a dialog
+    show_calendar_sync_dialog.dart
+                                opens the sync dialog
   chat/
     chat_search_bar.dart        the search field above the open channel's
                                 messages (#2429); data in, callbacks out, but

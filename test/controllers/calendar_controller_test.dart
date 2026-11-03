@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
@@ -182,6 +183,37 @@ void main() {
     await c.delete(14);
     expect(server.deleted, [14]);
     expect(c.anchor, DateTime(2026, 10, 7));
+  });
+
+  test('importing an .ics file reloads and returns the counts', () async {
+    final server = _Server([vet]);
+    final sent = <Uint8List>[];
+    final c = CalendarController(
+      listEvents: server.list,
+      importICalFile: (bytes) async {
+        sent.add(bytes);
+        return (imported: 2, skipped: 1);
+      },
+      canListPeople: () => false,
+      clock: () => _now,
+    );
+    await c.refresh();
+    final loads = server.ranges.length;
+    final bytes = Uint8List.fromList([1, 2, 3]);
+    expect(await c.importICal(bytes), (imported: 2, skipped: 1));
+    expect(sent, [bytes]);
+    expect(server.ranges.length, greaterThan(loads));
+  });
+
+  test('downloadICal hands back the file (#1151)', () async {
+    final bytes = Uint8List.fromList([66, 69, 71]);
+    final c = CalendarController(
+      listEvents: _Server([]).list,
+      downloadICalFile: () async => bytes,
+      canListPeople: () => false,
+      clock: () => _now,
+    );
+    expect(await c.downloadICal(), bytes);
   });
 
   test('upcoming lists the next seven days, dropping what is over', () async {

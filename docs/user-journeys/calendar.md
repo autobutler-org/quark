@@ -292,3 +292,52 @@ finger, are not dragged: the form moves the first, and the Day view has room for
 **Notes:** Keyboard resize still changes only the end time (JN-CA-012). Editing the series in the form still
 changes every remaining repeat, and does not shift starts the series already skips. All-day events are not
 dragged.
+
+---
+
+### JN-CA-014: Subscribe to the calendar from another app
+
+**Preconditions:** Signed in, on the Calendar page.
+
+**Steps:**
+
+1. Tap **Sync** in the top bar.
+2. Copy the link under **Subscribe**.
+3. Paste it into Apple Calendar (File › New Calendar Subscription) or Thunderbird on a device that can reach
+   the Quark, or into Google Calendar (Other calendars › From URL) when remote access is on.
+4. Or tap **Download .ics file** under **Download** and import the saved file into any calendar app.
+
+**Expected result:**
+
+- The dialog shows the link once it loads, with a copy button beside it. Copying confirms with a message.
+- The subscribing app shows the household calendar's events and picks up changes the next time it polls.
+- The download saves `quark.ics` through the browser on the web and the platform's save dialog elsewhere, and
+  confirms with a message. An app that imports it shows the same events, but never later changes.
+- If the link cannot load, the dialog says so in place of the link; the download still works.
+
+**Notes:** The subscribing app polls the Quark itself, so it has to reach it: Apple Calendar and Thunderbird
+from the device they run on, Google Calendar from Google's servers, which needs remote access. The link
+carries the signed-in person's session, so anyone holding it can read the calendar until that session ends.
+Both directions are read-only; changes made in the other app do not come back (#1151).
+
+---
+
+### JN-CA-015: Import an .ics file
+
+**Preconditions:** Signed in, on the Calendar page, with an `.ics` file exported from another calendar app.
+
+**Steps:**
+
+1. Tap **Sync** in the top bar.
+2. Tap **Import .ics file** and pick the file.
+
+**Expected result:**
+
+- The button shows a loader while the import runs.
+- The dialog closes and a message says how many events came in, and how many were skipped when any were.
+- The imported events show on the calendar at once.
+- Importing the same file again imports nothing and counts every event as skipped.
+- A file that is not an iCalendar, or one over 8 MiB, leaves the dialog open with a message saying so.
+
+**Notes:** Events already on the calendar and events whose repeat the calendar cannot represent are skipped
+(#1151).

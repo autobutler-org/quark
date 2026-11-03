@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:quark/models/calendar_event.dart';
 import 'package:quark/models/calendar_move.dart';
@@ -9,7 +10,9 @@ import 'package:quark/utils/local_time_zone.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Calls `/api/v0/calendar/events`: the household calendar's events, listed by
-/// range, created, updated, moved and deleted (#1144, #3215).
+/// range, created, updated, moved and deleted (#1144, #3215), and
+/// `/api/v0/calendar/ical`: the subscription link other calendar apps poll, the
+/// same feed as a one-time download, and the .ics import (#1151).
 class CalendarService with AuthenticatedService {
   static final CalendarService _instance = CalendarService._();
   CalendarService._();
@@ -115,5 +118,48 @@ class CalendarService with AuthenticatedService {
     if (response.statusCode != 204) {
       throw ApiException(response.statusCode, 'delete calendar event');
     }
+  }
+
+  /// The link Apple Calendar, Google Calendar or Thunderbird subscribes to. It
+  /// carries the caller's session token.
+  static Future<String> subscriptionUrl() async {
+    final response = await instance.authenticatedGet(
+      _apiUri('/calendar/ical/url'),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(response.statusCode, 'load the subscription link');
+    }
+    return (json.decode(response.body) as Map<String, dynamic>)['url']
+        as String;
+  }
+
+  /// The calendar as one .ics file, for a one-time import into an app that
+  /// cannot reach the Quark. Small: it holds what the household typed in.
+  static Future<Uint8List> downloadICal() async {
+    final response = await instance.authenticatedGet(_apiUri('/calendar/ical'));
+    if (response.statusCode != 200) {
+      throw ApiException(response.statusCode, 'download the calendar');
+    }
+    return response.bodyBytes;
+  }
+
+  /// Adds the events in the iCalendar file [bytes]. Events already on the
+  /// calendar and repeats it cannot represent are counted as skipped.
+  static Future<({int imported, int skipped})> importICal(
+    Uint8List bytes,
+  ) async {
+    final response = await instance.authenticatedPost(
+      _apiUri('/calendar/ical'),
+      headers: const {'Content-Type': 'text/calendar'},
+      body: bytes,
+    );
+    // A 400 says the file is not an iCalendar; a 5xx carries a Go error's
+    // text, so only client errors reach the user in the Quark's words.
+    throwUnlessOk(response, 'import the calendar', clientErrorsOnly: true);
+    final data = json.decode(response.body) as Map<String, dynamic>;
+    return (
+      imported: data['imported'] as int? ?? 0,
+      skipped: data['skipped'] as int? ?? 0,
+    );
   }
 }
