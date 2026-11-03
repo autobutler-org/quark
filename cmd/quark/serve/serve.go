@@ -1,5 +1,5 @@
 // Package serve is the quark serve subcommand: it builds the default dependency graph and starts the HTTP server,
-// over plain HTTP when --insecure is set.
+// over plain HTTP when --insecure is set and with an operator's certificate when --tls-cert and --tls-key are.
 package serve
 
 import (
@@ -15,7 +15,11 @@ import (
 )
 
 func Cmd() *cobra.Command {
-	var insecure bool
+	var (
+		insecure bool
+		tlsCert  string
+		tlsKey   string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -26,6 +30,12 @@ func Cmd() *cobra.Command {
 			// Makefile targets and CI without modifying command-line args.
 			if !insecure && os.Getenv("QUARK_INSECURE") == "true" {
 				insecure = true
+			}
+			if tlsCert == "" {
+				tlsCert = os.Getenv("QUARK_TLS_CERT")
+			}
+			if tlsKey == "" {
+				tlsKey = os.Getenv("QUARK_TLS_KEY")
 			}
 			// A newer binary installed by self-update takes over before anything
 			// starts. Failing that is no reason not to serve with this one.
@@ -45,7 +55,7 @@ func Cmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to initialize dependencies: %w", err)
 			}
-			if err := server.StartServer(deps, server.StartOptions{Insecure: insecure}); err != nil {
+			if err := server.StartServer(deps, server.StartOptions{Insecure: insecure, TLSCert: tlsCert, TLSKey: tlsKey}); err != nil {
 				return fmt.Errorf("failed to start server: %w", err)
 			}
 			return nil
@@ -53,6 +63,8 @@ func Cmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&insecure, "insecure", false, "Disable TLS and serve over plain HTTP (for local development only). Also enabled via QUARK_INSECURE=true env var.")
+	cmd.Flags().StringVar(&tlsCert, "tls-cert", "", "Serve this PEM certificate instead of a generated self-signed one; needs --tls-key. Reloaded when it changes on disk. Also read from QUARK_TLS_CERT.")
+	cmd.Flags().StringVar(&tlsKey, "tls-key", "", "PEM private key for --tls-cert. Also read from QUARK_TLS_KEY.")
 
 	return cmd
 }

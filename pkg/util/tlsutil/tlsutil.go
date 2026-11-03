@@ -47,7 +47,10 @@ func EnsureSelfSignedCert(dataDir string) (certFile, keyFile string, err error) 
 // CertificateGetter returns a tls.Config.GetCertificate that serves the pair
 // at certFile and keyFile, and loads it again whenever certFile changes on
 // disk. A certificate EnsureSelfSignedCert regenerates while the server runs,
-// as a rename does (#2344), then reaches new connections without a restart.
+// as a rename does (#2344), or an operator's pair rotated in place by
+// quark serve --tls-cert, then reaches new connections without a restart.
+// A cert replaced before its key fails to load and is retried on every
+// handshake until the matching key lands.
 // It fails only when the pair cannot be loaded at all; a later pair that does
 // not load leaves the last good one in place.
 func CertificateGetter(certFile, keyFile string) (func(*tls.ClientHelloInfo) (*tls.Certificate, error), error) {

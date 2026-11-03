@@ -348,3 +348,50 @@ func TestEnsureSelfSignedCert_RegeneratesByReplacingWholeFiles(t *testing.T) {
 		}
 	}
 }
+
+// An operator's pair (quark serve --tls-cert) lives anywhere and is rotated by
+// replacing both files, cert first: the half-replaced pair keeps the old one
+// serving, and the next handshake after the key lands serves the new one.
+func TestCertificateGetter_ServesAndRotatesAnOperatorPair(t *testing.T) {
+	dir := t.TempDir()
+	certFile, keyFile := filepath.Join(dir, "a.crt"), filepath.Join(dir, "a.key")
+	writeCert(t, certFile, keyFile, certValidity)
+	get, err := tlsutil.CertificateGetter(certFile, keyFile)
+	if err != nil {
+		t.Fatalf("CertificateGetter: %v", err)
+	}
+	first, err := get(nil)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	other := t.TempDir()
+	newCert, newKey := filepath.Join(other, "b.crt"), filepath.Join(other, "b.key")
+	writeCert(t, newCert, newKey, certValidity)
+	later := time.Now().Add(time.Hour)
+	if err := os.Rename(newCert, certFile); err != nil {
+		t.Fatalf("replace cert: %v", err)
+	}
+	if err := os.Chtimes(certFile, later, later); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	if kept, err := get(nil); err != nil || kept != first {
+		t.Errorf("get with the key not yet replaced = %v, %v; want the last good pair", kept, err)
+	}
+	if err := os.Rename(newKey, keyFile); err != nil {
+		t.Fatalf("replace key: %v", err)
+	}
+	second, err := get(nil)
+	if err != nil {
+		t.Fatalf("get after rotating: %v", err)
+	}
+	if string(second.Certificate[0]) == string(first.Certificate[0]) {
+		t.Error("still serving the old cert after the pair was rotated")
+	}
+
+	if _, err := tlsutil.CertificateGetter(certFile, filepath.Join(dir, "missing.key")); err == nil {
+		t.Error("CertificateGetter with a cert and no key returned no error")
+	}
+}
+
+const certValidity = 365 * 24 * time.Hour

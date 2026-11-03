@@ -338,6 +338,13 @@ around rather than a protection.
 Do not expose port 8080 directly to the internet. To use Quark's own self-signed certificate
 instead, unset `QUARK_INSECURE` and set `HTTPS_PORT`.
 
+To serve a certificate of your own (an internal CA, or ACME run by something else), unset
+`QUARK_INSECURE` and set `QUARK_TLS_CERT` and `QUARK_TLS_KEY` to the PEM certificate and key, or pass
+`quark serve --tls-cert <path> --tls-key <path>`. Quark then writes no self-signed pair, and a pair
+replaced on disk reaches the next connection without a restart: replace the certificate and the key
+together. Setting one without the other, a pair that does not load, or either combined with
+`QUARK_INSECURE` stops `quark serve` at startup with an error naming the flag.
+
 ## Behind a proxy
 
 Quark rate-limits login, setup and account recovery per client IP. It takes that IP
