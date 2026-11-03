@@ -68,6 +68,10 @@ The self-signed certificate is never added to your system trust store. The Flutt
 verification for private and loopback addresses, and for a local name (`quark.local`, `quark.lan`) only once it is
 the Quark you chose, so it can talk to it; browsers and `curl` will still warn.
 
+To serve a certificate of your own instead, pass `quark serve --tls-cert <path> --tls-key <path>`, or set
+`QUARK_TLS_CERT` and `QUARK_TLS_KEY`. Nothing is written to `<dataDir>/certs/` then, and replacing the pair on
+disk is picked up by the next connection. Both are needed, and neither goes with `--insecure`.
+
 If you need root — for USB device mounting on Linux, or to bind `:443` in secure mode — prefix any backend
 target with `AS_ROOT=1`, which runs it under `sudo`:
 
