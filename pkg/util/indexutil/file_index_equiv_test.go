@@ -22,7 +22,7 @@ type nameIndex interface {
 	Build(ctx context.Context, registry vfs.Registry)
 	Search(query string, serials map[string]bool) []IndexedFile
 	SearchEach(query string, serials map[string]bool, visit func(IndexedFile) bool)
-	HandleAdd(serial, relPath string)
+	HandleAdd(serial, relPath string, size, mtime int64)
 	HandleDelete(serial, relPath string)
 	HandleMove(ctx context.Context, fsys vfs.VFS, serial, oldRelPath, newRelPath string)
 	HandleRescan(ctx context.Context, fsys vfs.VFS, serial, relPath string)
@@ -121,7 +121,7 @@ func (s *equivState) step() string {
 	case 1: // a file added by path
 		rel := s.randomRel()
 		s.writeFile(dir, rel)
-		both(func(i nameIndex) { i.HandleAdd(serial, rel) })
+		both(func(i nameIndex) { i.HandleAdd(serial, rel, 0, 0) })
 		return "add " + rel
 	case 2: // new folder with files in it
 		rel := s.randomRel()
@@ -279,7 +279,7 @@ func benchHeap(b *testing.B, n int, newIndex func() nameIndex) {
 		start := time.Now()
 		idx = newIndex()
 		for _, rel := range rels {
-			idx.HandleAdd("", rel)
+			idx.HandleAdd("", rel, 0, 0)
 		}
 		build := time.Since(start)
 		after := heapAfterGC()

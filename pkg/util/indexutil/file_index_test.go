@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -121,7 +122,7 @@ func TestSearchBySerial(t *testing.T) {
 
 func TestHandleAdd(t *testing.T) {
 	idx := NewFileIndex()
-	idx.HandleAdd("", "newfile.txt")
+	idx.HandleAdd("", "newfile.txt", 0, 0)
 
 	results := idx.Search("newfile", nil)
 	if len(results) != 1 {
@@ -134,7 +135,7 @@ func TestHandleAdd(t *testing.T) {
 
 func TestHandleDelete(t *testing.T) {
 	idx := NewFileIndex()
-	idx.HandleAdd("", "todelete.txt")
+	idx.HandleAdd("", "todelete.txt", 0, 0)
 	idx.HandleDelete("", "todelete.txt")
 
 	if results := idx.Search("todelete", nil); len(results) != 0 {
@@ -144,7 +145,7 @@ func TestHandleDelete(t *testing.T) {
 
 func TestHandleMove(t *testing.T) {
 	idx := NewFileIndex()
-	idx.HandleAdd("ABC", "old_name.txt")
+	idx.HandleAdd("ABC", "old_name.txt", 0, 0)
 
 	idx.HandleMove(context.Background(), vfs.NewMemVFS("files:ABC"), "ABC", "old_name.txt", "new_name.txt")
 
@@ -163,7 +164,7 @@ func TestConcurrentAccess(t *testing.T) {
 
 	go func() {
 		for range 100 {
-			idx.HandleAdd("", "concurrent.txt")
+			idx.HandleAdd("", "concurrent.txt", 0, 0)
 		}
 		close(done)
 	}()
@@ -217,8 +218,8 @@ func TestHandleMoveFolderRewritesDescendants(t *testing.T) {
 func TestFileIndexSearchOrder(t *testing.T) {
 	idx := NewFileIndex()
 	for _, rel := range []string{"b/z.txt", "c.txt", "a/y.txt", "B.txt", "a/x.txt"} {
-		idx.HandleAdd("S", rel)
-		idx.HandleAdd("", rel)
+		idx.HandleAdd("S", rel, 0, 0)
+		idx.HandleAdd("", rel, 0, 0)
 	}
 	var got []string
 	for _, f := range idx.Search("", nil) {
@@ -352,4 +353,92 @@ func TestBuildAndWatchFollowsDevices(t *testing.T) {
 	devs.svc.InvalidateDeviceCache()
 	waitFor(t, func() bool { return slices.Equal(serials(), []string{":inside.txt"}) },
 		"the unplugged device to be dropped")
+}
+
+// writeSized writes n bytes to rel under root and returns its modification
+// time.
+func writeSized(t *testing.T, root, rel string, n int) time.Time {
+	t.Helper()
+	full := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, make([]byte, n), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(full)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return info.ModTime()
+}
+
+// wantFolderSize fails unless the index sums size bytes under relPath.
+func wantFolderSize(t *testing.T, idx *FileIndex, relPath string, size int64) {
+	t.Helper()
+	if got, ok := idx.FolderSize("", relPath); !ok || got != size {
+		t.Errorf("FolderSize(%q) = %d, %v, want %d, true", relPath, got, ok, size)
+	}
+}
+
+// A built index reports each file's size and mtime as the disk has them, and
+// sums a folder's files at every depth (#2759).
+func TestBuildCarriesSizeAndModTime(t *testing.T) {
+	internal := newMount(t, "")
+	mtime := writeSized(t, internal.filesDir, "a/b.txt", 10)
+	writeSized(t, internal.filesDir, "a/c/d.txt", 20)
+	writeSized(t, internal.filesDir, "e.txt", 5)
+	idx := NewFileIndex()
+	idx.Build(context.Background(), newDevices(t, internal).registry)
+
+	for _, f := range idx.Search("b.txt", nil) {
+		if f.Size != 10 || !f.ModTime.Equal(mtime) {
+			t.Errorf("a/b.txt: size %d, mtime %v, want 10, %v", f.Size, f.ModTime, mtime)
+		}
+	}
+	wantFolderSize(t, idx, "", 35)
+	wantFolderSize(t, idx, "a", 30)
+	wantFolderSize(t, idx, "a/c", 20)
+	if _, ok := idx.FolderSize("", "nope"); ok {
+		t.Error("FolderSize of a folder the index lacks reports true")
+	}
+	if _, ok := idx.FolderSize("USB1", ""); ok {
+		t.Error("FolderSize on a device the index lacks reports true")
+	}
+}
+
+// Every change moves the totals of the folders above it: a delete, an upload
+// over an existing file, and a folder move (#2759).
+func TestFolderSizeFollowsEvents(t *testing.T) {
+	internal := newMount(t, "")
+	root := internal.filesDir
+	writeSized(t, root, "a/b.txt", 10)
+	writeSized(t, root, "a/c/d.txt", 20)
+	writeSized(t, root, "a/c/e.txt", 1)
+	bus := eventbus.New()
+	idx := NewFileIndex()
+	idx.BuildAndWatch(BuildAndWatchParams{Bus: bus, Registry: newDevices(t, internal).registry})
+	wantFolderSize(t, idx, "", 31)
+
+	idx.HandleDelete("", "a/c/e.txt")
+	wantFolderSize(t, idx, "a/c", 20)
+	wantFolderSize(t, idx, "", 30)
+
+	// An upload over b.txt names its folder; the index learns the new size.
+	mtime := writeSized(t, root, "a/b.txt", 100)
+	bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: "a"})
+	waitFor(t, func() bool { size, _ := idx.FolderSize("", ""); return size == 120 }, "the upload to be indexed")
+	wantFolderSize(t, idx, "a", 120)
+	if got := idx.Search("b.txt", nil); len(got) != 1 || got[0].Size != 100 || !got[0].ModTime.Equal(mtime) {
+		t.Errorf("after the upload: %+v, want a/b.txt at 100 bytes, %v", got, mtime)
+	}
+
+	idx.HandleMove(context.Background(), vfs.NewMemVFS("files"), "", "a/c", "x/c")
+	wantFolderSize(t, idx, "a", 100)
+	wantFolderSize(t, idx, "x", 20)
+	wantFolderSize(t, idx, "x/c", 20)
+	wantFolderSize(t, idx, "", 120)
+	if _, ok := idx.FolderSize("", "a/c"); ok {
+		t.Error("the moved folder is still at its old path")
+	}
 }

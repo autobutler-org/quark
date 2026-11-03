@@ -6,10 +6,17 @@ type indexDir struct {
 	// name is the folder's name in its parent; empty for a device's root.
 	name string
 	// names is every file name, sorted, end to end; ends[i] is where the
-	// i-th one stops.
-	names string
-	ends  []uint32
-	dirs  []*indexDir
+	// i-th one stops, and sizes[i] and modTimes[i] (Unix nanoseconds) are
+	// its size and modification time.
+	names    string
+	ends     []uint32
+	sizes    []int64
+	modTimes []int64
+	dirs     []*indexDir
+	// size is the sum of every file's size under the folder, valid while
+	// sized holds; a change anywhere below clears sized.
+	size  int64
+	sized bool
 }
 
 // treeBuilder grows a tree from a walk. File names are gathered per folder in
@@ -22,10 +29,12 @@ type treeBuilder struct {
 
 // fileList is one folder's file names while a tree is built.
 type fileList struct {
-	names  []byte
-	ends   []uint32
-	last   string
-	sorted bool
+	names    []byte
+	ends     []uint32
+	sizes    []int64
+	modTimes []int64
+	last     string
+	sorted   bool
 }
 
 // nameMatcher reports whether a name contains a query, ignoring case exactly

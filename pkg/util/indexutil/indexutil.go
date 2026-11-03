@@ -1,12 +1,14 @@
-// Package indexutil keeps the in-memory filename index behind filename
-// search: one tree of folders per managed device, built by walking each
-// device's files namespace in the VFS registry and kept current from file
-// events. The trash and the other internal names are never indexed.
+// Package indexutil keeps the in-memory file index behind filename search:
+// one tree of folders per managed device, holding each file's name, size and
+// mtime, built by walking each device's files namespace in the VFS registry
+// and kept current from file events. It also answers a folder's total size
+// without a walk. The trash and the other internal names are never indexed.
 package indexutil
 
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -23,6 +25,10 @@ type IndexedFile struct {
 	// DeviceSerial names the device, empty for the internal drive. The file
 	// lives in the namespace vfs.FilesNamespace(DeviceSerial).
 	DeviceSerial string
+	// Size is the file's size in bytes when it was last indexed.
+	Size int64
+	// ModTime is the file's modification time when it was last indexed.
+	ModTime time.Time
 }
 
 // FileIndex is a thread-safe in-memory index of the files on every managed
@@ -35,8 +41,10 @@ type IndexedFile struct {
 // search rebuilds them on the way down, and only for the files it returns.
 //
 // A folder keeps the names of its files sorted and end to end in one string,
-// so a file costs its name's bytes and a 4-byte offset (#2760): ~30 B a file
-// against ~100 B for a map per folder (BenchmarkFileIndexHeap).
+// so a file costs its name's bytes and a 4-byte offset (#2760), plus 16 bytes
+// of size and mtime that let photos, recent files and folder sizes be served
+// without a walk (#2759): ~48 B a file against ~100 B for a map per folder
+// (BenchmarkFileIndexHeap).
 type FileIndex struct {
 	mu    sync.RWMutex
 	roots map[string]*indexDir // key: device serial, "" for the internal drive

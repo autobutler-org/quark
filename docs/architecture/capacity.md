@@ -32,7 +32,7 @@ change). Past that, the client's refresh-on-every-event turned each shared uploa
 | Rate limiters (`pkg/util/ratelimitutil`) | map of IP → limiter behind one mutex, auth paths only, swept every 5 min | ~200 B per IP |
 | Upload sessions (`pkg/util/uploadutil`) | map behind one mutex, O(1) lookups; per-session mutex held for one chunk's `io.CopyN` | one fd each, 24 h TTL, 32 per account and 256 overall, then 429 (#2756) |
 | Health collector (`pkg/util/healthutil`) | one `Collector` for every `/health` call | one host read per 5 s, shared (#2750) |
-| Filename index (`indexutil.FileIndex`) | one folder tree per device, each folder's file names sorted end to end in one string; linear scan per search under `RLock`, stopping at 500 readable matches | ~30 B per file, about the name's length plus 4 (#2760) |
+| Filename index (`indexutil.FileIndex`) | one folder tree per device, each folder's file names sorted end to end in one string; linear scan per search under `RLock`, stopping at 500 readable matches | ~48 B per file: the name's length plus 4 (#2760), plus 16 for the size and mtime that serve photos, recent files and folder sizes without a walk (#2759) |
 
 Streaming is in good shape: uploads, downloads and archive entries go through `io.Copy`/`http.ServeContent`, and
 no handler on a file path buffers a whole body (the one unbounded read was inside `gen2brain/heic`, which #2382
@@ -139,7 +139,7 @@ on SD, so 25–100 commits/s. Applied to the measurements above (estimates scale
 | 2,000–3,000 | not viable | not viable on an A55 board without #2763 and #2764; plausible on an 8-core A76 board with them, memory permitting (#2760, #2761) |
 
 Memory is not the first limit. The idle server is 50–100 MB, an app costs a few hundred KiB while connected, and
-the filename index costs ~30 B per file on the appliance, 30 MB per million (#2760). Decodes are refused above 64 MP
+the file index costs ~48 B per file on the appliance, 48 MB per million (#2760, #2759). Decodes are refused above 64 MP
 (`photoutil.MaxDecodePixels`) from the header alone, so one costs at most 256 MiB at four bytes a pixel (512 MiB for a 16-bit
 PNG), and the decode class admits two at once on a 4-core board. `quark serve` sets a Go soft memory limit of 60% of RAM unless `GOMEMLIMIT` is
 set, so the heap collects near its live set, and `quark install` writes a systemd drop-in

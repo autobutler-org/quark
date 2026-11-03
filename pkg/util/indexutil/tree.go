@@ -39,7 +39,7 @@ func scanFolder(ctx context.Context, fsys vfs.VFS, parts []string, held map[stri
 			}
 			return nil
 		}
-		b.add(rel, fi.IsDir)
+		b.add(rel, fi.IsDir, fi.Size, fi.ModTime.UnixNano())
 		if fi.IsDir && len(rel) == 1 && held[rel[0]] {
 			return fs.SkipDir
 		}
@@ -52,8 +52,9 @@ func newTreeBuilder() *treeBuilder {
 	return &treeBuilder{root: &indexDir{}, files: make(map[*indexDir]*fileList)}
 }
 
-// add records the file or folder at parts, relative to the tree's root.
-func (b *treeBuilder) add(parts []string, isDir bool) {
+// add records the file or folder at parts, relative to the tree's root, with
+// a file's size and mtime.
+func (b *treeBuilder) add(parts []string, isDir bool, size, mtime int64) {
 	parent, name := b.root.ensure(parts[:len(parts)-1]), parts[len(parts)-1]
 	if isDir {
 		parent.ensure([]string{name})
@@ -71,6 +72,8 @@ func (b *treeBuilder) add(parts []string, isDir bool) {
 	}
 	list.names = append(list.names, name...)
 	list.ends = append(list.ends, uint32(len(list.names)))
+	list.sizes = append(list.sizes, size)
+	list.modTimes = append(list.modTimes, mtime)
 	list.last = strings.Clone(name)
 }
 
@@ -80,17 +83,13 @@ func (b *treeBuilder) finish() *indexDir {
 	for dir, list := range b.files {
 		if list.sorted {
 			dir.names, dir.ends = string(list.names), slices.Clone(list.ends)
+			dir.sizes, dir.modTimes = slices.Clone(list.sizes), slices.Clone(list.modTimes)
 			continue
 		}
-		names := make([]string, len(list.ends))
 		start := uint32(0)
 		for i, end := range list.ends {
-			names[i] = string(list.names[start:end])
+			dir.putFile(string(list.names[start:end]), list.sizes[i], list.modTimes[i])
 			start = end
-		}
-		slices.Sort(names)
-		for _, name := range slices.Compact(names) {
-			dir.putFile(name)
 		}
 	}
 	return b.root
@@ -166,12 +165,14 @@ func (d *indexDir) ensure(parts []string) *indexDir {
 	return d
 }
 
-// putFile records a file, in place of a folder of that name. The names are
+// putFile records a file with its size and mtime, in place of a folder of
+// that name; a file already there takes the new size and mtime. The names are
 // rewritten whole, so a folder's strings never carry spare capacity.
-func (d *indexDir) putFile(name string) {
+func (d *indexDir) putFile(name string, size, mtime int64) {
 	d.removeDir(name)
 	i, ok := d.findFile(name)
 	if ok {
+		d.sizes[i], d.modTimes[i] = size, mtime
 		return
 	}
 	at := uint32(0)
@@ -186,6 +187,8 @@ func (d *indexDir) putFile(name string) {
 		ends[j+1] = d.ends[j] + uint32(len(name))
 	}
 	d.ends = ends
+	d.sizes = slices.Concat(d.sizes[:i], []int64{size}, d.sizes[i:])
+	d.modTimes = slices.Concat(d.modTimes[:i], []int64{mtime}, d.modTimes[i:])
 }
 
 // putDir records a folder, in place of a file or a folder of that name.
@@ -210,7 +213,7 @@ func (d *indexDir) removeFile(name string) {
 		start = d.ends[i-1]
 	}
 	if len(d.ends) == 1 {
-		d.names, d.ends = "", nil
+		d.names, d.ends, d.sizes, d.modTimes = "", nil, nil, nil
 		return
 	}
 	d.names = d.names[:start] + d.names[end:]
@@ -220,6 +223,8 @@ func (d *indexDir) removeFile(name string) {
 		ends[j-1] = d.ends[j] - (end - start)
 	}
 	d.ends = ends
+	d.sizes = slices.Concat(d.sizes[:i], d.sizes[i+1:])
+	d.modTimes = slices.Concat(d.modTimes[:i], d.modTimes[i+1:])
 }
 
 // removeDir drops the folder name with everything under it, if d has it.
@@ -240,10 +245,11 @@ func (d *indexDir) remove(name string) {
 
 // collect calls visit for every file under d whose name matches, with its
 // path relative to the tree's root, which prefix is the path of d plus a
-// trailing slash. It stops, and reports false, once visit does.
-func (d *indexDir) collect(prefix string, match nameMatcher, visit func(name, relPath string) bool) bool {
+// trailing slash, its size and its mtime. It stops, and reports false, once
+// visit does.
+func (d *indexDir) collect(prefix string, match nameMatcher, visit func(name, relPath string, size, mtime int64) bool) bool {
 	for i := range d.ends {
-		if name := d.file(i); match.matches(name) && !visit(name, prefix+name) {
+		if name := d.file(i); match.matches(name) && !visit(name, prefix+name, d.sizes[i], d.modTimes[i]) {
 			return false
 		}
 	}
@@ -253,4 +259,33 @@ func (d *indexDir) collect(prefix string, match nameMatcher, visit func(name, re
 		}
 	}
 	return true
+}
+
+// totalSize returns the sum of every file's size under d, remembering it on
+// each folder on the way down until a change clears it.
+func (d *indexDir) totalSize() int64 {
+	if d.sized {
+		return d.size
+	}
+	size := int64(0)
+	for _, s := range d.sizes {
+		size += s
+	}
+	for _, dir := range d.dirs {
+		size += dir.totalSize()
+	}
+	d.size, d.sized = size, true
+	return size
+}
+
+// forgetSize clears the remembered size of d and of each folder down parts,
+// the folders whose totals a change at parts moves.
+func (d *indexDir) forgetSize(parts []string) {
+	for i := 0; d != nil; i++ {
+		d.sized = false
+		if i == len(parts) {
+			return
+		}
+		d = d.child(parts[i])
+	}
 }
