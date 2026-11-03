@@ -266,6 +266,14 @@ func TestGetPart_Refusals(t *testing.T) {
 	h := newHarness(t)
 	h.writeDocx(t, "shared/report.docx", pictureBody)
 	h.writeDocx(t, "other/secret.docx", pictureBody)
+	h.writePptx(t, "shared/talk.pptx")
+	// Every part below is present, so a 404 is the allow-list refusing it.
+	h.writePackage(t, "shared/macros.pptm", map[string]string{
+		"ppt/vbaProject.bin":   "macros",
+		"vbaProject.bin":       "macros",
+		"ppt/presentation.xml": "<p:presentation/>",
+		"ppt/media/image1.png": "\x89PNG",
+	})
 
 	for name, tc := range map[string]struct {
 		filePath, part string
@@ -280,6 +288,10 @@ func TestGetPart_Refusals(t *testing.T) {
 		"non-image in media":   {"shared/report.docx", "word/media/readme.txt", http.StatusNotFound},
 		"absent image":         {"shared/report.docx", "word/media/image9.png", http.StatusNotFound},
 		"no part":              {"shared/report.docx", "", http.StatusBadRequest},
+		"pptx slide":           {"shared/talk.pptx", "ppt/slides/slide1.xml", http.StatusNotFound},
+		"pptx macros":          {"shared/macros.pptm", "ppt/vbaProject.bin", http.StatusNotFound},
+		"pptx root macros":     {"shared/macros.pptm", "vbaProject.bin", http.StatusNotFound},
+		"pptx traversal":       {"shared/macros.pptm", "ppt/media/../presentation.xml", http.StatusNotFound},
 	} {
 		w := h.get("part", map[string]string{"filePath": tc.filePath, "part": tc.part})
 		if w.Code != tc.want {

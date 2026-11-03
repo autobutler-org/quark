@@ -1,15 +1,20 @@
 package fileutil_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/pptxutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -103,5 +108,58 @@ func TestOpenDocumentPartServesPptxMediaOnly(t *testing.T) {
 		}); !errors.As(err, &notFound) {
 			t.Errorf("part %q: err = %v, want NotFoundError", part, err)
 		}
+	}
+}
+
+func TestPreviewSlidesSkipsAPictureTooLarge(t *testing.T) {
+	root, registry := newSlidesFixture(t)
+	// Swap the picture for one that declares more than the picture limit.
+	body, err := os.ReadFile(filepath.Join(root, "talk.pptx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var huge bytes.Buffer
+	zw := zip.NewWriter(&huge)
+	for _, f := range zr.File {
+		if f.Name == "ppt/media/image1.png" {
+			w, err := zw.CreateRaw(&zip.FileHeader{
+				Name: f.Name, Method: zip.Store, UncompressedSize64: pptxutil.MaxImageBytes + 1, CompressedSize64: 4,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = w.Write([]byte("\x89PNG"))
+			continue
+		}
+		if err := zw.Copy(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, root, "huge.pptx", huge.Bytes())
+
+	var out bytes.Buffer
+	result, err := fileutil.PreviewSlides(fileutil.PreviewSlidesParams{
+		Ctx: context.Background(), Registry: registry, FilePath: "huge.pptx", Out: &out,
+	})
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	if result.Slides != 2 {
+		t.Errorf("slides = %d, want 2", result.Slides)
+	}
+	if !slices.ContainsFunc(result.Warnings, func(w pptxutil.ImportWarning) bool {
+		return strings.Contains(w.Message, "larger than")
+	}) {
+		t.Errorf("warnings = %+v, want the picture named as too large", result.Warnings)
+	}
+	if strings.Contains(out.String(), fileutil.PackagePartPrefix) {
+		t.Errorf("the oversized picture was referenced: %s", out.String())
 	}
 }

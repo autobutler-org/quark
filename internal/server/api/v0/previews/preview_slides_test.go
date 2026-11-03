@@ -46,8 +46,11 @@ func TestPreviewSlides_StreamsQslideWithPartReferences(t *testing.T) {
 	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
 		t.Errorf("Content-Type = %q", ct)
 	}
-	if got := w.Result().Trailer.Get("X-Quark-Import-Warnings"); got != "0" {
-		t.Errorf("warnings trailer = %q, want 0", got)
+	if got := w.Header().Get("X-Quark-Import-Warnings"); got != "0" {
+		t.Errorf("warnings header = %q, want 0", got)
+	}
+	if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
 	}
 	var deck struct {
 		Slides []struct{ Elements []struct{ Source string } }

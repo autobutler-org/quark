@@ -8701,7 +8701,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Streams a .pptx, .pptm or .ppsx presentation as .qslide JSON, a slide at a time, for the read-only presentation viewer: what \"Open as Quark slides\" would write, but stored nowhere. A picture is named by its entry in the package, as part:ppt/media/image3.png, which GET /previews/part serves. Macros are never opened. The import's warnings are counted in the X-Quark-Import-Warnings trailer, sent after the body because they are known only once the last slide is read; a stream without it was cut off by a server error. A file that is not what its name says is a 400. Needs read access on the presentation.",
+                "description": "Converts a .pptx, .pptm or .ppsx presentation to .qslide JSON for the read-only presentation viewer: what \"Open as Quark slides\" would write, but stored nowhere. A picture is named by its entry in the package, as part:ppt/media/image3.png, which GET /previews/part serves. Macros are never opened. The import's warnings are counted in the X-Quark-Import-Warnings header, so the viewer can say that some things were not shown. A file that is not what its name says is a 400. Needs read access on the presentation.",
                 "produces": [
                     "application/json"
                 ],
@@ -8733,7 +8733,7 @@ const docTemplate = `{
                         "headers": {
                             "X-Quark-Import-Warnings": {
                                 "type": "integer",
-                                "description": "How many things the import left out or approximated, sent as a trailer"
+                                "description": "How many things the import left out or approximated"
                             }
                         }
                     },
