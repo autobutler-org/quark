@@ -949,18 +949,19 @@ class FilesService with AuthenticatedService {
     );
   }
 
-  /// Persists [rotationQuarters] (0–3) for a photo on the server.
-  /// A value of 0 removes the rotation record entirely.
+  /// Turns a photo [quarters] quarter turns clockwise. The Quark rewrites the
+  /// file's EXIF orientation, so the bytes it serves afterward are already
+  /// turned. It refuses anything but a JPEG with a 422.
   static Future<void> rotatePhoto(
     String relPath, {
     String? serial,
-    required int rotationQuarters,
+    int quarters = 1,
   }) async {
     final uri = apiBaseUri.resolve('/api/v0/photos/rotate');
     final body = jsonEncode({
       'relPath': relPath,
       'serial': serial?.trim() ?? '',
-      'rotationQuarters': rotationQuarters % 4,
+      'quarters': quarters,
     });
     final response = await instance.authenticatedPost(
       uri,
@@ -968,7 +969,7 @@ class FilesService with AuthenticatedService {
       body: body,
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to save rotation');
+      throw ApiException(response.statusCode, 'Failed to rotate the photo');
     }
   }
 

@@ -363,6 +363,17 @@ abstract final class Errors {
     _ => message(error, 'convert the video'),
   };
 
+  /// A rotation the Quark refused with a 422: only JPEGs can be turned,
+  /// because the turn is stored in the file's EXIF orientation (#1014).
+  static const String cantRotatePhoto =
+      "Your Quark can't rotate this kind of photo. Only JPEGs can be turned.";
+
+  /// A photo that could not be rotated. A 422 gets [cantRotatePhoto].
+  static String rotatePhoto(Object? error) => switch (error) {
+    ApiException(statusCode: 422) => cantRotatePhoto,
+    _ => message(error, 'rotate the photo'),
+  };
+
   /// A trim the Quark refused with a 422: the video's container can't be cut
   /// on the device, or the file can't be read as a video.
   static const String cantTrimVideo =

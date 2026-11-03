@@ -60,7 +60,7 @@ class AlbumRef {
       AlbumRef(id: json['id'] as int, name: json['name'] as String);
 }
 
-/// What the Quark knows about one photo: its EXIF data, the albums it is in, its saved rotation, and whether it
+/// What the Quark knows about one photo: its EXIF data, the albums it is in, and whether it
 /// is a Live Photo.
 class PhotoMetadata {
   final String fileName;
@@ -68,9 +68,6 @@ class PhotoMetadata {
   final DateTime mtime;
   final int width;
   final int height;
-
-  /// Server-persisted rotation: 0/1/2/3 × 90° CW.
-  final int rotationQuarters;
 
   /// Whether this photo is in the user's server-side favorites.
   final bool isFavorite;
@@ -87,7 +84,6 @@ class PhotoMetadata {
     required this.mtime,
     required this.width,
     required this.height,
-    this.rotationQuarters = 0,
     this.isFavorite = false,
     this.exif,
     required this.albums,
@@ -102,7 +98,6 @@ class PhotoMetadata {
     mtime: DateTime.fromMillisecondsSinceEpoch((json['mtime'] as int) * 1000),
     width: json['width'] as int,
     height: json['height'] as int,
-    rotationQuarters: (json['rotationQuarters'] as int?) ?? 0,
     isFavorite: (json['isFavorite'] as bool?) ?? false,
     exif: json['exif'] != null
         ? PhotoExif.fromJson(json['exif'] as Map<String, dynamic>)

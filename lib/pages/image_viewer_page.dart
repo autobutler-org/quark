@@ -153,7 +153,9 @@ class _ImageViewerPageState extends State<ImageViewerPage>
 
   bool _sidebarOpen = true;
   bool _isFavorite = false;
-  int _rotationQuarters = 0; // 0/1/2/3 × 90°
+  // A rotation is in flight: the photo is drawn turned a quarter while the
+  // Quark rewrites the file, and sits upright again once the turned bytes land.
+  bool _rotating = false;
 
   // Set to true whenever the photo list in the caller may need a refresh
   // (photo deleted, or album membership changed). Returned via pop().
@@ -306,15 +308,15 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     _prefs = prefs;
     final sidebarOpen = prefs.getBool(_kSidebarOpenKey) ?? true;
 
-    // Rotation and favorite state come from the server metadata response for
-    // Quark photos; leave them at defaults here and let
-    // _loadMetadataForCurrent apply the server values.
+    // Favorite state comes from the server metadata response for Quark
+    // photos; leave it at the default here and let _loadMetadataForCurrent
+    // apply the server value.
     setState(() => _sidebarOpen = sidebarOpen);
     _loadMetadata();
   }
 
-  // Rotation is always server-backed. Only Quark photos (with a relPath)
-  // support rotation — local device assets have no server path to key on.
+  // Rotation rewrites the file on the Quark. Only Quark photos (with a relPath)
+  // support it — local device assets have no server path to turn.
   bool get _isQuarkPhoto =>
       _currentRelPath != null && _currentRelPath!.isNotEmpty;
 
@@ -463,8 +465,8 @@ class _ImageViewerPageState extends State<ImageViewerPage>
 
       _disposeLiveVideo();
       _zoomController.value = Matrix4.identity();
-      // Reset rotation and favorite to defaults; _loadMetadataForCurrent
-      // will apply server-persisted values once metadata arrives.
+      // Reset the turn and favorite to defaults; _loadMetadataForCurrent
+      // will apply the server's favorite once metadata arrives.
       setState(() {
         _currentIndex = newIndex;
         _currentBytes = bytes;
@@ -475,7 +477,6 @@ class _ImageViewerPageState extends State<ImageViewerPage>
         _loading = false;
         _metadata = null;
         _isFavorite = false;
-        _rotationQuarters = 0;
         _rotationValue = Tween<double>(begin: 0, end: 0).animate(_rotationAnim);
       });
       _loadMetadataForCurrent();
@@ -530,17 +531,12 @@ class _ImageViewerPageState extends State<ImageViewerPage>
         serial: _currentSerial,
       );
       if (!mounted) return;
-      // Apply server-persisted rotation and favorite state for this photo.
-      final quarters = meta.rotationQuarters.clamp(0, 3);
+      // Apply the server's favorite state for this photo. The bytes it serves
+      // are already turned, so the viewer applies no rotation of its own.
       setState(() {
         _metadata = meta;
         _metadataLoading = false;
         _isFavorite = meta.isFavorite;
-        _rotationQuarters = quarters;
-        _rotationValue = Tween<double>(
-          begin: quarters * math.pi / 2,
-          end: quarters * math.pi / 2,
-        ).animate(_rotationAnim);
       });
       if (meta.isLivePhoto) _prepareLiveVideo();
     } catch (_) {
@@ -631,57 +627,80 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       return;
     }
 
-    final oldQuarters = _rotationQuarters;
-    final oldAngle = oldQuarters * math.pi / 2;
-    final newQuarters = (oldQuarters + 1) % 4;
-    final newAngle =
-        newQuarters * math.pi / 2 +
-        (newQuarters == 0 ? math.pi * 2 : 0); // always animate forward
+    if (_rotating) return;
+    _rotating = true;
+    final relPath = _currentRelPath!;
+    final serial = _currentSerial;
+    const quarter = math.pi / 2;
 
-    // Optimistically apply the rotation in the UI.
-    setState(() => _rotationQuarters = newQuarters);
-    _rotationValue = Tween<double>(
-      begin: oldAngle,
-      end: newAngle,
-    ).animate(CurvedAnimation(parent: _rotationAnim, curve: Curves.easeOut));
-    _playRotation();
+    // Optimistically turn the photo a quarter while the Quark rewrites the
+    // file's EXIF orientation. The bytes it serves afterward are already
+    // turned, so the transform goes back to zero when they land.
+    _turnTo(0, quarter);
 
     try {
-      await FilesService.rotatePhoto(
-        _currentRelPath!,
-        serial: _currentSerial,
-        rotationQuarters: newQuarters,
-      );
+      await FilesService.rotatePhoto(relPath, serial: serial);
       // Drop the old thumbnail, on disk and decoded, in both sizes the app
       // draws — the list's `sm` and the grids' default — so the next load
       // fetches the rotated one instead of showing the stale one first.
       for (final size in const [null, 'sm']) {
         await ThumbnailCacheManager.evict(
           FilesService.constructThumbnailUrl(
-            _currentRelPath!,
-            serial: _currentSerial,
+            relPath,
+            serial: serial,
             size: size,
           ),
         );
       }
       // Same reason, for the full-resolution bytes: the cache is keyed by path
       // and serial, neither of which a rotation changes (#1710).
-      PhotoBytesCache.instance.evict(
-        PhotoBytesCache.key(_currentRelPath!, _currentSerial),
-      );
+      PhotoBytesCache.instance.evict(PhotoBytesCache.key(relPath, serial));
       _listChanged = true;
+      await _showTurnedBytes(relPath, serial);
     } catch (e) {
       // Roll back the visual rotation and inform the user.
       if (!mounted) return;
-      setState(() {
-        _rotationQuarters = oldQuarters;
-        _rotationValue = Tween<double>(begin: newAngle, end: oldAngle).animate(
-          CurvedAnimation(parent: _rotationAnim, curve: Curves.easeOut),
-        );
-      });
-      _playRotation();
-      showMessage(context, Errors.message(e, 'rotate the photo'));
+      if (_currentRelPath == relPath && _currentSerial == serial) {
+        _turnTo(quarter, 0);
+      }
+      showMessage(context, Errors.rotatePhoto(e));
+    } finally {
+      _rotating = false;
     }
+  }
+
+  /// Swaps in the turned bytes of the photo at [relPath] and puts the
+  /// transform back to zero, unless the viewer has moved to another photo.
+  /// A failed download keeps the quarter turn on screen, which is what the
+  /// photo now looks like.
+  Future<void> _showTurnedBytes(String relPath, String? serial) async {
+    final Uint8List? bytes;
+    try {
+      bytes = await FilesService.downloadFileBytes(relPath, serial: serial);
+    } catch (_) {
+      return;
+    }
+    if (bytes == null ||
+        !mounted ||
+        _currentRelPath != relPath ||
+        _currentSerial != serial) {
+      return;
+    }
+    setState(() {
+      _currentBytes = bytes;
+      _rotationValue = Tween<double>(begin: 0, end: 0).animate(_rotationAnim);
+    });
+  }
+
+  /// Points [_rotationValue] from [begin] to [end] radians and plays it.
+  void _turnTo(double begin, double end) {
+    setState(() {
+      _rotationValue = Tween<double>(
+        begin: begin,
+        end: end,
+      ).animate(CurvedAnimation(parent: _rotationAnim, curve: Curves.easeOut));
+    });
+    _playRotation();
   }
 
   Future<void> _download() async {
