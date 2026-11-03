@@ -25,7 +25,7 @@ build under test, and processes need no Docker.
 | --- | --- | --- |
 | `TestSessionsAreShared` | sessions (audit, "Confirmed safe") | passes |
 | `TestSharedFileWrites` | #2968: no lost writes, partial reads or staging files left | passes |
-| `TestJobOwnership` | #2966: a late instance leaves a job alone; a killed owner's job is finished by another | passes |
+| `TestJobOwnership` | #2966: a late instance leaves a running job alone; a killed owner's running job is finished by another | passes |
 | `TestEventsCrossInstances` | #2965: an upload is live on the other instance's socket; a share works on both | known broken |
 | `TestChunkedUploadSplitAcrossInstances` | #2967: a chunked upload spread over both | known broken |
 | `TestDownloadTokenAcrossInstances` | #2967: a download token issued by one, used on the other | known broken |
@@ -37,9 +37,11 @@ A known-broken case calls `knownBroken(t, <issue>, err)`. While the case fails i
 once it passes it fails and says to remove the marker. The pull request that fixes a case therefore removes its
 marker, and from then on the case guards the fix.
 
-`TestJobOwnership` kills the instance that queued a music rescan whenever the kill lands: before the claim
-another instance takes the job, during the run it waits out the 60 s lease, and after it there is nothing left
-to do. It does not force the middle one.
+`TestJobOwnership` holds a music rescan running with a named pipe in the library: the scan's open of it blocks
+until a writer opens it too. With one instance running the job, it starts a second and requires the job to stay
+running on its first attempt for 15 s, through the newcomer's first heartbeats. It then kills the owner, lets the
+pipe go, and requires the second instance to finish the job on a later attempt once the 60 s lease runs out. A job
+that finishes any other way before either check fails the test.
 
 ## Run
 

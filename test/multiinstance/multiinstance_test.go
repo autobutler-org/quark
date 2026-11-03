@@ -130,9 +130,14 @@ func TestSharedFileWrites(t *testing.T) {
 }
 
 type job struct {
-	ID     int64  `json:"id"`
-	Status string `json:"status"`
-	Error  string `json:"error"`
+	ID       int64  `json:"id"`
+	Status   string `json:"status"`
+	Attempts int64  `json:"attempts"`
+	Error    string `json:"error"`
+}
+
+func (j job) finished() bool {
+	return j.Status == "completed" || j.Status == "failed" || j.Status == "canceled"
 }
 
 func getJob(base, token string, id int64) (job, error) {
@@ -144,40 +149,114 @@ func getJob(base, token string, id int64) (job, error) {
 	return j, err
 }
 
-// TestJobOwnership (#2966's done-when): starting another instance leaves a
-// job alone, and a job whose instance is killed is finished by another one
-// within the lease (60 s without a heartbeat). The kill lands whenever it
-// lands: before the claim the job is another instance's to take, during the
-// run it waits out the lease, and after it there is nothing left to do.
+// TestJobOwnership (#2966's done-when): starting a second instance leaves a
+// running job with its owner, and a job whose owner is killed mid-run is run
+// again and finished by another instance once the lease (60 s without a
+// heartbeat) runs out.
+//
+// The rescan is held running by a named pipe in the library: opening it
+// blocks until a writer opens it too, so the job stays running for as long as
+// the test needs it to and cannot finish before either check.
 func TestJobOwnership(t *testing.T) {
-	c := newCluster(t, 2, binary(t))
-	owner, survivor := c.instances[0], c.instances[1]
+	c := newCluster(t, 1, binary(t))
+	owner := c.instances[0]
+
+	// The first start queues a rescan of its own; it must be done before the
+	// pipe appears, or it would be the job the pipe holds.
+	err := eventually(time.Minute, func() error {
+		var jobs []job
+		r, err := callJSON(http.MethodGet, owner.url()+"/api/v0/jobs?kind=music_rescan", c.admin, nil, &jobs)
+		if err == nil && r.status != http.StatusOK {
+			err = fmt.Errorf("list the music rescan jobs: %d %s", r.status, r.body)
+		}
+		if err == nil && len(jobs) == 0 {
+			err = fmt.Errorf("the first start has not queued its rescan yet")
+		}
+		for _, j := range jobs {
+			if err == nil && !j.finished() {
+				err = fmt.Errorf("the first start's rescan %d is still %s", j.ID, j.Status)
+			}
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pipe := filepath.Join(c.shared, "hold.mp3")
+	if err := syscall.Mkfifo(pipe, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	var queued job
 	r, err := callJSON(http.MethodPost, owner.url()+"/api/v0/music/rescan", c.admin, struct{}{}, &queued)
 	if err != nil || r.status != http.StatusAccepted || queued.ID == 0 {
 		t.Fatalf("queue a music rescan on %s: %v %d %s", owner.name, err, r.status, r.body)
 	}
-
-	late := c.add("late", binary(t))
-	j, err := getJob(late.url(), c.admin, queued.ID)
-	if err != nil {
-		t.Fatal(err)
+	// expect polls the job until it is want or within passes, and fails the
+	// test at once if it finishes some other way.
+	expect := func(base, want string, within time.Duration) job {
+		t.Helper()
+		var j job
+		err := eventually(within, func() error {
+			var err error
+			if j, err = getJob(base, c.admin, queued.ID); err != nil {
+				return err
+			}
+			if j.finished() && j.Status != want {
+				t.Fatalf("job %d finished %s (%s) while it was meant to be %s", j.ID, j.Status, j.Error, want)
+			}
+			if j.Status != want {
+				return fmt.Errorf("job %d is %s (%s), want %s", j.ID, j.Status, j.Error, want)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return j
 	}
-	if j.Status == "failed" || j.Status == "canceled" {
-		t.Fatalf("starting %s left job %d %s (%s)", late.name, j.ID, j.Status, j.Error)
+	stillRunning := func(base, when string) {
+		t.Helper()
+		j, err := getJob(base, c.admin, queued.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if j.Status != "running" || j.Attempts != 1 {
+			t.Fatalf("%s, job %d is %s on attempt %d (%s), want still running on its first",
+				when, j.ID, j.Status, j.Attempts, j.Error)
+		}
+	}
+	expect(owner.url(), "running", time.Minute)
+
+	// The late instance's first heartbeat, and the next one, are when it
+	// would take or fail a job it does not own.
+	late := c.add("late", binary(t))
+	for end := time.Now().Add(15 * time.Second); time.Now().Before(end); time.Sleep(time.Second) {
+		stillRunning(late.url(), "after "+late.name+" started")
 	}
 
 	owner.stop(syscall.SIGKILL)
-	err = eventually(2*time.Minute, func() error {
-		j, err := getJob(survivor.url(), c.admin, queued.ID)
-		if err == nil && j.Status != "completed" {
-			err = fmt.Errorf("job %d is %s (%s) after its instance was killed", j.ID, j.Status, j.Error)
-		}
-		return err
-	})
+	stillRunning(late.url(), "right after "+owner.name+" was killed")
+	// Let every reader the pipe holds go, the late instance's own startup
+	// scan among them, and take the pipe away so the rerun is not held too.
+	// Opening a FIFO read-write does not block; the readers read EOF once it
+	// is closed.
+	hold, err := os.OpenFile(pipe, os.O_RDWR, 0)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if err := os.Remove(pipe); err != nil {
+		t.Fatal(err)
+	}
+	if err := hold.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// The lease, a heartbeat for the beat that finds it lapsed, and slack.
+	j := expect(late.url(), "completed", 2*time.Minute)
+	if j.Attempts < 2 {
+		t.Fatalf("job %d completed on attempt %d, so no other instance ran it after %s was killed",
+			j.ID, j.Attempts, owner.name)
 	}
 }
 
