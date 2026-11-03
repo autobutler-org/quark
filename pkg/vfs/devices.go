@@ -112,7 +112,9 @@ func listDevices(params ListDevicesParams) ([]FileInfo, error) {
 	maxResults := perDevice.MaxResults
 
 	out := make([]FileInfo, 0)
-	seenDirs := make(map[string]bool)
+	// The index of each folder already in out, so a later device adds itself
+	// to the folder's Devices instead of listing it again.
+	seenDirs := make(map[string]int)
 	sawListing := false
 	sawNotFound := false
 
@@ -142,10 +144,13 @@ func listDevices(params ListDevicesParams) ([]FileInfo, error) {
 		sawListing = true
 		for _, fi := range infos {
 			if fi.IsDir {
-				if seenDirs[fi.Path] {
+				device := DeviceRef{Serial: fi.DeviceSerial, Name: fi.DeviceName}
+				if i, ok := seenDirs[fi.Path]; ok {
+					out[i].Devices = append(out[i].Devices, device)
 					continue
 				}
-				seenDirs[fi.Path] = true
+				seenDirs[fi.Path] = len(out)
+				fi.Devices = []DeviceRef{device}
 			}
 			out = append(out, fi)
 		}

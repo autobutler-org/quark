@@ -1,3 +1,5 @@
+import 'file_device.dart';
+
 /// A file or folder as the Quark lists it: its name, size, kind and timestamps, and the path the API addresses it
 /// by.
 class FileNode {
@@ -12,6 +14,7 @@ class FileNode {
     this.fileType = '',
     this.compressedSize = 0,
     this.modifiedAt,
+    this.devices = const [],
   });
 
   final String name;
@@ -27,6 +30,11 @@ class FileNode {
   /// When the node last changed, or null when the Quark did not say — some
   /// archive entries carry no time.
   final DateTime? modifiedAt;
+
+  /// Every device a folder is on, when the listing merged it from several;
+  /// empty for a file and when the Quark did not say. [deviceName] and
+  /// [deviceSerial] are the first of them.
+  final List<FileDevice> devices;
 
   /// API path relative to the files root, safe to use in API calls.
   String get apiPath {
@@ -53,6 +61,7 @@ class FileNode {
     'dirPath': dirPath,
     'fileType': fileType,
     'modifiedAt': ?modifiedAt?.toIso8601String(),
+    if (devices.isNotEmpty) 'devices': [for (final d in devices) d.toJson()],
   };
 
   factory FileNode.fromJson(Map<String, dynamic> json) {
@@ -98,6 +107,13 @@ class FileNode {
       modifiedAt: switch (json['modifiedAt']) {
         final String value => DateTime.tryParse(value),
         _ => null,
+      },
+      devices: switch (json['devices']) {
+        final List<dynamic> list => [
+          for (final d in list)
+            if (d is Map<String, dynamic>) FileDevice.fromJson(d),
+        ],
+        _ => const [],
       },
     );
   }

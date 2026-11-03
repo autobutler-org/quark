@@ -2023,6 +2023,13 @@ definitions:
         type: string
       deviceSerial:
         type: string
+      devices:
+        description: |-
+          Devices names every device a folder exists on, when the listing merged
+          it from several; DeviceName and DeviceSerial are the first of them.
+        items:
+          $ref: '#/definitions/vfs.DeviceRef'
+        type: array
       dirPath:
         description: Directory path containing the file, for easier client-side handling
         type: string
@@ -2921,6 +2928,15 @@ definitions:
         items:
           type: integer
         type: array
+    type: object
+  vfs.DeviceRef:
+    properties:
+      name:
+        description: Name is the device's display name.
+        type: string
+      serial:
+        description: Serial is the device's serial, "" for the internal drive.
+        type: string
     type: object
 info:
   contact: {}

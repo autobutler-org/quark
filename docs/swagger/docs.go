@@ -14472,6 +14472,13 @@ const docTemplate = `{
                 "deviceSerial": {
                     "type": "string"
                 },
+                "devices": {
+                    "description": "Devices names every device a folder exists on, when the listing merged\nit from several; DeviceName and DeviceSerial are the first of them.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/vfs.DeviceRef"
+                    }
+                },
                 "dirPath": {
                     "description": "Directory path containing the file, for easier client-side handling",
                     "type": "string"
@@ -15733,6 +15740,19 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
+                }
+            }
+        },
+        "vfs.DeviceRef": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name is the device's display name.",
+                    "type": "string"
+                },
+                "serial": {
+                    "description": "Serial is the device's serial, \"\" for the internal drive.",
+                    "type": "string"
                 }
             }
         }

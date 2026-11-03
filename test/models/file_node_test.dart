@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark/models/file_device.dart';
 import 'package:quark/models/file_node.dart';
 
 void main() {
@@ -23,6 +24,23 @@ void main() {
       expect(node.dirPath, '/documents');
     });
 
+    test('reads every device a merged folder is on', () {
+      final node = FileNode.fromJson(<String, dynamic>{
+        'name': 'shared',
+        'isDir': true,
+        'devices': [
+          {'serial': '', 'name': 'Internal'},
+          {'serial': 'A', 'name': 'USB A'},
+        ],
+      });
+
+      expect(node.devices, const [
+        FileDevice(serial: '', name: 'Internal'),
+        FileDevice(serial: 'A', name: 'USB A'),
+      ]);
+      expect(FileNode.fromJson(node.toJson()).devices, node.devices);
+    });
+
     test('defaults missing fields gracefully', () {
       final node = FileNode.fromJson(<String, dynamic>{});
 
@@ -33,6 +51,7 @@ void main() {
       expect(node.devicePath, '');
       expect(node.deviceSerial, '');
       expect(node.dirPath, '');
+      expect(node.devices, isEmpty);
     });
 
     for (final (size, want) in <(Object, int)>[

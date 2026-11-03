@@ -150,6 +150,18 @@ type FileInfo struct {
 	DeviceSerial string `json:"device_serial,omitempty"`
 	DeviceName   string `json:"device_name,omitempty"`
 	DevicePath   string `json:"device_path,omitempty"`
+	// Devices names every device a folder exists on, in listing order. Only
+	// [ListDevices] sets it, on folders, so a folder merged from several
+	// devices shows all of them rather than the first (#1868).
+	Devices []DeviceRef `json:"devices,omitempty"`
+}
+
+// DeviceRef names one device an entry exists on.
+type DeviceRef struct {
+	// Serial is the device's serial, "" for the internal drive.
+	Serial string `json:"serial"`
+	// Name is the device's display name.
+	Name string `json:"name"`
 }
 
 type Namespace struct {
@@ -431,7 +443,8 @@ type ListDevicesParams struct {
 // ListDevices lists Path on every managed device by fanning out over the
 // device namespaces in the registry: the internal drive's first, then the
 // others in namespace order. Folders present on several devices appear once,
-// as the first device reports them; every file is kept. A serial with no
+// as the first device reports them, with Devices naming every device they are
+// on; every file is kept. A serial with no
 // registered namespace contributes nothing. A non-root Path that no device has
 // is [ErrNotFound].
 func ListDevices(params ListDevicesParams) ([]FileInfo, error) {
