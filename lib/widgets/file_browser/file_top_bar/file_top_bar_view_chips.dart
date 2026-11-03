@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_columns_button.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/view_grouping_copy.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/view_grouping_help_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -9,7 +10,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// picker.
 ///
 /// Probe keys: `bar_segment_list`, `bar_segment_grid` and
-/// `file_top_bar_grouping`, plus those of [FileTopBarColumnsButton].
+/// `file_top_bar_grouping` and `file_top_bar_grouping_help`, plus those of
+/// [FileTopBarColumnsButton].
 class FileTopBarViewChips extends StatelessWidget {
   const FileTopBarViewChips({
     required this.isGridView,
@@ -66,6 +68,7 @@ class FileTopBarViewChips extends StatelessWidget {
           onPressed: onToggleUnifiedView,
           active: isUnifiedView,
         ),
+        const ViewGroupingHelpButton(),
         FileTopBarColumnsButton(
           columns: columns,
           onColumnToggled: onColumnToggled,

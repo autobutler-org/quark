@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/view_grouping_copy.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/view_grouping_help_button.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/top_bar_menu_radio_item.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/top_bar_menu_section_header.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -15,7 +16,8 @@ import 'package:quark_icons/quark_icons.dart';
 /// Every row is at least 48dp tall: no compact density (#2605).
 ///
 /// Probe keys: `file_top_bar_views_list`, `file_top_bar_views_grid` and
-/// `file_top_bar_views_grouping`, plus `file_top_bar_views_column_<name>` for
+/// `file_top_bar_views_grouping`, `file_top_bar_grouping_help` for the
+/// grouping's (i), plus `file_top_bar_views_column_<name>` for
 /// each column's checkbox — `file_top_bar_views_column_kind`,
 /// `file_top_bar_views_column_modified`, `file_top_bar_views_column_device`
 /// and `file_top_bar_views_column_size`.
@@ -113,7 +115,12 @@ class FileTopBarViewsMenu extends StatelessWidget {
           ),
         const Divider(height: 1, indent: 16, endIndent: 16),
 
-        const TopBarMenuSectionHeader(title: 'Grouping'),
+        const Row(
+          children: [
+            Expanded(child: TopBarMenuSectionHeader(title: 'Grouping')),
+            ViewGroupingHelpButton(),
+          ],
+        ),
         // One toggle with the row's text as its label, rather than a row and
         // an unlabeled switch inside it (#2603).
         SwitchListTile.adaptive(
