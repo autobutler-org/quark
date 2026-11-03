@@ -82,6 +82,17 @@ type MoveJSON struct {
 	Created *EventJSON `json:"created,omitempty"`
 }
 
+// ICalURLJSON is the calendar's subscription link (#1151).
+type ICalURLJSON struct {
+	URL string `json:"url"`
+}
+
+// ImportICalJSON counts the events an iCalendar import stored and skipped.
+type ImportICalJSON struct {
+	Imported int `json:"imported"`
+	Skipped  int `json:"skipped"`
+}
+
 type router struct{}
 
 func (r *router) Routes() []*serverutil.Route {
@@ -92,5 +103,8 @@ func (r *router) Routes() []*serverutil.Route {
 		updateEventRoute,
 		moveEventRoute,
 		deleteEventRoute,
+		exportICalRoute,
+		getICalURLRoute,
+		importICalRoute,
 	}
 }

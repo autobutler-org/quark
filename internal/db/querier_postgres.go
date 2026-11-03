@@ -679,6 +679,18 @@ func (a *postgresQueries) ListAllChatChannels(ctx context.Context) ([]ListAllCha
 	return items, nil
 }
 
+func (a *postgresQueries) ListCalendarEvents(ctx context.Context, calendarID int64) ([]ListCalendarEventsRow, error) {
+	rows, err := a.q.ListCalendarEvents(ctx, calendarID)
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListCalendarEventsRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListCalendarEventsRow{CalendarEvent: CalendarEvent(row.CalendarEvent), OwnerName: row.OwnerName}
+	}
+	return items, nil
+}
+
 func (a *postgresQueries) ListCalendarEventsInRange(ctx context.Context, arg ListCalendarEventsInRangeParams) ([]ListCalendarEventsInRangeRow, error) {
 	rows, err := a.q.ListCalendarEventsInRange(ctx, pgdb.ListCalendarEventsInRangeParams(arg))
 	if err != nil || rows == nil {

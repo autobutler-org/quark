@@ -79,13 +79,14 @@ func rateLimit(deps deputil.Dependencies) gin.HandlerFunc {
 //
 // Keep this list minimal. (#1332)
 var queryTokenPrefixes = []string{
-	"/api/v0/events",     // WebSocket — new WebSocket() cannot set headers
-	"/api/v0/files",      // file download / streaming (src= attribute usage)
-	"/api/v0/photos",     // photo serving
-	"/api/v0/thumbnails", // thumbnail serving (Image.network src= cannot set headers)
-	"/api/v0/users",      // profile pictures (Image.network src= cannot set headers)
-	"/videos/",           // video deep-link player
-	"/audio/",            // audio deep-link player
+	"/api/v0/events",        // WebSocket — new WebSocket() cannot set headers
+	"/api/v0/calendar/ical", // calendar subscription feed — Apple/Google Calendar fetch it and cannot send a header (#1151)
+	"/api/v0/files",         // file download / streaming (src= attribute usage)
+	"/api/v0/photos",        // photo serving
+	"/api/v0/thumbnails",    // thumbnail serving (Image.network src= cannot set headers)
+	"/api/v0/users",         // profile pictures (Image.network src= cannot set headers)
+	"/videos/",              // video deep-link player
+	"/audio/",               // audio deep-link player
 }
 
 // queryTokenAllowed returns true when ?token= auth is permitted for the given
@@ -316,6 +317,8 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 				// Which session this is, so the session routes can mark it
 				// current and spare it from "sign out everywhere else" (#1663).
 				c = ctxutil.With(c, "sessionID", authutil.SessionID(candidate.token))
+				// The calendar subscription link hands the caller their own token back (#1151).
+				c = ctxutil.With(c, "sessionToken", candidate.token)
 				authenticated(c, db.Queries, username, userID)
 				return
 			}

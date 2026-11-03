@@ -3157,6 +3157,131 @@
                 }
             }
         },
+        "/calendar/ical": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams the household calendar as an RFC 5545 iCalendar file (#1151), one VEVENT per event with a stable UID. A repeating event carries its RRULE and the occurrences it skips as EXDATEs; reminders and colors are left out. The URL is also a subscription feed that Apple Calendar, Google Calendar and Thunderbird can poll, and it accepts ?token= in place of the Authorization header because those apps cannot send one; GET /calendar/ical/url hands out such a link.",
+                "produces": [
+                    "text/calendar"
+                ],
+                "tags": [
+                    "calendar"
+                ],
+                "summary": "Export the calendar as iCalendar",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session token, for a calendar app that cannot send an Authorization header",
+                        "name": "token",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Adds the events of an .ics file, sent as the raw body in any content type, to the household calendar, owned by the caller (#1151), and tells every open client the calendar changed. Daily, weekly and monthly rules become the matching repeat, with COUNT or UNTIL as the last date and EXDATEs as skipped occurrences; a modified occurrence becomes a one-off its series skips. Yearly rules, intervals, extra BYDAY or BYMONTHDAY values, cancelled events, events that break a calendar rule, and events whose title, start, end and all-day flag match an existing one are skipped and counted, so importing a file twice adds nothing. Reminders are not imported. The body may be at most 8 MiB.",
+                "consumes": [
+                    "text/calendar"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "calendar"
+                ],
+                "summary": "Import an iCalendar file",
+                "parameters": [
+                    {
+                        "description": "The iCalendar file",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_calendar.ImportICalJSON"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request: the body is not an iCalendar file",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large: the body is over 8 MiB",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/calendar/ical/url": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a link to GET /calendar/ical that a calendar app (Apple Calendar, Google Calendar, Thunderbird) can subscribe to (#1151). The link carries the caller's own session token as ?token=, which the subscribing app presents on every fetch and which stays alive as long as it is used; signing that session out ends the subscription. A request signed in some other way than a session (Basic, a download token) has no token to hand out and is a 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "calendar"
+                ],
+                "summary": "Get the calendar's subscription link",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_calendar.ICalURLJSON"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found: the request carries no session",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/chat/channels": {
             "get": {
                 "security": [
@@ -13907,6 +14032,25 @@
                     "items": {
                         "$ref": "#/definitions/v0_calendar.EventJSON"
                     }
+                }
+            }
+        },
+        "v0_calendar.ICalURLJSON": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_calendar.ImportICalJSON": {
+            "type": "object",
+            "properties": {
+                "imported": {
+                    "type": "integer"
+                },
+                "skipped": {
+                    "type": "integer"
                 }
             }
         },
