@@ -93,10 +93,12 @@ func TestEveryGeneratedQueryPreparesOnPostgres(t *testing.T) {
 
 // The check above is only worth having if it can fail on what PostgreSQL
 // alone refuses: a text column compared with a number is fine on SQLite.
+// no_such_function has to stay a name the schema does not define. instr was
+// that probe until 046_file_index added the function.
 func TestPrepareAllReportsWhatPostgresRejects(t *testing.T) {
 	source := "const good = `-- name: Good :one\nSELECT install_id FROM install WHERE id = $1\n`\n" +
 		"const mistyped = `-- name: Mistyped :many\nSELECT id FROM jobs WHERE status = 1\n`\n" +
-		"const noFunction = `-- name: NoFunction :one\nSELECT instr('abc', 'b')\n`\n"
+		"const noFunction = `-- name: NoFunction :one\nSELECT no_such_function('abc', 'b')\n`\n"
 	checked, failures := dbtest.PrepareAll(openPostgres(t), source)
 	if checked != 3 || len(failures) != 2 {
 		t.Fatalf("checked %d statements with failures %q, want 3 checked and Mistyped and NoFunction rejected", checked, failures)
