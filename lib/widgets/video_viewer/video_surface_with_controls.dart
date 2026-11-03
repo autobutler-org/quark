@@ -1,11 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:quark/widgets/video_viewer/player_controls.dart';
 import 'package:video_player/video_player.dart';
 
 /// The video itself plus its overlaid controls, which fade out while playing
 /// and come back on a tap.
+///
+/// Keyboard: Space plays and pauses, ← and → skip back and forward ten
+/// seconds.
 class VideoSurfaceWithControls extends StatefulWidget {
   final VideoPlayerController controller;
   final bool isFullscreen;
@@ -43,6 +47,8 @@ class VideoSurfaceWithControls extends StatefulWidget {
 
 class _VideoSurfaceWithControlsState extends State<VideoSurfaceWithControls> {
   static const Duration _hideDelay = Duration(seconds: 3);
+  static const Duration _skip = Duration(seconds: 10);
+  final FocusNode _focusNode = FocusNode(debugLabel: 'VideoSurface');
   Timer? _hideTimer;
   bool _controlsVisible = true;
 
@@ -67,6 +73,7 @@ class _VideoSurfaceWithControlsState extends State<VideoSurfaceWithControls> {
   void dispose() {
     widget.controller.removeListener(_handlePlayerStateChanged);
     _cancelHideTimer();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -107,7 +114,27 @@ class _VideoSurfaceWithControlsState extends State<VideoSurfaceWithControls> {
     });
   }
 
+  KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final controller = widget.controller;
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.space:
+        // A held Space would otherwise flicker between play and pause.
+        if (event is KeyRepeatEvent) return KeyEventResult.handled;
+        controller.value.isPlaying ? controller.pause() : controller.play();
+      case LogicalKeyboardKey.arrowLeft:
+        controller.seekTo(controller.value.position - _skip);
+      case LogicalKeyboardKey.arrowRight:
+        controller.seekTo(controller.value.position + _skip);
+      default:
+        return KeyEventResult.ignored;
+    }
+    _onControlsInteraction();
+    return KeyEventResult.handled;
+  }
+
   void _onSurfaceTap() {
+    _focusNode.requestFocus();
     setState(() {
       _controlsVisible = !_controlsVisible;
     });
@@ -138,58 +165,63 @@ class _VideoSurfaceWithControlsState extends State<VideoSurfaceWithControls> {
   Widget build(BuildContext context) {
     final ratio = _safeAspectRatio(widget.controller.value.aspectRatio);
 
-    return ColoredBox(
-      color: Colors.black,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        children: [
-          Center(
-            child: AspectRatio(
-              aspectRatio: ratio,
-              child: RepaintBoundary(
-                key: widget.frameKey,
-                child: VideoPlayer(widget.controller),
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: _handleKey,
+      child: ColoredBox(
+        color: Colors.black,
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            Center(
+              child: AspectRatio(
+                aspectRatio: ratio,
+                child: RepaintBoundary(
+                  key: widget.frameKey,
+                  child: VideoPlayer(widget.controller),
+                ),
               ),
             ),
-          ),
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _onSurfaceTap,
-              child: const SizedBox.expand(),
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _onSurfaceTap,
+                child: const SizedBox.expand(),
+              ),
             ),
-          ),
-          if (widget.topOverlay != null)
+            if (widget.topOverlay != null)
+              AnimatedOpacity(
+                opacity: _controlsVisible ? 1 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: IgnorePointer(
+                  ignoring: !_controlsVisible,
+                  child: widget.topOverlay,
+                ),
+              ),
             AnimatedOpacity(
               opacity: _controlsVisible ? 1 : 0,
               duration: const Duration(milliseconds: 180),
               child: IgnorePointer(
                 ignoring: !_controlsVisible,
-                child: widget.topOverlay,
+                child: PlayerControls(
+                  controller: widget.controller,
+                  isFullscreen: widget.isFullscreen,
+                  onToggleFullscreen: () {
+                    _onControlsInteraction();
+                    widget.onToggleFullscreen();
+                  },
+                  onInteraction: _onControlsInteraction,
+                  trimMode: widget.trimMode,
+                  trimStart: widget.trimStart,
+                  trimEnd: widget.trimEnd,
+                  onTrimStartChanged: widget.onTrimStartChanged,
+                  onTrimEndChanged: widget.onTrimEndChanged,
+                ),
               ),
             ),
-          AnimatedOpacity(
-            opacity: _controlsVisible ? 1 : 0,
-            duration: const Duration(milliseconds: 180),
-            child: IgnorePointer(
-              ignoring: !_controlsVisible,
-              child: PlayerControls(
-                controller: widget.controller,
-                isFullscreen: widget.isFullscreen,
-                onToggleFullscreen: () {
-                  _onControlsInteraction();
-                  widget.onToggleFullscreen();
-                },
-                onInteraction: _onControlsInteraction,
-                trimMode: widget.trimMode,
-                trimStart: widget.trimStart,
-                trimEnd: widget.trimEnd,
-                onTrimStartChanged: widget.onTrimStartChanged,
-                onTrimEndChanged: widget.onTrimEndChanged,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -10,7 +10,13 @@ import 'package:video_player_platform_interface/video_player_platform_interface.
 /// video_player_web reports that rejection on the event stream rather than by
 /// throwing from play(), so [rejectPlay] does the same.
 class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
-  FakeVideoPlayerPlatform({this.rejectPlay = false});
+  FakeVideoPlayerPlatform({
+    this.rejectPlay = false,
+    this.duration = const Duration(seconds: 10),
+  });
+
+  /// The length every player reports once it initializes.
+  final Duration duration;
 
   /// Whether play() fails with the browser's autoplay error.
   final bool rejectPlay;
@@ -34,7 +40,7 @@ class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
     _events.add(
       VideoEvent(
         eventType: VideoEventType.initialized,
-        duration: const Duration(seconds: 10),
+        duration: duration,
         size: const Size(640, 360),
       ),
     );
