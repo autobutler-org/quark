@@ -36,6 +36,14 @@ class FileNode {
   /// [deviceSerial] are the first of them.
   final List<FileDevice> devices;
 
+  /// Every device the node is on: [devices] when the listing named them,
+  /// otherwise the one [deviceName] names, and none when it names none.
+  List<FileDevice> get onDevices => devices.isNotEmpty
+      ? devices
+      : deviceName.isEmpty
+      ? const []
+      : [FileDevice(serial: deviceSerial, name: deviceName)];
+
   /// API path relative to the files root, safe to use in API calls.
   String get apiPath {
     final raw = dirPath.trim().isNotEmpty ? dirPath : name;

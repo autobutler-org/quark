@@ -2652,6 +2652,54 @@ final List<GalleryEntry> registry = [
   ),
 
   GalleryEntry(
+    name: 'DeviceTag',
+    group: 'Storage',
+    build: (context, log) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 12,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final (serial, name) in const [
+              ('', 'Internal'),
+              ('A1B2', 'USB Backup'),
+              ('C3D4', 'Photo Archive'),
+            ])
+              DeviceTag(
+                key: ValueKey('device_tag_$serial'),
+                label: name,
+                color: DeviceTag.colorFor(context, serial),
+              ),
+          ],
+        ),
+        SizedBox(
+          width: 180,
+          child: Row(
+            spacing: 8,
+            children: [
+              const Expanded(
+                child: Text(
+                  'vacation-2025.jpg',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Flexible(
+                child: DeviceTag(
+                  label: 'Very Long External Drive Name',
+                  color: DeviceTag.colorFor(context, 'LONG1'),
+                  tooltip: 'Very Long External Drive Name (LONG1)',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'UploadTargetPicker',
     group: 'Storage',
     build: (context, log) => QuarkSheet(

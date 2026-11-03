@@ -1,8 +1,10 @@
+import 'package:quark/models/file_device.dart';
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_browser_list_tile.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_device_tags.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_grid_preview.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_grid_sort_header.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_menu.dart';
@@ -204,6 +206,9 @@ class _FileBrowserViewState extends State<FileBrowserView> {
     });
   }
 
+  /// The group a node naming no device is listed under.
+  static const _unknownDevice = FileDevice(serial: '', name: 'Unknown Device');
+
   /// A node with no modification time sorts as the oldest there is.
   static final _noTime = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -327,11 +332,9 @@ class _FileBrowserViewState extends State<FileBrowserView> {
         ];
 
         if (!widget.isUnifiedView && !widget.isSearchMode) {
-          final groups = <String, List<FileNode>>{};
+          final groups = <FileDevice, List<FileNode>>{};
           for (final f in files) {
-            final key = f.deviceName.isNotEmpty
-                ? f.deviceName
-                : 'Unknown Device';
+            final key = f.onDevices.firstOrNull ?? _unknownDevice;
             groups.putIfAbsent(key, () => []).add(f);
           }
           return Column(
@@ -351,7 +354,19 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                       ExpansionTile(
                         initiallyExpanded: true,
                         leading: const Icon(QuarkIcons.storage_rounded),
-                        title: Text(entry.key),
+                        title: Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: DeviceTag(
+                            key: ValueKey(
+                              'device_group_tag_${entry.key.serial}',
+                            ),
+                            label: entry.key.name,
+                            color: DeviceTag.colorFor(
+                              context,
+                              entry.key.serial,
+                            ),
+                          ),
+                        ),
                         subtitle: Text(
                           '${entry.value.length} '
                           'item${entry.value.length == 1 ? '' : 's'}',
@@ -542,6 +557,9 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                                                       TextOverflow.ellipsis,
                                                 ),
                                               ),
+                                            Flexible(
+                                              child: FileDeviceTags(item: item),
+                                            ),
                                             if (widget.showFileSizeAndMenu)
                                               FileMenuButton(menu: menu),
                                           ],

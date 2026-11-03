@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/file_node.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_device_tags.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_list_leading.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_menu.dart';
@@ -115,12 +116,18 @@ class FileBrowserListTile extends StatelessWidget {
               for (final column in columns)
                 Expanded(
                   flex: FileListColumn.flex,
-                  child: Text(
-                    fileListCellText(column, item),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: colors.onSurfaceVariant),
-                  ),
+                  // The device column is a tag per device, in its color.
+                  child: column == FileListColumn.device
+                      ? Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: FileDeviceTags(item: item),
+                        )
+                      : Text(
+                          fileListCellText(column, item),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: colors.onSurfaceVariant),
+                        ),
                 ),
             ],
           ),
