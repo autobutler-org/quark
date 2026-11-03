@@ -382,6 +382,13 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
   }
 
   void _enterTrimMode() {
+    // The Quark refuses to cut a transport stream however well it plays, so
+    // say so before the trim bar promises a clip (#3424).
+    final extension = fileExtension(widget.name);
+    if (extension == '.ts') {
+      showMessage(context, Errors.cantTrimContainer(extension.toUpperCase()));
+      return;
+    }
     final controller = _controller;
     if (controller == null || !_canTrim(controller)) {
       showMessage(context, Errors.trimUnavailable);

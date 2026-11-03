@@ -232,6 +232,30 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  // #3424: a TS file the player opens still can't be cut on the Quark, so
+  // Trim says why instead of opening a bar whose Save Clip is refused.
+  testWidgets('a playable TS clip explains it cannot be trimmed', (
+    tester,
+  ) async {
+    await pumpClip(
+      tester,
+      const _Clip(
+        fileName: 'h264-aac.ts',
+        outcome: _Outcome.ready(),
+        playbackMessage: '',
+      ),
+    );
+
+    expect(find.byType(VideoPlayer), findsOneWidget);
+
+    await tapMenuItem(tester, const ValueKey('video_viewer_trim'));
+
+    expect(find.text(Errors.cantTrimContainer('.TS')), findsOneWidget);
+    expect(find.text('Save Clip'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
   final unplayable = <_Clip>[
     _Clip(
       fileName: 'clip.avi',
@@ -288,9 +312,13 @@ void main() {
         expect(find.text(Errors.unplayableMedia), findsNothing);
       }
 
-      expect(find.text(Errors.trimUnavailable), findsNothing);
+      // A TS file is refused for its container before playback is asked.
+      final trimMessage = clip.fileName.endsWith('.ts')
+          ? Errors.cantTrimContainer('.TS')
+          : Errors.trimUnavailable;
+      expect(find.text(trimMessage), findsNothing);
       await tapMenuItem(tester, const ValueKey('video_viewer_trim'));
-      expect(find.text(Errors.trimUnavailable), findsOneWidget);
+      expect(find.text(trimMessage), findsOneWidget);
       expect(find.text('Save Clip'), findsNothing);
       clearSnackBars(tester);
       await tester.pump();
