@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:quark/utils/file_kind.dart';
+import 'package:quark_widgets/quark_widgets.dart' show QuarkTokens;
 
 /// Size and timing for the thumbnails a client renders for the photos and
 /// videos it uploads (#2379), and the small rules that go with them.
@@ -22,7 +23,21 @@ abstract final class ClientThumbnailConfig {
   /// How long rendering one file may take before it is skipped. The file
   /// still uploads; it goes without a thumbnail, as from an older client.
   static const Duration renderTimeout = Duration(seconds: 20);
+
+  /// The color a 3D model's thumbnail is shaded in (#3227). One picture is
+  /// stored for every client and theme, so it uses the dark theme's, which
+  /// the grid's dark placeholder matches.
+  static final modelColor = QuarkTokens.dark.primary;
+
+  /// The background a 3D model's thumbnail is drawn over.
+  static final modelBackground = QuarkTokens.dark.card;
 }
+
+/// Whether [name] is a 3D model whose thumbnail a client renders (#3227):
+/// STL, OBJ or PLY, the formats read from the file alone. A glTF or 3MF may
+/// need the files beside it and goes without.
+bool isRenderedModel(String name) =>
+    const {'.stl', '.obj', '.ply'}.contains(fileExtension(name));
 
 /// Whether the client renders a thumbnail for [name]: every photo and every
 /// video. A platform that cannot decode one simply renders nothing.
@@ -32,13 +47,15 @@ bool wantsClientThumbnail(String name) {
 }
 
 /// Whether [name] is a file only a client can make a thumbnail for: a video,
-/// whose H.264 and HEVC frames the Quark does not decode, or a HEIC. The
-/// Quark marks a missing thumbnail for these with `clientRender` (#2381).
+/// whose H.264 and HEVC frames the Quark does not decode, a HEIC, or a 3D
+/// model ([isRenderedModel]), which it does not draw. The Quark marks a
+/// missing thumbnail for these with `clientRender` (#2381).
 bool needsClientRender(String name) {
   final ext = fileExtension(name);
   return ext == '.heic' ||
       ext == '.heif' ||
-      fileKindForName(name) == FileKind.video;
+      fileKindForName(name) == FileKind.video ||
+      isRenderedModel(name);
 }
 
 /// The size of a [width] x [height] image scaled so its long edge is at most

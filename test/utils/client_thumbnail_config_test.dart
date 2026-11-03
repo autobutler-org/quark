@@ -45,6 +45,17 @@ void main() {
     expect(wantsClientThumbnail('notes.txt'), isFalse);
   });
 
+  test('STL, OBJ and PLY are the 3D models a client renders (#3227)', () {
+    expect(isRenderedModel('part.STL'), isTrue);
+    expect(isRenderedModel('mesh.obj'), isTrue);
+    expect(isRenderedModel('scan.ply'), isTrue);
+    expect(isRenderedModel('scene.gltf'), isFalse);
+    expect(isRenderedModel('box.3mf'), isFalse);
+    expect(needsClientRender('part.stl'), isTrue);
+    // Rendered from the model, not from an upload's picture decoders.
+    expect(wantsClientThumbnail('part.stl'), isFalse);
+  });
+
   test('videos and HEIC are the files only a client renders', () {
     expect(needsClientRender('clip.MP4'), isTrue);
     expect(needsClientRender('IMG_1.HEIC'), isTrue);

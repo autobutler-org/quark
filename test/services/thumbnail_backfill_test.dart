@@ -5,7 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/thumbnail_probe.dart';
 import 'package:quark/services/thumbnail_backfill.dart';
 import 'package:quark/utils/error_text.dart';
-import 'package:quark_widgets/quark_widgets.dart' show ThumbnailIssue;
+import 'package:quark_widgets/quark_widgets.dart'
+    show QuarkModelMesh, ThumbnailIssue;
 
 /// The Quark and the renderers, in memory.
 class _Fake {
@@ -40,6 +41,8 @@ class _Fake {
         renderFromBytes: (name, bytes) => _render('bytes $name'),
         renderVideoFromUrl: (name, url) => _render('url $name ${url.path}'),
         mediaUrl: (path, {serial}) => Uri.parse('https://quark/$path'),
+        renderModelFile: (path, {serial}) => _render('model file $path'),
+        renderModel: (mesh) => _render('model mesh ${mesh.triangleCount}'),
         putThumbnail: ({required path, serial, required thumbnail}) async {
           calls.add('put $serial:$path');
           if (putError case final e?) throw e;
@@ -65,6 +68,62 @@ class _Fake {
 }
 
 void main() {
+  group('a 3D model (#3227)', () {
+    test('is read and rendered from its file when a tile asks', () async {
+      final fake = _Fake();
+
+      final filled = await fake.build().fill(path: 'p/part.stl');
+
+      expect(filled, isTrue);
+      expect(fake.calls, [
+        'probe p/part.stl',
+        'render model file p/part.stl',
+        'put null:p/part.stl',
+      ]);
+    });
+
+    test(
+      'opened in the viewer is drawn from its mesh, not read again',
+      () async {
+        final fake = _Fake();
+        final mesh = QuarkModelMesh.fromTriangles(
+          positions: Float32List.fromList([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+          indices: Uint32List.fromList([0, 1, 2]),
+        );
+
+        final filled = await fake.build().fill(path: 'p/part.ply', mesh: mesh);
+
+        expect(filled, isTrue);
+        expect(fake.calls, [
+          'probe p/part.ply',
+          'render model mesh 1',
+          'put null:p/part.ply',
+        ]);
+      },
+    );
+
+    test(
+      'that renders nothing keeps its icon and is not tried again',
+      () async {
+        final fake = _Fake()..rendered = null;
+        final backfill = fake.build();
+
+        expect(await backfill.fill(path: 'p/huge.obj'), isFalse);
+        expect(backfill.failureFor('p/huge.obj'), isNull);
+        expect(await backfill.fill(path: 'p/huge.obj'), isFalse);
+        expect(fake.calls.where((c) => c.startsWith('render')), hasLength(1));
+      },
+    );
+
+    test('that the Quark already has a thumbnail for is left alone', () async {
+      final fake = _Fake()
+        ..probes['p/part.stl'] = const ThumbnailProbe(served: true);
+
+      expect(await fake.build().fill(path: 'p/part.stl'), isTrue);
+      expect(fake.calls, ['probe p/part.stl']);
+    });
+  });
+
   test('a HEIC is downloaded, rendered and uploaded', () async {
     final fake = _Fake();
 

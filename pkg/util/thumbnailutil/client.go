@@ -30,14 +30,33 @@ const maxClientThumbnailEdge = 1024
 
 // NeedsClientRender reports whether a file is one only a client can render a
 // thumbnail for: video, whose H.264 and HEVC frames the device does not
-// decode, and HEIC. The device answers a missing thumbnail for these with
-// clientRender set, so a client knows to render one and PUT it.
+// decode, HEIC, and a 3D model, which the device does not draw. The device
+// answers a missing thumbnail for these with clientRender set, so a client
+// knows to render one and PUT it.
 func NeedsClientRender(name string) bool {
 	switch strings.ToLower(filepath.Ext(name)) {
 	case ".heic", ".heif":
 		return true
 	}
-	return storageutil.DetermineFileTypeFromPath(name) == storageutil.FileTypeVideo
+	return IsModel(name) || storageutil.DetermineFileTypeFromPath(name) == storageutil.FileTypeVideo
+}
+
+// IsModel reports whether a file is a 3D model a client renders a thumbnail
+// for (#3227): STL, OBJ or PLY, the formats a model viewer reads from the
+// file alone.
+func IsModel(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".stl", ".obj", ".ply":
+		return true
+	}
+	return false
+}
+
+// TakesClientThumbnail reports whether a client may attach a thumbnail to a
+// file: a photo, a video or a 3D model.
+func TakesClientThumbnail(name string) bool {
+	fileType := storageutil.DetermineFileTypeFromPath(name)
+	return fileType == storageutil.FileTypeImage || fileType == storageutil.FileTypeVideo || IsModel(name)
 }
 
 // ClientRenderReason says why the device could not render a video's
@@ -70,9 +89,10 @@ func clientThumbnailPath(serial, relPath string) (string, error) {
 	return filepath.Join(dir, CacheKey(serial, canonical, 0, sizeClient)), nil
 }
 
-// StoreClientThumbnail validates a thumbnail a client rendered and caches it
-// as the source of the file's size tiers, replacing any earlier one. A
-// photo's thumbnail is hashed for near-duplicate detection on the way in.
+// StoreClientThumbnail validates a thumbnail a client rendered, a JPEG or a
+// PNG, and caches it as the source of the file's size tiers, replacing any
+// earlier one. A photo's thumbnail is hashed for near-duplicate detection on
+// the way in.
 func StoreClientThumbnail(params StoreClientThumbnailParams) (StoreClientThumbnailResult, error) {
 	target, err := clientThumbnailPath(params.Serial, params.RelPath)
 	if err != nil {
@@ -102,15 +122,15 @@ func StoreClientThumbnail(params StoreClientThumbnailParams) (StoreClientThumbna
 		return StoreClientThumbnailResult{}, fmt.Errorf("rewind thumbnail: %w", err)
 	}
 	cfg, format, err := image.DecodeConfig(tmp)
-	if err != nil || format != "jpeg" {
-		return StoreClientThumbnailResult{}, fmt.Errorf("%w: not a JPEG", ErrInvalidThumbnail)
+	if err != nil || (format != "jpeg" && format != "png") {
+		return StoreClientThumbnailResult{}, fmt.Errorf("%w: not a JPEG or PNG", ErrInvalidThumbnail)
 	}
 	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > maxClientThumbnailEdge || cfg.Height > maxClientThumbnailEdge {
 		return StoreClientThumbnailResult{}, fmt.Errorf("%w: %dx%d is over %d on a side",
 			ErrInvalidThumbnail, cfg.Width, cfg.Height, maxClientThumbnailEdge)
 	}
 
-	if !params.IsVideo && params.Queries != nil {
+	if !params.SkipHash && params.Queries != nil {
 		// Hashed whole, not cropped to a tier, the way the device hashes a
 		// photo it decodes itself.
 		dhash, err := photoutil.DHashFile(tmpPath)
@@ -187,10 +207,9 @@ func FromClientThumbnail(params FromClientThumbnailParams) (FromClientThumbnailR
 }
 
 // StoreClientThumbnails attaches the "thumbnail" part of a multipart body to
-// a photo or video the caller may write.
+// a photo, video or 3D model the caller may write.
 func StoreClientThumbnails(params StoreClientThumbnailsParams) (StoreClientThumbnailsResult, error) {
-	fileType := storageutil.DetermineFileTypeFromPath(params.RelPath)
-	if fileType != storageutil.FileTypeImage && fileType != storageutil.FileTypeVideo {
+	if !TakesClientThumbnail(params.RelPath) {
 		return StoreClientThumbnailsResult{}, ErrNotMedia
 	}
 	ctx := context.Background()
@@ -221,12 +240,12 @@ func StoreClientThumbnails(params StoreClientThumbnailsParams) (StoreClientThumb
 			continue
 		}
 		_, err = StoreClientThumbnail(StoreClientThumbnailParams{
-			Queries: params.Queries,
-			Serial:  params.Serial,
-			RelPath: params.RelPath,
-			Source:  source,
-			Reader:  part,
-			IsVideo: fileType == storageutil.FileTypeVideo,
+			Queries:  params.Queries,
+			Serial:   params.Serial,
+			RelPath:  params.RelPath,
+			Source:   source,
+			Reader:   part,
+			SkipHash: storageutil.DetermineFileTypeFromPath(params.RelPath) != storageutil.FileTypeImage,
 		})
 		part.Close()
 		return StoreClientThumbnailsResult{}, err

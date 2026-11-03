@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:quark/controllers/code_viewer_controller.dart';
 import 'package:quark/services/code_viewer_service.dart';
 import 'package:quark/services/model_viewer_service.dart';
+import 'package:quark/services/thumbnail_backfill.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/model_viewer_config.dart';
 import 'package:quark/utils/model_viewer_files.dart';
@@ -23,6 +26,23 @@ typedef ParseModelFn =
 typedef ListModelResourcesFn =
     Future<List<String>> Function(Uint8List bytes, QuarkModelFormat format);
 
+/// Gives the model at a path the thumbnail drawn from its [mesh] if it has
+/// none yet; [saveOpenedModelThumbnail] by default.
+typedef SaveModelThumbnailFn =
+    Future<bool> Function(
+      String path, {
+      String? serial,
+      required QuarkModelMesh mesh,
+    });
+
+/// Hands an opened model's [mesh] to [ThumbnailBackfill.instance], which
+/// draws and uploads its thumbnail when the Quark has none (#3227).
+Future<bool> saveOpenedModelThumbnail(
+  String path, {
+  String? serial,
+  required QuarkModelMesh mesh,
+}) => ThumbnailBackfill.instance.fill(path: path, serial: serial, mesh: mesh);
+
 /// State behind the 3D model viewer for the file at [path] (#2988): the
 /// parsed mesh, whether it shows as a wireframe, the unit its numbers are
 /// read in and the print bed it is checked against (#3228), and why it
@@ -37,6 +57,9 @@ typedef ListModelResourcesFn =
 /// the viewer will not draw — too large, too detailed, too slow to read,
 /// not a valid model — sets [fallback], and the page shows the file's
 /// details instead. A failed request sets [error], which offers Retry.
+///
+/// A model that loads is handed to [saveThumbnail] without waiting on it, so
+/// the Files grid can show it (#3227).
 class ModelViewerController extends ChangeNotifier with SafeNotifier {
   ModelViewerController({
     required this.path,
@@ -45,6 +68,7 @@ class ModelViewerController extends ChangeNotifier with SafeNotifier {
     this.parse = ModelViewerService.parse,
     this.listResources = ModelViewerService.resources,
     this.limits = ModelViewerConfig.limits,
+    this.saveThumbnail = saveOpenedModelThumbnail,
   });
 
   /// The file's files-relative path.
@@ -61,6 +85,8 @@ class ModelViewerController extends ChangeNotifier with SafeNotifier {
 
   /// The caps the file is held to.
   final QuarkModelLimits limits;
+
+  final SaveModelThumbnailFn saveThumbnail;
 
   QuarkModelMesh? _mesh;
   bool _isLoading = true;
@@ -144,6 +170,7 @@ class ModelViewerController extends ChangeNotifier with SafeNotifier {
       );
       if (generation != _generation) return;
       _mesh = mesh;
+      unawaited(saveThumbnail(path, serial: serial, mesh: mesh));
     } on QuarkModelParseException catch (e) {
       if (generation != _generation) return;
       _mesh = null;

@@ -35,8 +35,7 @@ func (s Sidecars) Attach(part *multipart.Part, written []UploadedFile) {
 }
 
 func (s Sidecars) store(part *multipart.Part, relPath string) error {
-	fileType := storageutil.DetermineFileTypeFromPath(relPath)
-	if fileType != storageutil.FileTypeImage && fileType != storageutil.FileTypeVideo {
+	if !thumbnailutil.TakesClientThumbnail(relPath) {
 		return thumbnailutil.ErrNotMedia
 	}
 	var queries db.Querier
@@ -53,12 +52,12 @@ func (s Sidecars) store(part *multipart.Part, relPath string) error {
 		}
 	}
 	_, err := thumbnailutil.StoreClientThumbnail(thumbnailutil.StoreClientThumbnailParams{
-		Queries: queries,
-		Serial:  s.Serial,
-		RelPath: relPath,
-		Source:  source,
-		Reader:  part,
-		IsVideo: fileType == storageutil.FileTypeVideo,
+		Queries:  queries,
+		Serial:   s.Serial,
+		RelPath:  relPath,
+		Source:   source,
+		Reader:   part,
+		SkipHash: storageutil.DetermineFileTypeFromPath(relPath) != storageutil.FileTypeImage,
 	})
 	return err
 }

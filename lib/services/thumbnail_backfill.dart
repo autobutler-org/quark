@@ -5,13 +5,16 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/models/thumbnail_probe.dart';
 import 'package:quark/services/client_thumbnails.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/services/model_thumbnails.dart';
 import 'package:quark/utils/client_thumbnail_config.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_kind.dart';
-import 'package:quark_widgets/quark_widgets.dart' show ThumbnailIssue;
+import 'package:quark_widgets/quark_widgets.dart'
+    show QuarkModelMesh, ThumbnailIssue;
 
-/// Renders the thumbnail of a video or HEIC the Quark cannot make one for,
-/// when a tile showing it comes up empty, and uploads it (#2381).
+/// Renders the thumbnail of a video, HEIC or 3D model the Quark cannot make
+/// one for, when a tile showing it comes up empty or the model is opened,
+/// and uploads it (#2381, #3227).
 ///
 /// This is how a thumbnail reaches a file no client rendered at upload: one
 /// sent from a browser that could not decode it, extracted from an archive,
@@ -28,7 +31,9 @@ import 'package:quark_widgets/quark_widgets.dart' show ThumbnailIssue;
 /// A render that fails is recorded for its file, with why ([failureFor]), so
 /// the tile can say so rather than look like a file with no thumbnail at all
 /// (#3559): `unreadable` when the Quark could not parse the file either, and
-/// otherwise a format this device cannot picture.
+/// otherwise a format this device cannot picture. A 3D model that renders
+/// nothing — over the viewer's caps, or not a valid model — records nothing
+/// and keeps its file icon.
 class ThumbnailBackfill {
   ThumbnailBackfill({
     Future<ThumbnailProbe> Function(String path, {String? serial})? probe,
@@ -36,6 +41,8 @@ class ThumbnailBackfill {
     Future<Uint8List?> Function(String name, Uint8List bytes)? renderFromBytes,
     Future<Uint8List?> Function(String name, Uri url)? renderVideoFromUrl,
     Uri Function(String path, {String? serial})? mediaUrl,
+    Future<Uint8List?> Function(String path, {String? serial})? renderModelFile,
+    Future<Uint8List?> Function(QuarkModelMesh mesh)? renderModel,
     Future<void> Function({
       required String path,
       String? serial,
@@ -49,6 +56,8 @@ class ThumbnailBackfill {
        _renderFromBytes = renderFromBytes ?? renderThumbnailFromBytes,
        _renderVideoFromUrl = renderVideoFromUrl ?? renderVideoThumbnailFromUrl,
        _mediaUrl = mediaUrl ?? FilesService.constructMediaUrl,
+       _renderModelFile = renderModelFile ?? renderModelFileThumbnail,
+       _renderModel = renderModel ?? renderModelThumbnail,
        _putThumbnail = putThumbnail ?? FilesService.putThumbnail;
 
   /// The app's one backfill, shared by every tile.
@@ -67,6 +76,9 @@ class ThumbnailBackfill {
   _renderFromBytes;
   final Future<Uint8List?> Function(String name, Uri url) _renderVideoFromUrl;
   final Uri Function(String path, {String? serial}) _mediaUrl;
+  final Future<Uint8List?> Function(String path, {String? serial})
+  _renderModelFile;
+  final Future<Uint8List?> Function(QuarkModelMesh mesh) _renderModel;
   final Future<void> Function({
     required String path,
     String? serial,
@@ -97,11 +109,14 @@ class ThumbnailBackfill {
   /// Fills in the thumbnail of the file at [path] if the Quark has none and
   /// says a client may render it. True when the tile should load its
   /// thumbnail again: the Quark now has one. [stillWanted] is asked when the
-  /// file's turn comes; a tile that has scrolled away answers false.
+  /// file's turn comes; a tile that has scrolled away answers false. A 3D
+  /// model the viewer has already read passes its [mesh], which is drawn
+  /// rather than read again.
   Future<bool> fill({
     required String path,
     String? serial,
     bool Function()? stillWanted,
+    QuarkModelMesh? mesh,
   }) {
     if (!needsClientRender(path)) return Future.value(false);
     if (_readOnlyFolders.contains(_folderKey(path, serial))) {
@@ -110,15 +125,17 @@ class ThumbnailBackfill {
     final key = '${serial ?? ''}|$path';
     // A block body: whenComplete waits on a future its callback returns, and
     // remove would return this very one.
-    return _inFlight[key] ??= _fill(path, serial, stillWanted).whenComplete(() {
-      _inFlight.remove(key);
-    });
+    return _inFlight[key] ??= _fill(path, serial, stillWanted, mesh)
+        .whenComplete(() {
+          _inFlight.remove(key);
+        });
   }
 
   Future<bool> _fill(
     String path,
     String? serial,
     bool Function()? stillWanted,
+    QuarkModelMesh? mesh,
   ) async {
     final key = '${serial ?? ''}|$path';
     await _acquire();
@@ -130,10 +147,12 @@ class ThumbnailBackfill {
       if (!_attempted.add('$key|${probe.modTime}')) return false;
       Uint8List? thumbnail;
       try {
-        thumbnail = await _render(path, serial).timeout(budget);
+        thumbnail = await _render(path, serial, mesh).timeout(budget);
       } catch (e) {
         debugPrint('[thumbnail_backfill.dart] Cannot render $path: $e');
       }
+      // A model the viewer would not draw keeps its icon (#3227).
+      if (thumbnail == null && isRenderedModel(path)) return false;
       if (thumbnail == null) {
         _failures[key] = probe.reason == 'unreadable'
             ? ThumbnailIssue.unreadable
@@ -154,8 +173,17 @@ class ThumbnailBackfill {
     }
   }
 
-  Future<Uint8List?> _render(String path, String? serial) async {
+  Future<Uint8List?> _render(
+    String path,
+    String? serial,
+    QuarkModelMesh? mesh,
+  ) async {
     final name = path.split('/').last;
+    if (isRenderedModel(name)) {
+      return mesh != null
+          ? _renderModel(mesh)
+          : _renderModelFile(path, serial: serial);
+    }
     if (fileKindForName(name) == FileKind.video) {
       // Streamed: the platform reads only what the frame needs.
       return _renderVideoFromUrl(name, _mediaUrl(path, serial: serial));
