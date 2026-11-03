@@ -21,7 +21,6 @@ type PhotoMetadataJSON struct {
 	MTime              int64                  `json:"mtime"`
 	Width              int                    `json:"width"`
 	Height             int                    `json:"height"`
-	RotationQuarters   int64                  `json:"rotationQuarters"`
 	IsFavorite         bool                   `json:"isFavorite"`
 	Exif               *photoutil.ExifSummary `json:"exif,omitempty"`
 	Albums             []photoutil.AlbumRef   `json:"albums"`
@@ -89,7 +88,6 @@ func getMetadata(c *gin.Context) *serverutil.Response {
 		MTime:              result.MTime,
 		Width:              result.Width,
 		Height:             result.Height,
-		RotationQuarters:   result.RotationQuarters,
 		IsFavorite:         result.IsFavorite,
 		Exif:               result.Exif,
 		Albums:             result.Albums,

@@ -67,7 +67,7 @@ func clientThumbnailPath(serial, relPath string) (string, error) {
 		return "", err
 	}
 	canonical := strings.TrimPrefix(path.Clean("/"+filepath.ToSlash(relPath)), "/")
-	return filepath.Join(dir, CacheKey(serial, canonical, 0, sizeClient)), nil
+	return filepath.Join(dir, CacheKey(serial, canonical, sizeClient)), nil
 }
 
 // StoreClientThumbnail validates a thumbnail a client rendered and caches it
@@ -158,9 +158,7 @@ func FromClientThumbnail(params FromClientThumbnailParams) (FromClientThumbnailR
 	}
 
 	prepared, err := Prepare(PrepareParams{
-		Queries:    params.Queries,
 		Serial:     params.Serial,
-		RelPath:    params.RelPath,
 		FilePath:   params.FilePath,
 		Size:       params.Size,
 		SrcModTime: info.ModTime(),
@@ -175,9 +173,6 @@ func FromClientThumbnail(params FromClientThumbnailParams) (FromClientThumbnailR
 	thumb, err := decodeClientThumbnail(source, prepared.Width, prepared.Height)
 	if err != nil {
 		return FromClientThumbnailResult{}, err
-	}
-	if prepared.RotationQuarters != 0 {
-		thumb = photoutil.ApplyRotation(thumb, prepared.RotationQuarters)
 	}
 	modTime, err := writeCache(prepared.CachedPath, thumb, false)
 	if err != nil {

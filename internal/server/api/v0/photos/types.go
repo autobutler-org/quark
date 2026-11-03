@@ -37,7 +37,14 @@ type copyPhotoResponse struct {
 }
 
 type rotatePhotoRequest struct {
-	RelPath          string `json:"relPath"          binding:"required"`
-	Serial           string `json:"serial"`
-	RotationQuarters int64  `json:"rotationQuarters"` // 0–3; 0 deletes the record
+	RelPath string `json:"relPath" binding:"required"`
+	Serial  string `json:"serial"`
+	// Quarters is how many quarter turns clockwise to add; negative turns
+	// counterclockwise.
+	Quarters int64 `json:"quarters"`
+}
+
+type rotatePhotoResponse struct {
+	// Orientation is the EXIF Orientation (1-8) the file carries now.
+	Orientation int `json:"orientation"`
 }

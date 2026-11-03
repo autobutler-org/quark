@@ -11,26 +11,26 @@ import (
 
 func TestCacheKey(t *testing.T) {
 	// Same inputs should produce the same key
-	key1 := CacheKey("serial1", "/photos/test.jpg", 0, SizeLg)
-	key2 := CacheKey("serial1", "/photos/test.jpg", 0, SizeLg)
+	key1 := CacheKey("serial1", "/photos/test.jpg", SizeLg)
+	key2 := CacheKey("serial1", "/photos/test.jpg", SizeLg)
 	if key1 != key2 {
 		t.Errorf("CacheKey not deterministic: %s != %s", key1, key2)
 	}
 
 	// Different serial should produce a different key
-	key3 := CacheKey("serial2", "/photos/test.jpg", 0, SizeLg)
+	key3 := CacheKey("serial2", "/photos/test.jpg", SizeLg)
 	if key1 == key3 {
 		t.Errorf("CacheKey collision on different serials: %s == %s", key1, key3)
 	}
 
 	// Different path should produce a different key
-	key4 := CacheKey("serial1", "/photos/other.jpg", 0, SizeLg)
+	key4 := CacheKey("serial1", "/photos/other.jpg", SizeLg)
 	if key1 == key4 {
 		t.Errorf("CacheKey collision on different paths: %s == %s", key1, key4)
 	}
 
 	// Empty serial should work (default case)
-	key5 := CacheKey("", "/photos/test.jpg", 0, SizeLg)
+	key5 := CacheKey("", "/photos/test.jpg", SizeLg)
 	if key5 == "" {
 		t.Error("CacheKey returned empty string for empty serial")
 	}
@@ -38,15 +38,9 @@ func TestCacheKey(t *testing.T) {
 		t.Errorf("CacheKey should differ for empty vs non-empty serial")
 	}
 
-	// Different rotation should produce a different key
-	key6 := CacheKey("serial1", "/photos/test.jpg", 1, SizeLg)
-	if key1 == key6 {
-		t.Errorf("CacheKey collision on different rotation: %s == %s", key1, key6)
-	}
-
 	// Different size should produce a different key
-	keySm := CacheKey("serial1", "/photos/test.jpg", 0, SizeSm)
-	keyMd := CacheKey("serial1", "/photos/test.jpg", 0, SizeMd)
+	keySm := CacheKey("serial1", "/photos/test.jpg", SizeSm)
+	keyMd := CacheKey("serial1", "/photos/test.jpg", SizeMd)
 	if key1 == keySm {
 		t.Errorf("CacheKey collision: lg == sm")
 	}

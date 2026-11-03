@@ -29,7 +29,7 @@ type DeleteFilesParams struct {
 	Registry vfs.Registry
 	// EventBus is told about every deleted path, and that the trash changed.
 	EventBus *eventbus.Bus
-	// Database holds the album membership, favorite and rotation rows to clean up. Nil
+	// Database holds the album membership and favorite rows to clean up. Nil
 	// skips that half.
 	Database *db.DatabaseSqlc
 	// RootDir is the directory the paths are relative to.
@@ -150,12 +150,6 @@ func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 				RelPath:      key,
 			}); err != nil {
 				log.Printf("quark: delete cleanup: remove favorites for %q (serial=%q): %v", p, serial, err)
-			}
-			if err := database.Queries.DeletePhotoRotation(ctx, db.DeletePhotoRotationParams{
-				DeviceSerial: serial,
-				RelPath:      key,
-			}); err != nil {
-				log.Printf("quark: delete cleanup: remove rotation for %q (serial=%q): %v", p, serial, err)
 			}
 			if err := database.Queries.DeletePhotoHashesUnder(ctx, db.DeletePhotoHashesUnderParams{
 				DeviceSerial: serial,

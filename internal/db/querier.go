@@ -155,7 +155,6 @@ type Querier interface {
 	// DeletePhotoHashesUnder drops the hashes of a deleted or moved path, and of
 	// everything under it when the path is a folder.
 	DeletePhotoHashesUnder(ctx context.Context, arg DeletePhotoHashesUnderParams) error
-	DeletePhotoRotation(ctx context.Context, arg DeletePhotoRotationParams) error
 	DeleteSession(ctx context.Context, token string) error
 	// Deletes one user. sessions.user_id is ON DELETE CASCADE (001_auth) and
 	// connections set _foreign_keys=on, so the user's sessions go with the row.
@@ -238,7 +237,6 @@ type Querier interface {
 	// GetOldestActiveAdmin is the longest-standing active admin other than one
 	// account: the heir of an account that deletes itself (#1909).
 	GetOldestActiveAdmin(ctx context.Context, id int64) (User, error)
-	GetPhotoRotation(ctx context.Context, arg GetPhotoRotationParams) (int64, error)
 	// Only an active account's session counts (#1908): a pending account has
 	// never been approved, and a disabled one was turned off.
 	GetSession(ctx context.Context, token string) (GetSessionRow, error)
@@ -614,7 +612,6 @@ type Querier interface {
 	// taken_checked says the EXIF was read. A write that did not read it keeps
 	// the date already stored.
 	UpsertPhotoHash(ctx context.Context, arg UpsertPhotoHashParams) error
-	UpsertPhotoRotation(ctx context.Context, arg UpsertPhotoRotationParams) error
 	// UpsertUserChatKeys creates or replaces an account's chat identity row.
 	// created_at survives a replace, so it dates the account's first key.
 	UpsertUserChatKeys(ctx context.Context, arg UpsertUserChatKeysParams) (UserChatKey, error)

@@ -2,15 +2,11 @@ package photoutil_test
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
 
-	"github.com/autobutler-org/quark/internal/db"
-	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -206,48 +202,5 @@ func TestListPhotos_VFS_OffsetBeyondTotal(t *testing.T) {
 	}
 	if len(page.Photos) != 0 || page.Total != 1 {
 		t.Errorf("got %d photos, total %d, want 0 photos and total 1", len(page.Photos), page.Total)
-	}
-}
-
-// --- SaveRotation ---
-
-func newRotationDB(t *testing.T) db.Querier {
-	t.Helper()
-	return dbtest.NewDB(t).Queries
-}
-
-func TestSaveRotation_NormalizesAndDeletes(t *testing.T) {
-	ctx := context.Background()
-	queries := newRotationDB(t)
-
-	save := func(quarters int64) {
-		t.Helper()
-		if err := photoutil.SaveRotation(photoutil.SaveRotationParams{
-			Ctx:              ctx,
-			Queries:          queries,
-			RelPath:          "a.jpg",
-			RotationQuarters: quarters,
-		}); err != nil {
-			t.Fatalf("SaveRotation(%d): %v", quarters, err)
-		}
-	}
-	read := func() (int64, error) {
-		return queries.GetPhotoRotation(ctx, db.GetPhotoRotationParams{RelPath: "a.jpg"})
-	}
-
-	// Out-of-range values wrap into 0–3.
-	save(5)
-	if got, err := read(); err != nil || got != 1 {
-		t.Fatalf("after save(5): rotation = %d, err = %v, want 1", got, err)
-	}
-	save(-1)
-	if got, err := read(); err != nil || got != 3 {
-		t.Fatalf("after save(-1): rotation = %d, err = %v, want 3", got, err)
-	}
-
-	// A normalized zero removes the record rather than storing it.
-	save(4)
-	if _, err := read(); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("after save(4): err = %v, want sql.ErrNoRows", err)
 	}
 }

@@ -135,7 +135,7 @@ func (h photoHarness) expect(t *testing.T, rel string, metadata, rotate, copyCod
 	if w := h.do(http.MethodGet, "/api/v0/photos/metadata?relPath="+rel, ""); w.Code != metadata {
 		t.Errorf("metadata %s = %d, want %d: %s", rel, w.Code, metadata, w.Body.String())
 	}
-	if w := h.do(http.MethodPost, "/api/v0/photos/rotate", `{"relPath":"`+rel+`","rotationQuarters":1}`); w.Code != rotate {
+	if w := h.do(http.MethodPost, "/api/v0/photos/rotate", `{"relPath":"`+rel+`","quarters":1}`); w.Code != rotate {
 		t.Errorf("rotate %s = %d, want %d: %s", rel, w.Code, rotate, w.Body.String())
 	}
 	if w := h.do(http.MethodPost, "/api/v0/photos/copy", `{"relPath":"`+rel+`"}`); w.Code != copyCode {

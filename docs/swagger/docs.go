@@ -8152,7 +8152,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Persists the viewer rotation (0/1/2/3 × 90° CW) for a photo server-side. Needs write access on the photo.",
+                "description": "Turns a JPEG by the given number of clockwise quarter turns by rewriting its EXIF Orientation tag, so no pixels are re-encoded. Other formats are refused with 422. Needs write access on the photo.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8162,7 +8162,7 @@ const docTemplate = `{
                 "tags": [
                     "photos"
                 ],
-                "summary": "Save the rotation for a photo",
+                "summary": "Turn a photo",
                 "parameters": [
                     {
                         "description": "Rotation request",
@@ -8178,7 +8178,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
+                            "$ref": "#/definitions/v0_photos.rotatePhotoResponse"
                         }
                     },
                     "400": {
@@ -8195,6 +8195,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "Rotation not supported for this format",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -14730,9 +14736,6 @@ const docTemplate = `{
                 "mtime": {
                     "type": "integer"
                 },
-                "rotationQuarters": {
-                    "type": "integer"
-                },
                 "width": {
                     "type": "integer"
                 }
@@ -14766,15 +14769,24 @@ const docTemplate = `{
                 "relPath"
             ],
             "properties": {
+                "quarters": {
+                    "description": "Quarters is how many quarter turns clockwise to add; negative turns\ncounterclockwise.",
+                    "type": "integer"
+                },
                 "relPath": {
                     "type": "string"
                 },
-                "rotationQuarters": {
-                    "description": "0–3; 0 deletes the record",
-                    "type": "integer"
-                },
                 "serial": {
                     "type": "string"
+                }
+            }
+        },
+        "v0_photos.rotatePhotoResponse": {
+            "type": "object",
+            "properties": {
+                "orientation": {
+                    "description": "Orientation is the EXIF Orientation (1-8) the file carries now.",
+                    "type": "integer"
                 }
             }
         },

@@ -1,10 +1,7 @@
 package thumbnailutil
 
 import (
-	"context"
 	"crypto/sha256"
-	"database/sql"
-	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -13,7 +10,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
@@ -34,40 +30,29 @@ func CacheDir() (string, error) {
 	return dir, nil
 }
 
-// CacheKey computes a SHA-256 hex digest of the given serial, file path,
-// rotation, and size so that each combination produces a distinct cache entry.
-func CacheKey(serial, filePath string, rotationQuarters int64, size Size) string {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s:%s/%s:r%d:s%s", cacheVersion, serial, filePath, rotationQuarters, size)))
+// CacheKey computes a SHA-256 hex digest of the given serial, file path and
+// size so that each combination produces a distinct cache entry. Rotation is
+// not part of it: turning a photo rewrites its EXIF orientation, which moves
+// the file's mtime, and an entry older than its source is stale (#1014).
+func CacheKey(serial, filePath string, size Size) string {
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s:%s/%s:s%s", cacheVersion, serial, filePath, size)))
 	return fmt.Sprintf("%x", h)
 }
 
-// Prepare resolves a thumbnail request to its cache entry: the user's
-// server-side rotation, the target dimensions, and whether the entry on disk
-// is still newer than the source. Rotation and size are part of the key, so
-// each combination gets its own entry.
+// Prepare resolves a thumbnail request to its cache entry: the target
+// dimensions, and whether the entry on disk is still newer than the source.
 func Prepare(params PrepareParams) (PrepareResult, error) {
-	var rotationQuarters int64
-	if rq, err := params.Queries.GetPhotoRotation(
-		context.Background(),
-		db.GetPhotoRotationParams{DeviceSerial: params.Serial, RelPath: params.RelPath},
-	); err == nil {
-		rotationQuarters = rq
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		return PrepareResult{}, fmt.Errorf("get photo rotation: %w", err)
-	}
-
 	dir, err := CacheDir()
 	if err != nil {
 		return PrepareResult{}, err
 	}
-	cachedPath := filepath.Join(dir, CacheKey(params.Serial, params.FilePath, rotationQuarters, params.Size))
+	cachedPath := filepath.Join(dir, CacheKey(params.Serial, params.FilePath, params.Size))
 	width, height := Dimensions(params.Size)
 
 	result := PrepareResult{
-		CachedPath:       cachedPath,
-		RotationQuarters: rotationQuarters,
-		Width:            width,
-		Height:           height,
+		CachedPath: cachedPath,
+		Width:      width,
+		Height:     height,
 	}
 	if cachedInfo, cacheErr := os.Stat(cachedPath); cacheErr == nil {
 		result.CachedModTime = cachedInfo.ModTime()

@@ -298,10 +298,6 @@ func (a *postgresQueries) DeletePhotoHashesUnder(ctx context.Context, arg Delete
 	return a.q.DeletePhotoHashesUnder(ctx, pgdb.DeletePhotoHashesUnderParams(arg))
 }
 
-func (a *postgresQueries) DeletePhotoRotation(ctx context.Context, arg DeletePhotoRotationParams) error {
-	return a.q.DeletePhotoRotation(ctx, pgdb.DeletePhotoRotationParams(arg))
-}
-
 func (a *postgresQueries) DeleteSession(ctx context.Context, token string) error {
 	return a.q.DeleteSession(ctx, token)
 }
@@ -506,10 +502,6 @@ func (a *postgresQueries) GetMusicTrackScanState(ctx context.Context, arg GetMus
 func (a *postgresQueries) GetOldestActiveAdmin(ctx context.Context, id int64) (User, error) {
 	row, err := a.q.GetOldestActiveAdmin(ctx, id)
 	return User(row), err
-}
-
-func (a *postgresQueries) GetPhotoRotation(ctx context.Context, arg GetPhotoRotationParams) (int64, error) {
-	return a.q.GetPhotoRotation(ctx, pgdb.GetPhotoRotationParams(arg))
 }
 
 func (a *postgresQueries) GetSession(ctx context.Context, token string) (GetSessionRow, error) {
@@ -1447,10 +1439,6 @@ func (a *postgresQueries) UpsertMusicTrack(ctx context.Context, arg UpsertMusicT
 
 func (a *postgresQueries) UpsertPhotoHash(ctx context.Context, arg UpsertPhotoHashParams) error {
 	return a.q.UpsertPhotoHash(ctx, pgdb.UpsertPhotoHashParams(arg))
-}
-
-func (a *postgresQueries) UpsertPhotoRotation(ctx context.Context, arg UpsertPhotoRotationParams) error {
-	return a.q.UpsertPhotoRotation(ctx, pgdb.UpsertPhotoRotationParams(arg))
 }
 
 func (a *postgresQueries) UpsertUserChatKeys(ctx context.Context, arg UpsertUserChatKeysParams) (UserChatKey, error) {

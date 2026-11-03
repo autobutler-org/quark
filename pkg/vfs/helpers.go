@@ -135,6 +135,26 @@ func hostOpen(absPath string) (File, error) {
 	return f, nil
 }
 
+// hostWriteAt overwrites len(p) bytes of the existing host file at absPath
+// starting at off, for [WriterAt]. It never creates or grows the file.
+func hostWriteAt(absPath string, p []byte, off int64) error {
+	f, err := os.OpenFile(absPath, os.O_WRONLY, 0)
+	if err != nil {
+		return hostErr(err)
+	}
+	fi, err := f.Stat()
+	if err == nil && fi.IsDir() {
+		err = ErrIsDirectory
+	}
+	if err == nil && off < 0 || err == nil && off+int64(len(p)) > fi.Size() {
+		err = fmt.Errorf("vfs: write of %d bytes at %d is outside the %d-byte file", len(p), off, fi.Size())
+	}
+	if err == nil {
+		_, err = f.WriteAt(p, off)
+	}
+	return errors.Join(hostErr(err), f.Close())
+}
+
 // hostWrite streams r to the host file at absPath for [VFS.Write]. With
 // IfNoneMatch "*" a taken name is [ErrConflict]. A name already taken is
 // refused before r is read, so a caller can retry another name with the same

@@ -127,7 +127,6 @@ erDiagram
     photo_albums { int id  int parent_id  string name  string smart_type }
     photo_album_items { int album_id  string device_serial  string rel_path }
     photo_favorites { string device_serial  string rel_path }
-    photo_rotations { string device_serial  string rel_path  int rotation_quarters }
     photo_hashes { string device_serial  string rel_path  string dhash  string content_hash }
     file_content { string serial  string rel_path  string extracted }
     music_tracks { string serial  string rel_path  string title  string album_key }
@@ -166,6 +165,7 @@ join. `path_access.level` is `read`, `write` or `owner`, and each row names exac
 | `038_drop_household_vault` | drops `005_vault`'s tables                                          |
 | `041_content_search`   | PostgreSQL only: `file_content.search_vector` (a generated `tsvector`) and its GIN index; nothing on SQLite |
 | `042_feeds`            | `feeds`, `feed_entries`                                                     |
+| `044_drop_photo_rotations` | drops `photo_rotations`: a photo's turn is its EXIF Orientation tag (#1014) |
 
 `music_tracks` (#2982) is a cache built from audio files, not a record: every column is derived, and a rescan
 rebuilds it. `music_tracks_fts` is its FTS5 mirror and exists only on SQLite, like `file_content_fts`, whose

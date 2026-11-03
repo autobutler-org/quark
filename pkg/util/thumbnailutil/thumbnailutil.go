@@ -102,12 +102,8 @@ const MaxBufferedSourceBytes int64 = 64 << 20
 // PrepareParams describes a thumbnail request far enough to locate its cache
 // entry: which file, at which size, and how stale the entry may be.
 type PrepareParams struct {
-	// Queries reads the user's server-side rotation for the photo.
-	Queries db.Querier
 	// Serial is the device serial the file belongs to, empty for local files.
 	Serial string
-	// RelPath is the path used for database lookups (no leading slash).
-	RelPath string
 	// FilePath is the raw request path, used for the cache key.
 	FilePath string
 	// Size is the requested size tier.
@@ -120,12 +116,11 @@ type PrepareParams struct {
 // PrepareResult is everything needed to either serve the cache entry or
 // regenerate it.
 type PrepareResult struct {
-	CachedPath       string
-	CachedModTime    time.Time
-	Hit              bool
-	RotationQuarters int64
-	Width            uint
-	Height           uint
+	CachedPath    string
+	CachedModTime time.Time
+	Hit           bool
+	Width         uint
+	Height        uint
 }
 
 // PrepareCoverParams names a track's cover thumbnail.
@@ -194,8 +189,6 @@ type GenerateParams struct {
 	// Width and Height are the target dimensions.
 	Width  uint
 	Height uint
-	// RotationQuarters applies the user's server-side rotation.
-	RotationQuarters int64
 	// CachedPath is where the encoded thumbnail is committed.
 	CachedPath string
 }
@@ -218,8 +211,6 @@ type GenerateFromReaderParams struct {
 	// Width and Height are the target dimensions.
 	Width  uint
 	Height uint
-	// RotationQuarters applies the user's server-side rotation.
-	RotationQuarters int64
 	// CachedPath is where the encoded thumbnail is committed.
 	CachedPath string
 }
@@ -230,7 +221,7 @@ type GenerateResult struct {
 }
 
 // StoreClientThumbnailParams is a thumbnail a client rendered for a file: a
-// JPEG, long edge 400, rotation applied.
+// JPEG, long edge 400, drawn upright.
 type StoreClientThumbnailParams struct {
 	// Queries stores a photo's hashes for duplicate detection. Nil skips them.
 	Queries db.Querier
@@ -254,8 +245,6 @@ type StoreClientThumbnailResult struct {
 // FromClientThumbnailParams asks for a size tier of a file, resized from the
 // thumbnail a client uploaded for it.
 type FromClientThumbnailParams struct {
-	// Queries reads the user's rotation for the photo.
-	Queries db.Querier
 	// Serial and RelPath identify the file.
 	Serial  string
 	RelPath string

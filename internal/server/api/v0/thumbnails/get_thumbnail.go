@@ -110,9 +110,7 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	}
 
 	prepared, err := thumbnailutil.Prepare(thumbnailutil.PrepareParams{
-		Queries:    deps.Database().Queries,
 		Serial:     serial,
-		RelPath:    relPath,
 		FilePath:   filePath,
 		Size:       thumbnailutil.ParseSize(c.Query("size")),
 		SrcModTime: srcInfo.ModTime,
@@ -142,16 +140,15 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		}
 
 		generated, genErr := thumbnailutil.Generate(thumbnailutil.GenerateParams{
-			Queries:          deps.Database().Queries,
-			FS:               fsys,
-			Serial:           serial,
-			RelPath:          relPath,
-			Ext:              ext,
-			IsVideo:          isVideo,
-			Width:            prepared.Width,
-			Height:           prepared.Height,
-			RotationQuarters: prepared.RotationQuarters,
-			CachedPath:       prepared.CachedPath,
+			Queries:    deps.Database().Queries,
+			FS:         fsys,
+			Serial:     serial,
+			RelPath:    relPath,
+			Ext:        ext,
+			IsVideo:    isVideo,
+			Width:      prepared.Width,
+			Height:     prepared.Height,
+			CachedPath: prepared.CachedPath,
 		})
 		// A video or HEIC the device could not render is one a client can:
 		// say so, so it renders one and PUTs it (#2379).

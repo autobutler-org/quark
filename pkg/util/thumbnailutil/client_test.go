@@ -55,7 +55,7 @@ func store(t *testing.T, params StoreClientThumbnailParams) error {
 func TestFromClientThumbnailWithoutOneIsNotFound(t *testing.T) {
 	_, modTime := writeSource(t, "clip.mov")
 	result, err := FromClientThumbnail(FromClientThumbnailParams{
-		Queries: dbtest.NewDB(t).Queries, RelPath: "clip.mov", FilePath: "/clip.mov",
+		RelPath: "clip.mov", FilePath: "/clip.mov",
 		SourceModTime: modTime, Size: SizeSm,
 	})
 	if err != nil || result.Found {
@@ -77,7 +77,7 @@ func TestStoredClientThumbnailServesEveryTier(t *testing.T) {
 		// The request path keeps its leading slash; the stored one was
 		// written without caring which spelling it came in.
 		result, err := FromClientThumbnail(FromClientThumbnailParams{
-			Queries: database.Queries, RelPath: "clip.mov", FilePath: "/clip.mov",
+			RelPath: "clip.mov", FilePath: "/clip.mov",
 			SourceModTime: modTime, Size: size,
 		})
 		if err != nil || !result.Found {
@@ -106,7 +106,7 @@ func TestClientThumbnailOlderThanItsFileIsStale(t *testing.T) {
 	}
 	// The file was rewritten after the thumbnail was: it shows the old one.
 	result, err := FromClientThumbnail(FromClientThumbnailParams{
-		Queries: database.Queries, RelPath: "photo.heic", FilePath: "/photo.heic",
+		RelPath: "photo.heic", FilePath: "/photo.heic",
 		SourceModTime: modTime.Add(time.Hour), Size: SizeSm,
 	})
 	if err != nil || result.Found {

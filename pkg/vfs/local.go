@@ -195,6 +195,15 @@ func (v *LocalVFS) Write(ctx context.Context, path string, r io.Reader, opts Wri
 	return hostWrite(absPath, r, opts)
 }
 
+// WriteAt overwrites bytes of the file at path in place. See [WriterAt].
+func (v *LocalVFS) WriteAt(_ context.Context, path string, p []byte, off int64) error {
+	absPath, err := v.abs(path)
+	if err != nil {
+		return err
+	}
+	return hostWriteAt(absPath, p, off)
+}
+
 // MoveFileIn places the host file at srcAbs at path, renaming it rather than
 // copying it when it can. See [FileMover].
 func (v *LocalVFS) MoveFileIn(ctx context.Context, srcAbs string, path string, opts WriteOptions) error {

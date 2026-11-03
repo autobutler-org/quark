@@ -57,17 +57,9 @@ type GenerateThumbnailResult struct {
 	Thumbnail image.Image
 	Format    string
 	// DHash is the perceptual hash of the whole upright source image, taken
-	// before the crop and before any user rotation, so every size tier and
+	// before the crop, so every size tier and
 	// every path to the same file agrees on it (#1666). Empty for video.
 	DHash string
-}
-
-// ApplyRotation rotates img by quarters × 90° clockwise.
-// Negative values are normalized: -1 → 3, -2 → 2, etc.
-func ApplyRotation(img image.Image, quarters int64) image.Image {
-	// The EXIF orientations that turn an image 0°, 90°, 180° and 270°
-	// clockwise.
-	return applyExifOrientation(img, [4]int{1, 6, 3, 8}[((quarters%4)+4)%4])
 }
 
 // GenerateThumbnailFromReader creates a thumbnail from a seekable source: EXIF

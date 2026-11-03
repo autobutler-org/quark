@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"mime"
 	"path/filepath"
@@ -245,6 +246,28 @@ func (m *MemVFS) Write(ctx context.Context, path string, r io.Reader, opts Write
 	}
 
 	m.files[p] = memEntry{data: data, info: info}
+	return nil
+}
+
+// WriteAt overwrites bytes of the file at path. See [WriterAt]. It copies the
+// content first, because a reader from Open may still hold the old slice.
+func (m *MemVFS) WriteAt(_ context.Context, path string, p []byte, off int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	entry, ok := m.files[cleanPath(path)]
+	if !ok {
+		return ErrNotFound
+	}
+	if off < 0 || off+int64(len(p)) > int64(len(entry.data)) {
+		return fmt.Errorf("vfs: write of %d bytes at %d is outside the %d-byte file", len(p), off, len(entry.data))
+	}
+	data := bytes.Clone(entry.data)
+	copy(data[off:], p)
+	entry.data = data
+	entry.info.ModTime = time.Now()
+	entry.info.ContentHash = hashBytes(data)
+	m.files[cleanPath(path)] = entry
 	return nil
 }
 

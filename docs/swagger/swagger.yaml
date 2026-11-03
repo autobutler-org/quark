@@ -2293,8 +2293,6 @@ definitions:
         type: string
       mtime:
         type: integer
-      rotationQuarters:
-        type: integer
       width:
         type: integer
     type: object
@@ -2314,15 +2312,23 @@ definitions:
     type: object
   v0_photos.rotatePhotoRequest:
     properties:
+      quarters:
+        description: |-
+          Quarters is how many quarter turns clockwise to add; negative turns
+          counterclockwise.
+        type: integer
       relPath:
         type: string
-      rotationQuarters:
-        description: 0–3; 0 deletes the record
-        type: integer
       serial:
         type: string
     required:
     - relPath
+    type: object
+  v0_photos.rotatePhotoResponse:
+    properties:
+      orientation:
+        description: Orientation is the EXIF Orientation (1-8) the file carries now.
+        type: integer
     type: object
   v0_playback.savePlaybackRequest:
     properties:
@@ -8808,8 +8814,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Persists the viewer rotation (0/1/2/3 × 90° CW) for a photo server-side.
-        Needs write access on the photo.
+      description: Turns a JPEG by the given number of clockwise quarter turns by
+        rewriting its EXIF Orientation tag, so no pixels are re-encoded. Other formats
+        are refused with 422. Needs write access on the photo.
       parameters:
       - description: Rotation request
         in: body
@@ -8823,7 +8830,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/serverutil.Response'
+            $ref: '#/definitions/v0_photos.rotatePhotoResponse'
         "400":
           description: Bad Request
           schema:
@@ -8836,13 +8843,17 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "422":
+          description: Rotation not supported for this format
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
       security:
       - BearerAuth: []
-      summary: Save the rotation for a photo
+      summary: Turn a photo
       tags:
       - photos
   /playback:

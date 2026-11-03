@@ -148,7 +148,7 @@ func TestMigrationsApplyCleanly(t *testing.T) {
 		"users", "sessions",
 		"device_names", "device_roles",
 		"connected_devices",
-		"photo_albums", "photo_album_items", "photo_rotations", "photo_favorites", "photo_hashes",
+		"photo_albums", "photo_album_items", "photo_favorites", "photo_hashes",
 		"vault_keys", "vault_items",
 		"file_content", "file_content_fts",
 		"music_tracks", "music_tracks_fts",

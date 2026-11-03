@@ -65,7 +65,6 @@ type MetadataResult struct {
 	MTime              int64
 	Width              int
 	Height             int
-	RotationQuarters   int64
 	IsFavorite         bool
 	Exif               *ExifSummary
 	Albums             []AlbumRef
@@ -76,7 +75,7 @@ type MetadataResult struct {
 }
 
 // Metadata gathers everything the photo detail view needs: file stat, EXIF,
-// the server-side rotation, the account's favorite state and albums, and the
+// the account's favorite state and albums, and the
 // Live Photo video companion.
 //
 // A missing file comes back as [storageutil.ErrPathNotFound] and a relPath that
@@ -90,16 +89,6 @@ func Metadata(params MetadataParams) (MetadataResult, error) {
 	stat, err := statPhoto(params, fsys)
 	if err != nil {
 		return MetadataResult{}, err
-	}
-
-	var rotationQuarters int64
-	if rq, rotErr := params.Queries.GetPhotoRotation(
-		params.Ctx,
-		db.GetPhotoRotationParams{DeviceSerial: params.Serial, RelPath: params.RelPath},
-	); rotErr == nil {
-		rotationQuarters = rq
-	} else if !errors.Is(rotErr, sql.ErrNoRows) {
-		return MetadataResult{}, fmt.Errorf("get photo rotation: %w", rotErr)
 	}
 
 	var softErrors []error
@@ -138,46 +127,12 @@ func Metadata(params MetadataParams) (MetadataResult, error) {
 		MTime:              stat.mtime,
 		Width:              stat.width,
 		Height:             stat.height,
-		RotationQuarters:   rotationQuarters,
 		IsFavorite:         isFavorite,
 		Exif:               stat.exif,
 		Albums:             albumRefs,
 		LivePhotoVideoPath: liveVideoPath,
 		SoftErrors:         softErrors,
 	}, nil
-}
-
-// SaveRotationParams is the viewer rotation to persist for one photo.
-type SaveRotationParams struct {
-	// Ctx bounds the database write.
-	Ctx context.Context
-	// Queries writes the rotation record.
-	Queries db.Querier
-	// Serial is the device serial the file belongs to, empty for local files.
-	Serial string
-	// RelPath is the photo's path relative to its files directory.
-	RelPath string
-	// RotationQuarters is the rotation in 90° clockwise steps. Values outside
-	// 0–3 are normalized; a normalized 0 removes the record.
-	RotationQuarters int64
-}
-
-// SaveRotation persists the viewer rotation for a photo. No rotation is stored
-// as no record, so the table only ever holds photos the user actually turned.
-func SaveRotation(params SaveRotationParams) error {
-	quarters := ((params.RotationQuarters % 4) + 4) % 4
-	if quarters == 0 {
-		// No rotation — remove the record to keep the table clean.
-		return params.Queries.DeletePhotoRotation(params.Ctx, db.DeletePhotoRotationParams{
-			DeviceSerial: params.Serial,
-			RelPath:      params.RelPath,
-		})
-	}
-	return params.Queries.UpsertPhotoRotation(params.Ctx, db.UpsertPhotoRotationParams{
-		DeviceSerial:     params.Serial,
-		RelPath:          params.RelPath,
-		RotationQuarters: quarters,
-	})
 }
 
 // photoStat is the part of the metadata that comes from the file itself.

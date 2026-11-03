@@ -80,6 +80,16 @@ type FileMover interface {
 	MoveFileIn(ctx context.Context, srcAbs string, path string, opts WriteOptions) error
 }
 
+// WriterAt is implemented by namespaces that can overwrite bytes of an
+// existing file in place, so a change of a few bytes (an EXIF tag) costs the
+// same on a 4 GiB file as on a small one. A namespace without it is changed
+// by streaming the whole file through [VFS.Write].
+type WriterAt interface {
+	// WriteAt overwrites len(p) bytes of the file at path starting at off. It
+	// never grows the file: a range that reaches past its end is an error.
+	WriteAt(ctx context.Context, path string, p []byte, off int64) error
+}
+
 // Trasher is implemented by namespaces with a trash: a user delete moves an
 // item there, where it can be listed, restored or deleted for good, and
 // [VFS.Delete] stays the permanent removal (#2641). A trashed item keeps an

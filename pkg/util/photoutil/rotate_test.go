@@ -205,11 +205,6 @@ func TestOrientationTransformsHandleSubImages(t *testing.T) {
 			t.Errorf("orientation %d: a sub-image differs from the same pixels at the origin by %d", orientation, d)
 		}
 	}
-	for quarters := int64(0); quarters < 4; quarters++ {
-		if d := maxChannelDiff(t, ApplyRotation(sub, quarters), ApplyRotation(atOrigin(sub), quarters)); d != 0 {
-			t.Errorf("rotation %d: a sub-image differs from the same pixels at the origin by %d", quarters, d)
-		}
-	}
 }
 
 // Rotating the thumbnail instead of the source must give the thumbnail the

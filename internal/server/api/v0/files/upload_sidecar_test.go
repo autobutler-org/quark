@@ -69,7 +69,7 @@ func (e sidecarEnv) hasThumbnail(t *testing.T, rel string) bool {
 		t.Fatalf("%s did not land: %v", rel, err)
 	}
 	result, err := thumbnailutil.FromClientThumbnail(thumbnailutil.FromClientThumbnailParams{
-		Queries: e.database.Queries, Serial: e.target.serial, RelPath: rel, FilePath: "/" + rel,
+		Serial: e.target.serial, RelPath: rel, FilePath: "/" + rel,
 		SourceModTime: info.ModTime(), Size: thumbnailutil.SizeSm,
 	})
 	if err != nil {

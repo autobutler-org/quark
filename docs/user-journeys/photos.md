@@ -281,8 +281,9 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 **Expected result:**
 
-- Photo is rotated and the change is persisted on the quark.
+- A JPEG is rotated by rewriting its EXIF Orientation tag, so the turn is lossless and travels with the file.
 - Thumbnail in the grid reflects the new orientation.
+- Other formats (HEIC, PNG, WebP, GIF) are refused with "rotation not supported for this format".
 
 ---
 

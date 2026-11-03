@@ -29,15 +29,14 @@ func Generate(params GenerateParams) (GenerateResult, error) {
 		}
 		defer source.Close()
 		return GenerateFromReader(GenerateFromReaderParams{
-			Queries:          params.Queries,
-			Serial:           params.Serial,
-			RelPath:          params.RelPath,
-			Reader:           source,
-			Ext:              params.Ext,
-			Width:            params.Width,
-			Height:           params.Height,
-			RotationQuarters: params.RotationQuarters,
-			CachedPath:       params.CachedPath,
+			Queries:    params.Queries,
+			Serial:     params.Serial,
+			RelPath:    params.RelPath,
+			Reader:     source,
+			Ext:        params.Ext,
+			Width:      params.Width,
+			Height:     params.Height,
+			CachedPath: params.CachedPath,
 		})
 	}
 
@@ -48,12 +47,6 @@ func Generate(params GenerateParams) (GenerateResult, error) {
 	result, err := render(params, hostPath)
 	if err != nil {
 		return GenerateResult{}, err
-	}
-
-	// Apply server-side rotation so the cached thumbnail matches the
-	// orientation the user has set.
-	if params.RotationQuarters != 0 {
-		result.Thumbnail = photoutil.ApplyRotation(result.Thumbnail, params.RotationQuarters)
 	}
 
 	if !params.IsVideo && params.Queries != nil {
@@ -79,10 +72,6 @@ func GenerateFromReader(params GenerateFromReaderParams) (GenerateResult, error)
 	result, err := photoutil.GenerateThumbnailFromReader(params.Reader, params.Ext, params.Width, params.Height)
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("%w: %w", ErrUnsupportedSource, err)
-	}
-
-	if params.RotationQuarters != 0 {
-		result.Thumbnail = photoutil.ApplyRotation(result.Thumbnail, params.RotationQuarters)
 	}
 
 	if params.Queries != nil {

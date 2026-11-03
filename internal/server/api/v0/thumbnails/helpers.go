@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/deputil"
@@ -35,9 +34,7 @@ func getArchiveThumbnail(
 	}
 
 	prepared, err := thumbnailutil.Prepare(thumbnailutil.PrepareParams{
-		Queries:    deps.Database().Queries,
 		Serial:     serial,
-		RelPath:    strings.TrimPrefix(filePath, "/"),
 		FilePath:   filePath,
 		Size:       thumbnailutil.ParseSize(c.Query("size")),
 		SrcModTime: archive.ModTime,
@@ -91,12 +88,11 @@ func getArchiveThumbnail(
 			return serverutil.InternalServerError(bufErr)
 		}
 		generated, genErr := thumbnailutil.GenerateFromReader(thumbnailutil.GenerateFromReaderParams{
-			Reader:           source,
-			Ext:              ext,
-			Width:            prepared.Width,
-			Height:           prepared.Height,
-			RotationQuarters: prepared.RotationQuarters,
-			CachedPath:       prepared.CachedPath,
+			Reader:     source,
+			Ext:        ext,
+			Width:      prepared.Width,
+			Height:     prepared.Height,
+			CachedPath: prepared.CachedPath,
 		})
 		if errors.Is(genErr, thumbnailutil.ErrUnsupportedSource) {
 			return serverutil.NotFound(genErr)
@@ -176,7 +172,6 @@ var clientThumbnailFallthrough = &serverutil.Response{}
 // is none.
 func getClientThumbnail(c *gin.Context, deps deputil.Dependencies, relPath, filePath, serial string, srcModTime time.Time) *serverutil.Response {
 	result, err := thumbnailutil.FromClientThumbnail(thumbnailutil.FromClientThumbnailParams{
-		Queries:       deps.Database().Queries,
 		Serial:        serial,
 		RelPath:       relPath,
 		FilePath:      filePath,
@@ -211,9 +206,9 @@ func serveCachedThumbnail(c *gin.Context, cachedPath string, cachedModTime time.
 	etag := thumbnailutil.ETagFromModTime(cachedModTime)
 	c.Header("ETag", etag)
 	// no-cache: the browser must revalidate every request via If-None-Match.
-	// The ETag covers rotation state (cache key includes rotationQuarters),
-	// so the browser gets fresh bytes immediately after a rotation without
-	// waiting for a max-age window to expire.
+	// Turning a photo rewrites the file, so its thumbnail is regenerated with
+	// a new mod time and a new ETag; the browser gets fresh bytes immediately
+	// without waiting for a max-age window to expire.
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Content-Type", contentType)
 

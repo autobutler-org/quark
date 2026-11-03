@@ -261,6 +261,15 @@ func (v *StorageServiceVFS) Write(_ context.Context, path string, r io.Reader, o
 	return hostWrite(absPath, r, opts)
 }
 
+// WriteAt overwrites bytes of the file at path in place. See [WriterAt].
+func (v *StorageServiceVFS) WriteAt(_ context.Context, path string, p []byte, off int64) error {
+	absPath, err := v.resolve(path)
+	if err != nil {
+		return err
+	}
+	return hostWriteAt(absPath, p, off)
+}
+
 // MoveFileIn places the host file at srcAbs at path, renaming it rather than
 // copying it when it can. See [FileMover].
 func (v *StorageServiceVFS) MoveFileIn(ctx context.Context, srcAbs string, path string, opts WriteOptions) error {
