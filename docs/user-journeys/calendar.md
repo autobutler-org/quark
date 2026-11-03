@@ -303,17 +303,22 @@ dragged.
 
 1. Tap **Sync** in the top bar.
 2. Copy the link under **Subscribe**.
-3. Paste it into Apple Calendar (File › New Calendar Subscription), Google Calendar (Other calendars › From URL)
-   or Thunderbird.
+3. Paste it into Apple Calendar (File › New Calendar Subscription) or Thunderbird on a device that can reach
+   the Quark, or into Google Calendar (Other calendars › From URL) when remote access is on.
+4. Or tap **Download .ics file** under **Download** and import the saved file into any calendar app.
 
 **Expected result:**
 
 - The dialog shows the link once it loads, with a copy button beside it. Copying confirms with a message.
-- The other app shows the household calendar's events and picks up changes the next time it polls.
-- If the link cannot load, the dialog says so in place of the link.
+- The subscribing app shows the household calendar's events and picks up changes the next time it polls.
+- The download saves `quark.ics` through the browser on the web and the platform's save dialog elsewhere, and
+  confirms with a message. An app that imports it shows the same events, but never later changes.
+- If the link cannot load, the dialog says so in place of the link; the download still works.
 
-**Notes:** The link carries the signed-in person's session, so anyone holding it can read the calendar until
-that session ends. The subscription is read-only; changes made in the other app do not come back (#1151).
+**Notes:** The subscribing app polls the Quark itself, so it has to reach it: Apple Calendar and Thunderbird
+from the device they run on, Google Calendar from Google's servers, which needs remote access. The link
+carries the signed-in person's session, so anyone holding it can read the calendar until that session ends.
+Both directions are read-only; changes made in the other app do not come back (#1151).
 
 ---
 

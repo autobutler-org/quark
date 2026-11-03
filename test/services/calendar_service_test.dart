@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:quark/models/calendar_event.dart';
 import 'package:quark/models/calendar_move.dart';
 import 'package:quark/services/calendar_service.dart';
@@ -260,6 +261,15 @@ void main() {
       'https://quark.local/api/v0/calendar/ical?token=t',
     );
     expect(requests.single.url.path, '/api/v0/calendar/ical/url');
+  });
+
+  test('downloads the calendar as the feed itself (#1151)', () async {
+    answerWith(
+      (_) async => http.Response('BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n', 200),
+    );
+    final bytes = await CalendarService.downloadICal();
+    expect(utf8.decode(bytes), startsWith('BEGIN:VCALENDAR'));
+    expect(requests.single.url.path, '/api/v0/calendar/ical');
   });
 
   test('imports an .ics file as its raw bytes (#1151)', () async {

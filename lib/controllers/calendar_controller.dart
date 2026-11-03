@@ -33,6 +33,7 @@ typedef MoveCalendarEventFn =
 typedef DeleteCalendarEventFn = Future<void> Function(int id);
 typedef ListCalendarPeopleFn = Future<List<String>> Function();
 typedef CalendarSubscriptionUrlFn = Future<String> Function();
+typedef DownloadICalFn = Future<Uint8List> Function();
 typedef ImportICalFn =
     Future<({int imported, int skipped})> Function(Uint8List bytes);
 
@@ -96,6 +97,7 @@ class CalendarController extends ChangeNotifier with SafeNotifier {
     this.deleteEvent = CalendarService.deleteEvent,
     this.listPeople = listCalendarPeople,
     this.loadSubscriptionUrl = CalendarService.subscriptionUrl,
+    this.downloadICalFile = CalendarService.downloadICal,
     this.importICalFile = CalendarService.importICal,
     this.canListPeople = _isAdmin,
     this.clock = DateTime.now,
@@ -107,6 +109,7 @@ class CalendarController extends ChangeNotifier with SafeNotifier {
   final MoveCalendarEventFn moveEvent;
   final DeleteCalendarEventFn deleteEvent;
   final CalendarSubscriptionUrlFn loadSubscriptionUrl;
+  final DownloadICalFn downloadICalFile;
   final ImportICalFn importICalFile;
 
   /// Lists the people an admin can narrow the calendar to.
@@ -671,6 +674,9 @@ class CalendarController extends ChangeNotifier with SafeNotifier {
 
   /// The link other calendar apps subscribe to (#1151).
   Future<String> subscriptionUrl() => loadSubscriptionUrl();
+
+  /// The calendar as an .ics file, for a one-time import elsewhere.
+  Future<Uint8List> downloadICal() => downloadICalFile();
 
   /// Imports the .ics file [bytes] and reloads. Throws what the import threw.
   Future<({int imported, int skipped})> importICal(Uint8List bytes) async {

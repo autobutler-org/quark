@@ -11,8 +11,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// Calls `/api/v0/calendar/events`: the household calendar's events, listed by
 /// range, created, updated, moved and deleted (#1144, #3215), and
-/// `/api/v0/calendar/ical`: the subscription link other calendar apps poll and
-/// the .ics import (#1151).
+/// `/api/v0/calendar/ical`: the subscription link other calendar apps poll, the
+/// same feed as a one-time download, and the .ics import (#1151).
 class CalendarService with AuthenticatedService {
   static final CalendarService _instance = CalendarService._();
   CalendarService._();
@@ -131,6 +131,16 @@ class CalendarService with AuthenticatedService {
     }
     return (json.decode(response.body) as Map<String, dynamic>)['url']
         as String;
+  }
+
+  /// The calendar as one .ics file, for a one-time import into an app that
+  /// cannot reach the Quark. Small: it holds what the household typed in.
+  static Future<Uint8List> downloadICal() async {
+    final response = await instance.authenticatedGet(_apiUri('/calendar/ical'));
+    if (response.statusCode != 200) {
+      throw ApiException(response.statusCode, 'download the calendar');
+    }
+    return response.bodyBytes;
   }
 
   /// Adds the events in the iCalendar file [bytes]. Events already on the

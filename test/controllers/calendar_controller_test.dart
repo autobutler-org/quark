@@ -205,6 +205,17 @@ void main() {
     expect(server.ranges.length, greaterThan(loads));
   });
 
+  test('downloadICal hands back the file (#1151)', () async {
+    final bytes = Uint8List.fromList([66, 69, 71]);
+    final c = CalendarController(
+      listEvents: _Server([]).list,
+      downloadICalFile: () async => bytes,
+      canListPeople: () => false,
+      clock: () => _now,
+    );
+    expect(await c.downloadICal(), bytes);
+  });
+
   test('upcoming lists the next seven days, dropping what is over', () async {
     final lunch = _event(
       13,
