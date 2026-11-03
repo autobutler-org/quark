@@ -253,6 +253,45 @@ void main() {
     expect(requests.single.url.path, '/api/v0/calendar/events/14');
   });
 
+  test('reads the subscription link', () async {
+    answer(200, {'url': 'https://quark.local/api/v0/calendar/ical?token=t'});
+    expect(
+      await CalendarService.subscriptionUrl(),
+      'https://quark.local/api/v0/calendar/ical?token=t',
+    );
+    expect(requests.single.url.path, '/api/v0/calendar/ical/url');
+  });
+
+  test('imports an .ics file as its raw bytes (#1151)', () async {
+    answer(200, {'imported': 3, 'skipped': 1});
+    final result = await CalendarService.importICal(
+      Uint8List.fromList(utf8.encode('BEGIN:VCALENDAR')),
+    );
+    expect(result, (imported: 3, skipped: 1));
+    final request = requests.single;
+    expect(request.method, 'POST');
+    expect(request.url.path, '/api/v0/calendar/ical');
+    expect(request.headers['Content-Type'], startsWith('text/calendar'));
+    expect(request.body, 'BEGIN:VCALENDAR');
+  });
+
+  test(
+    "an import refused as not iCalendar says so in the Quark's words",
+    () async {
+      answer(400, {'error': 'not an iCalendar file'});
+      await expectLater(
+        CalendarService.importICal(Uint8List(0)),
+        throwsA(
+          isA<MessageException>().having(
+            (e) => e.message,
+            'message',
+            'not an iCalendar file',
+          ),
+        ),
+      );
+    },
+  );
+
   test('a refusal throws ApiException', () async {
     answer(400, {'error': 'invalid event: a title is required'});
     await expectLater(

@@ -14,6 +14,7 @@ import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/calendar/calendar_bar_bottom.dart';
 import 'package:quark/widgets/calendar/calendar_body.dart';
 import 'package:quark/widgets/calendar/show_calendar_event_editor.dart';
+import 'package:quark/widgets/calendar/show_calendar_sync_dialog.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -316,6 +317,13 @@ class _CalendarPageState extends State<CalendarPage>
                     icon: QuarkIcons.add_rounded,
                     label: 'New event',
                     onPressed: () => _create(_newDraft()),
+                  ),
+                  QuarkBarChip(
+                    key: const ValueKey('calendar_sync'),
+                    icon: QuarkIcons.cloud_sync_outlined,
+                    label: 'Sync',
+                    onPressed: () =>
+                        showCalendarSyncDialog(context, calendar: _calendar),
                   ),
                 ],
                 bottom: CalendarBarBottom(

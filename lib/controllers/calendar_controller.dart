@@ -32,6 +32,9 @@ typedef MoveCalendarEventFn =
     });
 typedef DeleteCalendarEventFn = Future<void> Function(int id);
 typedef ListCalendarPeopleFn = Future<List<String>> Function();
+typedef CalendarSubscriptionUrlFn = Future<String> Function();
+typedef ImportICalFn =
+    Future<({int imported, int skipped})> Function(Uint8List bytes);
 
 /// The usernames of the Quark's active accounts, alphabetically: whom an
 /// admin can narrow the calendar to. Only admins may list accounts.
@@ -92,6 +95,8 @@ class CalendarController extends ChangeNotifier with SafeNotifier {
     this.moveEvent = CalendarService.moveEvent,
     this.deleteEvent = CalendarService.deleteEvent,
     this.listPeople = listCalendarPeople,
+    this.loadSubscriptionUrl = CalendarService.subscriptionUrl,
+    this.importICalFile = CalendarService.importICal,
     this.canListPeople = _isAdmin,
     this.clock = DateTime.now,
   }) : _anchor = CalendarDates.dateOnly(clock()),
@@ -101,6 +106,8 @@ class CalendarController extends ChangeNotifier with SafeNotifier {
   final SaveCalendarEventFn saveEvent;
   final MoveCalendarEventFn moveEvent;
   final DeleteCalendarEventFn deleteEvent;
+  final CalendarSubscriptionUrlFn loadSubscriptionUrl;
+  final ImportICalFn importICalFile;
 
   /// Lists the people an admin can narrow the calendar to.
   final ListCalendarPeopleFn listPeople;
@@ -660,6 +667,16 @@ class CalendarController extends ChangeNotifier with SafeNotifier {
   Future<void> delete(int id) async {
     await deleteEvent(id);
     await refresh();
+  }
+
+  /// The link other calendar apps subscribe to (#1151).
+  Future<String> subscriptionUrl() => loadSubscriptionUrl();
+
+  /// Imports the .ics file [bytes] and reloads. Throws what the import threw.
+  Future<({int imported, int skipped})> importICal(Uint8List bytes) async {
+    final result = await importICalFile(bytes);
+    await refresh();
+    return result;
   }
 
   /// Answers an event from `/api/v0/events`: another client changed the
