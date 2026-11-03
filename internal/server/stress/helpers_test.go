@@ -30,7 +30,9 @@ import (
 // config is the run, read from the environment so the Makefile target and a
 // hand run against a dev backend use the same knobs.
 type config struct {
-	base      string
+	// bases are the instances' URLs. Clients are dealt to them round-robin,
+	// so several instances behind no load balancer are loaded evenly.
+	bases     []string
 	adminUser string
 	adminPass string
 	// levels are the simulated client counts, run in order against the same
@@ -48,14 +50,15 @@ type config struct {
 	uploadersPer100 int
 	uploadEvery     time.Duration
 	uploadDir       string
-	// pid is the server's process, sampled for RSS and threads when set.
+	// pid is the server's process, sampled for RSS and threads when set. In
+	// the multi-instance mode it is one instance's, so the peaks are per
+	// instance rather than the sum.
 	pid    int
 	report string
 }
 
 func loadConfig() (config, error) {
 	cfg := config{
-		base:            strings.TrimRight(envOr("QUARK_BASE_URL", "http://127.0.0.1:8080"), "/"),
 		adminUser:       os.Getenv("QUARK_USER"),
 		adminPass:       os.Getenv("QUARK_PASSWORD"),
 		duration:        durationEnv("STRESS_DURATION", 30*time.Second),
@@ -66,6 +69,10 @@ func loadConfig() (config, error) {
 		uploadDir:       envOr("STRESS_UPLOAD_DIR", "groups/everyone"),
 		pid:             intEnv("QUARK_PID", 0),
 		report:          os.Getenv("STRESS_REPORT"),
+	}
+	// QUARK_BASE_URLS, comma-separated, is the multi-instance mode (#2971).
+	for _, base := range strings.Split(envOr("QUARK_BASE_URLS", envOr("QUARK_BASE_URL", "http://127.0.0.1:8080")), ",") {
+		cfg.bases = append(cfg.bases, strings.TrimRight(strings.TrimSpace(base), "/"))
 	}
 	for _, field := range strings.Split(envOr("STRESS_USERS", "100,500,2000"), ",") {
 		n, err := strconv.Atoi(strings.TrimSpace(field))
@@ -260,7 +267,9 @@ func (r *recorder) observe(route string, status int, elapsed time.Duration, err 
 
 // client is one simulated app instance: one browser tab or phone.
 type client struct {
-	cfg     config
+	cfg config
+	// base is the instance this client talks to.
+	base    string
 	account account
 	http    *http.Client
 	agent   string
@@ -295,6 +304,7 @@ type levelCounts struct {
 func newClient(cfg config, acct account, id int, rec *recorder, counts *levelCounts) *client {
 	return &client{
 		cfg:     cfg,
+		base:    cfg.bases[id%len(cfg.bases)],
 		account: acct,
 		// dart:io's HttpClient: a 15 s idle timeout and, by default, no
 		// per-host cap; a browser holds 6.
@@ -315,7 +325,7 @@ func newClient(cfg config, acct account, id int, rec *recorder, counts *levelCou
 }
 
 func (c *client) get(ctx context.Context, route, path string) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.base+path, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
 	if err != nil {
 		return
 	}
@@ -395,7 +405,7 @@ func (c *client) pollLoop(ctx context.Context) {
 // eventLoop holds the events socket, asks for a refresh on every listing
 // event as the Files page does, and reconnects after 2 s when dropped.
 func (c *client) eventLoop(ctx context.Context) {
-	wsURL := strings.Replace(c.cfg.base, "http", "ws", 1) + "/api/v0/events?token=" + url.QueryEscape(c.account.token)
+	wsURL := strings.Replace(c.base, "http", "ws", 1) + "/api/v0/events?token=" + url.QueryEscape(c.account.token)
 	for ctx.Err() == nil {
 		dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		conn, _, err := websocket.Dial(dialCtx, wsURL, &websocket.DialOptions{
@@ -470,7 +480,7 @@ func (c *client) uploadLoop(ctx context.Context, id int) {
 		_, _ = part.Write(payload)
 		_ = form.Close()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-			c.cfg.base+"/api/v0/files/upload/"+c.cfg.uploadDir+"?keepBoth=true", &body)
+			c.base+"/api/v0/files/upload/"+c.cfg.uploadDir+"?keepBoth=true", &body)
 		if err != nil {
 			return
 		}

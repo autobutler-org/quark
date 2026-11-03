@@ -24,8 +24,9 @@ Sessions, job claiming, and most row-level work are already safe because they ar
 ## Method
 
 - Read from the code at `16f988b9` (tag `archive/saddle/integration`; `main` was `7edb427d`). Every row cites the line it
-  was read from. **Nothing here was checked by running two instances**: the harness that could do that is #2971,
-  and the PostgreSQL backend (#2955) it needs has not landed.
+  was read from. **Nothing here was checked by running two instances** when it was written. Since #2971,
+  [`test/multiinstance`](../../test/multiinstance/README.md) runs two on one PostgreSQL and one files directory in
+  CI, with a case for each sub-issue's "done when"; a case whose fix has not landed is marked known broken there.
 - Read line by line: `deputil`, `internal/server` (boot, middleware, routes, content indexer), `internal/db`
   (hand-written files), `internal/install`, `cmd/quark`, `eventbus`, `jobutil`, `fileversionutil`,
   `ratelimitutil`, `settingsutil`, `usersettingsutil`, `requestlogutil`, `healthutil`, `iosemutil`, `uploadutil`
@@ -246,7 +247,8 @@ allowlist, the way it already confines `os` calls. That would have flagged `sett
 which is where most of this page lives and where AGENTS.md tells new state to go, and it cannot tell a CPU
 semaphore (fine) from an upload session map (not).
 
-So the practical guards are two. The harness in #2971 is the only check that proves behavior. This page is the
+So the practical guards are two. The harness from #2971 (`make test/multiinstance`, CI's `test-multiinstance`) is
+the only check that proves behavior. This page is the
 check at review time: a change that adds a member to `Dependencies`, a goroutine to `server.go`, or a path under
-the data dir adds a row here saying which of the dispositions it takes. The lint is cheap enough to add alongside
-#2971 as a prompt to do that, and should not be mistaken for coverage.
+the data dir adds a row here saying which of the dispositions it takes. The lint is cheap enough to add as a prompt
+to do that, and should not be mistaken for coverage.

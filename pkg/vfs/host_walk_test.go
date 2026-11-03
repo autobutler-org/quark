@@ -314,3 +314,26 @@ func TestVersionStoreIsHidden(t *testing.T) {
 		t.Errorf("walk = %v, want only docs/pitch.qslide", walked)
 	}
 }
+
+// A files directory that is itself a symlink (a shared mount linked into the
+// data directory, #2971) is walked through: filepath.WalkDir alone stops at a
+// symlinked root, so every backfill saw an empty library while List, which
+// follows it, did not. Paths stay under the link, not its target.
+func TestHostWalkDir_FollowsASymlinkedRoot(t *testing.T) {
+	target := t.TempDir()
+	seedTree(t, target, "sub/song.mp3")
+	root := filepath.Join(t.TempDir(), "files")
+	if err := os.Symlink(target, root); err != nil {
+		t.Fatal(err)
+	}
+
+	got := collectWalk(t, root)
+	if paths := relPaths(got); strings.Join(paths, ",") != "sub,sub/song.mp3" {
+		t.Fatalf("walk through a symlinked root got %v, want [sub sub/song.mp3]", paths)
+	}
+	for _, f := range got {
+		if want := filepath.Join(root, filepath.FromSlash(f.RelPath)); f.Info.FullPath != want {
+			t.Errorf("%s: FullPath %s, want %s", f.RelPath, f.Info.FullPath, want)
+		}
+	}
+}

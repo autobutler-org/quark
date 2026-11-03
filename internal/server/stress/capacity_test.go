@@ -21,7 +21,7 @@ func TestCapacity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	setup := api{base: cfg.base, http: &http.Client{Timeout: 30 * time.Second}}
+	setup := api{base: cfg.bases[0], http: &http.Client{Timeout: 30 * time.Second}}
 	adminKey, err := setup.authKey(cfg.adminUser, cfg.adminPass)
 	if err != nil {
 		t.Fatalf("admin auth key: %v", err)
@@ -36,7 +36,9 @@ func TestCapacity(t *testing.T) {
 	}
 
 	for _, n := range cfg.levels {
-		awaitIdle(cfg.base)
+		for _, base := range cfg.bases {
+			awaitIdle(base)
+		}
 		summary := runLevel(cfg, accounts, n)
 		t.Log(summary)
 		if cfg.report != "" {

@@ -124,6 +124,18 @@ millisecond; on SD or eMMC it is 2–20 ms, which is where the write half of #27
 research comment on #2507 measured 78 requests/s with real flushes before #2766 against 8,168 with WAL and
 `synchronous=NORMAL`; measured before #2766, harness not rerun, and #2766 did not adopt WAL).
 
+### More than one instance
+
+`make test/stress/capacity/instances STRESS_INSTANCES=<n>` runs the same clients against n instances on one
+PostgreSQL and one files directory (#2971). It makes a throwaway database in the development PostgreSQL
+(`make serve/postgres`), starts the instances one after another on ports from `PERF_PORT` up, each with a `HOME`
+of its own whose files directory links to the shared one, and deals the clients to them round-robin through
+`QUARK_BASE_URLS`. The peak RSS and thread count are the first instance's, not the sum.
+
+Not measured yet: the table of throughput against instance count waits for a run on a quiet host. Until
+events cross instances (#2965), upload events reach only the clients of the instance that took the upload, so
+the delivery figure falls to about 1/n by design and says nothing about the relay.
+
 ## What this means on a board
 
 The target boards (#2507) are 4× Cortex-A55 to A76 with 2–8 GB and SQLite on SD or eMMC. The research comments

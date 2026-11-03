@@ -1349,6 +1349,78 @@ test/stress/capacity: build/backend ## Simulate STRESS_USERS app clients against
 		STRESS_USERS=$(STRESS_USERS) STRESS_DURATION=$(STRESS_DURATION) \
 		$(GO) test -tags stress -count=1 -timeout 60m -v -run TestCapacity ./internal/server/stress/
 
+# The capacity run against STRESS_INSTANCES instances on one PostgreSQL and one files directory,
+# so capacity.md can say how throughput scales with instance count (#2971). Each instance has a
+# HOME of its own whose files directory is a link to the shared one, as test/multiinstance runs
+# them, and the clients are dealt to the instances round-robin. The database is a throwaway one
+# in the development PostgreSQL that `make serve/postgres` starts.
+STRESS_INSTANCES ?= 2
+
+.PHONY: test/stress/capacity/instances
+test/stress/capacity/instances: build/backend check/docker/compose ## Run test/stress/capacity against STRESS_INSTANCES instances on one PostgreSQL (start it with make serve/postgres)
+	WORK_DIR=test-results/stress-instances
+	rm -rf "$$WORK_DIR"
+	mkdir -p "$$WORK_DIR"
+	STRESS_ROOT="$$(mktemp -d)"
+	STRESS_DB="quark_stress_$$$$"
+	PIDS=()
+	BASES=()
+	cleanup() {
+		for pid in "$${PIDS[@]}"; do kill "$$pid" 2>/dev/null || true; wait "$$pid" 2>/dev/null || true; done
+		docker compose exec -T postgres dropdb -U quark --if-exists "$$STRESS_DB" >/dev/null 2>&1 || true
+		rm -rf "$$STRESS_ROOT"
+	}
+	trap cleanup EXIT
+	if ! docker compose exec -T postgres createdb -U quark "$$STRESS_DB"; then
+		echo "Error: could not create a database in the development PostgreSQL." >&2
+		echo "  Fix: make serve/postgres" >&2
+		exit 1
+	fi
+	$(MAKE) test/perf/generate-files PERF_FIXTURE_TARGET_DIR="$$STRESS_ROOT/files"
+	for i in $$(seq 0 $$(( $(STRESS_INSTANCES) - 1 ))); do
+		port=$$(( $(PERF_PORT) + i ))
+		if (exec 3<>/dev/tcp/127.0.0.1/$$port) 2>/dev/null; then
+			echo "port $$port is already in use; stop whatever listens there or pass PERF_PORT=<free port>" >&2
+			exit 1
+		fi
+		mkdir -p "$$STRESS_ROOT/q$$i/$(PERF_DATA_DIR)"
+		ln -s "$$STRESS_ROOT/files" "$$STRESS_ROOT/q$$i/$(PERF_DATA_DIR)/files"
+		HOME="$$STRESS_ROOT/q$$i" PORT=$$port QUARK_INSECURE=true GIN_MODE=release QUARK_DB_BACKEND=postgres \
+			QUARK_DATABASE_URL="postgres://quark:quark@127.0.0.1:$(POSTGRES_PORT)/$$STRESS_DB?sslmode=disable" \
+			./build/quark serve > "$$WORK_DIR/server-$$i.log" 2>&1 &
+		PIDS+=($$!)
+		BASES+=("http://127.0.0.1:$$port")
+		# One at a time, so the first has migrated before the next connects.
+		for _ in $$(seq 1 60); do
+			curl -sSf "http://127.0.0.1:$$port/api/v0/auth/status" >/dev/null 2>&1 && break
+			sleep 1
+		done
+	done
+	export QUARK_USER=stress QUARK_PASSWORD=stress-password
+	AUTH_KEY="$$(./build/quark auth-key --host "$${BASES[0]}" -u "$$QUARK_USER" <<< "$$QUARK_PASSWORD")"
+	curl -sSf -o /dev/null -X POST -H 'Content-Type: application/json' \
+		-d "{\"username\":\"$$QUARK_USER\",\"authKey\":\"$$AUTH_KEY\"}" \
+		"$${BASES[0]}/api/v0/auth/setup"
+	# QUARK_PID samples the first instance only, so the memory figures are per instance.
+	QUARK_BASE_URLS="$$(IFS=,; echo "$${BASES[*]}")" QUARK_PID="$${PIDS[0]}" STRESS_REPORT="$$PWD/$$WORK_DIR/report.md" \
+		STRESS_USERS=$(STRESS_USERS) STRESS_DURATION=$(STRESS_DURATION) \
+		$(GO) test -tags stress -count=1 -timeout 60m -v -run TestCapacity ./internal/server/stress/
+
+# The #2964 cases on two instances of this build sharing one PostgreSQL and one files directory,
+# behind a round-robin balancer with no affinity; test/multiinstance/README.md lists them. Not part
+# of `make test`, since it needs PostgreSQL. CI runs it in test.yml's test-multiinstance job, which
+# also sets QUARK_PREVIOUS_BINARY so the rolling upgrade runs; without it that case skips.
+.PHONY: test/multiinstance
+test/multiinstance: build/backend ## Run instances sharing one PostgreSQL and one files directory through the multi-instance cases (start it with make serve/postgres)
+	if ! (exec 3<>/dev/tcp/127.0.0.1/$(POSTGRES_PORT)) 2>/dev/null; then
+		echo "Error: no PostgreSQL is listening on 127.0.0.1:$(POSTGRES_PORT)." >&2
+		echo "  Fix: make serve/postgres" >&2
+		exit 1
+	fi
+	QUARK_DB_BACKEND=postgres QUARK_DATABASE_URL='$(call POSTGRES_URL,127.0.0.1,$(POSTGRES_PORT))' \
+		QUARK_BINARY="$(CURDIR)/build/quark" \
+		$(GO) test -tags multiinstance -count=1 -timeout 20m -v ./test/multiinstance/
+
 .PHONY: test/unit
 test/unit: test/unit/backend test/unit/frontend ## Run unit tests
 

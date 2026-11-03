@@ -291,8 +291,8 @@ func hostListDir(dir string, deviceName string, devicePath string, deviceSerial 
 // fs.SkipAll to stop the walk; both are reported as success. Any other error
 // stops the walk and is returned.
 //
-// Symlinks are reported but never followed, so the walk cannot escape dir or
-// loop — the same containment the single-level hostListDir listing has.
+// Symlinks below dir are reported but never followed, so the walk cannot
+// escape dir or loop — the same containment the single-level hostListDir listing has.
 //
 // Directory entries carry the filesystem's own size rather than the size of
 // their contents. hostListDir computes subtree sizes with storageutil.GetFolderSize,
@@ -313,8 +313,14 @@ func hostWalkDir(
 		}
 		return fmt.Errorf("error reading the directory %s: %w", dir, err)
 	}
+	// filepath.WalkDir does not descend into a symlinked root, so walk where
+	// it points; paths are still reported under root.
+	walkRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("error reading the directory %s: %w", dir, err)
+	}
 
-	return filepath.WalkDir(root, func(fullPath string, entry fs.DirEntry, err error) error {
+	return filepath.WalkDir(walkRoot, func(walkedPath string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			// An unreadable subdirectory must not abort the whole listing —
 			// skip it and keep walking the rest of the tree.
@@ -326,14 +332,15 @@ func hostWalkDir(
 		if ctx != nil && ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if fullPath == root {
+		if walkedPath == walkRoot {
 			return nil
 		}
 
-		rel, relErr := filepath.Rel(root, fullPath)
+		rel, relErr := filepath.Rel(walkRoot, walkedPath)
 		if relErr != nil {
 			return nil // coverage: ignore - WalkDir only yields paths under root
 		}
+		fullPath := filepath.Join(root, rel)
 		rel = filepath.ToSlash(rel)
 
 		if storageutil.IsInternalName(entry.Name()) {
