@@ -353,3 +353,32 @@ func TestListDevices(t *testing.T) {
 		t.Errorf("MaxResults 2 listed %d entries", len(limited))
 	}
 }
+
+// TestListDevicesReportsEveryDeviceOfAFolder checks that a folder merged from
+// several devices names all of them, not only the first one listed (#1868).
+func TestListDevicesReportsEveryDeviceOfAFolder(t *testing.T) {
+	internal, usb := newDeviceMount(t), newDeviceMount(t)
+	writeOnDisk(t, internal.filesDir, "shared/a.txt", "a")
+	writeOnDisk(t, usb.filesDir, "shared/b.txt", "b")
+	writeOnDisk(t, usb.filesDir, "usb-only/c.txt", "c")
+	svc := storageutil.NewStorageService(newDevicesDetector(internal.device(""), usb.device("A")))
+	registry := newDeviceRegistry(t, svc)
+
+	entries, err := vfs.ListDevices(vfs.ListDevicesParams{Ctx: context.Background(), Registry: registry})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][]vfs.DeviceRef{}
+	for _, e := range entries {
+		got[e.Path] = e.Devices
+	}
+	want := map[string][]vfs.DeviceRef{
+		"shared":   {{Serial: "", Name: "Internal"}, {Serial: "A", Name: "USB A"}},
+		"usb-only": {{Serial: "A", Name: "USB A"}},
+	}
+	for path, devices := range want {
+		if !slices.Equal(got[path], devices) {
+			t.Errorf("%s devices = %v, want %v", path, got[path], devices)
+		}
+	}
+}

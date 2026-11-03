@@ -30,7 +30,10 @@ type FileNode struct {
 	DirPath        string `json:"dirPath"` // Directory path containing the file, for easier client-side handling
 	FullPath       string `json:"fullPath"`
 	DeviceSerial   string `json:"deviceSerial"`
-	FileType       string `json:"fileType"` // Kept for older clients; route viewers by file name instead
+	// Devices names every device a folder exists on, when the listing merged
+	// it from several; DeviceName and DeviceSerial are the first of them.
+	Devices  []vfs.DeviceRef `json:"devices,omitempty"`
+	FileType string          `json:"fileType"` // Kept for older clients; route viewers by file name instead
 	// ModifiedAt is when the entry last changed. It is left out when the source
 	// does not say, as some entries inside an archive do not.
 	ModifiedAt time.Time `json:"modifiedAt,omitzero"`

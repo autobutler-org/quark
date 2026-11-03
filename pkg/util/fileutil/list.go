@@ -112,6 +112,7 @@ func vfsFileNode(fi vfs.FileInfo) FileNode {
 		DirPath:      fi.Path,
 		FullPath:     fi.Path,
 		DeviceSerial: fi.DeviceSerial,
+		Devices:      fi.Devices,
 		FileType:     string(fileType),
 		ModifiedAt:   fi.ModTime,
 	}
