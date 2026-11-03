@@ -4,9 +4,11 @@ import 'package:quark_icons/quark_icons.dart';
 import '../../core/quark_menu_button.dart';
 import '../../core/show_quark_menu.dart';
 import '../../models/chat_message_item.dart';
+import '../../models/chat_poll_answer.dart';
 import '../../models/quark_menu_entry.dart';
 import '../../theme/quark_tokens.dart';
 import '../chat_mentions.dart';
+import '../quark_poll_card.dart';
 import 'chat_message_row/chat_message_body.dart';
 import 'chat_message_row/chat_reaction_bar.dart';
 import 'chat_message_row/chat_reaction_picker.dart';
@@ -15,8 +17,10 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// it when it starts a group, or indented under the group's header when it
 /// does not.
 ///
-/// Draws the body of a text message, the "waiting for key" placeholder, or a
-/// deleted message's tombstone, according to [ChatMessageItem.kind]. System
+/// Draws the body of a text message, a poll's `QuarkPollCard`, the "waiting
+/// for key" placeholder, or a deleted message's tombstone, according to
+/// [ChatMessageItem.kind]. A poll's card answers with [onAnswerPoll], closes
+/// with [onClosePoll] and exports with [onExportPoll]. System
 /// lines are a `ChatSystemLine` instead. A text message's reactions sit under
 /// its body as a `ChatReactionBar`, and [onReact] adds a `ChatReactionPicker`
 /// at the row's end as the quick way to react.
@@ -53,7 +57,7 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// `message_menu_<id>` on the menu button, `message_copy_<id>`,
 /// `message_menu_react_<id>` and `message_delete_<id>` on the menu's entries,
 /// `message_menu_react_<id>_<emoji>` on each emoji "Add reaction" offers, and
-/// those of `ChatReactionBar` and `ChatReactionPicker`.
+/// those of `ChatReactionBar`, `ChatReactionPicker` and `QuarkPollCard`.
 class ChatMessageRow extends StatefulWidget {
   /// Creates the row for [message].
   const ChatMessageRow({
@@ -64,6 +68,9 @@ class ChatMessageRow extends StatefulWidget {
     this.onDelete,
     this.onReact,
     this.onOpenLink,
+    this.onAnswerPoll,
+    this.onClosePoll,
+    this.onExportPoll,
     this.mentionNames = const [],
     this.selfName,
     this.longPressOpensMenu = true,
@@ -95,6 +102,15 @@ class ChatMessageRow extends StatefulWidget {
   /// Called with a web address in the message's text when it is tapped. Null
   /// draws the text with no links, as an unverified message always is.
   final ValueChanged<Uri>? onOpenLink;
+
+  /// Answers a poll message. Null draws its card's inputs disabled.
+  final ValueChanged<ChatPollAnswer>? onAnswerPoll;
+
+  /// Closes a poll message. Null leaves its card's "Close poll" out.
+  final VoidCallback? onClosePoll;
+
+  /// Exports a poll message's results. Null leaves its card's "Export" out.
+  final VoidCallback? onExportPoll;
 
   /// The names an `@mention` in the message can resolve to. Empty draws none.
   final List<String> mentionNames;
@@ -201,7 +217,6 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
   }
 
   @override
-  @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final message = widget.message;
@@ -223,6 +238,7 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
     final hasMenu =
         reacts && (onCopy != null || onReact != null || onDelete != null);
     void openMenu(Offset position) => _openMenu(context, position);
+    final poll = message.poll;
     final muted = TextStyle(
       color: tokens.mutedForeground,
       fontStyle: FontStyle.italic,
@@ -256,6 +272,20 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
           Flexible(child: Text('This message was deleted', style: muted)),
         ],
       ),
+      ChatMessageKind.poll =>
+        poll == null
+            ? const SizedBox.shrink()
+            // The card's border would touch the author's name above it.
+            : Padding(
+                padding: EdgeInsets.only(top: tokens.spacingXs),
+                child: QuarkPollCard(
+                  id: message.id,
+                  poll: poll,
+                  onAnswer: widget.onAnswerPoll,
+                  onClose: widget.onClosePoll,
+                  onExport: widget.onExportPoll,
+                ),
+              ),
       ChatMessageKind.text || ChatMessageKind.system => ChatMessageBody(
         key: ValueKey('message_body_${message.id}'),
         text: message.body,

@@ -13,6 +13,7 @@ import 'widgets/duplicate_group_list_demo.dart';
 import 'widgets/framed_viewport.dart';
 import 'widgets/model_viewer_demo.dart';
 import 'widgets/password_strength_demo.dart';
+import 'widgets/poll_editor_demo.dart';
 import 'widgets/split_view_demo.dart';
 import 'widgets/token_swatches.dart';
 
@@ -2349,6 +2350,10 @@ final List<GalleryEntry> registry = [
             onReact: (id, emoji) =>
                 log('QuarkMessageList.onReact($id, $emoji)'),
             onOpenLink: (uri) => log('QuarkMessageList.onOpenLink($uri)'),
+            onAnswerPoll: (id, answer) =>
+                log('QuarkMessageList.onAnswerPoll($id, ${answer.choices})'),
+            onClosePoll: (id) => log('QuarkMessageList.onClosePoll($id)'),
+            onExportPoll: (id) => log('QuarkMessageList.onExportPoll($id)'),
             onEncryptionHelp: () => log('QuarkMessageList.onEncryptionHelp'),
           ),
         ),
@@ -2372,6 +2377,117 @@ final List<GalleryEntry> registry = [
           child: QuarkMessageList(
             messages: galleryChatMessages,
             permissions: const {ChatPermission.manageMembers},
+          ),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkPollCard',
+    group: 'Chat',
+    build: (context, log) {
+      void answer(ChatPollAnswer a) =>
+          log('QuarkPollCard.onAnswer(${a.choices}, ${a.text})');
+      return Wrap(
+        spacing: 24,
+        runSpacing: 24,
+        children: [
+          SizedBox(
+            width: 420,
+            child: QuarkPollCard(
+              id: 'open',
+              poll: galleryPoll,
+              onAnswer: answer,
+              onClose: () => log('QuarkPollCard.onClose'),
+              onExport: () => log('QuarkPollCard.onExport'),
+            ),
+          ),
+          SizedBox(
+            width: 320,
+            child: QuarkPollCard(
+              id: 'multiple',
+              poll: ChatPollItem(
+                prompt: 'What should we bring?',
+                type: ChatPollType.multiple,
+                options: const ['Snacks', 'Board games', 'Firewood'],
+                anonymous: true,
+                closesAt: DateTime(2026, 11, 7, 18),
+              ),
+              onAnswer: answer,
+            ),
+          ),
+          SizedBox(
+            width: 320,
+            child: QuarkPollCard(
+              id: 'text',
+              poll: const ChatPollItem(
+                prompt: 'Any ideas for dinner?',
+                type: ChatPollType.text,
+                textAnswers: ['Chili', 'Pizza on the grill'],
+                responseCount: 2,
+              ),
+              onAnswer: answer,
+              onExport: () => log('QuarkPollCard.onExport'),
+            ),
+          ),
+          SizedBox(
+            width: 320,
+            child: QuarkPollCard(
+              id: 'hidden',
+              poll: const ChatPollItem(
+                prompt: 'Best photo of the trip?',
+                options: ['Lake', 'Summit'],
+                resultsAfterClose: true,
+                resultsVisible: false,
+                myAnswer: ChatPollAnswer(choices: [1]),
+              ),
+              onAnswer: answer,
+              onExport: () => log('QuarkPollCard.onExport'),
+            ),
+          ),
+          SizedBox(
+            width: 320,
+            child: QuarkPollCard(
+              id: 'closed',
+              poll: const ChatPollItem(
+                prompt: 'Which weekend works for the cabin?',
+                options: ['Nov 8', 'Nov 15', 'Nov 22'],
+                counts: [4, 1, 0],
+                responseCount: 5,
+                isClosed: true,
+              ),
+              onExport: () => log('QuarkPollCard.onExport'),
+            ),
+          ),
+        ],
+      );
+    },
+  ),
+  GalleryEntry(
+    name: 'QuarkPollEditor',
+    group: 'Chat',
+    build: (context, log) => Wrap(
+      spacing: 24,
+      runSpacing: 24,
+      children: [
+        FramedViewport(
+          width: 480,
+          height: 700,
+          child: Material(
+            child: PollEditorDemo(
+              initial: const ChatPollDraft(
+                prompt: 'Which weekend works for the cabin?',
+                options: ['Nov 8', 'Nov 15'],
+              ),
+              log: log,
+            ),
+          ),
+        ),
+        FramedViewport(
+          width: 390,
+          height: 700,
+          child: Material(
+            child: PollEditorDemo(initial: const ChatPollDraft(), log: log),
           ),
         ),
       ],
