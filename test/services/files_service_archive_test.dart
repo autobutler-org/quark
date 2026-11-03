@@ -30,18 +30,47 @@ void main() {
     sharedHttpClientFactory = buildLocalTrustHttpClient;
   });
 
-  test('asks for a JPEG of a HEIC entry and reports one', () async {
+  test('asks for a JPEG of a TIFF entry and reports one', () async {
     answer('image/jpeg', [0xff, 0xd8]);
 
     final entry = await FilesService.downloadArchiveFileBytes(
       'photos.zip',
-      'pics/IMG_1.HEIC',
+      'pics/scan.TIFF',
       convertImages: true,
     );
 
     expect(requests.single.url.queryParameters['format'], 'jpeg');
     expect(entry.isJpeg, isTrue);
     expect(entry.bytes, Uint8List.fromList([0xff, 0xd8]));
+  });
+
+  // The Quark decodes no HEIC (#2382), so asking it for a JPEG is pointless.
+  test('never asks for a JPEG of a HEIC entry', () async {
+    answer('application/octet-stream', [1]);
+
+    await FilesService.downloadArchiveFileBytes(
+      'photos.zip',
+      'pics/IMG_1.HEIC',
+      convertImages: true,
+    );
+
+    expect(requests.single.url.queryParameters.containsKey('format'), isFalse);
+  });
+
+  // A viewer shows a HEIC through the thumbnail a client rendered (#2382).
+  test('loads a HEIC photo from its stored thumbnail', () async {
+    answer('image/jpeg', [0xff, 0xd8]);
+
+    final bytes = await FilesService.downloadFileBytes(
+      'Camera/IMG_1.HEIC',
+      serial: 'S1',
+    );
+
+    final url = requests.single.url;
+    expect(url.path, '/api/v0/thumbnails/Camera/IMG_1.HEIC');
+    expect(url.queryParameters['size'], 'lg');
+    expect(url.queryParameters['serial'], 'S1');
+    expect(bytes, Uint8List.fromList([0xff, 0xd8]));
   });
 
   // An older Quark ignores format=jpeg and sends the original bytes, which the

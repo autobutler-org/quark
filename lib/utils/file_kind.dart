@@ -107,11 +107,14 @@ const thumbnailImageExtensions = {
 /// sends back a JPEG of it (#1851).
 const clientDecodedImageExtensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp'};
 
+/// HEIC and HEIF, which neither `Image.memory` nor the Quark decodes (#2382):
+/// a viewer shows the thumbnail a client rendered and the Quark stored.
+const heicImageExtensions = {'.heic', '.heif'};
+
 /// Image extensions `Image.memory` cannot decode, so the client asks the
-/// server for a JPEG instead (`?format=jpeg`, #1567).
+/// server for a JPEG instead (`?format=jpeg`, #1567). HEIC is not among them:
+/// see [heicImageExtensions].
 const serverConvertedImageExtensions = {
-  '.heic',
-  '.heif',
   '.tiff',
   '.tif',
   '.bmp',
