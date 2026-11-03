@@ -185,6 +185,12 @@ abstract final class Errors {
   static const String trimUnavailable =
       "This video can't be trimmed here. Download it to edit it locally.";
 
+  /// Trim was chosen on a container the Quark never cuts, such as an MPEG-TS
+  /// file, so the trim bar would only lead to a refused save (#3424).
+  static String cantTrimContainer(String extension) =>
+      "Your Quark can't trim $extension videos. Download it to edit it "
+      'locally.';
+
   /// Save Frame was offered, but the player has no decoded picture.
   static const String saveFrameUnavailable =
       "There's no picture to save from this video. Download it to watch "
