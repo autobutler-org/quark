@@ -7,3 +7,10 @@ package storageutil
 func ListUsbDevices(onlyStorage bool) ([]UsbDevice, error) {
 	return []UsbDevice{}, nil
 }
+
+// MonitorUsbDevices returns an empty list where there is no sysfs USB tree
+// and no mounted external volumes to watch. That is an empty list, not an
+// error (#1280).
+func MonitorUsbDevices() ([]UsbDevice, error) {
+	return []UsbDevice{}, nil
+}

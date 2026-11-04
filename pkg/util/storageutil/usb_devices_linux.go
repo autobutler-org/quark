@@ -13,6 +13,12 @@ import (
 // It is a var so tests can point enumeration at a directory that does not exist.
 var usbDevicesPath = "/sys/bus/usb/devices/"
 
+// MonitorUsbDevices is what usbDeviceMonitor polls: the sysfs storage
+// list, mounted and not, so an unmounted stick can be auto-mounted.
+func MonitorUsbDevices() ([]UsbDevice, error) {
+	return ListUsbDevices(true)
+}
+
 // ListUsbDevices lists all USB devices under /sys/bus/usb/devices/
 func ListUsbDevices(onlyStorage bool) ([]UsbDevice, error) {
 	base := usbDevicesPath
