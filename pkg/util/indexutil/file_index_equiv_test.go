@@ -214,15 +214,16 @@ func (s *equivState) compare(after string) {
 // the in-memory one replaced did, through randomized trees and randomized event
 // sequences: uploads, adds, new folders, deletes and moves of files and
 // folders, moves into the trash, stale events, unpublished changes, resyncs,
-// and two devices with their own serials.
+// and two devices with their own serials. The race-detector run keeps fewer
+// seeds; see equivSeeds.
 func TestFileIndexMatchesReference(t *testing.T) {
-	for seed := range uint64(12) {
+	for seed := range equivSeeds() {
 		t.Run(fmt.Sprint("seed", seed), func(t *testing.T) {
 			// Each seed has its own disk and database.
 			t.Parallel()
 			s := &equivState{
 				t:      t,
-				rng:    rand.New(rand.NewPCG(seed, 2760)),
+				rng:    rand.New(rand.NewPCG(uint64(seed), 2760)),
 				mounts: []mount{newMount(t, ""), newMount(t, "USB1")},
 				got:    newIndex(t),
 				want:   newRefIndex(),
