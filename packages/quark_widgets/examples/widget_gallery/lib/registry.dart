@@ -2406,8 +2406,10 @@ final List<GalleryEntry> registry = [
     name: 'QuarkPollCard',
     group: 'Chat',
     build: (context, log) {
-      void answer(ChatPollAnswer a) =>
-          log('QuarkPollCard.onAnswer(${a.choices}, ${a.text})');
+      void answer(ChatPollAnswer a) => log(
+        'QuarkPollCard.onAnswer(${a.choices}, ${a.text}, '
+        '${a.number}, ${a.date}, ${a.rating}, parts ${a.parts.length})',
+      );
       return Wrap(
         spacing: 24,
         runSpacing: 24,
@@ -2460,6 +2462,46 @@ final List<GalleryEntry> registry = [
                 resultsAfterClose: true,
                 resultsVisible: false,
                 myAnswer: ChatPollAnswer(choices: [1]),
+              ),
+              onAnswer: answer,
+              onExport: () => log('QuarkPollCard.onExport'),
+            ),
+          ),
+          SizedBox(
+            width: 320,
+            child: QuarkPollCard(
+              id: 'rating',
+              poll: const ChatPollItem(
+                prompt: 'How was the trip?',
+                type: ChatPollType.rating,
+                scale: 5,
+                ratingCounts: [0, 1, 0, 3, 2],
+                responseCount: 6,
+                allowChange: true,
+              ),
+              onAnswer: answer,
+            ),
+          ),
+          SizedBox(
+            width: 360,
+            child: QuarkPollCard(
+              id: 'several',
+              poll: const ChatPollItem(
+                prompt: 'How many people?',
+                type: ChatPollType.number,
+                responseCount: 2,
+                questions: [
+                  ChatPollQuestionItem(
+                    prompt: 'How many people?',
+                    type: ChatPollType.number,
+                    textAnswers: ['2', '4'],
+                  ),
+                  ChatPollQuestionItem(
+                    prompt: 'Which day?',
+                    type: ChatPollType.date,
+                    textAnswers: ['2026-11-08', '2026-11-15'],
+                  ),
+                ],
               ),
               onAnswer: answer,
               onExport: () => log('QuarkPollCard.onExport'),

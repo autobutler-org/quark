@@ -4,7 +4,7 @@ Covers chat (#2414): opening a channel, sending and receiving
 end-to-end encrypted messages, unlocking chat on web after a reload, waiting
 for a channel key, and creating, sharing, renaming, leaving and deleting
 channels (#2422), reacting to messages (#2426), a message's menu (#2631),
-searching a channel on the device (#2429), and mentioning a member (#2623).
+searching a channel on the device (#2429), mentioning a member (#2623), and polls (#3894).
 
 ---
 
@@ -466,9 +466,10 @@ on two devices or browsers, one with `general` open and one on **Files**.
 **Expected result:**
 
 - After step 1, a form titled "New poll" opens: a sheet on a phone, a dialog on a wider screen. It offers **One
-  choice**, **Several choices** and **Written answer**, and the settings **Close at a set time**, **Allow
-  changing an answer**, **Anonymous** and **Show results after it closes**.
-- **Post poll** stays disabled until there is a question and, for a choice poll, two options.
+  choice**, **Several choices**, **Written answer**, **Number**, **Date** and **Rating**, **Add question** for
+  another question on the same poll, and the settings **Close at a set time**, **Allow changing an answer**,
+  **Anonymous** and **Show results after it closes**.
+- **Post poll** stays disabled until every question has a prompt and, for a choice question, two options.
 - After step 3, the form closes and the poll shows in the channel as a card with its question and options.
 - After step 4, `bob` sees the same card, with nobody's answer yet.
 
@@ -565,5 +566,36 @@ channel open.
 - **Export** shows only to someone who can see the results: on a poll that shows results after it closes, its
   author, or anyone once it closes.
 - An anonymous poll's export has no `Name` column: nobody is named, the exporter included.
+- A poll with several questions has one column per question, in the poll's order (JN-CHAT-025). The file is
+  named after the first question. Two questions worded the same get a number on the later column.
 - The export is a snapshot of the answers this device has opened. Nothing tracks the file afterward.
 - The saved copy is a plain file on the Quark ([`docs/chat-security.md`](../chat-security.md)).
+
+---
+
+### JN-CHAT-025: A poll with several questions
+
+**Preconditions:** JN-CHAT-021. `carol` and `bob` have the channel open.
+
+**Steps:**
+
+1. As `carol`, tap **New poll**.
+2. Type `How many people?` as the question and choose **Number**.
+3. Tap **Add question**. Type `Which day?` and choose **Date**.
+4. Tap **Add question**. Type `How was it?` and choose **Rating**. Leave the scale at 5.
+5. Tap **Post poll**.
+6. As `bob`, enter `4`, pick a date, tap the fourth star, and tap **Answer**.
+
+**Expected result:**
+
+- After step 5, the card shows the three questions.
+- After step 6, the number lists `4` and an average, the date lists the day, and the rating shows one answer
+  on 4 of 5. **Answer** stays disabled until every question has an answer.
+- **Export** has a `Name` column and then one column per question.
+
+**Notes:**
+
+- A rating's scale runs from 2 to 10. The answer is a whole number from 1 up to that scale.
+- A number may be a whole number or a decimal. A date is a calendar day.
+- One person still has one answer. Changing it replaces every question at once.
+- A later question cannot depend on an earlier answer.

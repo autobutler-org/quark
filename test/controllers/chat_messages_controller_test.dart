@@ -802,6 +802,53 @@ void main() {
       expect(pollOf(alice, 2).options, isEmpty);
     });
 
+    test('number, date, rating and a second question tally', () async {
+      final [alice, bob, _] = await postAndOpen(
+        const ChatPollDraft(
+          prompt: 'How many?',
+          type: ChatPollType.number,
+          more: [
+            ChatPollQuestionDraft(prompt: 'When?', type: ChatPollType.date),
+            ChatPollQuestionDraft(
+              prompt: 'How was it?',
+              type: ChatPollType.rating,
+              scale: 5,
+            ),
+          ],
+        ),
+      );
+      final id = only(alice).message.id;
+      await bob.answerPoll(
+        id,
+        const ChatPollAnswer(
+          parts: [
+            ChatPollAnswer(number: '4'),
+            ChatPollAnswer(date: '2026-11-08'),
+            ChatPollAnswer(rating: 4),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+
+      final item = pollOf(alice, 2);
+      expect(item.questions, hasLength(3));
+      expect(item.type, ChatPollType.number);
+      expect(item.textAnswers, ['4']);
+      expect(item.questions[1].textAnswers, ['2026-11-08']);
+      expect(item.questions[2].ratingCounts, [0, 0, 0, 1, 0]);
+      expect(item.responseCount, 1);
+      expect(
+        pollOf(bob, 3).myAnswer,
+        const ChatPollAnswer(
+          parts: [
+            ChatPollAnswer(number: '4'),
+            ChatPollAnswer(date: '2026-11-08'),
+            ChatPollAnswer(rating: 4),
+          ],
+        ),
+      );
+    });
+
     test('poll-shaped text without settings, and other JSON, stay '
         'text', () async {
       final alice = quark.client(keys(), crypto);

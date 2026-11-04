@@ -47,27 +47,55 @@ enum ChatPollExportDestination {
 /// [entry]'s results as rows: a header, then one row per answer that opened,
 /// in the order the poll lists them. The first column is who answered, named
 /// through [nameOf], and is left out of an anonymous poll altogether; then one
-/// column per question, a choice as its option's label and text as written.
+/// column per question. A choice is its option's label, text is written as
+/// given, a number and a rating are the number, and a date is `YYYY-MM-DD`.
+/// Two questions with the same wording get ` (2)`, ` (3)` and so on, so a
+/// JSON export's keys stay unique.
 ///
 /// Call it only for an entry with a [ChatTimelineMessage.question].
 List<List<String>> chatPollExportRows(
   ChatTimelineMessage entry,
   String Function(int userId) nameOf,
 ) {
-  final question = entry.question!;
+  final questions = entry.question!.questions;
   final named = !entry.message.poll!.anonymous;
+  final headers = _headers(questions);
   return [
-    [if (named) 'Name', question.prompt],
+    [if (named) 'Name', ...headers],
     for (final ChatOpenPollAnswer(:response, :answer) in entry.pollAnswers)
       if (answer != null)
-        [
-          if (named) nameOf(response.userId ?? 0),
-          question.type == ChatPollType.text
-              ? answer.text
-              : answer.choices.map((c) => question.options[c]).join('; '),
-        ],
+        [if (named) nameOf(response.userId ?? 0), ..._cells(questions, answer)],
   ];
 }
+
+List<String> _headers(List<ChatPollQuestion> questions) {
+  final seen = <String, int>{};
+  final headers = <String>[];
+  for (final question in questions) {
+    final count = (seen[question.prompt] ?? 0) + 1;
+    seen[question.prompt] = count;
+    headers.add(count == 1 ? question.prompt : '${question.prompt} ($count)');
+  }
+  return headers;
+}
+
+List<String> _cells(List<ChatPollQuestion> questions, ChatPollAnswer answer) {
+  final parts = questions.length == 1 ? [answer] : answer.parts;
+  return [
+    for (final (index, question) in questions.indexed)
+      index < parts.length ? _cell(question, parts[index]) : '',
+  ];
+}
+
+String _cell(ChatPollQuestion question, ChatPollAnswer answer) =>
+    switch (question.type) {
+      ChatPollType.text => answer.text,
+      ChatPollType.number => answer.number ?? '',
+      ChatPollType.date => answer.date ?? '',
+      ChatPollType.rating => answer.rating == null ? '' : '${answer.rating}',
+      ChatPollType.single || ChatPollType.multiple =>
+        answer.choices.map((choice) => question.options[choice]).join('; '),
+    };
 
 /// [rows] from [chatPollExportRows] as the text of a [format] file. A
 /// snapshot: nothing tracks the file once it is written.

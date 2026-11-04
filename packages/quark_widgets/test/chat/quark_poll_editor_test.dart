@@ -73,6 +73,66 @@ void main() {
     );
   });
 
+  testWidgets('number, date and rating drop the options a choice needs', (
+    tester,
+  ) async {
+    final harness = _Harness();
+    await pumpAt(tester, harness.editor());
+    await tester.tap(find.byKey(const ValueKey('poll_editor_type_number')));
+    await tester.pump();
+    expect(harness.draft.type, ChatPollType.number);
+    expect(find.byKey(const ValueKey('poll_editor_option_0')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('poll_editor_type_date')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('poll_editor_option_0')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('poll_editor_type_rating')));
+    await tester.pump();
+    expect(find.text('5'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('poll_editor_scale_more')));
+    await tester.pump();
+    expect(harness.draft.scale, 6);
+  });
+
+  testWidgets('a second question has to be filled in too', (tester) async {
+    final harness = _Harness()
+      ..draft = const ChatPollDraft(
+        prompt: 'How many?',
+        type: ChatPollType.number,
+      );
+    await pumpAt(tester, harness.editor());
+    expect(harness.draft.isComplete, isTrue);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('poll_editor_question_add')),
+    );
+    await tester.tap(find.byKey(const ValueKey('poll_editor_question_add')));
+    await tester.pump();
+    expect(harness.draft.isComplete, isFalse);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('poll_editor_q1_prompt')),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('poll_editor_q1_prompt')),
+      'When?',
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('poll_editor_q1_type_date')),
+    );
+    await tester.tap(find.byKey(const ValueKey('poll_editor_q1_type_date')));
+    await tester.pump();
+    expect(harness.draft.questions, hasLength(2));
+    expect(harness.draft.questions.last.prompt, 'When?');
+    expect(harness.draft.questions.last.type, ChatPollType.date);
+    expect(harness.draft.isComplete, isTrue);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('poll_editor_question_remove_1')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('poll_editor_question_remove_1')),
+    );
+    await tester.pump();
+    expect(harness.draft.questions, hasLength(1));
+  });
+
   testWidgets('a text poll has no options', (tester) async {
     final harness = _Harness();
     await pumpAt(tester, harness.editor());

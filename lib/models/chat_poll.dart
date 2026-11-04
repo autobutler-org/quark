@@ -159,104 +159,232 @@ final class ChatOpenPollAnswer {
   final ChatPollAnswer? answer;
 }
 
-/// A poll's one question, as its message's plaintext carries it (#3894):
+/// A poll's questions, as its message's plaintext carries them (#3894):
 ///
 /// `{"quark":"poll/1","questions":[{"id":"q1","type":"single","prompt":"…","options":["…"]}]}`
 ///
-/// The marker is one no typed message produces, so [parse] tells a poll from
-/// text. An answer's plaintext is `{"q1":[0,2]}` or `{"q1":"text"}`
+/// [prompt], [type], [options] and [scale] are the first question. [more]
+/// holds the rest. The marker is one no typed message produces, so [parse]
+/// tells a poll from text. An answer's plaintext is keyed by question id:
+/// `{"q1":[0,2]}` for choices, `{"q1":"text"}` for text, `{"q1":3}` for a
+/// number or a rating, and `{"q1":"2026-11-04"}` for a date
 /// ([encodeAnswer], [decodeAnswer]).
 final class ChatPollQuestion {
-  /// Builds a question.
+  /// Builds a question. [more] are the questions after this one; their own
+  /// [more] is not read.
   const ChatPollQuestion({
     required this.prompt,
     this.id = 'q1',
     this.type = ChatPollType.single,
     this.options = const [],
+    this.scale = ChatPollType.defaultRating,
+    this.more = const [],
   });
 
-  /// The question from [draft], trimmed, its blank options dropped.
-  factory ChatPollQuestion.fromDraft(ChatPollDraft draft) => ChatPollQuestion(
-    prompt: draft.prompt.trim(),
-    type: draft.type,
-    options: draft.type == ChatPollType.text ? const [] : draft.filledOptions,
-  );
+  /// The questions from [draft], trimmed, a choice question's blank options
+  /// dropped. Ids are `q1`, `q2`, and so on, in the draft's order.
+  factory ChatPollQuestion.fromDraft(ChatPollDraft draft) {
+    final built = [
+      for (final (index, question) in draft.questions.indexed)
+        ChatPollQuestion._from(index, question),
+    ];
+    final first = built.first;
+    return ChatPollQuestion(
+      id: first.id,
+      prompt: first.prompt,
+      type: first.type,
+      options: first.options,
+      scale: first.scale,
+      more: List.unmodifiable(built.skip(1)),
+    );
+  }
+
+  /// Question [index] of a draft, id `q<index+1>`.
+  ChatPollQuestion._from(int index, ChatPollQuestionDraft question)
+    : id = 'q${index + 1}',
+      prompt = question.prompt.trim(),
+      type = question.type,
+      options = question.type.hasOptions
+          ? List.unmodifiable(question.filledOptions)
+          : const [],
+      scale = question.type == ChatPollType.rating
+          ? question.scale
+          : ChatPollType.defaultRating,
+      more = const [];
 
   /// The payload's marker and version.
   static const marker = 'poll/1';
 
-  /// The question's id within the poll; what an answer is keyed by.
+  /// The first question's id within the poll; what its answer is keyed by.
   final String id;
 
-  /// What it asks for.
+  /// What the first question asks for.
   final ChatPollType type;
 
-  /// The question.
+  /// The first question.
   final String prompt;
 
-  /// A choice poll's options, in order; empty for a text poll.
+  /// The first question's options, in order; empty unless it is a choice.
   final List<String> options;
+
+  /// How many steps the first question offers when it is a rating.
+  final int scale;
+
+  /// The questions after the first, in order.
+  final List<ChatPollQuestion> more;
+
+  /// Every question, the first one first.
+  List<ChatPollQuestion> get questions => [this, ...more];
 
   /// The poll message's plaintext.
   String toPayload() => jsonEncode({
     'quark': marker,
     'questions': [
-      {
-        'id': id,
-        'type': type.name,
-        'prompt': prompt,
-        if (type != ChatPollType.text) 'options': options,
-      },
+      for (final question in questions)
+        {
+          'id': question.id,
+          'type': question.type.name,
+          'prompt': question.prompt,
+          if (question.type.hasOptions) 'options': question.options,
+          if (question.type == ChatPollType.rating) 'scale': question.scale,
+        },
     ],
   });
 
-  /// The question [text] carries, or null when it isn't a poll payload.
+  /// The questions [text] carries, or null when it isn't a poll payload: no
+  /// questions, a repeated id, an unknown type, a choice with fewer than two
+  /// options, a rating whose scale is outside
+  /// [ChatPollType.minRating]..[ChatPollType.maxRating], or a blank prompt.
   static ChatPollQuestion? parse(String text) {
     try {
       final json = jsonDecode(text);
       if (json is! Map || json['quark'] != marker) return null;
-      final q = (json['questions'] as List).first as Map;
-      final type = ChatPollType.values.byName(q['type'] as String);
-      final options = [
-        for (final o in q['options'] as List? ?? const []) o as String,
-      ];
-      if (type != ChatPollType.text && options.length < 2) return null;
+      final raw = json['questions'] as List;
+      if (raw.isEmpty) return null;
+      final questions = <ChatPollQuestion>[];
+      final ids = <String>{};
+      for (final item in raw) {
+        final q = item as Map;
+        final id = q['id'] as String;
+        if (id.isEmpty || !ids.add(id)) return null;
+        final type = ChatPollType.values.byName(q['type'] as String);
+        final prompt = q['prompt'] as String;
+        if (prompt.trim().isEmpty) return null;
+        final options = [
+          for (final o in q['options'] as List? ?? const []) o as String,
+        ];
+        if (type.hasOptions && options.length < 2) return null;
+        final scale = _scale(q['scale']);
+        if (type == ChatPollType.rating &&
+            (scale < ChatPollType.minRating ||
+                scale > ChatPollType.maxRating)) {
+          return null;
+        }
+        questions.add(
+          ChatPollQuestion(
+            id: id,
+            type: type,
+            prompt: prompt,
+            options: type.hasOptions ? List.unmodifiable(options) : const [],
+            scale: type == ChatPollType.rating
+                ? scale
+                : ChatPollType.defaultRating,
+          ),
+        );
+      }
+      final first = questions.first;
       return ChatPollQuestion(
-        id: q['id'] as String,
-        type: type,
-        prompt: q['prompt'] as String,
-        options: List.unmodifiable(options),
+        id: first.id,
+        type: first.type,
+        prompt: first.prompt,
+        options: first.options,
+        scale: first.scale,
+        more: List.unmodifiable(questions.skip(1)),
       );
     } on Object {
       return null;
     }
   }
 
-  /// [answer]'s plaintext, before padding: its choices, or its text trimmed.
-  String encodeAnswer(ChatPollAnswer answer) => jsonEncode({
-    id: type == ChatPollType.text ? answer.text.trim() : answer.choices,
-  });
+  /// [answer]'s plaintext, before padding, one entry per question.
+  String encodeAnswer(ChatPollAnswer answer) {
+    final parts = questions.length == 1 ? [answer] : answer.parts;
+    return jsonEncode({
+      for (final (index, question) in questions.indexed)
+        question.id: question._jsonValue(parts[index]),
+    });
+  }
 
-  /// The answer [text] carries, or null when it doesn't fit this question: a
-  /// choice out of range or repeated, more than one for a single choice, or
-  /// none at all.
+  /// The answer [text] carries, or null when it doesn't fit these questions:
+  /// a value missing or of the wrong kind, a choice out of range or repeated,
+  /// more than one for a single choice, a rating outside the scale, or a
+  /// date that is not a real day. A poll with one question returns that
+  /// answer's fields; one with several returns them in [ChatPollAnswer.parts].
   ChatPollAnswer? decodeAnswer(String text) {
     try {
-      final value = (jsonDecode(text) as Map)[id];
-      if (type == ChatPollType.text) {
-        final written = value as String;
-        return written.trim().isEmpty ? null : ChatPollAnswer(text: written);
+      final json = jsonDecode(text) as Map;
+      final parts = <ChatPollAnswer>[];
+      for (final question in questions) {
+        final part = question._decodePart(json[question.id]);
+        if (part == null) return null;
+        parts.add(part);
       }
-      final choices = [for (final c in value as List) c as int]..sort();
-      final valid =
-          choices.isNotEmpty &&
-          choices.toSet().length == choices.length &&
-          choices.first >= 0 &&
-          choices.last < options.length &&
-          (type == ChatPollType.multiple || choices.length == 1);
-      return valid ? ChatPollAnswer(choices: List.unmodifiable(choices)) : null;
+      return parts.length == 1
+          ? parts.single
+          : ChatPollAnswer(parts: List.unmodifiable(parts));
     } on Object {
       return null;
+    }
+  }
+
+  /// [raw] as a rating scale. Absent means [ChatPollType.defaultRating].
+  static int _scale(Object? raw) {
+    if (raw == null) return ChatPollType.defaultRating;
+    if (raw is! num || raw != raw.roundToDouble()) {
+      throw const FormatException('a rating scale is a whole number');
+    }
+    return raw.toInt();
+  }
+
+  Object? _jsonValue(ChatPollAnswer answer) => switch (type) {
+    ChatPollType.single || ChatPollType.multiple => answer.choices,
+    ChatPollType.text => answer.text.trim(),
+    ChatPollType.number => ChatPollAnswer.encodeNumber(answer.number),
+    ChatPollType.date => answer.date,
+    ChatPollType.rating => answer.rating,
+  };
+
+  ChatPollAnswer? _decodePart(Object? value) {
+    switch (type) {
+      case ChatPollType.text:
+        if (value is! String || value.trim().isEmpty) return null;
+        return ChatPollAnswer(text: value);
+      case ChatPollType.number:
+        if (value is! num) return null;
+        final text = ChatPollAnswer.numberText(value);
+        return text == null ? null : ChatPollAnswer(number: text);
+      case ChatPollType.date:
+        if (value is! String || ChatPollAnswer.parseDate(value) == null) {
+          return null;
+        }
+        return ChatPollAnswer(date: value);
+      case ChatPollType.rating:
+        if (value is! num || value != value.roundToDouble()) return null;
+        final rating = value.toInt();
+        if (rating < 1 || rating > scale) return null;
+        return ChatPollAnswer(rating: rating);
+      case ChatPollType.single || ChatPollType.multiple:
+        if (value is! List) return null;
+        final choices = [for (final c in value) c as int]..sort();
+        final valid =
+            choices.isNotEmpty &&
+            choices.toSet().length == choices.length &&
+            choices.first >= 0 &&
+            choices.last < options.length &&
+            (type == ChatPollType.multiple || choices.length == 1);
+        return valid
+            ? ChatPollAnswer(choices: List.unmodifiable(choices))
+            : null;
     }
   }
 }

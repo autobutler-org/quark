@@ -7,11 +7,13 @@ import '../core/quark_loader.dart';
 import '../models/chat_poll_draft.dart';
 import '../models/chat_poll_type.dart';
 import '../theme/quark_tokens.dart';
+import 'quark_poll_editor/poll_editor_question.dart';
 
-/// The form for a new chat poll: its one question (prompt, type and, for a
-/// choice poll, the options) and its four settings (when it closes, whether
-/// an answer can change, whether it is anonymous, and whether results wait
-/// until it closes), with Post and Cancel.
+/// The form for a new chat poll: its questions (prompt, type and, for a
+/// choice question, the options, or for a rating its scale) and its four
+/// settings (when it closes, whether an answer can change, whether it is
+/// anonymous, and whether results wait until it closes), with Post and
+/// Cancel.
 ///
 /// It edits nothing itself. Every change comes back through [onChanged] as a
 /// new [ChatPollDraft] and the caller hands the next draft in. The caller
@@ -22,10 +24,14 @@ import '../theme/quark_tokens.dart';
 ///
 /// Key prefixes: `poll_editor_prompt`, `poll_editor_type_<type>`,
 /// `poll_editor_option_<index>`, `poll_editor_option_remove_<index>`,
-/// `poll_editor_option_add`, `poll_editor_closes`, `poll_editor_closes_date`,
+/// `poll_editor_option_add`, `poll_editor_scale`, `poll_editor_scale_less`,
+/// `poll_editor_scale_more`, `poll_editor_question_add`,
+/// `poll_editor_question_<index>`, `poll_editor_question_remove_<index>`,
+/// `poll_editor_closes`, `poll_editor_closes_date`,
 /// `poll_editor_closes_time`, `poll_editor_allow_change`,
 /// `poll_editor_anonymous`, `poll_editor_results_after_close`,
-/// `poll_editor_save`, `poll_editor_cancel` and `poll_editor_close`.
+/// `poll_editor_save`, `poll_editor_cancel` and `poll_editor_close`. A
+/// question after the first inserts `_q<index>` after `poll_editor`.
 ///
 /// ```dart
 /// QuarkPollEditor(
@@ -66,25 +72,17 @@ class QuarkPollEditor extends StatefulWidget {
   final String? saveError;
 
   /// The label of each poll type's chip.
-  static String typeLabel(ChatPollType type) => switch (type) {
-    ChatPollType.single => 'One choice',
-    ChatPollType.multiple => 'Several choices',
-    ChatPollType.text => 'Written answer',
-  };
+  static String typeLabel(ChatPollType type) => type.label;
 
   @override
   State<QuarkPollEditor> createState() => _QuarkPollEditorState();
 }
 
-/// The form's text controllers, one for the prompt and one per option, kept
-/// in step with the draft the caller hands in.
+/// The form's text controllers, one group per question, kept in step with
+/// the draft the caller hands in.
 class _QuarkPollEditorState extends State<QuarkPollEditor> {
-  late final TextEditingController _prompt = TextEditingController(
-    text: widget.draft.prompt,
-  );
-  late final List<TextEditingController> _options = [
-    for (final option in widget.draft.options)
-      TextEditingController(text: option),
+  late final List<_QuestionFields> _questions = [
+    for (final question in widget.draft.questions) _QuestionFields(question),
   ];
 
   @override
@@ -92,25 +90,23 @@ class _QuarkPollEditorState extends State<QuarkPollEditor> {
     super.didUpdateWidget(old);
     // Follow a draft the caller replaced, without moving the cursor on the
     // echo of what was just typed.
-    final draft = widget.draft;
-    if (_prompt.text != draft.prompt) _prompt.text = draft.prompt;
-    while (_options.length > draft.options.length) {
-      _options.removeLast().dispose();
+    final questions = widget.draft.questions;
+    while (_questions.length > questions.length) {
+      _questions.removeLast().dispose();
     }
-    for (final (index, option) in draft.options.indexed) {
-      if (index == _options.length) {
-        _options.add(TextEditingController(text: option));
-      } else if (_options[index].text != option) {
-        _options[index].text = option;
+    for (var i = 0; i < questions.length; i++) {
+      if (i == _questions.length) {
+        _questions.add(_QuestionFields(questions[i]));
+      } else {
+        _questions[i].sync(questions[i]);
       }
     }
   }
 
   @override
   void dispose() {
-    _prompt.dispose();
-    for (final option in _options) {
-      option.dispose();
+    for (final question in _questions) {
+      question.dispose();
     }
     super.dispose();
   }
@@ -164,8 +160,17 @@ class _QuarkPollEditorState extends State<QuarkPollEditor> {
     final saveError = widget.saveError;
     final closesAt = draft.closesAt;
     final use24Hour = MediaQuery.alwaysUse24HourFormatOf(context);
-    void replaceOptions(List<String> options) =>
-        widget.onChanged(draft.copyWith(options: options));
+    void replaceQuestion(int index, ChatPollQuestionDraft question) {
+      final current = widget.draft;
+      widget.onChanged(
+        current.copyWith(
+          questions: [
+            for (final (i, existing) in current.questions.indexed)
+              if (i == index) question else existing,
+          ],
+        ),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -211,70 +216,42 @@ class _QuarkPollEditorState extends State<QuarkPollEditor> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               spacing: tokens.spacingSm,
               children: [
-                TextField(
-                  key: const ValueKey('poll_editor_prompt'),
-                  controller: _prompt,
-                  autofocus: true,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(labelText: 'Question'),
-                  onChanged: (prompt) =>
-                      widget.onChanged(draft.copyWith(prompt: prompt)),
-                ),
-                Wrap(
-                  spacing: tokens.spacingSm,
-                  runSpacing: tokens.spacingXs,
-                  children: [
-                    for (final type in ChatPollType.values)
-                      ChoiceChip(
-                        key: ValueKey('poll_editor_type_${type.name}'),
-                        label: Text(QuarkPollEditor.typeLabel(type)),
-                        selected: draft.type == type,
-                        onSelected: (_) =>
-                            widget.onChanged(draft.copyWith(type: type)),
-                      ),
-                  ],
-                ),
-                if (draft.type != ChatPollType.text) ...[
-                  for (final (index, controller) in _options.indexed)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            key: ValueKey('poll_editor_option_$index'),
-                            controller: controller,
-                            decoration: InputDecoration(
-                              hintText: 'Option ${index + 1}',
-                              isDense: true,
+                for (final (index, question) in draft.questions.indexed)
+                  PollEditorQuestion(
+                    index: index,
+                    questionCount: draft.questions.length,
+                    question: question,
+                    prompt: _questions[index].prompt,
+                    options: _questions[index].options,
+                    onChanged: (next) => replaceQuestion(index, next),
+                    onRemove: draft.questions.length < 2
+                        ? null
+                        : () => widget.onChanged(
+                            draft.copyWith(
+                              questions: [
+                                for (final (i, current)
+                                    in draft.questions.indexed)
+                                  if (i != index) current,
+                              ],
                             ),
-                            onChanged: (text) => replaceOptions([
-                              ...draft.options.take(index),
-                              text,
-                              ...draft.options.skip(index + 1),
-                            ]),
                           ),
-                        ),
-                        if (_options.length > 2)
-                          IconButton(
-                            key: ValueKey('poll_editor_option_remove_$index'),
-                            tooltip: 'Remove option ${index + 1}',
-                            onPressed: () => replaceOptions([
-                              ...draft.options.take(index),
-                              ...draft.options.skip(index + 1),
-                            ]),
-                            icon: const Icon(QuarkIcons.remove_circle_outline),
-                          ),
-                      ],
-                    ),
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: TextButton.icon(
-                      key: const ValueKey('poll_editor_option_add'),
-                      onPressed: () => replaceOptions([...draft.options, '']),
-                      icon: const Icon(QuarkIcons.add_rounded, size: 18),
-                      label: const Text('Add option'),
-                    ),
                   ),
-                ],
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    key: const ValueKey('poll_editor_question_add'),
+                    onPressed: () => widget.onChanged(
+                      draft.copyWith(
+                        questions: [
+                          ...draft.questions,
+                          const ChatPollQuestionDraft(),
+                        ],
+                      ),
+                    ),
+                    icon: const Icon(QuarkIcons.add_rounded, size: 18),
+                    label: const Text('Add question'),
+                  ),
+                ),
                 SwitchListTile(
                   key: const ValueKey('poll_editor_closes'),
                   contentPadding: EdgeInsets.zero,
@@ -392,5 +369,45 @@ class _QuarkPollEditorState extends State<QuarkPollEditor> {
         ),
       ],
     );
+  }
+}
+
+/// The text controllers of one question in [QuarkPollEditor].
+class _QuestionFields {
+  /// Starts from [question]'s current text.
+  _QuestionFields(ChatPollQuestionDraft question)
+    : prompt = TextEditingController(text: question.prompt),
+      options = [
+        for (final option in question.options)
+          TextEditingController(text: option),
+      ];
+
+  /// The prompt field.
+  final TextEditingController prompt;
+
+  /// One controller per option.
+  final List<TextEditingController> options;
+
+  /// Follows [question] without moving a cursor on the echo of a keystroke.
+  void sync(ChatPollQuestionDraft question) {
+    if (prompt.text != question.prompt) prompt.text = question.prompt;
+    while (options.length > question.options.length) {
+      options.removeLast().dispose();
+    }
+    for (final (index, option) in question.options.indexed) {
+      if (index == options.length) {
+        options.add(TextEditingController(text: option));
+      } else if (options[index].text != option) {
+        options[index].text = option;
+      }
+    }
+  }
+
+  /// Drops the controllers.
+  void dispose() {
+    prompt.dispose();
+    for (final option in options) {
+      option.dispose();
+    }
   }
 }

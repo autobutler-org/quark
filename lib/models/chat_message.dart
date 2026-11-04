@@ -233,8 +233,8 @@ final class ChatTimelineMessage extends ChatTimelineEntry {
   /// The message's reactions, each with its emoji when it opened.
   final List<ChatOpenReaction> reactions;
 
-  /// The poll's question when the message is a poll whose [text] carries
-  /// one (#3894); null for text, which a poll that won't parse is too.
+  /// The poll's questions when the message is a poll whose [text] carries
+  /// them (#3894); null for text, which a poll that won't parse is too.
   final ChatPollQuestion? question;
 
   /// A poll's visible answers, each with what it opened to.

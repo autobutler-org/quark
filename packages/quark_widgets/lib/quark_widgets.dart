@@ -136,6 +136,7 @@ export 'src/models/chat_permission_preset.dart';
 export 'src/models/chat_poll_answer.dart';
 export 'src/models/chat_poll_draft.dart';
 export 'src/models/chat_poll_item.dart';
+export 'src/models/chat_poll_question_item.dart';
 export 'src/models/chat_poll_type.dart';
 export 'src/models/chat_reaction_item.dart';
 export 'src/models/connection_mode.dart';

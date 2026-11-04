@@ -7,23 +7,28 @@ import '../models/chat_poll_answer.dart';
 import '../models/chat_poll_item.dart';
 import '../models/chat_poll_type.dart';
 import '../theme/quark_tokens.dart';
-import 'quark_poll_card/poll_option_tally.dart';
+import 'quark_poll_card/poll_question_body.dart';
 
-/// A chat poll: its question, a way to answer it, and the tally so far.
+/// A chat poll: its questions, a way to answer them, and the tally so far.
 ///
-/// A `single` poll offers its options as radio buttons, a `multiple` poll as
-/// checkboxes, and a `text` poll a text field of at most [maxTextLength]
-/// characters. Picking or typing is only the reader's pending answer, held
-/// here the way a text field holds its text; "Answer" (or "Change answer")
-/// hands it to [onAnswer], and the caller's next [ChatPollItem.myAnswer]
-/// replaces it.
+/// A `single` question offers its options as radio buttons, a `multiple`
+/// question as checkboxes, a `text` question a text field of at most
+/// [maxTextLength] characters, a `number` question a number field, a `date`
+/// question a date button, and a `rating` question a row of stars. Picking
+/// or typing is only the reader's pending answer, held here the way a text
+/// field holds its text; "Answer" (or "Change answer") hands the whole poll
+/// to [onAnswer], and the caller's next [ChatPollItem.myAnswer] replaces it.
+/// A poll with several questions sends one answer per question, in
+/// [ChatPollAnswer.parts].
 ///
 /// The reader can answer while [onAnswer] is set, the poll is open, and they
 /// have not answered yet or [ChatPollItem.allowChange] lets them change it.
 /// Otherwise the inputs are drawn disabled with their own answer, if any.
+/// Every question has to be answered before the button enables.
 ///
-/// Each option shows its share of [ChatPollItem.responseCount] under it, and
-/// a `text` poll lists the written answers, while
+/// Each option shows its share of [ChatPollItem.responseCount] under it, a
+/// `text`, `number` or `date` question lists its answers, and a `rating`
+/// question shows how many answers gave each step, while
 /// [ChatPollItem.resultsVisible] holds. When it does not, as for a
 /// results-after-close poll still open, a line says the results come once
 /// the poll closes. The header names the poll anonymous when it is, and says
@@ -34,9 +39,14 @@ import 'quark_poll_card/poll_option_tally.dart';
 /// [onExport] and is offered only while [onExport] is set and the results
 /// are visible.
 ///
-/// Key prefixes, with [id]: `poll_option_<id>_<index>` on each option,
-/// `poll_tally_<id>_<index>` on its tally, `poll_text_<id>` on the text
-/// field, `poll_text_answer_<id>_<index>` on each written answer,
+/// Key prefixes, with [id]. A poll with one question uses these as written.
+/// A poll with more inserts `_q<index>` (the question, from 0) after the
+/// name: `poll_option_<id>_<index>` on each option, `poll_tally_<id>_<index>`
+/// on its tally, `poll_text_<id>` on the text field,
+/// `poll_text_answer_<id>_<index>` on each written answer,
+/// `poll_number_<id>` on the number field, `poll_number_average_<id>` on its
+/// average, `poll_date_<id>` on the date button, `poll_rating_<id>_<step>`
+/// on each star and `poll_rating_tally_<id>_<step>` on that step's tally,
 /// `poll_results_hidden_<id>` on the results-after-close line,
 /// `poll_anonymous_<id>` and `poll_closed_<id>` (or `poll_closes_<id>`) on
 /// the header's badges, and `poll_answer_<id>`, `poll_close_<id>` and
@@ -86,27 +96,128 @@ class QuarkPollCard extends StatefulWidget {
   State<QuarkPollCard> createState() => _QuarkPollCardState();
 }
 
-/// The reader's pending answer: the options picked, or null for none picked
-/// since [ChatPollItem.myAnswer] last changed, and the text being written.
+/// The reader's pending answer for each question: a null slot follows
+/// [ChatPollItem.myAnswer], and a text controller holds text or a number.
 class _QuarkPollCardState extends State<QuarkPollCard> {
-  List<int>? _choices;
-  late final TextEditingController _text = TextEditingController(
-    text: widget.poll.myAnswer?.text ?? '',
-  );
+  final List<List<int>?> _choices = [];
+  final List<TextEditingController> _fields = [];
+  final List<String?> _dates = [];
+  final List<int?> _ratings = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureSlots();
+    _applyAnswerText();
+  }
 
   @override
   void didUpdateWidget(QuarkPollCard old) {
     super.didUpdateWidget(old);
-    final mine = widget.poll.myAnswer;
-    if (mine == old.poll.myAnswer) return;
-    _choices = null;
-    if (_text.text != (mine?.text ?? '')) _text.text = mine?.text ?? '';
+    final grew = _ensureSlots();
+    if (widget.poll.myAnswer == old.poll.myAnswer && !grew) return;
+    if (widget.poll.myAnswer != old.poll.myAnswer) {
+      for (var i = 0; i < _choices.length; i++) {
+        _choices[i] = null;
+        _dates[i] = null;
+        _ratings[i] = null;
+      }
+    }
+    _applyAnswerText();
   }
 
   @override
   void dispose() {
-    _text.dispose();
+    for (final field in _fields) {
+      field.dispose();
+    }
     super.dispose();
+  }
+
+  /// Grows or shrinks the pending slots to the poll's questions. True when
+  /// the count changed.
+  bool _ensureSlots() {
+    final count = widget.poll.shownQuestions.length;
+    final grew = _fields.length != count;
+    while (_fields.length < count) {
+      _fields.add(TextEditingController());
+      _choices.add(null);
+      _dates.add(null);
+      _ratings.add(null);
+    }
+    while (_fields.length > count) {
+      _fields.removeLast().dispose();
+      _choices.removeLast();
+      _dates.removeLast();
+      _ratings.removeLast();
+    }
+    return grew;
+  }
+
+  void _applyAnswerText() {
+    final questions = widget.poll.shownQuestions;
+    for (var i = 0; i < questions.length; i++) {
+      final mine = questions[i].myAnswer;
+      final shown = switch (questions[i].type) {
+        ChatPollType.text => mine?.text ?? '',
+        ChatPollType.number => mine?.number ?? '',
+        _ => '',
+      };
+      if (_fields[i].text != shown) _fields[i].text = shown;
+    }
+  }
+
+  ChatPollAnswer _answerAt(int index) {
+    final question = widget.poll.shownQuestions[index];
+    final mine = question.myAnswer;
+    return switch (question.type) {
+      ChatPollType.single || ChatPollType.multiple => ChatPollAnswer(
+        choices: _choices[index] ?? mine?.choices ?? const [],
+      ),
+      ChatPollType.text => ChatPollAnswer(text: _fields[index].text),
+      ChatPollType.number => ChatPollAnswer(
+        number: ChatPollAnswer.numberText(_fields[index].text),
+      ),
+      ChatPollType.date => ChatPollAnswer(date: _dates[index] ?? mine?.date),
+      ChatPollType.rating => ChatPollAnswer(
+        rating: _ratings[index] ?? mine?.rating,
+      ),
+    };
+  }
+
+  ChatPollAnswer get _pending {
+    final parts = [
+      for (var i = 0; i < widget.poll.shownQuestions.length; i++) _answerAt(i),
+    ];
+    return parts.length == 1 ? parts.single : ChatPollAnswer(parts: parts);
+  }
+
+  void _pick(int question, int index, bool on) {
+    final type = widget.poll.shownQuestions[question].type;
+    final current =
+        _choices[question] ??
+        widget.poll.shownQuestions[question].myAnswer?.choices ??
+        const <int>[];
+    setState(() {
+      _choices[question] = type == ChatPollType.single
+          ? [index]
+          : ([...current.where((c) => c != index), if (on) index]..sort());
+    });
+  }
+
+  Future<void> _pickDate(int index) async {
+    final current = ChatPollAnswer.parseDate(
+      _dates[index] ?? widget.poll.shownQuestions[index].myAnswer?.date ?? '',
+    );
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current ?? now,
+      firstDate: DateTime(now.year - 100),
+      lastDate: DateTime(now.year + 20),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _dates[index] = ChatPollAnswer.formatDate(picked));
   }
 
   @override
@@ -114,6 +225,7 @@ class _QuarkPollCardState extends State<QuarkPollCard> {
     final tokens = QuarkTokens.of(context);
     final id = widget.id;
     final poll = widget.poll;
+    final questions = poll.shownQuestions;
     final mine = poll.myAnswer;
     final onAnswer = widget.onAnswer;
     final onClose = widget.onClose;
@@ -122,51 +234,10 @@ class _QuarkPollCardState extends State<QuarkPollCard> {
         onAnswer != null &&
         !poll.isClosed &&
         (mine == null || poll.allowChange);
-    final choices = _choices ?? mine?.choices ?? const <int>[];
-    final pending = poll.type == ChatPollType.text
-        ? ChatPollAnswer(text: _text.text)
-        : ChatPollAnswer(choices: choices);
+    final pending = _pending;
     final closesAt = poll.closesAt;
     final muted = TextStyle(color: tokens.mutedForeground, fontSize: 12);
     final showResults = poll.resultsVisible;
-
-    void pick(int index, bool on) => setState(
-      () => _choices = poll.type == ChatPollType.single
-          ? [index]
-          : ([...choices.where((c) => c != index), if (on) index]..sort()),
-    );
-    Widget? tallyOf(int index) => showResults
-        ? PollOptionTally(
-            key: ValueKey('poll_tally_${id}_$index'),
-            count: poll.countAt(index),
-            total: poll.responseCount,
-          )
-        : null;
-
-    final options = [
-      for (final (index, option) in poll.options.indexed)
-        if (poll.type == ChatPollType.single)
-          RadioListTile<int>(
-            key: ValueKey('poll_option_${id}_$index'),
-            value: index,
-            enabled: canAnswer,
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: Text(option),
-            subtitle: tallyOf(index),
-          )
-        else
-          CheckboxListTile(
-            key: ValueKey('poll_option_${id}_$index'),
-            value: choices.contains(index),
-            onChanged: canAnswer ? (on) => pick(index, on ?? false) : null,
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: Text(option),
-            subtitle: tallyOf(index),
-          ),
-    ];
 
     // A Material, not a DecoratedBox, so the option tiles' ink shows on it.
     return Material(
@@ -217,45 +288,27 @@ class _QuarkPollCardState extends State<QuarkPollCard> {
                   ),
               ],
             ),
-            Text(
-              poll.prompt,
-              style: TextStyle(
-                color: tokens.foreground,
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
+            for (final (index, question) in questions.indexed) ...[
+              if (index > 0) Divider(height: 1, color: tokens.border),
+              PollQuestionBody(
+                id: id,
+                questionIndex: index,
+                questionCount: questions.length,
+                question: question,
+                canAnswer: canAnswer,
+                showResults: showResults,
+                responseCount: poll.responseCount,
+                choices:
+                    _choices[index] ?? question.myAnswer?.choices ?? const [],
+                field: _fields[index],
+                date: _dates[index] ?? question.myAnswer?.date,
+                rating: _ratings[index] ?? question.myAnswer?.rating,
+                onPick: (option, on) => _pick(index, option, on),
+                onFieldChanged: () => setState(() {}),
+                onPickDate: () => _pickDate(index),
+                onRate: (step) => setState(() => _ratings[index] = step),
+                maxTextLength: QuarkPollCard.maxTextLength,
               ),
-            ),
-            if (poll.type == ChatPollType.single)
-              RadioGroup<int>(
-                groupValue: choices.isEmpty ? null : choices.first,
-                onChanged: (index) {
-                  if (index != null) pick(index, true);
-                },
-                child: Column(children: options),
-              )
-            else if (poll.type == ChatPollType.multiple)
-              Column(children: options)
-            else ...[
-              TextField(
-                key: ValueKey('poll_text_$id'),
-                controller: _text,
-                enabled: canAnswer,
-                maxLength: QuarkPollCard.maxTextLength,
-                minLines: 1,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  hintText: 'Write your answer',
-                  isDense: true,
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              if (showResults)
-                for (final (index, answer) in poll.textAnswers.indexed)
-                  Text(
-                    answer,
-                    key: ValueKey('poll_text_answer_${id}_$index'),
-                    style: TextStyle(color: tokens.foreground),
-                  ),
             ],
             if (!showResults)
               Row(

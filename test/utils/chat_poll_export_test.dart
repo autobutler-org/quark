@@ -128,6 +128,46 @@ void main() {
     });
   });
 
+  test('one column per question, with a number on a repeated prompt', () {
+    final trip = ChatPollQuestion(
+      prompt: 'How many?',
+      type: ChatPollType.number,
+      more: const [
+        ChatPollQuestion(id: 'q2', prompt: 'When?', type: ChatPollType.date),
+        ChatPollQuestion(id: 'q3', prompt: 'When?', type: ChatPollType.date),
+        ChatPollQuestion(
+          id: 'q4',
+          prompt: 'How was it?',
+          type: ChatPollType.rating,
+          scale: 5,
+        ),
+      ],
+    );
+    expect(
+      chatPollExportRows(
+        poll(trip, [
+          answer(
+            1,
+            7,
+            const ChatPollAnswer(
+              parts: [
+                ChatPollAnswer(number: '4'),
+                ChatPollAnswer(date: '2026-11-08'),
+                ChatPollAnswer(date: '2026-11-15'),
+                ChatPollAnswer(rating: 5),
+              ],
+            ),
+          ),
+        ]),
+        nameOf,
+      ),
+      [
+        ['Name', 'How many?', 'When?', 'When? (2)', 'How was it?'],
+        ['ada', '4', '2026-11-08', '2026-11-15', '5'],
+      ],
+    );
+  });
+
   test('the file is named after the prompt, made safe for a file system', () {
     expect(
       ChatPollExportFormat.csv.fileNameFor('Where for lunch?'),
