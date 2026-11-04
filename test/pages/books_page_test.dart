@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -5,19 +7,21 @@ import 'package:quark/controllers/books_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/pages/books_page.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/events_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/tap_target_guidelines.dart' as tap;
 import '../support/text_scale.dart';
 
-FileNode _node(String path, {int size = 1}) => FileNode(
+FileNode _node(String path, {int size = 1, String serial = ''}) => FileNode(
   name: path.split('/').last,
   size: size,
   isDir: false,
   deviceName: '',
   devicePath: '',
-  deviceSerial: '',
+  deviceSerial: serial,
   dirPath: path,
 );
 
@@ -29,11 +33,15 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    AppSettings.instance.refreshInterval.value = 15;
     listing = [];
     failure = null;
   });
 
-  Future<GoRouter> visit(WidgetTester tester) async {
+  Future<GoRouter> visit(
+    WidgetTester tester, {
+    Stream<FileEvent>? events,
+  }) async {
     final controller = BooksController(
       listBooks: () async {
         final f = failure;
@@ -47,7 +55,7 @@ void main() {
       routes: [
         GoRoute(
           path: AppRoutes.books,
-          builder: (_, _) => BooksPage(controller: controller),
+          builder: (_, _) => BooksPage(controller: controller, events: events),
         ),
         GoRoute(
           path: '${AppRoutes.viewFile}/:path(.*)',
@@ -122,6 +130,40 @@ void main() {
       () => Future<void>.delayed(const Duration(milliseconds: 1100)),
     );
     await tester.tap(find.byKey(const ValueKey('slides_retry')));
+    await tester.pumpAndSettle();
+    expect(find.text('Manual.pdf'), findsOneWidget);
+  });
+
+  testWidgets('opens a book on the drive it is on', (tester) async {
+    tap.setViewport(tester, tap.narrowViewport);
+    listing = [_node('library/Manual.pdf', serial: 'STICK')];
+    final router = await visit(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('book_tile_STICK_library/Manual.pdf')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.toString(),
+      '/view/library/Manual.pdf?serial=STICK&from=/books',
+    );
+  });
+
+  testWidgets('a file tree event refreshes the list', (tester) async {
+    tap.setViewport(tester, tap.narrowViewport);
+    AppSettings.instance.refreshInterval.value = 0;
+    final events = StreamController<FileEvent>.broadcast();
+    addTearDown(events.close);
+    await visit(tester, events: events.stream);
+    expect(find.text('No books yet'), findsOneWidget);
+
+    // The mixin debounces on the wall clock, which the fake one does not move.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1100)),
+    );
+    listing = [_node('Manual.pdf')];
+    events.add(const FileEvent(kind: 'upload', path: 'Manual.pdf'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
     expect(find.text('Manual.pdf'), findsOneWidget);
   });

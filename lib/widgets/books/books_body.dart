@@ -10,9 +10,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// disconnected view, the empty state, or one row per book with its folder
 /// and size (#1678).
 ///
-/// Key prefixes: `book_tile_<path>` on each row, where the path is the book's
-/// path under the files root, and [SlidesErrorView]'s `slides_retry` on the
-/// retry button.
+/// Key prefixes: `book_tile_<path>` on a book on the internal drive, and
+/// `book_tile_<serial>_<path>` on any other drive, where the path is the
+/// book's path under that drive's files root. [SlidesErrorView]'s
+/// `slides_retry` is the retry button.
 class BooksBody extends StatelessWidget {
   /// Shows [books], or the state standing in for them.
   const BooksBody({
@@ -64,8 +65,11 @@ class BooksBody extends StatelessWidget {
         final book = books[i];
         final slash = book.apiPath.lastIndexOf('/');
         final folder = slash < 0 ? '' : book.apiPath.substring(0, slash);
+        final tile = book.deviceSerial.isEmpty
+            ? 'book_tile_${book.apiPath}'
+            : 'book_tile_${book.deviceSerial}_${book.apiPath}';
         return ListTile(
-          key: ValueKey('book_tile_${book.apiPath}'),
+          key: ValueKey(tile),
           leading: QuarkFileIcon(
             kind: fileIconKindForName(book.name),
             size: 24,

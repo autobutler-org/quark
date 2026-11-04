@@ -5,11 +5,10 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
-/// The books API: `GET /api/v0/books`, every PDF and EPUB under the files
-/// directory that the signed-in user can read (#1678).
+/// The books API: `GET /api/v0/books`, every PDF and EPUB on every managed
+/// drive that the signed-in user can read (#1678, #3712).
 ///
-/// The Quark walks its internal drive only, so every book comes back on the
-/// empty device serial.
+/// [FileNode.deviceSerial] is empty for a book on the internal drive.
 class BooksService with AuthenticatedService {
   BooksService._();
   static final BooksService instance = BooksService._();
@@ -33,7 +32,7 @@ class BooksService with AuthenticatedService {
           isDir: false,
           deviceName: '',
           devicePath: '',
-          deviceSerial: '',
+          deviceSerial: json['deviceSerial']?.toString() ?? '',
           dirPath: json['relPath']?.toString() ?? '',
           fileType: json['type']?.toString() ?? '',
           modifiedAt: switch (json['mtime']) {
