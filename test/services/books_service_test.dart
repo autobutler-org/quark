@@ -18,6 +18,7 @@ void main() {
         'size': 2048,
         'type': 'epub',
         'mtime': 1767225600,
+        'deviceSerial': 'STICK',
       },
     ]);
 
@@ -29,6 +30,7 @@ void main() {
     expect(book.apiPath, 'library/sci-fi/Dune.epub');
     expect(book.size, 2048);
     expect(book.fileType, 'epub');
+    expect(book.deviceSerial, 'STICK');
     expect(book.isDir, isFalse);
     expect(book.modifiedAt!.toUtc(), DateTime.utc(2026));
   });

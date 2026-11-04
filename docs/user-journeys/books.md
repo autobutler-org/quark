@@ -15,12 +15,13 @@ Files uses (#1678).
 
 **Expected result:**
 
-- Every `.pdf` and `.epub` under Files that the user can read is listed by file name, whatever folder it is in.
+- Every `.pdf` and `.epub` the user can read is listed by file name, whatever folder it is in and whichever
+  drive it is on, the internal drive and each attached drive.
 - Each row shows the file name, and under it the folder it is in and its size.
 - The app bar's refresh button, beside the brand button, fetches the list again.
 
-**Notes:** The list is `GET /api/v0/books`, which walks the internal drive only: a book on an attached drive is not
-listed. A file the user cannot read is left out. Rows are keyed `book_tile_<path>`.
+**Notes:** The list is `GET /api/v0/books`. A file the user cannot read is left out, per drive. Rows on the
+internal drive are keyed `book_tile_<path>`; a row on another drive is `book_tile_<serial>_<path>`.
 
 ---
 
@@ -35,12 +36,12 @@ listed. A file the user cannot read is left out. Rows are keyed `book_tile_<path
 
 **Expected result:**
 
-- The book opens at its `/view/<path>` URL (JN-FB-043): a `.pdf` in the PDF viewer (JN-FB-045), an `.epub` in the
-  generic viewer (JN-FB-019), which offers **Download** and, off web, **Open with…**.
+- The book opens at its `/view/<path>` URL (JN-FB-043), on the drive it is on: a `.pdf` in the PDF viewer
+  (JN-FB-045), an `.epub` in the generic viewer (JN-FB-019), which offers **Download** and, off web, **Open with…**.
 - Closing the viewer returns to `/books`, not to the book's folder in Files.
 
-**Notes:** The viewer's URL carries `?from=/books`. Opened without it — from Files, a pasted link — the viewer closes
-into the book's folder as before.
+**Notes:** The viewer's URL carries `?from=/books`, and `?serial=` when the book is on an attached drive. Opened
+without `from` — from Files, a pasted link — the viewer closes into the book's folder as before.
 
 ---
 
@@ -72,3 +73,23 @@ into the book's folder as before.
 - The page reads "Couldn't load your books." with a **Retry** button, and never shows the Quark's raw error.
 - With the Quark unreachable, the disconnected view shows instead, as on Slides.
 - Retry fetches the list again.
+
+---
+
+### JN-BK-005: An added PDF shows up
+
+**Preconditions:** User is logged in. Auto-refresh may be off.
+
+**Steps:**
+
+1. Add a `.pdf` or `.epub` in Files, on the internal drive or an attached drive.
+2. Open `/books`, or stay there if it is already open.
+
+**Expected result:**
+
+- The file appears in the list without waiting for the next poll and without a manual refresh, including when
+  auto-refresh is off.
+- Tapping it opens that file on the drive it was added to (JN-BK-002).
+
+**Notes:** An upload, move, delete or restore anywhere in Files refreshes the list. A file the user cannot read
+on that drive stays off it.
