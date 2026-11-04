@@ -1,3 +1,4 @@
+// cspell:ignore rewrap
 import 'dart:convert';
 
 import 'package:quark/models/account_keys.dart';
@@ -595,6 +596,16 @@ abstract final class Errors {
   static const String vaultNotLoginPassword =
       "That isn't your account password. The vault opens with the password "
       'you sign in with.';
+
+  /// Opening a vault restored onto new hardware with a password that is not
+  /// the one it was backed up with. Nothing is sent to the Quark.
+  static const String vaultWrongBackupPassword =
+      "That isn't the password this vault was backed up with.";
+
+  /// The sign-in password offered when wrapping a restored vault again, which
+  /// the Quark refused, or which was left blank. The stored vault is unchanged.
+  static const String vaultRewrapWrongPassword =
+      "That isn't the password you sign in with. Your vault was not changed.";
 
   /// An import file over `VaultConfig.maxImportBytes`.
   static const String vaultImportTooLarge =

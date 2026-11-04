@@ -74,6 +74,7 @@ void main() {
     ValueChanged<StorageDevice>? onSetRole,
     ValueChanged<StorageDevice>? onBackup,
     ValueChanged<StorageDevice>? onVerify,
+    ValueChanged<StorageDevice>? onRestore,
   }) async {
     setViewport(tester, const Size(1280, 800));
 
@@ -93,6 +94,7 @@ void main() {
             onSetRole: onSetRole,
             onBackup: onBackup,
             onVerify: onVerify,
+            onRestore: onRestore,
           ),
         ),
       ),
@@ -123,7 +125,13 @@ void main() {
 
     expect(find.text('Stick'), findsOneWidget);
     expect(find.text('Backups'), findsOneWidget);
-    for (final label in ['Mount', 'Set Role', 'Back Up', 'Verify']) {
+    for (final label in [
+      'Mount',
+      'Set Role',
+      'Back Up',
+      'Verify',
+      'Restore vaults',
+    ]) {
       expect(find.text(label), findsNothing, reason: '$label is offered');
     }
     expect(tester.takeException(), isNull);
@@ -151,5 +159,22 @@ void main() {
 
     expect(find.text('Built-in'), findsOneWidget);
     expect(find.text('Set Role'), findsNothing);
+  });
+
+  testWidgets('restore vaults is only on the snapshot-backup drive', (
+    tester,
+  ) async {
+    await pumpBody(
+      tester,
+      devices: const [builtIn, backupDrive],
+      onRestore: (_) {},
+    );
+
+    expect(find.text('Restore vaults'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('device_card_restore_USB2')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('device_card_restore_')), findsNothing);
   });
 }

@@ -1242,6 +1242,41 @@ class AuthService {
     }
   }
 
+  /// Stores [wrapped], a vault key wrapped again under the password the
+  /// account already signs in with, without changing that password (#3664).
+  ///
+  /// `PUT /auth/password` carries [authKey] as both `password` and
+  /// `newAuthKey`, and [wrapped] as `vaultKey`. No chat keys go with it.
+  /// Other sessions of the account are signed out, as any call to that route
+  /// does; this session stays. [VaultService.putKey] cannot do this: it
+  /// refuses a key that exists.
+  ///
+  /// A 204 stores it. A 403, an auth key that is not the account's, throws
+  /// [ApiException] with that status. The caller decides what to tell the user.
+  static Future<void> replaceVaultKeyWrap(
+    WrappedVaultKey wrapped,
+    String authKey,
+  ) async {
+    final session = await _sessionAccount();
+    final response = await authHttpClientFactory()
+        .put(
+          _baseUri.resolve('/api/v0/auth/password'),
+          headers: {
+            'Authorization': ?session.authorization,
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'password': authKey,
+            'newAuthKey': authKey,
+            'vaultKey': wrapped.toJson(),
+          }),
+        )
+        .timeout(kAuthRequestTimeout);
+    if (response.statusCode == 401) throw const UnauthorizedException();
+    if (response.statusCode == 403) throw const ApiException(403);
+    throwUnlessOk(response, 'store the vault key', serverText: false);
+  }
+
   /// The `Authorization` header value for the stored session, null when the
   /// request carries none: signed out, or a cookie session.
   static String? get _authorization {

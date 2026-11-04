@@ -1232,9 +1232,8 @@ final List<GalleryEntry> registry = [
               SizedBox(
                 height: 200,
                 child: MediaQuery(
-                  data: MediaQuery.of(
-                    context,
-                  ).copyWith(disableAnimations: true),
+                  data: MediaQuery.of(context)
+                      .copyWith(disableAnimations: true),
                   child: view,
                 ),
               ),
@@ -3000,8 +2999,7 @@ final List<GalleryEntry> registry = [
     group: 'System',
     build: (context, log) => DataProtectionStatusCard(
       level: DataProtectionLevel.basic,
-      sentence:
-          'Your files are on 2 drives. Add a second backup drive and keep it somewhere else.',
+      sentence: 'Your files are on 2 drives. Add a second backup drive and keep it somewhere else.',
       drives: [
         DataProtectionDrive(
           id: 'usb-1',
@@ -3356,7 +3354,7 @@ final List<GalleryEntry> registry = [
         error: "That password doesn't unlock your vault.",
         secondaryLabel: 'Start over',
         onSecondary: () => log('VaultPasswordForm.onSecondary'),
-        onSubmit: (password, _) =>
+        onSubmit: (password, _, [_ = '']) =>
             log('VaultPasswordForm.onSubmit(${password.length} chars)'),
       ),
     ),

@@ -1,3 +1,4 @@
+// cspell:ignore rewrap
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -47,7 +48,12 @@ enum VaultStatus {
 /// recovery phrase too when the user typed it at setup; otherwise the
 /// account's next recovery phrase rotation adds that wrap. [unlock]
 /// re-derives that key from the login password: there is no separate vault
-/// password. Every item is encrypted and decrypted here
+/// password. A vault restored onto new hardware has a password wrap whose
+/// salt is not this account's auth salt. It opens with the password it was
+/// backed up with, and [unlock] then wraps it again under the password the
+/// account signs in with now and stores that wrap. A `vault_changed` reload
+/// that brings back a matching salt clears that case, because [load]
+/// refreshes both. Every item is encrypted and decrypted here
 /// ([AccountCrypto.encryptVaultItem]), and search, folder filtering and URL
 /// matching run over the decrypted items in memory.
 ///
@@ -65,6 +71,7 @@ class VaultController extends ChangeNotifier {
     Future<WrappedVaultKey?> Function()? fetchKey,
     Future<void> Function(WrappedVaultKey key, String authKey)? putKey,
     Future<void> Function(String authKey)? deleteVault,
+    Future<void> Function(WrappedVaultKey key, String authKey)? replaceVaultKey,
     Future<List<VaultCiphertext>> Function()? listItems,
     Future<VaultCiphertext> Function(VaultCiphertext item)? createItem,
     Future<void> Function(int id, VaultCiphertext item)? updateItem,
@@ -78,6 +85,7 @@ class VaultController extends ChangeNotifier {
        _fetchKey = fetchKey ?? VaultService.fetchKey,
        _putKey = putKey ?? VaultService.putKey,
        _deleteVault = deleteVault ?? VaultService.deleteVault,
+       _replaceVaultKey = replaceVaultKey ?? AuthService.replaceVaultKeyWrap,
        _listItems = listItems ?? VaultService.listItems,
        _createItem = createItem ?? VaultService.createItem,
        _updateItem = updateItem ?? VaultService.updateItem,
@@ -97,6 +105,12 @@ class VaultController extends ChangeNotifier {
   final Future<WrappedVaultKey?> Function() _fetchKey;
   final Future<void> Function(WrappedVaultKey key, String authKey) _putKey;
   final Future<void> Function(String authKey) _deleteVault;
+
+  /// `PUT /auth/password` with the sign-in auth key as both passwords and a
+  /// vault key wrapped again under that password. Not [VaultService.putKey],
+  /// which refuses a key that already exists.
+  final Future<void> Function(WrappedVaultKey key, String authKey)
+  _replaceVaultKey;
   final Future<List<VaultCiphertext>> Function() _listItems;
   final Future<VaultCiphertext> Function(VaultCiphertext item) _createItem;
   final Future<void> Function(int id, VaultCiphertext item) _updateItem;
@@ -116,6 +130,9 @@ class VaultController extends ChangeNotifier {
   Timer? _autoLock;
   bool _checked = false;
   WrappedVaultKey? _stored;
+
+  /// A copy of the account's auth salt from the last [load] or [setUp].
+  Uint8List? _accountSalt;
   SecureKey? _key;
   List<VaultItem> _items = const [];
   Object? _error;
@@ -140,6 +157,17 @@ class VaultController extends ChangeNotifier {
 
   /// Why the last [setUp] or [unlock] failed, for `Errors.message`.
   Object? get formError => _formError;
+
+  /// Whether this vault was restored onto new hardware. False when there is
+  /// no stored key, or when its password wrap's salt matches the account's
+  /// auth salt: the login password opens it. True when the salts differ, so
+  /// it opens with the password it was backed up with.
+  bool get opensWithBackupPassword {
+    final stored = _stored;
+    final salt = _accountSalt;
+    if (stored == null || salt == null) return false;
+    return !listEquals(stored.byPassword.salt, salt);
+  }
 
   /// The search text the entries are filtered by.
   String get query => _query;
@@ -242,7 +270,14 @@ class VaultController extends ChangeNotifier {
     );
     try {
       final stored = await _fetchKey();
+      // An account with no vault does not need the salt. setUp asks for it,
+      // and a salt the Quark will not give must not turn "set up your vault"
+      // into a load error.
+      final salt = stored == null
+          ? null
+          : Uint8List.fromList(await _authSalt());
       _stored = stored;
+      _accountSalt = salt;
       _checked = true;
       if (stored == null) {
         _forget();
@@ -276,6 +311,7 @@ class VaultController extends ChangeNotifier {
       _runForm(() async {
         final crypto = await _cryptoLoaded();
         final salt = await _authSalt();
+        _accountSalt = Uint8List.fromList(salt);
         final key = crypto.generateVaultKey();
         try {
           final withPhrase = phrase.trim().isNotEmpty;
@@ -316,34 +352,51 @@ class VaultController extends ChangeNotifier {
         _adopt(key, const []);
       });
 
-  /// Opens the vault with [password], the login password. A wrong one sets
+  /// Opens the vault with [password].
+  ///
+  /// When the stored wrap's salt is the account's auth salt, [password] is
+  /// the login password and [loginPassword] is ignored. A wrong one sets
   /// [formError] to a [MessageException] carrying [Errors.vaultWrongPassword].
-  Future<void> unlock(String password) => _runForm(() async {
-    final stored = _stored;
-    if (stored == null) return;
-    final crypto = await _cryptoLoaded();
-    final keys = crypto.deriveAuthKeys(
-      password,
-      stored.byPassword.salt,
-      stored.kdfParams,
-    );
-    final SecureKey key;
-    try {
-      key = crypto.unwrapVaultKey(
-        stored.byPassword,
-        keys.vaultWrapKey,
-        wrongSecret: Errors.vaultWrongPassword,
-      );
-    } finally {
-      keys.dispose();
-    }
-    _adopt(key, const []);
-    try {
-      await _fetchItems();
-    } catch (e) {
-      _error = e;
-    }
-  });
+  ///
+  /// When the salts differ, the vault was restored onto new hardware.
+  /// [password] is the one it was backed up with, and [loginPassword] is the
+  /// one the account signs in with now. The key is wrapped again under that
+  /// password and stored. A wrong backup password, or a sign-in password the
+  /// Quark refuses, sets [formError] and leaves the vault locked.
+  Future<void> unlock(String password, {String loginPassword = ''}) =>
+      _runForm(() async {
+        final stored = _stored;
+        if (stored == null) return;
+        final crypto = await _cryptoLoaded();
+        final accountSalt = _accountSalt;
+        if (accountSalt != null &&
+            !listEquals(stored.byPassword.salt, accountSalt)) {
+          await _unlockRestored(
+            crypto,
+            stored,
+            accountSalt,
+            password,
+            loginPassword,
+          );
+          return;
+        }
+        final keys = crypto.deriveAuthKeys(
+          password,
+          stored.byPassword.salt,
+          stored.kdfParams,
+        );
+        final SecureKey key;
+        try {
+          key = crypto.unwrapVaultKey(
+            stored.byPassword,
+            keys.vaultWrapKey,
+            wrongSecret: Errors.vaultWrongPassword,
+          );
+        } finally {
+          keys.dispose();
+        }
+        await _finishUnlock(key);
+      });
 
   /// Forgets the vault key and every decrypted item.
   void lock() {
@@ -615,9 +668,114 @@ class VaultController extends ChangeNotifier {
     _forget();
     _checked = false;
     _stored = null;
+    _accountSalt = null;
     _error = null;
     _formError = null;
     notifyListeners();
+  }
+
+  /// Opens a restored vault: [password] over the stored salt, then a new
+  /// password wrap under [loginPassword] and [accountSalt].
+  Future<void> _unlockRestored(
+    AccountCrypto crypto,
+    WrappedVaultKey stored,
+    Uint8List accountSalt,
+    String password,
+    String loginPassword,
+  ) async {
+    final opening = crypto.deriveAuthKeys(
+      password,
+      stored.byPassword.salt,
+      stored.kdfParams,
+    );
+    final SecureKey key;
+    try {
+      key = crypto.unwrapVaultKey(
+        stored.byPassword,
+        opening.vaultWrapKey,
+        wrongSecret: Errors.vaultWrongBackupPassword,
+      );
+    } finally {
+      opening.dispose();
+    }
+
+    var opened = false;
+    try {
+      if (loginPassword.isEmpty) {
+        throw const MessageException(Errors.vaultRewrapWrongPassword);
+      }
+      final wrapped = _wrapForLogin(
+        crypto,
+        key,
+        stored,
+        accountSalt,
+        loginPassword,
+      );
+      try {
+        await _replaceVaultKey(wrapped.wrapped, wrapped.authKey);
+      } on ApiException catch (e) {
+        if (e.statusCode == 403) {
+          throw const MessageException(Errors.vaultRewrapWrongPassword);
+        }
+        rethrow;
+      }
+      _stored = wrapped.wrapped;
+      await _finishUnlock(key);
+      opened = true;
+    } finally {
+      if (!opened) key.dispose();
+    }
+  }
+
+  /// [key] wrapped under [loginPassword] over [accountSalt], keeping the
+  /// stored phrase wrap. The auth key is the one the account signs in with,
+  /// derived at [kdfParams], which is the same run when [next] has that cost.
+  ({WrappedVaultKey wrapped, String authKey}) _wrapForLogin(
+    AccountCrypto crypto,
+    SecureKey key,
+    WrappedVaultKey stored,
+    Uint8List accountSalt,
+    String loginPassword,
+  ) {
+    final next = stored.kdfParams.atLeast(kdfParams);
+    final wrapKeys = crypto.deriveAuthKeys(loginPassword, accountSalt, next);
+    try {
+      final sameCost =
+          next.opsLimit == kdfParams.opsLimit &&
+          next.memLimit == kdfParams.memLimit;
+      final authKeys = sameCost
+          ? wrapKeys
+          : crypto.deriveAuthKeys(loginPassword, accountSalt, kdfParams);
+      try {
+        return (
+          wrapped: WrappedVaultKey(
+            byPassword: crypto.wrapVaultKey(
+              key,
+              wrapKeys.vaultWrapKey,
+              accountSalt,
+            ),
+            byPhrase: stored.byPhrase,
+            kdfParams: next,
+          ),
+          authKey: authKeys.authKey,
+        );
+      } finally {
+        if (!identical(authKeys, wrapKeys)) authKeys.dispose();
+      }
+    } finally {
+      wrapKeys.dispose();
+    }
+  }
+
+  /// Takes ownership of [key] and reads the items, as [unlock] does once the
+  /// key is open. A failed read is [error]; the vault stays open.
+  Future<void> _finishUnlock(SecureKey key) async {
+    _adopt(key, const []);
+    try {
+      await _fetchItems();
+    } catch (e) {
+      _error = e;
+    }
   }
 
   /// The signed-in account's auth salt, which the vault key's password wrap

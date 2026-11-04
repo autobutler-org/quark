@@ -1,3 +1,4 @@
+// cspell:ignore rewrap
 import 'dart:async';
 import 'dart:convert';
 
@@ -80,6 +81,7 @@ void main() {
       loadCrypto: () async => crypto,
       fetchKey: () async =>
           fail ? throw const ApiException(500) : server.fetchKey(),
+      authSalt: () async => fakeVaultSalt,
       events: events.stream,
     );
     addTearDown(c.dispose);
@@ -620,5 +622,138 @@ void main() {
       expect(c.entries.single.data.password, 'pw');
       expect(c.folderNameOf(c.entries.single.data.folderId), 'Work');
     });
+  });
+
+  group('a vault restored onto new hardware', () {
+    const oldPassword = 'the password at backup time';
+    const loginPassword = 'the password signed in with now';
+    const phrase = 'Apple-Bread-Cloud-Delta';
+    final oldSalt = Uint8List.fromList(List.generate(16, (i) => i + 1));
+    final newSalt = Uint8List.fromList(List.generate(16, (i) => i + 50));
+
+    /// A vault set up under [salt]. [useSalt] is what the next [load] reads.
+    Future<
+      ({VaultController controller, void Function(Uint8List salt) useSalt})
+    >
+    setUpUnder(Uint8List salt) async {
+      var current = salt;
+      final c = server.controller(
+        crypto,
+        authSalt: () async => current,
+        events: events.stream,
+      );
+      addTearDown(c.dispose);
+      await c.load();
+      await c.setUp(oldPassword, phrase: phrase);
+      return (
+        controller: c,
+        useSalt: (next) {
+          current = next;
+        },
+      );
+    }
+
+    test(
+      'opens with the backup password, then with the sign-in password',
+      () async {
+        final rig = await setUpUnder(oldSalt);
+        final c = rig.controller;
+        final phraseWrap = server.key!.byPhrase!;
+        final phraseBytes = phraseWrap.wrapped;
+        final phraseSalt = phraseWrap.salt;
+        c.lock();
+        rig.useSalt(newSalt);
+
+        await c.load();
+        expect(c.opensWithBackupPassword, isTrue);
+        expect(c.status, VaultStatus.locked);
+
+        final before = server.sent.length;
+        await c.unlock('not the backup password', loginPassword: loginPassword);
+        expect(c.status, VaultStatus.locked);
+        expect(server.sent, hasLength(before));
+        expect(
+          c.formError,
+          isA<MessageException>().having(
+            (e) => e.message,
+            'message',
+            Errors.vaultWrongBackupPassword,
+          ),
+        );
+
+        final login = crypto.deriveAuthKeys(loginPassword, newSalt, cheapKdf);
+        addTearDown(login.dispose);
+        server.loginAuthKey = login.authKey;
+
+        await c.unlock(oldPassword, loginPassword: loginPassword);
+
+        expect(c.formError, isNull);
+        expect(c.status, VaultStatus.unlocked);
+        expect(server.key!.byPhrase!.wrapped, same(phraseBytes));
+        expect(server.key!.byPhrase!.salt, same(phraseSalt));
+        expect(listEquals(server.key!.byPassword.salt, newSalt), isTrue);
+        final body = jsonDecode(server.sent.last) as Map<String, dynamic>;
+        expect(body['password'], login.authKey);
+        expect(body['newAuthKey'], login.authKey);
+        expect(body.containsKey('chatKeys'), isFalse);
+        final opened = crypto.unwrapVaultKey(
+          server.key!.byPassword,
+          login.vaultWrapKey,
+          wrongSecret: 'x',
+        );
+        addTearDown(opened.dispose);
+        expect(
+          server.sent.last,
+          isNot(contains(base64Encode(opened.extractBytes()))),
+        );
+        expect(server.sent.last, isNot(contains(oldPassword)));
+        expect(server.sent.last, isNot(contains(loginPassword)));
+
+        c.lock();
+        expect(c.opensWithBackupPassword, isFalse);
+        await c.unlock(loginPassword);
+        expect(c.status, VaultStatus.unlocked);
+
+        c.lock();
+        await c.unlock(oldPassword);
+        expect(c.status, VaultStatus.locked);
+        expect(
+          c.formError,
+          isA<MessageException>().having(
+            (e) => e.message,
+            'message',
+            Errors.vaultWrongPassword,
+          ),
+        );
+      },
+    );
+
+    test(
+      'a wrong sign-in password is refused and the vault stays locked',
+      () async {
+        final rig = await setUpUnder(oldSalt);
+        final c = rig.controller;
+        c.lock();
+        rig.useSalt(newSalt);
+        await c.load();
+        final before = jsonEncode(server.key!.toJson());
+        final login = crypto.deriveAuthKeys(loginPassword, newSalt, cheapKdf);
+        addTearDown(login.dispose);
+        server.loginAuthKey = login.authKey;
+
+        await c.unlock(oldPassword, loginPassword: 'not the sign-in password');
+
+        expect(c.status, VaultStatus.locked);
+        expect(jsonEncode(server.key!.toJson()), before);
+        expect(
+          c.formError,
+          isA<MessageException>().having(
+            (e) => e.message,
+            'message',
+            Errors.vaultRewrapWrongPassword,
+          ),
+        );
+      },
+    );
   });
 }

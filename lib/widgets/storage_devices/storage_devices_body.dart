@@ -11,7 +11,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// the backup progress card on top.
 ///
 /// [header] is drawn above that list. [protectionBadge] is drawn on the first
-/// snapshot-backup drive.
+/// snapshot-backup drive. [onRestore], like backup and verify, is drawn only
+/// on a drive with the snapshot-backup role, and only when the page passes it.
 class StorageDevicesBody extends StatelessWidget {
   const StorageDevicesBody({
     required this.devices,
@@ -26,6 +27,7 @@ class StorageDevicesBody extends StatelessWidget {
     this.onSetRole,
     this.onBackup,
     this.onVerify,
+    this.onRestore,
     this.onEject,
     this.ejecting = const {},
     this.header,
@@ -54,6 +56,10 @@ class StorageDevicesBody extends StatelessWidget {
   final ValueChanged<StorageDevice>? onSetRole;
   final ValueChanged<StorageDevice>? onBackup;
   final ValueChanged<StorageDevice>? onVerify;
+
+  /// Restores vaults from a snapshot-backup drive. Null draws no button, and
+  /// a drive with any other role draws none either.
+  final ValueChanged<StorageDevice>? onRestore;
   final ValueChanged<StorageDevice>? onEject;
 
   /// Serials whose eject is in progress.
@@ -107,6 +113,7 @@ class StorageDevicesBody extends StatelessWidget {
     final onSetRole = this.onSetRole;
     final onBackup = this.onBackup;
     final onVerify = this.onVerify;
+    final onRestore = this.onRestore;
     final onEject = this.onEject;
     final protectionBadge = this.protectionBadge;
     var badgePlaced = false;
@@ -130,6 +137,9 @@ class StorageDevicesBody extends StatelessWidget {
               : null,
           onVerify: onVerify != null && isBackupDrive
               ? () => onVerify(device)
+              : null,
+          onRestore: onRestore != null && isBackupDrive
+              ? () => onRestore(device)
               : null,
           onEject: onEject != null && isUsb ? () => onEject(device) : null,
           isEjecting: ejecting.contains(device.serial),
