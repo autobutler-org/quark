@@ -377,19 +377,25 @@ the vault (JN-VT-020).
 ### JN-VT-019: Restore the vault from a backup drive
 
 **Preconditions:** The Quark runs on SQLite, and a snapshot backup (JN-SD-008) on an attached drive holds
-`vault_items_backup.db`. No account on this Quark has a vault item, and every account whose vault is in the backup
-has an account here of the same username, letter for letter. The caller is an admin.
+`vault_items_backup.db`, and the drive has the `snapshot-backup` role. No account on this Quark has a vault item, no
+account whose vault is in the backup has a vault key here, and every account whose vault is in the backup has an
+account here of the same username, letter for letter. The caller is an admin.
 
 **Steps:**
 
-1. The admin calls `POST /api/v0/storage/devices/snapshot-backup/restore-vault` with the drive's `deviceSerial`.
+1. The admin calls `POST /api/v0/storage/devices/snapshot-backup/restore-vault` with the drive's `deviceSerial` and
+   `password`, the auth key of the admin's own login password.
 2. Each account opens the vault page and unlocks it with the password it had when the backup was taken.
 
 **Expected:** Every backed-up vault comes back under its account, its items as they were. The answer counts the
 accounts and items and names, in `backupPasswordAccounts`, every account whose vault opens with its backup-time
 password rather than the one it signs in with now, which is every account after a move to new hardware. A vault
-already holding items is a 409 and nothing changes. A backed-up vault with no account of its username is a 409
-naming the usernames, and nothing changes. There is no page for this yet: the app's restore flow is still to come.
+already holding items is a 409 and nothing changes. An account that already has a vault key, even an empty vault, is
+a 409 naming it, and nothing changes: the account deletes its empty vault first. A backed-up vault with no account of
+its username is a 409 naming the usernames, and nothing changes. A backed-up key or item this Quark would refuse from
+the app is a 400 naming the account, and nothing changes. A drive without the `snapshot-backup` role is a 400. A
+wrong password is a 403. Every restored account's open sessions get `vault_changed`, and the restore is written to
+the server log. There is no page for this yet: the app's restore flow is still to come.
 
 The old `POST /api/v0/vault/import-backup` is gone (#3460), and a `vault_backup.db` from an older snapshot cannot be
 restored.

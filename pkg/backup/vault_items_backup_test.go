@@ -1,3 +1,5 @@
+// cspell:ignore zeroblob
+
 package backup
 
 import (
@@ -7,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -74,8 +77,8 @@ func seedVault(t *testing.T, d *sql.DB, owners ...vaultOwner) {
 		wrapped, wrapNonce := seal(t, owner.wrapKey, vaultKey)
 		chatExec(t, d, `
 			INSERT INTO vault_keys (user_id, wrapped_by_password, salt_pw, kdf_params)
-			SELECT id, ?, ?, '{"alg":"argon2id"}' FROM users WHERE username = ?`,
-			append(wrapNonce, wrapped...), randomBytes(t, 16), owner.username)
+			SELECT id, ?, ?, ? FROM users WHERE username = ?`,
+			append(wrapNonce, wrapped...), randomBytes(t, 16), validKdfParams, owner.username)
 		for _, item := range owner.items {
 			ciphertext, nonce := seal(t, vaultKey, []byte(item))
 			chatExec(t, d, `
@@ -85,6 +88,9 @@ func seedVault(t *testing.T, d *sql.DB, owners ...vaultOwner) {
 		}
 	}
 }
+
+// validKdfParams is a cost vaultutil.ValidateKey accepts.
+const validKdfParams = `{"alg":"argon2id13","opsLimit":3,"memLimit":67108864}`
 
 // dumpVault reads every vault row but those of the account named except,
 // naming each row's account by username, so a restore that moved an account
@@ -126,26 +132,31 @@ func TestVaultBackup_RoundTripDecryptsWithTheOwnersKey(t *testing.T) {
 	// is named, and does not hold the restore up.
 	addChatUsers(t, source, "alice", "bob", "carol")
 	seedVault(t, source, alice, bob)
-	chatExec(t, source, `UPDATE vault_keys SET wrapped_by_phrase = ?, salt_rp = ? WHERE user_id = 1`, []byte("alice-phrase"), []byte("alice-rp"))
+	chatExec(t, source, `UPDATE vault_keys SET wrapped_by_phrase = ?, salt_rp = ? WHERE user_id = 1`, []byte("alice-phrase"), randomBytes(t, 16))
 	want := dumpVault(t, source, "")
 	dir := exportVault(t, source)
 	sumBefore := fileChecksum(t, filepath.Join(dir, backupVaultFilename))
 
 	// The new install numbered its accounts differently, has no carol, and
-	// bob's first sign-in already made him a vault key of his own.
+	// dave, whom the backup does not know, has a vault key of his own.
 	live := dbtest.NewDB(t).Db
-	addChatUsers(t, live, "bob", "alice")
-	seedVault(t, live, vaultOwner{username: "bob", wrapKey: randomBytes(t, chacha20poly1305.KeySize)})
+	addChatUsers(t, live, "bob", "dave", "alice")
+	seedVault(t, live, vaultOwner{username: "dave", wrapKey: randomBytes(t, chacha20poly1305.KeySize)})
+	want["vault_keys"] = append(want["vault_keys"], dumpVault(t, live, "")["vault_keys"]...)
+	slices.Sort(want["vault_keys"])
 
 	result, err := ImportVault(ctx, live, dir)
 	if err != nil {
 		t.Fatalf("ImportVault: %v", err)
 	}
-	if result.Accounts != 2 || result.Items != 3 || !slices.Equal(result.UnmatchedUsers, []string{"carol"}) {
-		t.Errorf("result = %+v, want 2 accounts, 3 items, carol unmatched", result)
+	if result.Accounts != 2 || result.Items != 3 || !slices.Equal(result.UnmatchedUsers, []string{"carol"}) ||
+		!slices.Equal(result.RestoredAccounts, []string{"alice", "bob"}) || len(result.RestoredUserIDs) != 2 {
+		t.Errorf("result = %+v, want 2 accounts, 3 items, carol unmatched, alice and bob restored", result)
 	}
 
-	if got := dumpVault(t, live, ""); !reflect.DeepEqual(got, want) {
+	got := dumpVault(t, live, "")
+	slices.Sort(got["vault_keys"])
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("vault after restore\n got %v\nwant %v", got, want)
 	}
 
@@ -310,8 +321,8 @@ func TestImportVault_RefusesAVaultWithNoAccountOfItsUsername(t *testing.T) {
 
 	live := dbtest.NewDB(t).Db
 	addChatUsers(t, live, "alice", "Carol")
-	// alice already signed in here and made a key, which a refused restore keeps.
-	seedVault(t, live, vaultOwner{username: "alice", wrapKey: randomBytes(t, 32)})
+	// Carol made a key here, which a refused restore keeps.
+	seedVault(t, live, vaultOwner{username: "Carol", wrapKey: randomBytes(t, 32)})
 	before := dumpVault(t, live, "")
 
 	_, err := ImportVault(context.Background(), live, dir)
@@ -343,9 +354,24 @@ func TestRestoreVault_ReadsTheBackupDrive(t *testing.T) {
 		}
 	}
 
-	live := dbtest.NewDB(t).Db
+	liveDB := dbtest.NewDB(t)
+	live := liveDB.Db
 	addChatUsers(t, live, "alice")
-	result, err := RestoreVault(RestoreVaultParams{Ctx: context.Background(), LiveDB: live, Registry: reg, DeviceSerial: "BACKUP-1"})
+	params := RestoreVaultParams{Ctx: context.Background(), LiveDB: live, Queries: liveDB.Queries, Registry: reg, DeviceSerial: "BACKUP-1"}
+
+	// A drive holding the file is not enough: it must be the snapshots' drive.
+	for _, role := range []string{"", "unassigned", "default-storage"} {
+		if role != "" {
+			chatExec(t, live, `INSERT OR REPLACE INTO device_roles (device_serial, role) VALUES ('BACKUP-1', ?)`, role)
+		}
+		if _, err := RestoreVault(params); !errors.Is(err, ErrVaultRestoreRoleRequired) {
+			t.Errorf("RestoreVault from a drive with role %q = %v, want ErrVaultRestoreRoleRequired", role, err)
+		}
+	}
+	assertRows(t, live, `SELECT COUNT(*) FROM vault_keys`, "[0]")
+
+	chatExec(t, live, `INSERT OR REPLACE INTO device_roles (device_serial, role) VALUES ('BACKUP-1', 'snapshot-backup')`)
+	result, err := RestoreVault(params)
 	if err != nil {
 		t.Fatalf("RestoreVault: %v", err)
 	}
@@ -354,7 +380,103 @@ func TestRestoreVault_ReadsTheBackupDrive(t *testing.T) {
 	}
 
 	var notFound *fileutil.NotFoundError
-	if _, err := RestoreVault(RestoreVaultParams{Ctx: context.Background(), LiveDB: live, Registry: reg, DeviceSerial: "GONE"}); !errors.As(err, &notFound) {
+	params.DeviceSerial = "GONE"
+	if _, err := RestoreVault(params); !errors.As(err, &notFound) {
 		t.Errorf("RestoreVault from a drive that is not attached = %v, want *fileutil.NotFoundError", err)
+	}
+}
+
+// A restore never replaces a vault key (quark-project#267). An account the
+// backup has a vault for that already has a key here refuses the whole
+// restore, naming every such account, and nothing changes: a session open on
+// it would otherwise go on sealing items under a key that is gone.
+func TestImportVault_RefusesAnAccountThatHasAVaultKey(t *testing.T) {
+	source := dbtest.NewDB(t).Db
+	addChatUsers(t, source, "alice", "bob", "carol")
+	seedVault(t, source,
+		vaultOwner{"alice", randomBytes(t, 32), []string{"a"}},
+		vaultOwner{"bob", randomBytes(t, 32), nil},
+		vaultOwner{"carol", randomBytes(t, 32), []string{"c"}})
+	dir := exportVault(t, source)
+
+	live := dbtest.NewDB(t).Db
+	addChatUsers(t, live, "carol", "bob", "alice")
+	// bob and carol signed in here and made keys, with no items yet.
+	seedVault(t, live,
+		vaultOwner{username: "bob", wrapKey: randomBytes(t, 32)},
+		vaultOwner{username: "carol", wrapKey: randomBytes(t, 32)})
+	before := dumpVault(t, live, "")
+
+	_, err := ImportVault(context.Background(), live, dir)
+	if !errors.Is(err, ErrVaultKeyExists) {
+		t.Fatalf("ImportVault = %v, want ErrVaultKeyExists", err)
+	}
+	if !strings.Contains(err.Error(), "(bob, carol)") {
+		t.Errorf("error %q does not name bob and carol", err)
+	}
+	if after := dumpVault(t, live, ""); !reflect.DeepEqual(after, before) {
+		t.Errorf("a refused restore changed the live vault\n got %v\nwant %v", after, before)
+	}
+}
+
+// Every backup key and item passes the checks an API write does
+// (vaultutil.ValidateKey, ValidateItem, #3648), or the whole restore is
+// refused naming the account and nothing changes.
+func TestImportVault_RefusesARowOutsideTheValidationBounds(t *testing.T) {
+	for _, tc := range []struct{ name, tamper string }{
+		{"kdf algorithm and cost out of bounds", `UPDATE vault_keys SET kdf_params = '{"alg":"x","opsLimit":4294967295,"memLimit":4398046511104}'`},
+		{"kdf cost under the floor", `UPDATE vault_keys SET kdf_params = '{"alg":"argon2id13","opsLimit":1,"memLimit":8192}'`},
+		{"kdf params not JSON", `UPDATE vault_keys SET kdf_params = 'nope'`},
+		{"1-byte password salt", `UPDATE vault_keys SET salt_pw = x'01'`},
+		{"empty password wrap", `UPDATE vault_keys SET wrapped_by_password = x''`},
+		{"oversized password wrap", `UPDATE vault_keys SET wrapped_by_password = zeroblob(513)`},
+		{"phrase wrap without its salt", `UPDATE vault_keys SET wrapped_by_phrase = x'0102'`},
+		{"empty item ciphertext", `UPDATE vault_items SET ciphertext = x''`},
+		{"oversized item ciphertext", `UPDATE vault_items SET ciphertext = zeroblob(1048577)`},
+		{"empty item nonce", `UPDATE vault_items SET nonce = x''`},
+		{"oversized item nonce", `UPDATE vault_items SET nonce = zeroblob(65)`},
+		{"format version 0", `UPDATE vault_items SET format_version = 0`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := dbtest.NewDB(t).Db
+			addChatUsers(t, source, "alice", "bob")
+			seedVault(t, source,
+				vaultOwner{"alice", randomBytes(t, 32), []string{"a"}},
+				vaultOwner{"bob", randomBytes(t, 32), []string{"b"}})
+			dir := exportVault(t, source)
+
+			backupDB, err := sql.Open("sqlite", db.DSN(filepath.Join(dir, backupVaultFilename)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			chatExec(t, backupDB, tc.tamper+` WHERE user_id = (SELECT id FROM users WHERE username = 'bob')`)
+			backupDB.Close()
+
+			live := dbtest.NewDB(t).Db
+			addChatUsers(t, live, "alice", "bob")
+			_, err = ImportVault(context.Background(), live, dir)
+			if !errors.Is(err, ErrVaultBackupInvalid) {
+				t.Fatalf("ImportVault = %v, want ErrVaultBackupInvalid", err)
+			}
+			if !strings.HasSuffix(err.Error(), "(bob)") {
+				t.Errorf("error %q does not name bob alone", err)
+			}
+			assertRows(t, live, `SELECT COUNT(*) FROM vault_keys`, "[0]")
+			assertRows(t, live, `SELECT COUNT(*) FROM vault_items`, "[0]")
+		})
+	}
+}
+
+// The refusal for a drive with no backup file says so without the drive's
+// mount path, which is the host's business, not the client's.
+func TestImportVault_MissingFileHidesTheHostPath(t *testing.T) {
+	live := dbtest.NewDB(t).Db
+	dir := t.TempDir()
+	_, err := ImportVault(context.Background(), live, dir)
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("ImportVault = %v, want fs.ErrNotExist", err)
+	}
+	if strings.Contains(err.Error(), dir) {
+		t.Errorf("error %q shows the host path %s", err, dir)
 	}
 }

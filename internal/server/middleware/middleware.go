@@ -41,6 +41,8 @@ var authRateLimitedPaths = map[string]bool{
 	"/api/v0/auth/recovery-key":      true,
 	"/api/v0/auth/password":          true,
 	"/api/v0/storage/devices/role":   true,
+	// POST is its only method, and it re-confirms the admin's password.
+	"/api/v0/storage/devices/snapshot-backup/restore-vault": true,
 }
 
 // authRateLimitedMethods are API paths whose one method re-confirms the

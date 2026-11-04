@@ -9853,7 +9853,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Restores the vault backup a snapshot wrote to the drive, each vault under the account of the same\nusername, letter for letter. Refused while any vault has items, and when a backed-up vault has no\naccount of its username here. backupPasswordAccounts names the accounts whose vault opens with the\npassword they had when the backup was taken, as every vault restored onto new hardware does.",
+                "description": "Re-confirms the caller with password, which carries the auth key of the admin's login password, exactly as DELETE /vault takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is restored. Shares the sign-in rate limit, and the body is at most 1 KiB.\nThen restores the vault backup a snapshot wrote to the drive, which must have the snapshot-backup role, each vault under the account of the same\nusername, letter for letter. Refused while any vault has items, when an account the backup has a vault for already has a vault key here (a restore never replaces one),\nwhen a backed-up vault has no account of its username here, and when a backed-up key or item would be refused as an API write. Every refusal names the accounts and changes nothing.\nrestoredAccounts names every account that got a vault back, and each is sent vault_changed. backupPasswordAccounts names the accounts whose vault opens with the\npassword they had when the backup was taken, as every vault restored onto new hardware does. Every attempt past the password check is written to the server log.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9866,12 +9866,12 @@ const docTemplate = `{
                 "summary": "Restore every account's vault from a snapshot backup",
                 "parameters": [
                     {
-                        "description": "{deviceSerial: string}",
+                        "description": "The backup drive and the admin's auth key",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/v0_storage.restoreSnapshotVaultBody"
                         }
                     }
                 ],
@@ -9883,7 +9883,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "bad request, or a backup this version cannot read",
+                        "description": "bad request, a drive without the snapshot-backup role, a backup this version cannot read, or a backed-up key or item this Quark does not accept",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "password is not the caller's auth key",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -9895,7 +9907,25 @@ const docTemplate = `{
                         }
                     },
                     "409": {
-                        "description": "a vault already has items, or a backed-up vault has no account",
+                        "description": "a vault already has items, an account already has a vault key, or a backed-up vault has no account",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "413": {
+                        "description": "a body over 1 KiB",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "426": {
+                        "description": "password is a raw password: the app is too old",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -12204,6 +12234,13 @@ const docTemplate = `{
                 },
                 "items": {
                     "type": "integer"
+                },
+                "restoredAccounts": {
+                    "description": "RestoredAccounts is the usernames, sorted, of every account here that\ngot a vault back.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "unmatchedUsers": {
                     "description": "UnmatchedUsers is the usernames in the backup with no account on this\nQuark, sorted. None of them had a vault: a backup vault with no account\nto go to refuses the restore ([ErrVaultAccountMissing]).",
@@ -15362,6 +15399,21 @@ const docTemplate = `{
                 },
                 "sentence": {
                     "description": "Sentence is one plain sentence describing that level.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_storage.restoreSnapshotVaultBody": {
+            "type": "object",
+            "required": [
+                "deviceSerial"
+            ],
+            "properties": {
+                "deviceSerial": {
+                    "type": "string"
+                },
+                "password": {
+                    "description": "Password is the standard base64 auth key of the admin's login\npassword, as DELETE /vault takes it.",
                     "type": "string"
                 }
             }

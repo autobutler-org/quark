@@ -7,6 +7,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -48,14 +49,31 @@ type ciphertextBackup struct {
 	// it never merges.
 	occupied    string
 	errOccupied error
-	// steps restore the rows, in the order the live foreign keys need.
+	// check, when set, runs on the restore's connection once
 	// temp.restore_users, the map from backup account ids to live ones, is
-	// made before the first.
+	// made and before the first step. An error refuses the restore, before
+	// any row is written.
+	check func(ctx context.Context, conn *sql.Conn) error
+	// steps restore the rows, in the order the live foreign keys need.
 	steps []restoreStep
 	// settle, when set, runs on the restore's connection after the last step,
-	// before the commit. An error refuses the restore and rolls it back; the
-	// usernames it returns come back as the restore's report.
-	settle func(ctx context.Context, conn *sql.Conn) ([]string, error)
+	// before the commit. An error refuses the restore and rolls it back; what
+	// it returns comes back as the restore's report.
+	settle func(ctx context.Context, conn *sql.Conn) (restoreReport, error)
+}
+
+// restoreReport is what a backup's settle reports about a restore.
+type restoreReport struct {
+	// named is the usernames the backup calls out to the caller.
+	named []string
+	// restored is the live accounts that got rows back.
+	restored []restoredAccount
+}
+
+// restoredAccount is one live account a restore wrote rows for.
+type restoredAccount struct {
+	userID   int64
+	username string
 }
 
 // restoreStep is one statement of a restore. name keys the rows it changed in
@@ -187,34 +205,42 @@ func (b ciphertextBackup) copyTables(ctx context.Context, liveDB *sql.DB, backup
 // The backup does not carry accounts, so every account a row names is looked
 // up by username on this Quark through temp.restore_users. A step treats an
 // account that is not here as the live schema treats a deleted one.
-func (b ciphertextBackup) restore(ctx context.Context, liveDB *sql.DB, backupDir string) (map[string]int64, []string, []string, error) {
+func (b ciphertextBackup) restore(ctx context.Context, liveDB *sql.DB, backupDir string) (map[string]int64, []string, restoreReport, error) {
 	if err := b.require(liveDB); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, restoreReport{}, err
 	}
 	dbPath, err := filepath.Abs(filepath.Join(backupDir, b.filename))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, restoreReport{}, err
 	}
 	// ATTACH would otherwise answer a missing file with a less helpful error.
+	// Only the cause goes out, never the *fs.PathError around it: its path is
+	// where the drive is mounted on the host, and that is no client's business.
 	if _, err := os.Stat(dbPath); err != nil {
-		return nil, nil, nil, fmt.Errorf("%s not found on device: %w", b.filename, err)
+		if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
+			err = pathErr.Err
+		}
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil, restoreReport{}, fmt.Errorf("%s not found on device: %w", b.filename, fs.ErrNotExist)
+		}
+		return nil, nil, restoreReport{}, fmt.Errorf("read %s on device: %w", b.filename, err)
 	}
 
 	// Read-only, so a restore can never change the file the manifest hashed.
 	backupURI := url.URL{Scheme: "file", Path: dbPath, RawQuery: "mode=ro"}
 	conn, err := b.attach(ctx, liveDB, backupURI.String())
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, restoreReport{}, err
 	}
 	// Also what rolls the transaction below back on every early return.
 	defer discardConn(conn)
 
 	var version int
 	if err := conn.QueryRowContext(ctx, `PRAGMA `+b.schema()+`.user_version`).Scan(&version); err != nil {
-		return nil, nil, nil, fmt.Errorf("read %s version: %w", b.filename, err)
+		return nil, nil, restoreReport{}, fmt.Errorf("read %s version: %w", b.filename, err)
 	}
 	if version != b.version {
-		return nil, nil, nil, fmt.Errorf("%w: the file is format %d, this Quark reads format %d",
+		return nil, nil, restoreReport{}, fmt.Errorf("%w: the file is format %d, this Quark reads format %d",
 			b.errVersion, version, b.version)
 	}
 
@@ -222,26 +248,34 @@ func (b ciphertextBackup) restore(ctx context.Context, liveDB *sql.DB, backupDir
 	// writes between the check and the delete that follows it.
 	// database/sql can only begin a deferred transaction, hence the Exec.
 	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
-		return nil, nil, nil, fmt.Errorf("begin %s restore: %w", b.filename, err)
+		return nil, nil, restoreReport{}, fmt.Errorf("begin %s restore: %w", b.filename, err)
 	}
 
 	var occupied bool
 	if err := conn.QueryRowContext(ctx, b.occupied).Scan(&occupied); err != nil {
-		return nil, nil, nil, fmt.Errorf("check live tables for %s: %w", b.filename, err)
+		return nil, nil, restoreReport{}, fmt.Errorf("check live tables for %s: %w", b.filename, err)
 	}
 	if occupied {
-		return nil, nil, nil, b.errOccupied
+		return nil, nil, restoreReport{}, b.errOccupied
 	}
 
-	steps := append([]restoreStep{{"map users", `
+	if _, err := conn.ExecContext(ctx, `
 		CREATE TEMP TABLE restore_users AS
 		SELECT b.id AS backup_id, l.id AS live_id
-		FROM ` + b.schema() + `.users AS b JOIN main.users AS l ON l.username = b.username`}}, b.steps...)
-	rows := make(map[string]int64, len(steps))
-	for _, step := range steps {
+		FROM `+b.schema()+`.users AS b JOIN main.users AS l ON l.username = b.username`); err != nil {
+		return nil, nil, restoreReport{}, fmt.Errorf("restore %s (map users): %w", b.filename, err)
+	}
+	if b.check != nil {
+		if err := b.check(ctx, conn); err != nil {
+			return nil, nil, restoreReport{}, err
+		}
+	}
+
+	rows := make(map[string]int64, len(b.steps))
+	for _, step := range b.steps {
 		res, err := conn.ExecContext(ctx, step.statement)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("restore %s (%s): %w", b.filename, step.name, err)
+			return nil, nil, restoreReport{}, fmt.Errorf("restore %s (%s): %w", b.filename, step.name, err)
 		}
 		// modernc's RowsAffected never fails.
 		rows[step.name], _ = res.RowsAffected()
@@ -249,17 +283,17 @@ func (b ciphertextBackup) restore(ctx context.Context, liveDB *sql.DB, backupDir
 
 	unmatched, err := b.unmatchedUsers(ctx, conn)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, restoreReport{}, err
 	}
-	var report []string
+	var report restoreReport
 	if b.settle != nil {
 		if report, err = b.settle(ctx, conn); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, restoreReport{}, err
 		}
 	}
 
 	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
-		return nil, nil, nil, fmt.Errorf("commit %s restore: %w", b.filename, err)
+		return nil, nil, restoreReport{}, fmt.Errorf("commit %s restore: %w", b.filename, err)
 	}
 	return rows, unmatched, report, nil
 }

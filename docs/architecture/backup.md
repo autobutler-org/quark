@@ -100,8 +100,11 @@ recovery password, which this build no longer reads.
 
 ## Restoring the vault
 
-An admin restores it with `POST /api/v0/storage/devices/snapshot-backup/restore-vault`, body `{"deviceSerial": ...}`,
-which `backup.RestoreVault` serves from the backup drive (#3614). `ImportVault` restores `vault_items_backup.db` in
+An admin restores it with `POST /api/v0/storage/devices/snapshot-backup/restore-vault`, body
+`{"deviceSerial": ..., "password": ...}`, which `backup.RestoreVault` serves from the backup drive (#3614). `password`
+is the admin's auth key, re-confirmed the way `DELETE /vault` does (#3615), and the route shares the sign-in rate limit.
+The drive must have the `snapshot-backup` role (`ErrVaultRestoreRoleRequired`, a 400): a restore reads only the drive
+snapshots are written to, never whatever attached drive holds a file of the right name. `ImportVault` restores `vault_items_backup.db` in
 one transaction, the way `ImportChat` restores the chat. A restore that is refused or fails changes nothing.
 
 - **It restores only while no account has a vault item** (`ErrVaultNotEmpty`, a 409).
@@ -112,8 +115,22 @@ one transaction, the way `ImportChat` restores the chat. A restore that is refus
   refused, and the skipped vault could never come back. An admin adds the accounts, with any password, and restores
   again; one nobody wants back can be deleted afterwards, which deletes its vault. A backup account with no vault
   and no account here only comes back in `UnmatchedUsers`.
-- A matched account's vault key replaces any its first sign-in on the new install made, and its items come back
-  byte for byte under their old ids.
+- **A vault key is never replaced** (quark-project#267). A backed-up vault whose account here already has a vault key,
+  even one with no items, refuses the whole restore (`ErrVaultKeyExists`, a 409 naming every such account). A session
+  open on that account would otherwise go on sealing items under a key that no longer exists. The account can delete
+  its empty vault (`DELETE /vault`) and the admin restores again. The insert is a plain `INSERT`, never `OR REPLACE`.
+- **Every backed-up row passes the checks an API write does.** Each key goes through `vaultutil.ValidateKey` (the
+  algorithm allowlist, the Argon2id floor and ceiling from #3648, 16-byte salts, wrap sizes) and each item through
+  `ValidateItem`, with its ciphertext at most `vaultutil.MaxItemRequestBytes`. Any failure refuses the whole restore
+  (`ErrVaultBackupInvalid`, a 400 naming the accounts).
+- A matched account's vault key and items come back byte for byte, the items under their old ids.
+- `restoredAccounts` names every account that got a vault back, and each is sent `vault_changed`. Every attempt
+  past the password check is written to the server log with the admin, the drive's serial, and the accounts and item
+  count, or the refusal.
+- A drive with no backup file is a 404 that names the file but not where the drive is mounted.
+
+The backup file itself is not authenticated: nothing proves that `vault_items_backup.db` is the one this household's
+snapshot wrote. Binding a backup to the Quark that wrote it is a follow-up (quark-project#267).
 
 **Which password opens a restored vault.** The wrapped key carries the salt it was derived over (`salt_pw`), and
 the app unlocks over that salt, so a restored vault opens with the password its account had when the backup was
