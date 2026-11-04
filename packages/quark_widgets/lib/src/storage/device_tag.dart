@@ -10,8 +10,10 @@ import '../theme/quark_tokens.dart';
 /// is drawn in [QuarkTokens.foreground] so it stays readable on every device
 /// color in every theme. The label is one line and ends in an ellipsis when
 /// the tag is squeezed, so a caller in a tight [Row] wraps it in a `Flexible`. A
-/// [Tooltip] shows [tooltip] on hover and on long-press. It is decoration, not
-/// a control, so it takes no callbacks.
+/// [Tooltip] shows [tooltip] on hover and on long-press, and stays out of the
+/// semantics tree: the tag already says [label], and a screen reader reads
+/// that full name even when the line is cut short (#3937). It is decoration,
+/// not a control, so it takes no callbacks.
 ///
 /// Key prefixes: the caller passes `ValueKey('device_tag_<serial>')`, with an
 /// empty serial (`device_tag_`) for the internal drive.
@@ -66,30 +68,38 @@ class DeviceTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
+    // Hover text only. In the semantics tree it merges into the row or tile
+    // and web reads it ahead of the file name (#3937). The tag already paints
+    // [label], and that full name is what is read when the line is cut short.
     return Tooltip(
       message: tooltip ?? label,
       triggerMode: TooltipTriggerMode.longPress,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.18),
-          border: Border.all(color: color),
-          borderRadius: BorderRadius.circular(tokens.radiusLg),
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: tokens.spacingSm,
-            vertical: 2,
+      excludeFromSemantics: true,
+      child: Semantics(
+        label: label,
+        excludeSemantics: true,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.18),
+            border: Border.all(color: color),
+            borderRadius: BorderRadius.circular(tokens.radiusLg),
           ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            softWrap: false,
-            style: TextStyle(
-              color: tokens.foreground,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              height: 1.3,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: tokens.spacingSm,
+              vertical: 2,
+            ),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: TextStyle(
+                color: tokens.foreground,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                height: 1.3,
+              ),
             ),
           ),
         ),
