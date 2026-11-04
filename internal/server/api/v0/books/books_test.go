@@ -103,6 +103,101 @@ func TestListBooks_WithEpub(t *testing.T) {
 	}
 }
 
+// serialUsb implements only GetSerial; any other call panics on the nil
+// embedded interface.
+type serialUsb struct {
+	storageutil.UsbDevice
+	serial string
+}
+
+func (u serialUsb) GetSerial() string { return u.serial }
+
+type driveDetector struct {
+	devices []storageutil.Device
+}
+
+func (d driveDetector) DetectDevices() ([]storageutil.Device, error) {
+	return d.devices, nil
+}
+
+// A PDF on a USB drive is a book too, and its entry names that drive. A
+// non-book on the same drive is not (#3712).
+func TestListBooks_SecondNamespace(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	internalFiles, err := storageutil.GetFilesDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(internalFiles, "shelf.pdf"), []byte("internal"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	usbMount := t.TempDir()
+	const serial = "STICK"
+	svc := storageutil.NewStorageService(driveDetector{devices: []storageutil.Device{
+		{Name: "Internal", MountPoint: "/", IsInternal: true},
+		{Name: "USB", MountPoint: usbMount, UsbInfo: serialUsb{serial: serial}},
+	}})
+	usbFiles, err := storageutil.GetFilesDirForDevice(usbMount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(usbFiles, "library"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(usbFiles, "library", "novel.epub"), []byte("usb"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(usbFiles, "notes.txt"), []byte("nope"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace(""))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: svc}); err != nil {
+		t.Fatal(err)
+	}
+
+	deps := deputil.NewDependencies().WithVFSRegistry(registry).WithStorageService(svc)
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", accessutil.System)
+		c.Next()
+	})
+	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_books.NewRouter())
+
+	w := doGet(engine, "/api/v0/books")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", w.Code, w.Body.String())
+	}
+	var books []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &books); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, book := range books {
+		path, _ := book["relPath"].(string)
+		drive, _ := book["deviceSerial"].(string)
+		got[path] = drive
+	}
+	want := map[string]string{
+		"shelf.pdf":          "",
+		"library/novel.epub": serial,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("books = %v, want %v", got, want)
+	}
+	for path, drive := range want {
+		if got[path] != drive {
+			t.Errorf("%s deviceSerial = %q, want %q", path, got[path], drive)
+		}
+	}
+}
+
 // A server with no internal files namespace is misconfigured: 500, not a panic.
 func TestListBooks_NoNamespace(t *testing.T) {
 	gin.SetMode(gin.TestMode)
