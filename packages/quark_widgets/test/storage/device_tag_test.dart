@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -101,5 +102,104 @@ void main() {
       DeviceTag.colorFor(context, ''),
       isNot(DeviceTag.colorFor(context, 'A')),
     );
+  });
+
+  // #3937 extends the #3645 guard: a tooltip on the tag must not become the
+  // name of a larger ancestor. The tag already paints its name.
+  testBothViewports('never lets its tooltip name a larger ancestor', (
+    tester,
+    size,
+  ) async {
+    final handle = tester.ensureSemantics();
+    const tooltip = 'Family archive drive';
+    const key = ValueKey('device_tag_A1B2');
+    await pumpAt(
+      tester,
+      const Center(
+        child: SizedBox(
+          width: 320,
+          height: 200,
+          child: MergeSemantics(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Trip 2026'),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: DeviceTag(
+                    key: key,
+                    label: 'Family',
+                    tooltip: tooltip,
+                    color: Color(0xFF0EA5E9),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      size: size,
+    );
+
+    final carriers = find.semantics
+        .byPredicate((node) {
+          return node.label.contains(tooltip) || node.tooltip.contains(tooltip);
+        })
+        .evaluate()
+        .toList();
+    expect(carriers, isEmpty, reason: 'the tooltip became a name');
+
+    final named = find.semantics
+        .byPredicate((node) => node.label.contains('Trip 2026'))
+        .evaluate()
+        .toList();
+    expect(named, hasLength(1));
+    final node = named.single;
+    expect(node.label, startsWith('Trip 2026'));
+    expect(node.label, contains('Family'));
+    expect(node.tooltip, isEmpty);
+    expect(node.rect.width, greaterThan(tester.getSize(find.byKey(key)).width));
+    handle.dispose();
+  });
+
+  // A squeezed tag paints an ellipsis. The accessible name is still the
+  // whole device, and it stays on the tag rather than a page-sized ancestor.
+  testBothViewports('reads the full name when the label is cut short', (
+    tester,
+    size,
+  ) async {
+    final handle = tester.ensureSemantics();
+    const label = 'Family archive drive';
+    const key = ValueKey('device_tag_A1B2');
+    await pumpAt(
+      tester,
+      const Align(
+        alignment: Alignment.centerLeft,
+        child: SizedBox(
+          width: 80,
+          child: DeviceTag(key: key, label: label, color: Color(0xFF10B981)),
+        ),
+      ),
+      size: size,
+    );
+
+    expect(tester.takeException(), isNull);
+    final paragraph = tester.renderObject<RenderParagraph>(find.text(label));
+    expect(paragraph.didExceedMaxLines, isTrue);
+
+    final carriers = find.semantics
+        .byPredicate((node) {
+          return node.label.contains(label) || node.tooltip.contains(label);
+        })
+        .evaluate()
+        .toList();
+    expect(carriers, hasLength(1), reason: label);
+    final node = carriers.single;
+    expect(node.label, label);
+    expect(node.tooltip, isEmpty);
+    final tagSize = tester.getSize(find.byKey(key));
+    expect(node.rect.width, lessThanOrEqualTo(tagSize.width));
+    expect(node.rect.height, lessThanOrEqualTo(tagSize.height));
+    handle.dispose();
   });
 }
