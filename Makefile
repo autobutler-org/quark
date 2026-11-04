@@ -1429,6 +1429,10 @@ test/unit: test/unit/backend test/unit/frontend ## Run unit tests
 # only for a target that reads it; pass BACKEND_UNIT_PACKAGES=<pkgs> to run fewer.
 BACKEND_UNIT_PACKAGES = $(shell $(GO) list ./... | grep -v '/internal/server/api/v0/' | grep -v '/test/chaos')
 
+# The phone tailnet library is its own Go module (#3637). `go` at the repo
+# root does not enter a nested module, so the targets below name it.
+TAILNET_FLUTTER_MOD := packages/tailnet_flutter
+
 .PHONY: test/unit/backend
 test/unit/backend: check/db internal/server/public/stub.txt ## Run unit tests for backend
 	# Generate coverage report for unit tests (excludes integration test packages)
@@ -1447,6 +1451,7 @@ test/unit/backend: check/db internal/server/public/stub.txt ## Run unit tests fo
 		$(GO) tool cover \
 			-func=coverage.out.ignored
 	fi
+	$(GO) -C $(TAILNET_FLUTTER_MOD) test ./...
 
 # A separate target rather than a flag on test/unit/backend: -race needs cgo and makes
 # the suite several times slower, so CI runs it as a job of its own beside the
@@ -1454,6 +1459,7 @@ test/unit/backend: check/db internal/server/public/stub.txt ## Run unit tests fo
 .PHONY: test/unit/backend/race
 test/unit/backend/race: check/db internal/server/public/stub.txt ## Run backend unit tests with the race detector
 	CGO_ENABLED=1 $(GO) test -race $(BACKEND_UNIT_PACKAGES)
+	CGO_ENABLED=1 $(GO) -C $(TAILNET_FLUTTER_MOD) test -race ./...
 
 # Test tuning. Each suite is a `flutter test` run, and each run spawns several
 # flutter_tester processes, so memory use is roughly FRONTEND_SUITE_JOBS x
@@ -1614,6 +1620,7 @@ endif
 .PHONY: tidy/go
 tidy/go: ## Tidy go mod
 	$(GO) mod tidy
+	$(GO) -C $(TAILNET_FLUTTER_MOD) mod tidy
 
 .PHONY: upgrade
 upgrade: upgrade/flutter upgrade/go ## Upgrade dependencies
@@ -1693,6 +1700,9 @@ check/format/go: ## Check Go code formatting
 	if [[ -n $$($(GO) fmt ./...) ]]; then
 		exit 1
 	fi
+	if [[ -n $$($(GO) -C $(TAILNET_FLUTTER_MOD) fmt ./...) ]]; then
+		exit 1
+	fi
 
 .PHONY: check/lint
 check/lint: check/lint/flutter check/lint/go check/lint/sqlc ## Check code quality
@@ -1712,6 +1722,7 @@ check/lint/go: internal/server/public/stub.txt check/structure/go test/db-backen
 	# and one of them ships a SWIG package there; ./... would load it, and
 	# loading runs swig, which fails before .golangci.yml's path exclusions apply.
 	golangci-lint run $$(go list -f '{{.Dir}}' ./... | grep -v '^$(CURDIR)/build/')
+	( cd $(TAILNET_FLUTTER_MOD) && golangci-lint run $$(go list -f '{{.Dir}}' ./...) )
 
 .PHONY: check/structure/go
 check/structure/go: test/structure/go ## Check Go package layout and file-access conventions (AGENTS.md)
@@ -1801,6 +1812,7 @@ check/vuln: check/vuln/backend ## Check for known CVEs
 .PHONY: check/vuln/backend
 check/vuln/backend: ## Check Go module for known CVEs (govulncheck)
 	govulncheck ./...
+	( cd $(TAILNET_FLUTTER_MOD) && govulncheck ./... )
 
 .PHONY: check/lint/sqlc
 check/lint/sqlc: ## Check the queries compile for both sqlc engines

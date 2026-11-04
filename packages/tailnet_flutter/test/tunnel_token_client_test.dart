@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quark/services/tunnel_token_client.dart';
+import 'package:tailnet_flutter/services/tunnel_token_client.dart';
 
 void main() {
   late HttpServer server;

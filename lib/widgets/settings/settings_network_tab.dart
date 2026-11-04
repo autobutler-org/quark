@@ -1,10 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:quark/services/embedded_tunnel.dart';
 import 'package:quark/widgets/layout/admin_map_card.dart';
 import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
 import 'package:quark/widgets/settings/hostname_section.dart';
 import 'package:quark/widgets/settings/ssh_access_section.dart';
+import 'package:tailnet_flutter/tailnet_flutter.dart';
 
 /// The Network tab of Settings (#2350): remote access, the connected
 /// devices, and, for an admin, the [AdminMapCard] (#2484), the device name

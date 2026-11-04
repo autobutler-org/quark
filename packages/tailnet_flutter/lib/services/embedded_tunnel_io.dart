@@ -24,7 +24,7 @@ import 'dart:math';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:quark/services/tunnel_token_client.dart';
+import 'package:tailnet_flutter/services/tunnel_token_client.dart';
 
 @Native<
   Int32 Function(
@@ -36,7 +36,7 @@ import 'package:quark/services/tunnel_token_client.dart';
   )
 >(
   symbol: 'quark_tsnet_start',
-  assetId: 'package:quark/services/embedded_tunnel_io.dart',
+  assetId: 'package:tailnet_flutter/services/embedded_tunnel_io.dart',
 )
 external int _start(
   Pointer<Utf8> stateDir,
@@ -48,25 +48,25 @@ external int _start(
 
 @Native<Pointer<Utf8> Function()>(
   symbol: 'quark_tsnet_token',
-  assetId: 'package:quark/services/embedded_tunnel_io.dart',
+  assetId: 'package:tailnet_flutter/services/embedded_tunnel_io.dart',
 )
 external Pointer<Utf8> _token();
 
 @Native<Void Function()>(
   symbol: 'quark_tsnet_stop',
-  assetId: 'package:quark/services/embedded_tunnel_io.dart',
+  assetId: 'package:tailnet_flutter/services/embedded_tunnel_io.dart',
 )
 external void _stop();
 
 @Native<Pointer<Utf8> Function()>(
   symbol: 'quark_tsnet_status',
-  assetId: 'package:quark/services/embedded_tunnel_io.dart',
+  assetId: 'package:tailnet_flutter/services/embedded_tunnel_io.dart',
 )
 external Pointer<Utf8> _status();
 
 @Native<Void Function(Pointer<Utf8>)>(
   symbol: 'quark_tsnet_free',
-  assetId: 'package:quark/services/embedded_tunnel_io.dart',
+  assetId: 'package:tailnet_flutter/services/embedded_tunnel_io.dart',
 )
 external void _free(Pointer<Utf8> p);
 

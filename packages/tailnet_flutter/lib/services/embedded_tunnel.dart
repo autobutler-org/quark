@@ -16,8 +16,8 @@
 library;
 
 import 'package:flutter/foundation.dart';
-import 'package:quark/services/embedded_tunnel_stub.dart'
-    if (dart.library.ffi) 'package:quark/services/embedded_tunnel_io.dart'
+import 'package:tailnet_flutter/services/embedded_tunnel_stub.dart'
+    if (dart.library.ffi) 'package:tailnet_flutter/services/embedded_tunnel_io.dart'
     as impl;
 
 /// What the bridge reports about its node.

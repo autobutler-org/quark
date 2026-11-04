@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quark/services/embedded_tunnel.dart';
-import 'package:quark/services/embedded_tunnel_stub.dart';
+import 'package:tailnet_flutter/services/embedded_tunnel.dart';
+import 'package:tailnet_flutter/services/embedded_tunnel_stub.dart';
 
 /// The web stand-in, and the JSON the bridge returns.
 void main() {

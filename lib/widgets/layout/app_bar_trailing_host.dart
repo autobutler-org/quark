@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/controllers/notifications_controller.dart';
-import 'package:quark/services/embedded_tunnel.dart';
 import 'package:quark/router.dart';
 import 'package:quark/widgets/layout/connection_sheet_button.dart';
 import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
 import 'package:quark/widgets/notifications/notifications_bell.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:tailnet_flutter/tailnet_flutter.dart';
 
 /// Gives every main page's top bar the app-wide controls, through one
 /// [QuarkAppBarTrailing] scope at the app root: a [ConnectionSheetButton] fed

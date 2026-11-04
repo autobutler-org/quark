@@ -1,0 +1,26 @@
+name: tailnet_flutter
+description: Embedded tailnet node for Flutter on iOS and Android, with a loopback HTTP proxy.
+version: 0.0.1
+homepage: "https://github.com/autobutler-org/quark"
+
+environment:
+  sdk: ^3.11.0
+
+resolution: workspace
+
+publish_to: none
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The phone joins the tailnet itself (#1881). hook/build.dart compiles
+  # cmd/tsnetbridge for the iOS and Android targets. cspell:words ffi tsnetbridge
+  code_assets: ^2.1.0
+  ffi: ^2.2.0
+  hooks: ^2.2.0
+  path_provider: ^2.1.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
