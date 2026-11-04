@@ -374,13 +374,27 @@ the vault (JN-VT-020).
 
 ---
 
-### JN-VT-019: Restore the vault from a backup drive (retired)
+### JN-VT-019: Restore the vault from a backup drive
 
-Retired by #3460: the app no longer offers this. On a SQLite-backed Quark a snapshot backup (JN-SD-008) copies
-every account's vault, as ciphertext with its wrapped key, into `vault_items_backup.db` and asks for no password; on
-PostgreSQL the vault is in the operator's database backup instead. Restoring that file waits on
-the restore route chat restore will use (#2428). `POST /api/v0/vault/import-backup` is gone, and a
-`vault_backup.db` from an older snapshot can no longer be restored.
+**Preconditions:** The Quark runs on SQLite, and a snapshot backup (JN-SD-008) on an attached drive holds
+`vault_items_backup.db`. No account on this Quark has a vault item, and every account whose vault is in the backup
+has an account here of the same username, letter for letter. The caller is an admin.
+
+**Steps:**
+
+1. The admin calls `POST /api/v0/storage/devices/snapshot-backup/restore-vault` with the drive's `deviceSerial`.
+2. Each account opens the vault page and unlocks it with the password it had when the backup was taken.
+
+**Expected:** Every backed-up vault comes back under its account, its items as they were. The answer counts the
+accounts and items and names, in `backupPasswordAccounts`, every account whose vault opens with its backup-time
+password rather than the one it signs in with now, which is every account after a move to new hardware. A vault
+already holding items is a 409 and nothing changes. A backed-up vault with no account of its username is a 409
+naming the usernames, and nothing changes. There is no page for this yet: the app's restore flow is still to come.
+
+The old `POST /api/v0/vault/import-backup` is gone (#3460), and a `vault_backup.db` from an older snapshot cannot be
+restored.
+
+On PostgreSQL the vault is in the operator's database backup instead, and the route answers 501.
 
 ---
 

@@ -9846,6 +9846,75 @@ const docTemplate = `{
                 }
             }
         },
+        "/storage/devices/snapshot-backup/restore-vault": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Restores the vault backup a snapshot wrote to the drive, each vault under the account of the same\nusername, letter for letter. Refused while any vault has items, and when a backed-up vault has no\naccount of its username here. backupPasswordAccounts names the accounts whose vault opens with the\npassword they had when the backup was taken, as every vault restored onto new hardware does.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "storage"
+                ],
+                "summary": "Restore every account's vault from a snapshot backup",
+                "parameters": [
+                    {
+                        "description": "{deviceSerial: string}",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/backup.VaultImportResult"
+                        }
+                    },
+                    "400": {
+                        "description": "bad request, or a backup this version cannot read",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the device is not attached, or holds no vault backup",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "a vault already has items, or a backed-up vault has no account",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "501": {
+                        "description": "the Quark runs on PostgreSQL",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/storage/devices/snapshot-backup/status/{jobId}": {
             "get": {
                 "security": [
@@ -12116,6 +12185,32 @@ const docTemplate = `{
                 },
                 "filesTotal": {
                     "type": "integer"
+                }
+            }
+        },
+        "backup.VaultImportResult": {
+            "type": "object",
+            "properties": {
+                "accounts": {
+                    "description": "Accounts is how many accounts got their vault key back.",
+                    "type": "integer"
+                },
+                "backupPasswordAccounts": {
+                    "description": "BackupPasswordAccounts is the restored accounts, sorted, whose vault\nwas wrapped over a salt other than the account's own on this Quark, as\nevery vault restored onto new hardware is (#3614). Such a vault opens\nwith the password the account had when the backup was taken, whatever\nit signs in with here, and the recovery phrase it had then does not\nrecover it, since this Quark checks the account's own phrase.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "items": {
+                    "type": "integer"
+                },
+                "unmatchedUsers": {
+                    "description": "UnmatchedUsers is the usernames in the backup with no account on this\nQuark, sorted. None of them had a vault: a backup vault with no account\nto go to refuses the restore ([ErrVaultAccountMissing]).",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

@@ -179,6 +179,33 @@ definitions:
       filesTotal:
         type: integer
     type: object
+  backup.VaultImportResult:
+    properties:
+      accounts:
+        description: Accounts is how many accounts got their vault key back.
+        type: integer
+      backupPasswordAccounts:
+        description: |-
+          BackupPasswordAccounts is the restored accounts, sorted, whose vault
+          was wrapped over a salt other than the account's own on this Quark, as
+          every vault restored onto new hardware is (#3614). Such a vault opens
+          with the password the account had when the backup was taken, whatever
+          it signs in with here, and the recovery phrase it had then does not
+          recover it, since this Quark checks the account's own phrase.
+        items:
+          type: string
+        type: array
+      items:
+        type: integer
+      unmatchedUsers:
+        description: |-
+          UnmatchedUsers is the usernames in the backup with no account on this
+          Quark, sorted. None of them had a vault: a backup vault with no account
+          to go to refuses the restore ([ErrVaultAccountMissing]).
+        items:
+          type: string
+        type: array
+    type: object
   chatutil.Channel:
     properties:
       createdAt:
@@ -10131,6 +10158,54 @@ paths:
       security:
       - BearerAuth: []
       summary: Start a snapshot backup to a device
+      tags:
+      - storage
+  /storage/devices/snapshot-backup/restore-vault:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Restores the vault backup a snapshot wrote to the drive, each vault under the account of the same
+        username, letter for letter. Refused while any vault has items, and when a backed-up vault has no
+        account of its username here. backupPasswordAccounts names the accounts whose vault opens with the
+        password they had when the backup was taken, as every vault restored onto new hardware does.
+      parameters:
+      - description: '{deviceSerial: string}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/backup.VaultImportResult'
+        "400":
+          description: bad request, or a backup this version cannot read
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: the device is not attached, or holds no vault backup
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: a vault already has items, or a backed-up vault has no account
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "501":
+          description: the Quark runs on PostgreSQL
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Restore every account's vault from a snapshot backup
       tags:
       - storage
   /storage/devices/snapshot-backup/status/{jobId}:

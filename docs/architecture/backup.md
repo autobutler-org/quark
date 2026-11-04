@@ -80,7 +80,7 @@ A restored account's chat identity replaces the one a sign-in on the new install
 it with the password or recovery phrase they had when the backup was taken. `ImportChat` returns the usernames
 it could not match in `UnmatchedUsers`.
 
-No handler calls `ImportChat` yet; the restore route and its page are still to come (#2428).
+No handler calls `ImportChat` yet; the chat's restore route and its page are still to come (#2428).
 
 ## The vault export
 
@@ -100,11 +100,32 @@ recovery password, which this build no longer reads.
 
 ## Restoring the vault
 
-`ImportVault` restores `vault_items_backup.db` in one transaction, the way `ImportChat` restores the chat, and
-like it has no route yet (#2428). It restores only while no account has a vault item (`ErrVaultNotEmpty`).
-Accounts are matched by username. A matched account's vault key replaces any its first sign-in on the new
-install made, and its items come back byte for byte under their old ids. An account that is not here is
-skipped, and its username comes back in `UnmatchedUsers`.
+An admin restores it with `POST /api/v0/storage/devices/snapshot-backup/restore-vault`, body `{"deviceSerial": ...}`,
+which `backup.RestoreVault` serves from the backup drive (#3614). `ImportVault` restores `vault_items_backup.db` in
+one transaction, the way `ImportChat` restores the chat. A restore that is refused or fails changes nothing.
+
+- **It restores only while no account has a vault item** (`ErrVaultNotEmpty`, a 409).
+- **A vault goes to the account whose username is the backup's, letter for letter**, the lookup sign-in makes. There
+  is no other identity that survives a move to new hardware, so nothing is guessed: `Carol` on the new Quark is not
+  `carol` in the backup. A backed-up vault with no such account refuses the whole restore (`ErrVaultAccountMissing`,
+  a 409 naming every such username). It is not skipped, because once any vault has items a second restore is
+  refused, and the skipped vault could never come back. An admin adds the accounts, with any password, and restores
+  again; one nobody wants back can be deleted afterwards, which deletes its vault. A backup account with no vault
+  and no account here only comes back in `UnmatchedUsers`.
+- A matched account's vault key replaces any its first sign-in on the new install made, and its items come back
+  byte for byte under their old ids.
+
+**Which password opens a restored vault.** The wrapped key carries the salt it was derived over (`salt_pw`), and
+the app unlocks over that salt, so a restored vault opens with the password its account had when the backup was
+taken, whatever the account signs in with now. A new install derives every account's auth salt from a secret of its
+own, so on new hardware every restored vault is in that state, and `backupPasswordAccounts` names those accounts. The
+recovery phrase of backup time does not get them back in: `/auth/recover` checks the account's recovery key on this
+Quark, and its phrase wrap is kept but nothing opens it yet. Re-wrapping such a vault under the account's current
+password, once the old one has opened it, is the app's to do.
+
+The backup holds the wrapped keys and never the accounts' auth salts, auth key hashes or recovery key hashes. Carrying
+those would let a restore bring the old password and phrase back as sign-in credentials, at the price of a backup
+drive that holds what a password guess is checked against.
 
 ## On PostgreSQL
 

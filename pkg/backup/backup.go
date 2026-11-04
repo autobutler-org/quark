@@ -96,8 +96,26 @@ type VaultImportResult struct {
 	Accounts int `json:"accounts"`
 	Items    int `json:"items"`
 	// UnmatchedUsers is the usernames in the backup with no account on this
-	// Quark, sorted. Their vaults were not restored.
+	// Quark, sorted. None of them had a vault: a backup vault with no account
+	// to go to refuses the restore ([ErrVaultAccountMissing]).
 	UnmatchedUsers []string `json:"unmatchedUsers"`
+	// BackupPasswordAccounts is the restored accounts, sorted, whose vault
+	// was wrapped over a salt other than the account's own on this Quark, as
+	// every vault restored onto new hardware is (#3614). Such a vault opens
+	// with the password the account had when the backup was taken, whatever
+	// it signs in with here, and the recovery phrase it had then does not
+	// recover it, since this Quark checks the account's own phrase.
+	BackupPasswordAccounts []string `json:"backupPasswordAccounts"`
+}
+
+// RestoreVaultParams asks for the vault backup a snapshot wrote to a drive.
+type RestoreVaultParams struct {
+	Ctx context.Context
+	// LiveDB is the live database the vaults are restored into.
+	LiveDB *sql.DB
+	// Registry holds the backup drive's files namespace.
+	Registry     vfs.Registry
+	DeviceSerial string
 }
 
 // ChatImportResult reports what [ImportChat] restored.
