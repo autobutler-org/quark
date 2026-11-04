@@ -582,7 +582,9 @@ definitions:
         description: ClosedAt is when the author closed the poll by hand.
         type: string
       closesAt:
-        description: ClosesAt, when set, is when the poll stops taking answers.
+        description: |-
+          ClosesAt, when set, is when the poll stops taking answers. Posting
+          refuses a time in the past or more than a year ahead.
         type: string
       resultsAfterClose:
         description: |-
@@ -640,7 +642,9 @@ definitions:
           still knows.
         type: boolean
       closesAt:
-        description: ClosesAt, when set, is when the poll stops taking answers.
+        description: |-
+          ClosesAt, when set, is when the poll stops taking answers. Posting
+          refuses a time in the past or more than a year ahead.
         type: string
       resultsAfterClose:
         description: |-
@@ -6164,11 +6168,13 @@ paths:
         the caller already sent to this channel returns that message with 200 and
         stores nothing, whatever the ciphertext. Ciphertext is at most 16 KiB. poll,
         when set, makes the message a poll whose question and options are in the ciphertext:
-        closesAt, when set, is when it stops taking answers; allowChange lets an account
-        replace its answer; anonymous serves answers without who gave them, to everyone;
-        resultsAfterClose shows answers only to the author until it closes. Needs
-        send_messages; a reader without it gets 403, and anyone without read_messages
-        404, delegated managers and admins included.'
+        closesAt, when set, is when it stops taking answers and has to be in the future
+        and at most a year after the post; allowChange lets an account replace its
+        answer; anonymous serves answers without who gave them, to everyone; resultsAfterClose
+        shows answers only to the author until it closes. A poll field of the wrong
+        type, or one the Quark does not know, is refused. Needs send_messages; a reader
+        without it gets 403, and anyone without read_messages 404, delegated managers
+        and admins included.'
       parameters:
       - description: Channel id
         in: path
@@ -6195,7 +6201,8 @@ paths:
             $ref: '#/definitions/chatutil.Message'
         "400":
           description: ciphertext too short, a key version the channel doesn't have,
-            or a clientMessageId over 64 bytes
+            a clientMessageId over 64 bytes, poll settings of the wrong shape, or
+            a closesAt in the past or more than a year ahead
           schema:
             $ref: '#/definitions/serverutil.Response'
         "401":

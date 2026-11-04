@@ -773,6 +773,19 @@ func readPoll(ctx context.Context, queries db.Querier, messageID int64) (db.Chat
 	return poll, err
 }
 
+// pollClosesAt reports ErrPollClosesAt when at is set and is not after now,
+// or is more than MaxPollClosesAfter after it (#3944). A nil close time never
+// closes the poll on its own.
+func pollClosesAt(at *time.Time, now time.Time) error {
+	if at == nil {
+		return nil
+	}
+	if !at.After(now) || at.After(now.Add(MaxPollClosesAfter)) {
+		return ErrPollClosesAt
+	}
+	return nil
+}
+
 // pollClosed is whether a poll has stopped taking answers at now: its author
 // closed it or its closing time has passed.
 func pollClosed(poll db.ChatPoll, now time.Time) bool {

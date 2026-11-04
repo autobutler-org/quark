@@ -479,6 +479,8 @@ on two devices or browsers, one with `general` open and one on **Files**.
 - The poll button is there only where the composer is: not for a **Viewer** without **Send messages**, and not
   while waiting for the channel's key (JN-CHAT-005).
 - A failed post keeps the form open with the reason above **Post poll**.
+- **Close at a set time** has to be later than the post and at most a year away. The Quark refuses any other
+  time, and the form stays open with the reason.
 
 ---
 

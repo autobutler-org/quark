@@ -20,7 +20,8 @@ class ChatPoll {
     this.answers = const [],
   });
 
-  /// When it stops taking answers on its own, or null for never.
+  /// When it stops taking answers on its own, or null for never. The Quark
+  /// refuses a time in the past or more than a year after the post.
   final DateTime? closesAt;
 
   /// Whether an account may replace its answer.

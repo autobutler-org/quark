@@ -1704,7 +1704,11 @@ type PostMessageResult struct {
 // ErrDuplicateMessage, unless the caller is repeating its own live post byte
 // for byte, which returns that post as Repeated. So does a ClientMessageID the
 // caller already sent to the channel, whatever the ciphertext, deleted posts
-// included: the retry of a send the user deleted stays deleted.
+// included: the retry of a send the user deleted stays deleted. A poll whose
+// closesAt is not after the post, or is more than MaxPollClosesAfter ahead,
+// is ErrPollClosesAt. That check runs only once the message row is in, so a
+// retry of a post already stored comes back as Repeated even when the close
+// time on the retry would no longer pass.
 func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 	if len(params.Ciphertext) > MaxCiphertextBytes {
 		return PostMessageResult{}, ErrMessageTooLarge
@@ -1747,6 +1751,11 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 			},
 		})
 		if err != nil || params.Poll == nil {
+			return err
+		}
+		// A retry hits the unique index on the insert above and never gets
+		// here, so its close time is not judged again (#3944).
+		if err := pollClosesAt(params.Poll.ClosesAt, time.Now()); err != nil {
 			return err
 		}
 		closesAt := sql.NullTime{Valid: params.Poll.ClosesAt != nil}
@@ -2160,6 +2169,10 @@ const (
 	// MaxPollAnswerRequestBytes caps an answer's body: the ciphertext in
 	// base64 plus room for the JSON around it.
 	MaxPollAnswerRequestBytes = 8 << 10
+	// MaxPollClosesAfter is how far ahead of a post a poll may set closesAt
+	// (#3944): a year. A close time that is not after the post, or further
+	// ahead than this, is ErrPollClosesAt.
+	MaxPollClosesAfter = 365 * 24 * time.Hour
 )
 
 var (
@@ -2179,12 +2192,20 @@ var (
 	ErrNoAnswers = errors.New("you can read this channel but not answer polls in it")
 	// ErrNotPollAuthor reports closing someone else's poll.
 	ErrNotPollAuthor = errors.New("only its author can close a poll")
+	// ErrMalformedPoll reports poll settings that are not the object a post
+	// takes: a field of the wrong type, or one the Quark does not know
+	// (#3944). The text is the whole answer a client sees.
+	ErrMalformedPoll = errors.New("poll settings are malformed")
+	// ErrPollClosesAt reports a closesAt that is not after the post, or is
+	// more than MaxPollClosesAfter ahead of it (#3944).
+	ErrPollClosesAt = errors.New("a poll's close time has to be in the future and at most a year away")
 )
 
 // PollSettings are the rules the Quark enforces on a poll. Its question and
 // options are in the message's ciphertext, which the Quark never opens.
 type PollSettings struct {
-	// ClosesAt, when set, is when the poll stops taking answers.
+	// ClosesAt, when set, is when the poll stops taking answers. Posting
+	// refuses a time in the past or more than a year ahead.
 	ClosesAt *time.Time `json:"closesAt,omitempty"`
 	// AllowChange lets an account replace its answer; without it a second
 	// answer is refused.
