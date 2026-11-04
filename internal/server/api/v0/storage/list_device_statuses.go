@@ -28,6 +28,7 @@ func listDeviceStatuses(c *gin.Context) *serverutil.Response {
 		Ctx:      c.Request.Context(),
 		Storage:  deps.StorageService(),
 		Database: deps.Database(),
+		Registry: deps.VFSRegistry(),
 	})
 	if err != nil {
 		return serverutil.InternalServerError(err)
