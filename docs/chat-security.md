@@ -350,8 +350,9 @@ the oldest, which also picks up deletions the socket dropped.
 A poll is a message (#3893): its question and options are in the message's ciphertext like any text, and a
 `chat_polls` row beside it holds the settings the Quark enforces, in plaintext, because it has to read them.
 
-- `closesAt`, optional: answers after it are refused. Nothing runs at that time; an answer is checked when it
-  arrives.
+- `closesAt`, optional: answers after it are refused. It has to be after the post and at most a year later;
+  a time in the past, or further ahead, is refused when the poll is posted, so it is not born closed. Nothing
+  runs at that time; an answer is checked when it arrives.
 - `allowChange`: a second answer from the same account replaces the first, or is refused.
 - `anonymous`: answers are served without the account that gave them, to every member, the author included.
 - `resultsAfterClose`: until the poll closes, the author sees every answer and everyone else only their own.
@@ -392,6 +393,8 @@ Quark holds settings for it; anything else shows as text. It tallies the answers
 ### Rules
 
 - Posting a poll needs `send_messages`, as any post does; the settings go in the same transaction as the message.
+  A field of the wrong type, or a field the Quark does not know, is refused. Single or multiple choice lives in
+  the ciphertext, and the app checks it when it tallies, so the Quark does not pretend to have accepted it.
 - Answering needs `read_messages` and `add_reactions`. A closed poll answers 409, and so does a second answer
   when `allowChange` is off.
 - Reading the answers needs `read_messages`, and follows `anonymous` and `resultsAfterClose`. The caller's own

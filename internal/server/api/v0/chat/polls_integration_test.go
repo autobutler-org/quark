@@ -151,18 +151,61 @@ func TestChatPolls_AnswerCloseTombstone(t *testing.T) {
 }
 
 // TestChatPolls_ClosesByTime refuses an answer once closesAt has passed,
-// with nothing having run at that time.
+// with nothing having run at that time. Posting a close time already in the
+// past is refused, so this posts one a moment ahead and waits it out.
 func TestChatPolls_ClosesByTime(t *testing.T) {
 	h := newHarness(t)
 	room := pollRoom(t, h)
-	past := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+	closes := time.Now().Add(2 * time.Second).UTC().Truncate(time.Second)
 	var poll chatutil.Message
 	h.expect(t, http.StatusCreated, http.MethodPost, room+"/messages", "bob",
-		pollBody('p', `{"closesAt":"`+past+`","allowChange":true,"anonymous":false,"resultsAfterClose":false}`), &poll)
-	if poll.Poll == nil || !poll.Poll.Closed || poll.Poll.ClosesAt == nil || poll.Poll.ClosedAt != nil {
+		pollBody('p', `{"closesAt":"`+closes.Format(time.RFC3339)+`","allowChange":true,"anonymous":false,"resultsAfterClose":false}`), &poll)
+	if poll.Poll == nil || poll.Poll.Closed || poll.Poll.ClosesAt == nil || poll.Poll.ClosedAt != nil {
 		t.Fatalf("posted poll = %+v", poll.Poll)
 	}
-	h.expect(t, http.StatusConflict, http.MethodPut, pollPath(poll.ID, "/answer"), "carol", answerBody('c'), nil)
+	answer := pollPath(poll.ID, "/answer")
+	h.expect(t, http.StatusOK, http.MethodPut, answer, "carol", answerBody('c'), nil)
+	time.Sleep(time.Until(closes.Add(time.Second)))
+	h.expect(t, http.StatusConflict, http.MethodPut, answer, "carol", answerBody('d'), nil)
+}
+
+// TestChatPolls_RefusesBadSettings gives a malformed poll its own 400, refuses
+// a field the Quark does not know, and refuses a closesAt in the past or
+// centuries ahead (#3944). A bad message that is not about the poll still
+// says so.
+func TestChatPolls_RefusesBadSettings(t *testing.T) {
+	h := newHarness(t)
+	room := pollRoom(t, h)
+	messages := room + "/messages"
+	const flags = `"allowChange":false,"anonymous":false,"resultsAfterClose":false`
+	past := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	far := time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC).Format(time.RFC3339)
+
+	for _, body := range []string{
+		`{"poll":{"anonymous":"yes"}}`,
+		pollBody('m', `{"multiple":true,`+flags+`}`),
+		pollBody('t', `{"closesAt":"not-a-time",`+flags+`}`),
+	} {
+		if code, got := h.do(t, http.MethodPost, messages, "bob", body); code != http.StatusBadRequest || !strings.Contains(got, "poll settings are malformed") || strings.Contains(got, "ciphertext") {
+			t.Errorf("malformed poll = %d %s", code, got)
+		}
+	}
+	for i, closesAt := range []string{past, far} {
+		body := pollBody('p'+byte(i), `{"closesAt":"`+closesAt+`",`+flags+`}`)
+		if code, got := h.do(t, http.MethodPost, messages, "bob", body); code != http.StatusBadRequest || !strings.Contains(got, "at most a year away") {
+			t.Errorf("closesAt %s = %d %s", closesAt, code, got)
+		}
+	}
+	var open chatutil.Message
+	soon := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	h.expect(t, http.StatusCreated, http.MethodPost, messages, "bob", pollBody('o', `{"closesAt":"`+soon+`",`+flags+`}`), &open)
+	if open.Poll == nil || open.Poll.Closed {
+		t.Errorf("a close time an hour ahead was born closed: %+v", open.Poll)
+	}
+	badKey := `{"keyVersion":"nope","ciphertext":"` + b64('k', 64) + `","poll":{` + flags + `}}`
+	if code, got := h.do(t, http.MethodPost, messages, "bob", badKey); code != http.StatusBadRequest || !strings.Contains(got, "ciphertext") || strings.Contains(got, "poll settings") {
+		t.Errorf("bad key version = %d %s", code, got)
+	}
 }
 
 // TestChatPolls_AllowChangeReplaces keeps one answer per account when a poll

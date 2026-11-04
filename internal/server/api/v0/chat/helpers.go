@@ -1,7 +1,10 @@
 package v0_chat
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -44,6 +47,44 @@ func rateLimited(deps deputil.Dependencies, principal accessutil.Principal, rout
 		return nil
 	}
 	return serverutil.NewResponse().WithStatusCode(http.StatusTooManyRequests).WithError(errTooManyRequests)
+}
+
+// bindPostMessage reads a post. The poll object, when set, rejects a field of
+// the wrong type or one the Quark does not know, as chatutil.ErrMalformedPoll
+// (#3944). The rest of the body keeps the usual decoding: an unknown field
+// there is ignored, and any other malformed body is the decoder's error.
+func bindPostMessage(r io.Reader, body *postMessageBody) error {
+	dec := json.NewDecoder(r)
+	var raw struct {
+		Ciphertext      []byte          `json:"ciphertext"`
+		KeyVersion      int64           `json:"keyVersion"`
+		ClientMessageID string          `json:"clientMessageId"`
+		Poll            json.RawMessage `json:"poll"`
+	}
+	if err := dec.Decode(&raw); err != nil {
+		return err
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("more than one JSON value")
+		}
+		return err
+	}
+	body.Ciphertext = raw.Ciphertext
+	body.KeyVersion = raw.KeyVersion
+	body.ClientMessageID = raw.ClientMessageID
+	pollJSON := bytes.TrimSpace(raw.Poll)
+	if len(pollJSON) == 0 || bytes.Equal(pollJSON, []byte("null")) {
+		return nil
+	}
+	pollDec := json.NewDecoder(bytes.NewReader(pollJSON))
+	pollDec.DisallowUnknownFields()
+	var poll chatutil.PollSettings
+	if err := pollDec.Decode(&poll); err != nil {
+		return chatutil.ErrMalformedPoll
+	}
+	body.Poll = &poll
+	return nil
 }
 
 // channelID reads the :id path parameter. One that isn't a positive integer
@@ -99,7 +140,8 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, accessutil.ErrGrantTarget),
 		errors.Is(err, chatutil.ErrInvalidKeys), errors.Is(err, chatutil.ErrInvalidGrant), errors.Is(err, chatutil.ErrGrantSignature),
 		errors.Is(err, chatutil.ErrInvalidMessage), errors.Is(err, chatutil.ErrInvalidReaction),
-		errors.Is(err, chatutil.ErrInvalidClientMessageID), errors.Is(err, chatutil.ErrInvalidPollAnswer):
+		errors.Is(err, chatutil.ErrInvalidClientMessageID), errors.Is(err, chatutil.ErrInvalidPollAnswer),
+		errors.Is(err, chatutil.ErrMalformedPoll), errors.Is(err, chatutil.ErrPollClosesAt):
 		return serverutil.BadRequest(err)
 	default:
 		return serverutil.InternalServerError(err)
