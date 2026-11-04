@@ -6624,7 +6624,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped. A request with no part named files is a 400.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped. A request with no part named files is a 400. A batch that stops partway, cut off (400) or on a taken name (409), lands the files before the failure, and its error body lists them under landed, so a retry resends only the rest.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -6682,7 +6682,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
+                            "$ref": "#/definitions/v0_files.uploadFailedResponse"
                         }
                     },
                     "403": {
@@ -6694,13 +6694,19 @@ const docTemplate = `{
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
+                            "$ref": "#/definitions/v0_files.uploadFailedResponse"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
+                            "$ref": "#/definitions/v0_files.uploadFailedResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v0_files.uploadFailedResponse"
                         }
                     }
                 }
@@ -6926,7 +6932,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped. A request with no part named files is a 400.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped. A request with no part named files is a 400. A batch that stops partway, cut off (400) or on a taken name (409), lands the files before the failure, and its error body lists them under landed, so a retry resends only the rest.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -6991,7 +6997,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
+                            "$ref": "#/definitions/v0_files.uploadFailedResponse"
                         }
                     },
                     "403": {
@@ -7003,13 +7009,19 @@ const docTemplate = `{
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
+                            "$ref": "#/definitions/v0_files.uploadFailedResponse"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
+                            "$ref": "#/definitions/v0_files.uploadFailedResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v0_files.uploadFailedResponse"
                         }
                     }
                 }
@@ -14876,6 +14888,20 @@ const docTemplate = `{
                 },
                 "sessionId": {
                     "type": "string"
+                }
+            }
+        },
+        "v0_files.uploadFailedResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "landed": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
