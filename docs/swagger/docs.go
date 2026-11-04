@@ -2813,7 +2813,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Finds all books in the files directory",
+                "description": "Finds every PDF and EPUB on every managed drive. deviceSerial is empty for the internal drive.",
                 "produces": [
                     "application/json"
                 ],
@@ -14183,6 +14183,10 @@ const docTemplate = `{
         "v0_books.BookJSON": {
             "type": "object",
             "properties": {
+                "deviceSerial": {
+                    "description": "DeviceSerial is the drive the book is on. Empty for the internal drive.",
+                    "type": "string"
+                },
                 "fileName": {
                     "type": "string"
                 },
