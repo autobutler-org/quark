@@ -40,6 +40,7 @@ tmp_dir = "tmp"
     "deploy",
     "docs",
     "internal/db",
+		"node_modules",
     "os",
     "packages",
     "scripts",
