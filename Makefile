@@ -57,6 +57,8 @@ endif
 # repository. Flutter reads its own version with git, so it then inspects the wrong
 # checkout, reports 0.0.0-unknown, and every pub resolution fails against the
 # `flutter:` version pinned in pubspec.yaml.
+# check/fast passes GIT_INDEX_FILE back into its script on purpose.
+# `git commit -- paths` points that variable at a temporary index.
 unexport GIT_DIR
 unexport GIT_INDEX_FILE
 unexport GIT_WORK_TREE
@@ -1655,6 +1657,24 @@ watch/frontend: generate/frontend ## Watch frontend on web
 
 .PHONY: check
 check: check/backend check/frontend check/spelling ## Check code
+
+# The pre-commit hook runs this and stops. CI runs the pieces of `check`
+# above; this one only looks at what is staged. GIT_INDEX_FILE is unexported
+# at the top of this file so a hook's git environment does not confuse
+# Flutter. `git commit -- paths` points that variable at a temporary index,
+# so pass it back through or the hook checks the wrong files.
+.PHONY: check/fast
+check/fast: node_modules ## Check staged files (gofmt, dart format, cspell)
+	index='$(subst ','\'',$(GIT_INDEX_FILE))'
+	if [[ -n "$$index" ]]; then
+		GIT_INDEX_FILE="$$index" ./scripts/check-fast.bash
+	else
+		./scripts/check-fast.bash
+	fi
+
+.PHONY: test/check/fast
+test/check/fast: node_modules ## Prove check/fast reads the index and names the fix
+	./scripts/check-fast-test.bash
 
 .PHONY: check/backend
 check/backend: generate/backend check/format/go check/lint/go check/lint/sqlc check/migrations test/chaos/powercut/base ## Check backend code

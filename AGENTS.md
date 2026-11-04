@@ -59,6 +59,7 @@ commands. `make help` lists everything; these are the ones that matter day to da
 | ------------------------------- | --------------------------------------------------------------------------- |
 | `make setup`                    | gotools, golangci-lint, probe, air, sqlc, swag, flutter, skills, git hooks   |
 | `make check`                    | the whole gate: `check/backend`, `check/frontend`, `check/spelling`          |
+| `make check/fast`               | staged files only: gofmt, dart format, cspell; what the pre-commit hook runs |
 | `make fix`                      | `dart format`, `go mod tidy`, `gofmt -s -w`                                  |
 | `make generate`                 | sqlc and swagger, plus frontend icons, SBOM, and widget docs                 |
 | `make test`                     | unit tests only — **not** the API integration tests                          |
@@ -84,12 +85,13 @@ mismatch review sends back.
 
 ### What the checks enforce
 
-`make check` is installed as a pre-commit hook (`make setup/hooks`), and `.github/workflows/check.yml` runs the
-same targets, so nothing here is advisory. `make setup/hooks` also installs a commit-msg hook that rejects AI
-attribution in a commit message — a `Co-authored-by:` trailer naming Claude or an `anthropic.com` address, a
-"Generated with Claude Code" footer, or a `claude.ai/code` session link. The hook never sees a pull request, so CI's
-`check-misc` job runs `make check/attribution PR=<number>`, which fails when the title, the description or a
-commit message carries that footer.
+`make setup/hooks` installs a pre-commit hook that runs `make check/fast` (gofmt, `dart format`, and cspell on
+the staged files) and names the fix when one fails (`make fix`, or the file to format). It also installs a
+commit-msg hook that rejects AI attribution in a commit message — a `Co-authored-by:` trailer naming Claude or
+an `anthropic.com` address, a "Generated with Claude Code" footer, or a `claude.ai/code` session link. That
+hook never sees a pull request, so CI's `check-misc` job runs `make check/attribution PR=<number>`, which fails
+when the title, the description or a commit message carries that footer. `.github/workflows/check.yml` runs the
+full `make check`, so the rest of the gate is not advisory.
 
 - **Formatting and lint** — `gofmt`, golangci-lint, `scripts/check-go-structure.bash`, `sqlc vet`,
   `dart format --set-exit-if-changed`, and `flutter analyze`.
@@ -198,9 +200,10 @@ An agent leans on GitHub Actions for the full gate rather than running it locall
   `make generate/backend` after a `sql/queries/`, migration or swagger change, and
   `make generate/frontend/widget-docs` after a widget's `///` class comment — because CI fails on the diff.
   Formatting still has to be clean.
-- **The commit hook still runs `make check`.** `make setup/hooks` installs it as the pre-commit hook, so in a
-  fresh worktree run `flutter pub get` first, or `dart format` rewrites hundreds of files under `packages/`.
-  Slimming the hook is tracked in #3663; leave the hooks and the `Makefile` alone.
+- **The commit hook runs `make check/fast`.** `make setup/hooks` installs it. It checks gofmt, `dart format`, and
+  cspell on the staged files and names the fix (`make fix`, or the file to format). The full `make check` stays
+  the gate humans and schmeide run, and GitHub Actions runs it on the pull request. In a fresh worktree, run
+  `flutter pub get` before that gate, or `dart format` rewrites files under `packages/`.
 
 Every target stays available to humans, and the full `make check` or a single `make test/...` target is the
 right tool for reproducing a CI failure locally.
@@ -903,8 +906,8 @@ widgets and reads in one screen.
   Build and test jobs are path-filtered there as they are on a PR, against the entry queued ahead; only the
   push to `main` runs every job, so a path missing from `.github/path-filters.yml` goes red after the merge.
   Rebase when there is a real conflict, or when the queue rejects the PR
-- Humans run `make check` before pushing, and the pre-commit hook runs it too once `make setup/hooks` has;
-  an agent follows "CI-first for agents" under Verification before claiming done instead
+- Humans run `make check` before pushing. The pre-commit hook runs `make check/fast` once `make setup/hooks`
+  has; an agent follows "CI-first for agents" under Verification before claiming done instead
 
 ### Platform and generated code
 

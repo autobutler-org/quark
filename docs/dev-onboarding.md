@@ -198,12 +198,14 @@ The build packages above are for compiling. Running the bundle also needs these 
 ## Lint and test
 
 ```bash
-make check          # lint
+make check          # full lint; CI runs this
+make check/fast     # staged gofmt, dart format, and cspell; the pre-commit hook runs this
 make test/unit/backend  # Go tests
 make test/unit/frontend # Flutter tests
 ```
 
-Run `make check` before pushing. CI runs it and will fail if the linter is unhappy.
+Run `make check` before pushing. CI runs it and will fail if the linter is unhappy. After `make setup/hooks`,
+the pre-commit hook runs the shorter `make check/fast` on the staged files.
 
 ## Database changes
 
@@ -285,6 +287,7 @@ Run `make help` to see everything. The most common ones:
 | `make generate/backend/sqlc`    | Regenerate DB layer only              |
 | `make generate/backend/swagger` | Regenerate API docs only              |
 | `make check`                    | Full lint + format check              |
+| `make check/fast`               | Staged gofmt, dart format, and cspell (pre-commit hook) |
 | `make format`                   | Auto-format code                      |
 | `make test/unit/backend`        | Go unit tests with coverage           |
 | `make test/unit/frontend`       | Flutter unit tests                    |
