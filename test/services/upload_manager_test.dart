@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:quark/models/upload_conflict.dart';
 import 'package:quark/models/upload_session.dart';
 import 'package:quark/services/resumable_upload_service.dart';
+import 'package:quark/services/upload_batch.dart';
 import 'package:quark/services/upload_chunk_source.dart';
 import 'package:quark/services/upload_manager.dart';
 import 'package:quark/utils/error_text.dart';
@@ -1443,6 +1444,41 @@ void main() {
         ['files:clip.mov', 'thumbnail:clip.mov'],
       ]);
     });
+
+    // #3533: the file landed and the request broke in its thumbnail. Sending
+    // the file again would land a second copy of it.
+    test(
+      'a file that landed before its thumbnail broke is not sent again',
+      () async {
+        final sent = <List<String>>[];
+        final manager = UploadManager.forTesting(
+          sender:
+              ({
+                required currentPath,
+                required selectedFiles,
+                serial,
+                conflict,
+              }) async {
+                sent.add([
+                  for (final f in selectedFiles) '${f.field}:${f.filename}',
+                ]);
+                throw const UploadBatchFailure(400, ['clip.mov']);
+              },
+        );
+
+        final done = manager.results.first;
+        manager.enqueue(
+          uploads: [rendered('clip.mov', render: () async => thumbnail)],
+          uploadPath: '',
+        );
+        final result = await done;
+
+        expect(sent, [
+          ['files:clip.mov', 'thumbnail:clip.mov'],
+        ]);
+        expect((result.succeeded, result.failed), (1, 0));
+      },
+    );
 
     test('renders once however many attempts the file takes', () async {
       var renders = 0;
