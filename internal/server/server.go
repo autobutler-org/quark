@@ -325,8 +325,9 @@ func clearDataTmp(when string) {
 // usbDeviceMonitor polls for newly connected USB storage devices and
 // auto-mounts them via storageutil.AutoMountDevice so they are immediately
 // operational without manual user intervention. When the set of mounted USB
-// devices changes any other way — a drive pulled out — it invalidates the
-// device cache, which re-syncs the VFS device namespaces (#2639).
+// devices changes any other way — a drive pulled out, or on macOS a volume
+// the OS mounted — it invalidates the device cache, which re-syncs the VFS
+// device namespaces (#2639, #3957).
 func usbDeviceMonitor(deps deputil.Dependencies) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -342,7 +343,7 @@ func usbDeviceMonitor(deps deputil.Dependencies) {
 	var mounted map[string]bool
 
 	for range ticker.C {
-		devices, err := storageutil.ListUsbDevices(true)
+		devices, err := storageutil.MonitorUsbDevices()
 		if err != nil {
 			if err.Error() != lastErr {
 				lastErr = err.Error()
