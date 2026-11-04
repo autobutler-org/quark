@@ -205,6 +205,117 @@ void main() {
     expect(find.byKey(const ValueKey('poll_close_p1')), findsNothing);
   });
 
+  testWidgets('a number, a date and a rating answer on their own inputs', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      _card(
+        const ChatPollItem(
+          prompt: 'How many?',
+          type: ChatPollType.number,
+          textAnswers: ['2', '4'],
+          responseCount: 2,
+          questions: [
+            ChatPollQuestionItem(
+              prompt: 'How many?',
+              type: ChatPollType.number,
+              textAnswers: ['2', '4'],
+            ),
+            ChatPollQuestionItem(
+              prompt: 'Which day?',
+              type: ChatPollType.date,
+              textAnswers: ['2026-11-08'],
+            ),
+            ChatPollQuestionItem(
+              prompt: 'How was it?',
+              type: ChatPollType.rating,
+              scale: 5,
+              ratingCounts: [0, 0, 1, 0, 0],
+            ),
+          ],
+        ),
+      ),
+    );
+    expect(find.text('Average 3'), findsOneWidget);
+    expect(
+      find.text(CalendarLabels.date(DateTime(2026, 11, 8))),
+      findsOneWidget,
+    );
+    expect(find.text('Choose a date'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('poll_number_q0_p1')),
+      '3.5',
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('poll_rating_q2_p1_4')),
+    );
+    await tester.tap(find.byKey(const ValueKey('poll_rating_q2_p1_4')));
+    await tester.pump();
+    // A day is still missing, so the poll cannot be answered yet.
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('poll_answer_p1')))
+          .onPressed,
+      isNull,
+    );
+  });
+
+  testBothViewports('a rating of ten stars fits the width', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      _card(
+        const ChatPollItem(
+          prompt: 'How was it?',
+          type: ChatPollType.rating,
+          scale: 10,
+        ),
+      ),
+      size: size,
+    );
+    expect(find.byKey(const ValueKey('poll_rating_p1_10')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('several questions are one answer', (tester) async {
+    await pumpAt(
+      tester,
+      _card(
+        const ChatPollItem(
+          prompt: 'How many?',
+          type: ChatPollType.number,
+          questions: [
+            ChatPollQuestionItem(
+              prompt: 'How many?',
+              type: ChatPollType.number,
+            ),
+            ChatPollQuestionItem(prompt: 'Notes?', type: ChatPollType.text),
+          ],
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('poll_number_q0_p1')),
+      '2',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('poll_text_q1_p1')));
+    await tester.enterText(find.byKey(const ValueKey('poll_text_q1_p1')), 'ok');
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const ValueKey('poll_answer_p1')));
+    await tester.tap(find.byKey(const ValueKey('poll_answer_p1')));
+    expect(_answers, [
+      const ChatPollAnswer(
+        parts: [
+          ChatPollAnswer(number: '2'),
+          ChatPollAnswer(text: 'ok'),
+        ],
+      ),
+    ]);
+  });
+
   testWidgets('"Close poll" calls back', (tester) async {
     await pumpAt(tester, _card(_single));
     await tester.tap(find.byKey(const ValueKey('poll_close_p1')));

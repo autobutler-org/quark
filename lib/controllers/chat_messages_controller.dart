@@ -343,39 +343,50 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   }
 
   /// [entry]'s poll as `QuarkPollCard` draws it, tallied here from the
-  /// answers that opened: a count per option, the written answers, and
-  /// account [me]'s own. Its results are visible unless it shows them after
-  /// it closes, is still open at [now], and [me] isn't its author. Call it
-  /// only for an entry with a [ChatTimelineMessage.question].
+  /// answers that opened: a count per option, the written answers, the
+  /// ratings, and account [me]'s own. Its results are visible unless it
+  /// shows them after it closes, is still open at [now], and [me] isn't its
+  /// author. Call it only for an entry with a [ChatTimelineMessage.question].
   static ChatPollItem pollItemFor(
     ChatTimelineMessage entry, {
     int? me,
     DateTime? now,
   }) {
-    final question = entry.question!;
+    final root = entry.question!;
     final poll = entry.message.poll!;
     final isClosed = poll.isClosedAt(now ?? DateTime.now());
-    final counts = List.filled(question.options.length, 0);
-    final texts = <String>[];
+    final questions = root.questions;
+    final tallies = [
+      for (final question in questions) _QuestionTally(question),
+    ];
     ChatPollAnswer? mine;
     var responses = 0;
     for (final ChatOpenPollAnswer(:response, :answer) in entry.pollAnswers) {
       if (answer == null) continue;
       responses++;
-      for (final choice in answer.choices) {
-        counts[choice]++;
+      final parts = questions.length == 1 ? [answer] : answer.parts;
+      for (final (index, tally) in tallies.indexed) {
+        if (index >= parts.length) continue;
+        tally.add(parts[index]);
+        if (response.mine || (me != null && response.userId == me)) {
+          tally.mine = parts[index];
+        }
       }
-      if (question.type == ChatPollType.text) texts.add(answer.text);
       if (response.mine || (me != null && response.userId == me)) {
         mine = answer;
       }
     }
+    final items = [for (final tally in tallies) tally.item];
+    final first = items.first;
     return ChatPollItem(
-      prompt: question.prompt,
-      type: question.type,
-      options: question.options,
-      counts: counts,
-      textAnswers: texts,
+      prompt: first.prompt,
+      type: first.type,
+      options: first.options,
+      counts: first.counts,
+      textAnswers: first.textAnswers,
+      scale: first.scale,
+      ratingCounts: first.ratingCounts,
+      questions: items,
       responseCount: responses,
       myAnswer: mine,
       isClosed: isClosed,
@@ -803,4 +814,51 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     ChatTimelineMessage(:final message) => message.id,
     ChatTimelineSystem(:final event) => event.id,
   };
+}
+
+/// One question's tally while [ChatMessagesController.pollItemFor] walks the
+/// answers.
+class _QuestionTally {
+  _QuestionTally(this.question)
+    : counts = List.filled(question.options.length, 0),
+      ratings = List.filled(question.scale, 0);
+
+  final ChatPollQuestion question;
+  final List<int> counts;
+  final List<String> texts = [];
+  final List<int> ratings;
+  ChatPollAnswer? mine;
+
+  void add(ChatPollAnswer answer) {
+    switch (question.type) {
+      case ChatPollType.single || ChatPollType.multiple:
+        for (final choice in answer.choices) {
+          if (choice >= 0 && choice < counts.length) counts[choice]++;
+        }
+      case ChatPollType.text:
+        texts.add(answer.text);
+      case ChatPollType.number:
+        final number = answer.number;
+        if (number != null) texts.add(number);
+      case ChatPollType.date:
+        final date = answer.date;
+        if (date != null) texts.add(date);
+      case ChatPollType.rating:
+        final rating = answer.rating;
+        if (rating != null && rating >= 1 && rating <= ratings.length) {
+          ratings[rating - 1]++;
+        }
+    }
+  }
+
+  ChatPollQuestionItem get item => ChatPollQuestionItem(
+    prompt: question.prompt,
+    type: question.type,
+    options: question.options,
+    counts: counts,
+    textAnswers: List.unmodifiable(texts),
+    scale: question.scale,
+    ratingCounts: ratings,
+    myAnswer: mine,
+  );
 }

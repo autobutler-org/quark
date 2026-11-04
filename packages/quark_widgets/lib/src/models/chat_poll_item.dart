@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 
 import 'chat_poll_answer.dart';
+import 'chat_poll_question_item.dart';
 import 'chat_poll_type.dart';
 
-/// A chat poll as `QuarkPollCard` draws it: its one question, its settings,
+/// A chat poll as `QuarkPollCard` draws it: its questions, its settings,
 /// and the tally the caller counted.
 ///
 /// The package's own view of a poll. Decrypting the question and the answers
@@ -17,6 +18,9 @@ class ChatPollItem {
     this.options = const [],
     this.counts = const [],
     this.textAnswers = const [],
+    this.scale = ChatPollType.defaultRating,
+    this.ratingCounts = const [],
+    this.questions = const [],
     this.responseCount = 0,
     this.myAnswer,
     this.isClosed = false,
@@ -27,10 +31,11 @@ class ChatPollItem {
     this.resultsVisible = true,
   });
 
-  /// The question.
+  /// The first question. A poll with several questions repeats it as
+  /// [questions]'s first entry; the card draws [shownQuestions].
   final String prompt;
 
-  /// What the question asks for.
+  /// What the first question asks for.
   final ChatPollType type;
 
   /// The options of a `single` or `multiple` poll, in order. Empty for a
@@ -41,14 +46,28 @@ class ChatPollItem {
   /// entry counts as zero.
   final List<int> counts;
 
-  /// The written answers of a `text` poll that the reader may see, in the
-  /// order to list them.
+  /// The written answers of a `text` question, the numbers of a `number`
+  /// question, or the `YYYY-MM-DD` days of a `date` question, for the first
+  /// question, in the order to list them.
   final List<String> textAnswers;
+
+  /// How many steps the first question offers when it is a rating.
+  final int scale;
+
+  /// How many answers gave each step of the first question when it is a
+  /// rating. Index 0 is step 1.
+  final List<int> ratingCounts;
+
+  /// Every question, in order. Empty when the poll was built from the flat
+  /// fields above, which are then its one question.
+  final List<ChatPollQuestionItem> questions;
 
   /// How many people have answered.
   final int responseCount;
 
-  /// The reader's own answer, or null before they answer.
+  /// The reader's own answer to the poll, or null before they answer. A poll
+  /// with one question uses the flat fields; one with several carries them
+  /// in [ChatPollAnswer.parts].
   final ChatPollAnswer? myAnswer;
 
   /// Whether the poll takes no more answers: its author closed it, or
@@ -76,6 +95,25 @@ class ChatPollItem {
   /// The count for the option at [index], zero when [counts] has none.
   int countAt(int index) => index < counts.length ? counts[index] : 0;
 
+  /// The questions the card draws. [questions] when it is set, and otherwise
+  /// the flat fields as the one question.
+  List<ChatPollQuestionItem> get shownQuestions => questions.isNotEmpty
+      ? questions
+      : [
+          ChatPollQuestionItem(
+            prompt: prompt,
+            type: type,
+            options: options,
+            counts: counts,
+            textAnswers: textAnswers,
+            scale: scale,
+            ratingCounts: ratingCounts,
+            myAnswer: myAnswer != null && myAnswer!.parts.isNotEmpty
+                ? myAnswer!.parts.first
+                : myAnswer,
+          ),
+        ];
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -85,6 +123,9 @@ class ChatPollItem {
           listEquals(other.options, options) &&
           listEquals(other.counts, counts) &&
           listEquals(other.textAnswers, textAnswers) &&
+          other.scale == scale &&
+          listEquals(other.ratingCounts, ratingCounts) &&
+          listEquals(other.questions, questions) &&
           other.responseCount == responseCount &&
           other.myAnswer == myAnswer &&
           other.isClosed == isClosed &&
@@ -101,6 +142,9 @@ class ChatPollItem {
     Object.hashAll(options),
     Object.hashAll(counts),
     Object.hashAll(textAnswers),
+    scale,
+    Object.hashAll(ratingCounts),
+    Object.hashAll(questions),
     responseCount,
     myAnswer,
     isClosed,

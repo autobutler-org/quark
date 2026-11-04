@@ -373,10 +373,12 @@ another account. An anonymous poll leaves it out, because its readers don't know
 opening. So the Quark can't move any answer to another poll or channel, but on an anonymous poll it could swap
 answers between the accounts that answered.
 
-The plaintext is JSON keyed by the question's id, `{"q1":[0,2]}` for the options picked or `{"q1":"text"}`
-for a written answer, zero-padded. The question itself is the poll message's text:
+The plaintext is JSON keyed by the question's id, `{"q1":[0,2]}` for the options picked, `{"q1":"text"}`
+for a written answer, `{"q1":3}` for a number or a rating, or `{"q1":"2026-11-04"}` for a date, zero-padded.
+A poll with several questions carries one key per question. The question itself is the poll message's text:
 `{"quark":"poll/1","questions":[{"id":"q1","type":"single","prompt":"…","options":["…"]}]}`, where `type` is
-`single`, `multiple` or `text`. The app treats a message as a poll only when its text parses as that and the
+`single`, `multiple`, `text`, `number`, `date` or `rating`. A rating also carries `scale`, how many steps it
+has, from 2 to 10. The app treats a message as a poll only when its text parses as that and the
 Quark holds settings for it; anything else shows as text. It tallies the answers on the device.
 
 ### What the Quark sees
