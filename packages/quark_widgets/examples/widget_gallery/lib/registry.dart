@@ -1,3 +1,4 @@
+// @dart=3.11
 // cspell:words reallocated
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -2338,6 +2339,10 @@ final List<GalleryEntry> registry = [
           status: ChatEncryptionStatus.waitingForKey,
           isChecking: true,
           onCheckAgain: () => log('QuarkEncryptionNotice.onCheckAgain'),
+        ),
+        QuarkEncryptionNotice(
+          status: ChatEncryptionStatus.waitingForKey,
+          onRegenerate: () => log('QuarkEncryptionNotice.onRegenerate'),
         ),
       ],
     ),

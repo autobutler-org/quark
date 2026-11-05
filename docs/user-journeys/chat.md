@@ -111,6 +111,10 @@ searching a channel on the device (#2429), mentioning a member (#2623), and poll
 - The composer is replaced by "Waiting for a member to share the key to this channel."
 - Once any member who has the key opens the app, the messages open and the composer returns, without a reload.
 
+**Notes:**
+
+- An admin who can read the channel sees a key button on that notice, named **Regenerate channel keys**. Confirming makes a new key and shares it with every member who has set up chat, so the channel opens without the member who created the current key. Messages already sent stay unreadable until that member opens Quark.
+
 ---
 
 ### JN-CHAT-007: Create a private channel shared with a group

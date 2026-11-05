@@ -16,18 +16,26 @@ import '../theme/quark_tokens.dart';
 ///
 /// [onCheckAgain], offered only while waiting for a key, asks the caller to
 /// look for the key now; [isChecking] holds it still with a loader.
+/// [onRegenerate], also only while waiting, asks an admin to make a new key
+/// and share it (#3455). [isRegenerating] holds that button still. The
+/// caller shows [regenerateHint] before it runs: messages already sent stay
+/// unreadable until a holder of the current key comes back.
 /// [onLearnMore] asks the caller to explain encryption, usually with a
 /// `QuarkEncryptionHelpDialog`. Without a callback, its button is left out.
 ///
 /// Key prefixes: `encryption_notice` on the card,
-/// `encryption_notice_check_again` and `encryption_notice_learn_more` on its
-/// buttons.
+/// `encryption_notice_check_again`, `encryption_notice_regenerate` and
+/// `encryption_notice_learn_more` on its buttons. The regenerate control is
+/// an icon button, [regenerateLabel] its tooltip, so it sits on the same
+/// row as "Check again" on a phone.
 ///
 /// ```dart
 /// QuarkEncryptionNotice(
 ///   status: ChatEncryptionStatus.waitingForKey,
 ///   isChecking: controller.isCheckingKey,
+///   isRegenerating: controller.isRegeneratingKey,
 ///   onCheckAgain: controller.checkKey,
+///   onRegenerate: () => controller.regenerateKey(),
 ///   onLearnMore: showEncryptionHelp,
 /// );
 /// ```
@@ -37,6 +45,8 @@ class QuarkEncryptionNotice extends StatelessWidget {
     required this.status,
     this.onCheckAgain,
     this.isChecking = false,
+    this.onRegenerate,
+    this.isRegenerating = false,
     this.onLearnMore,
     super.key,
   });
@@ -51,8 +61,26 @@ class QuarkEncryptionNotice extends StatelessWidget {
   /// Whether a check is running. Holds "Check again" still with a loader.
   final bool isChecking;
 
+  /// Called when "Regenerate channel keys" is tapped. Only offered for
+  /// [ChatEncryptionStatus.waitingForKey]. The caller confirms first.
+  final VoidCallback? onRegenerate;
+
+  /// Whether a regeneration is running. Holds its button still with a loader.
+  final bool isRegenerating;
+
   /// Called when "What does this mean?" is tapped.
   final VoidCallback? onLearnMore;
+
+  /// The regenerate button's name. It is an icon on the notice, and this
+  /// is its tooltip: a labeled button does not fit beside the others on a
+  /// phone.
+  static const regenerateLabel = 'Regenerate channel keys';
+
+  /// What regenerating does not unlock. The caller shows it before running
+  /// [onRegenerate].
+  static const regenerateHint =
+      'Messages already sent stay unreadable until the member who holds '
+      'the current key opens Quark.';
 
   /// The notice's heading for [status].
   static String titleOf(ChatEncryptionStatus status) => switch (status) {
@@ -84,6 +112,7 @@ class QuarkEncryptionNotice extends StatelessWidget {
     final waiting = status == ChatEncryptionStatus.waitingForKey;
     final color = waiting ? tokens.primary : tokens.warning;
     final onCheckAgain = waiting ? this.onCheckAgain : null;
+    final onRegenerate = waiting ? this.onRegenerate : null;
     final onLearnMore = this.onLearnMore;
 
     return Padding(
@@ -133,7 +162,9 @@ class QuarkEncryptionNotice extends StatelessWidget {
                       bodyOf(status),
                       style: TextStyle(color: tokens.mutedForeground),
                     ),
-                    if (onCheckAgain != null || onLearnMore != null)
+                    if (onCheckAgain != null ||
+                        onRegenerate != null ||
+                        onLearnMore != null)
                       Wrap(
                         spacing: tokens.spacingSm,
                         crossAxisAlignment: WrapCrossAlignment.center,
@@ -148,6 +179,22 @@ class QuarkEncryptionNotice extends StatelessWidget {
                                   ? const QuarkLoader(size: 16)
                                   : const Icon(QuarkIcons.refresh, size: 18),
                               label: const Text('Check again'),
+                            ),
+                          if (onRegenerate != null)
+                            Tooltip(
+                              message: regenerateLabel,
+                              child: IconButton(
+                                key: const ValueKey(
+                                  'encryption_notice_regenerate',
+                                ),
+                                onPressed: isRegenerating ? null : onRegenerate,
+                                icon: isRegenerating
+                                    ? const QuarkLoader(size: 16)
+                                    : const Icon(
+                                        QuarkIcons.key_outlined,
+                                        size: 18,
+                                      ),
+                              ),
                             ),
                           if (onLearnMore != null)
                             TextButton.icon(

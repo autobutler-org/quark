@@ -30,20 +30,13 @@ class _FakeQuark {
 
   Uint8List signKeyOf(int user) => members[user]!.sign.publicKey;
 
-  ChatChannelKeysController client(int me) => ChatChannelKeysController(
-    identity: () => members[me],
-    crypto: () => crypto,
-    userId: () => me,
-    fetchKeys: (channelId) async => ChatChannelKeys(
-      currentVersion: current,
-      versions: [for (var v = 1; v <= current; v++) v],
-      grants: [
-        for (final g in grants.values)
-          if (g.userId == me) g,
-      ],
-      rotationNeeded: rotationNeeded,
-    ),
-    createVersion: (channelId, version, sealedKey, signature) async {
+  ChatChannelKeysController client(int me) {
+    Future<ChatChannelEvent?> store(
+      int channelId,
+      int version,
+      Uint8List sealedKey,
+      Uint8List signature,
+    ) async {
       if (version != current + 1) return null;
       current = version;
       rotationNeeded = false;
@@ -65,58 +58,79 @@ class _FakeQuark {
       );
       events.add(event);
       return event;
-    },
-    fetchPending: (channelId) async => ChatPendingGrants(
-      pending: [
-        for (var v = 1; v <= current; v++)
-          if (grants.containsKey((v, me)))
-            for (final entry in members.entries)
-              if (!grants.containsKey((v, entry.key)))
-                ChatPendingGrant(
-                  version: v,
-                  userId: entry.key,
-                  boxPublicKey: entry.value.box.publicKey,
-                ),
-      ],
-      currentVersion: current,
-      rotationNeeded: rotationNeeded,
-    ),
-    uploadGrants: (channelId, uploads) async {
-      for (final g in uploads) {
-        grants.putIfAbsent(
-          (g.version, g.userId),
-          () => ChatKeyGrant(
-            version: g.version,
-            userId: g.userId,
-            sealedKey: g.sealedKey,
-            grantedBy: me,
-            granterSignKey: signKeyOf(me),
-            signature: g.signature,
-          ),
+    }
+
+    return ChatChannelKeysController(
+      identity: () => members[me],
+      crypto: () => crypto,
+      userId: () => me,
+      fetchKeys: (channelId) async => ChatChannelKeys(
+        currentVersion: current,
+        versions: [for (var v = 1; v <= current; v++) v],
+        grants: [
+          for (final g in grants.values)
+            if (g.userId == me) g,
+        ],
+        rotationNeeded: rotationNeeded,
+      ),
+      createVersion: (channelId, version, sealedKey, signature) async {
+        // The ordinary route refuses a version nobody's departure asked for.
+        if (current > 0 && !rotationNeeded) return null;
+        return store(channelId, version, sealedKey, signature);
+      },
+      regenerateVersion: store,
+      fetchPending: (channelId) async => ChatPendingGrants(
+        pending: [
+          for (var v = 1; v <= current; v++)
+            if (grants.containsKey((v, me)))
+              for (final entry in members.entries)
+                if (!grants.containsKey((v, entry.key)))
+                  ChatPendingGrant(
+                    version: v,
+                    userId: entry.key,
+                    boxPublicKey: entry.value.box.publicKey,
+                  ),
+        ],
+        currentVersion: current,
+        rotationNeeded: rotationNeeded,
+      ),
+      uploadGrants: (channelId, uploads) async {
+        for (final g in uploads) {
+          grants.putIfAbsent(
+            (g.version, g.userId),
+            () => ChatKeyGrant(
+              version: g.version,
+              userId: g.userId,
+              sealedKey: g.sealedKey,
+              grantedBy: me,
+              granterSignKey: signKeyOf(me),
+              signature: g.signature,
+            ),
+          );
+        }
+      },
+      signEvent: (channelId, eventId, signature) async {
+        final i = events.indexWhere((e) => e.id == eventId);
+        final e = events[i];
+        events[i] = ChatChannelEvent(
+          id: e.id,
+          channelId: e.channelId,
+          kind: e.kind,
+          actorId: e.actorId,
+          payload: e.payload,
+          createdAt: e.createdAt,
+          signature: signature,
+          signerSignKey: signKeyOf(me),
         );
-      }
-    },
-    signEvent: (channelId, eventId, signature) async {
-      final i = events.indexWhere((e) => e.id == eventId);
-      final e = events[i];
-      events[i] = ChatChannelEvent(
-        id: e.id,
-        channelId: e.channelId,
-        kind: e.kind,
-        actorId: e.actorId,
-        payload: e.payload,
-        createdAt: e.createdAt,
-        signature: signature,
-        signerSignKey: signKeyOf(me),
-      );
-    },
-    rejectGrant: (channelId, version) async {
-      // This fake holds one channel's grants; another channel has none.
-      if (channelId != _channel) return;
-      rejected.add((version, me));
-      grants.remove((version, me));
-    },
-  );
+      },
+      rejectGrant: (channelId, version) async {
+        // This fake holds one channel's grants; another channel has none.
+        if (channelId != _channel) return;
+        rejected.add((version, me));
+        grants.remove((version, me));
+      },
+    );
+  }
 }
 
 /// Real libsodium against a fake Quark (#2417). Accounts: 1 alice, 2 bob,
@@ -397,6 +411,40 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test(
+    'an admin regenerates a stuck channel and grants everyone with keys',
+    () async {
+      publish(1);
+      final alice = quark.client(1);
+      await alice.ensureKeys(_channel);
+      publish(2);
+      publish(3);
+      final admin = quark.client(3);
+
+      expect(await admin.ensureKeys(_channel), isTrue);
+      expect(
+        quark.current,
+        1,
+        reason: 'waiting must not use the ordinary route',
+      );
+
+      await admin.regenerate(_channel);
+
+      expect(quark.current, 2);
+      expect(admin.isWaiting(_channel), isFalse);
+      expect(admin.verifyEvent(quark.events.last), isTrue);
+      expect(quark.grants.containsKey((2, 1)), isTrue);
+      expect(quark.grants.containsKey((2, 2)), isTrue);
+      expect(quark.grants.containsKey((1, 2)), isFalse);
+      expect(quark.grants.containsKey((1, 3)), isFalse);
+
+      final bob = quark.client(2);
+      expect(await bob.ensureKeys(_channel), isFalse);
+      expect(bob.keyFor(_channel, 1), isNull);
+      sameKey(admin, bob, 2);
+    },
+  );
 
   test('a locked chat refuses to fetch keys', () async {
     final locked = quark.client(1);

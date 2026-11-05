@@ -1,3 +1,4 @@
+// @dart=3.11
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -162,6 +163,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     Future<SharePrincipals> Function() loadPrincipals =
         SharingService.principals,
     Future<bool> Function(int channelId)? ensureKeys,
+    Future<void> Function(int channelId)? regenerateKeys,
     SignMemberChangeFn? signMemberChange,
     bool Function()? isAdmin,
     ChatMessagesController Function(int channelId)? messagesFor,
@@ -196,6 +198,8 @@ class ChatController extends ChangeNotifier with SafeNotifier {
        _loadPrincipals = loadPrincipals,
        _ensureKeys =
            ensureKeys ?? ChatChannelKeysController.instance.ensureKeys,
+       _regenerateKeys =
+           regenerateKeys ?? ChatChannelKeysController.instance.regenerate,
        _signMemberChange =
            signMemberChange ??
            ChatChannelKeysController.instance.signMemberChange,
@@ -259,6 +263,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   final SetChatMemberFn _setMember;
   final Future<SharePrincipals> Function() _loadPrincipals;
   final Future<bool> Function(int channelId) _ensureKeys;
+  final Future<void> Function(int channelId) _regenerateKeys;
   final SignMemberChangeFn _signMemberChange;
   final bool Function() _isAdmin;
   final ChatMessagesController Function(int channelId) _messagesFor;
@@ -485,6 +490,39 @@ class ChatController extends ChangeNotifier with SafeNotifier {
 
   /// Whether [checkKey] is running.
   bool get isCheckingKey => _isCheckingKey;
+
+  /// Whether [regenerateKey] is running.
+  bool get isRegeneratingKey => _isRegeneratingKey;
+
+  bool _isRegeneratingKey = false;
+
+  /// Whether this admin can mint a new key for the open channel (#3455).
+  /// A member never can, and a channel that is not waiting has no key to
+  /// replace.
+  bool get canRegenerateKey => isAdmin && isWaitingForKey;
+
+  /// Creates the next key for the open channel and grants it to every member
+  /// with published chat keys. Returns the failure, or null. Does nothing
+  /// unless [canRegenerateKey].
+  Future<Object?> regenerateKey() async {
+    final channel = _selected;
+    if (channel == null || !canRegenerateKey || _isRegeneratingKey) {
+      return null;
+    }
+    _isRegeneratingKey = true;
+    notifyListeners();
+    try {
+      await _regenerateKeys(channel.id);
+      return null;
+    } catch (e) {
+      return e;
+    } finally {
+      if (!isDisposed) {
+        _isRegeneratingKey = false;
+        notifyListeners();
+      }
+    }
+  }
 
   /// Where the open channel's encryption stands, for `QuarkEncryptionNotice`
   /// (#2495), most urgent first: [isWaitingForKey]; the newest key event

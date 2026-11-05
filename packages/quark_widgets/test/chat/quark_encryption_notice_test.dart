@@ -8,6 +8,7 @@ import '../support/pump.dart';
 /// is and what to do next, in its own words, at both sizes.
 void main() {
   const checkAgain = ValueKey('encryption_notice_check_again');
+  const regenerate = ValueKey('encryption_notice_regenerate');
   const learnMore = ValueKey('encryption_notice_learn_more');
 
   for (final status in ChatEncryptionStatus.values) {
@@ -72,6 +73,63 @@ void main() {
     expect(find.byType(QuarkLoader), findsOneWidget);
     await tester.tap(find.byKey(checkAgain), warnIfMissed: false);
     expect(log, isEmpty);
+  });
+
+  testBothViewports('an admin waiting can regenerate the channel key', (
+    tester,
+    size,
+  ) async {
+    final log = <String>[];
+    await pumpAt(
+      tester,
+      Align(
+        alignment: Alignment.bottomCenter,
+        child: QuarkEncryptionNotice(
+          status: ChatEncryptionStatus.waitingForKey,
+          onCheckAgain: () => log.add('check'),
+          onRegenerate: () => log.add('regenerate'),
+        ),
+      ),
+      size: size,
+    );
+
+    expect(
+      find.byTooltip(QuarkEncryptionNotice.regenerateLabel),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(regenerate));
+    expect(log, ['regenerate']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('regenerating holds the button still with a loader', (
+    tester,
+  ) async {
+    final log = <String>[];
+    await pumpAt(
+      tester,
+      QuarkEncryptionNotice(
+        status: ChatEncryptionStatus.waitingForKey,
+        isRegenerating: true,
+        onRegenerate: () => log.add('regenerate'),
+      ),
+    );
+
+    expect(find.byType(QuarkLoader), findsOneWidget);
+    await tester.tap(find.byKey(regenerate), warnIfMissed: false);
+    expect(log, isEmpty);
+  });
+
+  testWidgets('regenerate is only offered while waiting', (tester) async {
+    await pumpAt(
+      tester,
+      QuarkEncryptionNotice(
+        status: ChatEncryptionStatus.unverifiedKey,
+        onRegenerate: () {},
+      ),
+    );
+
+    expect(find.byKey(regenerate), findsNothing);
   });
 
   testWidgets('check again is only for waiting', (tester) async {

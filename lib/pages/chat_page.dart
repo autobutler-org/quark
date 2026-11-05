@@ -175,6 +175,23 @@ class _ChatPageState extends State<ChatPage>
     showMessage(context, Errors.message(error, 'delete the message'));
   }
 
+  Future<void> _regenerateKey() async {
+    final confirmed = await confirmDestructive(
+      context,
+      title: "Regenerate this channel's keys?",
+      body:
+          'Members who have set up chat get a new key now, so this channel '
+          'can be used again. ${QuarkEncryptionNotice.regenerateHint}',
+      keyPrefix: 'regenerate_keys',
+      confirmLabel: 'Regenerate',
+      destructive: false,
+    );
+    if (!confirmed || !mounted) return;
+    final error = await _controller.regenerateKey();
+    if (error == null || !mounted) return;
+    showMessage(context, Errors.message(error, 'regenerate the channel keys'));
+  }
+
   Future<void> _explainEncryption() => showDialog<void>(
     context: context,
     builder: (dialogContext) => QuarkEncryptionHelpDialog(
@@ -603,7 +620,11 @@ class _ChatPageState extends State<ChatPage>
                         QuarkEncryptionNotice(
                           status: encryption,
                           isChecking: c.isCheckingKey,
+                          isRegenerating: c.isRegeneratingKey,
                           onCheckAgain: c.checkKey,
+                          onRegenerate: c.canRegenerateKey
+                              ? () => _regenerateKey()
+                              : null,
                           onLearnMore: _explainEncryption,
                         ),
                       for (final send in c.outboundSends)
