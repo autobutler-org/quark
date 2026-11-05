@@ -121,6 +121,7 @@ func chatError(err error) *serverutil.Response {
 	case errors.Is(err, chatutil.ErrForbidden), errors.Is(err, chatutil.ErrNotHeld),
 		errors.Is(err, chatutil.ErrNotSubset), errors.Is(err, chatutil.ErrCreatorRow),
 		errors.Is(err, chatutil.ErrNotHolder), errors.Is(err, chatutil.ErrAdminOnly),
+		errors.Is(err, chatutil.ErrRegenerateForbidden),
 		errors.Is(err, chatutil.ErrReadOnly), errors.Is(err, chatutil.ErrNotMessageAuthor),
 		errors.Is(err, chatutil.ErrNoReactions), errors.Is(err, chatutil.ErrNotReactionAuthor),
 		errors.Is(err, chatutil.ErrNoAnswers), errors.Is(err, chatutil.ErrNotPollAuthor):

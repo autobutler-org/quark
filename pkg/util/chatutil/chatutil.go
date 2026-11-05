@@ -1017,6 +1017,9 @@ var (
 	// ErrRotationNotNeeded reports creating a key version after the first
 	// while nobody outside the channel holds the current one.
 	ErrRotationNotNeeded = errors.New("the channel key doesn't need rotating")
+	// ErrRegenerateForbidden reports a member who isn't an admin asking to
+	// create the next key version without a rotation (#3455).
+	ErrRegenerateForbidden = errors.New("only an admin can regenerate a channel's keys")
 	// ErrInvalidGrant reports a grant of the wrong size, or for an account
 	// that isn't a member with published chat keys.
 	ErrInvalidGrant = errors.New("that key grant is malformed or names someone who can't receive it")
@@ -1331,6 +1334,10 @@ type CreateKeyVersionParams struct {
 	Version   int64
 	SealedKey []byte
 	Signature []byte
+	// Regenerate lets an admin create the next version even when rotation
+	// isn't needed (#3455). A non-admin is ErrRegenerateForbidden. The
+	// ordinary route leaves this false.
+	Regenerate bool
 }
 
 // CreateKeyVersionResult is the new version, the caller's grant and the
@@ -1344,7 +1351,9 @@ type CreateKeyVersionResult struct {
 // CreateKeyVersion lets any member start a channel's key, or rotate it once
 // rotation is needed (ErrRotationNotNeeded otherwise), storing the caller's
 // grant of the new key with it; the caller then fills the other members'
-// grants through UploadGrants. A version that isn't the
+// grants through UploadGrants. With Regenerate set, an admin who holds
+// read_messages may create that next version even when rotation isn't
+// needed (#3455); anyone else is ErrRegenerateForbidden. A version that isn't the
 // next one is ErrVersionConflict, so two clients racing to rotate leave one
 // winner. Access errors are GetChannelKeys'.
 func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, error) {
@@ -1366,6 +1375,11 @@ func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, er
 	if !grantSigned(signKey, params.ChannelID, own) {
 		return CreateKeyVersionResult{}, ErrGrantSignature
 	}
+	// A non-member already failed requireMember. A member who isn't an
+	// admin cannot use Regenerate; the ordinary route leaves it false.
+	if params.Regenerate && !params.Principal.IsAdmin {
+		return CreateKeyVersionResult{}, ErrRegenerateForbidden
+	}
 	var result CreateKeyVersionResult
 	err = db.InTx(params.Ctx, params.Database.Db, func(q db.Querier) error {
 		// Lock before reading, so a second creator waits under busy_timeout
@@ -1383,7 +1397,9 @@ func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, er
 		}
 		// Only a removal rotates the key (#2485): without one, a member could
 		// mint versions at will and bury the channel's history under them.
-		if state.current > 0 && !state.rotationNeeded() {
+		// An admin regenerating a stuck channel is the exception (#3455),
+		// and that route is rate-limited with this one.
+		if state.current > 0 && !state.rotationNeeded() && !params.Regenerate {
 			return ErrRotationNotNeeded
 		}
 		actor := sql.NullInt64{Int64: params.Principal.UserID, Valid: true}

@@ -45,10 +45,19 @@ func (f fixture) signedGrant(as string, channelID, version int64, to string, fil
 }
 
 func (f fixture) createVersion(as string, channelID, version int64) (chatutil.CreateKeyVersionResult, error) {
+	return f.createVersionAs(as, channelID, version, false)
+}
+
+// regenerate asks to create the next version even when nobody has left.
+func (f fixture) regenerate(as string, channelID, version int64) (chatutil.CreateKeyVersionResult, error) {
+	return f.createVersionAs(as, channelID, version, true)
+}
+
+func (f fixture) createVersionAs(as string, channelID, version int64, regenerate bool) (chatutil.CreateKeyVersionResult, error) {
 	own := f.signedGrant(as, channelID, version, as, 9)
 	return chatutil.CreateKeyVersion(chatutil.CreateKeyVersionParams{
 		Ctx: context.Background(), Database: f.database, EventBus: f.bus, Principal: f.as(as), ChannelID: channelID,
-		Version: version, SealedKey: own.SealedKey, Signature: own.Signature,
+		Version: version, SealedKey: own.SealedKey, Signature: own.Signature, Regenerate: regenerate,
 	})
 }
 
@@ -420,6 +429,67 @@ func TestRemovalNeedsRotation(t *testing.T) {
 	}
 	if !f.channelKeys(t, "bob", channel.ID).RotationNeeded {
 		t.Error("no rotation after carol's account was deleted")
+	}
+}
+
+// TestAdminRegeneratesStuckChannel is the channel whose first holder went
+// offline before anyone else had a grant (#3455). A member still cannot
+// mint the next version. An admin who can read the channel can, and then
+// grant it, without that holder coming back. An admin who cannot read it
+// is still a stranger.
+func TestAdminRegeneratesStuckChannel(t *testing.T) {
+	f := newFixture(t)
+	f.publishKeys(t, "bob", "carol", "admin")
+	channel := f.general(t)
+	if _, err := f.createVersion("bob", channel.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.createVersion("carol", channel.ID, 2); !errors.Is(err, chatutil.ErrRotationNotNeeded) {
+		t.Errorf("carol rotating a stuck channel: %v, want ErrRotationNotNeeded", err)
+	}
+	if _, err := f.regenerate("carol", channel.ID, 2); !errors.Is(err, chatutil.ErrRegenerateForbidden) {
+		t.Errorf("carol regenerating: %v, want ErrRegenerateForbidden", err)
+	}
+	if _, err := f.createVersion("admin", channel.ID, 2); !errors.Is(err, chatutil.ErrRotationNotNeeded) {
+		t.Errorf("admin on the ordinary route: %v, want ErrRotationNotNeeded", err)
+	}
+
+	created, err := f.regenerate("admin", channel.ID, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Event.Kind != chatutil.EventKeyCreated || created.Version.Version != 2 || created.Event.ActorID != f.users["admin"] {
+		t.Errorf("regenerate recorded %+v event %+v", created.Version, created.Event)
+	}
+	if got := f.pendingFor(t, "admin", channel.ID); !slices.Equal(got[2], []string{"bob", "carol"}) || got[1] != nil {
+		t.Errorf("admin can fill %v, want bob and carol for version 2 only", got)
+	}
+	for _, name := range []string{"bob", "carol"} {
+		if _, err := f.grant("admin", channel.ID, 2, name, 2); err != nil {
+			t.Fatal(err)
+		}
+	}
+	keys := f.channelKeys(t, "carol", channel.ID)
+	if keys.CurrentVersion != 2 || len(keys.Grants) != 1 || keys.Grants[0].Version != 2 || keys.Grants[0].GrantedBy != f.users["admin"] {
+		t.Errorf("carol after regeneration, with bob still offline: %+v", keys)
+	}
+
+	// dave publishes keys only after the new version exists. The admin, a
+	// holder of it, can grant him; bob still never came back.
+	f.publishKeys(t, "dave")
+	if got := f.pendingFor(t, "admin", channel.ID); !slices.Equal(got[2], []string{"dave"}) {
+		t.Errorf("after dave publishes keys, admin can fill %v, want dave for version 2", got)
+	}
+	if _, err := f.grant("admin", channel.ID, 2, "dave", 3); err != nil {
+		t.Fatal(err)
+	}
+
+	secret := f.create(t, "bob", "secret")
+	if _, err := f.createVersion("bob", secret.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.regenerate("admin", secret.ID, 2); !errors.Is(err, chatutil.ErrChannelNotFound) {
+		t.Errorf("admin regenerating a channel they cannot read: %v, want ErrChannelNotFound", err)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 )
 
 func b64(fill byte, n int) string {
@@ -118,5 +119,66 @@ func TestChatChannelKeys_Distribution(t *testing.T) {
 		h.expect(t, http.StatusNotFound, http.MethodGet, privatePath+"/events", as, "", nil)
 		h.expect(t, http.StatusNotFound, http.MethodPost, privatePath+"/keys/grants", as,
 			`{"grants":[`+grantBody('c', private.ID, 1, h.users["bob"], 'c')+`]}`, nil)
+		h.expect(t, http.StatusNotFound, http.MethodPost, privatePath+"/keys/regenerate", as,
+			createKeyBody('c', private.ID, 2, h.users[as]), nil)
 	}
+}
+
+// TestChatChannelKeys_AdminRegenerates lets an admin open general after bob
+// created version 1 and went offline (#3455). Carol cannot. The new version
+// is a signed key_created event, and uploading grants does not need bob.
+// Regenerating shares the key-version rate limit.
+func TestChatChannelKeys_AdminRegenerates(t *testing.T) {
+	h := newHarness(t)
+	h.expect(t, http.StatusOK, http.MethodPut, "/chat/keys/me", "bob", keysBody('b', false), nil)
+	h.expect(t, http.StatusOK, http.MethodPut, "/chat/keys/me", "carol", keysBody('c', false), nil)
+	h.expect(t, http.StatusOK, http.MethodPut, "/chat/keys/me", "admin", keysBody('a', false), nil)
+
+	var channels chatutil.ListChannelsResult
+	h.expect(t, http.StatusOK, http.MethodGet, "/chat/channels", "bob", "", &channels)
+	general := channels.Channels[0].ID
+	keysPath := "/chat/channels/" + strconv.FormatInt(general, 10) + "/keys"
+	h.expect(t, http.StatusOK, http.MethodPost, keysPath, "bob", createKeyBody('b', general, 1, h.users["bob"]), nil)
+
+	h.expect(t, http.StatusForbidden, http.MethodPost, keysPath+"/regenerate", "carol",
+		createKeyBody('c', general, 2, h.users["carol"]), nil)
+	h.expect(t, http.StatusConflict, http.MethodPost, keysPath, "admin",
+		createKeyBody('a', general, 2, h.users["admin"]), nil)
+
+	var created chatutil.CreateKeyVersionResult
+	h.expect(t, http.StatusOK, http.MethodPost, keysPath+"/regenerate", "admin",
+		createKeyBody('a', general, 2, h.users["admin"]), &created)
+	if created.Event.Kind != chatutil.EventKeyCreated || created.Version.Version != 2 || created.Event.ActorID != h.users["admin"] {
+		t.Errorf("regenerate = version %+v event %+v", created.Version, created.Event)
+	}
+
+	var pending chatutil.ListPendingGrantsResult
+	h.expect(t, http.StatusOK, http.MethodGet, keysPath+"/pending", "admin", "", &pending)
+	pendingUsers := map[int64]map[int64]bool{}
+	for _, p := range pending.Pending {
+		if pendingUsers[p.Version] == nil {
+			pendingUsers[p.Version] = map[int64]bool{}
+		}
+		pendingUsers[p.Version][p.UserID] = true
+	}
+	if pendingUsers[1] != nil || !pendingUsers[2][h.users["bob"]] || !pendingUsers[2][h.users["carol"]] {
+		t.Fatalf("pending = %+v, want bob and carol for version 2 only", pending.Pending)
+	}
+	h.expect(t, http.StatusOK, http.MethodPost, keysPath+"/grants", "admin",
+		`{"grants":[`+grantBody('a', general, 2, h.users["carol"], 'x')+`]}`, nil)
+	var keys chatutil.GetChannelKeysResult
+	h.expect(t, http.StatusOK, http.MethodGet, keysPath, "carol", "", &keys)
+	if len(keys.Grants) != 1 || keys.Grants[0].Version != 2 || keys.Grants[0].GrantedBy != h.users["admin"] {
+		t.Errorf("carol's grants = %+v, want version 2 from admin", keys.Grants)
+	}
+
+	h.deps.WithChatRateLimiter(ratelimitutil.NewWithRate(0, 1))
+	h.expect(t, http.StatusOK, http.MethodPost, keysPath+"/regenerate", "admin",
+		createKeyBody('a', general, 3, h.users["admin"]), nil)
+	h.expect(t, http.StatusTooManyRequests, http.MethodPost, keysPath+"/regenerate", "admin",
+		createKeyBody('a', general, 4, h.users["admin"]), nil)
+	h.expect(t, http.StatusTooManyRequests, http.MethodPost, keysPath, "admin",
+		createKeyBody('a', general, 4, h.users["admin"]), nil)
+	h.expect(t, http.StatusConflict, http.MethodPost, keysPath, "carol",
+		createKeyBody('c', general, 4, h.users["carol"]), nil)
 }
