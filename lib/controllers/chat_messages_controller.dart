@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:quark/controllers/chat_channel_keys_controller.dart';
@@ -9,6 +10,7 @@ import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
 import 'package:quark/models/chat_poll.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/chat_attachment_message.dart';
 import 'package:quark/services/chat_channel_keys_service.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/chat_messages_service.dart';
@@ -70,6 +72,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       int keyVersion,
       Uint8List ciphertext, {
       String? clientMessageId,
+      List<String>? attachmentIds,
       ChatPoll? poll,
     })?
     postMessage,
@@ -89,6 +92,13 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     answerPoll,
     Future<List<ChatPollResponse>> Function(int messageId)? fetchPollAnswers,
     Future<ChatPoll> Function(int messageId)? closePoll,
+    Future<int> Function(int channelId, String id, Object body)? putAttachment,
+    Future<Stream<List<int>>> Function(
+      int channelId,
+      String id, {
+      StreamSink<List<int>>? sink,
+    })?
+    getAttachment,
     int? Function()? currentUserId,
     Future<List<ChatChannelEvent>> Function(int channelId, {int after})?
     fetchEvents,
@@ -105,6 +115,8 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
        _fetchPollAnswers =
            fetchPollAnswers ?? ChatMessagesService.fetchPollAnswers,
        _closePoll = closePoll ?? ChatMessagesService.closePoll,
+       _putAttachment = putAttachment ?? ChatMessagesService.putAttachment,
+       _getAttachment = getAttachment ?? ChatMessagesService.getAttachment,
        _currentUserId =
            currentUserId ?? (() => AppSettings.instance.userId.value),
        _fetchEvents = fetchEvents ?? ChatChannelKeysService.fetchEvents,
@@ -134,6 +146,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     int keyVersion,
     Uint8List ciphertext, {
     String? clientMessageId,
+    List<String>? attachmentIds,
     ChatPoll? poll,
   })
   _postMessage;
@@ -154,6 +167,18 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   final Future<List<ChatPollResponse>> Function(int messageId)
   _fetchPollAnswers;
   final Future<ChatPoll> Function(int messageId) _closePoll;
+  final Future<int> Function(int channelId, String id, Object body)
+  _putAttachment;
+  final Future<Stream<List<int>>> Function(
+    int channelId,
+    String id, {
+    StreamSink<List<int>>? sink,
+  })
+  _getAttachment;
+
+  /// The most bytes of an image this client decodes into memory. A larger
+  /// image is refused before the download starts.
+  static const maxInlineImageBytes = 20 << 20;
   final int? Function() _currentUserId;
   final Future<List<ChatChannelEvent>> Function(int channelId, {int after})
   _fetchEvents;
@@ -307,6 +332,127 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     );
     _put(stored, text: text);
     notifyListeners();
+  }
+
+  /// Seals [bytes] as one attachment, uploads it, and posts the message.
+  ///
+  /// [caption] may be empty: a file with no caption is still a message. The
+  /// stored row is opened again so the timeline carries the file's name and
+  /// key, the same way a message loaded later does. Throws like [send] when
+  /// the channel key is missing, and whatever the upload or the post throws.
+  Future<void> sendAttachment({
+    required String name,
+    required String mime,
+    required Uint8List bytes,
+    String caption = '',
+    String? clientMessageId,
+  }) async {
+    final (crypto, version, key) = await _currentKey();
+    final prepared = await prepareAttachmentMessage(
+      crypto: crypto,
+      channelId: channelId,
+      keyVersion: version,
+      channelKey: key,
+      text: caption,
+      files: [AttachmentPlaintext(name: name, mime: mime, bytes: bytes)],
+    );
+    for (var i = 0; i < prepared.attachmentIds.length; i++) {
+      await _putAttachment(
+        channelId,
+        prepared.attachmentIds[i],
+        prepared.sealedBytes[i],
+      );
+    }
+    final stored = await _postMessage(
+      channelId,
+      version,
+      prepared.ciphertext,
+      clientMessageId: clientMessageId,
+      attachmentIds: prepared.attachmentIds,
+    );
+    // Decrypt the post we just made so the row has the caption and the
+    // file key. Passing the caption alone would drop the attachment.
+    _put(stored);
+    notifyListeners();
+  }
+
+  /// The thumbnail bytes for [attachmentId], or null when that file has none.
+  Uint8List? thumbnailFor(String attachmentId) {
+    final thumb = _described(attachmentId)?.thumbnail;
+    if (thumb == null || thumb.isEmpty) return null;
+    return thumb;
+  }
+
+  /// Decrypts image [attachmentId] into memory.
+  ///
+  /// Refuses a file larger than [maxInlineImageBytes] before downloading it.
+  /// Throws [StateError] when the file is missing, too large, or chat is
+  /// locked, and whatever the download or the decrypt throws.
+  Future<Uint8List> readImageAttachment(String attachmentId) async {
+    final described = _described(attachmentId);
+    if (described == null) {
+      throw StateError('no attachment $attachmentId');
+    }
+    if (described.size > maxInlineImageBytes) {
+      throw StateError('attachment $attachmentId is ${described.size} bytes');
+    }
+    final crypto = _crypto();
+    if (crypto == null) throw StateError('chat is locked');
+    final sealed = await _getAttachment(channelId, described.id);
+    final key = crypto.sodium.secureCopy(described.key);
+    final builder = BytesBuilder(copy: false);
+    try {
+      await for (final part in crypto.openAttachment(
+        key: key,
+        noncePrefix: described.nonce,
+        input: sealed,
+        totalBytes: described.size,
+      )) {
+        if (builder.length + part.length > maxInlineImageBytes) {
+          throw StateError(
+            'attachment $attachmentId is larger than $maxInlineImageBytes bytes',
+          );
+        }
+        builder.add(part);
+      }
+    } finally {
+      key.dispose();
+    }
+    return builder.takeBytes();
+  }
+
+  /// Decrypts [attachmentId] one chunk at a time.
+  ///
+  /// Nothing is buffered into one list. The caller writes the chunks out.
+  /// The file key stays alive until the stream finishes or is canceled.
+  Stream<List<int>> openAttachmentPlaintext(String attachmentId) async* {
+    final described = _described(attachmentId);
+    if (described == null) {
+      throw StateError('no attachment $attachmentId');
+    }
+    final crypto = _crypto();
+    if (crypto == null) throw StateError('chat is locked');
+    final sealed = await _getAttachment(channelId, described.id);
+    final key = crypto.sodium.secureCopy(described.key);
+    try {
+      yield* crypto.openAttachment(
+        key: key,
+        noncePrefix: described.nonce,
+        input: sealed,
+        totalBytes: described.size,
+      );
+    } finally {
+      key.dispose();
+    }
+  }
+
+  ChatOpenAttachment? _described(String attachmentId) {
+    for (final entry in _messages.values) {
+      for (final file in entry.attachments) {
+        if (file.id == attachmentId) return file;
+      }
+    }
+    return null;
   }
 
   /// Answers poll [messageId] with [answer], padded to one size and
@@ -534,6 +680,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     ChatMessage message,
     ChatMessageState state, [
     String? text,
+    List<ChatOpenAttachment> attachments = const [],
   ]) {
     final poll = message.poll;
     final question = poll == null || text == null
@@ -544,6 +691,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       state: state,
       text: text,
       reactions: _openReactions(message),
+      attachments: attachments,
       question: question,
       pollAnswers: poll == null || question == null
           ? const []
@@ -576,6 +724,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       held.message.copyWith(poll: change(poll)),
       held.state,
       held.text,
+      held.attachments,
     );
     notifyListeners();
   }
@@ -655,7 +804,12 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
         if (!remove.contains(r.id) && r.id != add?.id) r,
       ?add,
     ]);
-    _messages[messageId] = _entry(message, held.state, held.text);
+    _messages[messageId] = _entry(
+      message,
+      held.state,
+      held.text,
+      held.attachments,
+    );
     notifyListeners();
   }
 
@@ -717,6 +871,21 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
           keyVersion: message.keyVersion,
         ),
       );
+      final decoded = decodeAttachmentMessage(plain);
+      if (decoded != null) {
+        return _entry(message, ChatMessageState.ready, decoded.text, [
+          for (final file in decoded.attachments)
+            ChatOpenAttachment(
+              id: file.id,
+              name: file.name,
+              mime: file.mime,
+              size: file.size,
+              key: file.key,
+              nonce: file.nonce,
+              thumbnail: file.thumbnail,
+            ),
+        ]);
+      }
       return _entry(message, ChatMessageState.ready, utf8.decode(plain));
     } on Object catch (e) {
       debugPrint(

@@ -4,6 +4,7 @@ import 'package:quark_icons/quark_icons.dart';
 import '../core/empty_state_widget.dart';
 import '../core/quark_avatar.dart';
 import '../core/quark_loader.dart';
+import '../models/chat_attachment_item.dart';
 import '../models/chat_message_item.dart';
 import '../models/chat_poll_answer.dart';
 import '../models/chat_permission.dart';
@@ -72,6 +73,11 @@ import 'quark_message_list/chat_system_line.dart';
 /// is offered only on the user's own polls, and "Export" fires [onExportPoll]
 /// wherever the results are visible.
 ///
+/// A text message's attachments are drawn under its body, each as a
+/// `ChatAttachmentTile`. An empty body with attachments shows only those.
+/// [thumbnailBuilder] supplies an image's preview. A tap fires
+/// [onOpenAttachment], and a video's play control fires [onPlayAttachment].
+///
 /// With [onOpenLink] set, each `http://`, `https://` or `www.` address in a
 /// text message is drawn as a link, and a tap fires [onOpenLink] with its
 /// [Uri]; the caller opens it. An unverified sender's message, and every
@@ -108,7 +114,7 @@ import 'quark_message_list/chat_system_line.dart';
 /// picker,
 /// `message_reaction_<id>_<emoji>` on each reaction chip,
 /// `message_help_<id>` on a system line's "(?)", those of `QuarkPollCard`
-/// on a poll,
+/// on a poll, those of `ChatAttachmentTile` on an attachment,
 /// `message_list_load_older` on the load button,
 /// `message_list_retry` on the retry button, and `message_list_not_member`
 /// on the not-a-member pane.
@@ -128,6 +134,9 @@ import 'quark_message_list/chat_system_line.dart';
 ///   onDelete: controller.deleteMessage,
 ///   onReact: controller.toggleReaction,
 ///   onOpenLink: (uri) => launchUrl(uri),
+///   onOpenAttachment: controller.openAttachment,
+///   onPlayAttachment: controller.playAttachment,
+///   thumbnailBuilder: (context, item) => thumbnailOf(item),
 ///   onAtBottomChanged: controller.setAtBottom,
 ///   avatarBuilder: (context, userId) => AppAvatar(userId: userId),
 /// );
@@ -152,6 +161,9 @@ class QuarkMessageList extends StatefulWidget {
     this.onAnswerPoll,
     this.onClosePoll,
     this.onExportPoll,
+    this.onOpenAttachment,
+    this.onPlayAttachment,
+    this.thumbnailBuilder,
     this.onEncryptionHelp,
     this.onAtBottomChanged,
     this.avatarBuilder,
@@ -246,6 +258,21 @@ class QuarkMessageList extends StatefulWidget {
 
   /// Called with a poll message's id to export its results.
   final ValueChanged<String>? onExportPoll;
+
+  /// Called with a message's id and an image or a file attached to it when
+  /// the tile is tapped. Null leaves those tiles inert.
+  final void Function(String messageId, ChatAttachmentItem attachment)?
+  onOpenAttachment;
+
+  /// Called with a message's id and a video attached to it when its play
+  /// control is tapped. Null leaves the control disabled.
+  final void Function(String messageId, ChatAttachmentItem attachment)?
+  onPlayAttachment;
+
+  /// Builds a preview for an image attachment. Null, or a builder that
+  /// returns null, shows the file name on that tile.
+  final Widget? Function(BuildContext context, ChatAttachmentItem attachment)?
+  thumbnailBuilder;
 
   /// Called when an encryption or unverified system line's "(?)" is tapped,
   /// for the caller to explain. Null draws no "(?)".
@@ -534,6 +561,15 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
                     onExportPoll: onExportPoll == null
                         ? null
                         : () => onExportPoll(message.id),
+                    onOpenAttachment: widget.onOpenAttachment == null
+                        ? null
+                        : (attachment) =>
+                              widget.onOpenAttachment!(message.id, attachment),
+                    onPlayAttachment: widget.onPlayAttachment == null
+                        ? null
+                        : (attachment) =>
+                              widget.onPlayAttachment!(message.id, attachment),
+                    thumbnailBuilder: widget.thumbnailBuilder,
                     mentionNames: widget.mentionNames,
                     selfName: widget.currentUserName,
                     avatar: !QuarkMessageList.startsGroup(message, older)

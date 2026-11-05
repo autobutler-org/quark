@@ -1,0 +1,173 @@
+import 'package:flutter/material.dart';
+import 'package:quark_icons/quark_icons.dart';
+
+import '../layout/quark_bar_icon_button.dart';
+import '../models/chat_attachment_item.dart';
+import '../theme/quark_tokens.dart';
+import '../core/quark_tappable.dart';
+
+/// One file attached to a chat message: a photo, a video, or any other file.
+///
+/// An image asks [thumbnailBuilder] for its preview and shows the file name
+/// when that is null or returns null. A video shows a play control and does
+/// not play anything itself; this package does not depend on a video player.
+/// A file shows its name and its size in B, KiB, or MiB. A tap on an image or
+/// a file fires [onOpen]. The play control fires [onPlay].
+///
+/// Key prefixes: `chat_attachment_<id>` on the tile, and
+/// `chat_attachment_play_<id>` on a video's play control.
+///
+/// ```dart
+/// ChatAttachmentTile(
+///   item: item,
+///   thumbnailBuilder: (context, item) => thumbnailOf(item),
+///   onOpen: () => open(item),
+///   onPlay: () => play(item),
+/// )
+/// ```
+class ChatAttachmentTile extends StatelessWidget {
+  /// Creates the tile for [item].
+  const ChatAttachmentTile({
+    required this.item,
+    this.thumbnailBuilder,
+    this.onOpen,
+    this.onPlay,
+    super.key,
+  });
+
+  /// The file to draw.
+  final ChatAttachmentItem item;
+
+  /// Builds an image's preview. Null, or a builder that returns null, shows
+  /// the file name instead. Not called for a video or a file.
+  final Widget? Function(BuildContext context, ChatAttachmentItem item)?
+  thumbnailBuilder;
+
+  /// Called when an image or a file is tapped. Null leaves that tile inert.
+  /// A video's play control does not call this.
+  final VoidCallback? onOpen;
+
+  /// Called when a video's play control is tapped. Null leaves the control
+  /// disabled.
+  final VoidCallback? onPlay;
+
+  static const double _previewHeight = 160;
+  static const double _maxWidth = 280;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = QuarkTokens.of(context);
+    final item = this.item;
+    final preview = item.kind == ChatAttachmentKind.image
+        ? thumbnailBuilder?.call(context, item)
+        : null;
+    final name = Text(
+      item.name,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: tokens.foreground),
+    );
+    final size = Text(
+      _formatSize(item.size),
+      style: TextStyle(color: tokens.mutedForeground, fontSize: 12),
+    );
+
+    final Widget body;
+    final VoidCallback? onTap;
+    if (item.kind == ChatAttachmentKind.video) {
+      onTap = null;
+      body = Row(
+        children: [
+          QuarkBarIconButton(
+            key: ValueKey('chat_attachment_play_${item.id}'),
+            icon: QuarkIcons.play_arrow_rounded,
+            tooltip: 'Play',
+            onPressed: onPlay,
+          ),
+          SizedBox(width: tokens.spacingSm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [name, size],
+            ),
+          ),
+        ],
+      );
+    } else if (preview != null) {
+      onTap = onOpen;
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(tokens.radiusSm),
+            child: SizedBox(
+              width: double.infinity,
+              height: _previewHeight,
+              child: preview,
+            ),
+          ),
+          SizedBox(height: tokens.spacingXs),
+          name,
+          size,
+        ],
+      );
+    } else {
+      onTap = onOpen;
+      body = Row(
+        children: [
+          Icon(
+            item.kind == ChatAttachmentKind.image
+                ? QuarkIcons.image_outlined
+                : QuarkIcons.insert_drive_file_outlined,
+            size: 20,
+            color: tokens.mutedForeground,
+          ),
+          SizedBox(width: tokens.spacingSm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [name, size],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _maxWidth),
+        child: Semantics(
+          button: onTap != null,
+          child: QuarkTappable(
+            key: ValueKey('chat_attachment_${item.id}'),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(tokens.radiusMd),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: tokens.card,
+                borderRadius: BorderRadius.circular(tokens.radiusMd),
+                border: Border.all(color: tokens.border),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(tokens.spacingSm),
+                child: body,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// [bytes] as a short size: B under 1024, then KiB, then MiB.
+String _formatSize(int bytes) {
+  if (bytes < 1024) return '${bytes < 0 ? 0 : bytes} B';
+  final (unit, scale) = bytes < 1024 * 1024
+      ? ('KiB', 1024)
+      : ('MiB', 1024 * 1024);
+  final text = (bytes / scale).toStringAsFixed(1);
+  final shown = text.endsWith('.0') ? text.substring(0, text.length - 2) : text;
+  return '$shown $unit';
+}

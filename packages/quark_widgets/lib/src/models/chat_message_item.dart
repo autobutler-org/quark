@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'chat_attachment_item.dart';
 import 'chat_poll_item.dart';
 import 'chat_reaction_item.dart';
 
@@ -29,7 +30,9 @@ enum ChatMessageKind {
 ///
 /// The package's own view of a message, so no widget imports the app's model.
 /// The body is plaintext: decrypting it is the caller's job, and a message
-/// that cannot be decrypted yet is [ChatMessageKind.waitingForKey].
+/// that cannot be decrypted yet is [ChatMessageKind.waitingForKey]. A text
+/// message may carry [attachments]. The kind stays text; the files are not
+/// a separate kind.
 @immutable
 class ChatMessageItem {
   /// Creates a message value.
@@ -43,6 +46,7 @@ class ChatMessageItem {
     this.isUnverified = false,
     this.isEncryptionEvent = false,
     this.reactions = const [],
+    this.attachments = const [],
     this.poll,
   });
 
@@ -78,6 +82,11 @@ class ChatMessageItem {
   /// Only a [ChatMessageKind.text] message draws them.
   final List<ChatReactionItem> reactions;
 
+  /// Files on a [ChatMessageKind.text] message, drawn under the body. Empty
+  /// for every other kind, and for a text message with none. An empty [body]
+  /// with a non-empty list draws only these.
+  final List<ChatAttachmentItem> attachments;
+
   /// The poll a [ChatMessageKind.poll] message carries. Ignored for the other
   /// kinds; a poll message without one draws nothing in its body.
   final ChatPollItem? poll;
@@ -95,6 +104,7 @@ class ChatMessageItem {
           other.isUnverified == isUnverified &&
           other.isEncryptionEvent == isEncryptionEvent &&
           listEquals(other.reactions, reactions) &&
+          listEquals(other.attachments, attachments) &&
           other.poll == poll;
 
   @override
@@ -108,6 +118,7 @@ class ChatMessageItem {
     isUnverified,
     isEncryptionEvent,
     Object.hashAll(reactions),
+    Object.hashAll(attachments),
     poll,
   );
 }

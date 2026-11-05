@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../layout/quark_bar_icon_button.dart';
 import '../models/chat_permission.dart';
 import '../theme/quark_tokens.dart';
 import 'chat_mentions.dart';
@@ -15,6 +16,8 @@ import 'quark_mention_suggestions.dart';
 /// is there on every platform. Enter never sends while an input method is
 /// still composing, since that Enter confirms the composition. What is sent is trimmed, a blank message is
 /// never sent, and the field clears once [onSend] has been called.
+/// [onAttach] is separate: it asks the caller to send a file, which may have
+/// an empty caption. This field still refuses a blank message.
 ///
 /// The field is replaced by a sentence saying why the user can't write, for
 /// two reasons of the channel's own and one of the caller's, first match
@@ -43,6 +46,9 @@ import 'quark_mention_suggestions.dart';
 /// the outcome leaves through [onSend].
 ///
 /// Key prefixes: `message_composer_field` on the text field,
+/// `message_composer_attach` on the attach button, shown when [onAttach]
+/// is set and [permissions] allows [ChatPermission.attachFiles] (or
+/// [permissions] is null),
 /// `message_composer_send` on the send button,
 /// `message_composer_disabled` on the disabled sentence, and those of
 /// `QuarkMentionSuggestions`.
@@ -69,6 +75,7 @@ class QuarkMessageComposer extends StatefulWidget {
     this.maxLines = 6,
     this.maxLength,
     this.mentionNames = const [],
+    this.onAttach,
     super.key,
   });
 
@@ -130,6 +137,13 @@ class QuarkMessageComposer extends StatefulWidget {
   /// The names an `@mention` can resolve to, usually the channel's members,
   /// in the order to suggest them. Empty suggests and styles nothing.
   final List<String> mentionNames;
+
+  /// Called when the attach button is pressed. The button does not pick a
+  /// file; the caller does. Null hides the button. A non-null callback still
+  /// hides it when [permissions] is set and lacks [ChatPermission.attachFiles].
+  /// Null [permissions] shows it, the same way null [permissions] leaves send
+  /// unchecked.
+  final VoidCallback? onAttach;
 
   /// Said when Enter is pressed on a blank message, under the field with key
   /// `message_composer_hint`, and as the turned-off send button's tooltip.
@@ -376,6 +390,10 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
             }
           });
 
+          final canAttach =
+              widget.onAttach != null &&
+              (permissions == null ||
+                  permissions.contains(ChatPermission.attachFiles));
           return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -392,6 +410,15 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  if (canAttach) ...[
+                    QuarkBarIconButton(
+                      key: const ValueKey('message_composer_attach'),
+                      icon: QuarkIcons.attach_file,
+                      tooltip: 'Attach a file',
+                      onPressed: widget.onAttach,
+                    ),
+                    SizedBox(width: tokens.spacingSm),
+                  ],
                   Expanded(
                     child: CallbackShortcuts(
                       bindings: {

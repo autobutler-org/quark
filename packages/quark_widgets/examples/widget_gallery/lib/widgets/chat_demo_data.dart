@@ -64,6 +64,36 @@ const ChatPollItem galleryPoll = ChatPollItem(
 /// for its key, a deleted one, and one with reactions.
 final List<ChatMessageItem> galleryChatMessages = [
   ChatMessageItem(
+    id: 'm10',
+    authorId: 'ada',
+    authorName: 'Ada Lovelace',
+    sentAt: DateTime(2026, 9, 24, 9, 50),
+    body: 'The cabin from the trail.',
+    attachments: const [
+      ChatAttachmentItem(
+        id: 'cabin',
+        name: 'cabin.jpg',
+        mime: 'image/jpeg',
+        size: 240 * 1024,
+        kind: ChatAttachmentKind.image,
+      ),
+      ChatAttachmentItem(
+        id: 'clip',
+        name: 'walk.mp4',
+        mime: 'video/mp4',
+        size: 12 * 1024 * 1024,
+        kind: ChatAttachmentKind.video,
+      ),
+      ChatAttachmentItem(
+        id: 'note',
+        name: 'directions.pdf',
+        mime: 'application/pdf',
+        size: 80 * 1024,
+        kind: ChatAttachmentKind.file,
+      ),
+    ],
+  ),
+  ChatMessageItem(
     id: 'm9',
     authorId: 'bob',
     authorName: 'Bob Byron',
