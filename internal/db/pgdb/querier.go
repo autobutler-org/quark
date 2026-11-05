@@ -23,6 +23,10 @@ type Querier interface {
 	// For the import of user-settings/: keeps settings already there, and skips a
 	// file whose account is gone.
 	AddUserSettings(ctx context.Context, arg AddUserSettingsParams) error
+	// BindChatAttachment claims one unbound attachment for a message. The caller
+	// checks that exactly one row changed: zero means the id is missing, in
+	// another channel, uploaded by someone else, or already bound.
+	BindChatAttachment(ctx context.Context, arg BindChatAttachmentParams) (int64, error)
 	CancelJob(ctx context.Context, id int64) (Job, error)
 	// Claims a pending job for an instance (#2966). The status guard makes a job
 	// canceled or claimed by another instance since it was picked match no row,
@@ -65,8 +69,7 @@ type Querier interface {
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (PhotoAlbum, error)
 	CreateCalendarEvent(ctx context.Context, arg CreateCalendarEventParams) (CalendarEvent, error)
 	// Chat attachments (#2425). The ciphertext is a file in the data directory.
-	// These rows name it. message_id stays null until a later change binds the
-	// file to a message.
+	// These rows name it. message_id stays null until a message binds the file.
 	// CreateChatAttachment stores one. created_at is the database clock, at
 	// millisecond resolution (rule 3). The caller has already checked id.
 	CreateChatAttachment(ctx context.Context, arg CreateChatAttachmentParams) (ChatAttachment, error)
@@ -110,6 +113,9 @@ type Querier interface {
 	DeleteAlbum(ctx context.Context, arg DeleteAlbumParams) error
 	DeleteCalendarEvent(ctx context.Context, id int64) (int64, error)
 	DeleteChatAttachment(ctx context.Context, id string) error
+	// DeleteChatAttachmentsByMessage drops the rows a tombstoned message bound.
+	// ON DELETE CASCADE does not run on that update, so the rows have to go here.
+	DeleteChatAttachmentsByMessage(ctx context.Context, messageID sql.NullInt64) error
 	// DeleteChatChannel drops a channel and, by ON DELETE CASCADE, its members.
 	// The default channel is never deleted.
 	DeleteChatChannel(ctx context.Context, id int64) (int64, error)
@@ -320,6 +326,10 @@ type Querier interface {
 	// ListChatAttachmentIDsByChannel is every attachment in one channel, so
 	// deleting the channel can remove the files after the rows are gone.
 	ListChatAttachmentIDsByChannel(ctx context.Context, channelID int64) ([]string, error)
+	// ListChatAttachmentIDsByMessage is every attachment bound to one message, so
+	// deleting the message can remove the files. A tombstone does not fire the
+	// foreign key's ON DELETE CASCADE.
+	ListChatAttachmentIDsByMessage(ctx context.Context, messageID sql.NullInt64) ([]string, error)
 	// ListChatChannelEvents pages a channel's events oldest first, after an id.
 	ListChatChannelEvents(ctx context.Context, arg ListChatChannelEventsParams) ([]ChatChannelEvent, error)
 	// ListChatChannelGroupUsers expands each group row on a channel into the

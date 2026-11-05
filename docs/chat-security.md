@@ -339,17 +339,17 @@ The ciphertext is one file per attachment, addressed by an id the client chooses
 - `PUT /api/v0/chat/channels/:id/attachments/:attachmentId` writes that file. It needs `attach_files`, which the
   Member preset carries and which needs `read_messages`. A reader without it gets 403. Anyone without
   `read_messages` gets 404, delegated managers and admins included. The same id a second time is 409.
-- `GET` on the same path serves the ciphertext and honors a `Range` request. Nothing is bound to a message yet.
-  `message_id` is on the row for the next change, and while it is null only the account that uploaded the file
-  can read it; anyone else gets 404. Once a row is bound, reading it needs `read_messages`, and anyone without
-  that gets 404 too.
+- `GET` on the same path serves the ciphertext and honors a `Range` request. While `message_id` is null, only the
+  account that uploaded the file can read it; anyone else gets 404. Once a row is bound, reading it needs
+  `read_messages`, and anyone without that gets 404 too.
 
 The Quark sees the ciphertext length and which channel and account uploaded it. It does not see the name, the
 media type, or the key.
 
-Deleting a channel deletes its attachment files. Deleting a message does not yet, because no attachment is bound
-to one. The chat SQL backup copies the `chat_attachments` rows. The ciphertext files under `chat-attachments`
-in the data directory are not in that backup.
+Posting a message carries its attachment ids in the clear: the server has to know which files to delete, while
+the name, the media type and the key stay inside the ciphertext. Deleting a channel deletes its attachment
+files. Deleting a message deletes the files bound to it. The chat SQL backup copies the `chat_attachments`
+rows. The ciphertext files under `chat-attachments` in the data directory are not in that backup.
 
 4 GiB is the server's disk cap. It is not a limit on decrypting in the browser: the app opens one chunk at a time.
 

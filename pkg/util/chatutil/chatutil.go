@@ -54,8 +54,9 @@
 // Attachments (#2425) are ciphertext the client sealed under a key the
 // message carries. The Quark stores the bytes and which channel and account
 // uploaded them, never the name, the media type or the key. Uploading needs
-// PermAttachFiles. Nothing binds an attachment to a message yet, so only the
-// uploader can read one back, and deleting a channel removes the files.
+// PermAttachFiles. A post binds the ids it names; until then only the
+// uploader can read one back. Deleting the message or the channel removes
+// the files.
 //
 // Read markers (#2424) record how far each account has read in each channel,
 // and never move backward. ListChannels counts what is unread past the
@@ -1730,6 +1731,9 @@ type PostMessageParams struct {
 	// Poll, when set, makes the message a poll with these settings (#3893),
 	// stored in the same transaction as the message.
 	Poll *PollSettings
+	// AttachmentIDs names files already uploaded to the channel by the caller
+	// and not yet bound to a message. Empty leaves the post unchanged.
+	AttachmentIDs []string
 }
 
 // PostMessageResult is the message as stored.
@@ -1754,7 +1758,15 @@ type PostMessageResult struct {
 // closesAt is not after the post, or is more than MaxPollClosesAfter ahead,
 // is ErrPollClosesAt. That check runs only once the message row is in, so a
 // retry of a post already stored comes back as Repeated even when the close
-// time on the retry would no longer pass.
+// time on the retry would no longer pass. AttachmentIDs, when set, are bound
+// to the new message in that same transaction. More than
+// MaxAttachmentsPerMessage is ErrTooManyAttachments, an id that is not 64
+// lowercase hex characters is ErrInvalidAttachment, and an id that is
+// missing, in another channel, uploaded by someone else, or already bound is
+// ErrAttachmentNotFound, which stores nothing. A retry already treated as
+// Repeated does not fail when those ids are bound to that same message, nor
+// when that message was deleted and its attachment rows went with it. Ids
+// bound to a different message are ErrAttachmentNotFound.
 func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 	if len(params.Ciphertext) > MaxCiphertextBytes {
 		return PostMessageResult{}, ErrMessageTooLarge
@@ -1764,6 +1776,9 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 	}
 	if len(params.ClientMessageID) > MaxClientMessageIDBytes {
 		return PostMessageResult{}, ErrInvalidClientMessageID
+	}
+	if err := validateAttachmentIDs(params.AttachmentIDs); err != nil {
+		return PostMessageResult{}, err
 	}
 	if params.Database == nil {
 		return PostMessageResult{}, accessutil.ErrNoDatabase
@@ -1775,6 +1790,9 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 	}
 	if !perms.Has(PermSendMessages) {
 		return PostMessageResult{}, ErrReadOnly
+	}
+	if len(params.AttachmentIDs) > 0 && !perms.Has(PermAttachFiles) {
+		return PostMessageResult{}, ErrCannotAttach
 	}
 	versions, err := queries.ListChatChannelKeys(params.Ctx, params.ChannelID)
 	if err != nil {
@@ -1796,11 +1814,18 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 				String: params.ClientMessageID, Valid: params.ClientMessageID != "",
 			},
 		})
-		if err != nil || params.Poll == nil {
+		if err != nil {
 			return err
 		}
 		// A retry hits the unique index on the insert above and never gets
-		// here, so its close time is not judged again (#3944).
+		// here. Ids it already bound are checked on that path.
+		if err := bindMessageAttachments(params.Ctx, tx, params, row.ID); err != nil {
+			return err
+		}
+		if params.Poll == nil {
+			return nil
+		}
+		// A retry never gets here, so its close time is not judged again (#3944).
 		if err := pollClosesAt(params.Poll.ClosesAt, time.Now()); err != nil {
 			return err
 		}
@@ -1819,6 +1844,9 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 	if sqlutil.IsUniqueConstraintErr(err) {
 		result, err := repeatedPost(params)
 		if err != nil {
+			return PostMessageResult{}, err
+		}
+		if err := repeatedAttachments(params.Ctx, queries, params, result.Message); err != nil {
 			return PostMessageResult{}, err
 		}
 		result.Message, err = withPoll(params.Ctx, queries, params.Principal.UserID, result.Message)
@@ -1981,6 +2009,9 @@ type DeleteMessageParams struct {
 	EventBus  *eventbus.Bus
 	Principal accessutil.Principal
 	MessageID int64
+	// DataDir is the Quark's data directory (storageutil.GetDataDir). Empty
+	// skips removing attachment files.
+	DataDir string
 }
 
 // DeleteMessageResult is the tombstone left behind.
@@ -1992,7 +2023,11 @@ type DeleteMessageResult struct {
 // author or a holder of delete_messages, and tells the readers. Either must
 // hold read_messages now: anyone without it, an author who was removed or
 // demoted to a manage-only set and admins included, gets ErrMessageNotFound,
-// and a reader who is neither ErrNotMessageAuthor.
+// and a reader who is neither ErrNotMessageAuthor. The attachment rows bound
+// to it are deleted in the same transaction: a tombstone does not fire
+// ON DELETE CASCADE. When DataDir is set, those files are removed after the
+// transaction commits. A file that will not delete is logged and the delete
+// still succeeds. An empty DataDir leaves the files.
 func DeleteMessage(params DeleteMessageParams) (DeleteMessageResult, error) {
 	if params.Database == nil {
 		return DeleteMessageResult{}, accessutil.ErrNoDatabase
@@ -2015,9 +2050,33 @@ func DeleteMessage(params DeleteMessageParams) (DeleteMessageResult, error) {
 	if row.AuthorID.Int64 != params.Principal.UserID && !perms.Has(PermDeleteMessages) {
 		return DeleteMessageResult{}, ErrNotMessageAuthor
 	}
-	row, err = queries.TombstoneChatMessage(params.Ctx, params.MessageID)
+	var attachmentIDs []string
+	err = db.InTx(params.Ctx, params.Database.Db, func(tx db.Querier) error {
+		var err error
+		row, err = tx.TombstoneChatMessage(params.Ctx, params.MessageID)
+		if err != nil {
+			return err
+		}
+		bound := sql.NullInt64{Int64: params.MessageID, Valid: true}
+		if params.DataDir != "" {
+			attachmentIDs, err = tx.ListChatAttachmentIDsByMessage(params.Ctx, bound)
+			if err != nil {
+				return err
+			}
+		}
+		return tx.DeleteChatAttachmentsByMessage(params.Ctx, bound)
+	})
 	if err != nil {
 		return DeleteMessageResult{}, err
+	}
+	if params.DataDir != "" {
+		// The tombstone is already stored. A file that will not delete is
+		// logged and the readers still hear the message went away.
+		if err := RemoveChannelAttachmentFiles(RemoveChannelAttachmentFilesParams{
+			DataDir: params.DataDir, ChannelID: row.ChannelID, IDs: attachmentIDs,
+		}); err != nil {
+			log.Printf("chat: remove attachments for message %d: %v", params.MessageID, err)
+		}
 	}
 	message := messageFromRow(row)
 	if err := publishMessage(params.Ctx, queries, params.EventBus, eventbus.EventChatMessageDeleted, message); err != nil {

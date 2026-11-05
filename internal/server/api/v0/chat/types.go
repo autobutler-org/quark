@@ -98,10 +98,13 @@ type signEventBody struct {
 // base64 nonce || XChaCha20-Poly1305 output. ClientMessageID is optional, the
 // client's own id for this send, kept the same across its retries (#3531).
 // Poll, when set, makes the message a poll with those settings (#3893).
+// AttachmentIDs names ciphertext already uploaded to the channel, bound to
+// this message.
 type postMessageBody struct {
 	Ciphertext      []byte                 `json:"ciphertext"`
 	KeyVersion      int64                  `json:"keyVersion"`
 	ClientMessageID string                 `json:"clientMessageId,omitempty"`
+	AttachmentIDs   []string               `json:"attachmentIds,omitempty"`
 	Poll            *chatutil.PollSettings `json:"poll,omitempty"`
 }
 

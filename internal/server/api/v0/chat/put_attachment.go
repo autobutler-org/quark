@@ -12,7 +12,7 @@ import (
 
 // putAttachment godoc
 // @Summary Upload a chat attachment's ciphertext
-// @Description Stores the raw body as an attachment's ciphertext. The id is 64 lowercase hex characters chosen by the client. The Quark does not see the file name, the media type or the key. Needs attach_files. A reader without it gets 403, and anyone without read_messages gets 404, delegated managers and admins included. A second upload of the same id is 409. The body may be at most 4 GiB, which is the server's disk cap. Nothing is published: the bytes are not a message until a later change binds them.
+// @Description Stores the raw body as an attachment's ciphertext. The id is 64 lowercase hex characters chosen by the client. The Quark does not see the file name, the media type or the key. Needs attach_files. A reader without it gets 403, and anyone without read_messages gets 404, delegated managers and admins included. A second upload of the same id is 409. The body may be at most 4 GiB, which is the server's disk cap. Nothing is published: the bytes are not a message until a post names this id.
 // @Tags chat
 // @Accept application/octet-stream
 // @Produce json

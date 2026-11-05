@@ -1943,6 +1943,10 @@ definitions:
     type: object
   v0_chat.postMessageBody:
     properties:
+      attachmentIds:
+        items:
+          type: string
+        type: array
       ciphertext:
         items:
           type: integer
@@ -5724,12 +5728,11 @@ paths:
       - chat
   /chat/channels/{id}/attachments/{attachmentId}:
     get:
-      description: 'Serves the ciphertext, honoring HTTP range requests. An attachment
+      description: Serves the ciphertext, honoring HTTP range requests. An attachment
         no message is bound to is readable by its uploader only; anyone else gets
         404, so the answer does not reveal that the id exists. A bound attachment
         needs read_messages, and anyone without it gets 404, delegated managers and
-        admins included. Nothing is bound yet: message_id is reserved for the next
-        change. The response is not cached.'
+        admins included. The response is not cached.
       parameters:
       - description: Channel id
         in: path
@@ -5782,7 +5785,7 @@ paths:
         it gets 403, and anyone without read_messages gets 404, delegated managers
         and admins included. A second upload of the same id is 409. The body may be
         at most 4 GiB, which is the server''s disk cap. Nothing is published: the
-        bytes are not a message until a later change binds them.'
+        bytes are not a message until a post names this id.'
       parameters:
       - description: Channel id
         in: path
@@ -6473,15 +6476,24 @@ paths:
         reuse is 409. clientMessageId, up to 64 bytes, names the send: a retry encrypts
         again under a fresh nonce, so it carries the same clientMessageId, and one
         the caller already sent to this channel returns that message with 200 and
-        stores nothing, whatever the ciphertext. Ciphertext is at most 16 KiB. poll,
+        stores nothing, whatever the ciphertext. attachmentIds, when set, names up
+        to 10 attachments the caller already uploaded to this channel and has not
+        bound to a message. Each id is 64 lowercase hex characters, sent in the clear
+        so the Quark can delete the files with the message; the name, the media type
+        and the key stay in the ciphertext. They are bound to this message in the
+        same transaction. A retry of this clientMessageId or ciphertext still returns
+        the stored message when those ids are already bound to it. More than 10, or
+        an id that is not 64 lowercase hex characters, is 400. An id the caller cannot
+        bind is 404 and the message is not stored. Ciphertext is at most 16 KiB. poll,
         when set, makes the message a poll whose question and options are in the ciphertext:
         closesAt, when set, is when it stops taking answers and has to be in the future
         and at most a year after the post; allowChange lets an account replace its
         answer; anonymous serves answers without who gave them, to everyone; resultsAfterClose
         shows answers only to the author until it closes. A poll field of the wrong
-        type, or one the Quark does not know, is refused. Needs send_messages; a reader
-        without it gets 403, and anyone without read_messages 404, delegated managers
-        and admins included.'
+        type, or one the Quark does not know, is refused. Needs send_messages, and
+        attach_files when attachmentIds is set; a reader without the one it needs
+        gets 403, and anyone without read_messages 404, delegated managers and admins
+        included.'
       parameters:
       - description: Channel id
         in: path
@@ -6508,8 +6520,9 @@ paths:
             $ref: '#/definitions/chatutil.Message'
         "400":
           description: ciphertext too short, a key version the channel doesn't have,
-            a clientMessageId over 64 bytes, poll settings of the wrong shape, or
-            a closesAt in the past or more than a year ahead
+            a clientMessageId over 64 bytes, more than 10 attachment ids, an attachment
+            id that is not 64 lowercase hex characters, poll settings of the wrong
+            shape, or a closesAt in the past or more than a year ahead
           schema:
             $ref: '#/definitions/serverutil.Response'
         "401":
@@ -6517,11 +6530,13 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "403":
-          description: the caller reads the channel but lacks send_messages
+          description: the caller reads the channel but lacks send_messages, or names
+            attachments without attach_files
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
-          description: no such channel, or the caller lacks read_messages
+          description: no such channel, the caller lacks read_messages, or an attachment
+            the caller cannot bind to this message
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":
@@ -6714,11 +6729,12 @@ paths:
       - chat
   /chat/messages/{id}:
     delete:
-      description: Wipes the message's ciphertext and sets deletedAt, leaving a tombstone
-        so paging stays contiguous, and tells the channel's readers with chat_message_deleted.
-        Allowed for the message's author or a holder of delete_messages, either of
-        whom must hold read_messages now; another reader gets 403 and anyone without
-        read_messages 404, delegated managers, demoted authors and admins included.
+      description: Wipes the message's ciphertext, deletes the attachment files bound
+        to it, and sets deletedAt, leaving a tombstone so paging stays contiguous,
+        and tells the channel's readers with chat_message_deleted. Allowed for the
+        message's author or a holder of delete_messages, either of whom must hold
+        read_messages now; another reader gets 403 and anyone without read_messages
+        404, delegated managers, demoted authors and admins included.
       parameters:
       - description: Message id
         in: path

@@ -22,6 +22,9 @@ import (
 // disk cap, not a limit on decrypting: a client opens one chunk at a time.
 const MaxAttachmentBytes int64 = 4 << 30
 
+// MaxAttachmentsPerMessage is how many files one message may name.
+const MaxAttachmentsPerMessage = 10
+
 const unboundAttachmentMaxAge = 24 * time.Hour
 
 var (
@@ -37,6 +40,9 @@ var (
 	// ErrAttachmentNotFound reports an attachment the caller cannot read,
 	// including one that does not exist.
 	ErrAttachmentNotFound = errors.New("no attachment has that id")
+	// ErrTooManyAttachments reports a post naming more than
+	// MaxAttachmentsPerMessage files.
+	ErrTooManyAttachments = errors.New("a message can name at most 10 attachments")
 )
 
 // PutAttachmentParams stores one attachment's ciphertext.
@@ -214,6 +220,65 @@ func attachmentPath(dataDir string, channelID int64, id string) (string, error) 
 
 func channelAttachmentDir(dataDir string, channelID int64) string {
 	return filepath.Join(dataDir, "chat-attachments", strconv.FormatInt(channelID, 10))
+}
+
+func validateAttachmentIDs(ids []string) error {
+	if len(ids) > MaxAttachmentsPerMessage {
+		return ErrTooManyAttachments
+	}
+	for _, id := range ids {
+		if !validAttachmentID(id) {
+			return ErrInvalidAttachment
+		}
+	}
+	return nil
+}
+
+// bindMessageAttachments claims each id for messageID. Zero rows changed is
+// ErrAttachmentNotFound, and the caller's transaction rolls the message back
+// with it. A unique violation must not reach here: the insert that raised it
+// has already ended the transaction.
+func bindMessageAttachments(ctx context.Context, queries db.Querier, params PostMessageParams, messageID int64) error {
+	for _, id := range params.AttachmentIDs {
+		n, err := queries.BindChatAttachment(ctx, db.BindChatAttachmentParams{
+			MessageID:  sql.NullInt64{Int64: messageID, Valid: true},
+			ID:         id,
+			ChannelID:  params.ChannelID,
+			UploaderID: params.Principal.UserID,
+		})
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			return ErrAttachmentNotFound
+		}
+	}
+	return nil
+}
+
+// repeatedAttachments reports whether a retry's ids are already bound to
+// message by the caller in that channel. Bound to any other message, or not
+// the caller's, is ErrAttachmentNotFound. A missing row is the same, unless
+// message was deleted: its attachment rows were removed with the tombstone,
+// and the retry still returns that tombstone.
+func repeatedAttachments(ctx context.Context, queries db.Querier, params PostMessageParams, message Message) error {
+	for _, id := range params.AttachmentIDs {
+		row, err := queries.GetChatAttachment(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			if message.DeletedAt != nil {
+				continue
+			}
+			return ErrAttachmentNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if row.ChannelID != params.ChannelID || row.UploaderID != params.Principal.UserID ||
+			!row.MessageID.Valid || row.MessageID.Int64 != message.ID {
+			return ErrAttachmentNotFound
+		}
+	}
+	return nil
 }
 
 func validAttachmentID(id string) bool {

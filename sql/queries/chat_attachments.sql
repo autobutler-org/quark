@@ -1,6 +1,5 @@
 -- Chat attachments (#2425). The ciphertext is a file in the data directory.
--- These rows name it. message_id stays null until a later change binds the
--- file to a message.
+-- These rows name it. message_id stays null until a message binds the file.
 
 -- CreateChatAttachment stores one. created_at is the database clock, at
 -- millisecond resolution (rule 3). The caller has already checked id.
@@ -40,3 +39,27 @@ WHERE message_id IS NULL AND created_at < sqlc.arg(created_at);
 
 -- name: DeleteChatAttachment :exec
 DELETE FROM chat_attachments WHERE id = sqlc.arg(id);
+
+-- BindChatAttachment claims one unbound attachment for a message. The caller
+-- checks that exactly one row changed: zero means the id is missing, in
+-- another channel, uploaded by someone else, or already bound.
+-- name: BindChatAttachment :execrows
+UPDATE chat_attachments
+SET message_id = sqlc.arg(message_id)
+WHERE id = sqlc.arg(id)
+    AND channel_id = sqlc.arg(channel_id)
+    AND uploader_id = sqlc.arg(uploader_id)
+    AND message_id IS NULL;
+
+-- ListChatAttachmentIDsByMessage is every attachment bound to one message, so
+-- deleting the message can remove the files. A tombstone does not fire the
+-- foreign key's ON DELETE CASCADE.
+-- name: ListChatAttachmentIDsByMessage :many
+SELECT id FROM chat_attachments
+WHERE message_id = sqlc.arg(message_id)
+ORDER BY id;
+
+-- DeleteChatAttachmentsByMessage drops the rows a tombstoned message bound.
+-- ON DELETE CASCADE does not run on that update, so the rows have to go here.
+-- name: DeleteChatAttachmentsByMessage :exec
+DELETE FROM chat_attachments WHERE message_id = sqlc.arg(message_id);
