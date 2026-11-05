@@ -143,15 +143,19 @@ class ChatAttachmentTile extends StatelessWidget {
             key: ValueKey('chat_attachment_${item.id}'),
             onTap: onTap,
             borderRadius: BorderRadius.circular(tokens.radiusMd),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: tokens.card,
-                borderRadius: BorderRadius.circular(tokens.radiusMd),
-                border: Border.all(color: tokens.border),
-              ),
-              child: Padding(
-                padding: EdgeInsets.all(tokens.spacingSm),
-                child: body,
+            child: ConstrainedBox(
+              // A file row is otherwise shorter than the 48dp tap target.
+              constraints: const BoxConstraints(minHeight: 48),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: tokens.card,
+                  borderRadius: BorderRadius.circular(tokens.radiusMd),
+                  border: Border.all(color: tokens.border),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(tokens.spacingSm),
+                  child: body,
+                ),
               ),
             ),
           ),
