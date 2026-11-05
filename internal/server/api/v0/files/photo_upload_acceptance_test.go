@@ -381,8 +381,8 @@ func TestPhotoUploadAcceptance_DuplicateNameKeepsBoth(t *testing.T) {
 
 // A connection that drops inside the third file of a batch keeps the two that
 // arrived, exactly once, and leaves nothing of the third under its name. The
-// clients still hear about the two. Sending the third again completes the
-// batch without a renamed copy of anything.
+// clients still hear about the two, and the failure names them. Sending the
+// third again completes the batch without a renamed copy of anything.
 func TestPhotoUploadAcceptance_InterruptedBatch(t *testing.T) {
 	h := newPhotoUploadHarness(t)
 	parts := []photoPart{
@@ -401,6 +401,10 @@ func TestPhotoUploadAcceptance_InterruptedBatch(t *testing.T) {
 	w := doRequest(h.engine, http.MethodPost, "/api/v0/files/upload?keepBoth=true", cut, contentType)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("interrupted upload returned %d, want 400: %s", w.Code, w.Body.String())
+	}
+	// The 400 names what landed, so the client resends c.jpg alone (#3533).
+	if got := decodeUploadFailure(t, w).Landed; !slices.Equal(got, []string{"a.jpg", "b.jpg"}) {
+		t.Fatalf("landed = %v, want [a.jpg b.jpg]", got)
 	}
 	if _, err := os.Stat(filepath.Join(h.filesDir, "c.jpg")); !os.IsNotExist(err) {
 		t.Fatalf("c.jpg after the cut: stat err = %v, want not exist", err)

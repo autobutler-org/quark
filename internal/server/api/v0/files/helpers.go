@@ -306,3 +306,13 @@ func uploadedPaths(written []uploadutil.UploadedFile) uploadFilesResponse {
 	}
 	return uploadFilesResponse{Paths: paths}
 }
+
+// uploadFailed carries failed's status and error into a body that also lists
+// the files that landed before the failure (#3533), an empty list when none
+// did.
+func uploadFailed(failed *serverutil.Response, written []uploadutil.UploadedFile) *serverutil.Response {
+	return failed.WithData(uploadFailedResponse{
+		Error:  failed.Error.Error(),
+		Landed: uploadedPaths(written).Paths,
+	}).WithError(nil)
+}

@@ -2236,6 +2236,15 @@ definitions:
       sessionId:
         type: string
     type: object
+  v0_files.uploadFailedResponse:
+    properties:
+      error:
+        type: string
+      landed:
+        items:
+          type: string
+        type: array
+    type: object
   v0_files.uploadFilesResponse:
     properties:
       paths:
@@ -7913,7 +7922,10 @@ paths:
         path each file landed at, after any keepBoth rename. A photo or video's client-rendered
         thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail
         whose filename is the file's; one that names no earlier file, or is not a
-        valid JPEG, is skipped. A request with no part named files is a 400.
+        valid JPEG, is skipped. A request with no part named files is a 400. A batch
+        that stops partway, cut off (400) or on a taken name (409), lands the files
+        before the failure, and its error body lists them under landed, so a retry
+        resends only the rest.
       parameters:
       - description: Device serial number to upload to
         in: query
@@ -7951,7 +7963,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/serverutil.Response'
+            $ref: '#/definitions/v0_files.uploadFailedResponse'
         "403":
           description: Forbidden
           schema:
@@ -7959,11 +7971,15 @@ paths:
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/serverutil.Response'
+            $ref: '#/definitions/v0_files.uploadFailedResponse'
         "409":
           description: Conflict
           schema:
-            $ref: '#/definitions/serverutil.Response'
+            $ref: '#/definitions/v0_files.uploadFailedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v0_files.uploadFailedResponse'
       security:
       - BearerAuth: []
       summary: Upload files to the top-level directory
@@ -8127,7 +8143,10 @@ paths:
         file landed at, after any keepBoth rename. A photo or video's client-rendered
         thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail
         whose filename is the file's; one that names no earlier file, or is not a
-        valid JPEG, is skipped. A request with no part named files is a 400.
+        valid JPEG, is skipped. A request with no part named files is a 400. A batch
+        that stops partway, cut off (400) or on a taken name (409), lands the files
+        before the failure, and its error body lists them under landed, so a retry
+        resends only the rest.
       parameters:
       - description: Directory to upload into
         in: path
@@ -8170,7 +8189,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/serverutil.Response'
+            $ref: '#/definitions/v0_files.uploadFailedResponse'
         "403":
           description: Forbidden
           schema:
@@ -8178,11 +8197,15 @@ paths:
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/serverutil.Response'
+            $ref: '#/definitions/v0_files.uploadFailedResponse'
         "409":
           description: Conflict
           schema:
-            $ref: '#/definitions/serverutil.Response'
+            $ref: '#/definitions/v0_files.uploadFailedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v0_files.uploadFailedResponse'
       security:
       - BearerAuth: []
       summary: Upload files to a nested directory

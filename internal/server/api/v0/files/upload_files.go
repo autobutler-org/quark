@@ -15,7 +15,7 @@ import (
 
 // uploadFiles godoc
 // @Summary Upload files to the top-level directory
-// @Description Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped. A request with no part named files is a 400.
+// @Description Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped. A request with no part named files is a 400. A batch that stops partway, cut off (400) or on a taken name (409), lands the files before the failure, and its error body lists them under landed, so a retry resends only the rest.
 // @Tags files
 // @Accept multipart/form-data
 // @Produce json
@@ -25,10 +25,11 @@ import (
 // @Param files formData []file true "One file per part; repeat the part to upload more than one" collectionFormat(multi)
 // @Param thumbnail formData file false "Thumbnail JPEG for the file of the same filename sent before it"
 // @Success 200 {object} uploadFilesResponse "OK"
-// @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 400 {object} uploadFailedResponse "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden"
-// @Failure 404 {object} serverutil.Response "Not Found"
-// @Failure 409 {object} serverutil.Response "Conflict"
+// @Failure 404 {object} uploadFailedResponse "Not Found"
+// @Failure 409 {object} uploadFailedResponse "Conflict"
+// @Failure 500 {object} uploadFailedResponse "Internal Server Error"
 // @Security BearerAuth
 // @Router /files/upload [post]
 func uploadFiles(c *gin.Context) *serverutil.Response {
@@ -37,7 +38,7 @@ func uploadFiles(c *gin.Context) *serverutil.Response {
 
 // uploadFiles godoc
 // @Summary Upload files to a nested directory
-// @Description Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped. A request with no part named files is a 400.
+// @Description Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped. A request with no part named files is a 400. A batch that stops partway, cut off (400) or on a taken name (409), lands the files before the failure, and its error body lists them under landed, so a retry resends only the rest.
 // @Tags files
 // @Accept multipart/form-data
 // @Produce json
@@ -48,10 +49,11 @@ func uploadFiles(c *gin.Context) *serverutil.Response {
 // @Param files formData []file true "One file per part; repeat the part to upload more than one" collectionFormat(multi)
 // @Param thumbnail formData file false "Thumbnail JPEG for the file of the same filename sent before it"
 // @Success 200 {object} uploadFilesResponse "OK"
-// @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 400 {object} uploadFailedResponse "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden"
-// @Failure 404 {object} serverutil.Response "Not Found"
-// @Failure 409 {object} serverutil.Response "Conflict"
+// @Failure 404 {object} uploadFailedResponse "Not Found"
+// @Failure 409 {object} uploadFailedResponse "Conflict"
+// @Failure 500 {object} uploadFailedResponse "Internal Server Error"
 // @Security BearerAuth
 // @Router /files/upload/{rootDir} [post]
 func uploadFilesNested(c *gin.Context, rootDir string) *serverutil.Response {
@@ -98,21 +100,22 @@ func uploadFilesNested(c *gin.Context, rootDir string) *serverutil.Response {
 	// clients have to hear about them however the request ended.
 	grantOwners(c, deps, access, serial, written.Written)
 	publishUpload(deps, serial, rootDir, written.Written)
-	switch {
-	case errors.Is(err, uploadutil.ErrNoFiles):
-		return serverutil.BadRequest(err)
-	case err == nil:
+	if err == nil {
 		return serverutil.Ok().WithData(uploadedPaths(written.Written))
+	}
+	var failed *serverutil.Response
+	switch {
+	case errors.Is(err, uploadutil.ErrNoFiles), errors.Is(err, uploadutil.ErrInvalidBody):
+		failed = serverutil.BadRequest(err)
 	case nameTaken(err):
-		return serverutil.Conflict(err)
-	case errors.Is(err, uploadutil.ErrInvalidBody):
-		return serverutil.BadRequest(err)
+		failed = serverutil.Conflict(err)
 	case errors.Is(err, vfs.ErrNotFound):
 		// The device went away mid-upload.
-		return serverutil.NotFound(err)
+		failed = serverutil.NotFound(err)
 	default:
-		return serverutil.InternalServerError(err)
+		failed = serverutil.InternalServerError(err)
 	}
+	return uploadFailed(failed, written.Written)
 }
 
 var uploadFilesRoute = serverutil.ApiRoute(

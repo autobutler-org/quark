@@ -106,3 +106,12 @@ type uploadChunkResponse struct {
 type uploadFilesResponse struct {
 	Paths []string `json:"paths"`
 }
+
+// uploadFailedResponse answers a batch upload that stopped partway: the
+// error, and the files-relative path of each file that landed before it
+// (#3533). A client that retries resends only the files not listed, rather
+// than landing the listed ones again as keepBoth copies.
+type uploadFailedResponse struct {
+	Error  string   `json:"error"`
+	Landed []string `json:"landed"`
+}
