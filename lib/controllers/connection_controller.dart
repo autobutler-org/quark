@@ -5,12 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/device_pairing_store.dart';
-import 'package:quark/services/embedded_tunnel.dart';
 import 'package:quark/services/remote_access_service.dart';
 import 'package:quark/utils/connection_config.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/remote_access_config.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:tailnet_flutter/tailnet_flutter.dart';
 
 /// Picks the address the app reaches the active Quark on: its home address,
 /// its remote-access address, or neither (#1880).

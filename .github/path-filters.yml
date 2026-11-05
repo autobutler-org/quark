@@ -14,6 +14,10 @@ backend: &backend
   - "**/*.go"
   - go.mod
   - go.sum
+  # The phone tailnet library is its own module. **/*.go already matches its
+  # sources; a dependency bump touches only these two.
+  - packages/tailnet_flutter/go.mod
+  - packages/tailnet_flutter/go.sum
   - sqlc.yaml
   - sql/**
   # Migrations and the embedded web directory are read by //go:embed.

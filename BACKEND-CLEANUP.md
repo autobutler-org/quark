@@ -173,7 +173,7 @@ Do not refactor the files handlers so a later WebDAV mount is easier. `accessuti
 ## Leave these alone
 
 - `featureflagutil`. The registry is an empty slice on purpose after the chat, calendar, and slides flags were migrated out. The settings routes still return that empty list. `RequireFeatureEnabled` is the gate the next flag will use.
-- `cmd/lsusb`, `cmd/knowledge`, `cmd/provisioning`, and the Tailscale bridge command next to them (`cmd/tsnetbridge`). Makefile targets and the mobile build call them.
+- `cmd/lsusb`, `cmd/knowledge`, `cmd/provisioning`, and the Tailscale bridge command (`packages/tailnet_flutter/cmd/tsnetbridge`). The mobile build calls the bridge.
 - `pkg/backup/sync.go` `DrainPending`. Only tests call it, and the worker loop never does. That is a missing call, so a failed mirror stays queued. Do not delete it.
 - `ExportChat`, `ImportChat`, `ExportVault`, `ImportVault`. Snapshots use the ciphertext path. The wrappers are the restore API. No HTTP handler calls them yet.
 - `authutil/wordlist.go`. The server no longer draws phrases. The Dart recovery-phrase test reads this file and checks it against the Dart list.

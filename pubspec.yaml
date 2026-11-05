@@ -18,6 +18,7 @@ workspace:
   - packages/quark_slides
   - packages/quark_widgets
   - packages/quark_widgets/examples/widget_gallery
+  - packages/tailnet_flutter
 
 dependencies:
   flutter:
@@ -64,6 +65,10 @@ dependencies:
     path: packages/quark_slides
   quark_widgets:
     path: packages/quark_widgets
+  # On-device tailnet node for iOS and Android (#1881). The package's
+  # hook/build.dart compiles cmd/tsnetbridge. cspell:words ffi tsnetbridge
+  tailnet_flutter:
+    path: packages/tailnet_flutter
 
   # Thumbnails rendered with the platform decoders on iOS and Android (#2379):
   # video frames through AVAssetImageGenerator and MediaMetadataRetriever,
@@ -94,11 +99,6 @@ dependencies:
   # their own video_player backends.
   video_player_media_kit: ^2.0.0
   media_kit_libs_linux: ^1.2.1
-  # The phone joins the tailnet itself (#1881). hook/build.dart compiles
-  # cmd/tsnetbridge for the iOS and Android targets. cspell:words ffi tsnetbridge
-  code_assets: ^2.1.0
-  ffi: ^2.2.0
-  hooks: ^2.2.0
 
 # desktop_drop pinned to upstream's merge commit of MixinNetwork/flutter-plugins#503
 # (the #1831 fix): upstream's web handler called webkitGetAsEntry()! on every

@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/local_trust.dart';
 import 'package:quark/services/local_trust_pin_io.dart';
-import 'package:quark/services/tunnel_token_client.dart';
+import 'package:tailnet_flutter/services/tunnel_token_client.dart';
 
 /// Applies [acceptsUnverifiedCertificate] to every [HttpClient] created in this
 /// isolate.

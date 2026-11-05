@@ -11,7 +11,6 @@ import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/device_pairing_store.dart';
-import 'package:quark/services/embedded_tunnel.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/widgets/layout/app_bar_trailing_host.dart';
 import 'package:quark/widgets/layout/connection_sheet_button.dart';
@@ -20,6 +19,7 @@ import 'package:quark/widgets/settings/settings_network_tab.dart';
 import 'package:quark/widgets/settings/this_phone_card.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:tailnet_flutter/tailnet_flutter.dart';
 
 import '../../support/tap_target_guidelines.dart' show setViewport;
 
