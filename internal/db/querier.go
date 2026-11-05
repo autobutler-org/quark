@@ -113,7 +113,7 @@ type Querier interface {
 	DeleteAlbum(ctx context.Context, arg DeleteAlbumParams) error
 	DeleteCalendarEvent(ctx context.Context, id int64) (int64, error)
 	DeleteChatAttachment(ctx context.Context, id string) error
-	// DeleteChatAttachmentsByMessage drops the rows a tombstoned message bound.
+	// DeleteChatAttachmentsByMessage drops the rows a deleted message bound.
 	// ON DELETE CASCADE does not run on that update, so the rows have to go here.
 	DeleteChatAttachmentsByMessage(ctx context.Context, messageID sql.NullInt64) error
 	// DeleteChatChannel drops a channel and, by ON DELETE CASCADE, its members.

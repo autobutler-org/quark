@@ -99,7 +99,7 @@ const deleteChatAttachmentsByMessage = `-- name: DeleteChatAttachmentsByMessage 
 DELETE FROM chat_attachments WHERE message_id = ?1
 `
 
-// DeleteChatAttachmentsByMessage drops the rows a tombstoned message bound.
+// DeleteChatAttachmentsByMessage drops the rows a deleted message bound.
 // ON DELETE CASCADE does not run on that update, so the rows have to go here.
 func (q *Queries) DeleteChatAttachmentsByMessage(ctx context.Context, messageID sql.NullInt64) error {
 	_, err := q.db.ExecContext(ctx, deleteChatAttachmentsByMessage, messageID)

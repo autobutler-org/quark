@@ -59,7 +59,7 @@ SELECT id FROM chat_attachments
 WHERE message_id = sqlc.arg(message_id)
 ORDER BY id;
 
--- DeleteChatAttachmentsByMessage drops the rows a tombstoned message bound.
+-- DeleteChatAttachmentsByMessage drops the rows a deleted message bound.
 -- ON DELETE CASCADE does not run on that update, so the rows have to go here.
 -- name: DeleteChatAttachmentsByMessage :exec
 DELETE FROM chat_attachments WHERE message_id = sqlc.arg(message_id);
