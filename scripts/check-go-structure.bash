@@ -132,6 +132,8 @@ OS_FILE_ALLOWED=(
     "pkg/util/memutil/"
     # Avatars live in the data directory, not the user's files.
     "pkg/util/avatarutil/"
+    # Chat attachment ciphertext lives in the data directory, not in the user's files (#2425).
+    "pkg/util/chatutil/attachments.go"
     # Per-user settings and the account request history are in the database;
     # each imports, then retires, the files an older Quark kept in the data directory.
     "pkg/util/usersettingsutil/"

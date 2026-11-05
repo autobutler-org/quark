@@ -140,7 +140,7 @@ func TestPermsParseAndString(t *testing.T) {
 		}
 	}
 	all := chatutil.PermsAll.String()
-	if want := "read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions"; all != want {
+	if want := "read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions,attach_files"; all != want {
 		t.Errorf("PermsAll.String() = %q, want %q", all, want)
 	}
 	if got := chatutil.Perms(0).Names(); got == nil || len(got) != 0 {
@@ -153,7 +153,7 @@ func TestPermsParseAndString(t *testing.T) {
 	}
 
 	body, err := json.Marshal(chatutil.PresetMember)
-	if err != nil || string(body) != `["read_messages","send_messages","add_reactions"]` {
+	if err != nil || string(body) != `["read_messages","send_messages","add_reactions","attach_files"]` {
 		t.Errorf("Member as JSON = %s, %v", body, err)
 	}
 	var back chatutil.Perms
@@ -174,6 +174,7 @@ func TestPermsValidate(t *testing.T) {
 		{chatutil.PermAddReactions, "add_reactions needs read_messages"},
 		{chatutil.PermDeleteMessages | chatutil.PermManageMembers, "delete_messages needs read_messages"},
 		{chatutil.PermManageReactions, "manage_reactions needs read_messages"},
+		{chatutil.PermAttachFiles, "attach_files needs read_messages"},
 		{1 << 40, "unknown permission bits"},
 	} {
 		err := tc.perms.Validate()
@@ -199,16 +200,16 @@ func TestPermsValidate(t *testing.T) {
 func TestPresets(t *testing.T) {
 	read, send, react := chatutil.PermReadMessages, chatutil.PermSendMessages, chatutil.PermAddReactions
 	del, channel, members := chatutil.PermDeleteMessages, chatutil.PermManageChannel, chatutil.PermManageMembers
-	reactions := chatutil.PermManageReactions
+	reactions, attach := chatutil.PermManageReactions, chatutil.PermAttachFiles
 	for _, tc := range []struct {
 		name string
 		got  chatutil.Perms
 		want chatutil.Perms
 	}{
 		{"viewer", chatutil.PresetViewer, read},
-		{"member", chatutil.PresetMember, read | send | react},
-		{"moderator", chatutil.PresetModerator, read | send | react | del | reactions | members},
-		{"owner", chatutil.PresetOwner, read | send | react | del | reactions | channel | members},
+		{"member", chatutil.PresetMember, read | send | react | attach},
+		{"moderator", chatutil.PresetModerator, read | send | react | attach | del | reactions | members},
+		{"owner", chatutil.PresetOwner, read | send | react | attach | del | reactions | channel | members},
 		{"all", chatutil.PermsAll, chatutil.PresetOwner},
 	} {
 		if tc.got != tc.want {
@@ -217,6 +218,25 @@ func TestPresets(t *testing.T) {
 		if err := tc.got.Validate(); err != nil {
 			t.Errorf("%s is incoherent: %v", tc.name, err)
 		}
+	}
+}
+
+func TestPermAttachFiles(t *testing.T) {
+	if chatutil.PermAttachFiles != 128 {
+		t.Fatalf("PermAttachFiles = %d, want 128", chatutil.PermAttachFiles)
+	}
+	if !chatutil.PresetMember.Has(chatutil.PermAttachFiles) || !chatutil.PresetModerator.Has(chatutil.PermAttachFiles) || !chatutil.PresetOwner.Has(chatutil.PermAttachFiles) {
+		t.Fatal("Member, Moderator and Owner must include attach_files")
+	}
+	got, err := chatutil.ParsePerms([]string{"attach_files"})
+	if err != nil || got != chatutil.PermAttachFiles {
+		t.Fatalf("ParsePerms(attach_files) = %v, %v", got, err)
+	}
+	if err := chatutil.PermAttachFiles.Validate(); !errors.Is(err, chatutil.ErrInvalidPerms) || !strings.Contains(err.Error(), "attach_files needs read_messages") {
+		t.Fatalf("attach without read = %v", err)
+	}
+	if err := (chatutil.PermReadMessages | chatutil.PermAttachFiles).Validate(); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -560,7 +580,7 @@ func TestListMembersExpandsGroupsWithAvatars(t *testing.T) {
 		}
 	}
 	body, err := json.Marshal(result.Members[1])
-	if err != nil || !strings.Contains(string(body), `"permissions":["read_messages","send_messages","add_reactions","delete_messages","manage_channel","manage_members","manage_reactions"]`) {
+	if err != nil || !strings.Contains(string(body), `"permissions":["read_messages","send_messages","add_reactions","delete_messages","manage_channel","manage_members","manage_reactions","attach_files"]`) {
 		t.Errorf("a member as JSON = %s, %v", body, err)
 	}
 }

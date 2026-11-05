@@ -5,13 +5,14 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
 
 // deleteChannel godoc
 // @Summary Delete a chat channel
-// @Description Deletes a channel and its members. Needs manage_channel, or an admin, and general can't be deleted. Publishes chat_channel_changed to everyone who had a non-empty set on it.
+// @Description Deletes a channel, its members and its attachment files. Needs manage_channel, or an admin, and general can't be deleted. Publishes chat_channel_changed to everyone who had a non-empty set on it.
 // @Tags chat
 // @Param id path int true "Channel id"
 // @Success 204
@@ -37,6 +38,7 @@ func deleteChannel(c *gin.Context) *serverutil.Response {
 		EventBus:  deps.EventBus(),
 		Principal: principal,
 		ChannelID: id,
+		DataDir:   storageutil.GetDataDir(),
 	}); err != nil {
 		return chatError(err)
 	}

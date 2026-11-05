@@ -3408,7 +3408,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deletes a channel and its members. Needs manage_channel, or an admin, and general can't be deleted. Publishes chat_channel_changed to everyone who had a non-empty set on it.",
+                "description": "Deletes a channel, its members and its attachment files. Needs manage_channel, or an admin, and general can't be deleted. Publishes chat_channel_changed to everyone who had a non-empty set on it.",
                 "tags": [
                     "chat"
                 ],
@@ -3526,6 +3526,170 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "another channel has that name",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/channels/{id}/attachments/{attachmentId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Serves the ciphertext, honoring HTTP range requests. An attachment no message is bound to is readable by its uploader only; anyone else gets 404, so the answer does not reveal that the id exists. A bound attachment needs read_messages, and anyone without it gets 404, delegated managers and admins included. Nothing is bound yet: message_id is reserved for the next change. The response is not cached.",
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Download a chat attachment's ciphertext",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Attachment id, 64 lowercase hex characters",
+                        "name": "attachmentId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "the ciphertext",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "206": {
+                        "description": "a byte range of the ciphertext",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "the attachment id is not 64 lowercase hex characters",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such attachment, or the caller may not read it",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores the raw body as an attachment's ciphertext. The id is 64 lowercase hex characters chosen by the client. The Quark does not see the file name, the media type or the key. Needs attach_files. A reader without it gets 403, and anyone without read_messages gets 404, delegated managers and admins included. A second upload of the same id is 409. The body may be at most 4 GiB, which is the server's disk cap. Nothing is published: the bytes are not a message until a later change binds them.",
+                "consumes": [
+                    "application/octet-stream"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Upload a chat attachment's ciphertext",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Attachment id, 64 lowercase hex characters",
+                        "name": "attachmentId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Ciphertext",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.PutAttachmentResult"
+                        }
+                    },
+                    "400": {
+                        "description": "the attachment id is not 64 lowercase hex characters",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller reads the channel but lacks attach_files",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller lacks read_messages",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "an attachment with this id already exists",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "413": {
+                        "description": "ciphertext over 4 GiB",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -12426,7 +12590,8 @@ const docTemplate = `{
                             "delete_messages",
                             "manage_channel",
                             "manage_members",
-                            "manage_reactions"
+                            "manage_reactions",
+                            "attach_files"
                         ]
                     }
                 },
@@ -12775,7 +12940,8 @@ const docTemplate = `{
                             "delete_messages",
                             "manage_channel",
                             "manage_members",
-                            "manage_reactions"
+                            "manage_reactions",
+                            "attach_files"
                         ]
                     }
                 },
@@ -12985,6 +13151,17 @@ const docTemplate = `{
                 },
                 "userId": {
                     "type": "integer"
+                }
+            }
+        },
+        "chatutil.PutAttachmentResult": {
+            "type": "object",
+            "properties": {
+                "byteSize": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
                 }
             }
         },
@@ -14631,7 +14808,8 @@ const docTemplate = `{
                             "delete_messages",
                             "manage_channel",
                             "manage_members",
-                            "manage_reactions"
+                            "manage_reactions",
+                            "attach_files"
                         ]
                     }
                 },

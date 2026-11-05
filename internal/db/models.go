@@ -44,6 +44,15 @@ type CalendarEvent struct {
 	ExcludedStarts  sql.NullString
 }
 
+type ChatAttachment struct {
+	ID         string
+	ChannelID  int64
+	MessageID  sql.NullInt64
+	UploaderID int64
+	ByteSize   int64
+	CreatedAt  time.Time
+}
+
 type ChatChannel struct {
 	ID        int64
 	ServerID  int64

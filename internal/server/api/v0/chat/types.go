@@ -34,6 +34,8 @@ func (r *router) Routes() []*serverutil.Route {
 		listChannelEventsRoute,
 		signChannelEventRoute,
 		postMessageRoute,
+		putAttachmentRoute,
+		getAttachmentRoute,
 		listMessagesRoute,
 		deleteMessageRoute,
 		markReadRoute,
@@ -64,7 +66,7 @@ type setMemberBody struct {
 	UserID  int64 `json:"userId,omitempty"`
 	GroupID int64 `json:"groupId,omitempty"`
 	// Permissions is the whole set the row carries, by name.
-	Permissions []string `json:"permissions" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions"`
+	Permissions []string `json:"permissions" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions,attach_files"`
 }
 
 // removeMemberBody removes one account's or group's row from a channel.

@@ -3,7 +3,7 @@
 Chat messages are end-to-end encrypted: only the members of a channel can read them, and the Quark stores
 ciphertext it can't open. This page covers the identity keys that make that possible (#2416) and what they
 protect against, then the channel keys and key grants built on them (#2417), then the messages encrypted under
-those keys (#2418), the reactions on them (#2426) and the answers to polls (#3893). The password vault is
+those keys (#2418), the files attached to them (#2425), the reactions on them (#2426) and the answers to polls (#3893). The password vault is
 encrypted with the same account keys, and [The vault](#the-vault) covers it.
 
 ## Identity keys
@@ -334,6 +334,25 @@ ends before the last chunk, or fails the last tag, and is refused. An empty file
 The prefix and the file key travel inside the message ciphertext. The Quark stores the sealed chunks and sees
 how many bytes they are. It does not see the name, the media type, the thumbnail or the key.
 
+The ciphertext is one file per attachment, addressed by an id the client chooses (64 lowercase hex characters):
+
+- `PUT /api/v0/chat/channels/:id/attachments/:attachmentId` writes that file. It needs `attach_files`, which the
+  Member preset carries and which needs `read_messages`. A reader without it gets 403. Anyone without
+  `read_messages` gets 404, delegated managers and admins included. The same id a second time is 409.
+- `GET` on the same path serves the ciphertext and honors a `Range` request. Nothing is bound to a message yet.
+  `message_id` is on the row for the next change, and while it is null only the account that uploaded the file
+  can read it; anyone else gets 404. Once a row is bound, reading it needs `read_messages`, and anyone without
+  that gets 404 too.
+
+The Quark sees the ciphertext length and which channel and account uploaded it. It does not see the name, the
+media type, or the key.
+
+Deleting a channel deletes its attachment files. Deleting a message does not yet, because no attachment is bound
+to one. The chat SQL backup (#2428, still open) does not yet copy the `chat_attachments` table or the
+`chat-attachments` directory.
+
+4 GiB is the server's disk cap. It is not a limit on decrypting in the browser: the app opens one chunk at a time.
+
 ## Reactions
 
 A reaction is encrypted like a message (#2426): XChaCha20-Poly1305 under the channel's current key, a random
@@ -589,7 +608,8 @@ Quark restarts.
     machine's time, so 2^47 expected guesses are about 450,000 core-years, which parallel hardware can buy, and a
     Quark holding the phrase wrap can guess offline, without the sign-in rate limit.
 - **Metadata.** The Quark sees who is in which channel, when each message was sent, and how big it is, and
-  who reacted to which message and when.
+  who reacted to which message and when. For an attachment it sees the ciphertext length and which channel and
+  account uploaded it, not the file's name, media type, or key.
   Admins also see the names and topics of private channels they aren't in, through the admin channel list
   (`ListChannels` with `All`); that is by design, for admin tooling (#2488).
 - **A device that's already unlocked.** On phones and desktop the unwrapped seeds sit in the platform keystore

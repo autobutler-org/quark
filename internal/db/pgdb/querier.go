@@ -7,6 +7,7 @@ package pgdb
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 type Querier interface {
@@ -63,6 +64,12 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (PhotoAlbum, error)
 	CreateCalendarEvent(ctx context.Context, arg CreateCalendarEventParams) (CalendarEvent, error)
+	// Chat attachments (#2425). The ciphertext is a file in the data directory.
+	// These rows name it. message_id stays null until a later change binds the
+	// file to a message.
+	// CreateChatAttachment stores one. created_at is the database clock, at
+	// millisecond resolution (rule 3). The caller has already checked id.
+	CreateChatAttachment(ctx context.Context, arg CreateChatAttachmentParams) (ChatAttachment, error)
 	// CreateChatChannel adds a channel to the Quark's one server.
 	CreateChatChannel(ctx context.Context, arg CreateChatChannelParams) (ChatChannel, error)
 	CreateChatChannelEvent(ctx context.Context, arg CreateChatChannelEventParams) (ChatChannelEvent, error)
@@ -102,6 +109,7 @@ type Querier interface {
 	CreateVaultKey(ctx context.Context, arg CreateVaultKeyParams) (VaultKey, error)
 	DeleteAlbum(ctx context.Context, arg DeleteAlbumParams) error
 	DeleteCalendarEvent(ctx context.Context, id int64) (int64, error)
+	DeleteChatAttachment(ctx context.Context, id string) error
 	// DeleteChatChannel drops a channel and, by ON DELETE CASCADE, its members.
 	// The default channel is never deleted.
 	DeleteChatChannel(ctx context.Context, id int64) (int64, error)
@@ -166,6 +174,9 @@ type Querier interface {
 	DeleteSession(ctx context.Context, token string) error
 	// DeleteStaleIndexedSerial drops what a reconcile of the device did not write.
 	DeleteStaleIndexedSerial(ctx context.Context, arg DeleteStaleIndexedSerialParams) error
+	// DeleteUnboundChatAttachmentsBefore drops those rows. The cutoff is the
+	// same value the list used, passed from Go; this does not call datetime().
+	DeleteUnboundChatAttachmentsBefore(ctx context.Context, createdAt time.Time) error
 	// Deletes one user. sessions.user_id is ON DELETE CASCADE (001_auth) and
 	// connections set _foreign_keys=on, so the user's sessions go with the row.
 	DeleteUser(ctx context.Context, id int64) error
@@ -213,6 +224,7 @@ type Querier interface {
 	GetAllDeviceRoles(ctx context.Context) ([]GetAllDeviceRolesRow, error)
 	// Reads carry the owner's username, empty for an event with no owner (#2544).
 	GetCalendarEvent(ctx context.Context, id int64) (GetCalendarEventRow, error)
+	GetChatAttachment(ctx context.Context, id string) (ChatAttachment, error)
 	GetChatChannel(ctx context.Context, id int64) (ChatChannel, error)
 	GetChatChannelEvent(ctx context.Context, arg GetChatChannelEventParams) (ChatChannelEvent, error)
 	GetChatKeyGrant(ctx context.Context, arg GetChatKeyGrantParams) (ChatKeyGrant, error)
@@ -305,6 +317,9 @@ type Querier interface {
 	// not ended before ended_before (#2535), since any of its occurrences may fall
 	// in the range; the app expands them. A series with no end never ends.
 	ListCalendarEventsInRange(ctx context.Context, arg ListCalendarEventsInRangeParams) ([]ListCalendarEventsInRangeRow, error)
+	// ListChatAttachmentIDsByChannel is every attachment in one channel, so
+	// deleting the channel can remove the files after the rows are gone.
+	ListChatAttachmentIDsByChannel(ctx context.Context, channelID int64) ([]string, error)
 	// ListChatChannelEvents pages a channel's events oldest first, after an id.
 	ListChatChannelEvents(ctx context.Context, arg ListChatChannelEventsParams) ([]ChatChannelEvent, error)
 	// ListChatChannelGroupUsers expands each group row on a channel into the
@@ -444,6 +459,10 @@ type Querier interface {
 	ListSettings(ctx context.Context) ([]Setting, error)
 	// ListStaleIndexedChildren names what directly in dir a rescan did not write.
 	ListStaleIndexedChildren(ctx context.Context, arg ListStaleIndexedChildrenParams) ([]string, error)
+	// ListUnboundChatAttachmentsBefore lists attachments no message claims that
+	// were stored before created_at, so a sweep can remove their files and then
+	// delete the rows. The cutoff is passed from Go.
+	ListUnboundChatAttachmentsBefore(ctx context.Context, createdAt time.Time) ([]ListUnboundChatAttachmentsBeforeRow, error)
 	// ListJobs for one account, so a non-admin's listing never loads every other
 	// account's jobs (#2756).
 	ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]Job, error)

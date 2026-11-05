@@ -5,6 +5,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/autobutler-org/quark/internal/db/pgdb"
 )
@@ -115,6 +116,11 @@ func (a *postgresQueries) CreateCalendarEvent(ctx context.Context, arg CreateCal
 	return CalendarEvent(row), err
 }
 
+func (a *postgresQueries) CreateChatAttachment(ctx context.Context, arg CreateChatAttachmentParams) (ChatAttachment, error) {
+	row, err := a.q.CreateChatAttachment(ctx, pgdb.CreateChatAttachmentParams(arg))
+	return ChatAttachment(row), err
+}
+
 func (a *postgresQueries) CreateChatChannel(ctx context.Context, arg CreateChatChannelParams) (ChatChannel, error) {
 	row, err := a.q.CreateChatChannel(ctx, pgdb.CreateChatChannelParams(arg))
 	return ChatChannel(row), err
@@ -200,6 +206,10 @@ func (a *postgresQueries) DeleteAlbum(ctx context.Context, arg DeleteAlbumParams
 
 func (a *postgresQueries) DeleteCalendarEvent(ctx context.Context, id int64) (int64, error) {
 	return a.q.DeleteCalendarEvent(ctx, id)
+}
+
+func (a *postgresQueries) DeleteChatAttachment(ctx context.Context, id string) error {
+	return a.q.DeleteChatAttachment(ctx, id)
 }
 
 func (a *postgresQueries) DeleteChatChannel(ctx context.Context, id int64) (int64, error) {
@@ -322,6 +332,10 @@ func (a *postgresQueries) DeleteStaleIndexedSerial(ctx context.Context, arg Dele
 	return a.q.DeleteStaleIndexedSerial(ctx, pgdb.DeleteStaleIndexedSerialParams(arg))
 }
 
+func (a *postgresQueries) DeleteUnboundChatAttachmentsBefore(ctx context.Context, createdAt time.Time) error {
+	return a.q.DeleteUnboundChatAttachmentsBefore(ctx, createdAt)
+}
+
 func (a *postgresQueries) DeleteUser(ctx context.Context, id int64) error {
 	return a.q.DeleteUser(ctx, id)
 }
@@ -421,6 +435,11 @@ func (a *postgresQueries) GetAllDeviceRoles(ctx context.Context) ([]GetAllDevice
 func (a *postgresQueries) GetCalendarEvent(ctx context.Context, id int64) (GetCalendarEventRow, error) {
 	row, err := a.q.GetCalendarEvent(ctx, id)
 	return GetCalendarEventRow{CalendarEvent: CalendarEvent(row.CalendarEvent), OwnerName: row.OwnerName}, err
+}
+
+func (a *postgresQueries) GetChatAttachment(ctx context.Context, id string) (ChatAttachment, error) {
+	row, err := a.q.GetChatAttachment(ctx, id)
+	return ChatAttachment(row), err
 }
 
 func (a *postgresQueries) GetChatChannel(ctx context.Context, id int64) (ChatChannel, error) {
@@ -717,6 +736,10 @@ func (a *postgresQueries) ListCalendarEventsInRange(ctx context.Context, arg Lis
 		items[i] = ListCalendarEventsInRangeRow{CalendarEvent: CalendarEvent(row.CalendarEvent), OwnerName: row.OwnerName}
 	}
 	return items, nil
+}
+
+func (a *postgresQueries) ListChatAttachmentIDsByChannel(ctx context.Context, channelID int64) ([]string, error) {
+	return a.q.ListChatAttachmentIDsByChannel(ctx, channelID)
 }
 
 func (a *postgresQueries) ListChatChannelEvents(ctx context.Context, arg ListChatChannelEventsParams) ([]ChatChannelEvent, error) {
@@ -1205,6 +1228,18 @@ func (a *postgresQueries) ListSettings(ctx context.Context) ([]Setting, error) {
 
 func (a *postgresQueries) ListStaleIndexedChildren(ctx context.Context, arg ListStaleIndexedChildrenParams) ([]string, error) {
 	return a.q.ListStaleIndexedChildren(ctx, pgdb.ListStaleIndexedChildrenParams(arg))
+}
+
+func (a *postgresQueries) ListUnboundChatAttachmentsBefore(ctx context.Context, createdAt time.Time) ([]ListUnboundChatAttachmentsBeforeRow, error) {
+	rows, err := a.q.ListUnboundChatAttachmentsBefore(ctx, createdAt)
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListUnboundChatAttachmentsBeforeRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListUnboundChatAttachmentsBeforeRow(row)
+	}
+	return items, nil
 }
 
 func (a *postgresQueries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]Job, error) {
