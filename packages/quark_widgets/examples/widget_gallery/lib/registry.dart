@@ -1637,6 +1637,23 @@ final List<GalleryEntry> registry = [
   ),
 
   GalleryEntry(
+    name: 'QuarkFolderPicker',
+    group: 'Files',
+    build: (context, log) => QuarkFolderPicker(
+      folders: const [
+        QuarkFolderEntry(path: '/Documents/Taxes', name: 'Taxes'),
+        QuarkFolderEntry(path: '/Documents/Travel', name: 'Travel'),
+      ],
+      currentPath: '/Documents',
+      currentName: 'Documents',
+      canGoUp: true,
+      onOpen: (folder) => log('QuarkFolderPicker.onOpen(${folder.path})'),
+      onUp: () => log('QuarkFolderPicker.onUp'),
+      onSelect: () => log('QuarkFolderPicker.onSelect'),
+    ),
+  ),
+
+  GalleryEntry(
     name: 'FileVersionsPanel',
     group: 'File versions',
     build: (context, log) => Wrap(
