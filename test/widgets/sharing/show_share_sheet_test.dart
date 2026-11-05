@@ -233,6 +233,7 @@ void main() {
       ChatPermission.readMessages,
       ChatPermission.sendMessages,
       ChatPermission.addReactions,
+      ChatPermission.attachFiles,
     };
     const everyoneRow = ChatMember(
       groupId: 1,
@@ -337,9 +338,9 @@ void main() {
         expect(find.textContaining("key will change"), findsOneWidget);
         await tapKey(tester, 'rotate_key_confirm');
         expect(calls, [
-          'set 2 user=2 read_messages,send_messages,add_reactions,'
+          'set 2 user=2 read_messages,send_messages,add_reactions,attach_files,'
               'delete_messages,manage_reactions,manage_members',
-          'sign user=2 group=null read_messages,send_messages,add_reactions,'
+          'sign user=2 group=null read_messages,send_messages,add_reactions,attach_files,'
               'delete_messages,manage_reactions,manage_members',
           'remove 2 user=null group=1',
           'sign user=null group=1 none',
@@ -420,8 +421,8 @@ void main() {
       expect(find.textContaining("key will change"), findsNothing);
       expect(
         calls.first,
-        'set 2 user=2 read_messages,send_messages,'
-        'add_reactions,manage_members',
+        'set 2 user=2 read_messages,send_messages,add_reactions,'
+        'attach_files,manage_members',
       );
 
       // Keeping manage_members without read_messages warns first.

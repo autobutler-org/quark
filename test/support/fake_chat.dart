@@ -101,6 +101,7 @@ const memberSet = {
   ChatPermission.readMessages,
   ChatPermission.sendMessages,
   ChatPermission.addReactions,
+  ChatPermission.attachFiles,
 };
 
 /// Every permission, what a channel's creator gets.

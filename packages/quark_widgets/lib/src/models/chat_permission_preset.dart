@@ -12,11 +12,12 @@ enum ChatPermissionPreset {
   /// See the channel and read it.
   viewer('Viewer', {ChatPermission.readMessages}),
 
-  /// A viewer who also posts and reacts.
+  /// A viewer who also posts, reacts and attaches files.
   member('Member', {
     ChatPermission.readMessages,
     ChatPermission.sendMessages,
     ChatPermission.addReactions,
+    ChatPermission.attachFiles,
   }),
 
   /// A member who also deletes other people's messages and reactions and
@@ -25,6 +26,7 @@ enum ChatPermissionPreset {
     ChatPermission.readMessages,
     ChatPermission.sendMessages,
     ChatPermission.addReactions,
+    ChatPermission.attachFiles,
     ChatPermission.deleteMessages,
     ChatPermission.manageReactions,
     ChatPermission.manageMembers,
@@ -35,6 +37,7 @@ enum ChatPermissionPreset {
     ChatPermission.readMessages,
     ChatPermission.sendMessages,
     ChatPermission.addReactions,
+    ChatPermission.attachFiles,
     ChatPermission.deleteMessages,
     ChatPermission.manageReactions,
     ChatPermission.manageChannel,
