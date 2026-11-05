@@ -207,6 +207,11 @@ func (v *LocalVFS) MoveFileIn(ctx context.Context, srcAbs string, path string, o
 	})
 }
 
+// StagingDir returns tmp/<name> beside the root. See [FileMover].
+func (v *LocalVFS) StagingDir(_ context.Context, name string) (string, error) {
+	return hostStagingDir(v.root, name)
+}
+
 // Delete removes the file or directory at the given path. The root is
 // [ErrPermissionDenied].
 func (v *LocalVFS) Delete(ctx context.Context, path string, opts DeleteOptions) error {

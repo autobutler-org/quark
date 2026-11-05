@@ -260,6 +260,17 @@ func (v *StorageServiceVFS) MoveFileIn(ctx context.Context, srcAbs string, path 
 	})
 }
 
+// StagingDir returns tmp/<name> beside this namespace's files directory, on
+// its device. A device namespace whose device is gone is [ErrNotFound]. See
+// [FileMover].
+func (v *StorageServiceVFS) StagingDir(_ context.Context, name string) (string, error) {
+	filesDir, err := v.filesDir()
+	if err != nil {
+		return "", err
+	}
+	return hostStagingDir(filesDir, name)
+}
+
 // resolve turns a namespace path into the host path under this namespace's
 // files directory, for an operation that changes it. A path escaping it is
 // [ErrPermissionDenied], and so is a ".trash/..." path: the trash changes

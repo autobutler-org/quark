@@ -175,6 +175,18 @@ func placeUnderFreeName(dir, fileName string, keepBoth bool, place func(p string
 	}
 }
 
+// gone reports that the device with this serial is no longer there to take
+// an upload: its namespace is unregistered, or the namespace answers that its
+// device is not attached.
+func (d Destination) gone(ctx context.Context, serial string) bool {
+	fsys := d.FilesVFS(serial)
+	if fsys == nil {
+		return true
+	}
+	_, err := fsys.Stat(ctx, "")
+	return errors.Is(err, vfs.ErrNotFound)
+}
+
 // taken reports whether a file already sits where an upload would land, so a
 // session can be refused before its bytes are sent. Only a definite answer
 // counts: an upload that cannot tell goes ahead, and the commit decides.

@@ -269,6 +269,14 @@ type SessionStore struct {
 	// MaxFinishedSessionsPerUser of them. Guarded by mu.
 	finished map[int64][]SessionSummary
 
+	// stagingMu guards prepared: the staging dirs this store has cleared of
+	// what an earlier process stranded. It is held across the clear, so no
+	// session stages in a dir until the clear is done.
+	stagingMu sync.Mutex
+	prepared  map[string]bool
+
+	// stagingDir is the internal drive's. A USB drive's sessions stage on the
+	// drive itself, beside its files (#3970).
 	stagingDir string
 	ttl        time.Duration
 	now        func() time.Time
@@ -278,8 +286,9 @@ type SessionStore struct {
 // defaults so tests can pin a temp dir and a short TTL without the rest of the
 // codebase caring.
 type NewSessionStoreParams struct {
-	// StagingDir is where partial uploads are staged. Empty means the data
-	// dir's tmp area.
+	// StagingDir is where partial uploads to the internal drive are staged.
+	// Empty means the data dir's tmp area. An upload to a USB drive stages on
+	// that drive whatever this says.
 	StagingDir string
 	// TTL overrides DefaultSessionTTL. Zero means the default.
 	TTL time.Duration
@@ -307,6 +316,7 @@ func NewSessionStore(params NewSessionStoreParams) *SessionStore {
 	return &SessionStore{
 		sessions:   make(map[string]*session),
 		finished:   make(map[int64][]SessionSummary),
+		prepared:   make(map[string]bool),
 		stagingDir: stagingDir,
 		ttl:        ttl,
 		now:        now,
@@ -315,7 +325,8 @@ func NewSessionStore(params NewSessionStoreParams) *SessionStore {
 
 // CreateSessionParams opens a session for one file.
 type CreateSessionParams struct {
-	// Ctx bounds the check for a name already in use. Nil means background.
+	// Ctx bounds the check for a name already in use and the lookup of where
+	// to stage. Nil means background.
 	Ctx         context.Context
 	Destination Destination
 	RootDir     string

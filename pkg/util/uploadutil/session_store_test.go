@@ -11,10 +11,13 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -1188,5 +1191,298 @@ func TestCommitRunsBeforeOverwriteOnlyWhenReplacing(t *testing.T) {
 
 	if want := []string{"deck.qslide=original"}; !slices.Equal(seen, want) {
 		t.Errorf("BeforeOverwrite saw %q, want %q", seen, want)
+	}
+}
+
+// pluggableDrive reports one USB drive at mountPoint until it is unplugged.
+type pluggableDrive struct {
+	mountPoint string
+	unplugged  atomic.Bool
+}
+
+func (d *pluggableDrive) DetectDevices() ([]storageutil.Device, error) {
+	if d.unplugged.Load() {
+		return nil, nil
+	}
+	return []storageutil.Device{{Name: "USB", MountPoint: d.mountPoint, UsbInfo: usbDrive{}}}, nil
+}
+
+// usbStaging is a USB drive registered the way production registers one,
+// beside an in-memory internal drive, with the host directories a test checks.
+type usbStaging struct {
+	dest     uploadutil.Destination
+	drive    *pluggableDrive
+	svc      *storageutil.StorageService
+	filesDir string
+	// stagingDir is where the drive's sessions should stage: beside its files
+	// directory, the way its trash is.
+	stagingDir string
+}
+
+func newUSBStaging(t *testing.T) usbStaging {
+	t.Helper()
+	drive := &pluggableDrive{mountPoint: t.TempDir()}
+	svc := storageutil.NewStorageService(drive)
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: "files"}, vfs.NewMemVFS("files")); err != nil {
+		t.Fatalf("register files namespace: %v", err)
+	}
+	if _, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: svc}); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := storageutil.GetDataDirForDevice(drive.mountPoint)
+	return usbStaging{
+		dest:       uploadutil.Destination{Registry: registry, EventBus: eventbus.New()},
+		drive:      drive,
+		svc:        svc,
+		filesDir:   storageutil.ConstructFilesDir(dataDir),
+		stagingDir: filepath.Join(dataDir, "tmp", "upload-sessions"),
+	}
+}
+
+func openDeviceSession(t *testing.T, store *uploadutil.SessionStore, dest uploadutil.Destination, name string, size int64) string {
+	t.Helper()
+	result, err := store.CreateSession(uploadutil.CreateSessionParams{
+		Destination: dest,
+		FileName:    name,
+		TotalSize:   size,
+		Serial:      deviceSerial,
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	return result.SessionID
+}
+
+// onlyStagedFile is the one file staged in dir.
+func onlyStagedFile(t *testing.T, dir string) string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(dir, "upload-*.part"))
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("want exactly one staged file in %s, got %v (%v)", dir, matches, err)
+	}
+	return matches[0]
+}
+
+// An upload to a USB drive is staged on that drive, so its commit is a rename
+// on one filesystem rather than a copy off the internal drive (#3970).
+func TestADeviceUploadIsStagedOnThatDevice(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	usb := newUSBStaging(t)
+	content := []byte("staged beside the files, not on the internal drive")
+	total := int64(len(content))
+
+	id := openDeviceSession(t, store, usb.dest, "takeout.zip", total)
+	if got := stagedCount(t, store.StagingDir()); got != 0 {
+		t.Errorf("the internal staging dir holds %d file(s) for a USB upload", got)
+	}
+	staged := onlyStagedFile(t, usb.stagingDir)
+	if rel, err := filepath.Rel(usb.filesDir, staged); err != nil || !strings.HasPrefix(rel, "..") {
+		t.Errorf("staged at %s, inside the files directory %s", staged, usb.filesDir)
+	}
+	before, err := os.Stat(staged)
+	if err != nil {
+		t.Fatalf("stat staged file: %v", err)
+	}
+
+	result, err := writeChunk(store, usb.dest, id, 0, total-1, total, content)
+	if err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if !result.Complete || result.Serial != deviceSerial {
+		t.Fatalf("commit reported %+v", result)
+	}
+	committed := filepath.Join(usb.filesDir, "takeout.zip")
+	after, err := os.Stat(committed)
+	if err != nil {
+		t.Fatalf("stat committed file: %v", err)
+	}
+	if !os.SameFile(before, after) {
+		t.Error("the committed file is a copy; the staged file should have been renamed into place")
+	}
+	if got, _ := os.ReadFile(committed); !bytes.Equal(got, content) {
+		t.Errorf("committed file is %q, want %q", got, content)
+	}
+	if got := stagedCount(t, usb.stagingDir); got != 0 {
+		t.Errorf("the drive's staging dir still holds %d entries after the commit", got)
+	}
+}
+
+// When the staged file and its destination are on different filesystems the
+// commit cannot rename, and falls back to a copy that still lands the whole
+// file and leaves nothing staged.
+func TestACrossDeviceCommitFallsBackToACopy(t *testing.T) {
+	t.Parallel()
+
+	const otherFS = "/dev/shm"
+	dest, root := newLocalDestination(t)
+	if !onDifferentFilesystems(t, otherFS, root) {
+		t.Skipf("%s is not a separate filesystem from %s here", otherFS, root)
+	}
+	stagingRoot, err := os.MkdirTemp(otherFS, "quark-upload-staging-")
+	if err != nil {
+		t.Skipf("cannot stage on %s: %v", otherFS, err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(stagingRoot) })
+	store := uploadutil.NewSessionStore(uploadutil.NewSessionStoreParams{
+		StagingDir: filepath.Join(stagingRoot, "upload-sessions"),
+	})
+	t.Cleanup(func() { _ = store.Close() })
+
+	content := []byte("copied across filesystems")
+	staged, err := commitWhole(t, store, dest, "far.bin", false, content)
+	if err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(root, "far.bin")); !bytes.Equal(got, content) {
+		t.Errorf("committed file is %q, want %q", got, content)
+	}
+	if _, err := os.Stat(staged); !os.IsNotExist(err) {
+		t.Errorf("the staged file survived the copy: %v", err)
+	}
+}
+
+// onDifferentFilesystems reports whether a exists and sits on another
+// filesystem from b, where a rename between them is EXDEV.
+func onDifferentFilesystems(t *testing.T, a, b string) bool {
+	t.Helper()
+	ai, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	bi, err := os.Stat(b)
+	if err != nil {
+		t.Fatalf("stat %s: %v", b, err)
+	}
+	as, aok := ai.Sys().(*syscall.Stat_t)
+	bs, bok := bi.Sys().(*syscall.Stat_t)
+	return aok && bok && as.Dev != bs.Dev
+}
+
+// An expired or canceled session on a USB drive takes its staged bytes with
+// it, the same as one on the internal drive.
+func TestDeviceSessionsLeaveNothingStagedWhenTheyEnd(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	usb := newUSBStaging(t)
+
+	canceled := openDeviceSession(t, store, usb.dest, "canceled.bin", 1024)
+	if _, err := writeChunk(store, usb.dest, canceled, 0, 511, 1024, make([]byte, 512)); err != nil {
+		t.Fatalf("chunk: %v", err)
+	}
+	if _, err := store.DeleteSession(uploadutil.DeleteSessionParams{SessionID: canceled}); err != nil {
+		t.Fatalf("delete session: %v", err)
+	}
+	if got := stagedCount(t, usb.stagingDir); got != 0 {
+		t.Errorf("a canceled session left %d staged file(s) on the drive", got)
+	}
+
+	openDeviceSession(t, store, usb.dest, "abandoned.bin", 1024)
+	if result := store.Sweep(time.Now().Add(2 * uploadutil.DefaultSessionTTL)); result.Expired != 1 {
+		t.Fatalf("sweep expired %d sessions, want 1", result.Expired)
+	}
+	if got := stagedCount(t, usb.stagingDir); got != 0 {
+		t.Errorf("an expired session left %d staged file(s) on the drive", got)
+	}
+}
+
+// Sessions live in memory, so a process that dies mid-upload strands its
+// staged file. The next process clears what an earlier one left in a staging
+// dir the first time it stages there, on the internal drive and on a USB
+// drive alike, and never touches a file one of its own sessions staged.
+func TestARestartClearsPartFilesAnEarlierProcessStranded(t *testing.T) {
+	t.Parallel()
+
+	usb := newUSBStaging(t)
+	internalDir := filepath.Join(t.TempDir(), "upload-sessions")
+	crashed := uploadutil.NewSessionStore(uploadutil.NewSessionStoreParams{StagingDir: internalDir})
+	// The crashed process never closed its store, so its staged files stayed.
+	// Closing it after the test only releases its file handles.
+	t.Cleanup(func() { _ = crashed.Close() })
+	openSession(t, crashed, usb.dest, "internal.bin", 1024)
+	openDeviceSession(t, crashed, usb.dest, "usb.bin", 1024)
+	stranded := []string{onlyStagedFile(t, internalDir), onlyStagedFile(t, usb.stagingDir)}
+	var unrelated []string
+	for _, dir := range []string{internalDir, usb.stagingDir} {
+		p := filepath.Join(dir, "not-an-upload.txt")
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatalf("seed %s: %v", p, err)
+		}
+		unrelated = append(unrelated, p)
+	}
+
+	restarted := uploadutil.NewSessionStore(uploadutil.NewSessionStoreParams{StagingDir: internalDir})
+	t.Cleanup(func() { _ = restarted.Close() })
+	openSession(t, restarted, usb.dest, "internal.bin", 1024)
+	openDeviceSession(t, restarted, usb.dest, "usb.bin", 1024)
+	own := []string{onlyStagedFile(t, internalDir), onlyStagedFile(t, usb.stagingDir)}
+
+	for _, p := range stranded {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s survived the restart: %v", p, err)
+		}
+	}
+	for _, p := range unrelated {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s is not a staged upload but was removed: %v", p, err)
+		}
+	}
+	// A second session in the same dirs leaves the first one's file alone.
+	openSession(t, restarted, usb.dest, "internal-2.bin", 1024)
+	openDeviceSession(t, restarted, usb.dest, "usb-2.bin", 1024)
+	for _, p := range own {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("a live session's staged file %s was removed: %v", p, err)
+		}
+	}
+}
+
+// Unplugging the drive mid-upload ends the session with the "no destination"
+// error the handler answers as 404, rather than writing on to a stale file or
+// falling back to the internal drive, and an upload to the internal drive
+// goes on working.
+func TestUnpluggingTheDeviceMidUploadEndsItsSession(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	usb := newUSBStaging(t)
+
+	id := openDeviceSession(t, store, usb.dest, "unplugged.bin", 1024)
+	if _, err := writeChunk(store, usb.dest, id, 0, 511, 1024, make([]byte, 512)); err != nil {
+		t.Fatalf("first chunk: %v", err)
+	}
+	usb.drive.unplugged.Store(true)
+	usb.svc.InvalidateDeviceCache()
+
+	_, err := writeChunk(store, usb.dest, id, 512, 1023, 1024, make([]byte, 512))
+	if !errors.Is(err, uploadutil.ErrNoDestination) || !errors.Is(err, vfs.ErrNotFound) {
+		t.Fatalf("chunk after unplugging = %v, want ErrNoDestination wrapping vfs.ErrNotFound", err)
+	}
+	if _, err := store.DescribeSession(uploadutil.DescribeSessionParams{SessionID: id}); !errors.Is(err, uploadutil.ErrSessionNotFound) {
+		t.Errorf("the session outlived its drive: %v", err)
+	}
+	finished := store.ListSessions(uploadutil.ListSessionsParams{}).Finished
+	if len(finished) != 1 || finished[0].SessionID != id || finished[0].State != uploadutil.SessionFailed {
+		t.Errorf("unplugged session listed as %+v, want one failed session %s", finished, id)
+	}
+	if got := stagedCount(t, usb.stagingDir); got != 0 {
+		t.Errorf("the ended session left %d staged file(s)", got)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != 0 {
+		t.Errorf("the internal staging dir picked up %d file(s)", got)
+	}
+	if _, err := store.CreateSession(uploadutil.CreateSessionParams{
+		Destination: usb.dest, FileName: "again.bin", TotalSize: 1, Serial: deviceSerial,
+	}); !errors.Is(err, uploadutil.ErrNoDestination) {
+		t.Errorf("a session on the unplugged drive opened: %v", err)
+	}
+
+	internal := openSession(t, store, usb.dest, "internal.bin", 3)
+	result, err := writeChunk(store, usb.dest, internal, 0, 2, 3, []byte("yes"))
+	if err != nil || !result.Complete {
+		t.Errorf("an internal upload after the unplug = %+v, %v", result, err)
 	}
 }
