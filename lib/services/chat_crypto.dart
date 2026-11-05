@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -27,6 +28,11 @@ import 'package:sodium/sodium_sumo.dart';
 ///   bound to [reactionAad].
 /// - Poll answers (#3894): the same over [padPollAnswer], bound to
 ///   [pollAnswerAad].
+/// - Attachments (#2425): [newAttachmentKey], [newAttachmentNoncePrefix],
+///   [sealAttachment] and [openAttachment]. Each file has its own key. The
+///   plaintext is split into [attachmentChunkBytes] chunks, and each chunk
+///   is sealed under a nonce of the file's prefix plus the chunk index, so
+///   a reordered or truncated ciphertext fails to open.
 class ChatCrypto {
   /// Wraps an initialized libsodium.
   ChatCrypto(this.sodium) : account = AccountCrypto(sodium);
@@ -366,7 +372,192 @@ class ChatCrypto {
       additionalData: additionalData,
     );
   }
+
+  /// Plaintext bytes in one attachment chunk (#2425). The last chunk is
+  /// shorter when the file's size is not a multiple of this.
+  static const attachmentChunkBytes = 64 * 1024;
+
+  /// Random bytes that start every chunk nonce of one file. The remaining
+  /// 8 bytes of the 24-byte nonce are the chunk index, big-endian.
+  static const attachmentNoncePrefixBytes = 16;
+
+  /// A new file key. The caller disposes it. It belongs in the message
+  /// ciphertext, next to [newAttachmentNoncePrefix], and never on the Quark.
+  SecureKey newAttachmentKey() => _aead.keygen();
+
+  /// The nonce prefix for one file. Store it with the file key.
+  Uint8List newAttachmentNoncePrefix() =>
+      sodium.randombytes.buf(attachmentNoncePrefixBytes);
+
+  /// Seals [input], which is exactly [totalBytes] long, as a sequence of
+  /// chunks (#2425).
+  ///
+  /// Each yielded piece is one sealed chunk: the ciphertext and its tag, with
+  /// no nonce in front. The nonce is [noncePrefix] followed by the chunk
+  /// index, and the additional data binds the domain, that index and
+  /// [totalBytes]. A listener can forward each piece as it arrives; nothing
+  /// here holds more than one chunk.
+  ///
+  /// An empty file yields nothing. A stream that ends early or runs long
+  /// throws [FormatException]. [key] and [noncePrefix] have to stay alive
+  /// until the stream finishes.
+  Stream<Uint8List> sealAttachment({
+    required SecureKey key,
+    required Uint8List noncePrefix,
+    required Stream<List<int>> input,
+    required int totalBytes,
+  }) async* {
+    _checkAttachmentHeader(noncePrefix, totalBytes);
+    if (totalBytes == 0) {
+      await for (final piece in input) {
+        if (piece.isNotEmpty) {
+          throw const FormatException('attachment is longer than it claims');
+        }
+      }
+      return;
+    }
+
+    final buffer = Uint8List(attachmentChunkBytes);
+    var filled = 0;
+    var remaining = totalBytes;
+    var index = 0;
+    await for (final piece in input) {
+      var offset = 0;
+      while (offset < piece.length) {
+        if (remaining == 0) {
+          throw const FormatException('attachment is longer than it claims');
+        }
+        final room = attachmentChunkBytes - filled;
+        final take = _smaller(piece.length - offset, _smaller(room, remaining));
+        buffer.setRange(filled, filled + take, piece, offset);
+        filled += take;
+        offset += take;
+        remaining -= take;
+        if (filled == attachmentChunkBytes || remaining == 0) {
+          yield _sealAttachmentChunk(
+            key,
+            noncePrefix,
+            index,
+            totalBytes,
+            Uint8List.sublistView(buffer, 0, filled),
+          );
+          buffer.fillRange(0, filled, 0);
+          filled = 0;
+          index++;
+        }
+      }
+    }
+    if (remaining != 0) {
+      throw const FormatException('attachment truncated');
+    }
+  }
+
+  /// Opens what [sealAttachment] produced for the same [key], [noncePrefix]
+  /// and [totalBytes].
+  ///
+  /// [totalBytes] is the size from the decrypted message, so a file the Quark
+  /// shortened fails here even when every delivered chunk's tag is valid.
+  /// A chunk moved to another index fails its tag ([SodiumException], the
+  /// same as [decrypt]). The plaintext comes out one chunk at a time.
+  Stream<Uint8List> openAttachment({
+    required SecureKey key,
+    required Uint8List noncePrefix,
+    required Stream<List<int>> input,
+    required int totalBytes,
+  }) async* {
+    _checkAttachmentHeader(noncePrefix, totalBytes);
+    final chunkCount = totalBytes == 0
+        ? 0
+        : (totalBytes + attachmentChunkBytes - 1) ~/ attachmentChunkBytes;
+    final window = Uint8List(attachmentChunkBytes + _aead.aBytes);
+    var filled = 0;
+    var index = 0;
+    await for (final piece in input) {
+      var offset = 0;
+      while (offset < piece.length) {
+        if (index == chunkCount) {
+          throw const FormatException('attachment is longer than it claims');
+        }
+        final plainLen = _attachmentPlainLength(index, chunkCount, totalBytes);
+        final sealedLen = plainLen + _aead.aBytes;
+        final take = _smaller(piece.length - offset, sealedLen - filled);
+        window.setRange(filled, filled + take, piece, offset);
+        filled += take;
+        offset += take;
+        if (filled == sealedLen) {
+          yield _openAttachmentChunk(
+            key,
+            noncePrefix,
+            index,
+            totalBytes,
+            Uint8List.sublistView(window, 0, sealedLen),
+          );
+          filled = 0;
+          index++;
+        }
+      }
+    }
+    if (index != chunkCount || filled != 0) {
+      throw const FormatException('attachment truncated');
+    }
+  }
+
+  void _checkAttachmentHeader(Uint8List noncePrefix, int totalBytes) {
+    if (noncePrefix.length != attachmentNoncePrefixBytes) {
+      throw const FormatException('an attachment nonce prefix is 16 bytes');
+    }
+    if (totalBytes < 0) {
+      throw const FormatException('an attachment size is negative');
+    }
+  }
+
+  int _attachmentPlainLength(int index, int chunkCount, int totalBytes) {
+    if (index == chunkCount - 1) {
+      final earlier = index * attachmentChunkBytes;
+      return totalBytes - earlier;
+    }
+    return attachmentChunkBytes;
+  }
+
+  Uint8List _attachmentNonce(Uint8List noncePrefix, int index) =>
+      Uint8List.fromList([...noncePrefix, ..._be64(index)]);
+
+  /// `"quark-chat-file-v1" 0x00 || be64(index) || be64(totalBytes)`.
+  Uint8List _attachmentAad(int index, int totalBytes) => Uint8List.fromList([
+    ...utf8.encode('quark-chat-file-v1'),
+    0,
+    ..._be64(index),
+    ..._be64(totalBytes),
+  ]);
+
+  Uint8List _sealAttachmentChunk(
+    SecureKey key,
+    Uint8List noncePrefix,
+    int index,
+    int totalBytes,
+    Uint8List plain,
+  ) => _aead.encrypt(
+    message: plain,
+    nonce: _attachmentNonce(noncePrefix, index),
+    key: key,
+    additionalData: _attachmentAad(index, totalBytes),
+  );
+
+  Uint8List _openAttachmentChunk(
+    SecureKey key,
+    Uint8List noncePrefix,
+    int index,
+    int totalBytes,
+    Uint8List sealed,
+  ) => _aead.decrypt(
+    cipherText: sealed,
+    nonce: _attachmentNonce(noncePrefix, index),
+    key: key,
+    additionalData: _attachmentAad(index, totalBytes),
+  );
 }
+
+int _smaller(int a, int b) => a < b ? a : b;
 
 /// A user's unlocked chat identity: an X25519 keypair for sealed boxes and an
 /// Ed25519 keypair for signatures (#2416).
