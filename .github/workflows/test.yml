@@ -39,7 +39,7 @@ jobs:
       postgres: ${{ steps.filter.outputs.postgres }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Filter paths
         id: filter
         if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
@@ -47,7 +47,7 @@ jobs:
         # the jobs would skip behind a failed `changes`, and a skipped required check
         # counts as passed.
         continue-on-error: true
-        uses: dorny/paths-filter@v4
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: .github/path-filters.yml
   test-backend:
@@ -57,10 +57,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # errand: remove on errand-x64-quark-backend; ci-backend carries Go.
       - name: Setup go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       # errand: remove on errand-x64-quark-backend; ci-backend carries sqlc.
@@ -81,7 +81,7 @@ jobs:
           total="$(go tool cover -func=coverage.out.ignored | tail -1 | awk '{print $NF}')"
           echo "### Backend unit test coverage: ${total}" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload coverage report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: backend-coverage
           path: coverage.html
@@ -98,10 +98,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # errand: remove on errand-x64-quark-backend; ci-backend carries Go.
       - name: Setup go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       # errand: remove on errand-x64-quark-backend; ci-backend carries sqlc.
@@ -141,10 +141,10 @@ jobs:
           --health-retries 30
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # errand: remove on errand-arm-medium-quark-backend; ci-backend carries Go.
       - name: Setup go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - name: Download Go modules
@@ -192,10 +192,10 @@ jobs:
           --health-retries 30
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # errand: remove on errand-x64-medium-quark-backend; ci-backend carries Go.
       - name: Setup go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       # errand: remove on errand-x64-medium-quark-backend; ci-backend carries sqlc.
@@ -228,10 +228,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # errand: remove on errand-arm-medium-quark-backend; ci-backend carries Go.
       - name: Setup go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       # errand: remove on errand-arm-medium-quark-backend; ci-backend carries sqlc.
@@ -245,7 +245,7 @@ jobs:
           make test/chaos/local
       - name: Upload stress suite artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: api-chaos-results
           path: test-results/chaos/
@@ -258,10 +258,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # errand: remove on errand-arm-medium-quark-backend; ci-backend carries Go.
       - name: Setup go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - name: Cut the power under uploads
@@ -276,7 +276,7 @@ jobs:
           make test/chaos/powercut
       - name: Upload power-cut results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: power-cut-results
           path: test-results/powercut/
@@ -308,7 +308,7 @@ jobs:
             suite: test/unit/frontend/packages
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # errand: remove on errand-arm-quark-frontend; ci-frontend carries Flutter.
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
