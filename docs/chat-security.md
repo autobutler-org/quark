@@ -353,6 +353,8 @@ rows. The ciphertext files under `chat-attachments` in the data directory are no
 
 4 GiB is the server's disk cap. It is not a limit on decrypting in the browser: the app opens one chunk at a time.
 
+Saving an attachment to this device decrypts it here and hands the file to the same save other downloads use: the photo library for a picture or video on a phone, and the platform download otherwise (#3334). Saving it to my files decrypts it on the device and uploads the plaintext through the normal files upload, keeping both when the name is already taken. The Quark does not decrypt the attachment. The copy in my files is an ordinary file, not ciphertext.
+
 ## Reactions
 
 A reaction is encrypted like a message (#2426): XChaCha20-Poly1305 under the channel's current key, a random

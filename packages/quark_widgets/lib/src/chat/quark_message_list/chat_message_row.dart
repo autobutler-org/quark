@@ -24,8 +24,9 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// for key" placeholder, or a deleted message's tombstone, according to
 /// [ChatMessageItem.kind]. A text message's [ChatMessageItem.attachments]
 /// are `ChatAttachmentTile`s under the body. An empty body with attachments
-/// shows only those. A poll's card answers with [onAnswerPoll], closes
-/// with [onClosePoll] and exports with [onExportPoll]. System
+/// shows only those. Save actions on a tile call [onSaveAttachmentToDevice]
+/// and [onSaveAttachmentToFiles]. A poll's card answers with [onAnswerPoll],
+/// closes with [onClosePoll] and exports with [onExportPoll]. System
 /// lines are a `ChatSystemLine` instead. A text message's reactions sit under
 /// its body as a `ChatReactionBar`, and [onReact] adds a `ChatReactionPicker`
 /// at the row's end as the quick way to react. "More emoji" there, and in the
@@ -84,6 +85,8 @@ class ChatMessageRow extends StatefulWidget {
     this.onExportPoll,
     this.onOpenAttachment,
     this.onPlayAttachment,
+    this.onSaveAttachmentToDevice,
+    this.onSaveAttachmentToFiles,
     this.thumbnailBuilder,
     this.mentionNames = const [],
     this.selfName,
@@ -138,6 +141,14 @@ class ChatMessageRow extends StatefulWidget {
   /// Called with a video attached to this message when its play control is
   /// tapped. Null leaves the control disabled.
   final ValueChanged<ChatAttachmentItem>? onPlayAttachment;
+
+  /// Called with an attachment when its "Save to device" action is tapped.
+  /// Null leaves that action out.
+  final ValueChanged<ChatAttachmentItem>? onSaveAttachmentToDevice;
+
+  /// Called with an attachment when its "Save to my files" action is tapped.
+  /// Null leaves that action out.
+  final ValueChanged<ChatAttachmentItem>? onSaveAttachmentToFiles;
 
   /// Builds a preview for an image attachment. Null, or a builder that
   /// returns null, shows the file name on that tile.
@@ -450,6 +461,24 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
                                                 ? null
                                                 : () =>
                                                       widget.onPlayAttachment!(
+                                                        attachment,
+                                                      ),
+                                            onSaveToDevice:
+                                                widget.onSaveAttachmentToDevice ==
+                                                    null
+                                                ? null
+                                                : () =>
+                                                      widget
+                                                          .onSaveAttachmentToDevice!(
+                                                        attachment,
+                                                      ),
+                                            onSaveToFiles:
+                                                widget.onSaveAttachmentToFiles ==
+                                                    null
+                                                ? null
+                                                : () =>
+                                                      widget
+                                                          .onSaveAttachmentToFiles!(
                                                         attachment,
                                                       ),
                                           ),

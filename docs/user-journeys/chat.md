@@ -4,7 +4,8 @@ Covers chat (#2414): opening a channel, sending and receiving
 end-to-end encrypted messages, unlocking chat on web after a reload, waiting
 for a channel key, and creating, sharing, renaming, leaving and deleting
 channels (#2422), reacting to messages (#2426), a message's menu (#2631),
-searching a channel on the device (#2429), mentioning a member (#2623), and polls (#3894).
+searching a channel on the device (#2429), mentioning a member (#2623), polls (#3894),
+and attaching a file and saving it (#2425).
 
 ---
 
@@ -603,3 +604,70 @@ channel open.
 - A number may be a whole number or a decimal. A date is a calendar day.
 - One person still has one answer. Changing it replaces every question at once.
 - A later question cannot depend on an earlier answer.
+
+---
+
+### JN-CHAT-026: Send an image
+
+**Preconditions:** JN-CHAT-001. The account can attach files. Another account is in the channel.
+
+**Steps:**
+
+1. Tap the attach button and choose an image.
+2. Send it. A caption in the composer goes with the image, and the composer may be empty.
+3. As the other account, open the channel.
+
+**Expected result:**
+
+- The image appears for the sender under the message. The thumbnail is inline, with the file's name.
+- After the other account opens the channel, the same image is there.
+- Tapping the image opens a larger view.
+
+**Notes:**
+
+- A file that is not an image is listed by its name and size. A video has a play control.
+- An image larger than 20 MiB can be sent and saved. Opening that image in the viewer is refused, because the viewer reads it into memory. Saving does not use that cap.
+
+---
+
+### JN-CHAT-027: Save an attachment to the device
+
+**Preconditions:** A message with an attachment is on screen (JN-CHAT-026).
+
+**Steps:**
+
+1. Tap **Save to device** on the attachment.
+
+**Expected result:**
+
+- An image or a video on a phone is added to the photo library.
+- Any other file, and every file on the web, is saved through the platform download: the browser's download, or the save dialog in the app.
+
+**Notes:**
+
+- Canceling the save dialog leaves the file where it was.
+- The file is decrypted on this device. The Quark only stored the ciphertext.
+- This is the same save other downloads use (#3334).
+
+---
+
+### JN-CHAT-028: Save an attachment to my files
+
+**Preconditions:** A message with an attachment is on screen (JN-CHAT-026).
+
+**Steps:**
+
+1. Tap **Save to my files** on the attachment.
+2. Open a folder, or stay where the picker opened, and tap **Save here**.
+
+**Expected result:**
+
+- A folder picker opens on My files.
+- The file is uploaded into the chosen folder under its own name.
+- A file of that name already in the folder is kept, and the new one lands beside it.
+
+**Notes:**
+
+- The file is decrypted on this device and uploaded as a normal file. The Quark does not decrypt it.
+- Up goes to the parent folder. It is absent at the top, which is the same place the file browser opens for this account.
+- Any kind of file can be saved this way, including an image or a video.

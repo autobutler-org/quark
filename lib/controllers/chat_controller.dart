@@ -846,6 +846,25 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     return messages.openAttachmentPlaintext(attachmentId);
   }
 
+  /// Saves attachment [attachmentId] on the open channel through the platform
+  /// save. Where it landed, or null when the save was canceled. Throws when
+  /// there is no open channel or the file cannot be saved.
+  Future<String?> saveAttachmentToDevice(String attachmentId) {
+    final messages = _messages;
+    if (messages == null) throw StateError('no channel');
+    return messages.saveAttachmentToDevice(attachmentId);
+  }
+
+  /// Uploads attachment [attachmentId] on the open channel into [folder].
+  ///
+  /// [folder] is the folder the person picked. `/` is the top of their files.
+  /// The file keeps its name, and a name already there is kept beside it.
+  Future<void> saveAttachmentToFolder(String attachmentId, String folder) {
+    final messages = _messages;
+    if (messages == null) throw StateError('no channel');
+    return messages.saveAttachmentToFolder(attachmentId, folder: folder);
+  }
+
   /// Sends failed message [pendingId] again.
   Future<void> retry(String pendingId) async {
     final pending = _pending.where((p) => p.id == pendingId).firstOrNull;

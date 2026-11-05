@@ -11,3 +11,8 @@ Future<String?> saveDownloadPlatform({
 
 Future<String?> saveBytesPlatform(Uint8List bytes, String fileName) =>
     throw UnsupportedError('The web saves through the browser');
+
+Future<String?> saveExistingFilePlatform({
+  required String path,
+  required String fileName,
+}) => throw UnsupportedError('The web saves through the browser');

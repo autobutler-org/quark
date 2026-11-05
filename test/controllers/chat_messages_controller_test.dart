@@ -85,12 +85,17 @@ class _FakeQuark {
   /// How many times an attachment body was downloaded.
   var attachmentDownloads = 0;
 
+  /// Ciphertext uploaded for an attachment id, so a later download can open it.
+  final Map<String, List<int>> attachmentBodies = {};
+
   int _nextId = 1;
 
   ChatMessagesController client(
     _FakeKeys keys,
     ChatCrypto crypto, {
     int userId = 2,
+    SaveChatAttachmentFn? saveAttachmentFile,
+    UploadChatAttachmentFn? uploadAttachmentFile,
   }) => ChatMessagesController(
     channelId: _channel,
     keys: keys,
@@ -150,17 +155,21 @@ class _FakeQuark {
     closePoll: (messageId) async => close(messageId),
     putAttachment: (channelId, id, body) async {
       uploadedAttachmentIds.add(id);
-      return body is List<int> ? body.length : 0;
+      final bytes = body is List<int> ? List<int>.from(body) : const <int>[];
+      attachmentBodies[id] = bytes;
+      return bytes.length;
     },
     getAttachment: (channelId, id, {sink}) async {
       attachmentDownloads++;
-      return const Stream<List<int>>.empty();
+      return Stream<List<int>>.value(attachmentBodies[id] ?? const <int>[]);
     },
     currentUserId: () => userId,
     fetchEvents: (channelId, {after = 0}) async =>
         events.where((e) => e.id > after).toList(),
     events: live.stream.where((e) => audience[e]?.contains(userId) ?? true),
     reconnects: reconnects.stream,
+    saveAttachmentFile: saveAttachmentFile,
+    uploadAttachmentFile: uploadAttachmentFile,
   );
 
   ChatReaction react(
@@ -465,6 +474,42 @@ void main() {
     expect(got[1].text, isEmpty);
     sender.dispose();
     reader.dispose();
+  });
+
+  test('saving an attachment to a folder uploads its name there', () async {
+    final key = crypto.newChannelKey();
+    final uploads = <({String folder, String name, List<int> bytes})>[];
+    final sender = quark.client(
+      _FakeKeys()..grant(1, key),
+      crypto,
+      uploadAttachmentFile:
+          ({required plaintext, required folder, required fileName}) async {
+            final bytes = await plaintext.fold<List<int>>(
+              <int>[],
+              (collected, chunk) => collected..addAll(chunk),
+            );
+            uploads.add((folder: folder, name: fileName, bytes: bytes));
+          },
+    );
+    await sender.open();
+    final plain = Uint8List.fromList(const [1, 2, 3, 4]);
+    await sender.sendAttachment(
+      name: 'cabin.png',
+      mime: 'image/png',
+      bytes: plain,
+    );
+    final id = [
+      for (final entry in sender.entries)
+        if (entry is ChatTimelineMessage) ...entry.attachments,
+    ].single.id;
+
+    await sender.saveAttachmentToFolder(id, folder: '/Photos');
+
+    expect(uploads, hasLength(1));
+    expect(uploads.single.folder, '/Photos');
+    expect(uploads.single.name, 'cabin.png');
+    expect(uploads.single.bytes, plain);
+    sender.dispose();
   });
 
   test('an image over 20 MiB is refused before it is downloaded', () async {

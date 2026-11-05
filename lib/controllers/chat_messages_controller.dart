@@ -11,6 +11,7 @@ import 'package:quark/models/chat_message.dart';
 import 'package:quark/models/chat_poll.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_attachment_message.dart';
+import 'package:quark/services/chat_attachment_save.dart';
 import 'package:quark/services/chat_channel_keys_service.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/chat_messages_service.dart';
@@ -19,6 +20,21 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:sodium/sodium_sumo.dart';
+
+/// Writes a decrypted attachment through the platform save.
+typedef SaveChatAttachmentFn =
+    Future<String?> Function({
+      required Stream<List<int>> plaintext,
+      required String fileName,
+    });
+
+/// Uploads a decrypted attachment into a Quark folder under its file name.
+typedef UploadChatAttachmentFn =
+    Future<void> Function({
+      required Stream<List<int>> plaintext,
+      required String folder,
+      required String fileName,
+    });
 
 /// One open channel's timeline (#2418): its messages, decrypted in memory,
 /// merged with its membership and key events.
@@ -51,8 +67,11 @@ import 'package:sodium/sodium_sumo.dart';
 ///   (the keys controller notifies).
 /// - [entries] is the merged timeline, oldest first.
 ///
-/// Plaintext is never written anywhere; [dispose] drops it. The chat page
-/// makes one per open channel and disposes it on leaving.
+/// Plaintext stays in memory, and [dispose] drops it, except when an
+/// attachment is saved. That writes the file to a temporary file and deletes
+/// it afterward. Saving into Quark files uploads that plaintext through the
+/// files upload; the Quark does not decrypt it. The chat page makes one per
+/// open channel and disposes it on leaving.
 class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   /// Builds a controller for [channelId]. Every collaborator has a real
   /// default; tests pass fakes.
@@ -104,6 +123,8 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     fetchEvents,
     Stream<FileEvent>? events,
     Stream<void>? reconnects,
+    SaveChatAttachmentFn? saveAttachmentFile,
+    UploadChatAttachmentFn? uploadAttachmentFile,
   }) : _keys = keys ?? ChatChannelKeysController.instance,
        _crypto = crypto ?? (() => ChatKeysController.instance.crypto),
        _fetchMessages = fetchMessages ?? ChatMessagesService.fetchMessages,
@@ -121,7 +142,10 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
            currentUserId ?? (() => AppSettings.instance.userId.value),
        _fetchEvents = fetchEvents ?? ChatChannelKeysService.fetchEvents,
        _eventStream = events ?? EventsService.instance.events,
-       _reconnectStream = reconnects ?? EventsService.instance.reconnects;
+       _reconnectStream = reconnects ?? EventsService.instance.reconnects,
+       _saveAttachmentFile = saveAttachmentFile ?? saveChatAttachmentToDevice,
+       _uploadAttachmentFile =
+           uploadAttachmentFile ?? uploadChatAttachmentToFolder;
 
   /// The channel this timeline is for.
   final int channelId;
@@ -184,6 +208,8 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   _fetchEvents;
   final Stream<FileEvent> _eventStream;
   final Stream<void> _reconnectStream;
+  final SaveChatAttachmentFn _saveAttachmentFile;
+  final UploadChatAttachmentFn _uploadAttachmentFile;
 
   final SplayTreeMap<int, ChatTimelineMessage> _messages = SplayTreeMap();
   List<ChatTimelineSystem> _system = const [];
@@ -419,6 +445,46 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       key.dispose();
     }
     return builder.takeBytes();
+  }
+
+  /// Saves [attachmentId] through the platform save, under the file's own name.
+  ///
+  /// Returns where it landed, or null when the person canceled. A picture or
+  /// video on a phone goes to the photo library. This does not apply
+  /// [maxInlineImageBytes]: that cap is only for opening an image in memory.
+  Future<String?> saveAttachmentToDevice(String attachmentId) {
+    final name = _attachmentSaveName(attachmentId);
+    return _saveAttachmentFile(
+      plaintext: openAttachmentPlaintext(attachmentId),
+      fileName: name,
+    );
+  }
+
+  /// Uploads [attachmentId] into [folder] under the file's own name.
+  ///
+  /// [folder] is the folder the person picked, `/` for the top of their
+  /// files. A name already there is kept beside the new file. The plaintext
+  /// is streamed; it is not collected here.
+  Future<void> saveAttachmentToFolder(
+    String attachmentId, {
+    required String folder,
+  }) {
+    final name = _attachmentSaveName(attachmentId);
+    return _uploadAttachmentFile(
+      plaintext: openAttachmentPlaintext(attachmentId),
+      folder: folder,
+      fileName: name,
+    );
+  }
+
+  String _attachmentSaveName(String attachmentId) {
+    final described = _described(attachmentId);
+    if (described == null) {
+      throw StateError('no attachment $attachmentId');
+    }
+    final base = described.name.trim().split(RegExp(r'[/\\]')).last.trim();
+    if (base.isEmpty || base == '.' || base == '..') return 'file';
+    return base;
   }
 
   /// Decrypts [attachmentId] one chunk at a time.

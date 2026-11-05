@@ -24,6 +24,7 @@ import 'package:quark/widgets/chat/chat_unlock_prompt.dart';
 import 'package:quark/widgets/chat/native_emoji_dialog.dart';
 import 'package:quark/widgets/chat/show_chat_poll_editor.dart';
 import 'package:quark/widgets/chat/show_chat_poll_export.dart';
+import 'package:quark/widgets/chat/show_chat_save_folder.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
@@ -71,7 +72,10 @@ import 'package:url_launcher/url_launcher.dart';
 /// The attach button on the composer sends one file from this device. The
 /// caption is whatever is in the field, and it may be empty. A photo opens
 /// in the image viewer. A video is decrypted to a temporary file and played.
-/// Nothing is saved to this device or to Quark files.
+/// Saving an attachment decrypts it on this device. A picture or video on a
+/// phone goes to the photo library, and anything else through the save
+/// dialog. Saving to my files asks for a folder and uploads the plaintext
+/// there under the file's name, beside a file that already has that name.
 ///
 /// The poll button beside the composer opens a form for a poll (#3894). A
 /// holder of `add_reactions` answers one, and its author closes it. Each
@@ -119,6 +123,9 @@ class _ChatPageState extends State<ChatPage>
 
   /// Whether a file pick and upload is already running.
   bool _attaching = false;
+
+  /// Whether an attachment save is already running.
+  bool _savingAttachment = false;
 
   @override
   void initState() {
@@ -258,6 +265,38 @@ class _ChatPageState extends State<ChatPage>
     } catch (e) {
       if (!mounted) return;
       showMessage(context, Errors.message(e, 'open the image'));
+    }
+  }
+
+  Future<void> _saveAttachmentToDevice(ChatAttachmentItem item) async {
+    if (_savingAttachment) return;
+    _savingAttachment = true;
+    try {
+      final saved = await _controller.saveAttachmentToDevice(item.id);
+      if (saved == null || !mounted) return;
+      showMessage(context, 'Saved');
+    } catch (error) {
+      if (!mounted) return;
+      showMessage(context, Errors.message(error, 'save the file'));
+    } finally {
+      _savingAttachment = false;
+    }
+  }
+
+  Future<void> _saveAttachmentToFiles(ChatAttachmentItem item) async {
+    if (_savingAttachment) return;
+    _savingAttachment = true;
+    try {
+      final folder = await showChatSaveFolderPicker(context);
+      if (folder == null || !mounted) return;
+      await _controller.saveAttachmentToFolder(item.id, folder);
+      if (!mounted) return;
+      showMessage(context, 'Saved to my files');
+    } catch (error) {
+      if (!mounted) return;
+      showMessage(context, Errors.message(error, 'save the file'));
+    } finally {
+      _savingAttachment = false;
     }
   }
 
@@ -695,6 +734,10 @@ class _ChatPageState extends State<ChatPage>
                                     unawaited(_openAttachment(item)),
                                 onPlayAttachment: (_, item) =>
                                     unawaited(_playAttachment(item)),
+                                onSaveAttachmentToDevice: (_, item) =>
+                                    unawaited(_saveAttachmentToDevice(item)),
+                                onSaveAttachmentToFiles: (_, item) =>
+                                    unawaited(_saveAttachmentToFiles(item)),
                                 thumbnailBuilder: (context, item) {
                                   final bytes = c.thumbnailFor(item.id);
                                   if (bytes == null) return null;

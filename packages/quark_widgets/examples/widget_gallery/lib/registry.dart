@@ -2296,6 +2296,10 @@ final List<GalleryEntry> registry = [
                   : null,
               onOpen: () => log('ChatAttachmentTile.onOpen(${item.id})'),
               onPlay: () => log('ChatAttachmentTile.onPlay(${item.id})'),
+              onSaveToDevice: () =>
+                  log('ChatAttachmentTile.onSaveToDevice(${item.id})'),
+              onSaveToFiles: () =>
+                  log('ChatAttachmentTile.onSaveToFiles(${item.id})'),
             ),
         ],
       );
@@ -2457,6 +2461,12 @@ final List<GalleryEntry> registry = [
                 log('QuarkMessageList.onOpenAttachment($id, ${item.id})'),
             onPlayAttachment: (id, item) =>
                 log('QuarkMessageList.onPlayAttachment($id, ${item.id})'),
+            onSaveAttachmentToDevice: (id, item) => log(
+              'QuarkMessageList.onSaveAttachmentToDevice($id, ${item.id})',
+            ),
+            onSaveAttachmentToFiles: (id, item) => log(
+              'QuarkMessageList.onSaveAttachmentToFiles($id, ${item.id})',
+            ),
             thumbnailBuilder: (context, item) => ColoredBox(
               color: QuarkTokens.of(context).primary,
               child: const SizedBox(width: 120, height: 80),

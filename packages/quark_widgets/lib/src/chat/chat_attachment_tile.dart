@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../layout/quark_bar_chip.dart';
 import '../layout/quark_bar_icon_button.dart';
 import '../models/chat_attachment_item.dart';
 import '../theme/quark_tokens.dart';
@@ -12,10 +13,14 @@ import '../core/quark_tappable.dart';
 /// when that is null or returns null. A video shows a play control and does
 /// not play anything itself; this package does not depend on a video player.
 /// A file shows its name and its size in B, KiB, or MiB. A tap on an image or
-/// a file fires [onOpen]. The play control fires [onPlay].
+/// a file fires [onOpen]. The play control fires [onPlay]. [onSaveToDevice]
+/// and [onSaveToFiles], when set, are actions under the preview. Either may
+/// be null, and then its action is absent.
 ///
-/// Key prefixes: `chat_attachment_<id>` on the tile, and
-/// `chat_attachment_play_<id>` on a video's play control.
+/// Key prefixes: `chat_attachment_<id>` on the tile,
+/// `chat_attachment_play_<id>` on a video's play control,
+/// `chat_attachment_save_device_<id>` on save to this device, and
+/// `chat_attachment_save_files_<id>` on save to my files.
 ///
 /// ```dart
 /// ChatAttachmentTile(
@@ -23,6 +28,8 @@ import '../core/quark_tappable.dart';
 ///   thumbnailBuilder: (context, item) => thumbnailOf(item),
 ///   onOpen: () => open(item),
 ///   onPlay: () => play(item),
+///   onSaveToDevice: () => saveToDevice(item),
+///   onSaveToFiles: () => saveToFiles(item),
 /// )
 /// ```
 class ChatAttachmentTile extends StatelessWidget {
@@ -32,6 +39,8 @@ class ChatAttachmentTile extends StatelessWidget {
     this.thumbnailBuilder,
     this.onOpen,
     this.onPlay,
+    this.onSaveToDevice,
+    this.onSaveToFiles,
     super.key,
   });
 
@@ -50,6 +59,12 @@ class ChatAttachmentTile extends StatelessWidget {
   /// Called when a video's play control is tapped. Null leaves the control
   /// disabled.
   final VoidCallback? onPlay;
+
+  /// Called when "Save to device" is tapped. Null leaves that action out.
+  final VoidCallback? onSaveToDevice;
+
+  /// Called when "Save to my files" is tapped. Null leaves that action out.
+  final VoidCallback? onSaveToFiles;
 
   static const double _previewHeight = 160;
   static const double _maxWidth = 280;
@@ -133,30 +148,68 @@ class ChatAttachmentTile extends StatelessWidget {
       );
     }
 
+    final saveToDevice = onSaveToDevice;
+    final saveToFiles = onSaveToFiles;
     return Align(
       alignment: AlignmentDirectional.centerStart,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: _maxWidth),
-        child: Semantics(
-          button: onTap != null,
-          child: QuarkTappable(
-            key: ValueKey('chat_attachment_${item.id}'),
-            onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: tokens.card,
             borderRadius: BorderRadius.circular(tokens.radiusMd),
-            child: ConstrainedBox(
-              // A file row is otherwise shorter than the 48dp tap target.
-              constraints: const BoxConstraints(minHeight: 48),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: tokens.card,
-                  borderRadius: BorderRadius.circular(tokens.radiusMd),
-                  border: Border.all(color: tokens.border),
+            border: Border.all(color: tokens.border),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(tokens.spacingSm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Semantics(
+                  button: onTap != null,
+                  child: QuarkTappable(
+                    key: ValueKey('chat_attachment_${item.id}'),
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(tokens.radiusSm),
+                    child: ConstrainedBox(
+                      // A file row is otherwise shorter than the 48dp tap target.
+                      constraints: const BoxConstraints(minHeight: 48),
+                      child: body,
+                    ),
+                  ),
                 ),
-                child: Padding(
-                  padding: EdgeInsets.all(tokens.spacingSm),
-                  child: body,
-                ),
-              ),
+                if (saveToDevice != null || saveToFiles != null) ...[
+                  SizedBox(height: tokens.spacingXs),
+                  Wrap(
+                    spacing: tokens.spacingXs,
+                    runSpacing: tokens.spacingXs,
+                    children: [
+                      if (saveToDevice != null)
+                        QuarkBarChip(
+                          key: ValueKey(
+                            'chat_attachment_save_device_${item.id}',
+                          ),
+                          icon: QuarkIcons.download_outlined,
+                          label: 'Save to device',
+                          tooltip: 'Save to device',
+                          keepLabel: true,
+                          onPressed: saveToDevice,
+                        ),
+                      if (saveToFiles != null)
+                        QuarkBarChip(
+                          key: ValueKey(
+                            'chat_attachment_save_files_${item.id}',
+                          ),
+                          icon: QuarkIcons.folder_outlined,
+                          label: 'Save to my files',
+                          tooltip: 'Save to my files',
+                          keepLabel: true,
+                          onPressed: saveToFiles,
+                        ),
+                    ],
+                  ),
+                ],
+              ],
             ),
           ),
         ),

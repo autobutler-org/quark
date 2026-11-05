@@ -65,6 +65,12 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
               onPlayAttachment: (id, item) => widget.log(
                 'QuarkMessageList.onPlayAttachment($id, ${item.id})',
               ),
+              onSaveAttachmentToDevice: (id, item) => widget.log(
+                'QuarkMessageList.onSaveAttachmentToDevice($id, ${item.id})',
+              ),
+              onSaveAttachmentToFiles: (id, item) => widget.log(
+                'QuarkMessageList.onSaveAttachmentToFiles($id, ${item.id})',
+              ),
               thumbnailBuilder: (context, item) => ColoredBox(
                 color: QuarkTokens.of(context).primary,
                 child: const SizedBox(width: 120, height: 80),

@@ -100,6 +100,37 @@ Future<String?> saveBytesPlatform(Uint8List bytes, String fileName) {
   );
 }
 
+/// Saves the file already at [path] the way [saveBytesPlatform] saves bytes:
+/// the photo library for a picture or video, the mobile dialog otherwise, and
+/// the desktop dialog on desktop. [path] is not read into memory and is not
+/// deleted.
+Future<String?> saveExistingFilePlatform({
+  required String path,
+  required String fileName,
+}) async {
+  if (!_usesMobileDialog) {
+    final destination = await _pickDesktopSavePath(fileName);
+    if (destination == null) return null;
+    try {
+      await File(path).copy(destination);
+    } catch (_) {
+      _removePlaceholder(destination);
+      rethrow;
+    }
+    return destination;
+  }
+  return saveToPhotoLibraryOrFiles(
+    destination: downloadDestinationFor(fileName),
+    requestAccess: _requestPhotoLibraryAccess,
+    saveToLibrary: (destination) =>
+        _saveFileToPhotoLibrary(File(path), fileName, destination),
+    saveToFiles: () => FlutterFileDialog.saveFile(
+      params: SaveFileDialogParams(sourceFilePath: path, fileName: fileName),
+    ),
+    notify: announceDownloadNotice,
+  );
+}
+
 /// The mobile save (#3334): a picture or video goes into the photo library
 /// when [requestAccess] allows it, anything else through [saveToFiles].
 ///
