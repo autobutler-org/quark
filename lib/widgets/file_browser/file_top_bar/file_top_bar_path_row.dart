@@ -50,6 +50,7 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
     this.onUploadPhotosPressed,
     this.onUploadFolderPressed,
     this.onCancelUploadPressed,
+    this.onShowUploadProgressPressed,
     this.devices,
     this.activeDevicePaths,
     this.onDeviceToggled,
@@ -84,6 +85,7 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onUploadPhotosPressed;
   final VoidCallback? onUploadFolderPressed;
   final VoidCallback? onCancelUploadPressed;
+  final VoidCallback? onShowUploadProgressPressed;
   final List<StorageDevice>? devices;
   final Set<String>? activeDevicePaths;
   final ValueChanged<String>? onDeviceToggled;
@@ -156,6 +158,7 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
           onUploadPhotosPressed: onUploadPhotosPressed,
           onUploadFolderPressed: onUploadFolderPressed,
           onCancelUploadPressed: onCancelUploadPressed,
+          onShowUploadProgressPressed: onShowUploadProgressPressed,
         ),
         FileTopBarViewChips(
           isGridView: isGridView,

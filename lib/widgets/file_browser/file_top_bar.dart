@@ -47,6 +47,7 @@ class FileTopBar extends StatefulWidget implements PreferredSizeWidget {
     this.onUploadPhotosPressed,
     this.onUploadFolderPressed,
     this.onCancelUploadPressed,
+    this.onShowUploadProgressPressed,
     required this.onCreateFolderPressed,
     required this.onNewFilePressed,
     this.onStartSelection,
@@ -115,6 +116,9 @@ class FileTopBar extends StatefulWidget implements PreferredSizeWidget {
   /// failing its way through a thousand files should not leave the user
   /// watching a disabled button.
   final VoidCallback? onCancelUploadPressed;
+
+  /// Opens the Jobs tab, where each file's progress is shown (#3972).
+  final VoidCallback? onShowUploadProgressPressed;
   final VoidCallback onCreateFolderPressed;
   final VoidCallback onNewFilePressed;
   final List<StorageDevice>? devices;
@@ -247,6 +251,7 @@ class _FileTopBarState extends State<FileTopBar> {
               onUploadPhotosPressed: widget.onUploadPhotosPressed,
               onUploadFolderPressed: widget.onUploadFolderPressed,
               onCancelUploadPressed: widget.onCancelUploadPressed,
+              onShowUploadProgressPressed: widget.onShowUploadProgressPressed,
               devices: widget.devices,
               activeDevicePaths: widget.activeDevicePaths,
               onDeviceToggled: widget.onDeviceToggled,

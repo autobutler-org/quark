@@ -164,6 +164,7 @@ export 'src/models/remote_access_state.dart';
 export 'src/models/shared_root_item.dart';
 export 'src/models/ssh_key_item.dart';
 export 'src/models/transcode_format_option.dart';
+export 'src/models/upload_item.dart';
 export 'src/models/upload_target.dart';
 export 'src/models/user_account_item.dart';
 export 'src/models/vault_entry_item.dart';

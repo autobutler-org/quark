@@ -37,6 +37,42 @@ const _completed = JobItem(
 );
 const _jobs = [_running, _pending, _failed, _completed];
 
+const _uploading = UploadItem(
+  id: 'up1',
+  fileName: 'takeout-001.zip',
+  destination: 'To Imports on an external drive',
+  status: UploadItemStatus.uploading,
+  sentBytes: 512 * 1024 * 1024,
+  totalBytes: 2 * 1024 * 1024 * 1024,
+  bytesPerSecond: 12.5 * 1024 * 1024,
+  remaining: Duration(minutes: 2, seconds: 3),
+  canCancel: true,
+);
+const _finishing = UploadItem(
+  id: 'up2',
+  fileName: 'takeout-002.zip',
+  status: UploadItemStatus.finishing,
+  sentBytes: 2048,
+  totalBytes: 2048,
+);
+const _stalled = UploadItem(
+  id: 'up3',
+  fileName: 'takeout-003.zip',
+  status: UploadItemStatus.stalled,
+  sentBytes: 1536,
+  totalBytes: 4096,
+  bytesPerSecond: 100,
+  canCancel: true,
+);
+const _uploaded = UploadItem(
+  id: 'up4',
+  fileName: 'takeout-004.zip',
+  status: UploadItemStatus.completed,
+  sentBytes: 5 * 1024 * 1024,
+  totalBytes: 5 * 1024 * 1024,
+);
+const _uploads = [_uploading, _finishing, _stalled, _uploaded];
+
 void main() {
   testWidgets('shows a spinner while loading with nothing yet', (tester) async {
     await pumpAt(tester, const JobList(items: [], isLoading: true));
@@ -179,4 +215,79 @@ void main() {
     expect(find.textContaining('Conversions'), findsNothing);
     expect(find.byType(QuarkLoader), findsNothing);
   });
+
+  testBothViewports('describes each upload above the jobs', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      const JobList(items: _jobs, uploads: _uploads),
+      size: size,
+    );
+    expect(tester.takeException(), isNull);
+
+    expect(find.text('takeout-001.zip'), findsOneWidget);
+    expect(find.text('To Imports on an external drive'), findsOneWidget);
+    expect(
+      find.text('Uploading · 512 MB of 2.0 GB · 13 MB/s · About 3 min left'),
+      findsOneWidget,
+    );
+    expect(find.text('Finishing · 2.0 KB of 2.0 KB'), findsOneWidget);
+    // A stalled upload shows no rate: nothing is moving.
+    expect(find.text('Stalled · 1.5 KB of 4.0 KB'), findsOneWidget);
+    expect(find.text('Uploaded · 5.0 MB'), findsOneWidget);
+    // Three uploads in flight and one running job have bars.
+    expect(find.byType(LinearProgressIndicator), findsNWidgets(4));
+
+    final firstUpload = tester.getTopLeft(
+      find.byKey(const ValueKey('upload_row_up1')),
+    );
+    final firstJob = tester.getTopLeft(find.byKey(const ValueKey('job_row_3')));
+    expect(firstUpload.dy, lessThan(firstJob.dy));
+  });
+
+  testWidgets('offers Cancel on an upload only where the item does', (
+    tester,
+  ) async {
+    final canceled = <String>[];
+    await pumpAt(
+      tester,
+      JobList(items: const [], uploads: _uploads, onCancelUpload: canceled.add),
+    );
+    for (final upload in _uploads) {
+      expect(
+        find.byKey(ValueKey('upload_cancel_${upload.id}')),
+        upload.canCancel ? findsOneWidget : findsNothing,
+      );
+    }
+    await tester.tap(find.byKey(const ValueKey('upload_cancel_up3')));
+    await tester.pump();
+    expect(canceled, ['up3']);
+  });
+
+  testWidgets('uploads alone are not the empty state', (tester) async {
+    await pumpAt(tester, const JobList(items: [], uploads: [_uploading]));
+    expect(find.text('No jobs yet'), findsNothing);
+    expect(find.byKey(const ValueKey('upload_row_up1')), findsOneWidget);
+  });
+
+  for (final (label, brightness, tokens) in [
+    ('dark', Brightness.dark, QuarkTokens.dark),
+    ('light', Brightness.light, QuarkTokens.light),
+  ]) {
+    testWidgets('$label: a stalled upload is drawn in the error token', (
+      tester,
+    ) async {
+      await pumpAt(
+        tester,
+        const JobList(items: [], uploads: [_stalled]),
+        brightness: brightness,
+      );
+      final status = tester.widget<Text>(
+        find.text('Stalled · 1.5 KB of 4.0 KB'),
+      );
+      expect(status.style?.color, tokens.error);
+    });
+  }
 }

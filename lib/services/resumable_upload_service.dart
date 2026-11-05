@@ -7,6 +7,7 @@ import 'package:quark/models/upload_session.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/upload_chunk_source.dart';
+import 'package:quark/services/upload_sessions_service.dart';
 import 'package:quark/utils/error_text.dart';
 
 /// Where the session endpoints live, under the same `/api/v0` group and behind
@@ -55,6 +56,11 @@ abstract interface class ResumableUploadClient {
 
   /// Abandons a session and its temp file. Best effort.
   Future<void> deleteSession(String sessionId);
+
+  /// Whether [sessionId] is gone because someone canceled it, from this
+  /// device or another (#3972). False when the Quark cannot say, so a wrong
+  /// guess only costs a retry.
+  Future<bool> wasCanceled(String sessionId);
 }
 
 /// Calls `/api/v0/files/upload-session` to upload a large file in chunks: create a session, send each chunk, ask
@@ -178,6 +184,10 @@ class ResumableUploadService
       );
     }
   }
+
+  @override
+  Future<bool> wasCanceled(String sessionId) =>
+      UploadSessionsService.wasCanceled(sessionId);
 
   static Map<String, dynamic> _decode(http.Response response) {
     final decoded = jsonDecode(response.body);

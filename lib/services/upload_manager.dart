@@ -609,6 +609,12 @@ class UploadManager extends ChangeNotifier {
         lastError = const MessageException(
           'The upload session expired before it finished.',
         );
+      } on _CanceledElsewhere {
+        // Someone chose not to send this file. Not a failure, the same as
+        // declining a name clash.
+        _store.remove(fileKey);
+        _recordDeclined();
+        return;
       } on _UploadStopped {
         // Neither sent nor failed: the run is ending and this file stopped on
         // a chunk boundary. The session ends with it, so its staged bytes go
@@ -756,6 +762,11 @@ class UploadManager extends ChangeNotifier {
           record = record.copyWith(offset: offset);
           _store.write(record);
         case ChunkSessionGone():
+          // Canceled from the Jobs page, here or on another device: opening
+          // a new session would undo the cancel (#3972).
+          if (await _client.wasCanceled(record.sessionId)) {
+            throw const _CanceledElsewhere();
+          }
           return null;
         case ChunkRejected():
           throw Exception('$outcome');
@@ -931,6 +942,11 @@ class UploadManager extends ChangeNotifier {
 /// server's offset next time rather than counted against the batch.
 class _UploadStopped implements Exception {
   const _UploadStopped();
+}
+
+/// Thrown when a file's session was canceled from the Jobs page.
+class _CanceledElsewhere implements Exception {
+  const _CanceledElsewhere();
 }
 
 class _QueuedUpload {

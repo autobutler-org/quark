@@ -1712,7 +1712,9 @@ final List<GalleryEntry> registry = [
     build: (context, log) => SizedBox(
       height: 360,
       child: JobList(
+        uploads: _galleryUploads,
         items: _galleryJobs,
+        onCancelUpload: (id) => log('JobList.onCancelUpload($id)'),
         onCancel: (id) => log('JobList.onCancel($id)'),
         onRetry: (id) => log('JobList.onRetry($id)'),
       ),
@@ -3765,6 +3767,36 @@ const List<SshKeyItem> _gallerySshKeys = [
 ];
 
 /// The fake jobs: one of every state the list draws.
+const List<UploadItem> _galleryUploads = [
+  UploadItem(
+    id: 'upload-1',
+    fileName: 'takeout-20261103-001.zip',
+    destination: 'To Imports on an external drive',
+    status: UploadItemStatus.uploading,
+    sentBytes: 900 * 1024 * 1024,
+    totalBytes: 2 * 1024 * 1024 * 1024,
+    bytesPerSecond: 11 * 1024 * 1024,
+    remaining: Duration(minutes: 2),
+    canCancel: true,
+  ),
+  UploadItem(
+    id: 'upload-2',
+    fileName: 'takeout-20261103-002.zip',
+    destination: 'To Imports on an external drive',
+    status: UploadItemStatus.finishing,
+    sentBytes: 2 * 1024 * 1024 * 1024,
+    totalBytes: 2 * 1024 * 1024 * 1024,
+  ),
+  UploadItem(
+    id: 'upload-3',
+    fileName: 'vacation.mov',
+    destination: 'To Videos',
+    status: UploadItemStatus.completed,
+    sentBytes: 350 * 1024 * 1024,
+    totalBytes: 350 * 1024 * 1024,
+  ),
+];
+
 const List<JobItem> _galleryJobs = [
   JobItem(
     id: 4,
