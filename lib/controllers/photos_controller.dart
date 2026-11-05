@@ -20,6 +20,7 @@ import 'package:quark/services/favorites_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/client_thumbnails.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/services/upload_batch.dart';
 import 'package:quark/utils/album_link.dart' as link;
 import 'package:quark/utils/album_order.dart';
 import 'package:quark/utils/connection_error.dart';
@@ -1550,38 +1551,45 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     _isUploading = true;
     notifyListeners();
     try {
-      final multipart = <http.MultipartFile>[];
-      for (final file in files) {
-        final path = file.path;
-        if (!_isWeb && path != null && path.isNotEmpty) {
-          multipart.add(
-            await http.MultipartFile.fromPath(
-              'files',
-              path,
-              filename: file.name,
-            ),
-          );
-          final thumbnail = await _renderQuietly(
-            () => _renderFromPath(file.name, path),
-          );
-          if (thumbnail != null) {
-            multipart.add(thumbnailPart(file.name, thumbnail));
-          }
-          continue;
-        }
-        final bytes = await file.readAsBytes();
-        multipart.add(
-          http.MultipartFile.fromBytes('files', bytes, filename: file.name),
-        );
-        // The thumbnail follows its file: the Quark pairs them by name (#2379).
-        final thumbnail = await _renderQuietly(
-          () => _renderFromBytes(file.name, bytes),
-        );
-        if (thumbnail != null) {
-          multipart.add(thumbnailPart(file.name, thumbnail));
-        }
-      }
-      final paths = await _uploadToLibrary(multipart, serial: serial);
+      // Each photo's parts are built per attempt: a retry after the Quark
+      // refused the batch partway resends only the photos that did not land
+      // (#3533), and a part's body can be read only once.
+      Future<List<http.MultipartFile>> Function() partsOf(PlatformFile file) =>
+          () async {
+            final path = file.path;
+            final http.MultipartFile part;
+            final Uint8List? thumbnail;
+            if (!_isWeb && path != null && path.isNotEmpty) {
+              part = await http.MultipartFile.fromPath(
+                'files',
+                path,
+                filename: file.name,
+              );
+              thumbnail = await _renderQuietly(
+                () => _renderFromPath(file.name, path),
+              );
+            } else {
+              final bytes = await file.readAsBytes();
+              part = http.MultipartFile.fromBytes(
+                'files',
+                bytes,
+                filename: file.name,
+              );
+              thumbnail = await _renderQuietly(
+                () => _renderFromBytes(file.name, bytes),
+              );
+            }
+            // The thumbnail follows its file: the Quark pairs them by name
+            // (#2379).
+            return [
+              part,
+              if (thumbnail != null) thumbnailPart(file.name, thumbnail),
+            ];
+          };
+      final paths = await sendUploadBatch(
+        files: [for (final file in files) partsOf(file)],
+        send: (parts) => _uploadToLibrary(parts, serial: serial),
+      );
       if (albumId == null) return null;
       var added = 0;
       Object? error;
@@ -1652,10 +1660,16 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
         if (file == null) continue;
         final render = photo.renderThumbnail;
         final thumbnail = render == null ? null : await _renderQuietly(render);
-        await _uploadToLibrary([
-          file,
-          if (thumbnail != null) thumbnailPart(photo.name, thumbnail),
-        ], serial: serial);
+        try {
+          await _uploadToLibrary([
+            file,
+            if (thumbnail != null) thumbnailPart(photo.name, thumbnail),
+          ], serial: serial);
+        } on UploadBatchFailure catch (e) {
+          // The file landed and only a following part, its thumbnail, did
+          // not (#3533). Sending it again would land a second copy.
+          if (e.landed.isEmpty) rethrow;
+        }
         uploaded++;
       }
       return uploaded;

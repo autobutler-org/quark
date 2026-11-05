@@ -30,6 +30,12 @@ abstract final class UploadConfig {
   /// try. More attempts than a whole-file upload gets for that reason.
   static const int maxChunkAttempts = 4;
 
+  /// How many requests one multipart batch gets before it is given up on.
+  ///
+  /// Each retry carries only the files the Quark did not report as landed
+  /// (#3533), so a retry never repeats a file that made it.
+  static const int maxBatchAttempts = 3;
+
   /// Multiplied by the attempt number for the pause between chunk retries.
   ///
   /// Linear rather than exponential: the server this talks to is a small box

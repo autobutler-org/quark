@@ -9,6 +9,7 @@ import 'package:quark/services/file_browser_actions.dart';
 import 'package:quark/services/client_thumbnails.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/resumable_upload_service.dart';
+import 'package:quark/services/upload_batch.dart';
 import 'package:quark/services/upload_chunk_source.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/error_text.dart';
@@ -504,20 +505,28 @@ class UploadManager extends ChangeNotifier {
           );
           return;
         }
-        await _send(
-          currentPath: queued.targetPath,
-          // The thumbnail follows its file: the Quark pairs them by name.
-          selectedFiles: [
-            file,
-            if (thumbnail != null) thumbnailPart(queued.upload.name, thumbnail),
-          ],
-          serial: queued.serial,
-          conflict: queued.conflict,
-        ).timeout(
-          _attemptTimeout,
-          onTimeout: () =>
-              throw TimeoutException('no response after $_attemptTimeout'),
-        );
+        try {
+          await _send(
+            currentPath: queued.targetPath,
+            // The thumbnail follows its file: the Quark pairs them by name.
+            selectedFiles: [
+              file,
+              if (thumbnail != null)
+                thumbnailPart(queued.upload.name, thumbnail),
+            ],
+            serial: queued.serial,
+            conflict: queued.conflict,
+          ).timeout(
+            _attemptTimeout,
+            onTimeout: () =>
+                throw TimeoutException('no response after $_attemptTimeout'),
+          );
+        } on UploadBatchFailure catch (e) {
+          // The file landed and only its thumbnail did not (#3533). Sending
+          // it again would land a second copy; a missing thumbnail is filled
+          // in later (#2381).
+          if (e.landed.isEmpty) rethrow;
+        }
 
         _consecutiveFailures = 0;
         _completed++;
