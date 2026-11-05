@@ -438,6 +438,13 @@ abstract final class Errors {
   /// A cancel the Quark refused: a 409 means the job had already finished, a
   /// 404 that the Quark no longer knows it or no longer shows it to this
   /// account. A 403 reads as the generic permission copy from [message].
+  /// Canceling an upload from the Jobs page. A 404 means it had already
+  /// ended.
+  static String cancelUpload(Object? error) => switch (error) {
+    ApiException(statusCode: 404) => 'That upload has already finished.',
+    _ => message(error, 'cancel the upload'),
+  };
+
   static String cancelJob(Object? error) => switch (error) {
     ApiException(statusCode: 409) => 'That job has already finished.',
     ApiException(statusCode: 404) => 'That job no longer exists.',

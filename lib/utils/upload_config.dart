@@ -42,6 +42,14 @@ abstract final class UploadConfig {
   /// on a home network, and it recovers in seconds or not at all.
   static const Duration chunkRetryBackoff = Duration(seconds: 1);
 
+  /// How long an upload in flight can go without a byte landing before the
+  /// Jobs page calls it stalled (#3972).
+  ///
+  /// One 8 MiB chunk takes a few seconds on a slow home link, so this is
+  /// several chunks' worth of silence: long enough not to cry wolf, short
+  /// enough that a dropped laptop shows before anyone wonders.
+  static const Duration stallAfter = Duration(seconds: 30);
+
   /// How long a persisted session record is worth trying to resume.
   ///
   /// Shorter than the server's own session TTL so the client gives up first

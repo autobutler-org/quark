@@ -19,6 +19,7 @@ void main() {
     VoidCallback? onUploadPhotos,
     VoidCallback? onUploadFolder,
     VoidCallback? onCancelUpload,
+    VoidCallback? onShowProgress,
     bool isUploading = false,
     int uploadTotal = 0,
     int uploadCompleted = 0,
@@ -38,6 +39,7 @@ void main() {
             onUploadPhotosPressed: onUploadPhotos,
             onUploadFolderPressed: onUploadFolder,
             onCancelUploadPressed: onCancelUpload,
+            onShowUploadProgressPressed: onShowProgress,
           ),
         ),
       ),
@@ -215,6 +217,33 @@ void main() {
 
     expect(cancels, 1);
     expect(files, 0);
+  });
+
+  // #3972: "12/100" says nothing about a 2 GB file in flight. The chip
+  // leads to where each file's bytes, rate and time left are shown.
+  testWidgets('while uploading, the chip offers to show the progress', (
+    tester,
+  ) async {
+    var shown = 0;
+    await pumpBar(
+      tester,
+      onUpload: () {},
+      onCancelUpload: () {},
+      onShowProgress: () => shown++,
+      isUploading: true,
+      uploadTotal: 10,
+      uploadCompleted: 0,
+    );
+
+    await tester.tap(find.text('0/10'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('file_top_bar_upload_progress')),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(MenuItemButton, 'Show progress'));
+    await tester.pumpAndSettle();
+    expect(shown, 1);
   });
 
   testWidgets('with no cancel handler the chip stays inert while uploading', (

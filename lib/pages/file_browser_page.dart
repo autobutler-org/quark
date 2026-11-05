@@ -2150,6 +2150,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                   ? _handleUploadFolderPressed
                   : null,
               onCancelUploadPressed: UploadManager.instance.cancel,
+              onShowUploadProgressPressed: () =>
+                  context.go(AppRoutes.systemTab(SystemTab.jobs)),
               onCreateFolderPressed: _handleCreateFolderPressed,
               onNewFilePressed: _handleNewFilePressed,
               uploadTotal: _uploadTotal,

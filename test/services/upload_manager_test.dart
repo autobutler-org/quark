@@ -962,6 +962,29 @@ void main() {
       expect(store.read(keyFor('big.bin', 20)), isNull);
     });
 
+    test('a session canceled from the Jobs page is not started over', () async {
+      // #3972: the Jobs page cancels by deleting the session. Opening a new
+      // one would quietly undo that.
+      server.intercept = (attempt, start, end) async {
+        if (attempt == 2) {
+          final id = server.created.single;
+          server.sessions.remove(id);
+          server.canceled.add(id);
+        }
+        return null;
+      };
+      final manager = managerFor();
+
+      final done = manager.results.first;
+      manager.enqueue(uploads: [sized('big.bin', 20)], uploadPath: '');
+      final result = await done;
+
+      expect(server.created, hasLength(1), reason: 'no second session');
+      expect(result.failed, 0, reason: 'a cancel is not a failure');
+      expect(result.declined, 1);
+      expect(store.read(keyFor('big.bin', 20)), isNull);
+    });
+
     test('cancel stops a chunked file on a chunk boundary', () async {
       // The one thing a whole-file upload could not do. Cancelling used to
       // mean waiting out however long the file in flight took, which for a
@@ -1668,6 +1691,9 @@ class _FakeUploadServer implements ResumableUploadClient {
   final List<String> deleted = [];
   final List<String> ranges = [];
 
+  /// Sessions canceled from the Jobs page, here or on another device.
+  final Set<String> canceled = {};
+
   int puts = 0;
   int _counter = 0;
 
@@ -1692,6 +1718,10 @@ class _FakeUploadServer implements ResumableUploadClient {
     );
     return sessionId;
   }
+
+  @override
+  Future<bool> wasCanceled(String sessionId) async =>
+      canceled.contains(sessionId);
 
   @override
   Future<UploadSession> createSession({

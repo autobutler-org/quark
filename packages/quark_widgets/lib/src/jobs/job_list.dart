@@ -4,24 +4,31 @@ import 'package:quark_icons/quark_icons.dart';
 import '../core/empty_state_widget.dart';
 import '../core/quark_loader.dart';
 import '../models/job_item.dart';
+import '../models/upload_item.dart';
 import '../theme/quark_tokens.dart';
 import 'job_list/job_row.dart';
+import 'job_list/upload_row.dart';
 
-/// Long-running jobs, newest first, each with its status, progress, and the
-/// Cancel or Retry action its [JobItem] offers.
+/// Long-running work: file [uploads] first, each with how much has arrived,
+/// its rate and time left, then jobs, newest first, each with its status,
+/// progress, and the Cancel or Retry action its [JobItem] offers.
 ///
 /// Loading and error are inputs. A spinner or the [error] text replaces the
-/// list only while there are no [items]; with items on screen the error sits
-/// above them, so a failed refresh never hides what was already known.
+/// list only while there are no [items] and no [uploads]; with rows on screen
+/// the error sits above them, so a failed refresh never hides what was
+/// already known.
 ///
-/// Key prefixes: `job_row_<id>` on each row, `job_cancel_<id>` and
-/// `job_retry_<id>` on its actions.
+/// Key prefixes: `upload_row_<id>` and `upload_cancel_<id>` on each upload,
+/// `job_row_<id>` on each job, `job_cancel_<id>` and `job_retry_<id>` on its
+/// actions.
 ///
 /// ```dart
 /// JobList(
+///   uploads: uploads.items,
 ///   items: controller.items,
 ///   isLoading: controller.isLoading,
 ///   error: controller.error,
+///   onCancelUpload: cancelUpload,
 ///   onCancel: cancel,
 ///   onRetry: retry,
 /// );
@@ -30,15 +37,20 @@ class JobList extends StatelessWidget {
   /// Creates a list of [items].
   const JobList({
     required this.items,
+    this.uploads = const [],
     this.isLoading = false,
     this.error,
     this.onCancel,
     this.onRetry,
+    this.onCancelUpload,
     super.key,
   });
 
   /// The jobs to show, in order.
   final List<JobItem> items;
+
+  /// The uploads to show above the jobs, in order.
+  final List<UploadItem> uploads;
 
   /// Whether jobs are being fetched. Shows a spinner while [items] is empty.
   final bool isLoading;
@@ -51,6 +63,9 @@ class JobList extends StatelessWidget {
 
   /// Called with the id of the job whose Retry was tapped.
   final ValueChanged<int>? onRetry;
+
+  /// Called with the id of the upload whose Cancel was tapped.
+  final ValueChanged<String>? onCancelUpload;
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +81,7 @@ class JobList extends StatelessWidget {
             ),
           );
 
-    if (items.isEmpty) {
+    if (items.isEmpty && uploads.isEmpty) {
       if (isLoading) return const Center(child: QuarkLoader());
       if (errorText != null) return Center(child: errorText);
       return const EmptyStateWidget(
@@ -76,14 +91,16 @@ class JobList extends StatelessWidget {
         // category it belongs to: "conversions" is a word for someone who
         // already knows this page exists (#2038).
         subtext:
-            'Work that takes a while — converting a video, say — shows up '
-            'here while your Quark gets on with it.',
+            'Work that takes a while — a big upload or converting a video, '
+            'say — shows up here while your Quark gets on with it.',
       );
     }
 
     return ListView(
       children: [
         ?errorText,
+        for (final upload in uploads)
+          UploadRow(item: upload, onCancel: onCancelUpload),
         for (final item in items)
           JobRow(item: item, onCancel: onCancel, onRetry: onRetry),
       ],

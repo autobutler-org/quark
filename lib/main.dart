@@ -12,6 +12,7 @@ import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/jobs_controller.dart';
+import 'package:quark/controllers/upload_sessions_controller.dart';
 import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -64,6 +65,8 @@ Future<void> _run() async {
   installLocalTrustHttpOverrides();
   // Finish announcements and the jobs list outlive every page.
   JobsController.instance.start();
+  // Uploads from every device, for the Jobs tab and the badge (#3972).
+  UploadSessionsController.instance.start();
   // The bell's count is right on whatever page opens first (#2493).
   NotificationsController.instance.start();
   // Picks the home or remote-access address before the first request goes
@@ -142,6 +145,7 @@ class QuarkApp extends StatelessWidget {
             onNavigate: router.go,
             child: AppBarTrailingHost(
               jobs: JobsController.instance,
+              uploads: UploadSessionsController.instance,
               connection: ConnectionController.instance,
               notifications: NotificationsController.instance,
               onNavigate: router.go,

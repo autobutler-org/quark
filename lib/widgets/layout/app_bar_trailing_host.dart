@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/jobs_controller.dart';
+import 'package:quark/controllers/upload_sessions_controller.dart';
 import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/widgets/layout/connection_sheet_button.dart';
@@ -14,7 +15,8 @@ import 'package:tailnet_flutter/tailnet_flutter.dart';
 /// Gives every main page's top bar the app-wide controls, through one
 /// [QuarkAppBarTrailing] scope at the app root: a [ConnectionSheetButton] fed
 /// by [connection] (#1880), which opens the connection sheet (#2857), a
-/// [JobsBadge] counting [jobs]' running jobs, and a [NotificationsBell]
+/// [JobsBadge] counting [jobs]' running jobs and [uploads]' uploads in
+/// flight, and a [NotificationsBell]
 /// counting [notifications]' entries and opening them (#2493).
 ///
 /// The indicator is left out until [connection] has a mode, which is never on
@@ -27,6 +29,7 @@ class AppBarTrailingHost extends StatefulWidget {
   /// Creates the scope around [child].
   const AppBarTrailingHost({
     required this.jobs,
+    this.uploads,
     required this.connection,
     required this.notifications,
     required this.onNavigate,
@@ -36,6 +39,10 @@ class AppBarTrailingHost extends StatefulWidget {
 
   /// Where the running count comes from.
   final JobsController jobs;
+
+  /// Where the count of uploads in flight comes from. They count toward the
+  /// badge alongside running jobs, and both open the Jobs tab (#3972).
+  final UploadSessionsController? uploads;
 
   /// Where the local, remote or offline state comes from.
   final ConnectionController connection;
@@ -100,9 +107,11 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
                 onNavigate: widget.onNavigate,
               ),
             ListenableBuilder(
-              listenable: widget.jobs,
+              listenable: Listenable.merge([widget.jobs, ?widget.uploads]),
               builder: (context, _) => JobsBadge(
-                runningCount: widget.jobs.runningCount,
+                runningCount:
+                    widget.jobs.runningCount +
+                    (widget.uploads?.activeCount ?? 0),
                 onTap: () =>
                     widget.onNavigate(AppRoutes.systemTab(SystemTab.jobs)),
               ),

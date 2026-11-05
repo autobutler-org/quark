@@ -19,6 +19,7 @@ class FileTopBarActions extends StatelessWidget {
     this.onUploadPhotosPressed,
     this.onUploadFolderPressed,
     this.onCancelUploadPressed,
+    this.onShowUploadProgressPressed,
     super.key,
   });
 
@@ -32,6 +33,7 @@ class FileTopBarActions extends StatelessWidget {
   final VoidCallback? onUploadPhotosPressed;
   final VoidCallback? onUploadFolderPressed;
   final VoidCallback? onCancelUploadPressed;
+  final VoidCallback? onShowUploadProgressPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +48,7 @@ class FileTopBarActions extends StatelessWidget {
           onUploadPhotosPressed: onUploadPhotosPressed,
           onUploadFolderPressed: onUploadFolderPressed,
           onCancelUploadPressed: onCancelUploadPressed,
+          onShowUploadProgressPressed: onShowUploadProgressPressed,
         ),
         const SizedBox(width: 6),
         QuarkBarChip(

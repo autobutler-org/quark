@@ -19,7 +19,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// way out: a batch failing its way through a large folder must not leave the
 /// user watching a disabled button.
 ///
-/// Probe keys: `file_top_bar_upload`.
+/// While an upload runs its menu also offers Show progress, which opens the
+/// Jobs tab with each file's bytes, rate and time left (#3972).
+///
+/// Probe keys: `file_top_bar_upload`, `file_top_bar_upload_progress`.
 class FileTopBarUploadChip extends StatelessWidget {
   const FileTopBarUploadChip({
     required this.isUploading,
@@ -29,6 +32,7 @@ class FileTopBarUploadChip extends StatelessWidget {
     this.onUploadPhotosPressed,
     this.onUploadFolderPressed,
     this.onCancelUploadPressed,
+    this.onShowUploadProgressPressed,
     super.key,
   });
 
@@ -40,6 +44,9 @@ class FileTopBarUploadChip extends StatelessWidget {
   final VoidCallback? onUploadFolderPressed;
   final VoidCallback? onCancelUploadPressed;
 
+  /// Opens where each file's progress is shown, the Jobs tab (#3972).
+  final VoidCallback? onShowUploadProgressPressed;
+
   @override
   Widget build(BuildContext context) {
     final label = isUploading
@@ -47,19 +54,28 @@ class FileTopBarUploadChip extends StatelessWidget {
         : 'Upload';
 
     final onCancel = onCancelUploadPressed;
+    final onShowProgress = onShowUploadProgressPressed;
     final onUploadPhotos = onUploadPhotosPressed;
     final onUploadFolder = onUploadFolderPressed;
 
     final List<Widget>? menuItems;
     if (isUploading) {
-      menuItems = onCancel == null
+      menuItems = onCancel == null && onShowProgress == null
           ? null
           : [
-              MenuItemButton(
-                onPressed: onCancel,
-                leadingIcon: const Icon(QuarkIcons.close_rounded),
-                child: const Text('Cancel upload'),
-              ),
+              if (onShowProgress != null)
+                MenuItemButton(
+                  key: const ValueKey('file_top_bar_upload_progress'),
+                  onPressed: onShowProgress,
+                  leadingIcon: const Icon(QuarkIcons.pending_actions_outlined),
+                  child: const Text('Show progress'),
+                ),
+              if (onCancel != null)
+                MenuItemButton(
+                  onPressed: onCancel,
+                  leadingIcon: const Icon(QuarkIcons.close_rounded),
+                  child: const Text('Cancel upload'),
+                ),
             ];
     } else if (onUploadPhotos == null && onUploadFolder == null) {
       menuItems = null;
