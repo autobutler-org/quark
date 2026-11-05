@@ -75,6 +75,16 @@ class _FakeQuark {
   /// What each client message id was stored as, the way the Quark answers a
   /// repeated one (#3531).
   final Map<String, ChatMessage> byClientId = {};
+
+  /// Attachment ids uploaded with [putAttachment], in order.
+  final List<String> uploadedAttachmentIds = [];
+
+  /// The ids on the last post, when it named any.
+  List<String>? lastAttachmentIds;
+
+  /// How many times an attachment body was downloaded.
+  var attachmentDownloads = 0;
+
   int _nextId = 1;
 
   ChatMessagesController client(
@@ -106,7 +116,15 @@ class _FakeQuark {
       return older.sublist(older.length > n ? older.length - n : 0);
     },
     postMessage:
-        (channelId, keyVersion, ciphertext, {clientMessageId, poll}) async {
+        (
+          channelId,
+          keyVersion,
+          ciphertext, {
+          clientMessageId,
+          attachmentIds,
+          poll,
+        }) async {
+          lastAttachmentIds = attachmentIds;
           final stored = byClientId[clientMessageId];
           if (stored != null) return stored;
           final message = post(channelId, keyVersion, ciphertext, poll: poll);
@@ -130,6 +148,14 @@ class _FakeQuark {
         answer(messageId, userId, keyVersion, ciphertext),
     fetchPollAnswers: (messageId) async => visibleAnswers(messageId, userId),
     closePoll: (messageId) async => close(messageId),
+    putAttachment: (channelId, id, body) async {
+      uploadedAttachmentIds.add(id);
+      return body is List<int> ? body.length : 0;
+    },
+    getAttachment: (channelId, id, {sink}) async {
+      attachmentDownloads++;
+      return const Stream<List<int>>.empty();
+    },
     currentUserId: () => userId,
     fetchEvents: (channelId, {after = 0}) async =>
         events.where((e) => e.id > after).toList(),
@@ -383,6 +409,106 @@ void main() {
     final reader = quark.client(bob, crypto);
     await reader.open();
     expect(texts(reader), ['hello there']);
+  });
+
+  test('an attachment posts with an empty caption and opens as text', () async {
+    final key = crypto.newChannelKey();
+    final alice = _FakeKeys()..grant(1, key);
+    final sender = quark.client(alice, crypto);
+    await sender.open();
+
+    await sender.sendAttachment(
+      name: 'cabin.png',
+      mime: 'image/png',
+      bytes: Uint8List.fromList(const [1, 2, 3, 4]),
+      caption: 'look',
+    );
+    await sender.sendAttachment(
+      name: 'notes.txt',
+      mime: 'text/plain',
+      bytes: Uint8List.fromList(const [9]),
+    );
+
+    final entries = [
+      for (final e in sender.entries)
+        if (e is ChatTimelineMessage) e,
+    ];
+    expect(entries, hasLength(2));
+    expect(entries[0].text, 'look');
+    expect(entries[0].attachments.single.name, 'cabin.png');
+    expect(entries[0].attachments.single.size, 4);
+    expect(entries[1].text, isEmpty);
+    expect(entries[1].attachments.single.mime, 'text/plain');
+    expect(quark.uploadedAttachmentIds, [
+      entries[0].attachments.single.id,
+      entries[1].attachments.single.id,
+    ]);
+    expect(quark.lastAttachmentIds, [entries[1].attachments.single.id]);
+
+    final image = ChatController.itemFor(entries[0], (_) => 'Ada');
+    expect(image.kind, ChatMessageKind.text);
+    expect(image.body, 'look');
+    expect(image.attachments.single.kind, ChatAttachmentKind.image);
+    final file = ChatController.itemFor(entries[1], (_) => 'Ada');
+    expect(file.attachments.single.kind, ChatAttachmentKind.file);
+
+    final bob = _FakeKeys()
+      ..grant(1, crypto.channelKeyFromBytes(key.extractBytes()));
+    final reader = quark.client(bob, crypto);
+    await reader.open();
+    final got = [
+      for (final e in reader.entries)
+        if (e is ChatTimelineMessage) e,
+    ];
+    expect(got[0].text, 'look');
+    expect(got[0].attachments.single.id, entries[0].attachments.single.id);
+    expect(got[1].text, isEmpty);
+    sender.dispose();
+    reader.dispose();
+  });
+
+  test('an image over 20 MiB is refused before it is downloaded', () async {
+    final key = crypto.newChannelKey();
+    final id = 'ab' * 32;
+    final plain = utf8.encode(
+      jsonEncode({
+        'v': 1,
+        'attachments': [
+          {
+            'id': id,
+            'key': base64Encode(Uint8List(32)),
+            'nonce': base64Encode(Uint8List(16)),
+            'name': 'big.png',
+            'mime': 'image/png',
+            'size': ChatMessagesController.maxInlineImageBytes + 1,
+          },
+        ],
+      }),
+    );
+    quark.messages.add(
+      ChatMessage(
+        id: 1,
+        channelId: _channel,
+        authorId: 2,
+        keyVersion: 1,
+        ciphertext: crypto.encrypt(
+          Uint8List.fromList(plain),
+          key,
+          additionalData: crypto.messageAad(channelId: _channel, keyVersion: 1),
+        ),
+        createdAt: _epoch,
+      ),
+    );
+    final reader = quark.client(_FakeKeys()..grant(1, key), crypto);
+    await reader.open();
+    final entry = reader.entries.single as ChatTimelineMessage;
+    expect(entry.attachments.single.name, 'big.png');
+    await expectLater(
+      reader.readImageAttachment(id),
+      throwsA(isA<StateError>()),
+    );
+    expect(quark.attachmentDownloads, 0);
+    reader.dispose();
   });
 
   test('a message under a key not yet granted waits, then opens', () async {
