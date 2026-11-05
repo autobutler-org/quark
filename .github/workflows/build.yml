@@ -47,7 +47,7 @@ jobs:
       ios: ${{ steps.filter.outputs.ios }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Filter paths
         id: filter
         if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
@@ -55,7 +55,7 @@ jobs:
         # the jobs would skip behind a failed `changes`, and a skipped required check
         # counts as passed.
         continue-on-error: true
-        uses: dorny/paths-filter@v4
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: .github/path-filters.yml
   build-backend:
@@ -65,10 +65,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # errand: remove on errand-x64-medium-quark-backend; ci-backend carries Go.
       - name: Setup go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       # errand: remove on errand-x64-medium-quark-backend; ci-backend carries sqlc.
@@ -81,7 +81,7 @@ jobs:
         run: |
           make build/backend
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           path: build/quark
           if-no-files-found: error
@@ -104,7 +104,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # errand: remove on errand-x64-quark-frontend; ci-frontend carries Flutter.
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
@@ -123,7 +123,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # build/frontend/android takes the app version from the most recent tag, and
           # the default checkout is shallow with no tags. Without these the version
@@ -132,7 +132,7 @@ jobs:
           fetch-depth: 0
       # errand: remove on errand-x64-quark-full; ci-full carries Go.
       - name: Setup go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       # errand: remove on errand-x64-quark-full; ci-full carries Flutter.
@@ -142,7 +142,7 @@ jobs:
         uses: ./.github/actions/setup-node
       - name: Restore Gradle caches
         id: gradle
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches
@@ -166,7 +166,7 @@ jobs:
       # cache is 3 GB, and a copy saved on any other ref is one only that ref can restore.
       - name: Save Gradle caches
         if: github.ref == 'refs/heads/main' && steps.gradle.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches
@@ -192,7 +192,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # build/frontend/linux takes the app version from the most recent tag, and
           # the default checkout is shallow with no tags.
@@ -218,7 +218,7 @@ jobs:
         run: |
           make build/frontend/linux LINUX_ARCH=${{ matrix.arch }}
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-bundle-${{ matrix.arch }}
           path: build/linux/${{ matrix.arch }}/release/bundle
@@ -239,7 +239,7 @@ jobs:
           find build/linux/${{ matrix.arch }}/release/bundle -type f \( -name quark -o -name '*.so' \) -exec readelf -d {} + \
             | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | sort -u
       - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-appimage-${{ matrix.arch }}
           path: |
@@ -264,7 +264,7 @@ jobs:
         || github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The app version comes from the most recent tag, and the default checkout is
           # shallow with no tags, so git describe would find nothing.
@@ -278,7 +278,7 @@ jobs:
       # tailnet while Flutter archives, and it fails closed when go is not on PATH.
       # Same version the backend jobs install, from go.mod.
       - name: Setup go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       # Dependabot pull requests run with the secrets withheld, so the signing material
@@ -326,7 +326,7 @@ jobs:
           make build/frontend/ios FLUTTER_BUILD_MODE=release
       - name: Upload artifact
         if: steps.signing.outputs.available == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-ipa-ci
           path: build/ios/ipa/*.ipa

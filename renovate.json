@@ -1,7 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>autobutler-org/renovate-config"
+    "github>autobutler-org/renovate-config",
+    "helpers:pinGitHubActionDigests"
   ],
   "packageRules": [
     {

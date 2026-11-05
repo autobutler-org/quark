@@ -8,7 +8,7 @@ runs:
     # the clone fetches the arm64 Dart SDK and engine on first run.
     - name: Resolve flutter SDK
       id: resolve
-      uses: subosito/flutter-action@v2
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
       with:
         channel: ${{ runner.os == 'Linux' && runner.arch == 'ARM64' && 'main' || 'stable' }}
         flutter-version-file: pubspec.yaml
@@ -20,21 +20,21 @@ runs:
     # (#2677). Restore on every ref, save on main only.
     - name: Restore flutter SDK
       id: sdk
-      uses: actions/cache/restore@v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.resolve.outputs.CACHE-PATH }}
         key: ${{ steps.resolve.outputs.CACHE-KEY }}
     # Skips the download when the restore above put the SDK in place. The pub cache is
     # small enough to keep saving on every ref.
     - name: Install flutter SDK
-      uses: subosito/flutter-action@v2
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
       with:
         channel: ${{ runner.os == 'Linux' && runner.arch == 'ARM64' && 'main' || 'stable' }}
         flutter-version-file: pubspec.yaml
         pub-cache: true
     - name: Save flutter SDK
       if: github.ref == 'refs/heads/main' && steps.sdk.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v6
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.resolve.outputs.CACHE-PATH }}
         key: ${{ steps.resolve.outputs.CACHE-KEY }}

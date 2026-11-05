@@ -12,7 +12,7 @@ runs:
 
     - name: Restore golangci-lint
       id: cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/go/bin/golangci-lint
         key: golangci-lint-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}

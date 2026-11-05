@@ -64,7 +64,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The version and the versionCode both come from the most recent tag. The
           # default checkout is shallow and fetches none, which would silently build
@@ -74,7 +74,7 @@ jobs:
 
       # errand: remove on errand-x64-quark-full; ci-full carries Go.
       - name: Setup go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       # errand: remove on errand-x64-quark-full; ci-full carries Flutter.
@@ -85,7 +85,7 @@ jobs:
         uses: ./.github/actions/setup-gnu-make
 
       - name: Restore Gradle caches
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches
@@ -126,7 +126,7 @@ jobs:
       # The file the maintainer uploads to the Play Console. Nothing here is published to
       # a GitHub Release -- both artifacts stay attached to the workflow run.
       - name: Upload AAB artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-aab
           path: build/android-release/*.aab
@@ -140,7 +140,7 @@ jobs:
       # different app. The APK for direct distribution has to be the Play-generated
       # universal APK, pulled back out after publishing (#1602).
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-apk
           path: build/android-release/*.apk
