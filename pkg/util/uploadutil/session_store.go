@@ -21,10 +21,14 @@ import (
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
-// stagingDirName is the directory, under the data dir's tmp area, where
+// stagingDirName is the directory, under a device data dir's tmp area, where
 // partial uploads accumulate. It is deliberately outside the files
 // namespace: a partial upload must never be listable as a real file.
 const stagingDirName = "upload-sessions"
+
+// stagingPattern names staged uploads. Clearing a staging dir removes only
+// these.
+const stagingPattern = "upload-*.part"
 
 // session is one file in flight. Everything above the mutex is fixed when the
 // session is created; everything below it moves as chunks arrive.
@@ -96,10 +100,11 @@ func (s *SessionStore) CreateSession(params CreateSessionParams) (CreateSessionR
 	if err != nil {
 		return CreateSessionResult{}, err
 	}
-	if err := os.MkdirAll(s.stagingDir, 0o755); err != nil {
-		return CreateSessionResult{}, fmt.Errorf("failed to create upload staging directory: %w", err)
+	stagingDir, err := s.stagingDirFor(orBackground(params.Ctx), params.Destination, params.Serial)
+	if err != nil {
+		return CreateSessionResult{}, err
 	}
-	file, err := os.CreateTemp(s.stagingDir, "upload-*.part")
+	file, err := os.CreateTemp(stagingDir, stagingPattern)
 	if err != nil {
 		return CreateSessionResult{}, fmt.Errorf("failed to stage upload: %w", err)
 	}
@@ -159,6 +164,15 @@ func (s *SessionStore) WriteChunk(params WriteChunkParams) (WriteChunkResult, er
 	defer sess.mu.Unlock()
 	if sess.closed {
 		return WriteChunkResult{}, fmt.Errorf("%w: %q", ErrSessionNotFound, params.SessionID)
+	}
+	// A USB drive unplugged mid-upload took the staged file with it, so the
+	// session can never finish. It ends now, and the client is told there is
+	// nowhere for the file to go, rather than writing on to a dead file.
+	if sess.serial != "" && params.Destination.gone(orBackground(params.Ctx), sess.serial) {
+		err := fmt.Errorf("%w: device %q: %w", ErrNoDestination, sess.serial, vfs.ErrNotFound)
+		s.endLocked(sess, SessionFailed, err.Error())
+		s.forgetStagingDir(filepath.Dir(sess.tempPath))
+		return WriteChunkResult{}, err
 	}
 
 	switch {
@@ -352,6 +366,63 @@ func (s *SessionStore) recordLocked(sess *session, state SessionState, errText s
 // nothing is left behind.
 func (s *SessionStore) StagingDir() string {
 	return s.stagingDir
+}
+
+// stagingDirFor is where a session for this serial stages. A USB drive's
+// session stages on that drive, beside its files, so the commit is a rename
+// on one filesystem rather than a copy off the internal drive (#3970). The
+// internal drive, and a namespace that cannot take a file by rename, use the
+// store's own dir. A drive that is gone is ErrNoDestination.
+func (s *SessionStore) stagingDirFor(ctx context.Context, dest Destination, serial string) (string, error) {
+	dir := s.stagingDir
+	var err error
+	if mover, ok := dest.FilesVFS(serial).(vfs.FileMover); ok && serial != "" {
+		dir, err = mover.StagingDir(ctx, stagingDirName)
+	} else {
+		err = os.MkdirAll(dir, 0o755)
+	}
+	if errors.Is(err, vfs.ErrNotFound) {
+		return "", fmt.Errorf("%w: device %q: %w", ErrNoDestination, serial, err)
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to create upload staging directory: %w", err)
+	}
+	s.clearStranded(dir)
+	return dir, nil
+}
+
+// clearStranded removes the staged uploads an earlier process left in dir,
+// the first time this store stages there. Sessions live in memory, so a
+// process that died mid-upload stranded its files, and on a USB drive nothing
+// else clears them: the startup wipe covers only the internal data dir. Until
+// the clear is done no session of this store has staged in dir, so every
+// staged upload in it belongs to an earlier process.
+func (s *SessionStore) clearStranded(dir string) {
+	s.stagingMu.Lock()
+	defer s.stagingMu.Unlock()
+	if s.prepared[dir] {
+		return
+	}
+	s.prepared[dir] = true
+	// Glob fails only on a malformed pattern, and stagingPattern is constant.
+	stranded, _ := filepath.Glob(filepath.Join(dir, stagingPattern))
+	for _, p := range stranded {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			log.Printf("[upload] failed to remove stranded upload %s: %v", p, err)
+		}
+	}
+	if len(stranded) > 0 {
+		log.Printf("[upload] cleared %d stranded upload(s) from %s", len(stranded), dir)
+	}
+}
+
+// forgetStagingDir has the next session in dir clear it again. A drive
+// unplugged mid-upload keeps the staged files its sessions could not remove,
+// and the next session after it is plugged back in clears them.
+func (s *SessionStore) forgetStagingDir(dir string) {
+	s.stagingMu.Lock()
+	delete(s.prepared, dir)
+	s.stagingMu.Unlock()
 }
 
 // lookup resolves a session id for the user asking, expiring the session on

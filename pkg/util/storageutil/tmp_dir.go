@@ -13,6 +13,14 @@ import (
 // and none of them is meant to outlive the process that wrote it.
 const tmpDirName = "tmp"
 
+// TmpRoot is the tmp directory of the device whose files directory is
+// filesDir: <dataDir>/tmp, beside it the way [TrashRoot] is. Scratch staged
+// there shares the files' filesystem, so it moves into place by rename, and
+// sits outside the files tree, where no listing, index or scan sees it.
+func TmpRoot(filesDir string) string {
+	return filepath.Join(filepath.Dir(filepath.Clean(filesDir)), tmpDirName)
+}
+
 // ClearTmpDirParams names the data dir whose tmp directory is emptied.
 type ClearTmpDirParams struct {
 	// DataDir is the data dir itself, not its tmp directory. It must be an

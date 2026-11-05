@@ -81,6 +81,19 @@ func moveFileIn(srcAbs string, dstAbs string, opts WriteOptions, write func(io.R
 	return nil
 }
 
+// hostStagingDir is the body of every [FileMover.StagingDir]: tmp/<name>
+// beside filesDir, created if missing.
+func hostStagingDir(filesDir, name string) (string, error) {
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+		return "", ErrPermissionDenied
+	}
+	dir := filepath.Join(storageutil.TmpRoot(filesDir), name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", hostErr(err)
+	}
+	return dir, nil
+}
+
 // copyFile is the body of every [VFS.Copy] and of [CopyBetween]: it streams
 // the source into dst's Write, the atomic write path, so a reader of dst sees
 // either nothing or the whole copy.

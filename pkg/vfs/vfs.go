@@ -79,6 +79,12 @@ type FileMover interface {
 	// MoveFileIn places the host file at srcAbs at path, honoring
 	// opts.IfNoneMatch as Write does. On success srcAbs is gone.
 	MoveFileIn(ctx context.Context, srcAbs string, path string, opts WriteOptions) error
+	// StagingDir returns the host directory, created if missing, where a file
+	// bound for MoveFileIn should be built: tmp/<name> beside the files
+	// directory, on its filesystem so the move is a rename and outside it so
+	// nothing lists a half-built file (#3970). name is one path element; any
+	// other is [ErrPermissionDenied]. A device that is gone is [ErrNotFound].
+	StagingDir(ctx context.Context, name string) (string, error)
 }
 
 // Trasher is implemented by namespaces with a trash: a user delete moves an
