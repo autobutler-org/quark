@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Pre-commit hook — runs make check before every commit.
+# Pre-commit hook — runs make check/fast on the staged files.
+# The full gate is make check, which GitHub Actions runs.
 # Install: make setup/hooks
 set -euo pipefail
 
@@ -15,9 +16,11 @@ else
   MAKE=make
 fi
 
-echo "Running ${MAKE} check..."
-if ! "${MAKE}" check; then
+echo "Running ${MAKE} check/fast..."
+if ! "${MAKE}" check/fast; then
   echo ""
-  echo "❌ ${MAKE} check failed. Fix the issues above before committing."
+  echo "check/fast failed. Formatting: run 'make fix', or format the file named above."
+  echo "Spelling: correct the word, or add it to .vscode/cspell.json."
+  echo "GitHub Actions runs the full 'make check' on the pull request."
   exit 1
 fi

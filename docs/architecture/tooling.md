@@ -26,7 +26,8 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    check["make check<br/>(pre-commit hook and CI)"]
+    hook["pre-commit hook<br/>make check/fast<br/>gofmt · dart format · cspell on staged files"]
+    check["make check<br/>(CI and the schmeide gate)"]
     check --> be["check/backend<br/>gofmt · golangci-lint · check-go-structure.bash (layout, file access via pkg/vfs) · sqlc vet · generate diff"]
     check --> fe["check/frontend<br/>dart format · flutter analyze · generate diff"]
     check --> sp["check/spelling<br/>cspell + .vscode/cspell.json allowlist"]
