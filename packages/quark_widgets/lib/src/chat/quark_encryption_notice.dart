@@ -181,20 +181,18 @@ class QuarkEncryptionNotice extends StatelessWidget {
                               label: const Text('Check again'),
                             ),
                           if (onRegenerate != null)
-                            Tooltip(
-                              message: regenerateLabel,
-                              child: IconButton(
-                                key: const ValueKey(
-                                  'encryption_notice_regenerate',
-                                ),
-                                onPressed: isRegenerating ? null : onRegenerate,
-                                icon: isRegenerating
-                                    ? const QuarkLoader(size: 16)
-                                    : const Icon(
-                                        QuarkIcons.key_outlined,
-                                        size: 18,
-                                      ),
+                            IconButton(
+                              key: const ValueKey(
+                                'encryption_notice_regenerate',
                               ),
+                              tooltip: regenerateLabel,
+                              onPressed: isRegenerating ? null : onRegenerate,
+                              icon: isRegenerating
+                                  ? const QuarkLoader(size: 16)
+                                  : const Icon(
+                                      QuarkIcons.key_outlined,
+                                      size: 18,
+                                    ),
                             ),
                           if (onLearnMore != null)
                             TextButton.icon(
