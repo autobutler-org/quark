@@ -23,6 +23,7 @@
     "coverage.*",
     "datalinks",
     "docs/architecture/knowledge-graph.json",
+    "packages/quark_widgets/lib/src/chat/quark_message_list/chat_emoji_catalog.dart",
     "dist",
     "go.mod",
     "go.sum",

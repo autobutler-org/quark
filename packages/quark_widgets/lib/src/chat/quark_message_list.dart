@@ -43,8 +43,10 @@ import 'quark_message_list/chat_system_line.dart';
 ///
 /// Each text message has a menu, opened by a long press on a touch platform,
 /// a right-click, or the three-dot button at its end, which the keyboard
-/// reaches. "Copy text" fires [onCopy], "Add reaction" offers the emoji and
-/// fires [onReact], and "Delete" fires [onDelete]; the caller asks for
+/// reaches. "Copy text" fires [onCopy], "Add reaction" offers the quick emoji
+/// and "More emoji", which opens a searchable picker of every emoji (or
+/// [pickMoreEmoji], when set) and fires [onReact], and "Delete" fires
+/// [onDelete]; the caller asks for
 /// confirmation if it wants one. "Delete" is on each message the user may
 /// delete: their own, which authorship allows, or anyone's when [permissions]
 /// holds [ChatPermission.deleteMessages].
@@ -58,7 +60,8 @@ import 'quark_message_list/chat_system_line.dart';
 /// A text message's reactions show under it as chips, one per emoji with its
 /// count, highlighted where the user reacted. When [onReact] is set and
 /// [permissions] holds [ChatPermission.addReactions] (or is null), each text
-/// message gets an add-reaction button offering a short list of emoji, and
+/// message gets an add-reaction button offering a short list of emoji and
+/// "More emoji" for any other, and
 /// tapping a chip fires [onReact] too; the caller decides from its own state
 /// whether that adds the user's reaction or takes it back. Waiting, deleted
 /// and system lines draw no reactions.
@@ -99,6 +102,10 @@ import 'quark_message_list/chat_system_line.dart';
 /// `message_menu_react_<id>_<emoji>` on each emoji the menu offers,
 /// `message_react_<id>` on its add-reaction button,
 /// `message_react_<id>_<emoji>` on each emoji that button offers,
+/// `message_react_<id>_more` on its "More emoji",
+/// `message_menu_react_<id>_more` on the menu's "More emoji",
+/// `message_emoji_search_<id>` and `message_emoji_close_<id>` on the full
+/// picker,
 /// `message_reaction_<id>_<emoji>` on each reaction chip,
 /// `message_help_<id>` on a system line's "(?)", those of `QuarkPollCard`
 /// on a poll,
@@ -140,6 +147,7 @@ class QuarkMessageList extends StatefulWidget {
     this.onCopy,
     this.onDelete,
     this.onReact,
+    this.pickMoreEmoji,
     this.onOpenLink,
     this.onAnswerPoll,
     this.onClosePoll,
@@ -218,6 +226,11 @@ class QuarkMessageList extends StatefulWidget {
   /// or taps its chip. Null, or [permissions] without
   /// [ChatPermission.addReactions], only shows reactions.
   final void Function(String messageId, String emoji)? onReact;
+
+  /// Asks for an emoji beyond the quick six. Null opens the built-in
+  /// searchable picker. A null result fires no [onReact].
+  final Future<String?> Function(BuildContext context, String messageId)?
+  pickMoreEmoji;
 
   /// Called with a web address in a text message when it is tapped, for the
   /// caller to open. Null draws every message as plain text.
@@ -506,6 +519,9 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
                     onReact: onReact == null
                         ? null
                         : (emoji) => onReact(message.id, emoji),
+                    pickMoreEmoji: onReact == null
+                        ? null
+                        : widget.pickMoreEmoji,
                     onOpenLink: widget.onOpenLink,
                     onAnswerPoll: onAnswerPoll == null
                         ? null

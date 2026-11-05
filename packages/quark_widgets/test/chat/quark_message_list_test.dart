@@ -501,6 +501,58 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testBothViewports(
+      'More emoji opens the picker and a dismissal sends nothing',
+      (tester, size) async {
+        final events = <String>[];
+        await pumpAt(
+          tester,
+          QuarkMessageList(
+            messages: messages,
+            permissions: ChatPermissionPreset.member.permissions,
+            onReact: (id, emoji) => events.add('$id $emoji'),
+          ),
+          size: size,
+        );
+
+        await tester.tap(key('message_menu_m4'));
+        await tester.pumpAndSettle();
+        await tester.tap(key('message_menu_react_m4'));
+        await tester.pumpAndSettle();
+        expect(key('message_menu_react_m4_more'), findsOneWidget);
+        for (final emoji in ['👍', '❤️', '😂', '😮', '😢', '🎉']) {
+          expect(key('message_menu_react_m4_$emoji'), findsOneWidget);
+        }
+
+        await tester.tap(key('message_menu_react_m4_more'));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('message_emoji_search_m4')),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.byKey(const ValueKey('message_emoji_close_m4')));
+        await tester.pumpAndSettle();
+        expect(events, isEmpty);
+
+        await tester.tap(key('message_menu_m4'));
+        await tester.pumpAndSettle();
+        await tester.tap(key('message_menu_react_m4'));
+        await tester.pumpAndSettle();
+        await tester.tap(key('message_menu_react_m4_more'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('message_emoji_search_m4')),
+          'party popper',
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('message_react_m4_🎉')));
+        await tester.pumpAndSettle();
+        expect(events, ['m4 🎉']);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('a viewer without add_reactions gets no Add reaction', (
       tester,
     ) async {
@@ -828,6 +880,78 @@ void main() {
       expect(events, ['r1 👍', 'r1 🎉']);
       expect(find.byKey(const ValueKey('message_react_r2')), findsNothing);
       expect(tester.takeException(), isNull);
+    });
+
+    testBothViewports('the button\'s More emoji opens the full picker', (
+      tester,
+      size,
+    ) async {
+      final events = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: reacted,
+          permissions: ChatPermissionPreset.member.permissions,
+          onReact: (id, emoji) => events.add('$id $emoji'),
+        ),
+        size: size,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('message_react_r1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('message_react_r1_👍')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('message_react_r1_more')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('message_emoji_search_r1')),
+        findsOneWidget,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('message_emoji_search_r1')),
+        'unicorn',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('message_react_r1_🦄')));
+      await tester.pumpAndSettle();
+      expect(events, ['r1 🦄']);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('pickMoreEmoji replaces the picker, and null sends nothing', (
+      tester,
+    ) async {
+      final events = <String>[];
+      var calls = 0;
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: reacted,
+          permissions: ChatPermissionPreset.member.permissions,
+          onReact: (id, emoji) => events.add('$id $emoji'),
+          pickMoreEmoji: (context, id) async {
+            calls += 1;
+            return calls == 1 ? null : '🦄';
+          },
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('message_react_r1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('message_react_r1_more')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('message_emoji_search_r1')),
+        findsNothing,
+      );
+      expect(events, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('message_react_r1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('message_react_r1_more')));
+      await tester.pumpAndSettle();
+      expect(events, ['r1 🦄']);
+      expect(calls, 2);
     });
 
     testBothViewports('a chip is a 48dp button a screen reader can press', (
