@@ -175,7 +175,10 @@ is pending again, and the holders hear `chat_key_needed` and refill it. The bad 
   member, signs, and uploads. The first grant for a member and version wins, and later ones are ignored.
   `chat_key_granted` then tells the recipients.
 - **Waiting.** Until its grant lands, a member sees "Waiting for a member to share the key". The Quark can't end
-  that wait itself.
+  that wait itself. An admin who already holds `read_messages` can: their client creates the next version and
+  grants it to every member with published keys, so the channel opens while the original holder stays offline
+  (#3455). Messages already sent under the old version stay unreadable until a holder of that version comes
+  back and fills its grants. An admin without `read_messages` is still a stranger to the key routes.
 - **The first key.** A channel starts with no version. The first member client to open it, `general` on a new
   Quark included, creates version 1. Creating a version must name the next number, so two clients racing leave
   one winner.
@@ -191,6 +194,12 @@ kept with no recipient for this purpose. The Quark reports `rotationNeeded` and 
 next member client online creates the next version and grants it to the remaining members. That member doesn't
 have to hold the old version. Messages from then on use the new key. The Quark refuses any version after the first
 unless `rotationNeeded` is true, with 409, so a member can't bury the channel under versions nobody needs (#2485).
+
+An admin who holds `read_messages` may create the next version anyway, with
+`POST /api/v0/chat/channels/:id/keys/regenerate` (#3455). That is how a channel opens when its only holder has
+not been online since the other members published keys. Another member gets 403. The route records the same
+`key_created` event and shares the key-version rate limit, so an admin cannot flood versions either. It does
+not hand anyone the previous version: the admin's client grants only the new key.
 
 ### Channel events
 
@@ -217,11 +226,13 @@ the signature check catching it, unless it also lies about the granter's public 
 
 ### Routes
 
-All need `read_messages`: anyone else gets 404, delegated managers and admins included.
+All need `read_messages`: anyone else gets 404, delegated managers and admins included. Regenerating a key also needs an admin.
 
 - `GET /api/v0/chat/channels/:id/keys` returns the versions, the current one, the caller's own grants, and
   `rotationNeeded`.
 - `POST /api/v0/chat/channels/:id/keys` creates the next version with the caller's own grant.
+- `POST /api/v0/chat/channels/:id/keys/regenerate` does the same when `rotationNeeded` is false. Admin only;
+  another member with `read_messages` gets 403. It shares the key-version rate limit.
 - `GET /api/v0/chat/channels/:id/keys/pending` returns the grants the caller can fill.
 - `POST /api/v0/chat/channels/:id/keys/grants` uploads grants for versions the caller holds.
 - `DELETE /api/v0/chat/channels/:id/keys/grants/:version` deletes the caller's own grant of a version.
@@ -512,7 +523,7 @@ ciphertext, and a malicious running Quark, or the web app it serves, can still c
 ## Rate limits
 
 Posting a message, creating a key version, uploading key grants, and moving a read marker are each limited per
-account (#2485), with a separate bucket per route, so a member can't flood a channel with ciphertext or grant rows. The limit is a burst of
+account (#2485), with a separate bucket per route, so a member can't flood a channel with ciphertext or grant rows. Regenerating a key version shares the creating-a-version bucket. The limit is a burst of
 100 and then 10 a second (`ChatWriteRate` and `ChatWriteBurst` in `pkg/util/deputil`), far above what the app
 sends: a grant upload carries up to 256 grants, so one burst refills a rotation for thousands of members. Going
 over gets 429, which the app shows as "wait a moment and try again". The limits live in memory and reset when the
@@ -525,7 +536,9 @@ Quark restarts.
 - **Someone with the disk or a backup.** Messages and channel keys are ciphertext, and the identity keys are
   wrapped under secrets the disk doesn't hold.
 - **Another admin reading the database.** Being an admin, or adding yourself to a channel, gives you no key to
-  what was said before. Joining shows up to the members as an event, unverified unless the admin's client signed it.
+  what was said before. An admin who holds `read_messages` can regenerate the channel key (#3455), which lets
+  members write again, and that new version is a `key_created` event the admin's client signs. It does not
+  open messages sent under an earlier version. Joining shows up to the members as an event, unverified unless the admin's client signed it.
 - **The Quark process reading history at rest.** The server never decrypts anything; it stores and forwards
   bytes.
 

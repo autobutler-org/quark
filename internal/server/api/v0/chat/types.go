@@ -27,6 +27,7 @@ func (r *router) Routes() []*serverutil.Route {
 		getUserKeysRoute,
 		getChannelKeysRoute,
 		createKeyVersionRoute,
+		regenerateKeyVersionRoute,
 		listPendingGrantsRoute,
 		uploadGrantsRoute,
 		deleteKeyGrantRoute,
