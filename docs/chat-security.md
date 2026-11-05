@@ -348,8 +348,8 @@ The Quark sees the ciphertext length and which channel and account uploaded it. 
 media type, or the key.
 
 Deleting a channel deletes its attachment files. Deleting a message does not yet, because no attachment is bound
-to one. The chat SQL backup (#2428, still open) does not yet copy the `chat_attachments` table or the
-`chat-attachments` directory.
+to one. The chat SQL backup copies the `chat_attachments` rows. The ciphertext files under `chat-attachments`
+in the data directory are not in that backup.
 
 4 GiB is the server's disk cap. It is not a limit on decrypting in the browser: the app opens one chunk at a time.
 

@@ -29,10 +29,10 @@ encrypted on the client under keys the Quark never holds, and the rest of what t
 keys, signatures, and who posted in which channel when. The copy is exactly as private as the database it came
 from, so it is not encrypted a second time.
 
-`chat_backup.db` is a SQLite file whose schema is `internal/db/chat_backup_schema.go`: the eleven chat tables
+`chat_backup.db` is a SQLite file whose schema is `internal/db/chat_backup_schema.go`: the twelve chat tables
 (`chat_servers`, `chat_channels`, `chat_channel_members`, `user_chat_keys`, `chat_channel_keys`,
 `chat_key_grants`, `chat_channel_events`, `chat_messages`, `chat_reactions`, `chat_polls`,
-`chat_poll_answers`) with the live columns and none of
+`chat_poll_answers`, `chat_attachments`) with the live columns and none of
 the constraints, plus a `users` and a `groups` table that hold only an id and a name. Its `user_version` is the
 format version, `db.ChatBackupVersion`.
 
@@ -45,8 +45,8 @@ copy to finish; that is the limit to revisit if a history ever takes more than a
 The export is one case of `ciphertextBackup` (`pkg/backup/ciphertext_backup.go`), which the vault export
 shares: a file name, a schema, the tables to copy, and the restore's steps.
 
-Chat attachments (#2425) are planned as files on the internal device. The snapshot already copies every source
-device's files as streams, so they need nothing from the chat export.
+`chat_attachments` names each attachment's ciphertext file. The file itself lives under `chat-attachments` in
+the data directory, which this export does not copy.
 
 ## Restoring chat
 

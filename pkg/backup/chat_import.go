@@ -142,4 +142,11 @@ var chatRestoreSteps = []restoreStep{
 		SELECT a.id, a.message_id, u.live_id, a.key_version, a.ciphertext, a.created_at, a.updated_at
 		FROM chat_backup.chat_poll_answers AS a
 		JOIN temp.restore_users AS u ON u.backup_id = a.user_id`},
+	// Channel and message ids come back unchanged, the same as chat_messages.
+	// An uploader who is not on this Quark is left out, the same as a reaction.
+	{"chat_attachments", `
+		INSERT INTO main.chat_attachments (id, channel_id, message_id, uploader_id, byte_size, created_at)
+		SELECT a.id, a.channel_id, a.message_id, u.live_id, a.byte_size, a.created_at
+		FROM chat_backup.chat_attachments AS a
+		JOIN temp.restore_users AS u ON u.backup_id = a.uploader_id`},
 }
