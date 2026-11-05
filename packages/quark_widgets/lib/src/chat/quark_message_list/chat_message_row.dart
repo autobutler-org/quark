@@ -9,6 +9,7 @@ import '../../models/quark_menu_entry.dart';
 import '../../theme/quark_tokens.dart';
 import '../chat_mentions.dart';
 import '../quark_poll_card.dart';
+import 'chat_emoji_picker.dart';
 import 'chat_message_row/chat_message_body.dart';
 import 'chat_message_row/chat_reaction_bar.dart';
 import 'chat_message_row/chat_reaction_picker.dart';
@@ -23,11 +24,14 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// with [onClosePoll] and exports with [onExportPoll]. System
 /// lines are a `ChatSystemLine` instead. A text message's reactions sit under
 /// its body as a `ChatReactionBar`, and [onReact] adds a `ChatReactionPicker`
-/// at the row's end as the quick way to react.
+/// at the row's end as the quick way to react. "More emoji" there, and in the
+/// menu, opens the full picker, or [pickMoreEmoji] when the caller supplies
+/// one.
 ///
 /// A text message has one menu, through `showQuarkMenu`: "Copy text" with
-/// [onCopy], "Add reaction" with [onReact], which opens the picker's emoji as
-/// a second menu in the same place, and "Delete" with [onDelete]. A null
+/// [onCopy], "Add reaction" with [onReact], which opens the picker's emoji and
+/// "More emoji" as a second menu in the same place, and "Delete" with
+/// [onDelete]. A null
 /// callback leaves its entry out, and with all three null there is no menu. A
 /// right-click opens it at the pointer, the three-dot button at the row's end
 /// opens it for the keyboard, and with [longPressOpensMenu] a long press opens
@@ -56,7 +60,8 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// mentions the reader, `message_body_<id>` on a text message's body,
 /// `message_menu_<id>` on the menu button, `message_copy_<id>`,
 /// `message_menu_react_<id>` and `message_delete_<id>` on the menu's entries,
-/// `message_menu_react_<id>_<emoji>` on each emoji "Add reaction" offers, and
+/// `message_menu_react_<id>_<emoji>` on each emoji "Add reaction" offers,
+/// `message_menu_react_<id>_more` on its "More emoji", and
 /// those of `ChatReactionBar`, `ChatReactionPicker` and `QuarkPollCard`.
 class ChatMessageRow extends StatefulWidget {
   /// Creates the row for [message].
@@ -67,6 +72,7 @@ class ChatMessageRow extends StatefulWidget {
     this.onCopy,
     this.onDelete,
     this.onReact,
+    this.pickMoreEmoji,
     this.onOpenLink,
     this.onAnswerPoll,
     this.onClosePoll,
@@ -98,6 +104,11 @@ class ChatMessageRow extends StatefulWidget {
   /// or a reaction chip. Null leaves the picker and the menu's "Add reaction"
   /// out and the chips inert.
   final ValueChanged<String>? onReact;
+
+  /// Asks for an emoji beyond the quick six. Null opens the built-in picker.
+  /// A null result adds no reaction.
+  final Future<String?> Function(BuildContext context, String messageId)?
+  pickMoreEmoji;
 
   /// Called with a web address in the message's text when it is tapped. Null
   /// draws the text with no links, as an unverified message always is.
@@ -133,6 +144,7 @@ class ChatMessageRow extends StatefulWidget {
     final onCopy = this.onCopy;
     final onDelete = this.onDelete;
     final onReact = this.onReact;
+    final pickMoreEmoji = this.pickMoreEmoji;
     if (message.kind != ChatMessageKind.text) return const [];
     return [
       if (onCopy != null)
@@ -159,6 +171,17 @@ class ChatMessageRow extends StatefulWidget {
                     label: emoji,
                     onSelected: () => onReact(emoji),
                   ),
+                QuarkMenuEntry(
+                  key: ValueKey('message_menu_react_${message.id}_more'),
+                  label: 'More emoji',
+                  icon: QuarkIcons.search,
+                  onSelected: () => requestMoreEmoji(
+                    context,
+                    messageId: message.id,
+                    onPick: onReact,
+                    pickMore: pickMoreEmoji,
+                  ),
+                ),
               ],
             );
             onReactionMenu?.call(emojiMenu);
@@ -416,6 +439,7 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
                           ChatReactionPicker(
                             messageId: message.id,
                             onPick: onReact,
+                            pickMoreEmoji: widget.pickMoreEmoji,
                           ),
                         if (hasMenu)
                           // The same 48dp touch target as the picker beside it,
