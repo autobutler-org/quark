@@ -719,6 +719,10 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('encryption_notice_regenerate')),
+        findsNothing,
+      );
       await tester.tap(
         find.byKey(const ValueKey('encryption_notice_check_again')),
       );
@@ -730,6 +734,44 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(QuarkEncryptionHelpDialog), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // #3455: an admin stuck waiting can mint a new key. The notice says
+    // what that leaves unreadable, and nothing happens until they confirm.
+    testWidgets('an admin can regenerate a stuck channel key ($label)', (
+      tester,
+    ) async {
+      final fake = FakeChat(isAdmin: true)..waiting.add(1);
+      await pumpChat(tester, size, chat: fake);
+      fake.calls.clear();
+
+      await tester.tap(
+        find.byKey(const ValueKey('encryption_notice_regenerate')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(ConfirmDeleteDialog), findsOneWidget);
+      expect(
+        find.textContaining(QuarkEncryptionNotice.regenerateHint),
+        findsOneWidget,
+      );
+      expect(fake.calls, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('regenerate_keys_cancel')));
+      await tester.pumpAndSettle();
+      expect(fake.calls, isEmpty);
+
+      await tester.tap(
+        find.byKey(const ValueKey('encryption_notice_regenerate')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('regenerate_keys_confirm')));
+      await tester.pumpAndSettle();
+      expect(fake.calls, ['regenerate keys 1']);
+      expect(
+        find.byKey(const ValueKey('encryption_notice_regenerate')),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     });
 

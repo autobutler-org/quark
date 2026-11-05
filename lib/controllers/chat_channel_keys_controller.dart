@@ -24,7 +24,9 @@ import 'package:sodium/sodium_sumo.dart';
 ///   rotating because someone left, it creates the next version; and when it
 ///   holds a version other members lack, it seals and signs grants for them.
 /// - Until a member shares the current version, the channel is [isWaiting]:
-///   "Waiting for a member to share the key", not an error.
+///   "Waiting for a member to share the key", not an error. [regenerate]
+///   is an admin's way out of that wait: it mints the next version and
+///   grants it to every member with published keys (#3455).
 /// - [start] follows `chat_key_needed`, so a member added through a group
 ///   gets their grants from whoever is online, and `chat_key_granted`, so a
 ///   waiting channel opens as soon as its grant lands.
@@ -47,6 +49,13 @@ class ChatChannelKeysController extends ChangeNotifier {
       Uint8List signature,
     )?
     createVersion,
+    Future<ChatChannelEvent?> Function(
+      int channelId,
+      int version,
+      Uint8List sealedKey,
+      Uint8List signature,
+    )?
+    regenerateVersion,
     Future<ChatPendingGrants> Function(int channelId)? fetchPending,
     Future<void> Function(int channelId, List<ChatGrantUpload> grants)?
     uploadGrants,
@@ -58,6 +67,8 @@ class ChatChannelKeysController extends ChangeNotifier {
        _userId = userId ?? (() => AppSettings.instance.userId.value),
        _fetchKeys = fetchKeys ?? ChatChannelKeysService.fetchKeys,
        _createVersion = createVersion ?? ChatChannelKeysService.createVersion,
+       _regenerateVersion =
+           regenerateVersion ?? ChatChannelKeysService.regenerateVersion,
        _fetchPending = fetchPending ?? ChatChannelKeysService.fetchPending,
        _uploadGrants = uploadGrants ?? ChatChannelKeysService.uploadGrants,
        _signEvent = signEvent ?? ChatChannelKeysService.signEvent,
@@ -80,6 +91,13 @@ class ChatChannelKeysController extends ChangeNotifier {
     Uint8List signature,
   )
   _createVersion;
+  final Future<ChatChannelEvent?> Function(
+    int channelId,
+    int version,
+    Uint8List sealedKey,
+    Uint8List signature,
+  )
+  _regenerateVersion;
   final Future<ChatPendingGrants> Function(int channelId) _fetchPending;
   final Future<void> Function(int channelId, List<ChatGrantUpload> grants)
   _uploadGrants;
@@ -219,7 +237,14 @@ class ChatChannelKeysController extends ChangeNotifier {
     );
     var current = state.currentVersion;
     if (current == 0 || state.rotationNeeded) {
-      if (await _create(channelId, current + 1, identity, crypto, me)) {
+      if (await _create(
+        channelId,
+        current + 1,
+        identity,
+        crypto,
+        me,
+        _createVersion,
+      )) {
         current++;
       } else {
         // Another member got there first; their grant comes to us.
@@ -234,15 +259,44 @@ class ChatChannelKeysController extends ChangeNotifier {
     if (_keys[channelId]?.isNotEmpty ?? false) {
       await _fillPending(channelId, identity, crypto);
     }
-    _current[channelId] = current;
-    final waiting = keyFor(channelId, current) == null;
-    if (waiting) {
+    _remember(channelId, current);
+    return keyFor(channelId, current) == null;
+  }
+
+  /// Mints the next key version and grants it to every member with published
+  /// chat keys, without waiting for a holder of the current one (#3455).
+  /// The Quark refuses anyone who is not an admin. Messages under the
+  /// previous version stay unreadable until a holder of that version shares
+  /// it. A race to the same version falls through to [ensureKeys].
+  Future<void> regenerate(int channelId) async {
+    final (identity, crypto, me) = _unlocked();
+    final state = await _fetchKeys(channelId);
+    final version = state.currentVersion + 1;
+    if (!await _create(
+      channelId,
+      version,
+      identity,
+      crypto,
+      me,
+      _regenerateVersion,
+    )) {
+      await ensureKeys(channelId);
+      return;
+    }
+    await _fillPending(channelId, identity, crypto);
+    _remember(channelId, version);
+  }
+
+  /// Records [version] as current and whether this account is still waiting
+  /// on a grant of it.
+  void _remember(int channelId, int version) {
+    _current[channelId] = version;
+    if (keyFor(channelId, version) == null) {
       _waiting.add(channelId);
     } else {
       _waiting.remove(channelId);
     }
     notifyListeners();
-    return waiting;
   }
 
   /// Verifies and opens this account's grants, skipping any already open, and
@@ -304,7 +358,8 @@ class ChatChannelKeysController extends ChangeNotifier {
     }
   }
 
-  /// Creates [version] with our own grant, and signs its event. False when
+  /// Creates [version] with our own grant, and signs its event. [post] is
+  /// the route: the ordinary one, or an admin's regenerate. False when
   /// another member created it first.
   Future<bool> _create(
     int channelId,
@@ -312,6 +367,13 @@ class ChatChannelKeysController extends ChangeNotifier {
     ChatIdentity identity,
     ChatCrypto crypto,
     int me,
+    Future<ChatChannelEvent?> Function(
+      int channelId,
+      int version,
+      Uint8List sealedKey,
+      Uint8List signature,
+    )
+    post,
   ) async {
     final key = crypto.newChannelKey();
     final sealed = crypto.seal(key.extractBytes(), identity.box.publicKey);
@@ -326,7 +388,7 @@ class ChatChannelKeysController extends ChangeNotifier {
     );
     final ChatChannelEvent? event;
     try {
-      event = await _createVersion(channelId, version, sealed, signature);
+      event = await post(channelId, version, sealed, signature);
     } catch (_) {
       key.dispose();
       rethrow;

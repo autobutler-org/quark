@@ -1039,6 +1039,50 @@ void main() {
       chat.controller.dispose();
     });
 
+    test('an admin waiting for the key can regenerate it', () async {
+      final chat = FakeChat(isAdmin: true)..waiting.add(1);
+      chat.controller.select('general');
+      await chat.controller.refresh();
+      chat.calls.clear();
+
+      expect(chat.controller.canRegenerateKey, isTrue);
+      expect(await chat.controller.regenerateKey(), isNull);
+      expect(chat.calls, ['regenerate keys 1']);
+      expect(chat.controller.isWaitingForKey, isFalse);
+      expect(chat.controller.canRegenerateKey, isFalse);
+      chat.controller.dispose();
+    });
+
+    test('a member waiting for the key cannot regenerate it', () async {
+      final chat = FakeChat()..waiting.add(1);
+      chat.controller.select('general');
+      await chat.controller.refresh();
+
+      expect(chat.controller.canRegenerateKey, isFalse);
+      expect(await chat.controller.regenerateKey(), isNull);
+      expect(chat.calls, isEmpty);
+      expect(chat.controller.isWaitingForKey, isTrue);
+      chat.controller.dispose();
+    });
+
+    test(
+      'regenerating reports a failure and leaves the channel waiting',
+      () async {
+        final chat = FakeChat(isAdmin: true)
+          ..waiting.add(1)
+          ..failWith = Exception('no');
+        chat.controller.select('general');
+        await chat.controller.refresh();
+        chat.calls.clear();
+
+        final error = await chat.controller.regenerateKey();
+        expect(error, isA<Exception>());
+        expect(chat.controller.isWaitingForKey, isTrue);
+        expect(chat.controller.isRegeneratingKey, isFalse);
+        chat.controller.dispose();
+      },
+    );
+
     test('waiting for the key comes first', () async {
       final chat = FakeChat()
         ..waiting.add(1)

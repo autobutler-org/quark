@@ -12,7 +12,8 @@ import 'package:quark/services/authenticated_service.dart';
 /// events.
 ///
 /// Everything here is sealed keys, signatures and public keys;
-/// `ChatChannelKeysController` does the crypto.
+/// `ChatChannelKeysController` does the crypto. Regenerating a version is
+/// the admin route for a channel stuck on an offline holder (#3455).
 class ChatChannelKeysService with AuthenticatedService {
   ChatChannelKeysService._();
 
@@ -33,9 +34,41 @@ class ChatChannelKeysService with AuthenticatedService {
     int version,
     Uint8List sealedKey,
     Uint8List signature,
+  ) => _postVersion(
+    channelId,
+    '/keys',
+    version,
+    sealedKey,
+    signature,
+    'create key $version of channel $channelId',
+  );
+
+  /// Creates [version] even when the key does not need rotating. Admin only
+  /// (#3455). Null when another member created that version first.
+  static Future<ChatChannelEvent?> regenerateVersion(
+    int channelId,
+    int version,
+    Uint8List sealedKey,
+    Uint8List signature,
+  ) => _postVersion(
+    channelId,
+    '/keys/regenerate',
+    version,
+    sealedKey,
+    signature,
+    'regenerate key $version of channel $channelId',
+  );
+
+  static Future<ChatChannelEvent?> _postVersion(
+    int channelId,
+    String suffix,
+    int version,
+    Uint8List sealedKey,
+    Uint8List signature,
+    String action,
   ) async {
     final response = await instance.authenticatedPost(
-      _uri(channelId, '/keys'),
+      _uri(channelId, suffix),
       headers: const {'Content-Type': 'application/json'},
       body: jsonEncode({
         'version': version,
@@ -44,7 +77,7 @@ class ChatChannelKeysService with AuthenticatedService {
       }),
     );
     if (response.statusCode == 409) return null;
-    throwUnlessOk(response, 'create key $version of channel $channelId');
+    throwUnlessOk(response, action);
     return ChatChannelEvent.fromJson(
       _json(response)['event'] as Map<String, dynamic>,
     );
