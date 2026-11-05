@@ -6912,6 +6912,37 @@
                 }
             }
         },
+        "/files/upload-sessions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the caller's upload sessions with what each has committed: those in flight (uploading, or committing while the finished file is flushed and moved into place), oldest first, then those that ended in the last 24 hours (completed, failed, canceled or expired), newest first, at most 50. Only a session's owner sees it, admins included. Sessions live in this instance's memory, so a restart empties the list. This is the source of truth; upload_session_changed events are a hint to refetch and can be dropped.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "List the caller's resumable uploads",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_files.listUploadSessionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/files/upload/{rootDir}": {
             "post": {
                 "security": [
@@ -14838,6 +14869,23 @@
                 }
             }
         },
+        "v0_files.listUploadSessionsResponse": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v0_files.uploadSessionSummaryResponse"
+                    }
+                },
+                "finished": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v0_files.uploadSessionSummaryResponse"
+                    }
+                }
+            }
+        },
         "v0_files.moveFileRequest": {
             "type": "object",
             "properties": {
@@ -14903,6 +14951,54 @@
                 },
                 "totalSize": {
                     "type": "integer"
+                }
+            }
+        },
+        "v0_files.uploadSessionSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "error": {
+                    "description": "Error is diagnostic text for a failed session, not copy for a user.",
+                    "type": "string"
+                },
+                "fileName": {
+                    "type": "string"
+                },
+                "offset": {
+                    "description": "Offset is how many bytes have been committed.",
+                    "type": "integer"
+                },
+                "rootDir": {
+                    "type": "string"
+                },
+                "serial": {
+                    "description": "Serial is the device the file is going to; empty is the internal drive.",
+                    "type": "string"
+                },
+                "sessionId": {
+                    "type": "string"
+                },
+                "state": {
+                    "description": "State is uploading or committing for a session in flight, and\ncompleted, failed, canceled or expired for one that ended.",
+                    "type": "string",
+                    "enum": [
+                        "uploading",
+                        "committing",
+                        "completed",
+                        "failed",
+                        "canceled",
+                        "expired"
+                    ]
+                },
+                "totalSize": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "description": "UpdatedAt is when the last chunk landed, or when the session ended.",
+                    "type": "string"
                 }
             }
         },

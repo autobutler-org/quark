@@ -296,6 +296,36 @@ func publishUpload(deps deputil.Dependencies, serial, rootDir string, written []
 	})
 }
 
+// publishUploadSessionChanged tells the session's owner, and only them, that
+// one of their upload sessions moved, so an open Jobs page fetches
+// GET /files/upload-sessions (#3971).
+func publishUploadSessionChanged(deps deputil.Dependencies, userID int64, sessionID string) {
+	bus := deps.EventBus()
+	if bus == nil || sessionID == "" {
+		return
+	}
+	bus.Publish(eventbus.Event{
+		Kind: eventbus.EventUploadSessionChanged,
+		Data: eventbus.UploadSessionChanged{SessionID: sessionID, UserID: userID},
+	})
+}
+
+// uploadSessionJSON describes one upload session for the Jobs page.
+func uploadSessionJSON(summary uploadutil.SessionSummary) uploadSessionSummaryResponse {
+	return uploadSessionSummaryResponse{
+		SessionID: summary.SessionID,
+		FileName:  summary.FileName,
+		RootDir:   summary.RootDir,
+		Serial:    summary.Serial,
+		TotalSize: summary.TotalSize,
+		Offset:    summary.Offset,
+		State:     string(summary.State),
+		CreatedAt: summary.CreatedAt.UTC(),
+		UpdatedAt: summary.UpdatedAt.UTC(),
+		Error:     summary.Error,
+	}
+}
+
 // uploadedPaths is the answer to an upload: where each file landed. The
 // nested route's rootDir keeps gin's leading slash on the VFS branch, so it is
 // trimmed to match the files-relative paths the photo and album APIs use.

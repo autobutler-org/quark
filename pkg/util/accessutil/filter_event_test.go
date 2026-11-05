@@ -365,3 +365,43 @@ func TestFilterEventFeedChanged(t *testing.T) {
 		t.Errorf("event JSON = %s, want %s", body, want)
 	}
 }
+
+// TestFilterEventUploadSessionChanged passes upload_session_changed only to
+// the session's owner, never to another account or an admin (#3971): a
+// session is invisible to everyone else on every other route too.
+func TestFilterEventUploadSessionChanged(t *testing.T) {
+	f := newFixture(t)
+	stranger := f.load(t, accessutil.Principal{UserID: createUser(t, f.database, "carol")})
+	admin := f.load(t, accessutil.Principal{UserID: createUser(t, f.database, "root"), IsAdmin: true})
+	owner := f.load(t, accessutil.Principal{UserID: f.userID})
+	changed := eventbus.Event{
+		Kind: eventbus.EventUploadSessionChanged,
+		Data: eventbus.UploadSessionChanged{SessionID: "abc", UserID: f.userID},
+	}
+	for _, tc := range []struct {
+		name   string
+		access accessutil.Access
+		event  eventbus.Event
+		want   bool
+	}{
+		{name: "owner", access: owner, event: changed, want: true},
+		{name: "another account", access: stranger, event: changed},
+		{name: "admin", access: admin, event: changed},
+		{name: "system", access: f.load(t, accessutil.System), event: changed},
+		{name: "no data", access: owner, event: eventbus.Event{Kind: eventbus.EventUploadSessionChanged}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := accessutil.FilterEvent(accessutil.FilterEventParams{Access: tc.access, Event: tc.event}); got.Deliver != tc.want {
+				t.Errorf("Deliver = %v, want %v", got.Deliver, tc.want)
+			}
+		})
+	}
+
+	body, err := json.Marshal(changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"kind":"upload_session_changed","data":{"sessionId":"abc"}}`; string(body) != want {
+		t.Errorf("event JSON = %s, want %s", body, want)
+	}
+}

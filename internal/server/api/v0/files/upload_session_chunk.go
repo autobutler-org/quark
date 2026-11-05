@@ -43,16 +43,22 @@ func uploadSessionChunk(c *gin.Context) *serverutil.Response {
 		return uploadSessionError(c, err)
 	}
 
+	sessionID, userID := c.Param(sessionIDParam), callerID(c)
 	result, err := store.WriteChunk(uploadutil.WriteChunkParams{
 		Ctx:         c.Request.Context(),
 		Destination: uploadDestination(deps),
-		SessionID:   c.Param(sessionIDParam),
-		UserID:      callerID(c),
+		SessionID:   sessionID,
+		UserID:      userID,
 		Range:       chunk,
 		Body:        c.Request.Body,
 		// A save that arrives in chunks snapshots what it replaces too (#2992).
 		BeforeOverwrite: beforeSave(c, deps, ""),
 	})
+	// A failed commit may have ended the session, so a failure is news too;
+	// a session that is not found has nothing new to say.
+	if (err != nil && !errors.Is(err, uploadutil.ErrSessionNotFound)) || result.Complete || result.ProgressDue {
+		publishUploadSessionChanged(deps, userID, sessionID)
+	}
 	if err != nil {
 		return uploadSessionError(c, err)
 	}

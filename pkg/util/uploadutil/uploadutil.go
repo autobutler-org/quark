@@ -265,6 +265,9 @@ type SessionStore struct {
 	// long chunk write cannot block session lookups on unrelated uploads.
 	mu       sync.Mutex
 	sessions map[string]*session
+	// finished holds each account's ended sessions, oldest first, at most
+	// MaxFinishedSessionsPerUser of them. Guarded by mu.
+	finished map[int64][]SessionSummary
 
 	stagingDir string
 	ttl        time.Duration
@@ -303,6 +306,7 @@ func NewSessionStore(params NewSessionStoreParams) *SessionStore {
 	}
 	return &SessionStore{
 		sessions:   make(map[string]*session),
+		finished:   make(map[int64][]SessionSummary),
 		stagingDir: stagingDir,
 		ttl:        ttl,
 		now:        now,
@@ -362,6 +366,10 @@ type WriteChunkResult struct {
 	Serial string
 	// Created is false when the finished file replaced one already there.
 	Created bool
+	// ProgressDue is true when this chunk is the first to land at least
+	// ProgressInterval after the last one that was. The caller publishes a
+	// progress hint then, so a fast upload does not flood the event stream.
+	ProgressDue bool
 }
 
 // DescribeSessionParams asks what a session has committed.
@@ -393,4 +401,69 @@ type DeleteSessionResult struct{}
 // SweepResult reports what a sweep reclaimed.
 type SweepResult struct {
 	Expired int
+}
+
+// SessionState is where an upload session is, as ListSessions reports it.
+type SessionState string
+
+const (
+	// SessionUploading is a session still taking chunks.
+	SessionUploading SessionState = "uploading"
+	// SessionCommitting is a session whose last byte has landed and whose file
+	// is being flushed and moved into place, which on a slow disk can take
+	// minutes.
+	SessionCommitting SessionState = "committing"
+	// SessionCompleted is a session whose file landed.
+	SessionCompleted SessionState = "completed"
+	// SessionFailed is a session whose file can never land: its name was taken,
+	// or the destination refused it.
+	SessionFailed SessionState = "failed"
+	// SessionCanceled is a session its owner deleted.
+	SessionCanceled SessionState = "canceled"
+	// SessionExpired is a session that sat idle past its TTL.
+	SessionExpired SessionState = "expired"
+)
+
+const (
+	// ProgressInterval is the least time between two chunks that report
+	// ProgressDue for one session.
+	ProgressInterval = 2 * time.Second
+	// MaxFinishedSessionsPerUser is how many ended sessions ListSessions keeps
+	// for each account, newest first, so an upload that ends between two
+	// polls still shows how it ended.
+	MaxFinishedSessionsPerUser = 50
+	// FinishedSessionMaxAge is how long an ended session stays listed.
+	FinishedSessionMaxAge = 24 * time.Hour
+)
+
+// SessionSummary is one upload session as ListSessions reports it. It carries
+// no file content and nothing the session's owner did not send.
+type SessionSummary struct {
+	SessionID string
+	FileName  string
+	RootDir   string
+	// Serial is the device the file is going to. Empty is the internal drive.
+	Serial    string
+	TotalSize int64
+	// Offset is how many bytes have been committed.
+	Offset    int64
+	State     SessionState
+	CreatedAt time.Time
+	// UpdatedAt is when the last chunk landed, or when the session ended.
+	UpdatedAt time.Time
+	// Error is diagnostic text for a failed session, not copy for a user.
+	Error string
+}
+
+// ListSessionsParams names whose sessions to list. Only a session's owner sees
+// it, the same as every other call on it.
+type ListSessionsParams struct {
+	UserID int64
+}
+
+// ListSessionsResult is the caller's sessions: those in flight, oldest first,
+// then those that ended, newest first.
+type ListSessionsResult struct {
+	Active   []SessionSummary
+	Finished []SessionSummary
 }

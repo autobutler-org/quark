@@ -593,6 +593,10 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 		changed, ok := evt.Data.(eventbus.FeedChanged)
 		return FilterEventResult{Event: evt, Deliver: ok && changed.UserID != 0 && changed.UserID == access.principal.UserID}
 	}
+	if evt.Kind == eventbus.EventUploadSessionChanged {
+		changed, ok := evt.Data.(eventbus.UploadSessionChanged)
+		return FilterEventResult{Event: evt, Deliver: ok && changed.UserID != 0 && changed.UserID == access.principal.UserID}
+	}
 	if access.principal.IsAdmin {
 		return FilterEventResult{Event: evt, Deliver: true}
 	}

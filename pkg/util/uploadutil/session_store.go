@@ -11,8 +11,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -40,10 +42,20 @@ type session struct {
 	createdAt time.Time
 	expiresAt time.Time
 
+	// committed mirrors offset, and updatedAt (Unix nanoseconds) is when the
+	// last chunk landed. Both are atomics so ListSessions can read them without
+	// taking mu, which a chunk write or a commit holds for as long as the disk
+	// takes.
+	committed  atomic.Int64
+	updatedAt  atomic.Int64
+	committing atomic.Bool
+
 	mu     sync.Mutex
 	file   *os.File
 	offset int64
 	closed bool
+	// lastProgress is when a chunk last reported ProgressDue.
+	lastProgress time.Time
 }
 
 // CreateSession validates the upload and stages an empty temp file for it.
@@ -108,7 +120,11 @@ func (s *SessionStore) CreateSession(params CreateSessionParams) (CreateSessionR
 		expiresAt: now.Add(s.ttl),
 		file:      file,
 		offset:    createdOffset,
+		// The first progress hint comes ProgressInterval after the start,
+		// not on the first chunk: creating the session is its own news.
+		lastProgress: now,
 	}
+	sess.updatedAt.Store(now.UnixNano())
 
 	if err := s.admit(sess); err != nil {
 		sess.discard()
@@ -157,10 +173,17 @@ func (s *SessionStore) WriteChunk(params WriteChunkParams) (WriteChunkResult, er
 		if err := sess.append(params.Range, params.Body); err != nil {
 			return WriteChunkResult{}, err
 		}
+		sess.committed.Store(sess.offset)
+		sess.updatedAt.Store(s.now().UnixNano())
 	}
 
 	if sess.offset < sess.totalSize {
-		return WriteChunkResult{SessionID: sess.id, Offset: sess.offset}, nil
+		now := s.now()
+		due := now.Sub(sess.lastProgress) >= ProgressInterval
+		if due {
+			sess.lastProgress = now
+		}
+		return WriteChunkResult{SessionID: sess.id, Offset: sess.offset, ProgressDue: due}, nil
 	}
 	// Every byte is staged. A replayed final chunk lands here too, which is
 	// what makes a commit that failed on a full disk retryable: the client
@@ -202,6 +225,7 @@ func (s *SessionStore) DeleteSession(params DeleteSessionParams) (DeleteSessionR
 	ok = ok && sess.userID == params.UserID
 	if ok {
 		delete(s.sessions, params.SessionID)
+		s.recordLocked(sess, SessionCanceled, "")
 	}
 	s.mu.Unlock()
 
@@ -226,6 +250,7 @@ func (s *SessionStore) Sweep(now time.Time) SweepResult {
 		if now.After(sess.expiresAt) {
 			expired = append(expired, sess)
 			delete(s.sessions, id)
+			s.recordLocked(sess, SessionExpired, "")
 		}
 	}
 	s.mu.Unlock()
@@ -280,6 +305,49 @@ func (s *SessionStore) Close() error {
 	return nil
 }
 
+// ListSessions reports the caller's upload sessions: every one in flight and
+// the ones that ended in the last FinishedSessionMaxAge. It reads only what a
+// session keeps in atomics, so a chunk write or a slow commit never holds it up.
+func (s *SessionStore) ListSessions(params ListSessionsParams) ListSessionsResult {
+	now := s.now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var result ListSessionsResult
+	for _, sess := range s.sessions {
+		if sess.userID == params.UserID {
+			result.Active = append(result.Active, sess.summary(sess.liveState(), time.Unix(0, sess.updatedAt.Load()), ""))
+		}
+	}
+	slices.SortFunc(result.Active, func(a, b SessionSummary) int { return a.CreatedAt.Compare(b.CreatedAt) })
+
+	kept := s.finished[params.UserID][:0]
+	for _, ended := range s.finished[params.UserID] {
+		if now.Sub(ended.UpdatedAt) <= FinishedSessionMaxAge {
+			kept = append(kept, ended)
+		}
+	}
+	if len(kept) == 0 {
+		delete(s.finished, params.UserID)
+	} else {
+		s.finished[params.UserID] = kept
+	}
+	for i := len(kept) - 1; i >= 0; i-- {
+		result.Finished = append(result.Finished, kept[i])
+	}
+	return result
+}
+
+// recordLocked keeps how a session ended for ListSessions. Called with s.mu
+// held.
+func (s *SessionStore) recordLocked(sess *session, state SessionState, errText string) {
+	ended := append(s.finished[sess.userID], sess.summary(state, s.now(), errText))
+	if extra := len(ended) - MaxFinishedSessionsPerUser; extra > 0 {
+		ended = slices.Delete(ended, 0, extra)
+	}
+	s.finished[sess.userID] = ended
+}
+
 // StagingDir is where partial uploads accumulate. Exported for tests that check
 // nothing is left behind.
 func (s *SessionStore) StagingDir() string {
@@ -298,6 +366,7 @@ func (s *SessionStore) lookup(id string, userID int64) (*session, error) {
 	expired := ok && s.now().After(sess.expiresAt)
 	if expired {
 		delete(s.sessions, id)
+		s.recordLocked(sess, SessionExpired, "")
 	}
 	s.mu.Unlock()
 
@@ -324,6 +393,7 @@ func (s *SessionStore) admit(sess *session) error {
 		case sess.createdAt.After(other.expiresAt):
 			expired = append(expired, other)
 			delete(s.sessions, id)
+			s.recordLocked(other, SessionExpired, "")
 		case other.userID == sess.userID:
 			owned++
 		}
@@ -358,6 +428,8 @@ func (s *SessionStore) commit(sess *session, params WriteChunkParams) (WriteChun
 	// place rather than copy it (#1828). sess.file stays open across the move —
 	// on the platforms we build for an open file can be renamed — so a failed
 	// commit can still be retried, and discardLocked closes it afterwards.
+	sess.committing.Store(true)
+	defer sess.committing.Store(false)
 	beforeOverwrite := params.BeforeOverwrite
 	if sess.serial != "" {
 		beforeOverwrite = nil
@@ -380,11 +452,11 @@ func (s *SessionStore) commit(sess *session, params WriteChunkParams) (WriteChun
 		// fix ends the session now rather than holding a full copy of the file
 		// on disk until the TTL.
 		if commitCannotSucceed(err) {
-			s.endLocked(sess)
+			s.endLocked(sess, SessionFailed, err.Error())
 		}
 		return WriteChunkResult{}, err
 	}
-	s.endLocked(sess)
+	s.endLocked(sess, SessionCompleted, "")
 
 	return WriteChunkResult{
 		SessionID: sess.id,
@@ -396,11 +468,12 @@ func (s *SessionStore) commit(sess *session, params WriteChunkParams) (WriteChun
 	}, nil
 }
 
-// endLocked removes a session from the store and discards its staged file.
-// Called with the session's lock held.
-func (s *SessionStore) endLocked(sess *session) {
+// endLocked removes a session from the store, records how it ended, and
+// discards its staged file. Called with the session's lock held.
+func (s *SessionStore) endLocked(sess *session, state SessionState, errText string) {
 	s.mu.Lock()
 	delete(s.sessions, sess.id)
+	s.recordLocked(sess, state, errText)
 	s.mu.Unlock()
 	sess.discardLocked()
 }
@@ -452,6 +525,30 @@ func (sess *session) append(chunk ContentRange, body io.Reader) error {
 func (sess *session) rollback() {
 	if err := sess.file.Truncate(sess.offset); err != nil {
 		log.Printf("[upload] failed to roll back session %s to offset %d: %v", sess.id, sess.offset, err)
+	}
+}
+
+// liveState is what a session in the store is doing right now.
+func (sess *session) liveState() SessionState {
+	if sess.committing.Load() {
+		return SessionCommitting
+	}
+	return SessionUploading
+}
+
+// summary describes the session for ListSessions without taking its lock.
+func (sess *session) summary(state SessionState, updatedAt time.Time, errText string) SessionSummary {
+	return SessionSummary{
+		SessionID: sess.id,
+		FileName:  sess.fileName,
+		RootDir:   sess.rootDir,
+		Serial:    sess.serial,
+		TotalSize: sess.totalSize,
+		Offset:    sess.committed.Load(),
+		State:     state,
+		CreatedAt: sess.createdAt,
+		UpdatedAt: updatedAt,
+		Error:     errText,
 	}
 }
 
