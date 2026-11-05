@@ -6,10 +6,13 @@ import '../core/quark_loader.dart';
 import '../theme/quark_tokens.dart';
 
 /// The password prompt that sets up or unlocks a vault: an icon, a headline,
-/// a sentence, the password field (and, with [phraseHelp], an optional
-/// recovery phrase field), and the submit button. An optional secondary
-/// action sits under it, such as starting over. The password is asked once:
+/// a sentence, the password field, an optional second password field when
+/// [secondPasswordLabel] is set, an optional recovery phrase field when
+/// [phraseHelp] is set, and the submit button. An optional secondary action
+/// sits under it, such as starting over. The first password is asked once:
 /// the caller checks it, as the Quark re-confirms a vault's setup password.
+/// A restored vault passes [secondPasswordLabel] so the person can type the
+/// password they sign in with now beside the one the vault was backed up with.
 ///
 /// What the password opens, and whether it did, is the caller's: [isBusy]
 /// and [error] come in, the typed password goes out through [onSubmit]. The
@@ -17,8 +20,9 @@ import '../theme/quark_tokens.dart';
 /// across rebuilds; a submit clears them, so a password does not linger in
 /// the widget tree.
 ///
-/// Key prefixes: `vault_password_field`, `vault_password_phrase`,
-/// `vault_password_submit` and `vault_password_secondary`.
+/// Key prefixes: `vault_password_field`, `vault_password_login`,
+/// `vault_password_phrase`, `vault_password_submit` and
+/// `vault_password_secondary`.
 ///
 /// ```dart
 /// VaultPasswordForm(
@@ -27,7 +31,8 @@ import '../theme/quark_tokens.dart';
 ///   submitLabel: 'Unlock',
 ///   isBusy: controller.isBusy,
 ///   error: unlockError,
-///   onSubmit: (password, _) => controller.unlock(password),
+///   onSubmit: (password, _, [second = '']) =>
+///       controller.unlock(password, loginPassword: second),
 /// );
 /// ```
 class VaultPasswordForm extends StatefulWidget {
@@ -39,6 +44,7 @@ class VaultPasswordForm extends StatefulWidget {
     required this.onSubmit,
     this.icon = QuarkIcons.lock_outline,
     this.phraseHelp,
+    this.secondPasswordLabel,
     this.isBusy = false,
     this.error,
     this.secondaryLabel,
@@ -55,10 +61,12 @@ class VaultPasswordForm extends StatefulWidget {
   /// The submit button's label, such as "Unlock".
   final String submitLabel;
 
-  /// Called with the password and, with [phraseHelp], the recovery phrase,
-  /// which is empty when its field is not shown or was left blank. Never
-  /// called with an empty password.
-  final void Function(String password, String phrase) onSubmit;
+  /// Called with the password, the recovery phrase (empty when that field is
+  /// hidden or was left blank), and the second password when
+  /// [secondPasswordLabel] is set. Never called with an empty password, nor
+  /// with an empty second password when that field is shown.
+  final void Function(String password, String phrase, [String secondPassword])
+  onSubmit;
 
   /// The glyph above the headline.
   final IconData icon;
@@ -66,6 +74,10 @@ class VaultPasswordForm extends StatefulWidget {
   /// The help under an optional "Recovery phrase" field, saying what giving
   /// it does. Null hides the field.
   final String? phraseHelp;
+
+  /// The label of a second password field, shown under the first. Null hides
+  /// it. The field's key is `vault_password_login`.
+  final String? secondPasswordLabel;
 
   /// Whether a submit is running. Holds both buttons still.
   final bool isBusy;
@@ -85,23 +97,28 @@ class VaultPasswordForm extends StatefulWidget {
 
 class _VaultPasswordFormState extends State<VaultPasswordForm> {
   final TextEditingController _password = TextEditingController();
+  final TextEditingController _login = TextEditingController();
   final TextEditingController _phrase = TextEditingController();
 
   @override
   void dispose() {
     _password.dispose();
+    _login.dispose();
     _phrase.dispose();
     super.dispose();
   }
 
   void _submit() {
     final password = _password.text;
+    final second = _login.text;
     if (widget.isBusy || password.isEmpty) return;
+    if (widget.secondPasswordLabel != null && second.isEmpty) return;
     final phrase = _phrase.text;
     TextInput.finishAutofillContext();
     _password.clear();
+    _login.clear();
     _phrase.clear();
-    widget.onSubmit(password, phrase);
+    widget.onSubmit(password, phrase, second);
   }
 
   @override
@@ -146,6 +163,20 @@ class _VaultPasswordFormState extends State<VaultPasswordForm> {
                   ),
                   onSubmitted: (_) => _submit(),
                 ),
+                if (widget.secondPasswordLabel case final label?) ...[
+                  SizedBox(height: tokens.spacingMd),
+                  TextField(
+                    key: const ValueKey('vault_password_login'),
+                    controller: _login,
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.password],
+                    decoration: InputDecoration(
+                      labelText: label,
+                      border: const OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => _submit(),
+                  ),
+                ],
                 if (widget.phraseHelp case final help?) ...[
                   SizedBox(height: tokens.spacingMd),
                   TextField(

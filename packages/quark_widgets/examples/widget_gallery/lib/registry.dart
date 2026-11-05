@@ -3356,7 +3356,7 @@ final List<GalleryEntry> registry = [
         error: "That password doesn't unlock your vault.",
         secondaryLabel: 'Start over',
         onSecondary: () => log('VaultPasswordForm.onSecondary'),
-        onSubmit: (password, _) =>
+        onSubmit: (password, _, [_ = '']) =>
             log('VaultPasswordForm.onSubmit(${password.length} chars)'),
       ),
     ),

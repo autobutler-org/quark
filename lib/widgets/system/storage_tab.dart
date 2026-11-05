@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/data_protection_controller.dart';
 import 'package:quark/controllers/drive_health_controller.dart';
+import 'package:quark/controllers/restore_vault_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/data_protection_service.dart';
@@ -15,6 +16,7 @@ import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/widgets/layout/admin_map_card.dart';
 import 'package:quark/widgets/storage_devices/credentials_dialog.dart';
 import 'package:quark/widgets/storage_devices/eject_drive_dialog.dart';
+import 'package:quark/widgets/storage_devices/restore_vault_dialog.dart';
 import 'package:quark/widgets/storage_devices/role_dialog.dart';
 import 'package:quark/widgets/storage_devices/snapshot_backup_dialog.dart';
 import 'package:quark/widgets/storage_devices/storage_devices_body.dart';
@@ -22,13 +24,17 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The System page's Storage tab: how protected the files are, the drives the
 /// Quark can see, their status and role, and the actions to mount, eject,
-/// rename or back them up. An admin also gets the [AdminMapCard] (#2484).
+/// rename or back them up. An admin can also restore every vault from the
+/// snapshot-backup drive. An admin also gets the [AdminMapCard] (#2484).
 class StorageTab extends StatefulWidget {
-  const StorageTab({this.onRefreshingChanged, super.key});
+  const StorageTab({this.onRefreshingChanged, this.restoreVault, super.key});
 
   /// Called with whether a refresh is in flight whenever that changes, so
   /// the page's app bar can show it.
   final ValueChanged<bool>? onRefreshingChanged;
+
+  /// The vault restore. Tests pass one; otherwise the tab builds its own.
+  final RestoreVaultController? restoreVault;
 
   @override
   State<StorageTab> createState() => _StorageTabState();
@@ -47,11 +53,15 @@ class _StorageTabState extends State<StorageTab>
   BackupJobStatus? _backupStatus;
   Timer? _pollTimer;
   late final DataProtectionController _protection;
+  late final RestoreVaultController _restore;
+  late final bool _ownsRestore;
 
   @override
   void initState() {
     _protection = DataProtectionController();
     _protection.addListener(_onProtection);
+    _restore = widget.restoreVault ?? RestoreVaultController();
+    _ownsRestore = widget.restoreVault == null;
     super.initState();
   }
 
@@ -92,6 +102,7 @@ class _StorageTabState extends State<StorageTab>
     _pollTimer?.cancel();
     _protection.removeListener(_onProtection);
     _protection.dispose();
+    if (_ownsRestore) _restore.dispose();
     super.dispose();
   }
 
@@ -311,6 +322,27 @@ class _StorageTabState extends State<StorageTab>
     }
   }
 
+  /// Restores every vault from [device] once the admin re-enters their login
+  /// password. Cancel leaves the vaults alone. The snack bar is the counts,
+  /// or why the Quark refused.
+  Future<void> _restoreVaults(StorageDevice device) async {
+    final password = await QuarkWidget.showDialog<String>(
+      context,
+      builder: (ctx) => const RestoreVaultDialog(),
+    );
+    if (password == null || !mounted) return;
+    await _restore.restore(deviceSerial: device.serial, password: password);
+    if (!mounted) return;
+    final error = _restore.error;
+    final summary = _restore.summary;
+    showMessage(
+      context,
+      error != null
+          ? Errors.message(error, 'restore the vaults')
+          : summary ?? Errors.couldNot('restore the vaults'),
+    );
+  }
+
   static String _roleLabel(String role) {
     switch (role) {
       case 'default-storage':
@@ -414,6 +446,7 @@ class _StorageTabState extends State<StorageTab>
           onSetRole: isAdmin ? _showRoleDialog : null,
           onBackup: isAdmin ? _startBackup : null,
           onVerify: isAdmin ? _verifyBackup : null,
+          onRestore: isAdmin ? _restoreVaults : null,
           onEject: isAdmin ? _ejectDevice : null,
           ejecting: _ejecting,
           header: showCard

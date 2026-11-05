@@ -200,8 +200,8 @@ class StorageDevice {
   }
 }
 
-/// Calls `/api/v0/storage`: the drives the Quark manages, mounting, renaming and assigning roles, and snapshot
-/// backups. Device listings are cached briefly.
+/// Calls `/api/v0/storage`: the drives the Quark manages, mounting, renaming and assigning roles, snapshot
+/// backups, and restoring vaults from a snapshot-backup drive. Device listings are cached briefly.
 class StorageService with AuthenticatedService {
   static final StorageService _instance = StorageService._();
   StorageService._();
@@ -360,6 +360,38 @@ class StorageService with AuthenticatedService {
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return VerifyResult.fromJson(data);
   }
+
+  /// Restores every account's vault from the snapshot backup on
+  /// [deviceSerial] (#3664). [password] is the admin's login password; the
+  /// request sends its auth key, the same re-confirmation `DELETE /vault`
+  /// takes. A 4xx whose body carries `error` is a [MessageException]; a 5xx
+  /// stays an [ApiException].
+  static Future<VaultRestoreResult> restoreSnapshotVault({
+    required String deviceSerial,
+    required String password,
+  }) async {
+    final username = AppSettings.instance.username;
+    if (username == null) throw const UnauthorizedException();
+    final secret = await AuthSecret.resolve(
+      username: username,
+      password: password,
+      use: AuthSecretUse.reconfirm,
+    );
+    final uri = apiBaseUri.resolve(
+      '/api/v0/storage/devices/snapshot-backup/restore-vault',
+    );
+    final response = await instance.authenticatedPost(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'deviceSerial': deviceSerial,
+        'password': secret.authKey,
+      }),
+    );
+    throwUnlessOk(response, 'restore the vaults', clientErrorsOnly: true);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return VaultRestoreResult.fromJson(data);
+  }
 }
 
 class BackupJobStatus {
@@ -428,4 +460,56 @@ class VerifyResult {
   }
 
   bool get isHealthy => missing.isEmpty && corrupted.isEmpty;
+}
+
+/// What `POST /storage/devices/snapshot-backup/restore-vault` restored.
+///
+/// Counts and name lists default to empty when the Quark omits them.
+/// [backupPasswordAccounts] is who must unlock with the password they had
+/// when the backup was taken, which is every account after a move to new
+/// hardware.
+class VaultRestoreResult {
+  /// Creates a result. Omitted lists are empty and omitted counts are zero.
+  const VaultRestoreResult({
+    this.accounts = 0,
+    this.items = 0,
+    this.unmatchedUsers = const [],
+    this.backupPasswordAccounts = const [],
+    this.restoredAccounts = const [],
+  });
+
+  /// Parses the restore answer. A missing field is zero or an empty list.
+  factory VaultRestoreResult.fromJson(Map<String, dynamic> json) {
+    return VaultRestoreResult(
+      accounts: (json['accounts'] as num?)?.toInt() ?? 0,
+      items: (json['items'] as num?)?.toInt() ?? 0,
+      unmatchedUsers: _names(json['unmatchedUsers']),
+      backupPasswordAccounts: _names(json['backupPasswordAccounts']),
+      restoredAccounts: _names(json['restoredAccounts']),
+    );
+  }
+
+  /// How many accounts got a vault back.
+  final int accounts;
+
+  /// How many vault entries came back.
+  final int items;
+
+  /// Usernames in the backup with no account here. A restore that has any
+  /// is refused, so a success leaves this empty.
+  final List<String> unmatchedUsers;
+
+  /// Restored accounts whose vault opens with the backup-time password.
+  final List<String> backupPasswordAccounts;
+
+  /// Every account that got a vault back.
+  final List<String> restoredAccounts;
+}
+
+List<String> _names(Object? value) {
+  if (value is! List) return const [];
+  return [
+    for (final name in value)
+      if (name is String) name,
+  ];
 }

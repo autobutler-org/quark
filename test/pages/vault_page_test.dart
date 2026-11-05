@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/vault_controller.dart';
@@ -381,4 +383,57 @@ void main() {
     expect(tester.takeException(), isNull);
     await expectTapTargetGuidelines(tester);
   });
+
+  testWidgets(
+    'a restored vault asks for the backup password and the sign-in password',
+    (tester) async {
+      setViewport(tester, const Size(1280, 800));
+      final setup = server.controller(crypto);
+      await setup.load();
+      await setup.setUp(_password);
+      setup.dispose();
+      // The re-wrap's auth key is derived over the new salt, not the one
+      // setup just proved. Accept it; the controller test checks the key.
+      server.loginAuthKey = null;
+
+      final vault = server.controller(
+        crypto,
+        authSalt: () async =>
+            Uint8List.fromList(List.generate(16, (i) => i + 32)),
+      );
+      addTearDown(vault.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),
+          home: VaultPage(controller: vault),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining(
+          'the password you had when this vault was backed up',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Password you sign in with'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('vault_password_field')),
+        _password,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('vault_password_login')),
+        'sign-in-password',
+      );
+      final submit = find.byKey(const ValueKey('vault_password_submit'));
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(vault.status, VaultStatus.unlocked);
+      expect(find.text('No passwords yet'), findsOneWidget);
+      vault.lock();
+    },
+  );
 }

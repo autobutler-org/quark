@@ -1,3 +1,4 @@
+// cspell:ignore rewrap
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -64,6 +65,24 @@ class FakeVault {
     key = k;
   }
 
+  /// `PUT /auth/password` for a vault wrapped again under the sign-in
+  /// password: the body is the wrap plus `password` and `newAuthKey`, never
+  /// the vault key itself. A [loginAuthKey] that does not match is a 403 and
+  /// the stored key is left as it was.
+  Future<void> rewrapKey(WrappedVaultKey k, String authKey) async {
+    sent.add(
+      jsonEncode({
+        'password': authKey,
+        'newAuthKey': authKey,
+        'vaultKey': k.toJson(),
+      }),
+    );
+    if (loginAuthKey != null && authKey != loginAuthKey) {
+      throw const ApiException(403);
+    }
+    key = k;
+  }
+
   /// `DELETE /vault`, which re-confirms [loginAuthKey] as `PUT /vault/key`
   /// does (#3615). A wrong one is a 403 and nothing is deleted.
   Future<void> deleteVault(String authKey) async {
@@ -113,16 +132,18 @@ class FakeVault {
     Listenable? session,
     Duration autoLockAfter = const Duration(minutes: 15),
     KdfParams kdfParams = cheapKdf,
+    Future<Uint8List> Function()? authSalt,
   }) => VaultController(
     loadCrypto: () async => crypto,
     fetchKey: fetchKey,
     putKey: putKey,
     deleteVault: deleteVault,
+    replaceVaultKey: rewrapKey,
     listItems: listItems,
     createItem: createItem,
     updateItem: updateItem,
     deleteItem: deleteItem,
-    authSalt: () async => fakeVaultSalt,
+    authSalt: authSalt ?? () async => fakeVaultSalt,
     events: events,
     session: session,
     kdfParams: kdfParams,

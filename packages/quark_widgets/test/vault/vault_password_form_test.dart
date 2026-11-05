@@ -20,7 +20,7 @@ void main() {
     error: error,
     secondaryLabel: secondary == null ? null : 'Start over',
     onSecondary: secondary == null ? null : () => secondary.add('tap'),
-    onSubmit: (password, phrase) => submits?.add('$password/$phrase'),
+    onSubmit: (password, phrase, [_ = '']) => submits?.add('$password/$phrase'),
   );
 
   testBothViewports('lays out the prompt without an exception', (
@@ -96,6 +96,70 @@ void main() {
     await pumpAt(tester, form());
 
     expect(find.byKey(const ValueKey('vault_password_phrase')), findsNothing);
+    expect(find.byKey(const ValueKey('vault_password_login')), findsNothing);
+  });
+
+  testBothViewports('with a second password, shows the field and submits it', (
+    tester,
+    size,
+  ) async {
+    final submits = <String>[];
+    await pumpAt(
+      tester,
+      VaultPasswordForm(
+        title: 'Your vault is locked',
+        message: 'Enter the password you had when this vault was backed up.',
+        submitLabel: 'Unlock',
+        secondPasswordLabel: 'Password you sign in with',
+        onSubmit: (password, phrase, [second = '']) =>
+            submits.add('$password/$phrase/$second'),
+      ),
+      size: size,
+    );
+
+    expect(find.byKey(const ValueKey('vault_password_login')), findsOneWidget);
+    expect(find.text('Password you sign in with'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('vault_password_field')),
+      'old-one',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('vault_password_login')),
+      'new-one',
+    );
+    final submit = find.byKey(const ValueKey('vault_password_submit'));
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pump();
+
+    expect(submits, ['old-one//new-one']);
+    expect(find.text('new-one'), findsNothing);
+  });
+
+  testWidgets('an empty second password submits nothing', (tester) async {
+    final submits = <String>[];
+    await pumpAt(
+      tester,
+      VaultPasswordForm(
+        title: 'Your vault is locked',
+        message: 'Enter the password you had when this vault was backed up.',
+        submitLabel: 'Unlock',
+        secondPasswordLabel: 'Password you sign in with',
+        onSubmit: (password, _, [second = '']) =>
+            submits.add('$password/$second'),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('vault_password_field')),
+      'old-one',
+    );
+    await tester.tap(find.byKey(const ValueKey('vault_password_submit')));
+    await tester.pump();
+
+    expect(submits, isEmpty);
   });
 
   testWidgets('an empty password submits nothing', (tester) async {

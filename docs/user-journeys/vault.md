@@ -383,19 +383,26 @@ account here of the same username, letter for letter. The caller is an admin.
 
 **Steps:**
 
-1. The admin calls `POST /api/v0/storage/devices/snapshot-backup/restore-vault` with the drive's `deviceSerial` and
-   `password`, the auth key of the admin's own login password.
-2. Each account opens the vault page and unlocks it with the password it had when the backup was taken.
+1. The admin opens Storage and taps **Restore vaults** on the snapshot-backup drive.
+2. The dialog says each vault goes to the account with exactly the same username (`Carol` is not `carol`), that every
+   vault in the backup must have its account here first or nothing is restored, and that after a move to new hardware
+   each person unlocks their vault with the password they had when the backup was taken.
+3. The admin enters their login password and confirms.
+4. The snack bar reports how many vaults and entries were restored, and names anyone who must unlock with the
+   password they had when the backup was taken.
+5. Each of those accounts opens `/vault`, enters the password they had when the backup was taken and the password
+   they sign in with now. The vault then opens with the sign-in password.
 
 **Expected:** Every backed-up vault comes back under its account, its items as they were. The answer counts the
 accounts and items and names, in `backupPasswordAccounts`, every account whose vault opens with its backup-time
-password rather than the one it signs in with now, which is every account after a move to new hardware. A vault
-already holding items is a 409 and nothing changes. An account that already has a vault key, even an empty vault, is
-a 409 naming it, and nothing changes: the account deletes its empty vault first. A backed-up vault with no account of
-its username is a 409 naming the usernames, and nothing changes. A backed-up key or item this Quark would refuse from
-the app is a 400 naming the account, and nothing changes. A drive without the `snapshot-backup` role is a 400. A
-wrong password is a 403. Every restored account's open sessions get `vault_changed`, and the restore is written to
-the server log. There is no page for this yet: the app's restore flow is still to come.
+password rather than the one it signs in with now, which is every account after a move to new hardware. The app wraps
+that vault again under the sign-in password when the account unlocks it. A vault already holding items is a 409 and
+nothing changes. An account that already has a vault key, even an empty vault, is a 409 naming it, and nothing
+changes: the account deletes its empty vault first. A backed-up vault with no account of its username is a 409 naming
+the usernames, and nothing changes. A drive without the `snapshot-backup` role, a backup this version cannot read,
+or a backed-up key or item this Quark would refuse from the app is a 400 naming the account when one is at fault,
+and nothing changes. A drive that is gone, or that holds no vault backup, is a 404. A wrong password is a 403.
+Every restored account's open sessions get `vault_changed`, and the restore is written to the server log.
 
 The old `POST /api/v0/vault/import-backup` is gone (#3460), and a `vault_backup.db` from an older snapshot cannot be
 restored.

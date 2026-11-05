@@ -33,7 +33,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// A composition over [VaultController], which holds the vault's state and
 /// does all of its crypto: set up or unlock with the login password, then
-/// list, search, add, edit, delete, import and export.
+/// list, search, add, edit, delete, import and export. A vault restored onto
+/// new hardware asks for the password it was backed up with and the password
+/// the account signs in with now, and then opens with that sign-in password.
 class VaultPage extends StatefulWidget {
   /// Creates the page over [controller], the app's vault by default.
   const VaultPage({this.controller, super.key});
@@ -183,6 +185,7 @@ class _VaultPageState extends State<VaultPage>
       builder: (context, _) {
         final status = _vault.status;
         final unlocked = status == VaultStatus.unlocked;
+        final restored = _vault.opensWithBackupPassword;
         final formError = _vault.formError;
         final error = _vault.error;
         return QuarkPageScaffold(
@@ -244,23 +247,31 @@ class _VaultPageState extends State<VaultPage>
               error: formError == null
                   ? null
                   : Errors.message(formError, 'set up your vault'),
-              onSubmit: (password, phrase) =>
+              onSubmit: (password, phrase, [_ = '']) =>
                   _vault.setUp(password, phrase: phrase),
             ),
             VaultStatus.locked => VaultPasswordForm(
               key: const ValueKey('vault_unlock'),
               title: 'Your vault is locked',
-              message:
-                  'Enter the password you sign in to Quark with. Your vault '
-                  'opens on this device; the Quark never sees what is in it.',
+              message: restored
+                  ? 'Enter the password you had when this vault was backed '
+                        'up. Your vault is then re-wrapped under the password '
+                        'you sign in with now, and that password opens it '
+                        'from then on.'
+                  : 'Enter the password you sign in to Quark with. Your vault '
+                        'opens on this device; the Quark never sees what is in it.',
               submitLabel: 'Unlock',
+              secondPasswordLabel: restored
+                  ? 'Password you sign in with'
+                  : null,
               isBusy: _vault.isBusy,
               error: formError == null
                   ? null
                   : Errors.message(formError, 'unlock your vault'),
               secondaryLabel: 'Start over',
               onSecondary: _startOver,
-              onSubmit: (password, _) => _vault.unlock(password),
+              onSubmit: (password, _, [login = '']) =>
+                  _vault.unlock(password, loginPassword: login),
             ),
             VaultStatus.unlocked => VaultEntryList(
               entries: _vault.visibleRows,
