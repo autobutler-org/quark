@@ -49,6 +49,12 @@ const (
 	// Path is empty. It reaches only that account's sessions. A feed URL can
 	// carry a private token, and the event never carries the URL.
 	EventFeedChanged EventKind = "feed_changed"
+	// EventUploadSessionChanged fires when a resumable upload session opens,
+	// commits a chunk at most once per uploadutil.ProgressInterval, finishes,
+	// fails or is canceled (#3971). Data is an UploadSessionChanged; Path is
+	// empty. It reaches only the session's owner, and it is a hint:
+	// GET /files/upload-sessions is the source of truth.
+	EventUploadSessionChanged EventKind = "upload_session_changed"
 
 	// EventAccountChanged fires when an account's role changes (promoted or
 	// demoted), so signed-in apps refetch what they are allowed to show.
@@ -242,6 +248,14 @@ type FeedChanged struct {
 	// FeedID is the subscription created, updated or deleted.
 	FeedID int64 `json:"feedId"`
 	// UserID is the account whose subscription changed. It is never sent.
+	UserID int64 `json:"-"`
+}
+
+// UploadSessionChanged is the data of an upload_session_changed event.
+type UploadSessionChanged struct {
+	// SessionID is the session that changed.
+	SessionID string `json:"sessionId"`
+	// UserID is the session's owner. It is never sent.
 	UserID int64 `json:"-"`
 }
 

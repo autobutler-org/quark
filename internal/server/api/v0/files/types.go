@@ -33,6 +33,7 @@ func (r *router) Routes() []*serverutil.Route {
 		uploadSessionChunkRoute,
 		getUploadSessionRoute,
 		deleteUploadSessionRoute,
+		listUploadSessionsRoute,
 	}
 }
 
@@ -84,6 +85,34 @@ type uploadSessionStatusResponse struct {
 	FileName  string    `json:"fileName"`
 	RootDir   string    `json:"rootDir"`
 	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// uploadSessionSummaryResponse is one upload session in
+// GET /files/upload-sessions.
+type uploadSessionSummaryResponse struct {
+	SessionID string `json:"sessionId"`
+	FileName  string `json:"fileName"`
+	RootDir   string `json:"rootDir"`
+	// Serial is the device the file is going to; empty is the internal drive.
+	Serial    string `json:"serial"`
+	TotalSize int64  `json:"totalSize"`
+	// Offset is how many bytes have been committed.
+	Offset int64 `json:"offset"`
+	// State is uploading or committing for a session in flight, and
+	// completed, failed, canceled or expired for one that ended.
+	State     string    `json:"state" enums:"uploading,committing,completed,failed,canceled,expired"`
+	CreatedAt time.Time `json:"createdAt"`
+	// UpdatedAt is when the last chunk landed, or when the session ended.
+	UpdatedAt time.Time `json:"updatedAt"`
+	// Error is diagnostic text for a failed session, not copy for a user.
+	Error string `json:"error"`
+}
+
+// listUploadSessionsResponse is the caller's upload sessions: those in
+// flight, oldest first, then those that ended, newest first.
+type listUploadSessionsResponse struct {
+	Active   []uploadSessionSummaryResponse `json:"active"`
+	Finished []uploadSessionSummaryResponse `json:"finished"`
 }
 
 type moveFileRequest struct {

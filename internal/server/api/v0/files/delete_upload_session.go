@@ -32,12 +32,14 @@ func deleteUploadSession(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(errors.New("upload sessions are not configured"))
 	}
 
+	sessionID, userID := c.Param(sessionIDParam), callerID(c)
 	if _, err := store.DeleteSession(uploadutil.DeleteSessionParams{
-		SessionID: c.Param(sessionIDParam),
-		UserID:    callerID(c),
+		SessionID: sessionID,
+		UserID:    userID,
 	}); err != nil {
 		return uploadSessionError(c, err)
 	}
+	publishUploadSessionChanged(deps, userID, sessionID)
 	return serverutil.Ok()
 }
 

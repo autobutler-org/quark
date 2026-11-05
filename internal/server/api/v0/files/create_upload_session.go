@@ -65,6 +65,7 @@ func createUploadSession(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return uploadSessionError(c, err)
 	}
+	publishUploadSessionChanged(deps, access.Principal().UserID, result.SessionID)
 	return serverutil.Ok().WithData(createUploadSessionResponse{
 		SessionID: result.SessionID,
 		Offset:    result.Offset,
