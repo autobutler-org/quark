@@ -96,6 +96,8 @@ class _FakeQuark {
     int userId = 2,
     SaveChatAttachmentFn? saveAttachmentFile,
     UploadChatAttachmentFn? uploadAttachmentFile,
+    Future<Uint8List?> Function(String name, Uint8List bytes)?
+    renderVideoThumbnail,
   }) => ChatMessagesController(
     channelId: _channel,
     keys: keys,
@@ -170,6 +172,7 @@ class _FakeQuark {
     reconnects: reconnects.stream,
     saveAttachmentFile: saveAttachmentFile,
     uploadAttachmentFile: uploadAttachmentFile,
+    renderVideoThumbnail: renderVideoThumbnail,
   );
 
   ChatReaction react(
@@ -474,6 +477,71 @@ void main() {
     expect(got[1].text, isEmpty);
     sender.dispose();
     reader.dispose();
+  });
+
+  test('a sent video keeps its preview frame', () async {
+    final key = crypto.newChannelKey();
+    final thumb = Uint8List.fromList(const [0xFF, 0xD8, 0xFF]);
+    final plain = Uint8List.fromList(const [1, 2, 3, 4]);
+    var renders = 0;
+    final sender = quark.client(
+      _FakeKeys()..grant(1, key),
+      crypto,
+      renderVideoThumbnail: (name, bytes) async {
+        renders++;
+        expect(name, 'hard-n.mp4');
+        expect(bytes, plain);
+        return thumb;
+      },
+    );
+    await sender.open();
+    await sender.sendAttachment(
+      name: 'hard-n.mp4',
+      mime: 'video/mp4',
+      bytes: plain,
+    );
+    final id = [
+      for (final entry in sender.entries)
+        if (entry is ChatTimelineMessage) ...entry.attachments,
+    ].single.id;
+
+    expect(sender.thumbnailFor(id), thumb);
+    expect(await sender.videoPreview(id), thumb);
+    expect(renders, 1);
+    expect(quark.attachmentDownloads, 0);
+    sender.dispose();
+  });
+
+  test('a video with no stored frame is rendered once from the file', () async {
+    final key = crypto.newChannelKey();
+    final thumb = Uint8List.fromList(const [0xFF, 0xD8, 0xFF]);
+    final plain = Uint8List.fromList(const [1, 2, 3, 4]);
+    var renders = 0;
+    final sender = quark.client(
+      _FakeKeys()..grant(1, key),
+      crypto,
+      renderVideoThumbnail: (name, bytes) async {
+        renders++;
+        return renders == 1 ? null : thumb;
+      },
+    );
+    await sender.open();
+    await sender.sendAttachment(
+      name: 'hard-n.mp4',
+      mime: 'video/mp4',
+      bytes: plain,
+    );
+    final id = [
+      for (final entry in sender.entries)
+        if (entry is ChatTimelineMessage) ...entry.attachments,
+    ].single.id;
+
+    expect(sender.thumbnailFor(id), isNull);
+    expect(await sender.videoPreview(id), thumb);
+    expect(await sender.videoPreview(id), thumb);
+    expect(renders, 2);
+    expect(quark.attachmentDownloads, 1);
+    sender.dispose();
   });
 
   test('saving an attachment to a folder uploads its name there', () async {

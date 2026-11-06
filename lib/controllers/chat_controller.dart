@@ -828,6 +828,14 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   Uint8List? thumbnailFor(String attachmentId) =>
       _messages?.thumbnailFor(attachmentId);
 
+  /// A JPEG frame for video [attachmentId], from the message or rendered
+  /// here. Null when there is no open channel or no frame.
+  Future<Uint8List?> videoPreview(String attachmentId) {
+    final messages = _messages;
+    if (messages == null) return Future<Uint8List?>.value();
+    return messages.videoPreview(attachmentId);
+  }
+
   /// Decrypts image [attachmentId] into memory, refusing one over
   /// [ChatMessagesController.maxInlineImageBytes] before downloading it.
   Future<Uint8List> readAttachmentImage(String attachmentId) {

@@ -762,6 +762,15 @@ class _ChatPageState extends State<ChatPage>
                                           c.readAttachmentImage(item.id),
                                     );
                                   }
+                                  if (item.kind == ChatAttachmentKind.video &&
+                                      item.size <=
+                                          ChatMessagesController
+                                              .maxVideoPreviewBytes) {
+                                    return ChatAttachmentPreview(
+                                      load: () => c.videoPreview(item.id),
+                                      reportFailure: false,
+                                    );
+                                  }
                                   return null;
                                 },
                                 avatarBuilder: (context, userId) {

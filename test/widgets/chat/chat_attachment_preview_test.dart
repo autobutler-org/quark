@@ -45,6 +45,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('no frame leaves the preview blank', (tester) async {
+    await _pump(
+      tester,
+      SizedBox(
+        width: 120,
+        height: 80,
+        child: ChatAttachmentPreview(
+          load: () async => null,
+          reportFailure: false,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(Image), findsNothing);
+    expect(find.byIcon(QuarkIcons.image_outlined), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a failed load shows the image glyph', (tester) async {
     await _pump(
       tester,
