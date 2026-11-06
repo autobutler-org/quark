@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/chat_channel_share_target.dart';
 import 'package:quark/controllers/chat_controller.dart';
+import 'package:quark/controllers/chat_messages_controller.dart';
 import 'package:quark/controllers/chat_unread_controller.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/router.dart';
@@ -16,6 +17,7 @@ import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_kind.dart';
+import 'package:quark/widgets/chat/chat_attachment_preview.dart';
 import 'package:quark/widgets/chat/chat_channel_header.dart';
 import 'package:quark/widgets/chat/chat_channel_not_found.dart';
 import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
@@ -312,6 +314,7 @@ class _ChatPageState extends State<ChatPage>
       await playChatAttachmentVideo(
         context: context,
         name: item.name,
+        mime: item.mime,
         plaintext: _controller.openAttachmentPlaintext(item.id),
       );
     } catch (e) {
@@ -740,12 +743,26 @@ class _ChatPageState extends State<ChatPage>
                                     unawaited(_saveAttachmentToFiles(item)),
                                 thumbnailBuilder: (context, item) {
                                   final bytes = c.thumbnailFor(item.id);
-                                  if (bytes == null) return null;
-                                  return Image.memory(
-                                    bytes,
-                                    fit: BoxFit.cover,
-                                    gaplessPlayback: true,
-                                  );
+                                  if (bytes != null && bytes.isNotEmpty) {
+                                    return Image.memory(
+                                      bytes,
+                                      fit: BoxFit.cover,
+                                      gaplessPlayback: true,
+                                    );
+                                  }
+                                  // A message can carry no thumbnail: the
+                                  // picture still belongs in the bubble when
+                                  // it is small enough to open.
+                                  if (item.kind == ChatAttachmentKind.image &&
+                                      item.size <=
+                                          ChatMessagesController
+                                              .maxInlineImageBytes) {
+                                    return ChatAttachmentPreview(
+                                      load: () =>
+                                          c.readAttachmentImage(item.id),
+                                    );
+                                  }
+                                  return null;
                                 },
                                 avatarBuilder: (context, userId) {
                                   final id = int.tryParse(userId) ?? 0;
@@ -783,46 +800,52 @@ class _ChatPageState extends State<ChatPage>
                       // rounded display corners and the home indicator
                       // (#2788).
                       QuarkEdgeInset(
-                        child: Row(
-                          children: [
-                            if (c.canPostPoll)
-                              QuarkBarIconButton(
-                                key: const ValueKey('chat_new_poll'),
-                                icon: QuarkIcons.poll,
-                                tooltip: 'New poll',
-                                onPressed: () =>
-                                    showChatPollEditor(context, chat: c),
-                              ),
-                            Expanded(
-                              child: QuarkMessageComposer(
-                                // A new state per channel. The text is that
-                                // channel's draft, kept for this app session.
-                                key: ValueKey(
-                                  'chat_composer_${channel?.id}_$_composerEpoch',
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            vertical: QuarkTokens.of(context).spacingSm,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              if (c.canPostPoll)
+                                QuarkBarIconButton(
+                                  key: const ValueKey('chat_new_poll'),
+                                  icon: QuarkIcons.poll,
+                                  tooltip: 'New poll',
+                                  onPressed: () =>
+                                      showChatPollEditor(context, chat: c),
                                 ),
-                                initialText: channel == null
-                                    ? ''
-                                    : c.draftFor(channel.id),
-                                onChanged: channel == null
-                                    ? null
-                                    : (text) => c.setDraft(channel.id, text),
-                                hintText: channel == null
-                                    ? 'Message'
-                                    : 'Message ${c.titleOf(channel)}',
-                                permissions: channel == null
-                                    ? null
-                                    : c.selectedPermissions,
-                                isWaitingForKey: c.isWaitingForKey,
-                                disabledReason: c.composerDisabledReason,
-                                maxLength: ChatConfig.maxMessageLength,
-                                mentionNames: c.mentionNames,
-                                onSend: c.send,
-                                onAttach: channel == null
-                                    ? null
-                                    : () => unawaited(_attachFile()),
+                              Expanded(
+                                child: QuarkMessageComposer(
+                                  // A new state per channel. The text is that
+                                  // channel's draft, kept for this app session.
+                                  key: ValueKey(
+                                    'chat_composer_${channel?.id}_$_composerEpoch',
+                                  ),
+                                  initialText: channel == null
+                                      ? ''
+                                      : c.draftFor(channel.id),
+                                  onChanged: channel == null
+                                      ? null
+                                      : (text) => c.setDraft(channel.id, text),
+                                  hintText: channel == null
+                                      ? 'Message'
+                                      : 'Message ${c.titleOf(channel)}',
+                                  permissions: channel == null
+                                      ? null
+                                      : c.selectedPermissions,
+                                  isWaitingForKey: c.isWaitingForKey,
+                                  disabledReason: c.composerDisabledReason,
+                                  maxLength: ChatConfig.maxMessageLength,
+                                  mentionNames: c.mentionNames,
+                                  onSend: c.send,
+                                  onAttach: channel == null
+                                      ? null
+                                      : () => unawaited(_attachFile()),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],

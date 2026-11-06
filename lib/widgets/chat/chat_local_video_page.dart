@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/video_viewer/fullscreen_video_page.dart';
@@ -7,16 +5,18 @@ import 'package:quark/widgets/video_viewer/inline_video_player.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:video_player/video_player.dart';
 
-/// Plays a chat attachment that has already been decrypted to [path].
+/// Plays a chat attachment from the controller [open] returns.
 ///
 /// Uses the same surface as the file browser's video viewer. The caller
-/// deletes [path] after this route pops.
+/// creates the controller, from a temporary file or a blob URL, and releases
+/// that source after this route pops. This page initializes, plays, and
+/// disposes the controller.
 class ChatLocalVideoPage extends StatefulWidget {
-  /// Creates a player for the file at [path], titled [name].
-  const ChatLocalVideoPage({required this.path, required this.name, super.key});
+  /// Creates a player titled [name] for the controller [open] returns.
+  const ChatLocalVideoPage({required this.open, required this.name, super.key});
 
-  /// Absolute path of the decrypted video.
-  final String path;
+  /// Creates the player. Not initialized yet.
+  final VideoPlayerController Function() open;
 
   /// The file name shown in the title.
   final String name;
@@ -36,7 +36,7 @@ class _ChatLocalVideoPageState extends State<ChatLocalVideoPage> {
   }
 
   Future<void> _open() async {
-    final controller = VideoPlayerController.file(File(widget.path));
+    final controller = widget.open();
     try {
       await controller.initialize();
       await controller.play();

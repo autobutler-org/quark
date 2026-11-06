@@ -9,13 +9,13 @@ import '../core/quark_tappable.dart';
 
 /// One file attached to a chat message: a photo, a video, or any other file.
 ///
-/// An image asks [thumbnailBuilder] for its preview and shows the file name
-/// when that is null or returns null. A video shows a play control and does
-/// not play anything itself; this package does not depend on a video player.
-/// A file shows its name and its size in B, KiB, or MiB. A tap on an image or
-/// a file fires [onOpen]. The play control fires [onPlay]. [onSaveToDevice]
-/// and [onSaveToFiles], when set, are actions under the preview. Either may
-/// be null, and then its action is absent.
+/// An image or a video asks [thumbnailBuilder] for a preview. An image with
+/// none shows its name. A video is a frame either way: the preview when there
+/// is one, and a play control on top. This package does not play the video
+/// itself. A file shows its name and its size in B, KiB, or MiB. A tap on an
+/// image or a file fires [onOpen]. The play control fires [onPlay].
+/// [onSaveToDevice] and [onSaveToFiles], when set, are actions under the
+/// preview. Either may be null, and then its action is absent.
 ///
 /// Key prefixes: `chat_attachment_<id>` on the tile,
 /// `chat_attachment_play_<id>` on a video's play control,
@@ -47,8 +47,8 @@ class ChatAttachmentTile extends StatelessWidget {
   /// The file to draw.
   final ChatAttachmentItem item;
 
-  /// Builds an image's preview. Null, or a builder that returns null, shows
-  /// the file name instead. Not called for a video or a file.
+  /// Builds an image or video preview. Null, or a builder that returns null,
+  /// shows an image's name and a video's empty frame. Not called for a file.
   final Widget? Function(BuildContext context, ChatAttachmentItem item)?
   thumbnailBuilder;
 
@@ -73,9 +73,9 @@ class ChatAttachmentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final item = this.item;
-    final preview = item.kind == ChatAttachmentKind.image
-        ? thumbnailBuilder?.call(context, item)
-        : null;
+    final preview = item.kind == ChatAttachmentKind.file
+        ? null
+        : thumbnailBuilder?.call(context, item);
     final name = Text(
       item.name,
       maxLines: 2,
@@ -90,22 +90,37 @@ class ChatAttachmentTile extends StatelessWidget {
     final Widget body;
     final VoidCallback? onTap;
     if (item.kind == ChatAttachmentKind.video) {
+      // The play control is the button. The frame around it is not a second
+      // one, or a screen reader announces two controls for one video.
       onTap = null;
-      body = Row(
+      final frame = preview;
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          QuarkBarIconButton(
-            key: ValueKey('chat_attachment_play_${item.id}'),
-            icon: QuarkIcons.play_arrow_rounded,
-            tooltip: 'Play',
-            onPressed: onPlay,
-          ),
-          SizedBox(width: tokens.spacingSm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [name, size],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(tokens.radiusSm),
+            child: SizedBox(
+              width: double.infinity,
+              height: _previewHeight,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Positioned.fill(
+                    child: frame ?? ColoredBox(color: tokens.input),
+                  ),
+                  QuarkBarIconButton(
+                    key: ValueKey('chat_attachment_play_${item.id}'),
+                    icon: QuarkIcons.play_arrow_rounded,
+                    tooltip: 'Play',
+                    onPressed: onPlay,
+                  ),
+                ],
+              ),
             ),
           ),
+          SizedBox(height: tokens.spacingXs),
+          name,
+          size,
         ],
       );
     } else if (preview != null) {

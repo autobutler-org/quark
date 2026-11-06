@@ -161,32 +161,34 @@ void main() {
     final opened = <String>[];
     await pumpAt(
       tester,
-      Column(
-        children: [
-          ChatAttachmentTile(
-            item: _item(
-              id: 'photo',
-              name: 'cabin.png',
-              kind: ChatAttachmentKind.image,
-              size: 10,
+      SingleChildScrollView(
+        child: Column(
+          children: [
+            ChatAttachmentTile(
+              item: _item(
+                id: 'photo',
+                name: 'cabin.png',
+                kind: ChatAttachmentKind.image,
+                size: 10,
+              ),
+              thumbnailBuilder: (context, item) =>
+                  const SizedBox(width: 8, height: 8),
+              onOpen: () => opened.add('photo'),
+              onSaveToDevice: () => savedDevice.add('photo'),
+              onSaveToFiles: () => savedFiles.add('photo'),
             ),
-            thumbnailBuilder: (context, item) =>
-                const SizedBox(width: 8, height: 8),
-            onOpen: () => opened.add('photo'),
-            onSaveToDevice: () => savedDevice.add('photo'),
-            onSaveToFiles: () => savedFiles.add('photo'),
-          ),
-          ChatAttachmentTile(
-            item: _item(
-              id: 'clip',
-              name: 'walk.mp4',
-              kind: ChatAttachmentKind.video,
-              size: 10,
+            ChatAttachmentTile(
+              item: _item(
+                id: 'clip',
+                name: 'walk.mp4',
+                kind: ChatAttachmentKind.video,
+                size: 10,
+              ),
+              onSaveToDevice: () => savedDevice.add('clip'),
+              onSaveToFiles: () => savedFiles.add('clip'),
             ),
-            onSaveToDevice: () => savedDevice.add('clip'),
-            onSaveToFiles: () => savedFiles.add('clip'),
-          ),
-        ],
+          ],
+        ),
       ),
       size: size,
     );
@@ -260,7 +262,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('message_body_m')), findsNothing);
     expect(find.text('caption'), findsOneWidget);
-    expect(find.byKey(const Key('thumb')), findsOneWidget);
+    expect(find.byKey(const Key('thumb')), findsNWidgets(2));
 
     await tester.tap(find.byKey(const ValueKey('chat_attachment_photo')));
     await tester.tap(find.byKey(const ValueKey('chat_attachment_play_clip')));
