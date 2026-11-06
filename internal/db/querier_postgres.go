@@ -40,6 +40,10 @@ func (a *postgresQueries) AddUserSettings(ctx context.Context, arg AddUserSettin
 	return a.q.AddUserSettings(ctx, pgdb.AddUserSettingsParams(arg))
 }
 
+func (a *postgresQueries) BindChatAttachment(ctx context.Context, arg BindChatAttachmentParams) (int64, error) {
+	return a.q.BindChatAttachment(ctx, pgdb.BindChatAttachmentParams(arg))
+}
+
 func (a *postgresQueries) CancelJob(ctx context.Context, id int64) (Job, error) {
 	row, err := a.q.CancelJob(ctx, id)
 	return Job(row), err
@@ -210,6 +214,10 @@ func (a *postgresQueries) DeleteCalendarEvent(ctx context.Context, id int64) (in
 
 func (a *postgresQueries) DeleteChatAttachment(ctx context.Context, id string) error {
 	return a.q.DeleteChatAttachment(ctx, id)
+}
+
+func (a *postgresQueries) DeleteChatAttachmentsByMessage(ctx context.Context, messageID sql.NullInt64) error {
+	return a.q.DeleteChatAttachmentsByMessage(ctx, messageID)
 }
 
 func (a *postgresQueries) DeleteChatChannel(ctx context.Context, id int64) (int64, error) {
@@ -740,6 +748,10 @@ func (a *postgresQueries) ListCalendarEventsInRange(ctx context.Context, arg Lis
 
 func (a *postgresQueries) ListChatAttachmentIDsByChannel(ctx context.Context, channelID int64) ([]string, error) {
 	return a.q.ListChatAttachmentIDsByChannel(ctx, channelID)
+}
+
+func (a *postgresQueries) ListChatAttachmentIDsByMessage(ctx context.Context, messageID sql.NullInt64) ([]string, error) {
+	return a.q.ListChatAttachmentIDsByMessage(ctx, messageID)
 }
 
 func (a *postgresQueries) ListChatChannelEvents(ctx context.Context, arg ListChatChannelEventsParams) ([]ChatChannelEvent, error) {

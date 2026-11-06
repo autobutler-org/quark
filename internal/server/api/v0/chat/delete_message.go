@@ -3,13 +3,14 @@ package v0_chat
 import (
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
 
 // deleteMessage godoc
 // @Summary Delete a chat message
-// @Description Wipes the message's ciphertext and sets deletedAt, leaving a tombstone so paging stays contiguous, and tells the channel's readers with chat_message_deleted. Allowed for the message's author or a holder of delete_messages, either of whom must hold read_messages now; another reader gets 403 and anyone without read_messages 404, delegated managers, demoted authors and admins included.
+// @Description Wipes the message's ciphertext, deletes the attachment files bound to it, and sets deletedAt, leaving a tombstone so paging stays contiguous, and tells the channel's readers with chat_message_deleted. Allowed for the message's author or a holder of delete_messages, either of whom must hold read_messages now; another reader gets 403 and anyone without read_messages 404, delegated managers, demoted authors and admins included.
 // @Tags chat
 // @Produce json
 // @Param id path int true "Message id"
@@ -31,6 +32,7 @@ func deleteMessage(c *gin.Context) *serverutil.Response {
 	}
 	result, err := chatutil.DeleteMessage(chatutil.DeleteMessageParams{
 		Ctx: c.Request.Context(), Database: deps.Database(), EventBus: deps.EventBus(), Principal: principal, MessageID: id,
+		DataDir: storageutil.GetDataDir(),
 	})
 	if err != nil {
 		return chatError(err)

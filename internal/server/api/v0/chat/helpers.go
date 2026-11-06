@@ -59,6 +59,7 @@ func bindPostMessage(r io.Reader, body *postMessageBody) error {
 		Ciphertext      []byte          `json:"ciphertext"`
 		KeyVersion      int64           `json:"keyVersion"`
 		ClientMessageID string          `json:"clientMessageId"`
+		AttachmentIDs   []string        `json:"attachmentIds"`
 		Poll            json.RawMessage `json:"poll"`
 	}
 	if err := dec.Decode(&raw); err != nil {
@@ -73,6 +74,7 @@ func bindPostMessage(r io.Reader, body *postMessageBody) error {
 	body.Ciphertext = raw.Ciphertext
 	body.KeyVersion = raw.KeyVersion
 	body.ClientMessageID = raw.ClientMessageID
+	body.AttachmentIDs = raw.AttachmentIDs
 	pollJSON := bytes.TrimSpace(raw.Poll)
 	if len(pollJSON) == 0 || bytes.Equal(pollJSON, []byte("null")) {
 		return nil
@@ -145,7 +147,7 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, chatutil.ErrInvalidMessage), errors.Is(err, chatutil.ErrInvalidReaction),
 		errors.Is(err, chatutil.ErrInvalidClientMessageID), errors.Is(err, chatutil.ErrInvalidPollAnswer),
 		errors.Is(err, chatutil.ErrMalformedPoll), errors.Is(err, chatutil.ErrPollClosesAt),
-		errors.Is(err, chatutil.ErrInvalidAttachment):
+		errors.Is(err, chatutil.ErrInvalidAttachment), errors.Is(err, chatutil.ErrTooManyAttachments):
 		return serverutil.BadRequest(err)
 	default:
 		return serverutil.InternalServerError(err)

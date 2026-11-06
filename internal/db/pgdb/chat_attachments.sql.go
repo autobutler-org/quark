@@ -7,8 +7,41 @@ package pgdb
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
+
+const bindChatAttachment = `-- name: BindChatAttachment :execrows
+UPDATE chat_attachments
+SET message_id = $1
+WHERE id = $2
+    AND channel_id = $3
+    AND uploader_id = $4
+    AND message_id IS NULL
+`
+
+type BindChatAttachmentParams struct {
+	MessageID  sql.NullInt64
+	ID         string
+	ChannelID  int64
+	UploaderID int64
+}
+
+// BindChatAttachment claims one unbound attachment for a message. The caller
+// checks that exactly one row changed: zero means the id is missing, in
+// another channel, uploaded by someone else, or already bound.
+func (q *Queries) BindChatAttachment(ctx context.Context, arg BindChatAttachmentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, bindChatAttachment,
+		arg.MessageID,
+		arg.ID,
+		arg.ChannelID,
+		arg.UploaderID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
 
 const createChatAttachment = `-- name: CreateChatAttachment :one
 
@@ -31,8 +64,7 @@ type CreateChatAttachmentParams struct {
 }
 
 // Chat attachments (#2425). The ciphertext is a file in the data directory.
-// These rows name it. message_id stays null until a later change binds the
-// file to a message.
+// These rows name it. message_id stays null until a message binds the file.
 // CreateChatAttachment stores one. created_at is the database clock, at
 // millisecond resolution (rule 3). The caller has already checked id.
 func (q *Queries) CreateChatAttachment(ctx context.Context, arg CreateChatAttachmentParams) (ChatAttachment, error) {
@@ -60,6 +92,17 @@ DELETE FROM chat_attachments WHERE id = $1
 
 func (q *Queries) DeleteChatAttachment(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteChatAttachment, id)
+	return err
+}
+
+const deleteChatAttachmentsByMessage = `-- name: DeleteChatAttachmentsByMessage :exec
+DELETE FROM chat_attachments WHERE message_id = $1
+`
+
+// DeleteChatAttachmentsByMessage drops the rows a deleted message bound.
+// ON DELETE CASCADE does not run on that update, so the rows have to go here.
+func (q *Queries) DeleteChatAttachmentsByMessage(ctx context.Context, messageID sql.NullInt64) error {
+	_, err := q.db.ExecContext(ctx, deleteChatAttachmentsByMessage, messageID)
 	return err
 }
 
@@ -101,6 +144,38 @@ SELECT id FROM chat_attachments WHERE channel_id = $1 ORDER BY id
 // deleting the channel can remove the files after the rows are gone.
 func (q *Queries) ListChatAttachmentIDsByChannel(ctx context.Context, channelID int64) ([]string, error) {
 	rows, err := q.db.QueryContext(ctx, listChatAttachmentIDsByChannel, channelID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChatAttachmentIDsByMessage = `-- name: ListChatAttachmentIDsByMessage :many
+SELECT id FROM chat_attachments
+WHERE message_id = $1
+ORDER BY id
+`
+
+// ListChatAttachmentIDsByMessage is every attachment bound to one message, so
+// deleting the message can remove the files. A tombstone does not fire the
+// foreign key's ON DELETE CASCADE.
+func (q *Queries) ListChatAttachmentIDsByMessage(ctx context.Context, messageID sql.NullInt64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listChatAttachmentIDsByMessage, messageID)
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,7 @@ import (
 
 // getAttachment godoc
 // @Summary Download a chat attachment's ciphertext
-// @Description Serves the ciphertext, honoring HTTP range requests. An attachment no message is bound to is readable by its uploader only; anyone else gets 404, so the answer does not reveal that the id exists. A bound attachment needs read_messages, and anyone without it gets 404, delegated managers and admins included. Nothing is bound yet: message_id is reserved for the next change. The response is not cached.
+// @Description Serves the ciphertext, honoring HTTP range requests. An attachment no message is bound to is readable by its uploader only; anyone else gets 404, so the answer does not reveal that the id exists. A bound attachment needs read_messages, and anyone without it gets 404, delegated managers and admins included. The response is not cached.
 // @Tags chat
 // @Produce application/octet-stream
 // @Param id path int true "Channel id"
