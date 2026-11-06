@@ -32,3 +32,14 @@ Future<String?> saveDownloadThroughDialog({
 /// does.
 Future<String?> saveBytesThroughDialog(Uint8List bytes, String fileName) =>
     platform.saveBytesPlatform(bytes, fileName);
+
+/// Saves the file already at [path], named [fileName], through the same photo
+/// library or save dialog as [saveBytesThroughDialog].
+///
+/// Nothing is read into one buffer. [path] is left in place for the caller
+/// to delete. Returns where it landed, or null when the user canceled. The
+/// web does not reach this.
+Future<String?> saveExistingFileThroughDialog({
+  required String path,
+  required String fileName,
+}) => platform.saveExistingFilePlatform(path: path, fileName: fileName);

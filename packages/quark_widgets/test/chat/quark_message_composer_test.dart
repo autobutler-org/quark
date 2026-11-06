@@ -547,6 +547,9 @@ void main() {
     expect(find.byKey(attach), findsOneWidget);
     expect(find.byKey(field), findsOneWidget);
     expect(tester.takeException(), isNull);
+    final attachBox = tester.getRect(find.byKey(attach));
+    final fieldBox = tester.getRect(find.byKey(field));
+    expect((attachBox.bottom - fieldBox.bottom).abs(), lessThan(1));
   });
 
   testWidgets('the attach button is absent without attachFiles', (

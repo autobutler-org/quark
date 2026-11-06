@@ -343,8 +343,10 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
       );
     }
 
+    // Horizontal only. Vertical padding here would drop the attach button
+    // below the poll button, which sits outside this composer.
     return Padding(
-      padding: EdgeInsets.all(tokens.spacingSm),
+      padding: EdgeInsets.symmetric(horizontal: tokens.spacingSm),
       child: ListenableBuilder(
         listenable: _text,
         builder: (context, _) {

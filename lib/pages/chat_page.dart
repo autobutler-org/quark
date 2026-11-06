@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/chat_channel_share_target.dart';
 import 'package:quark/controllers/chat_controller.dart';
+import 'package:quark/controllers/chat_messages_controller.dart';
 import 'package:quark/controllers/chat_unread_controller.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/router.dart';
@@ -16,6 +17,7 @@ import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_kind.dart';
+import 'package:quark/widgets/chat/chat_attachment_preview.dart';
 import 'package:quark/widgets/chat/chat_channel_header.dart';
 import 'package:quark/widgets/chat/chat_channel_not_found.dart';
 import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
@@ -24,6 +26,7 @@ import 'package:quark/widgets/chat/chat_unlock_prompt.dart';
 import 'package:quark/widgets/chat/native_emoji_dialog.dart';
 import 'package:quark/widgets/chat/show_chat_poll_editor.dart';
 import 'package:quark/widgets/chat/show_chat_poll_export.dart';
+import 'package:quark/widgets/chat/show_chat_save_folder.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
@@ -71,7 +74,10 @@ import 'package:url_launcher/url_launcher.dart';
 /// The attach button on the composer sends one file from this device. The
 /// caption is whatever is in the field, and it may be empty. A photo opens
 /// in the image viewer. A video is decrypted to a temporary file and played.
-/// Nothing is saved to this device or to Quark files.
+/// Saving an attachment decrypts it on this device. A picture or video on a
+/// phone goes to the photo library, and anything else through the save
+/// dialog. Saving to my files asks for a folder and uploads the plaintext
+/// there under the file's name, beside a file that already has that name.
 ///
 /// The poll button beside the composer opens a form for a poll (#3894). A
 /// holder of `add_reactions` answers one, and its author closes it. Each
@@ -119,6 +125,9 @@ class _ChatPageState extends State<ChatPage>
 
   /// Whether a file pick and upload is already running.
   bool _attaching = false;
+
+  /// Whether an attachment save is already running.
+  bool _savingAttachment = false;
 
   @override
   void initState() {
@@ -261,6 +270,38 @@ class _ChatPageState extends State<ChatPage>
     }
   }
 
+  Future<void> _saveAttachmentToDevice(ChatAttachmentItem item) async {
+    if (_savingAttachment) return;
+    _savingAttachment = true;
+    try {
+      final saved = await _controller.saveAttachmentToDevice(item.id);
+      if (saved == null || !mounted) return;
+      showMessage(context, 'Saved');
+    } catch (error) {
+      if (!mounted) return;
+      showMessage(context, Errors.message(error, 'save the file'));
+    } finally {
+      _savingAttachment = false;
+    }
+  }
+
+  Future<void> _saveAttachmentToFiles(ChatAttachmentItem item) async {
+    if (_savingAttachment) return;
+    _savingAttachment = true;
+    try {
+      final folder = await showChatSaveFolderPicker(context);
+      if (folder == null || !mounted) return;
+      await _controller.saveAttachmentToFolder(item.id, folder);
+      if (!mounted) return;
+      showMessage(context, 'Saved to my files');
+    } catch (error) {
+      if (!mounted) return;
+      showMessage(context, Errors.message(error, 'save the file'));
+    } finally {
+      _savingAttachment = false;
+    }
+  }
+
   Future<void> _playAttachment(ChatAttachmentItem item) async {
     if (!chatVideoPlaybackSupported) {
       showMessage(
@@ -273,6 +314,7 @@ class _ChatPageState extends State<ChatPage>
       await playChatAttachmentVideo(
         context: context,
         name: item.name,
+        mime: item.mime,
         plaintext: _controller.openAttachmentPlaintext(item.id),
       );
     } catch (e) {
@@ -695,14 +737,41 @@ class _ChatPageState extends State<ChatPage>
                                     unawaited(_openAttachment(item)),
                                 onPlayAttachment: (_, item) =>
                                     unawaited(_playAttachment(item)),
+                                onSaveAttachmentToDevice: (_, item) =>
+                                    unawaited(_saveAttachmentToDevice(item)),
+                                onSaveAttachmentToFiles: (_, item) =>
+                                    unawaited(_saveAttachmentToFiles(item)),
                                 thumbnailBuilder: (context, item) {
                                   final bytes = c.thumbnailFor(item.id);
-                                  if (bytes == null) return null;
-                                  return Image.memory(
-                                    bytes,
-                                    fit: BoxFit.cover,
-                                    gaplessPlayback: true,
-                                  );
+                                  if (bytes != null && bytes.isNotEmpty) {
+                                    return Image.memory(
+                                      bytes,
+                                      fit: BoxFit.cover,
+                                      gaplessPlayback: true,
+                                    );
+                                  }
+                                  // A message can carry no thumbnail: the
+                                  // picture still belongs in the bubble when
+                                  // it is small enough to open.
+                                  if (item.kind == ChatAttachmentKind.image &&
+                                      item.size <=
+                                          ChatMessagesController
+                                              .maxInlineImageBytes) {
+                                    return ChatAttachmentPreview(
+                                      load: () =>
+                                          c.readAttachmentImage(item.id),
+                                    );
+                                  }
+                                  if (item.kind == ChatAttachmentKind.video &&
+                                      item.size <=
+                                          ChatMessagesController
+                                              .maxVideoPreviewBytes) {
+                                    return ChatAttachmentPreview(
+                                      load: () => c.videoPreview(item.id),
+                                      reportFailure: false,
+                                    );
+                                  }
+                                  return null;
                                 },
                                 avatarBuilder: (context, userId) {
                                   final id = int.tryParse(userId) ?? 0;
@@ -741,6 +810,7 @@ class _ChatPageState extends State<ChatPage>
                       // (#2788).
                       QuarkEdgeInset(
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             if (c.canPostPoll)
                               QuarkBarIconButton(

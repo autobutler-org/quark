@@ -97,6 +97,8 @@ void main() {
     expect(find.byKey(const ValueKey('chat_attachment_photo')), findsOneWidget);
     expect(find.byKey(const ValueKey('chat_attachment_plain')), findsOneWidget);
     expect(find.byKey(const ValueKey('chat_attachment_note')), findsOneWidget);
+    expect(find.byTooltip('Save to device'), findsNothing);
+    expect(find.byTooltip('Save to my files'), findsNothing);
   });
 
   testWidgets('taps open an image or a file and play a video', (tester) async {
@@ -150,9 +152,69 @@ void main() {
     expect(played, ['clip']);
   });
 
+  testBothViewports('save actions fire and do not open the file', (
+    tester,
+    size,
+  ) async {
+    final savedDevice = <String>[];
+    final savedFiles = <String>[];
+    final opened = <String>[];
+    await pumpAt(
+      tester,
+      SingleChildScrollView(
+        child: Column(
+          children: [
+            ChatAttachmentTile(
+              item: _item(
+                id: 'photo',
+                name: 'cabin.png',
+                kind: ChatAttachmentKind.image,
+                size: 10,
+              ),
+              thumbnailBuilder: (context, item) =>
+                  const SizedBox(width: 8, height: 8),
+              onOpen: () => opened.add('photo'),
+              onSaveToDevice: () => savedDevice.add('photo'),
+              onSaveToFiles: () => savedFiles.add('photo'),
+            ),
+            ChatAttachmentTile(
+              item: _item(
+                id: 'clip',
+                name: 'walk.mp4',
+                kind: ChatAttachmentKind.video,
+                size: 10,
+              ),
+              onSaveToDevice: () => savedDevice.add('clip'),
+              onSaveToFiles: () => savedFiles.add('clip'),
+            ),
+          ],
+        ),
+      ),
+      size: size,
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.byTooltip('Save to device'), findsNWidgets(2));
+    expect(find.byTooltip('Save to my files'), findsNWidgets(2));
+
+    await tester.tap(
+      find.byKey(const ValueKey('chat_attachment_save_device_photo')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('chat_attachment_save_files_clip')),
+    );
+    await tester.pump();
+
+    expect(savedDevice, ['photo']);
+    expect(savedFiles, ['clip']);
+    expect(opened, isEmpty);
+  });
+
   testWidgets('the message list threads attachment callbacks', (tester) async {
     final opened = <(String, String)>[];
     final played = <(String, String)>[];
+    final savedDevice = <(String, String)>[];
+    final savedFiles = <(String, String)>[];
     final sent = DateTime(2026, 1, 2, 3, 4);
     await pumpAt(
       tester,
@@ -191,6 +253,8 @@ void main() {
         ],
         onOpenAttachment: (id, item) => opened.add((id, item.id)),
         onPlayAttachment: (id, item) => played.add((id, item.id)),
+        onSaveAttachmentToDevice: (id, item) => savedDevice.add((id, item.id)),
+        onSaveAttachmentToFiles: (id, item) => savedFiles.add((id, item.id)),
         thumbnailBuilder: (context, item) =>
             const SizedBox(key: Key('thumb'), width: 8, height: 8),
       ),
@@ -198,13 +262,21 @@ void main() {
 
     expect(find.byKey(const ValueKey('message_body_m')), findsNothing);
     expect(find.text('caption'), findsOneWidget);
-    expect(find.byKey(const Key('thumb')), findsOneWidget);
+    expect(find.byKey(const Key('thumb')), findsNWidgets(2));
 
     await tester.tap(find.byKey(const ValueKey('chat_attachment_photo')));
     await tester.tap(find.byKey(const ValueKey('chat_attachment_play_clip')));
+    await tester.tap(
+      find.byKey(const ValueKey('chat_attachment_save_device_photo')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('chat_attachment_save_files_clip')),
+    );
     await tester.pump();
 
     expect(opened, [('m', 'photo')]);
     expect(played, [('n', 'clip')]);
+    expect(savedDevice, [('m', 'photo')]);
+    expect(savedFiles, [('n', 'clip')]);
   });
 }

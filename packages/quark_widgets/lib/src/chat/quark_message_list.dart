@@ -77,6 +77,8 @@ import 'quark_message_list/chat_system_line.dart';
 /// `ChatAttachmentTile`. An empty body with attachments shows only those.
 /// [thumbnailBuilder] supplies an image's preview. A tap fires
 /// [onOpenAttachment], and a video's play control fires [onPlayAttachment].
+/// [onSaveAttachmentToDevice] and [onSaveAttachmentToFiles] are that tile's
+/// save actions.
 ///
 /// With [onOpenLink] set, each `http://`, `https://` or `www.` address in a
 /// text message is drawn as a link, and a tap fires [onOpenLink] with its
@@ -136,6 +138,8 @@ import 'quark_message_list/chat_system_line.dart';
 ///   onOpenLink: (uri) => launchUrl(uri),
 ///   onOpenAttachment: controller.openAttachment,
 ///   onPlayAttachment: controller.playAttachment,
+///   onSaveAttachmentToDevice: (id, item) => saveToDevice(item),
+///   onSaveAttachmentToFiles: (id, item) => saveToFiles(item),
 ///   thumbnailBuilder: (context, item) => thumbnailOf(item),
 ///   onAtBottomChanged: controller.setAtBottom,
 ///   avatarBuilder: (context, userId) => AppAvatar(userId: userId),
@@ -163,6 +167,8 @@ class QuarkMessageList extends StatefulWidget {
     this.onExportPoll,
     this.onOpenAttachment,
     this.onPlayAttachment,
+    this.onSaveAttachmentToDevice,
+    this.onSaveAttachmentToFiles,
     this.thumbnailBuilder,
     this.onEncryptionHelp,
     this.onAtBottomChanged,
@@ -268,6 +274,16 @@ class QuarkMessageList extends StatefulWidget {
   /// control is tapped. Null leaves the control disabled.
   final void Function(String messageId, ChatAttachmentItem attachment)?
   onPlayAttachment;
+
+  /// Called with a message's id and an attachment when "Save to device" is
+  /// tapped. Null leaves that action out.
+  final void Function(String messageId, ChatAttachmentItem attachment)?
+  onSaveAttachmentToDevice;
+
+  /// Called with a message's id and an attachment when "Save to my files" is
+  /// tapped. Null leaves that action out.
+  final void Function(String messageId, ChatAttachmentItem attachment)?
+  onSaveAttachmentToFiles;
 
   /// Builds a preview for an image attachment. Null, or a builder that
   /// returns null, shows the file name on that tile.
@@ -569,6 +585,20 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
                         ? null
                         : (attachment) =>
                               widget.onPlayAttachment!(message.id, attachment),
+                    onSaveAttachmentToDevice:
+                        widget.onSaveAttachmentToDevice == null
+                        ? null
+                        : (attachment) => widget.onSaveAttachmentToDevice!(
+                            message.id,
+                            attachment,
+                          ),
+                    onSaveAttachmentToFiles:
+                        widget.onSaveAttachmentToFiles == null
+                        ? null
+                        : (attachment) => widget.onSaveAttachmentToFiles!(
+                            message.id,
+                            attachment,
+                          ),
                     thumbnailBuilder: widget.thumbnailBuilder,
                     mentionNames: widget.mentionNames,
                     selfName: widget.currentUserName,

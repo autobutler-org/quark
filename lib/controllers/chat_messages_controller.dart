@@ -11,6 +11,8 @@ import 'package:quark/models/chat_message.dart';
 import 'package:quark/models/chat_poll.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_attachment_message.dart';
+import 'package:quark/services/chat_attachment_save.dart';
+import 'package:quark/services/chat_video_thumbnail.dart';
 import 'package:quark/services/chat_channel_keys_service.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/chat_messages_service.dart';
@@ -19,6 +21,21 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:sodium/sodium_sumo.dart';
+
+/// Writes a decrypted attachment through the platform save.
+typedef SaveChatAttachmentFn =
+    Future<String?> Function({
+      required Stream<List<int>> plaintext,
+      required String fileName,
+    });
+
+/// Uploads a decrypted attachment into a Quark folder under its file name.
+typedef UploadChatAttachmentFn =
+    Future<void> Function({
+      required Stream<List<int>> plaintext,
+      required String folder,
+      required String fileName,
+    });
 
 /// One open channel's timeline (#2418): its messages, decrypted in memory,
 /// merged with its membership and key events.
@@ -51,8 +68,11 @@ import 'package:sodium/sodium_sumo.dart';
 ///   (the keys controller notifies).
 /// - [entries] is the merged timeline, oldest first.
 ///
-/// Plaintext is never written anywhere; [dispose] drops it. The chat page
-/// makes one per open channel and disposes it on leaving.
+/// Plaintext stays in memory, and [dispose] drops it, except when an
+/// attachment is saved. That writes the file to a temporary file and deletes
+/// it afterward. Saving into Quark files uploads that plaintext through the
+/// files upload; the Quark does not decrypt it. The chat page makes one per
+/// open channel and disposes it on leaving.
 class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   /// Builds a controller for [channelId]. Every collaborator has a real
   /// default; tests pass fakes.
@@ -104,6 +124,10 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     fetchEvents,
     Stream<FileEvent>? events,
     Stream<void>? reconnects,
+    SaveChatAttachmentFn? saveAttachmentFile,
+    UploadChatAttachmentFn? uploadAttachmentFile,
+    Future<Uint8List?> Function(String name, Uint8List bytes)?
+    renderVideoThumbnail,
   }) : _keys = keys ?? ChatChannelKeysController.instance,
        _crypto = crypto ?? (() => ChatKeysController.instance.crypto),
        _fetchMessages = fetchMessages ?? ChatMessagesService.fetchMessages,
@@ -121,7 +145,11 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
            currentUserId ?? (() => AppSettings.instance.userId.value),
        _fetchEvents = fetchEvents ?? ChatChannelKeysService.fetchEvents,
        _eventStream = events ?? EventsService.instance.events,
-       _reconnectStream = reconnects ?? EventsService.instance.reconnects;
+       _reconnectStream = reconnects ?? EventsService.instance.reconnects,
+       _saveAttachmentFile = saveAttachmentFile ?? saveChatAttachmentToDevice,
+       _uploadAttachmentFile =
+           uploadAttachmentFile ?? uploadChatAttachmentToFolder,
+       _renderVideoThumbnail = renderVideoThumbnail ?? chatVideoThumbnail;
 
   /// The channel this timeline is for.
   final int channelId;
@@ -179,11 +207,27 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   /// The most bytes of an image this client decodes into memory. A larger
   /// image is refused before the download starts.
   static const maxInlineImageBytes = 20 << 20;
+
+  /// The most bytes of a video this client downloads to paint a preview.
+  /// A larger one keeps the empty frame.
+  static const maxVideoPreviewBytes = 64 << 20;
   final int? Function() _currentUserId;
   final Future<List<ChatChannelEvent>> Function(int channelId, {int after})
   _fetchEvents;
   final Stream<FileEvent> _eventStream;
   final Stream<void> _reconnectStream;
+  final SaveChatAttachmentFn _saveAttachmentFile;
+  final UploadChatAttachmentFn _uploadAttachmentFile;
+
+  /// Renders one JPEG frame from a plaintext video. Null when it cannot.
+  final Future<Uint8List?> Function(String name, Uint8List bytes)
+  _renderVideoThumbnail;
+
+  /// Frames already rendered for videos whose message carried none.
+  final Map<String, Uint8List> _videoPreviews = {};
+
+  /// In-flight renders, so two bubbles do not decode the same video twice.
+  final Map<String, Future<Uint8List?>> _videoPreviewLoads = {};
 
   final SplayTreeMap<int, ChatTimelineMessage> _messages = SplayTreeMap();
   List<ChatTimelineSystem> _system = const [];
@@ -348,13 +392,21 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     String? clientMessageId,
   }) async {
     final (crypto, version, key) = await _currentKey();
+    final thumbnail = await _thumbnailForSend(name, mime, bytes);
     final prepared = await prepareAttachmentMessage(
       crypto: crypto,
       channelId: channelId,
       keyVersion: version,
       channelKey: key,
       text: caption,
-      files: [AttachmentPlaintext(name: name, mime: mime, bytes: bytes)],
+      files: [
+        AttachmentPlaintext(
+          name: name,
+          mime: mime,
+          bytes: bytes,
+          thumbnail: thumbnail,
+        ),
+      ],
     );
     for (var i = 0; i < prepared.attachmentIds.length; i++) {
       await _putAttachment(
@@ -383,17 +435,72 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     return thumb;
   }
 
+  /// A JPEG frame for video [attachmentId].
+  ///
+  /// Uses the frame the sender stored when the message still has it.
+  /// Otherwise decrypts the file, up to [maxVideoPreviewBytes], and renders
+  /// one. The result is kept for this timeline so a rebuild does not decode
+  /// the video again. Null when the file is missing, too large, or this
+  /// device cannot decode it.
+  Future<Uint8List?> videoPreview(String attachmentId) {
+    final stored = thumbnailFor(attachmentId);
+    if (stored != null) return Future<Uint8List?>.value(stored);
+    final cached = _videoPreviews[attachmentId];
+    if (cached != null) return Future<Uint8List?>.value(cached);
+    return _videoPreviewLoads.putIfAbsent(attachmentId, () async {
+      final rendered = await _renderMissingVideoPreview(attachmentId);
+      if (rendered != null && rendered.isNotEmpty) {
+        _videoPreviews[attachmentId] = rendered;
+      }
+      return rendered;
+    });
+  }
+
   /// Decrypts image [attachmentId] into memory.
   ///
   /// Refuses a file larger than [maxInlineImageBytes] before downloading it.
   /// Throws [StateError] when the file is missing, too large, or chat is
   /// locked, and whatever the download or the decrypt throws.
-  Future<Uint8List> readImageAttachment(String attachmentId) async {
+  Future<Uint8List> readImageAttachment(String attachmentId) =>
+      _readAttachment(attachmentId, maxInlineImageBytes);
+
+  /// One frame to store with a video, or null for anything else or a decoder
+  /// that produced nothing. A failure here still sends the file.
+  Future<Uint8List?> _thumbnailForSend(
+    String name,
+    String mime,
+    Uint8List bytes,
+  ) async {
+    final type = mime.split(';').first.trim().toLowerCase();
+    if (!type.startsWith('video/')) return null;
+    try {
+      final thumb = await _renderVideoThumbnail(name, bytes);
+      if (thumb == null || thumb.isEmpty) return null;
+      return thumb;
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _renderMissingVideoPreview(String attachmentId) async {
+    final described = _described(attachmentId);
+    if (described == null || described.size > maxVideoPreviewBytes) {
+      return null;
+    }
+    try {
+      final bytes = await _readAttachment(attachmentId, maxVideoPreviewBytes);
+      return await _renderVideoThumbnail(described.name, bytes);
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<Uint8List> _readAttachment(String attachmentId, int maxBytes) async {
     final described = _described(attachmentId);
     if (described == null) {
       throw StateError('no attachment $attachmentId');
     }
-    if (described.size > maxInlineImageBytes) {
+    if (described.size > maxBytes) {
       throw StateError('attachment $attachmentId is ${described.size} bytes');
     }
     final crypto = _crypto();
@@ -408,9 +515,9 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
         input: sealed,
         totalBytes: described.size,
       )) {
-        if (builder.length + part.length > maxInlineImageBytes) {
+        if (builder.length + part.length > maxBytes) {
           throw StateError(
-            'attachment $attachmentId is larger than $maxInlineImageBytes bytes',
+            'attachment $attachmentId is larger than $maxBytes bytes',
           );
         }
         builder.add(part);
@@ -419,6 +526,46 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       key.dispose();
     }
     return builder.takeBytes();
+  }
+
+  /// Saves [attachmentId] through the platform save, under the file's own name.
+  ///
+  /// Returns where it landed, or null when the person canceled. A picture or
+  /// video on a phone goes to the photo library. This does not apply
+  /// [maxInlineImageBytes]: that cap is only for opening an image in memory.
+  Future<String?> saveAttachmentToDevice(String attachmentId) {
+    final name = _attachmentSaveName(attachmentId);
+    return _saveAttachmentFile(
+      plaintext: openAttachmentPlaintext(attachmentId),
+      fileName: name,
+    );
+  }
+
+  /// Uploads [attachmentId] into [folder] under the file's own name.
+  ///
+  /// [folder] is the folder the person picked, `/` for the top of their
+  /// files. A name already there is kept beside the new file. The plaintext
+  /// is streamed; it is not collected here.
+  Future<void> saveAttachmentToFolder(
+    String attachmentId, {
+    required String folder,
+  }) {
+    final name = _attachmentSaveName(attachmentId);
+    return _uploadAttachmentFile(
+      plaintext: openAttachmentPlaintext(attachmentId),
+      folder: folder,
+      fileName: name,
+    );
+  }
+
+  String _attachmentSaveName(String attachmentId) {
+    final described = _described(attachmentId);
+    if (described == null) {
+      throw StateError('no attachment $attachmentId');
+    }
+    final base = described.name.trim().split(RegExp(r'[/\\]')).last.trim();
+    if (base.isEmpty || base == '.' || base == '..') return 'file';
+    return base;
   }
 
   /// Decrypts [attachmentId] one chunk at a time.
