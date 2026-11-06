@@ -462,6 +462,7 @@ void main() {
       ChatPermission.readMessages,
       ChatPermission.sendMessages,
       ChatPermission.addReactions,
+      ChatPermission.attachFiles,
     };
     final channelGrants = [
       const GrantItem(principal: everyone, permissions: member),
@@ -526,8 +527,8 @@ void main() {
       await tapKey(tester, 'share_add_submit');
 
       expect(events, [
-        'add group_2 read_messages,send_messages,add_reactions',
-        'add group_2 read_messages,send_messages,add_reactions,'
+        'add group_2 read_messages,send_messages,add_reactions,attach_files',
+        'add group_2 read_messages,send_messages,add_reactions,attach_files,'
             'delete_messages,manage_reactions,manage_members',
       ]);
     });

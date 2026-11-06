@@ -12,6 +12,7 @@ void main() {
   const channel = ChatPermission.manageChannel;
   const members = ChatPermission.manageMembers;
   const reactions = ChatPermission.manageReactions;
+  const attach = ChatPermission.attachFiles;
 
   test('every permission carries the name the Quark uses', () {
     expect(
@@ -20,6 +21,7 @@ void main() {
         'read_messages',
         'send_messages',
         'add_reactions',
+        'attach_files',
         'delete_messages',
         'manage_reactions',
         'manage_channel',
@@ -35,11 +37,12 @@ void main() {
   test('each preset is its exact set', () {
     final want = {
       ChatPermissionPreset.viewer: {read},
-      ChatPermissionPreset.member: {read, send, react},
+      ChatPermissionPreset.member: {read, send, react, attach},
       ChatPermissionPreset.moderator: {
         read,
         send,
         react,
+        attach,
         delete,
         reactions,
         members,
@@ -48,6 +51,7 @@ void main() {
         read,
         send,
         react,
+        attach,
         delete,
         reactions,
         channel,
@@ -72,6 +76,7 @@ void main() {
   test('only the message permissions need read_messages', () {
     expect(send.requires, {read});
     expect(react.requires, {read});
+    expect(attach.requires, {read});
     expect(delete.requires, {read});
     expect(reactions.requires, {read});
     expect(read.requires, isEmpty);

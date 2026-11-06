@@ -27,6 +27,9 @@ enum ChatPermission {
   /// React to a message.
   addReactions('add_reactions', 'Add reactions', 'React to messages'),
 
+  /// Upload a file into the channel (#2425).
+  attachFiles('attach_files', 'Attach files', 'Upload files into the channel'),
+
   /// Delete other people's messages. Everyone may delete their own.
   deleteMessages(
     'delete_messages',
@@ -72,6 +75,7 @@ enum ChatPermission {
   Set<ChatPermission> get requires => switch (this) {
     sendMessages ||
     addReactions ||
+    attachFiles ||
     deleteMessages ||
     manageReactions => const {readMessages},
     readMessages || manageChannel || manageMembers => const {},
@@ -103,7 +107,8 @@ enum ChatPermission {
 
   /// [permissions] without [removed] and without everything that needs it,
   /// so clearing `read_messages` also clears `send_messages`,
-  /// `add_reactions`, `delete_messages` and `manage_reactions`, and leaves
+  /// `add_reactions`, `attach_files`, `delete_messages` and
+  /// `manage_reactions`, and leaves
   /// the management permissions, which need nothing.
   static Set<ChatPermission> withoutDependents(
     Set<ChatPermission> permissions,

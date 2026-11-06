@@ -219,6 +219,7 @@ void main() {
               ChatPermission.readMessages,
               ChatPermission.sendMessages,
               ChatPermission.addReactions,
+              ChatPermission.attachFiles,
             },
           ),
           ChatChannelItem(
