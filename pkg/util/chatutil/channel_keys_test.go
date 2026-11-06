@@ -592,7 +592,7 @@ func TestEventsAreRecordedAndSignedOnce(t *testing.T) {
 	}
 	event := added.Event
 	if event == nil || event.Kind != chatutil.EventMemberSet || event.ActorID != f.users["bob"] ||
-		event.Payload != `{"userId":`+strconv.FormatInt(f.users["carol"], 10)+`,"name":"carol","permissions":["read_messages","send_messages","add_reactions"]}` {
+		event.Payload != `{"userId":`+strconv.FormatInt(f.users["carol"], 10)+`,"name":"carol","permissions":["read_messages","send_messages","add_reactions","attach_files"]}` {
 		t.Fatalf("member_set event = %+v", event)
 	}
 	created, err := f.createVersion("carol", channel.ID, 1)

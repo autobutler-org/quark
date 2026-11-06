@@ -153,8 +153,8 @@ func userBody(id int64, permissions ...string) string {
 
 var (
 	viewer = []string{"read_messages"}
-	member = []string{"read_messages", "send_messages", "add_reactions"}
-	owner  = []string{"read_messages", "send_messages", "add_reactions", "delete_messages", "manage_channel", "manage_members", "manage_reactions"}
+	member = []string{"read_messages", "send_messages", "add_reactions", "attach_files"}
+	owner  = []string{"read_messages", "send_messages", "add_reactions", "delete_messages", "manage_channel", "manage_members", "manage_reactions", "attach_files"}
 )
 
 // TestChat_ChannelLifecycle has bob create a channel, share it with carol and

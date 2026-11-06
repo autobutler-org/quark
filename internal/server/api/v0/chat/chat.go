@@ -8,7 +8,8 @@
 // marker, which the unread counts in the channel list are counted from. /chat/messages/:id/reactions adds an encrypted reaction
 // to a message and /chat/reactions/:id removes one. PUT /chat/messages/:id/answer answers a poll message,
 // /chat/messages/:id/answers lists the answers the caller may see, and POST /chat/messages/:id/close closes a poll
-// for its author. POST /chat/channels/:id/keys/regenerate is the one admin-only route, and it still needs
+// for its author. PUT and GET /chat/channels/:id/attachments/:attachmentId store and serve an attachment's ciphertext.
+// POST /chat/channels/:id/keys/regenerate is the one admin-only route, and it still needs
 // read_messages: another member gets 403, and anyone without read_messages gets 404. Admins may manage any
 // channel but, like everyone else, list only the channels they are members of, and keys, events and messages
 // are for members alone. A channel the caller may not see is a 404.

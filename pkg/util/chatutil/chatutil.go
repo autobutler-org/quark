@@ -51,6 +51,12 @@
 // else's manage_reactions. Both publish chat_reaction_changed to the readers
 // alone, and a deleted message's reactions go with its tombstone.
 //
+// Attachments (#2425) are ciphertext the client sealed under a key the
+// message carries. The Quark stores the bytes and which channel and account
+// uploaded them, never the name, the media type or the key. Uploading needs
+// PermAttachFiles. Nothing binds an attachment to a message yet, so only the
+// uploader can read one back, and deleting a channel removes the files.
+//
 // Read markers (#2424) record how far each account has read in each channel,
 // and never move backward. ListChannels counts what is unread past the
 // caller's from message ids alone: messages someone else wrote that nobody
@@ -144,8 +150,8 @@ var (
 // manage-only set is a delegated manager, who runs a channel without being in
 // the conversation or holding its key.
 //
-// Reserved for later phases, with no bit yet: attach_files, mention_everyone
-// and pin_messages.
+// Reserved for later phases, with no bit yet: mention_everyone and
+// pin_messages.
 type Perms uint64
 
 // The permissions, in bit order.
@@ -168,6 +174,8 @@ const (
 	// PermManageReactions removes other people's reactions (#2426). Anyone
 	// with PermAddReactions may remove their own.
 	PermManageReactions
+	// PermAttachFiles uploads a file into the channel (#2425).
+	PermAttachFiles
 )
 
 // The presets the app offers (#2415). The Quark stores and serves only
@@ -175,7 +183,7 @@ const (
 // sets it seeds and grants.
 const (
 	PresetViewer    = PermReadMessages
-	PresetMember    = PresetViewer | PermSendMessages | PermAddReactions
+	PresetMember    = PresetViewer | PermSendMessages | PermAddReactions | PermAttachFiles
 	PresetModerator = PresetMember | PermDeleteMessages | PermManageReactions | PermManageMembers
 	PresetOwner     = PresetModerator | PermManageChannel
 	// PermsAll is every permission.
@@ -192,6 +200,7 @@ var permNames = []string{
 	"manage_channel",
 	"manage_members",
 	"manage_reactions",
+	"attach_files",
 }
 
 // ParsePerms reads a list of permission names. An unknown name is
@@ -238,7 +247,7 @@ func (p Perms) Validate() error {
 	if p.Has(PermReadMessages) {
 		return nil
 	}
-	for _, needsRead := range []Perms{PermSendMessages, PermAddReactions, PermDeleteMessages, PermManageReactions} {
+	for _, needsRead := range []Perms{PermSendMessages, PermAddReactions, PermDeleteMessages, PermManageReactions, PermAttachFiles} {
 		if p.Has(needsRead) {
 			return fmt.Errorf("%w: %s needs read_messages", ErrInvalidPerms, needsRead)
 		}
@@ -277,7 +286,7 @@ type Channel struct {
 	IsPrivate bool `json:"isPrivate"`
 	// Permissions is the caller's effective set: the union of every row that
 	// reaches them. Empty for an admin managing a channel they are not in.
-	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions"`
+	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions,attach_files"`
 	// CreatedBy is the account that created the channel; absent for general
 	// and for a channel whose creator was deleted.
 	CreatedBy int64     `json:"createdBy,omitempty"`
@@ -304,7 +313,7 @@ type Member struct {
 	// Builtin marks the everyone group.
 	Builtin bool `json:"builtin"`
 	// Permissions is this row's set, not anyone's effective one.
-	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions"`
+	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions,attach_files"`
 	// AvatarUpdatedAt is an account's profile picture version in Unix
 	// milliseconds, absent when it has none.
 	AvatarUpdatedAt int64 `json:"avatarUpdatedAt,omitempty"`
@@ -556,6 +565,9 @@ type DeleteChannelParams struct {
 	EventBus  *eventbus.Bus
 	Principal accessutil.Principal
 	ChannelID int64
+	// DataDir is the Quark's data directory (storageutil.GetDataDir). Empty
+	// skips removing attachment files.
+	DataDir string
 }
 
 // DeleteChannelResult reports the deleted channel.
@@ -565,7 +577,9 @@ type DeleteChannelResult struct {
 
 // DeleteChannel deletes a channel and its members, for a holder of
 // manage_channel or an admin. general can't be deleted (ErrDefaultChannel).
-// Access errors are UpdateChannel's.
+// When DataDir is set, the channel's attachment files go with it. An empty
+// DataDir leaves them, which is what a caller that has none does. Access
+// errors are UpdateChannel's.
 func DeleteChannel(params DeleteChannelParams) (DeleteChannelResult, error) {
 	if params.Database == nil {
 		return DeleteChannelResult{}, accessutil.ErrNoDatabase
@@ -582,8 +596,24 @@ func DeleteChannel(params DeleteChannelParams) (DeleteChannelResult, error) {
 	if err != nil {
 		return DeleteChannelResult{}, err
 	}
+	var attachmentIDs []string
+	if params.DataDir != "" {
+		attachmentIDs, err = queries.ListChatAttachmentIDsByChannel(params.Ctx, params.ChannelID)
+		if err != nil {
+			return DeleteChannelResult{}, err
+		}
+	}
 	if _, err := queries.DeleteChatChannel(params.Ctx, params.ChannelID); err != nil {
 		return DeleteChannelResult{}, err
+	}
+	if params.DataDir != "" {
+		// The channel row is already gone. A file that will not delete is
+		// logged and the members still hear the channel went away.
+		if err := RemoveChannelAttachmentFiles(RemoveChannelAttachmentFilesParams{
+			DataDir: params.DataDir, ChannelID: params.ChannelID, IDs: attachmentIDs,
+		}); err != nil {
+			log.Printf("chat: remove attachments for channel %d: %v", params.ChannelID, err)
+		}
 	}
 	publish(params.EventBus, params.ChannelID, audience)
 	return DeleteChannelResult{ChannelID: params.ChannelID}, nil

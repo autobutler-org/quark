@@ -25,6 +25,7 @@ var chatBackupTables = []string{
 	"chat_reactions",
 	"chat_polls",
 	"chat_poll_answers",
+	"chat_attachments",
 }
 
 // chatBackup is the chat's ciphertext backup, chat_backup.db.

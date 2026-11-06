@@ -98,6 +98,9 @@ func seedChat(t *testing.T, d *sql.DB) {
 		INSERT INTO chat_poll_answers (message_id, user_id, key_version, ciphertext, created_at, updated_at)
 		VALUES (1, 3, 1, ?, ?, ?), (4, 1, 1, ?, ?, ?)`,
 		[]byte("answer-carol"), at, at, []byte("answer-alice"), at, at)
+	chatExec(t, d, `
+		INSERT INTO chat_attachments (id, channel_id, message_id, uploader_id, byte_size, created_at)
+		VALUES ('aa', 2, 1, 1, 12, ?), ('bb', 2, NULL, 2, 4, ?)`, at, at)
 }
 
 // dumpChat reads every row of every chat table, keyed by table.
