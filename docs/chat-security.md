@@ -311,6 +311,29 @@ All need `read_messages`: anyone else gets 404, delegated managers and admins in
 - `DELETE /api/v0/chat/messages/:id` is allowed for the author or a holder of `delete_messages`, while they hold
   `read_messages`.
 
+## Attachments
+
+A file attached to a message is encrypted on the sender's device under its own key, not under the channel key
+(#2425). The channel key encrypts the message, and that message carries the file key, so anyone who can read
+the message can open the file and a channel-key rotation leaves old files alone: their keys sit in messages
+that were already sealed under the old version.
+
+The file is split into 64 KiB chunks (the last one shorter). Each chunk is XChaCha20-Poly1305. Its 24-byte
+nonce is a 16-byte prefix, random per file, followed by the chunk index as 8 big-endian bytes, so the nonce
+is never stored beside the ciphertext. The additional data is:
+
+```text
+"quark-chat-file-v1" 0x00 || be64(chunkIndex) || be64(totalBytes)
+```
+
+`totalBytes` is the plaintext size. The bytes on disk are the chunks one after another, each ciphertext then
+its 16-byte tag, and nothing else. Opening rebuilds each nonce from the prefix and the position, and checks
+the result is exactly `totalBytes` long. A chunk swapped with another fails its tag. A file the Quark shortens
+ends before the last chunk, or fails the last tag, and is refused. An empty file is zero chunks.
+
+The prefix and the file key travel inside the message ciphertext. The Quark stores the sealed chunks and sees
+how many bytes they are. It does not see the name, the media type, the thumbnail or the key.
+
 ## Reactions
 
 A reaction is encrypted like a message (#2426): XChaCha20-Poly1305 under the channel's current key, a random
