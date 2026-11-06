@@ -3,10 +3,12 @@ import 'package:quark_icons/quark_icons.dart';
 
 import '../../core/quark_menu_button.dart';
 import '../../core/show_quark_menu.dart';
+import '../../models/chat_attachment_item.dart';
 import '../../models/chat_message_item.dart';
 import '../../models/chat_poll_answer.dart';
 import '../../models/quark_menu_entry.dart';
 import '../../theme/quark_tokens.dart';
+import '../chat_attachment_tile.dart';
 import '../chat_mentions.dart';
 import '../quark_poll_card.dart';
 import 'chat_emoji_picker.dart';
@@ -20,7 +22,9 @@ import 'chat_message_row/chat_reaction_picker.dart';
 ///
 /// Draws the body of a text message, a poll's `QuarkPollCard`, the "waiting
 /// for key" placeholder, or a deleted message's tombstone, according to
-/// [ChatMessageItem.kind]. A poll's card answers with [onAnswerPoll], closes
+/// [ChatMessageItem.kind]. A text message's [ChatMessageItem.attachments]
+/// are `ChatAttachmentTile`s under the body. An empty body with attachments
+/// shows only those. A poll's card answers with [onAnswerPoll], closes
 /// with [onClosePoll] and exports with [onExportPoll]. System
 /// lines are a `ChatSystemLine` instead. A text message's reactions sit under
 /// its body as a `ChatReactionBar`, and [onReact] adds a `ChatReactionPicker`
@@ -62,7 +66,8 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// `message_menu_react_<id>` and `message_delete_<id>` on the menu's entries,
 /// `message_menu_react_<id>_<emoji>` on each emoji "Add reaction" offers,
 /// `message_menu_react_<id>_more` on its "More emoji", and
-/// those of `ChatReactionBar`, `ChatReactionPicker` and `QuarkPollCard`.
+/// those of `ChatReactionBar`, `ChatReactionPicker`, `ChatAttachmentTile`
+/// and `QuarkPollCard`.
 class ChatMessageRow extends StatefulWidget {
   /// Creates the row for [message].
   const ChatMessageRow({
@@ -77,6 +82,9 @@ class ChatMessageRow extends StatefulWidget {
     this.onAnswerPoll,
     this.onClosePoll,
     this.onExportPoll,
+    this.onOpenAttachment,
+    this.onPlayAttachment,
+    this.thumbnailBuilder,
     this.mentionNames = const [],
     this.selfName,
     this.longPressOpensMenu = true,
@@ -122,6 +130,19 @@ class ChatMessageRow extends StatefulWidget {
 
   /// Exports a poll message's results. Null leaves its card's "Export" out.
   final VoidCallback? onExportPoll;
+
+  /// Called with an image or a file attached to this message when its tile
+  /// is tapped. Null leaves those tiles inert.
+  final ValueChanged<ChatAttachmentItem>? onOpenAttachment;
+
+  /// Called with a video attached to this message when its play control is
+  /// tapped. Null leaves the control disabled.
+  final ValueChanged<ChatAttachmentItem>? onPlayAttachment;
+
+  /// Builds a preview for an image attachment. Null, or a builder that
+  /// returns null, shows the file name on that tile.
+  final Widget? Function(BuildContext context, ChatAttachmentItem item)?
+  thumbnailBuilder;
 
   /// The names an `@mention` in the message can resolve to. Empty draws none.
   final List<String> mentionNames;
@@ -402,7 +423,37 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    body,
+                                    if (message.body.isNotEmpty ||
+                                        message.kind != ChatMessageKind.text ||
+                                        message.attachments.isEmpty)
+                                      body,
+                                    if (reacts)
+                                      for (final attachment
+                                          in message.attachments)
+                                        Padding(
+                                          padding: EdgeInsets.only(
+                                            top: tokens.spacingXs,
+                                          ),
+                                          child: ChatAttachmentTile(
+                                            item: attachment,
+                                            thumbnailBuilder:
+                                                widget.thumbnailBuilder,
+                                            onOpen:
+                                                widget.onOpenAttachment == null
+                                                ? null
+                                                : () =>
+                                                      widget.onOpenAttachment!(
+                                                        attachment,
+                                                      ),
+                                            onPlay:
+                                                widget.onPlayAttachment == null
+                                                ? null
+                                                : () =>
+                                                      widget.onPlayAttachment!(
+                                                        attachment,
+                                                      ),
+                                          ),
+                                        ),
                                     if (reacts && message.reactions.isNotEmpty)
                                       ChatReactionBar(
                                         messageId: message.id,

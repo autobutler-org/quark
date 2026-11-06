@@ -2231,6 +2231,60 @@ final List<GalleryEntry> registry = [
   ),
 
   GalleryEntry(
+    name: 'ChatAttachmentTile',
+    group: 'Chat',
+    build: (context, log) {
+      const files = [
+        ChatAttachmentItem(
+          id: 'cabin',
+          name: 'cabin.jpg',
+          mime: 'image/jpeg',
+          size: 240 * 1024,
+          kind: ChatAttachmentKind.image,
+        ),
+        ChatAttachmentItem(
+          id: 'scan',
+          name: 'scan.png',
+          mime: 'image/png',
+          size: 512,
+          kind: ChatAttachmentKind.image,
+        ),
+        ChatAttachmentItem(
+          id: 'clip',
+          name: 'walk.mp4',
+          mime: 'video/mp4',
+          size: 12 * 1024 * 1024,
+          kind: ChatAttachmentKind.video,
+        ),
+        ChatAttachmentItem(
+          id: 'note',
+          name: 'directions.pdf',
+          mime: 'application/pdf',
+          size: 1536,
+          kind: ChatAttachmentKind.file,
+        ),
+      ];
+      return Wrap(
+        spacing: 16,
+        runSpacing: 16,
+        children: [
+          for (final item in files)
+            ChatAttachmentTile(
+              item: item,
+              thumbnailBuilder: (context, item) => item.id == 'cabin'
+                  ? ColoredBox(
+                      color: QuarkTokens.of(context).primary,
+                      child: const SizedBox(width: 120, height: 80),
+                    )
+                  : null,
+              onOpen: () => log('ChatAttachmentTile.onOpen(${item.id})'),
+              onPlay: () => log('ChatAttachmentTile.onPlay(${item.id})'),
+            ),
+        ],
+      );
+    },
+  ),
+  GalleryEntry(
     name: 'QuarkChatLayout',
     group: 'Chat',
     build: (context, log) => ChatLayoutDemo(log: log),
@@ -2382,6 +2436,14 @@ final List<GalleryEntry> registry = [
             onClosePoll: (id) => log('QuarkMessageList.onClosePoll($id)'),
             onExportPoll: (id) => log('QuarkMessageList.onExportPoll($id)'),
             onEncryptionHelp: () => log('QuarkMessageList.onEncryptionHelp'),
+            onOpenAttachment: (id, item) =>
+                log('QuarkMessageList.onOpenAttachment($id, ${item.id})'),
+            onPlayAttachment: (id, item) =>
+                log('QuarkMessageList.onPlayAttachment($id, ${item.id})'),
+            thumbnailBuilder: (context, item) => ColoredBox(
+              color: QuarkTokens.of(context).primary,
+              child: const SizedBox(width: 120, height: 80),
+            ),
           ),
         ),
         SizedBox(
@@ -2573,6 +2635,7 @@ final List<GalleryEntry> registry = [
           permissions: ChatPermissionPreset.member.permissions,
           mentionNames: const ['ada', 'bob', 'eve'],
           onSend: (text) => log('QuarkMessageComposer.onSend($text)'),
+          onAttach: () => log('QuarkMessageComposer.onAttach'),
         ),
         const SizedBox(height: 16),
         QuarkMessageComposer(

@@ -514,4 +514,66 @@ void main() {
       expect(find.byKey(suggestions), findsNothing);
     });
   });
+
+  const attach = ValueKey('message_composer_attach');
+
+  testWidgets('the attach button fires onAttach', (tester) async {
+    var taps = 0;
+    await pumpAt(
+      tester,
+      QuarkMessageComposer(onSend: (_) {}, onAttach: () => taps++),
+    );
+
+    expect(find.byTooltip('Attach a file'), findsOneWidget);
+    await tester.tap(find.byKey(attach));
+    await tester.pump();
+    expect(taps, 1);
+  });
+
+  testBothViewports('the attach button fits beside the field', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkMessageComposer(
+        onSend: (_) {},
+        onAttach: () {},
+        permissions: ChatPermissionPreset.member.permissions,
+      ),
+      size: size,
+    );
+
+    expect(find.byKey(attach), findsOneWidget);
+    expect(find.byKey(field), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the attach button is absent without attachFiles', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkMessageComposer(
+        onSend: (_) {},
+        onAttach: () {},
+        permissions: const {
+          ChatPermission.readMessages,
+          ChatPermission.sendMessages,
+        },
+      ),
+    );
+
+    expect(find.byKey(attach), findsNothing);
+    expect(find.byKey(field), findsOneWidget);
+    expect(find.byKey(send), findsOneWidget);
+  });
+
+  testWidgets('the attach button is absent when onAttach is null', (
+    tester,
+  ) async {
+    await pumpAt(tester, QuarkMessageComposer(onSend: (_) {}));
+
+    expect(find.byKey(attach), findsNothing);
+  });
 }

@@ -168,6 +168,45 @@ class ChatReaction {
   );
 }
 
+/// One file from a decrypted attachment message.
+///
+/// The thumbnail, when the sender included one, is raw image bytes. [key]
+/// and [nonce] open the file; they stay in memory with the rest of the
+/// plaintext.
+class ChatOpenAttachment {
+  /// Copies the fields a decrypted attachment message carries for one file.
+  const ChatOpenAttachment({
+    required this.id,
+    required this.name,
+    required this.mime,
+    required this.size,
+    required this.key,
+    required this.nonce,
+    this.thumbnail,
+  });
+
+  /// 64 lowercase hex characters, chosen by the sender.
+  final String id;
+
+  /// File name from the sender.
+  final String name;
+
+  /// Media type from the sender.
+  final String mime;
+
+  /// Plaintext size in bytes.
+  final int size;
+
+  /// File key. 32 bytes.
+  final Uint8List key;
+
+  /// Nonce prefix. 16 bytes.
+  final Uint8List nonce;
+
+  /// Raw thumbnail bytes, or null when the sender omitted one.
+  final Uint8List? thumbnail;
+}
+
 /// A [ChatReaction] with its emoji, when the client could open it.
 final class ChatOpenReaction {
   /// Wraps [reaction] with what it decrypted to.
@@ -217,6 +256,7 @@ final class ChatTimelineMessage extends ChatTimelineEntry {
     required this.state,
     this.text,
     this.reactions = const [],
+    this.attachments = const [],
     this.question,
     this.pollAnswers = const [],
   });
@@ -232,6 +272,11 @@ final class ChatTimelineMessage extends ChatTimelineEntry {
 
   /// The message's reactions, each with its emoji when it opened.
   final List<ChatOpenReaction> reactions;
+
+  /// Files from an attachment message, in order, including any thumbnail
+  /// bytes. Empty when the plaintext was ordinary text. The file key stays
+  /// in memory with the caption and is not written down.
+  final List<ChatOpenAttachment> attachments;
 
   /// The poll's questions when the message is a poll whose [text] carries
   /// them (#3894); null for text, which a poll that won't parse is too.

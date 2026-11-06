@@ -59,6 +59,16 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
               onDelete: (id) => widget.log('QuarkMessageList.onDelete($id)'),
               onOpenLink: (uri) =>
                   widget.log('QuarkMessageList.onOpenLink($uri)'),
+              onOpenAttachment: (id, item) => widget.log(
+                'QuarkMessageList.onOpenAttachment($id, ${item.id})',
+              ),
+              onPlayAttachment: (id, item) => widget.log(
+                'QuarkMessageList.onPlayAttachment($id, ${item.id})',
+              ),
+              thumbnailBuilder: (context, item) => ColoredBox(
+                color: QuarkTokens.of(context).primary,
+                child: const SizedBox(width: 120, height: 80),
+              ),
               onAtBottomChanged: (atBottom) =>
                   widget.log('QuarkMessageList.onAtBottomChanged($atBottom)'),
             ),
@@ -67,6 +77,7 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
             hintText: 'Message #$_channelId',
             permissions: ChatPermissionPreset.moderator.permissions,
             onSend: (text) => widget.log('QuarkMessageComposer.onSend($text)'),
+            onAttach: () => widget.log('QuarkMessageComposer.onAttach'),
           ),
         ],
       ),

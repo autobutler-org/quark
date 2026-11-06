@@ -1,17 +1,21 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/chat_channel_share_target.dart';
 import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/controllers/chat_unread_controller.dart';
+import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/chat_attachment_playback.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/chat_config.dart';
 import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark/widgets/chat/chat_channel_header.dart';
 import 'package:quark/widgets/chat/chat_channel_not_found.dart';
 import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
@@ -64,6 +68,11 @@ import 'package:url_launcher/url_launcher.dart';
 /// `delete_messages`, deletes it after confirming. A holder of `add_reactions`
 /// reacts to a message, and taps a reaction of their own to take it back.
 ///
+/// The attach button on the composer sends one file from this device. The
+/// caption is whatever is in the field, and it may be empty. A photo opens
+/// in the image viewer. A video is decrypted to a temporary file and played.
+/// Nothing is saved to this device or to Quark files.
+///
 /// The poll button beside the composer opens a form for a poll (#3894). A
 /// holder of `add_reactions` answers one, and its author closes it. Each
 /// card is tallied on this device from the answers it can open. Anyone who
@@ -103,6 +112,13 @@ class _ChatPageState extends State<ChatPage>
   /// Whether this window is focused on the page. An unfocused window keeps
   /// the open channel's unread badge; a focused one does not (#3255).
   bool _windowFocused = true;
+
+  /// Bumped after an attachment send so the composer remounts empty. The
+  /// field does not follow [ChatController.draftFor] after it is created.
+  int _composerEpoch = 0;
+
+  /// Whether a file pick and upload is already running.
+  bool _attaching = false;
 
   @override
   void initState() {
@@ -199,6 +215,71 @@ class _ChatPageState extends State<ChatPage>
       onClose: () => Navigator.of(dialogContext).pop(),
     ),
   );
+
+  Future<void> _attachFile() async {
+    if (_attaching) return;
+    final channel = _controller.selectedChannel;
+    if (channel == null) return;
+    _attaching = true;
+    try {
+      final file = await FilePicker.pickFile();
+      if (!mounted || file == null) return;
+      final bytes = await file.readAsBytes();
+      final name = file.name.trim().isEmpty ? 'file' : file.name.trim();
+      final caption = _controller.draftFor(channel.id).trim();
+      final error = await _controller.sendAttachment(
+        name: name,
+        mime: _chatFileMime(name),
+        bytes: bytes,
+        caption: caption,
+      );
+      if (!mounted) return;
+      if (error != null) {
+        showMessage(context, Errors.message(error, 'send the file'));
+        return;
+      }
+      _controller.setDraft(channel.id, '');
+      setState(() => _composerEpoch++);
+    } finally {
+      _attaching = false;
+    }
+  }
+
+  Future<void> _openAttachment(ChatAttachmentItem item) async {
+    if (item.kind != ChatAttachmentKind.image) return;
+    try {
+      final bytes = await _controller.readAttachmentImage(item.id);
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ImageViewerPage(bytes: bytes, name: item.name),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showMessage(context, Errors.message(e, 'open the image'));
+    }
+  }
+
+  Future<void> _playAttachment(ChatAttachmentItem item) async {
+    if (!chatVideoPlaybackSupported) {
+      showMessage(
+        context,
+        Errors.message(UnsupportedError('no local file'), 'play the video'),
+      );
+      return;
+    }
+    try {
+      await playChatAttachmentVideo(
+        context: context,
+        name: item.name,
+        plaintext: _controller.openAttachmentPlaintext(item.id),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showMessage(context, Errors.message(e, 'play the video'));
+    }
+  }
 
   void _copyMessage(String id) {
     for (final message in _controller.messageItems) {
@@ -610,6 +691,19 @@ class _ChatPageState extends State<ChatPage>
                                   uri,
                                   mode: LaunchMode.externalApplication,
                                 ),
+                                onOpenAttachment: (_, item) =>
+                                    unawaited(_openAttachment(item)),
+                                onPlayAttachment: (_, item) =>
+                                    unawaited(_playAttachment(item)),
+                                thumbnailBuilder: (context, item) {
+                                  final bytes = c.thumbnailFor(item.id);
+                                  if (bytes == null) return null;
+                                  return Image.memory(
+                                    bytes,
+                                    fit: BoxFit.cover,
+                                    gaplessPlayback: true,
+                                  );
+                                },
                                 avatarBuilder: (context, userId) {
                                   final id = int.tryParse(userId) ?? 0;
                                   return UserAvatar(
@@ -660,7 +754,9 @@ class _ChatPageState extends State<ChatPage>
                               child: QuarkMessageComposer(
                                 // A new state per channel. The text is that
                                 // channel's draft, kept for this app session.
-                                key: ValueKey('chat_composer_${channel?.id}'),
+                                key: ValueKey(
+                                  'chat_composer_${channel?.id}_$_composerEpoch',
+                                ),
                                 initialText: channel == null
                                     ? ''
                                     : c.draftFor(channel.id),
@@ -678,6 +774,9 @@ class _ChatPageState extends State<ChatPage>
                                 maxLength: ChatConfig.maxMessageLength,
                                 mentionNames: c.mentionNames,
                                 onSend: c.send,
+                                onAttach: channel == null
+                                    ? null
+                                    : () => unawaited(_attachFile()),
                               ),
                             ),
                           ],
@@ -715,4 +814,28 @@ class _ChatPageState extends State<ChatPage>
       },
     );
   }
+}
+
+/// A media type for [name], enough for the receiver to draw the tile.
+///
+/// Known image and video extensions keep a specific type. Anything else
+/// follows [fileKindForName], so a photo the table knows is still an image.
+String _chatFileMime(String name) {
+  return switch (fileExtension(name)) {
+    '.jpg' || '.jpeg' => 'image/jpeg',
+    '.png' => 'image/png',
+    '.gif' => 'image/gif',
+    '.webp' => 'image/webp',
+    '.heic' || '.heif' => 'image/heic',
+    '.mp4' || '.m4v' => 'video/mp4',
+    '.mov' => 'video/quicktime',
+    '.webm' => 'video/webm',
+    '.pdf' => 'application/pdf',
+    '.txt' => 'text/plain',
+    _ => switch (fileKindForName(name)) {
+      FileKind.image => 'image/jpeg',
+      FileKind.video => 'video/mp4',
+      _ => 'application/octet-stream',
+    },
+  };
 }

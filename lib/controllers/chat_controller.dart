@@ -798,6 +798,54 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     await _deliver(pending);
   }
 
+  /// Sends one file to the open channel, with [caption] as its text.
+  ///
+  /// [caption] may be empty. A blank text message is still refused by the
+  /// composer; this path is the file, not that check. Null on success,
+  /// otherwise the failure, for `Errors.message`.
+  Future<Object?> sendAttachment({
+    required String name,
+    required String mime,
+    required Uint8List bytes,
+    String caption = '',
+  }) async {
+    final messages = _messages;
+    if (messages == null) return StateError('no channel');
+    try {
+      await messages.sendAttachment(
+        name: name,
+        mime: mime,
+        bytes: bytes,
+        caption: caption,
+      );
+      return null;
+    } catch (e) {
+      return e;
+    }
+  }
+
+  /// Thumbnail bytes for [attachmentId] on the open channel, or null.
+  Uint8List? thumbnailFor(String attachmentId) =>
+      _messages?.thumbnailFor(attachmentId);
+
+  /// Decrypts image [attachmentId] into memory, refusing one over
+  /// [ChatMessagesController.maxInlineImageBytes] before downloading it.
+  Future<Uint8List> readAttachmentImage(String attachmentId) {
+    final messages = _messages;
+    if (messages == null) throw StateError('no channel');
+    return messages.readImageAttachment(attachmentId);
+  }
+
+  /// Decrypts [attachmentId] one chunk at a time. The caller writes the
+  /// chunks out; this does not collect them.
+  Stream<List<int>> openAttachmentPlaintext(String attachmentId) {
+    final messages = _messages;
+    if (messages == null) {
+      return Stream<List<int>>.error(StateError('no channel'));
+    }
+    return messages.openAttachmentPlaintext(attachmentId);
+  }
+
   /// Sends failed message [pendingId] again.
   Future<void> retry(String pendingId) async {
     final pending = _pending.where((p) => p.id == pendingId).firstOrNull;
@@ -1130,6 +1178,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       :final text,
       :final reactions,
       :final question,
+      :final attachments,
     ) =>
       ChatMessageItem(
         id: '${message.id}',
@@ -1150,6 +1199,18 @@ class ChatController extends ChangeNotifier with SafeNotifier {
         },
         isUnverified: state == ChatMessageState.unreadable,
         reactions: reactionItems(reactions, me),
+        attachments: state == ChatMessageState.ready
+            ? [
+                for (final file in attachments)
+                  ChatAttachmentItem(
+                    id: file.id,
+                    name: file.name,
+                    mime: file.mime,
+                    size: file.size,
+                    kind: _attachmentKind(file.mime),
+                  ),
+              ]
+            : const [],
         poll: question == null
             ? null
             : ChatMessagesController.pollItemFor(entry, me: me, now: now),
@@ -1189,6 +1250,13 @@ class ChatController extends ChangeNotifier with SafeNotifier {
           reactedByMe: mine.contains(emoji),
         ),
     ];
+  }
+
+  static ChatAttachmentKind _attachmentKind(String mime) {
+    final type = mime.split(';').first.trim().toLowerCase();
+    if (type.startsWith('image/')) return ChatAttachmentKind.image;
+    if (type.startsWith('video/')) return ChatAttachmentKind.video;
+    return ChatAttachmentKind.file;
   }
 
   /// The sentence a system line reads for [event]: who was given what, who
