@@ -809,52 +809,47 @@ class _ChatPageState extends State<ChatPage>
                       // rounded display corners and the home indicator
                       // (#2788).
                       QuarkEdgeInset(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            vertical: QuarkTokens.of(context).spacingSm,
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              if (c.canPostPoll)
-                                QuarkBarIconButton(
-                                  key: const ValueKey('chat_new_poll'),
-                                  icon: QuarkIcons.poll,
-                                  tooltip: 'New poll',
-                                  onPressed: () =>
-                                      showChatPollEditor(context, chat: c),
-                                ),
-                              Expanded(
-                                child: QuarkMessageComposer(
-                                  // A new state per channel. The text is that
-                                  // channel's draft, kept for this app session.
-                                  key: ValueKey(
-                                    'chat_composer_${channel?.id}_$_composerEpoch',
-                                  ),
-                                  initialText: channel == null
-                                      ? ''
-                                      : c.draftFor(channel.id),
-                                  onChanged: channel == null
-                                      ? null
-                                      : (text) => c.setDraft(channel.id, text),
-                                  hintText: channel == null
-                                      ? 'Message'
-                                      : 'Message ${c.titleOf(channel)}',
-                                  permissions: channel == null
-                                      ? null
-                                      : c.selectedPermissions,
-                                  isWaitingForKey: c.isWaitingForKey,
-                                  disabledReason: c.composerDisabledReason,
-                                  maxLength: ChatConfig.maxMessageLength,
-                                  mentionNames: c.mentionNames,
-                                  onSend: c.send,
-                                  onAttach: channel == null
-                                      ? null
-                                      : () => unawaited(_attachFile()),
-                                ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (c.canPostPoll)
+                              QuarkBarIconButton(
+                                key: const ValueKey('chat_new_poll'),
+                                icon: QuarkIcons.poll,
+                                tooltip: 'New poll',
+                                onPressed: () =>
+                                    showChatPollEditor(context, chat: c),
                               ),
-                            ],
-                          ),
+                            Expanded(
+                              child: QuarkMessageComposer(
+                                // A new state per channel. The text is that
+                                // channel's draft, kept for this app session.
+                                key: ValueKey(
+                                  'chat_composer_${channel?.id}_$_composerEpoch',
+                                ),
+                                initialText: channel == null
+                                    ? ''
+                                    : c.draftFor(channel.id),
+                                onChanged: channel == null
+                                    ? null
+                                    : (text) => c.setDraft(channel.id, text),
+                                hintText: channel == null
+                                    ? 'Message'
+                                    : 'Message ${c.titleOf(channel)}',
+                                permissions: channel == null
+                                    ? null
+                                    : c.selectedPermissions,
+                                isWaitingForKey: c.isWaitingForKey,
+                                disabledReason: c.composerDisabledReason,
+                                maxLength: ChatConfig.maxMessageLength,
+                                mentionNames: c.mentionNames,
+                                onSend: c.send,
+                                onAttach: channel == null
+                                    ? null
+                                    : () => unawaited(_attachFile()),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
