@@ -97,6 +97,7 @@ jobs:
 
       - name: Upload images to Azure Blob Storage
         env:
+          AZURE_STORAGE_ACCOUNT: quarkrelease
           AZURE_STORAGE_SAS_TOKEN: ${{ secrets.AZURE_STORAGE_SAS_TOKEN }}
         run: |
           az storage blob upload-batch \

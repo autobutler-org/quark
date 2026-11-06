@@ -9,6 +9,9 @@ defaults:
     shell: bash
 
 env:
+  # GoReleaser 2.20 (gocloud 0.47) reads the account from this variable when a
+  # SAS token is set, and ignores storage_account on the bucket URL.
+  AZURE_STORAGE_ACCOUNT: quarkrelease
   AZURE_STORAGE_SAS_TOKEN: ${{ secrets.AZURE_STORAGE_SAS_TOKEN }}
   WORKING_DIR: ${{ github.workspace }}
 
