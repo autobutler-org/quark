@@ -160,8 +160,16 @@ if [[ "${dart_count}" -gt 0 ]]; then
             dart_srcs[${i}]="${work}/${dart_paths[${i}]}"
             i=$((i + 1))
         done
+        # The shadow has no package config, so dart format would use the
+        # SDK's newest language version and its style, not the repo's. Pin
+        # it to the lower bound of pubspec.yaml's `sdk:` constraint.
+        lang="$(sed -nE 's/^  sdk: [^0-9]*([0-9]+\.[0-9]+).*/\1/p' "${QUARK_ROOT}/pubspec.yaml" | head -1)"
+        lang_flag=()
+        if [[ -n "${lang}" ]]; then
+            lang_flag=(--language-version="${lang}")
+        fi
         dart_status=0
-        dart_out="$(dart format --output=none --set-exit-if-changed "${dart_srcs[@]}" 2>&1)" || dart_status=$?
+        dart_out="$(dart format ${lang_flag[@]+"${lang_flag[@]}"} --output=none --set-exit-if-changed "${dart_srcs[@]}" 2>&1)" || dart_status=$?
         if [[ "${dart_status}" -ne 0 ]]; then
             echo "check/fast: dart format would change staged Dart files:"
             # Drop the shadow directory so the line names the repo path.

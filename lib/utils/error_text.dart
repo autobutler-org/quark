@@ -92,6 +92,13 @@ abstract final class Errors {
   /// The fallback: what the app was doing, and that it didn't work.
   static String couldNot(String action) => "Couldn't $action.";
 
+  /// A Move/Rename destination listing failed. Files was listed a moment
+  /// before, so a dropped or timed-out request says what failed rather than
+  /// that the Quark is unreachable (#3995).
+  static String destinations(Object error) => isQuarkUnreachableError(error)
+      ? couldNot('load destinations')
+      : message(error, 'load destinations');
+
   /// The zero-config connect form's own failure: an address that never
   /// answered is a typo as often as it is a sleeping Quark.
   static const String couldNotConnect =

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -8,7 +9,9 @@ import 'package:quark/controllers/file_browser_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/tap_target_guidelines.dart' show setViewport;
 
@@ -42,6 +45,12 @@ void main() {
 
   late List<Map<String, Object?>> devices;
   late List<Map<String, dynamic>> moves;
+
+  /// How many times the dialog asked for device status (#3995).
+  late int statusCalls;
+
+  /// Answers `GET /api/v0/files` in place of [listing] when set.
+  late Future<http.Response> Function(http.BaseRequest request)? files;
 
   /// The folders on each drive, by serial. A listing is answered from this
   /// the way the Quark answers it: no `serial` is every drive merged, with a
@@ -83,6 +92,8 @@ void main() {
   setUp(() {
     devices = [device('Built-in'), device('Stick', serial: 'USB1')];
     moves = [];
+    statusCalls = 0;
+    files = null;
     folders = {
       '': {'Docs'},
       'USB1': {'Docs'},
@@ -90,13 +101,16 @@ void main() {
     StorageService.invalidateDeviceCache();
     sharedHttpClientFactory = () => MockClient((request) async {
       if (request.url.path.endsWith('/storage/devices/status')) {
+        statusCalls++;
         return http.Response(jsonEncode({'devices': devices}), 200);
       }
       if (request.method == 'PUT') {
         moves.add(jsonDecode(request.body) as Map<String, dynamic>);
         return http.Response('{}', 202);
       }
-      if (request.url.path == '/api/v0/files') return listing(request.url);
+      if (request.url.path == '/api/v0/files') {
+        return files?.call(request) ?? listing(request.url);
+      }
       return http.Response('[]', 200);
     });
   });
@@ -111,8 +125,9 @@ void main() {
   /// the dialog closes.
   Future<Future<FileMenuActionOutcome?>> open(
     WidgetTester tester,
-    FileNode moved,
-  ) async {
+    FileNode moved, {
+    bool settle = true,
+  }) async {
     setViewport(tester, const Size(1280, 1600));
     late Future<FileMenuActionOutcome?> outcome;
     await tester.pumpWidget(
@@ -124,6 +139,7 @@ void main() {
                   node: moved,
                   action: FileMenuAction.moveRename,
                   context: context,
+                  devices: [for (final d in devices) StorageDevice.fromJson(d)],
                 ),
             child: const Text('open'),
           ),
@@ -131,7 +147,14 @@ void main() {
       ),
     );
     await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      // A listing that never answers keeps the loader spinning, so this
+      // pumps past the dialog's entrance rather than settling.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+    }
     expect(find.text('Move / Rename'), findsOneWidget);
     return outcome;
   }
@@ -306,5 +329,47 @@ void main() {
         'oldDeviceSerial': 'USB1',
       },
     ]);
+  });
+
+  group('#3995', () {
+    testWidgets('the dialog opens from the devices Files holds', (
+      tester,
+    ) async {
+      await open(tester, node('Docs/a.txt'));
+
+      expect(find.byType(DropdownButtonFormField<StorageDevice>), findsOne);
+      expect(statusCalls, 0);
+    });
+
+    testWidgets('a failed listing says the destinations did not load', (
+      tester,
+    ) async {
+      files = (_) async => throw http.ClientException('connection reset');
+      await open(tester, node('Docs/a.txt'));
+
+      expect(find.text(Errors.couldNot('load destinations')), findsOneWidget);
+      expect(find.text(quarkDisconnectedInline), findsNothing);
+    });
+
+    testWidgets('closing the dialog cancels its listing', (tester) async {
+      var aborted = false;
+      // The plain MockClient copies each request and drops its abort
+      // trigger; the streaming one hands the handler the request as sent.
+      resetSharedHttpClient();
+      sharedHttpClientFactory = () => MockClient.streaming((request, _) async {
+        final trigger = request is http.Abortable ? request.abortTrigger : null;
+        await (trigger ?? Completer<void>().future);
+        aborted = true;
+        throw http.RequestAbortedException(request.url);
+      });
+      final outcome = await open(tester, node('Docs/a.txt'), settle: false);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(await outcome, isNull);
+      expect(aborted, isTrue);
+    });
   });
 }

@@ -188,6 +188,7 @@ class FilesService with AuthenticatedService {
   static Future<List<FileNode>> getFiles(
     String path, {
     List<String>? serials,
+    Future<void>? abortTrigger,
   }) async {
     final rootDir = toRootDir(path);
     final serialValues = _serialFilter(serials);
@@ -205,7 +206,10 @@ class FilesService with AuthenticatedService {
         ? endpointUri
         : endpointUri.replace(query: querySegments.join('&'));
 
-    final response = await instance.authenticatedGet(uri);
+    final response = await instance.authenticatedGet(
+      uri,
+      abortTrigger: abortTrigger,
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw FilesRequestException(
         statusCode: response.statusCode,

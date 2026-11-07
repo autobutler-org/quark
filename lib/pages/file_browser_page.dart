@@ -1282,6 +1282,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         node: node,
         action: action,
         context: context,
+        devices: _allDevices,
       );
 
       if (!mounted || outcome == null) {
