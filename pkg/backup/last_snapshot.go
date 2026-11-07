@@ -24,6 +24,12 @@ import (
 // the database every instance reads the same answer (#3083).
 const lastSnapshotKey = "lastSnapshotBackup"
 
+// driveSnapshotKeyPrefix, followed by a drive's serial, is the settings row
+// that holds when a snapshot onto that drive last completed, in the same form
+// as lastSnapshotKey. Protection status reads it so a drive keeps counting
+// after its job row is pruned (#4011). The internal drive's serial is empty.
+const driveSnapshotKeyPrefix = lastSnapshotKey + ":"
+
 // lastSnapshotFilename is the file in the Quark's data directory that held
 // the same time, bare, before it moved into the database.
 const lastSnapshotFilename = "last-snapshot-backup"
@@ -43,7 +49,27 @@ func RecordSnapshot(ctx context.Context, queries db.Querier, at time.Time) error
 // backed up until its next snapshot. If that matters, fall back to the
 // manifest's mtime on the connected snapshot-backup devices.
 func LastSnapshot(ctx context.Context, queries db.Querier) (time.Time, error) {
-	value, err := queries.GetSetting(ctx, lastSnapshotKey)
+	return readSnapshotTime(ctx, queries, lastSnapshotKey)
+}
+
+// RecordDriveSnapshot records that a snapshot backup onto the drive with the
+// given serial completed at the given time.
+func RecordDriveSnapshot(ctx context.Context, queries db.Querier, serial string, at time.Time) error {
+	if err := queries.SetSetting(ctx, db.SetSettingParams{Key: driveSnapshotKeyPrefix + serial, Value: lastSnapshotValue(at)}); err != nil {
+		return fmt.Errorf("record snapshot backup of drive %q: %w", serial, err)
+	}
+	return nil
+}
+
+// LastDriveSnapshot returns when a snapshot backup onto the drive with the
+// given serial last completed, or the zero time when none is on record.
+func LastDriveSnapshot(ctx context.Context, queries db.Querier, serial string) (time.Time, error) {
+	return readSnapshotTime(ctx, queries, driveSnapshotKeyPrefix+serial)
+}
+
+// readSnapshotTime reads the completion time a settings row holds.
+func readSnapshotTime(ctx context.Context, queries db.Querier, key string) (time.Time, error) {
+	value, err := queries.GetSetting(ctx, key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return time.Time{}, nil
 	}

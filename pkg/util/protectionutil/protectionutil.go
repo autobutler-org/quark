@@ -78,8 +78,8 @@ type Device struct {
 	ReplaceSoon bool
 }
 
-// Completion is one completed snapshot-backup job. Failed and unfinished jobs
-// are not completions.
+// Completion is one completed snapshot-backup job, or a drive's own record of
+// its last completed snapshot. Failed and unfinished jobs are not completions.
 type Completion struct {
 	Serial      string
 	CompletedAt time.Time
@@ -94,7 +94,7 @@ type StatusParams struct {
 	// Devices are the detected devices, internal included. A role whose serial
 	// is missing here is an unplugged drive: it has no path and stands alone.
 	Devices []Device
-	// Completions are completed snapshot-backup jobs. The newest time per
+	// Completions are completed snapshot-backup jobs and per-drive records. The newest time per
 	// serial is the one that counts.
 	Completions []Completion
 }

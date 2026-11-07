@@ -68,6 +68,18 @@ func protectionStatus(ctx context.Context, deps deputil.Dependencies) (protectio
 			Serial: role.DeviceSerial,
 			Role:   role.Role,
 		})
+		// The drive's own record outlives its pruned job rows; the newest of
+		// the two is the one that counts.
+		at, err := backup.LastDriveSnapshot(ctx, deps.Database().Queries, role.DeviceSerial)
+		if err != nil {
+			return protectionutil.StatusResult{}, err
+		}
+		if !at.IsZero() {
+			params.Completions = append(params.Completions, protectionutil.Completion{
+				Serial:      role.DeviceSerial,
+				CompletedAt: at,
+			})
+		}
 	}
 	for _, root := range roots {
 		health := storageutil.CachedDriveHealth(ctx, root.DevicePath)
