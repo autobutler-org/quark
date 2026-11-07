@@ -95,6 +95,9 @@ func TestSnapshotBackup_RecordsCompletion(t *testing.T) {
 	if got, want := lastSnapshot(t, queries), job.CompletedAt.Truncate(time.Second); !got.Equal(want) {
 		t.Errorf("LastSnapshot = %v, want the job's completion time %v", got, want)
 	}
+	if got, want := lastDriveSnapshot(t, queries, "TARGET"), job.CompletedAt.Truncate(time.Second); !got.Equal(want) {
+		t.Errorf("LastDriveSnapshot(TARGET) = %v, want the job's completion time %v", got, want)
+	}
 }
 
 func TestSnapshotBackup_FailedBackupRecordsNothing(t *testing.T) {
@@ -115,6 +118,43 @@ func TestSnapshotBackup_FailedBackupRecordsNothing(t *testing.T) {
 
 	if got := lastSnapshot(t, queries); !got.IsZero() {
 		t.Errorf("LastSnapshot = %v after a failed backup, want the zero time", got)
+	}
+	if got := lastDriveSnapshot(t, queries, "TARGET"); !got.IsZero() {
+		t.Errorf("LastDriveSnapshot(TARGET) = %v after a failed backup, want the zero time", got)
+	}
+}
+
+// lastDriveSnapshot is LastDriveSnapshot, failing the test on an error.
+func lastDriveSnapshot(t *testing.T, queries db.Querier, serial string) time.Time {
+	t.Helper()
+	at, err := LastDriveSnapshot(context.Background(), queries, serial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return at
+}
+
+// TestRecordDriveSnapshot_KeepsEachDriveApart checks each drive reads back its
+// own time, and a drive with no record reads the zero time.
+func TestRecordDriveSnapshot_KeepsEachDriveApart(t *testing.T) {
+	queries := dbtest.NewDB(t).Queries
+	ctx := context.Background()
+	first := time.Date(2026, 10, 9, 12, 30, 0, 0, time.UTC)
+	second := first.Add(48 * time.Hour)
+	if err := RecordDriveSnapshot(ctx, queries, "USB-1", first); err != nil {
+		t.Fatal(err)
+	}
+	if err := RecordDriveSnapshot(ctx, queries, "USB-2", second); err != nil {
+		t.Fatal(err)
+	}
+	if got := lastDriveSnapshot(t, queries, "USB-1"); !got.Equal(first) {
+		t.Errorf("LastDriveSnapshot(USB-1) = %v, want %v", got, first)
+	}
+	if got := lastDriveSnapshot(t, queries, "USB-2"); !got.Equal(second) {
+		t.Errorf("LastDriveSnapshot(USB-2) = %v, want %v", got, second)
+	}
+	if got := lastDriveSnapshot(t, queries, "USB-3"); !got.IsZero() {
+		t.Errorf("LastDriveSnapshot(USB-3) = %v, want the zero time", got)
 	}
 }
 

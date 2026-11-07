@@ -165,7 +165,10 @@ func SnapshotBackup(
 	// Recorded before the event, so a client that asks again on it sees the
 	// new time. The backup itself succeeded, so a failed record is only logged.
 	if params.Queries != nil {
-		if err := RecordSnapshot(ctx, params.Queries, completedAt); err != nil {
+		if err := errors.Join(
+			RecordSnapshot(ctx, params.Queries, completedAt),
+			RecordDriveSnapshot(ctx, params.Queries, params.TargetDeviceSerial, completedAt),
+		); err != nil {
 			log.Printf("snapshot backup: %v", err)
 		}
 	}

@@ -186,6 +186,8 @@ flowchart LR
    job's row is pruned with the rest of the job history and the manifest sits on a drive that may be unplugged, so
    this row is what still knows. A failed backup writes nothing. A Quark that kept the time in the file
    `last-snapshot-backup` in its data directory has it imported on the next start (`backup.ImportLastSnapshot`).
+   It also writes the time to `lastSnapshotBackup:<serial>` for the target drive (`backup.RecordDriveSnapshot`),
+   which protection status reads (#4011).
 2. `GET /api/v0/notifications` (`v0_notifications`) reads the caller's own settings and calls
    `notificationutil.List`, which reads the record (`backup.LastSnapshot`). A caller who is not an admin gets an
    empty list. An admin gets `backup_due` when there is no record, `backup_stale` when the record is at least
@@ -221,8 +223,9 @@ counts, even when it holds the snapshot-backup role. A backup onto that drive st
 | protected    | two or more such drives                                                                                             |
 
 The 30 days are `protectionutil.StaleAfter`, the same window as `backup_stale`. A drive counts only when its role
-is snapshot-backup, its health verdict is not Replace soon, and it has a completed snapshot-backup job inside
-that window. A failed job, a job that has not completed, a completion older than the window, and a Replace soon
+is snapshot-backup, its health verdict is not Replace soon, and it has a completed snapshot-backup job, or its
+`lastSnapshotBackup:<serial>` record, inside that window. The record keeps a drive counted after its job row is
+pruned. A failed job, a job that has not completed, a completion older than the window, and a Replace soon
 drive do not count. Watch and Unknown still follow the 30-day rule. Quark does not store the result of a verify,
 so a completed job is the success signal.
 

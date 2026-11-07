@@ -147,6 +147,48 @@ func TestGetProtectionStatus_CompletedBackupCounts(t *testing.T) {
 	}
 }
 
+// TestGetProtectionStatus_DriveRecordOutlivesJobRow checks a drive whose
+// completed job row has been pruned still counts on its own record while the
+// record is inside StaleAfter, and stops counting once it is not.
+func TestGetProtectionStatus_DriveRecordOutlivesJobRow(t *testing.T) {
+	database := dbtest.NewDB(t)
+	ctx := context.Background()
+	const serial = "USB-1"
+	if err := database.Queries.UpsertDeviceRole(ctx, db.UpsertDeviceRoleParams{
+		DeviceSerial: serial,
+		Role:         "snapshot-backup",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	engine := protectionEngine(t, database, []storageutil.Device{{
+		Name:       "Backup",
+		DevicePath: "/dev/sdb1",
+		MountPoint: t.TempDir(),
+		UsbInfo:    serialUsb{serial: serial},
+	}})
+
+	recent := time.Now().Add(-10 * 24 * time.Hour).Truncate(time.Second)
+	if err := backup.RecordDriveSnapshot(ctx, database.Queries, serial, recent); err != nil {
+		t.Fatal(err)
+	}
+	got := getProtection(t, engine)
+	if got.Level != protectionutil.LevelBasic || len(got.Drives) != 1 || !got.Drives[0].Counts {
+		t.Fatalf("with only a drive record = %+v, want basic and counting", got)
+	}
+	if got.Drives[0].LastBackedUp == nil || !got.Drives[0].LastBackedUp.Equal(recent) {
+		t.Fatalf("last backed up = %v, want %v", got.Drives[0].LastBackedUp, recent)
+	}
+
+	old := time.Now().Add(-protectionutil.StaleAfter - time.Hour)
+	if err := backup.RecordDriveSnapshot(ctx, database.Queries, serial, old); err != nil {
+		t.Fatal(err)
+	}
+	got = getProtection(t, engine)
+	if len(got.Drives) != 1 || got.Drives[0].Counts || got.Drives[0].Reason != protectionutil.ReasonStale {
+		t.Fatalf("with a stale drive record = %+v, want not counting as stale", got)
+	}
+}
+
 func TestGetProtectionStatus_TwoPartitionsCountOnce(t *testing.T) {
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
