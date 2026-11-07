@@ -93,7 +93,12 @@ func TestVerifySnapshotBackup_UnattachedDeviceIsNotFound(t *testing.T) {
 // A drive with no manifest has nothing to verify against: 400, as before.
 func TestVerifySnapshotBackup_NoManifestIsBadRequest(t *testing.T) {
 	drive := vfs.NewMemVFS(vfs.FilesNamespace(backupSerial))
-	if w := verify(newVerifyEngine(t, drive), backupSerial); w.Code != http.StatusBadRequest {
+	w := verify(newVerifyEngine(t, drive), backupSerial)
+	if w.Code != http.StatusBadRequest {
 		t.Errorf("verify without a manifest = %d %s, want 400", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "vfs: not found") || !strings.Contains(body, "Back Up") {
+		t.Errorf("verify without a manifest body = %s, want it to name Back Up and not the vfs error", body)
 	}
 }
