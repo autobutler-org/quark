@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -15,6 +16,11 @@ import (
 )
 
 const manifestFilename = "backup_manifest.json"
+
+// ErrNoManifest is what verifying a drive with no finished backup returns: a
+// manifest is written only when a snapshot completes, so there is nothing to
+// check yet.
+var ErrNoManifest = errors.New("nothing to verify yet: run Back Up on this drive first")
 
 // GenerateManifest hashes every file in fsys but the manifest itself.
 func GenerateManifest(ctx context.Context, fsys vfs.VFS) (*Manifest, error) {
@@ -90,6 +96,9 @@ func VerifyBackup(params VerifyBackupParams) (*VerifyResult, error) {
 // verifyTree checks the backup in fsys against its manifest.
 func verifyTree(ctx context.Context, fsys vfs.VFS, full bool) (*VerifyResult, error) {
 	m, err := ReadManifest(ctx, fsys)
+	if errors.Is(err, vfs.ErrNotFound) {
+		return nil, ErrNoManifest
+	}
 	if err != nil {
 		return nil, fmt.Errorf("read manifest: %w", err)
 	}

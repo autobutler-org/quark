@@ -49,6 +49,8 @@ func verifySnapshotBackup(c *gin.Context) *serverutil.Response {
 	switch {
 	case errors.As(err, &notFound):
 		return serverutil.NotFound(err)
+	case errors.Is(err, backup.ErrNoManifest):
+		return serverutil.BadRequest(err)
 	case err != nil:
 		return serverutil.BadRequest(fmt.Errorf("verify failed: %w", err))
 	}
