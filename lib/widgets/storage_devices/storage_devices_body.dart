@@ -5,6 +5,7 @@ import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/storage_devices/backup_progress_card.dart';
 import 'package:quark/widgets/storage_devices/device_card.dart';
+import 'package:quark/widgets/storage_devices/restore_files_flow.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Body of the devices page: no host, error, spinner, or the device list with
@@ -13,6 +14,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// [header] is drawn above that list. [protectionBadge] is drawn on the first
 /// snapshot-backup drive. [onRestore], like backup and verify, is drawn only
 /// on a drive with the snapshot-backup role, and only when the page passes it.
+/// **Restore files** shows wherever [onRestore] does: it is admin-only too,
+/// and [onRestoreFiles] defaults to [restoreFilesFrom].
 class StorageDevicesBody extends StatelessWidget {
   const StorageDevicesBody({
     required this.devices,
@@ -28,6 +31,7 @@ class StorageDevicesBody extends StatelessWidget {
     this.onBackup,
     this.onVerify,
     this.onRestore,
+    this.onRestoreFiles,
     this.onEject,
     this.ejecting = const {},
     this.header,
@@ -60,6 +64,10 @@ class StorageDevicesBody extends StatelessWidget {
   /// Restores vaults from a snapshot-backup drive. Null draws no button, and
   /// a drive with any other role draws none either.
   final ValueChanged<StorageDevice>? onRestore;
+
+  /// Restores a snapshot-backup drive's files. Used only where [onRestore]
+  /// is set; null there means [restoreFilesFrom].
+  final ValueChanged<StorageDevice>? onRestoreFiles;
   final ValueChanged<StorageDevice>? onEject;
 
   /// Serials whose eject is in progress.
@@ -114,6 +122,8 @@ class StorageDevicesBody extends StatelessWidget {
     final onBackup = this.onBackup;
     final onVerify = this.onVerify;
     final onRestore = this.onRestore;
+    final onRestoreFiles =
+        this.onRestoreFiles ?? (device) => restoreFilesFrom(context, device);
     final onEject = this.onEject;
     final protectionBadge = this.protectionBadge;
     var badgePlaced = false;
@@ -140,6 +150,9 @@ class StorageDevicesBody extends StatelessWidget {
               : null,
           onRestore: onRestore != null && isBackupDrive
               ? () => onRestore(device)
+              : null,
+          onRestoreFiles: onRestore != null && isBackupDrive
+              ? () => onRestoreFiles(device)
               : null,
           onEject: onEject != null && isUsb ? () => onEject(device) : null,
           isEjecting: ejecting.contains(device.serial),
