@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/storage_devices/role_dialog.dart';
 
-/// #3194: the roles Set Role offers. The Quark refuses snapshot-backup for
-/// built-in storage, so the dialog does not offer it there.
+/// #3194, #3999: the roles Set Role offers. Built-in storage can be the
+/// snapshot backup, so an external drive's files have somewhere to land.
 void main() {
   Future<List<String?>> pumpDialog(
     WidgetTester tester, {
@@ -42,17 +42,17 @@ void main() {
     expect(find.textContaining('copied onto it'), findsOneWidget);
   });
 
-  testWidgets('built-in storage is offered default storage and unassigned, '
-      'not snapshot backup', (tester) async {
+  testWidgets('built-in storage can be the snapshot backup', (tester) async {
     final popped = await pumpDialog(tester, isInternal: true);
 
-    expect(find.text('Snapshot Backup'), findsNothing);
+    expect(find.text('Snapshot Backup'), findsOneWidget);
+    expect(find.text('Other drives are backed up onto it'), findsOneWidget);
     expect(find.text('Unassigned'), findsOneWidget);
-    expect(find.textContaining('copied onto it'), findsNothing);
+    expect(find.textContaining('also copied onto it'), findsNothing);
 
-    await tester.tap(find.text('Default Storage'));
+    await tester.tap(find.text('Snapshot Backup'));
     await tester.pumpAndSettle();
 
-    expect(popped, ['default-storage']);
+    expect(popped, ['snapshot-backup']);
   });
 }

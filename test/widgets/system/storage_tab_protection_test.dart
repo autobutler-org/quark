@@ -65,11 +65,14 @@ void main() {
     sharedHttpClientFactory = buildLocalTrustHttpClient;
   });
 
-  void serve(Map<String, Object?> protection) {
+  void serve(
+    Map<String, Object?> protection, {
+    Map<String, Object?>? devicesBody,
+  }) {
     sharedHttpClientFactory = () => MockClient((request) async {
       final path = request.url.path;
       if (path == '/api/v0/storage/devices/status') {
-        return http.Response(jsonEncode(devices), 200);
+        return http.Response(jsonEncode(devicesBody ?? devices), 200);
       }
       if (path == '/api/v0/storage/protection') {
         return http.Response(jsonEncode(protection), 200);
@@ -205,6 +208,53 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('data_protection_explain')));
     await tester.pumpAndSettle();
     expect(find.text('One copy'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('assign-backup-role can open Set Role on built-in storage', (
+    tester,
+  ) async {
+    AppSettings.instance.isAdmin.value = true;
+    serve(
+      {
+        'level': 'unprotected',
+        'sentence': 'Your files are only on this Quark.',
+        'nextStep': 'assign-backup-role',
+        'drives': <Object?>[],
+      },
+      devicesBody: {
+        'devices': [
+          {
+            'name': 'Quark',
+            'devicePath': '/dev/mmcblk0p2',
+            'mountPoint': '/',
+            'fileSystem': 'ext4',
+            'isInternal': true,
+            'isEnabled': true,
+            'role': 'unassigned',
+          },
+          {
+            'name': 'Stick',
+            'devicePath': '/dev/sdb1',
+            'mountPoint': '/mnt/stick',
+            'fileSystem': 'exfat',
+            'isInternal': false,
+            'isEnabled': true,
+            'role': 'unassigned',
+            'usbInfo': {'serial': 'USB1'},
+          },
+        ],
+      },
+    );
+
+    await pumpTab(tester);
+    await tester.tap(find.text('Assign the backup role'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RoleDialog), findsOneWidget);
+    expect(find.text('Snapshot Backup'), findsOneWidget);
+    expect(find.text('Other drives are backed up onto it'), findsOneWidget);
+    expect(find.textContaining('also copied onto it'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

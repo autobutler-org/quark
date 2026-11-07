@@ -19,8 +19,9 @@ class RoleDialog extends StatelessWidget {
 
   final String currentRole;
 
-  /// Whether the device is built-in storage, which cannot be a snapshot
-  /// backup: the Quark refuses that role for it.
+  /// Whether the device is built-in storage. Snapshot backup is offered
+  /// there too: other drives are copied onto it, and it is not copied onto
+  /// itself.
   final bool isInternal;
 
   /// The drive's health. Omitted callers see Unknown, never Healthy.
@@ -47,13 +48,14 @@ class RoleDialog extends StatelessWidget {
           selected: currentRole == 'default-storage',
           onTap: () => Navigator.pop(context, 'default-storage'),
         ),
-        if (!isInternal)
-          RoleOption(
-            title: 'Snapshot Backup',
-            subtitle: 'Plug in, back up everything, unplug',
-            selected: currentRole == 'snapshot-backup',
-            onTap: () => Navigator.pop(context, 'snapshot-backup'),
-          ),
+        RoleOption(
+          title: 'Snapshot Backup',
+          subtitle: isInternal
+              ? 'Other drives are backed up onto it'
+              : 'Plug in, back up everything, unplug',
+          selected: currentRole == 'snapshot-backup',
+          onTap: () => Navigator.pop(context, 'snapshot-backup'),
+        ),
         RoleOption(
           title: 'Unassigned',
           subtitle: 'No special role',

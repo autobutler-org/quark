@@ -362,15 +362,15 @@ class _StorageTabState extends State<StorageTab>
     );
   }
 
-  /// The first enabled external drive that is not already a backup drive.
-  /// Set Role is only offered for an enabled drive.
+  /// The first enabled drive that is not already a backup drive, built-in
+  /// storage included. A USB drive with no serial is not one: an empty serial
+  /// is built-in storage. Set Role is only offered for an enabled drive.
   StorageDevice? _assignTarget() {
     final devices = _devices;
     if (devices == null) return null;
     for (final device in devices) {
-      if (!device.isEnabled || device.isInternal || device.serial.isEmpty) {
-        continue;
-      }
+      if (!device.isEnabled) continue;
+      if (!device.isInternal && device.serial.isEmpty) continue;
       if (device.role == 'snapshot-backup') continue;
       return device;
     }
