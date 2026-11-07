@@ -107,6 +107,21 @@ git add -- lib/main.dart
 expect 1 "make fix" "" "unformatted staged dart file"
 expect 1 "lib/main.dart" "" "unformatted dart file is named"
 
+# Formatted under the repo's language version (pubspec's sdk lower bound),
+# which the SDK's newest style would re-wrap.
+fresh
+mkdir -p lib
+cat >lib/typedef.dart <<'DART'
+typedef DeleteFilesFn =
+    Future<void> Function(
+      List<String> filePaths, {
+      String? rootDir,
+      String? deviceSerial,
+    });
+DART
+git add -- lib/typedef.dart
+expect 0 "" "dart format would change" "dart format uses the repo's language version"
+
 fresh
 printf 'Please recieve this.\n' >note.md
 git add -- note.md
