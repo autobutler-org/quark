@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -62,6 +63,9 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
   if (!context.mounted) return null;
 
   final controller = FileBrowserController();
+  // Completed when the dialog closes, cancelling any listing still in flight
+  // (#3995).
+  final closed = Completer<void>();
   String currentAbsolutePath = normalizePath(
     startPath,
   ); // normalized with leading slash or empty
@@ -91,8 +95,12 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
   // picker there is no destination to choose and the listing is as it was.
   Future<List<FileNode>> filesOn(StorageDevice? device, String path) =>
       showDevicePicker && device != null
-      ? controller.fetchDeviceFiles(path, device.serial)
-      : controller.fetchFiles(path);
+      ? controller.fetchDeviceFiles(
+          path,
+          device.serial,
+          abortTrigger: closed.future,
+        )
+      : controller.fetchFiles(path, abortTrigger: closed.future);
 
   Future<List<FileNode>> listingFor(String path) {
     final current = filesFuture;
@@ -251,6 +259,12 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
                         isGridView: false,
                         currentPath: currentAbsolutePath,
                         showFileSizeAndMenu: false,
+                        errorBuilder: (context, error) => Center(
+                          child: Text(
+                            Errors.destinations(error),
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -336,6 +350,7 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
       },
     ),
   );
+  closed.complete();
 
   if (result == null) return null;
   final normalized = result.targetInput.trim();

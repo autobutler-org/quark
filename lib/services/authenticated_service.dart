@@ -176,10 +176,19 @@ mixin AuthenticatedService {
   http.Client get httpClient => sharedHttpClient;
 
   /// Authenticated GET — injects auth headers and checks for 401 automatically.
+  ///
+  /// Completing [abortTrigger] cancels the request; it then throws
+  /// [http.RequestAbortedException].
   Future<http.Response> authenticatedGet(
     Uri uri, {
     Map<String, String>? headers,
-  }) => _checked(httpClient.get(uri, headers: {...authHeaders, ...?headers}));
+    Future<void>? abortTrigger,
+  }) async => http.Response.fromStream(
+    await authenticatedSend(
+      http.AbortableRequest('GET', uri, abortTrigger: abortTrigger)
+        ..headers.addAll({...?headers}),
+    ),
+  );
 
   /// Authenticated GET streamed straight onto disk, returning where it landed.
   ///

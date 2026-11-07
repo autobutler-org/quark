@@ -110,11 +110,17 @@ class FileBrowserController {
     ),
   );
 
+  /// What [currentPath] holds; completing [abortTrigger] cancels the request.
   Future<List<FileNode>> fetchFiles(
     String currentPath, {
     List<String>? serials,
+    Future<void>? abortTrigger,
   }) {
-    return FilesService.getFiles(currentPath, serials: serials);
+    return FilesService.getFiles(
+      currentPath,
+      serials: serials,
+      abortTrigger: abortTrigger,
+    );
   }
 
   /// What [currentPath] holds on the one drive whose serial is [serial] —
@@ -126,11 +132,21 @@ class FileBrowserController {
   /// internal drive's when it has one.
   Future<List<FileNode>> fetchDeviceFiles(
     String currentPath,
-    String serial,
-  ) async {
-    if (serial.isNotEmpty) return fetchFiles(currentPath, serials: [serial]);
+    String serial, {
+    Future<void>? abortTrigger,
+  }) async {
+    if (serial.isNotEmpty) {
+      return fetchFiles(
+        currentPath,
+        serials: [serial],
+        abortTrigger: abortTrigger,
+      );
+    }
     return [
-      for (final node in await fetchFiles(currentPath))
+      for (final node in await fetchFiles(
+        currentPath,
+        abortTrigger: abortTrigger,
+      ))
         if (node.deviceSerial.isEmpty) node,
     ];
   }
@@ -240,10 +256,14 @@ class FileBrowserController {
     }
   }
 
+  /// Runs [action] on [node]. [devices] is the device list the page already
+  /// holds; Move/Rename offers its destinations from it rather than waiting
+  /// on a device status call (#3995).
   Future<FileMenuActionOutcome?> handleFileAction({
     required FileNode node,
     required FileMenuAction action,
     required BuildContext context,
+    List<StorageDevice> devices = const [],
   }) async {
     switch (action) {
       case FileMenuAction.download:
@@ -253,26 +273,19 @@ class FileBrowserController {
       case FileMenuAction.moveRename:
         final startPath = parentPath(node.apiPath);
         final nodeSerial = node.deviceSerial.trim();
-        // Fetch devices for cross-device move support. Only mounted drives
-        // are destinations — moving to any other answers 404 — plus the
-        // item's own drive, so the picker always has where it is now. Mount
-        // state is fresh: mounting and unmounting invalidate the device
-        // cache (#1042).
-        List<StorageDevice> devices = [];
-        try {
-          devices = [
-            for (final d in await StorageService.listDevices())
-              if (d.isEnabled || d.serial == nodeSerial) d,
-          ];
-        } catch (_) {
-          // Fall through with empty list — dialog will skip device picker
-        }
-        if (!context.mounted) return null;
+        // Only mounted drives are destinations — moving to any other
+        // answers 404 — plus the item's own drive, so the picker always has
+        // where it is now. The list is the page's: the status call behind a
+        // fresh one runs disk detection and health reads, and waiting on it
+        // held the dialog back and failed it as "not connected" (#3995).
         final moveResult = await promptForMoveRenamePath(
           context,
           startPath: startPath,
           initialName: node.name,
-          devices: devices,
+          devices: [
+            for (final d in devices)
+              if (d.isEnabled || d.serial == nodeSerial) d,
+          ],
           deviceSerial: nodeSerial,
         );
         if (!context.mounted) {
