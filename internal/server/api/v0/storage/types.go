@@ -27,5 +27,14 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 		startSnapshotBackupRoute,
 		verifySnapshotBackupRoute,
 		restoreSnapshotVaultRoute,
+		restoreSnapshotFilesRoute,
 	}
+}
+
+// restoreSnapshotFilesBody is what the file restore reads.
+type restoreSnapshotFilesBody struct {
+	DeviceSerial string `json:"deviceSerial" binding:"required"`
+	// MissingToBuiltIn puts the files of a device that is no longer attached
+	// on built-in storage.
+	MissingToBuiltIn bool `json:"missingToBuiltIn"`
 }
