@@ -84,9 +84,7 @@ func runSnapshotJob(ctx context.Context, params NewHandlerParams, raw json.RawMe
 	if err := json.Unmarshal(raw, &jobParams); err != nil {
 		return fmt.Errorf("decode backup params: %w", err)
 	}
-	if jobParams.TargetDeviceSerial == "" {
-		return ErrTargetNotManaged
-	}
+	// An empty serial is the internal drive. FilesVFS resolves it.
 	target, err := fileutil.FilesVFS(params.Registry, jobParams.TargetDeviceSerial)
 	if err != nil {
 		return ErrTargetNotManaged

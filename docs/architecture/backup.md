@@ -212,7 +212,7 @@ the Quark. Nothing new is stored for it. `protectionutil.Status` takes the roles
 timestamps the handler has already loaded, and it does not open the database or the filesystem.
 
 Copy 1 is the live data on the default-storage drive. It never counts as a backup copy. The internal drive never
-counts; assigning it the snapshot-backup role is already refused.
+counts, even when it holds the snapshot-backup role. A backup onto that drive still skips copying it onto itself.
 
 | Level        | When                                                                                                                |
 | ------------ | ------------------------------------------------------------------------------------------------------------------- |

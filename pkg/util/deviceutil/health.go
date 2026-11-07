@@ -46,11 +46,11 @@ type BackupHealthParams struct {
 }
 
 // RefuseReplaceSoonTarget reports an acknowledgment error when serial is a
-// connected Replace soon drive and AcknowledgeHealth is false. Watch and
-// Unknown do not block. A drive that is not connected is left for the backup
-// itself to reject.
+// connected Replace soon drive and AcknowledgeHealth is false. An empty
+// serial is the internal drive. Watch and Unknown do not block. A drive that
+// is not connected is left for the backup itself to reject.
 func RefuseReplaceSoonTarget(params BackupHealthParams) error {
-	if params.Storage == nil || params.Serial == "" {
+	if params.Storage == nil {
 		return nil
 	}
 	statuses, err := params.Storage.GetDeviceStatuses()

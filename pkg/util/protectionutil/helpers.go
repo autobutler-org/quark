@@ -45,8 +45,8 @@ func collectDrives(params StatusParams) []backupDrive {
 		seen[role.Serial] = true
 		device := devices[role.Serial]
 		at, has := completed[role.Serial]
-		// An empty serial is the internal drive, which set_role also refuses
-		// as a backup target.
+		// An empty serial is the internal drive. It can hold the role, and it
+		// still does not count as a backup copy.
 		internal := device.IsInternal || role.Serial == ""
 		drive := backupDrive{
 			serial:       role.Serial,

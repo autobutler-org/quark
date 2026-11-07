@@ -81,9 +81,6 @@ func SetRole(params SetRoleParams) (SetRoleResult, error) {
 		if !found {
 			return SetRoleResult{}, invalidf("device with serial %q not found", params.Serial)
 		}
-		if device.IsInternal && params.Role == "snapshot-backup" {
-			return SetRoleResult{}, invalid(errors.New("internal device cannot be assigned as snapshot-backup"))
-		}
 		stronger := params.Role == "default-storage" && worseDefault(params, statuses, device)
 		if err := refuseReplaceSoon(healthFor(params.Ctx, params.Health, device), params.AcknowledgeHealth, stronger); err != nil {
 			return SetRoleResult{}, err

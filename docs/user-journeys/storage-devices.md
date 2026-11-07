@@ -198,8 +198,10 @@ including one that is not mounted.
 - With more than one enabled device, the **Upload to device** sheet (JN-FB-006, JN-PH-006) and the one New folder
   opens start on the default storage device, and its row reads **Default**. The sheet is still shown, and any
   other enabled device can be chosen.
-- **Set Role** on built-in storage offers **Default Storage** and **Unassigned** only, which is how built-in
-  storage takes the role back from a USB drive.
+- **Set Role** on built-in storage offers **Default Storage**, **Snapshot Backup**, and **Unassigned**.
+  **Snapshot Backup** makes built-in storage the drive other drives are copied onto. That backup does not copy
+  built-in storage onto itself. **Default Storage** and **Unassigned** are how built-in storage takes the default
+  role back from a USB drive.
 
 **Notes:**
 

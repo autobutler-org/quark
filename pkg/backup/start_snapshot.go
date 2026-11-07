@@ -49,7 +49,7 @@ type StartSnapshotBackupParams struct {
 	// UserID is the account starting the backup. 0 records none.
 	UserID int64
 	// TargetDeviceSerial is the device to back up onto. It must already hold
-	// the snapshot-backup role.
+	// the snapshot-backup role. An empty serial is the internal drive.
 	TargetDeviceSerial string
 }
 
@@ -77,10 +77,8 @@ func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupR
 		return StartSnapshotBackupResult{}, inProgress
 	}
 
-	// Find the target device's namespace. The internal drive cannot be one.
-	if params.TargetDeviceSerial == "" {
-		return StartSnapshotBackupResult{}, ErrTargetNotManaged
-	}
+	// An empty serial is the internal drive. FilesVFS resolves it, and a
+	// registry without that namespace is not a managed target.
 	if _, err := fileutil.FilesVFS(params.Registry, params.TargetDeviceSerial); err != nil {
 		return StartSnapshotBackupResult{}, ErrTargetNotManaged
 	}

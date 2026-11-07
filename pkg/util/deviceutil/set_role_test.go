@@ -8,6 +8,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	_ "modernc.org/sqlite"
 )
 
@@ -296,5 +297,39 @@ func TestSetRole_RawPasswordIsAppTooOld(t *testing.T) {
 	var unauthorized *UnauthorizedError
 	if _, err := SetRole(params); !errors.As(err, &unauthorized) {
 		t.Fatalf("unknown account's key = %v, want an UnauthorizedError", err)
+	}
+}
+
+// The drive inside the Quark can hold the snapshot-backup role (#3999). An
+// external drive's files are then copied onto it.
+func TestSetRole_InternalDriveCanBeSnapshotBackup(t *testing.T) {
+	queries := adminForRole(t)
+	params := SetRoleParams{
+		Ctx:     context.Background(),
+		Queries: queries,
+		Storage: storageutil.NewStorageService(healthDetector{devices: []storageutil.Device{{
+			Name:       "Built-in",
+			MountPoint: t.TempDir(),
+			IsInternal: true,
+		}}}),
+		Serial:   "",
+		Role:     "snapshot-backup",
+		Username: "admin",
+		Password: dbtest.AuthKey("mypassword"),
+		Health: func(storageutil.Device) *storageutil.DiskHealth {
+			health := storageutil.DiskHealth{Verdict: storageutil.HealthHealthy, Reason: storageutil.ReasonHealthy}
+			return &health
+		},
+	}
+	result, err := SetRole(params)
+	if err != nil {
+		t.Fatalf("SetRole = %v", err)
+	}
+	if result.Serial != "" || result.Role != "snapshot-backup" {
+		t.Fatalf("result = %+v", result)
+	}
+	role, err := queries.GetDeviceRole(context.Background(), "")
+	if err != nil || role != "snapshot-backup" {
+		t.Fatalf("role = %q, %v", role, err)
 	}
 }

@@ -197,6 +197,30 @@ func TestRefuseReplaceSoonTarget(t *testing.T) {
 	}
 }
 
+// An empty serial is the internal drive. Starting a backup onto it still asks
+// before a Replace soon disk (#3999).
+func TestRefuseReplaceSoonTarget_InternalDrive(t *testing.T) {
+	storage := storageutil.NewStorageService(healthDetector{devices: []storageutil.Device{{
+		Name:       "Built-in",
+		MountPoint: t.TempDir(),
+		DevicePath: "/dev/mmcblk0",
+		IsInternal: true,
+	}}})
+	params := BackupHealthParams{
+		Ctx:     context.Background(),
+		Storage: storage,
+		Serial:  "",
+		Health:  verdictHealth(storageutil.HealthReplaceSoon, storageutil.ReasonReplaceFailed),
+	}
+	if err := RefuseReplaceSoonTarget(params); !errors.As(err, new(*AcknowledgmentRequiredError)) {
+		t.Fatalf("internal backup without acknowledgment = %v", err)
+	}
+	params.AcknowledgeHealth = true
+	if err := RefuseReplaceSoonTarget(params); err != nil {
+		t.Fatalf("acknowledged internal backup = %v", err)
+	}
+}
+
 func TestListStatuses_MissingToolStillLists(t *testing.T) {
 	result, err := ListStatuses(ListStatusesParams{
 		Ctx:     context.Background(),
