@@ -55,5 +55,5 @@ var chatBackup = ciphertextBackup{
 // A failed export leaves the previous backup whole, and a PostgreSQL-backed
 // Quark gets [ErrDatabaseBackedUpSeparately] and nothing written.
 func ExportChat(ctx context.Context, liveDB *sql.DB, targetDir string) (string, error) {
-	return chatBackup.export(ctx, liveDB, targetDir)
+	return chatBackup.export(ctx, liveDB, targetDir, nil)
 }

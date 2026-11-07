@@ -247,7 +247,13 @@ func AuthSaltSecret() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx := context.Background()
+	return AuthSaltSecretIn(context.Background(), queries)
+}
+
+// AuthSaltSecretIn is [AuthSaltSecret] read from, and made in, queries rather
+// than the database Bind gave the package. pkg/backup keys a snapshot's
+// binding off it with the database it already holds (#4010).
+func AuthSaltSecretIn(ctx context.Context, queries db.Querier) ([]byte, error) {
 	if secret, err := storedSaltSecret(ctx, queries); secret != nil || err != nil {
 		return secret, err
 	}

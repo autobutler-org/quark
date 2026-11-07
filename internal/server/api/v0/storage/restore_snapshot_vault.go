@@ -23,6 +23,7 @@ import (
 // @Description Then restores the vault backup a snapshot wrote to the drive, which must have the snapshot-backup role, each vault under the account of the same
 // @Description username, letter for letter. Refused while any vault has items, when an account the backup has a vault for already has a vault key here (a restore never replaces one),
 // @Description when a backed-up vault has no account of its username here, and when a backed-up key or item would be refused as an API write. Every refusal names the accounts and changes nothing.
+// @Description Also refused, changing nothing, when this Quark did not write the backup: its MAC is another Quark's, the file changed after the snapshot, or its MAC is gone from a drive this Quark binds its snapshots to. A snapshot taken before binding still restores.
 // @Description restoredAccounts names every account that got a vault back, and each is sent vault_changed. backupPasswordAccounts names the accounts whose vault opens with the
 // @Description password they had when the backup was taken, as every vault restored onto new hardware does. Every attempt past the password check is written to the server log.
 // @Tags storage
@@ -30,7 +31,7 @@ import (
 // @Produce json
 // @Param body body restoreSnapshotVaultBody true "The backup drive and the admin's auth key"
 // @Success 200 {object} backup.VaultImportResult
-// @Failure 400 {object} serverutil.Response "bad request, a drive without the snapshot-backup role, a backup this version cannot read, or a backed-up key or item this Quark does not accept"
+// @Failure 400 {object} serverutil.Response "bad request, a drive without the snapshot-backup role, a backup this version cannot read, a backed-up key or item this Quark does not accept, or a backup this Quark did not write"
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response "password is not the caller's auth key"
 // @Failure 404 {object} serverutil.Response "the device is not attached, or holds no vault backup"
@@ -90,7 +91,7 @@ func restoreSnapshotVault(c *gin.Context) *serverutil.Response {
 		errors.Is(err, backup.ErrVaultKeyExists):
 		return serverutil.Conflict(err)
 	case errors.Is(err, backup.ErrVaultBackupVersion), errors.Is(err, backup.ErrVaultBackupInvalid),
-		errors.Is(err, backup.ErrVaultRestoreRoleRequired):
+		errors.Is(err, backup.ErrVaultRestoreRoleRequired), errors.Is(err, backup.ErrBackupNotFromThisQuark):
 		return serverutil.BadRequest(err)
 	case errors.Is(err, backup.ErrDatabaseBackedUpSeparately):
 		return serverutil.NewResponse().WithStatusCode(http.StatusNotImplemented).WithError(err)

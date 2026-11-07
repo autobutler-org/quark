@@ -293,3 +293,32 @@ func TestRestoreSnapshotVault_RefusesARowOutsideTheValidationBounds(t *testing.T
 		t.Errorf("a refused restore left %d vault keys (%v)", keys, err)
 	}
 }
+
+// Another Quark's snapshot is refused as one this Quark did not write
+// (#4010), and nothing changes.
+func TestRestoreSnapshotVault_RefusesAnotherQuarksSnapshot(t *testing.T) {
+	driveDir := t.TempDir()
+	source := vaultQuark(t, map[string]bool{"carol": true})
+	target, err := vfs.NewLocalVFS(driveDir, vfs.FilesNamespace(backupSerial))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backup.SnapshotBackup(context.Background(), backup.SnapshotBackupParams{
+		TargetDeviceSerial: backupSerial,
+		Job:                &backup.BackupJob{ID: "bind"},
+		LiveDB:             source.Db,
+		Queries:            source.Queries,
+	}, nil, target); err != nil {
+		t.Fatal(err)
+	}
+
+	live := vaultQuark(t, map[string]bool{"carol": false})
+	w := restoreVault(newRestoreEngine(t, live, driveDir), backupSerial)
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "did not write") {
+		t.Errorf("restore = %d %s, want 400 saying this Quark did not write it", w.Code, w.Body.String())
+	}
+	var keys int
+	if err := live.Db.QueryRow(`SELECT COUNT(*) FROM vault_keys`).Scan(&keys); err != nil || keys != 0 {
+		t.Errorf("a refused restore left %d vault keys (%v)", keys, err)
+	}
+}

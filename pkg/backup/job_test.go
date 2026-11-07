@@ -359,8 +359,8 @@ func TestSnapshotBackupJob_ExportsTheVaultWithNoPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := manifest.Files[backupVaultFilename]; !ok || len(manifest.Files) != 2 {
-		t.Errorf("the manifest covers %v, want the vault and chat exports", manifest.Files)
+	if _, ok := manifest.Files[backupVaultFilename]; !ok || len(manifest.Files) != 4 {
+		t.Errorf("the manifest covers %v, want the vault and chat exports and their bindings", manifest.Files)
 	}
 
 	live := dbtest.NewDB(t).Db

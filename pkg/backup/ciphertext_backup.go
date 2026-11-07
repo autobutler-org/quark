@@ -2,11 +2,16 @@ package backup
 
 import (
 	"context"
+	"crypto/hkdf"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -14,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	// Registers the "sqlite" driver with database/sql.
 	_ "modernc.org/sqlite"
@@ -112,7 +118,12 @@ func (b ciphertextBackup) require(liveDB *sql.DB) error {
 // The file is built under a temp name of its own and renamed into place, so a
 // failed export leaves the previous backup whole and two exports never share a
 // temp (#3084).
-func (b ciphertextBackup) export(ctx context.Context, liveDB *sql.DB, targetDir string) (string, error) {
+//
+// A key binds the file to this Quark: its MAC goes beside it, under
+// [bindingSuffix], and [ciphertextBackup.checkBinding] reads it back (#4010).
+// With no key the file is unbound and any binding an earlier export left is
+// removed, so it cannot refuse the new file.
+func (b ciphertextBackup) export(ctx context.Context, liveDB *sql.DB, targetDir string, key []byte) (string, error) {
 	if err := b.require(liveDB); err != nil {
 		return "", err
 	}
@@ -132,6 +143,13 @@ func (b ciphertextBackup) export(ctx context.Context, liveDB *sql.DB, targetDir 
 
 	if err := storageutil.SyncFile(tmpPath); err != nil {
 		return "", fmt.Errorf("flush %s: %w", b.filename, err)
+	}
+	// ponytail: the binding lands before the file it binds, so a power cut
+	// between the two renames leaves the old file beside the new MAC, which a
+	// restore refuses until the next snapshot. Fail closed; carry the MAC
+	// inside the file if that window ever matters.
+	if err := b.writeBinding(key, tmpPath, targetDir); err != nil {
+		return "", err
 	}
 	if err := os.Rename(tmpPath, dbPath); err != nil {
 		return "", fmt.Errorf("replace %s: %w", b.filename, err)
@@ -355,4 +373,154 @@ func (b ciphertextBackup) attach(ctx context.Context, liveDB *sql.DB, path strin
 func discardConn(conn *sql.Conn) {
 	// database/sql throws away a connection whose Raw callback reports it bad.
 	_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+}
+
+// bindingSuffix follows a ciphertext backup's file name to name the file
+// holding its MAC, the hex of HMAC-SHA256 under [bindingKey] over the file
+// name, a NUL, and the file's bytes. The MAC is what binds the file to the
+// Quark that wrote it (#4010).
+const bindingSuffix = ".mac"
+
+// boundDriveKeyPrefix starts the settings key recording that this Quark binds
+// the chat and vault files it writes to a drive: backupBound:<serial>. Without
+// the record, a bound file whose MAC was deleted would pass for one written
+// before binding.
+const boundDriveKeyPrefix = "backupBound:"
+
+// bindingKeyInfo separates the binding key from every other use of the salt
+// secret. HKDF, not HMAC(secret, label): /auth/salt answers HMAC(secret,
+// username) for any username, so a label there could be asked for.
+const bindingKeyInfo = "quark snapshot backup binding v1"
+
+// bindingKey is the key this Quark MACs its chat and vault backups with,
+// derived from the install's salt secret in queries. The secret lives in the
+// settings table, which no snapshot copies, so a drive's contents cannot
+// produce it.
+func bindingKey(ctx context.Context, queries db.Querier) ([]byte, error) {
+	secret, err := settingsutil.AuthSaltSecretIn(ctx, queries)
+	if err != nil {
+		return nil, fmt.Errorf("read the backup binding key: %w", err)
+	}
+	return hkdf.Key(sha256.New, secret, nil, bindingKeyInfo, sha256.Size)
+}
+
+// markDriveBound records that this Quark binds what it writes to the drive
+// serial. It is written before the first bound file, so a failure afterwards
+// leaves the drive refusing unbound files rather than accepting them.
+func markDriveBound(ctx context.Context, queries db.Querier, serial string) error {
+	if err := queries.SetSetting(ctx, db.SetSettingParams{Key: boundDriveKeyPrefix + serial, Value: "true"}); err != nil {
+		return fmt.Errorf("record the backup binding for the drive: %w", err)
+	}
+	return nil
+}
+
+// fileMAC is the binding MAC of the file at path, read as a stream.
+func (b ciphertextBackup) fileMAC(key []byte, path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(b.filename + "\x00"))
+	if _, err := io.Copy(mac, f); err != nil {
+		return nil, err
+	}
+	return mac.Sum(nil), nil
+}
+
+// writeBinding puts the MAC of the file at filePath, under key, in targetDir,
+// through a temp name and a rename. A nil key removes the binding instead.
+func (b ciphertextBackup) writeBinding(key []byte, filePath, targetDir string) error {
+	macPath := filepath.Join(targetDir, b.filename+bindingSuffix)
+	if key == nil {
+		if err := os.Remove(macPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("remove the old %s binding: %w", b.filename, err)
+		}
+		return nil
+	}
+	sum, err := b.fileMAC(key, filePath)
+	if err != nil {
+		return fmt.Errorf("bind %s: %w", b.filename, err)
+	}
+	tmpPath := filepath.Join(targetDir, storageutil.WriteTempPrefix+rand.Text()+"-"+b.filename+bindingSuffix)
+	defer os.Remove(tmpPath)
+	if err := os.WriteFile(tmpPath, []byte(hex.EncodeToString(sum)), 0o600); err != nil {
+		return fmt.Errorf("bind %s: %w", b.filename, err)
+	}
+	if err := storageutil.SyncFile(tmpPath); err != nil {
+		return fmt.Errorf("flush the %s binding: %w", b.filename, err)
+	}
+	if err := os.Rename(tmpPath, macPath); err != nil {
+		return fmt.Errorf("replace the %s binding: %w", b.filename, err)
+	}
+	return nil
+}
+
+// ErrBackupNotFromThisQuark reports a chat or vault backup file this Quark did
+// not write, or one changed since (#4010). Its error says which, and that
+// nothing was restored.
+var ErrBackupNotFromThisQuark = errors.New("this Quark did not write this backup file, so nothing was restored")
+
+// checkBinding refuses the backup in backupDir, on the drive serial, unless
+// this Quark wrote it. A file with a binding must match it under this
+// Quark's key. A file without one restores only from a drive this Quark has
+// never bound a snapshot to: that is a snapshot taken before binding, and the
+// drives already on the shelf keep working. A missing file is left to the
+// restore, which names it.
+//
+// The chat's restore route, when it comes (#2428), checks the same way.
+func (b ciphertextBackup) checkBinding(ctx context.Context, queries db.Querier, serial, backupDir string) error {
+	dbPath := filepath.Join(backupDir, b.filename)
+	if _, err := os.Stat(dbPath); errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	// Bounded: a MAC is 64 hex characters, and the drive is not trusted.
+	want, err := readBinding(filepath.Join(backupDir, b.filename+bindingSuffix))
+	if errors.Is(err, fs.ErrNotExist) {
+		_, err := queries.GetSetting(ctx, boundDriveKeyPrefix+serial)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read the drive's backup binding record: %w", err)
+		}
+		return fmt.Errorf("%w: %s has no binding, but this Quark binds every snapshot it writes to this drive",
+			ErrBackupNotFromThisQuark, b.filename)
+	}
+	if err != nil {
+		return fmt.Errorf("read the %s binding on device: %w", b.filename, err)
+	}
+	key, err := bindingKey(ctx, queries)
+	if err != nil {
+		return err
+	}
+	got, err := b.fileMAC(key, dbPath)
+	if err != nil {
+		return fmt.Errorf("check the %s binding on device: %w", b.filename, err)
+	}
+	if !hmac.Equal(got, want) {
+		return fmt.Errorf("%w: %s was written by another Quark, or changed after the snapshot wrote it",
+			ErrBackupNotFromThisQuark, b.filename)
+	}
+	return nil
+}
+
+// readBinding reads the MAC at path. Anything that is not one decodes to a
+// MAC no file matches.
+func readBinding(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
+			err = pathErr.Err
+		}
+		return nil, err
+	}
+	defer f.Close()
+	encoded, err := io.ReadAll(io.LimitReader(f, 2*sha256.Size+1))
+	if err != nil {
+		return nil, err
+	}
+	sum, _ := hex.DecodeString(string(encoded))
+	return sum, nil
 }
