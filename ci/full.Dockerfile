@@ -18,8 +18,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 COPY apt-packages.txt /tmp/apt-packages.txt
 COPY common.sh install-full.sh /tmp/
 ARG TARGETARCH
-ARG DOCKER_VERSION=28.0.4
-ARG RUNNER_VERSION=2.338.2
+ARG DOCKER_VERSION
+ARG RUNNER_VERSION
 # Backend tool versions
 ARG GO_VERSION=1.27.3
 ARG GOLANGCI_LINT_VERSION=v2.15.0
@@ -29,7 +29,7 @@ ARG SWAG_VERSION=v1.16.6
 # Frontend tool versions
 ARG NODE_VERSION=24.22.2
 ARG FLUTTER_VERSION=3.47.8
-ARG YQ_VERSION=v4.54.1
+ARG YQ_VERSION
 # Android SDK, no defaults: ci-image.yml passes compileSdk and buildToolsVersion from
 # android/app/build.gradle.kts and the command-line tools from the Makefile.
 ARG ANDROID_PLATFORM
