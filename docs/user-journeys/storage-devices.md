@@ -1,6 +1,6 @@
 # Storage Devices Journeys
 
-Covers the System page's Storage tab (`/system/storage`) — listing, mounting, renaming, assigning roles to, and backing up storage devices connected to the quark.
+Covers the System page's Storage tab (`/system/storage`) — listing, mounting, renaming, assigning roles to, backing up, and restoring files from storage devices connected to the quark.
 
 ---
 
@@ -171,7 +171,7 @@ including one that is not mounted.
 **Expected result:**
 
 - The device list, usage bars and badges are shown as they are for an admin.
-- No **Mount**, **Set Role**, **Back Up** or **Verify** button is offered on any device.
+- No **Mount**, **Set Role**, **Back Up**, **Verify** or **Restore files** button is offered on any device.
 
 **Notes:**
 
@@ -305,3 +305,28 @@ including one that is not mounted.
 - After **Eject**, a message says the drive is safe to unplug, and its card reads **Not mounted · safe to unplug** with a **Mount** button.
 - **Eject** is disabled while a backup runs. When the drive's files are still in use, the Quark refuses and the page shows the error.
 - A non-admin is not offered **Eject**.
+
+---
+
+### JN-SD-015: Restore files from a snapshot drive
+
+**Preconditions:** User is signed in as an admin. A drive with the **Snapshot Backup** role is connected and holds a snapshot. The drives those files came from are attached.
+
+**Steps:**
+
+1. Navigate to `/system/storage`.
+2. Tap **Restore files** on the snapshot-backup drive.
+3. Read the confirmation, then tap **Restore**.
+
+**Expected result:**
+
+- The dialog is titled **Restore files from this drive**. It says each drive's files go back onto that drive, and that a file already there is kept as it is. It also says a snapshot keeps files that were deleted since, so the restore brings them back.
+- Canceling restores nothing.
+- After **Restore**, a snack bar says how many drives' files are being restored. Each drive's files come back onto that drive. Files already there are kept, and files deleted since the snapshot return.
+- The copy runs as a job named **Restore files from snapshot**. The Jobs tab follows it.
+
+**Notes:**
+
+- **Restore files** is offered only on a drive with the snapshot-backup role, and only to an admin (JN-SD-010). It is disabled while a backup runs.
+- When a drive the files came from is not attached, tick **Put the files of a drive that is not attached on built-in storage**, then tap **Restore**. Those files land in a folder named after the snapshot folder on built-in storage, and the snack bar names that folder as going to built-in storage.
+- With that box left clear, those files stay on the backup drive. The snack bar names the folder and says its drive is not attached. When every drive in the snapshot is gone, the Quark refuses and says to restore them to built-in storage instead.
