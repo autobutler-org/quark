@@ -165,6 +165,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   // Multi-select / batch delete state (#986)
   bool _selectionMode = false;
   final Set<String> _selectedPaths = {};
+  bool _movingSelection = false;
   List<FileNode> _allCurrentFiles = [];
 
   // Archive browser state — non-null when navigating inside an archive.
@@ -788,6 +789,36 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           nodes.length == 1 ? 'delete the item' : 'delete the items',
         ),
       );
+    }
+  }
+
+  /// Moves the selection into a folder or onto a device. Cancel leaves the
+  /// selection as it was. Selection mode ends only when every selected item
+  /// moved (#3989).
+  Future<void> _moveSelected() async {
+    if (_movingSelection || _selectedPaths.isEmpty) return;
+    final nodes = _allCurrentFiles
+        .where((node) => _selectedPaths.contains(node.apiPath))
+        .toList();
+    if (nodes.isEmpty) return;
+    _movingSelection = true;
+    try {
+      final outcome = await _controller.moveSelection(
+        context: context,
+        nodes: nodes,
+        devices: _allDevices,
+        isAdmin: AppSettings.instance.isAdmin.value,
+      );
+      if (!mounted || outcome == null) return;
+      if (outcome.moved > 0) unawaited(_refreshFileState());
+      if (outcome.message.isNotEmpty) showMessage(context, outcome.message);
+      if (outcome.leaveSelection) {
+        _exitSelectionMode();
+      } else {
+        setState(() => _selectedPaths.removeAll(outcome.movedPaths));
+      }
+    } finally {
+      _movingSelection = false;
     }
   }
 
@@ -2196,6 +2227,14 @@ class _FileBrowserPageState extends State<FileBrowserPage>
               onDeselectAll: () => setState(() => _selectedPaths.clear()),
               onCancel: _exitSelectionMode,
               onDelete: _selectedPaths.isNotEmpty ? _deleteSelected : null,
+              actions: [
+                QuarkBarIconButton(
+                  key: const ValueKey('file_selection_move'),
+                  icon: QuarkIcons.drive_file_move_outlined,
+                  tooltip: 'Move selected',
+                  onPressed: _selectedPaths.isNotEmpty ? _moveSelected : null,
+                ),
+              ],
             ),
           if (!_selectionMode && !searchActive && !_noHostSelected)
             FileShortcutBar(

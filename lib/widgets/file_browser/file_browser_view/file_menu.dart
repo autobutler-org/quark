@@ -14,6 +14,24 @@ import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.d
 typedef FileMenuActionDispatch =
     void Function(BuildContext context, FileNode item, FileMenuAction action);
 
+/// Whether Move/Rename and Delete apply to [node].
+///
+/// Nothing inside an archive, and not the `users` or `groups` folder, a home
+/// folder, or a group's own folder unless [isAdmin]. A `users` or `groups`
+/// folder on another drive is an ordinary folder.
+bool canChangeFileNode(
+  FileNode node, {
+  required bool isAdmin,
+  bool inArchive = false,
+}) {
+  if (inArchive) return false;
+  final serial = node.deviceSerial;
+  final path = node.apiPath;
+  final structural = isUsersDir(serial, path) || isGroupsDir(serial, path);
+  return isAdmin ||
+      !(structural || isHomeRoot(serial, path) || isGroupRoot(serial, path));
+}
+
 /// What one file or folder's menu offers, built once and shown by both the
 /// three-dot `FileMenuButton` and a long press on the row (#2245).
 ///
@@ -63,6 +81,10 @@ class FileMenu {
   /// Opens the version history of a file (#2992). Null leaves the entry out.
   final void Function(FileNode)? onVersionHistory;
 
+  /// Whether [item] can be moved or deleted. See [canChangeFileNode].
+  bool get canChange =>
+      canChangeFileNode(item, isAdmin: isAdmin, inArchive: inArchive);
+
   /// The entries for [item], empty when nothing applies to it.
   ///
   /// [dispatchContext] is handed to [onDispatchMenuAction] and has to outlive
@@ -74,12 +96,6 @@ class FileMenu {
     final path = item.apiPath;
     final isStructuralDir =
         isUsersDir(serial, path) || isGroupsDir(serial, path);
-    final canChange =
-        !inArchive &&
-        (isAdmin ||
-            !(isStructuralDir ||
-                isHomeRoot(serial, path) ||
-                isGroupRoot(serial, path)));
 
     QuarkMenuEntry entry(
       FileMenuAction action,
