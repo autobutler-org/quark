@@ -392,6 +392,30 @@ class StorageService with AuthenticatedService {
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return VaultRestoreResult.fromJson(data);
   }
+
+  /// Starts copying the files a snapshot holds on [deviceSerial] back onto
+  /// the drives they came from (#4009). With [missingToBuiltIn], the files of
+  /// a drive that is no longer attached go to built-in storage. The copy runs
+  /// as a job; a 4xx whose body carries `error` is a [MessageException].
+  static Future<FilesRestoreResult> restoreSnapshotFiles({
+    required String deviceSerial,
+    required bool missingToBuiltIn,
+  }) async {
+    final uri = apiBaseUri.resolve(
+      '/api/v0/storage/devices/snapshot-backup/restore-files',
+    );
+    final response = await instance.authenticatedPost(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'deviceSerial': deviceSerial,
+        'missingToBuiltIn': missingToBuiltIn,
+      }),
+    );
+    throwUnlessOk(response, 'restore the files', clientErrorsOnly: true);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return FilesRestoreResult.fromJson(data);
+  }
 }
 
 class BackupJobStatus {
@@ -504,6 +528,44 @@ class VaultRestoreResult {
 
   /// Every account that got a vault back.
   final List<String> restoredAccounts;
+}
+
+/// A file restore the Quark queued, as
+/// `POST /storage/devices/snapshot-backup/restore-files` answers it.
+class FilesRestoreResult {
+  /// Creates a result.
+  const FilesRestoreResult({
+    required this.jobId,
+    this.folders = const [],
+    this.missing = const [],
+  });
+
+  /// Parses the answer. A missing list is empty.
+  factory FilesRestoreResult.fromJson(Map<String, dynamic> json) {
+    final folders = json['folders'];
+    return FilesRestoreResult(
+      jobId: json['jobId'] as String? ?? '',
+      folders: [
+        if (folders is List)
+          for (final f in folders.whereType<Map<String, dynamic>>())
+            (
+              folder: f['folder'] as String? ?? '',
+              toBuiltIn: f['toBuiltIn'] as bool? ?? false,
+            ),
+      ],
+      missing: _names(json['missing']),
+    );
+  }
+
+  /// The job copying the files.
+  final String jobId;
+
+  /// Each drive's folder on the backup drive being restored, and whether it
+  /// goes to built-in storage because its drive is gone.
+  final List<({String folder, bool toBuiltIn})> folders;
+
+  /// The folders left on the backup drive because their drive is gone.
+  final List<String> missing;
 }
 
 List<String> _names(Object? value) {

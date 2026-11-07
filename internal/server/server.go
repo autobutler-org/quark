@@ -87,6 +87,14 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 			IOSemaphore: deps.IOSemaphore().For(iosemutil.Copy),
 		}),
 	})
+	jobs.Register(jobutil.RegisterParams{
+		Kind: backup.RestoreKind,
+		Handler: backup.NewRestoreHandler(backup.NewRestoreHandlerParams{
+			Registry:    deps.VFSRegistry(),
+			EventBus:    deps.EventBus(),
+			IOSemaphore: deps.IOSemaphore().For(iosemutil.Copy),
+		}),
+	})
 	// The music indexer's rescan is a job, so it registers before the queue
 	// runs; its event loop starts beside the content indexer below.
 	music := newMusicIndexer(deps)

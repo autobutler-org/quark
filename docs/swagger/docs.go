@@ -10141,6 +10141,75 @@ const docTemplate = `{
                 }
             }
         },
+        "/storage/devices/snapshot-backup/restore-files": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Queues a snapshot-restore job that copies each device's folder on the drive, which must have the snapshot-backup role, back onto the device it was copied from.\nA file already at the target path is kept as it is: a restore never overwrites. Each copy lands under its name only once it is whole, so a failed restore leaves every file already copied and the rest of the target in place.\nA snapshot never removes a file that left its source, so a restore brings back files deleted since. The folder of a device that is no longer attached goes into a folder of the same name on built-in storage when missingToBuiltIn is true, and is named in missing otherwise.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "storage"
+                ],
+                "summary": "Restore files from a snapshot backup",
+                "parameters": [
+                    {
+                        "description": "The snapshot drive, and whether a gone device's files go to built-in storage",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_storage.restoreSnapshotFilesBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/backup.StartRestoreFilesResult"
+                        }
+                    },
+                    "400": {
+                        "description": "bad request, or a drive without the snapshot-backup role",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the drive is not attached, or holds no snapshot",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "every device in the snapshot is gone and missingToBuiltIn is false",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/storage/devices/snapshot-backup/restore-vault": {
             "post": {
                 "security": [
@@ -12487,6 +12556,23 @@ const docTemplate = `{
                 "BackupStatusFailed"
             ]
         },
+        "backup.RestoreFolder": {
+            "type": "object",
+            "properties": {
+                "folder": {
+                    "description": "Folder is the device's folder at the drive's root, as the snapshot\nnamed it: \"internal\", or the device name, an underscore, and the\nfirst 8 characters of its serial.",
+                    "type": "string"
+                },
+                "targetSerial": {
+                    "description": "TargetSerial is the device the files go back onto, \"\" for built-in\nstorage.",
+                    "type": "string"
+                },
+                "toBuiltIn": {
+                    "description": "ToBuiltIn is set when the device the files came from is gone. They go\ninto a folder of the same name on built-in storage, beside its own.",
+                    "type": "boolean"
+                }
+            }
+        },
         "backup.SourceDeviceProgress": {
             "type": "object",
             "properties": {
@@ -12510,6 +12596,28 @@ const docTemplate = `{
                 },
                 "filesTotal": {
                     "type": "integer"
+                }
+            }
+        },
+        "backup.StartRestoreFilesResult": {
+            "type": "object",
+            "properties": {
+                "folders": {
+                    "description": "Folders is where each device's files are going, in folder order.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/backup.RestoreFolder"
+                    }
+                },
+                "jobId": {
+                    "type": "string"
+                },
+                "missing": {
+                    "description": "Missing is the folders, sorted, whose device is gone and whose files\nwere left on the snapshot drive.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -15798,6 +15906,21 @@ const docTemplate = `{
                 "sentence": {
                     "description": "Sentence is one plain sentence describing that level.",
                     "type": "string"
+                }
+            }
+        },
+        "v0_storage.restoreSnapshotFilesBody": {
+            "type": "object",
+            "required": [
+                "deviceSerial"
+            ],
+            "properties": {
+                "deviceSerial": {
+                    "type": "string"
+                },
+                "missingToBuiltIn": {
+                    "description": "MissingToBuiltIn puts the files of a device that is no longer attached\non built-in storage.",
+                    "type": "boolean"
                 }
             }
         },

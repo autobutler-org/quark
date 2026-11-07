@@ -17,6 +17,7 @@ class DeviceCard extends StatelessWidget {
     this.onBackup,
     this.onVerify,
     this.onRestore,
+    this.onRestoreFiles,
     this.onEject,
     this.isEjecting = false,
     this.isBackupRunning = false,
@@ -34,6 +35,10 @@ class DeviceCard extends StatelessWidget {
   /// Restores every vault from this snapshot-backup drive. Null hides the
   /// button. Disabled while a backup is running, as [onVerify] is.
   final VoidCallback? onRestore;
+
+  /// Restores the files on this snapshot-backup drive to the drives they
+  /// came from. Null hides the button; disabled while a backup is running.
+  final VoidCallback? onRestoreFiles;
 
   /// Unmounts a plugged-in drive so it can be unplugged. Shown only for an
   /// enabled external drive, and disabled while a backup runs.
@@ -259,6 +264,15 @@ class DeviceCard extends StatelessWidget {
                       onPressed: isBackupRunning ? null : onRestore,
                       icon: const Icon(QuarkIcons.restore, size: 16),
                       label: const Text('Restore vaults'),
+                    ),
+                  if (onRestoreFiles != null)
+                    OutlinedButton.icon(
+                      key: ValueKey(
+                        'device_card_restore_files_${device.serial}',
+                      ),
+                      onPressed: isBackupRunning ? null : onRestoreFiles,
+                      icon: const Icon(QuarkIcons.restore, size: 16),
+                      label: const Text('Restore files'),
                     ),
                   if (!device.isInternal && onEject != null)
                     OutlinedButton.icon(
