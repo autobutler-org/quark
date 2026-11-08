@@ -26,9 +26,9 @@ type jobFixture struct {
 	database *db.DatabaseSqlc
 	registry vfs.Registry
 	storage  *storageutil.StorageService
-	// internal and target are the files directories of the internal drive
-	// and of the targetSerial drive.
-	internal, target string
+	// internal, target and other are the files directories of the internal
+	// drive, the targetSerial drive and the otherSerial drive.
+	internal, target, other string
 }
 
 func newJobFixture(t *testing.T, database *db.DatabaseSqlc) jobFixture {
@@ -59,6 +59,7 @@ func newJobFixture(t *testing.T, database *db.DatabaseSqlc) jobFixture {
 		storage:  storageutil.NewStorageService(devices),
 		internal: dirs[""],
 		target:   dirs[targetSerial],
+		other:    dirs[otherSerial],
 	}
 }
 

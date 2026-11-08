@@ -6,15 +6,20 @@ import "time"
 
 const roleSnapshotBackup = "snapshot-backup"
 
-// backupDrive is one snapshot-backup role joined with its device and the
-// newest completed job the caller supplied.
-type backupDrive struct {
-	serial       string
-	name         string
-	internal     bool
-	completedAt  time.Time
-	hasCompleted bool
-	diskKey      string
-	qualifies    bool
-	replaceSoon  bool
+// drive is one data or backup drive joined with its device.
+type drive struct {
+	serial      string
+	name        string
+	diskKey     string
+	connected   bool
+	replaceSoon bool
+}
+
+// inputs is StatusParams joined up: the data drives and backup drives, each
+// ordered by serial, and the newest copy per backup drive and data drive.
+type inputs struct {
+	data      []drive
+	backups   []drive
+	copies    map[string]map[string]time.Time
+	receiving map[string]bool
 }

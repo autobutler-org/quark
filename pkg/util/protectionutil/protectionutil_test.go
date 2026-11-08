@@ -1,4 +1,4 @@
-// cspell:ignore mmcblk nvme protectionutil sda sdb sdc
+// cspell:ignore mmcblk protectionutil sda sdb sdc sdd
 
 package protectionutil_test
 
@@ -9,350 +9,361 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/protectionutil"
 )
 
+var testNow = time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
+
+// builtIn is the internal drive, a data drive unless it takes the backup role.
+var builtIn = protectionutil.Device{Serial: "", Name: "Built-in storage", DevicePath: "/dev/mmcblk0p2"}
+
+func backupRole(serial string) protectionutil.Role {
+	return protectionutil.Role{Serial: serial, Role: "snapshot-backup"}
+}
+
+func copyOf(backup, source string, at time.Time) protectionutil.Copy {
+	return protectionutil.Copy{BackupSerial: backup, SourceSerial: source, CopiedAt: at}
+}
+
+func dataDrive(t *testing.T, got protectionutil.StatusResult, serial string) protectionutil.DataDrive {
+	t.Helper()
+	for _, drive := range got.DataDrives {
+		if drive.Serial == serial {
+			return drive
+		}
+	}
+	t.Fatalf("no data drive %q in %+v", serial, got.DataDrives)
+	return protectionutil.DataDrive{}
+}
+
+func backupDrive(t *testing.T, got protectionutil.StatusResult, serial string) protectionutil.BackupDrive {
+	t.Helper()
+	for _, drive := range got.BackupDrives {
+		if drive.Serial == serial {
+			return drive
+		}
+	}
+	t.Fatalf("no backup drive %q in %+v", serial, got.BackupDrives)
+	return protectionutil.BackupDrive{}
+}
+
 func TestStatus_NoBackupDrive(t *testing.T) {
-	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	// The live copy is the default-storage drive. A completed job aimed at it
-	// is still not a backup copy.
 	got := protectionutil.Status(protectionutil.StatusParams{
-		Now:   now,
-		Roles: []protectionutil.Role{{Serial: "", Role: "default-storage"}},
-		Devices: []protectionutil.Device{{
-			Serial: "", Name: "Internal", DevicePath: "/dev/mmcblk0p2", IsInternal: true,
-		}},
-		Completions: []protectionutil.Completion{{
-			Serial: "", CompletedAt: now.Add(-time.Hour),
-		}},
+		Now:     testNow,
+		Roles:   []protectionutil.Role{{Serial: "", Role: "default-storage"}},
+		Devices: []protectionutil.Device{builtIn},
 	})
-	if got.Level != protectionutil.LevelUnprotected {
-		t.Errorf("level = %s, want unprotected", got.Level)
+	if got.Level != protectionutil.LevelUnprotected || got.NextStep != protectionutil.NextStepAssignRole {
+		t.Fatalf("status = %+v, want unprotected and assign-backup-role", got)
 	}
-	if got.NextStep != protectionutil.NextStepAssignRole {
-		t.Errorf("next = %s, want assign-backup-role", got.NextStep)
-	}
-	if len(got.Drives) != 0 {
-		t.Errorf("drives = %+v, want none", got.Drives)
-	}
-	const want = "Your files are only on this Quark. Assign the backup role to another drive."
+	const want = "Built-in storage is only on this Quark. Assign the backup role to another drive."
 	if got.Sentence != want {
 		t.Errorf("sentence = %q, want %q", got.Sentence, want)
 	}
+	if len(got.DataDrives) != 1 || got.DataDrives[0].Level != protectionutil.LevelUnprotected {
+		t.Fatalf("data drives = %+v, want built-in storage unprotected", got.DataDrives)
+	}
+	if got.DataDrives[0].Copies == nil || len(got.DataDrives[0].Copies) != 0 {
+		t.Errorf("copies = %#v, want an empty list", got.DataDrives[0].Copies)
+	}
+	if got.BackupDrives == nil || len(got.BackupDrives) != 0 {
+		t.Errorf("backup drives = %#v, want an empty list", got.BackupDrives)
+	}
 }
 
-func TestStatus_OneGoodDrive(t *testing.T) {
-	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	fresh := now.Add(-protectionutil.StaleAfter + time.Second)
+func TestStatus_OneFreshCopyIsBasic(t *testing.T) {
+	fresh := testNow.Add(-protectionutil.StaleAfter + time.Second)
 	got := protectionutil.Status(protectionutil.StatusParams{
-		Now: now,
-		Roles: []protectionutil.Role{
-			{Serial: "", Role: "default-storage"},
-			{Serial: "usb-a", Role: "snapshot-backup"},
-		},
+		Now:   testNow,
+		Roles: []protectionutil.Role{{Serial: "", Role: "default-storage"}, backupRole("usb-a")},
 		Devices: []protectionutil.Device{
-			{Serial: "", Name: "Internal", DevicePath: "/dev/mmcblk0p2", IsInternal: true},
-			{Serial: "usb-a", Name: "Backup", DevicePath: "/dev/sdb1"},
+			builtIn,
+			{Serial: "usb-a", Name: "Backup A", DevicePath: "/dev/sdb1"},
 		},
-		Completions: []protectionutil.Completion{
-			{Serial: "usb-a", CompletedAt: now.Add(-protectionutil.StaleAfter - time.Hour)},
-			{Serial: "usb-a", CompletedAt: fresh},
+		Copies: []protectionutil.Copy{
+			copyOf("usb-a", "", testNow.Add(-protectionutil.StaleAfter-time.Hour)),
+			copyOf("usb-a", "", fresh),
 		},
 	})
-	if got.Level != protectionutil.LevelBasic {
-		t.Errorf("level = %s, want basic", got.Level)
+	if got.Level != protectionutil.LevelBasic || got.NextStep != protectionutil.NextStepAssignRole {
+		t.Fatalf("status = %+v, want basic and assign-backup-role", got)
 	}
-	if got.NextStep != protectionutil.NextStepAssignRole {
-		t.Errorf("next = %s, want assign-backup-role", got.NextStep)
-	}
-	const want = "Your files are on 2 drives. Add a second backup drive and keep it somewhere else."
+	const want = "Every drive has a copy on one backup drive. Add a second backup drive and keep it somewhere else."
 	if got.Sentence != want {
 		t.Errorf("sentence = %q, want %q", got.Sentence, want)
 	}
-	if len(got.Drives) != 1 || !got.Drives[0].Counts || got.Drives[0].Serial != "usb-a" {
-		t.Fatalf("drives = %+v, want usb-a counting", got.Drives)
+	data := dataDrive(t, got, "")
+	if data.Name != "Built-in storage" || data.Level != protectionutil.LevelBasic || len(data.Copies) != 1 {
+		t.Fatalf("built-in = %+v, want basic with one copy", data)
 	}
-	if got.Drives[0].LastBackedUp == nil || !got.Drives[0].LastBackedUp.Equal(fresh) {
-		t.Errorf("last backed up = %v, want %v", got.Drives[0].LastBackedUp, fresh)
+	if c := data.Copies[0]; c.BackupSerial != "usb-a" || c.BackupName != "Backup A" || !c.CopiedAt.Equal(fresh) || !c.Counts || c.Reason != "" {
+		t.Errorf("copy = %+v, want the newest record on Backup A, counting", c)
+	}
+	backup := backupDrive(t, got, "usb-a")
+	if backup.State != protectionutil.BackupStateCurrent || backup.Name != "Backup A" {
+		t.Errorf("backup = %+v, want current", backup)
+	}
+	if len(backup.Holds) != 1 || backup.Holds[0].Serial != "" || backup.Holds[0].Name != "Built-in storage" || !backup.Holds[0].CopiedAt.Equal(fresh) {
+		t.Errorf("holds = %+v, want built-in storage at %v", backup.Holds, fresh)
+	}
+	if backup.NewestCopy == nil || !backup.NewestCopy.Equal(fresh) {
+		t.Errorf("newest copy = %v, want %v", backup.NewestCopy, fresh)
 	}
 }
 
-func TestStatus_TwoGoodDrives(t *testing.T) {
-	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	fresh := now.Add(-time.Hour)
+func TestStatus_TwoFreshCopiesAreProtected(t *testing.T) {
+	fresh := testNow.Add(-time.Hour)
 	got := protectionutil.Status(protectionutil.StatusParams{
-		Now: now,
-		Roles: []protectionutil.Role{
-			{Serial: "usb-a", Role: "snapshot-backup"},
-			{Serial: "usb-b", Role: "snapshot-backup"},
-		},
+		Now:   testNow,
+		Roles: []protectionutil.Role{backupRole("usb-a"), backupRole("usb-b")},
 		Devices: []protectionutil.Device{
+			builtIn,
 			{Serial: "usb-a", Name: "Shelf", DevicePath: "/dev/sdb1"},
 			{Serial: "usb-b", Name: "Office", DevicePath: "/dev/sdc1"},
 		},
-		Completions: []protectionutil.Completion{
-			{Serial: "usb-a", CompletedAt: fresh},
-			{Serial: "usb-b", CompletedAt: fresh},
-		},
+		Copies: []protectionutil.Copy{copyOf("usb-a", "", fresh), copyOf("usb-b", "", fresh.Add(time.Minute))},
 	})
-	if got.Level != protectionutil.LevelProtected {
-		t.Errorf("level = %s, want protected", got.Level)
+	if got.Level != protectionutil.LevelProtected || got.NextStep != protectionutil.NextStepKeepElsewhere {
+		t.Fatalf("status = %+v, want protected and keep-one-elsewhere", got)
 	}
-	if got.NextStep != protectionutil.NextStepKeepElsewhere {
-		t.Errorf("next = %s, want keep-one-elsewhere", got.NextStep)
-	}
-	const want = "Your files are on 3 drives. Keep one backup drive somewhere else."
+	const want = "Every drive is on two backup drives. Keep one somewhere else."
 	if got.Sentence != want {
 		t.Errorf("sentence = %q, want %q", got.Sentence, want)
 	}
-	if len(got.Drives) != 2 || !got.Drives[0].Counts || !got.Drives[1].Counts {
-		t.Fatalf("drives = %+v, want both counting", got.Drives)
+	copies := dataDrive(t, got, "").Copies
+	if len(copies) != 2 || copies[0].BackupSerial != "usb-b" || copies[1].BackupSerial != "usb-a" {
+		t.Errorf("copies = %+v, want both, newest first", copies)
 	}
 }
 
-func TestStatus_InternalDriveIgnored(t *testing.T) {
-	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	fresh := now.Add(-time.Hour)
+// A backup drive is never a data drive, so a record of one backup drive on
+// another is not reported, and only the drives holding files are judged.
+func TestStatus_BackupDrivesAreNotDataDrives(t *testing.T) {
+	fresh := testNow.Add(-time.Hour)
 	got := protectionutil.Status(protectionutil.StatusParams{
-		Now: now,
+		Now: testNow,
 		Roles: []protectionutil.Role{
-			{Serial: "builtin", Role: "snapshot-backup"},
-			{Serial: "", Role: "snapshot-backup"},
+			backupRole("usb-a"), backupRole("usb-b"), {Serial: "main", Role: "default-storage"},
 		},
 		Devices: []protectionutil.Device{
-			{Serial: "builtin", Name: "Builtin", DevicePath: "/dev/nvme0n1p2", IsInternal: true},
+			builtIn,
+			{Serial: "main", Name: "Main", DevicePath: "/dev/sdd1"},
+			{Serial: "usb-a", Name: "A", DevicePath: "/dev/sdb1"},
+			{Serial: "usb-b", Name: "B", DevicePath: "/dev/sdc1"},
 		},
-		Completions: []protectionutil.Completion{
-			{Serial: "builtin", CompletedAt: fresh},
-			{Serial: "", CompletedAt: fresh},
+		Copies: []protectionutil.Copy{
+			copyOf("usb-a", "", fresh), copyOf("usb-a", "main", fresh), copyOf("usb-a", "usb-b", fresh),
 		},
 	})
-	if got.Level != protectionutil.LevelUnprotected {
-		t.Errorf("level = %s, want unprotected", got.Level)
+	if len(got.DataDrives) != 2 || got.DataDrives[0].Serial != "" || got.DataDrives[1].Serial != "main" {
+		t.Fatalf("data drives = %+v, want built-in storage and main", got.DataDrives)
 	}
+	if len(got.BackupDrives) != 2 {
+		t.Fatalf("backup drives = %+v, want usb-a and usb-b", got.BackupDrives)
+	}
+	if holds := backupDrive(t, got, "usb-a").Holds; len(holds) != 2 {
+		t.Errorf("usb-a holds = %+v, want only the two data drives", holds)
+	}
+	if got.Level != protectionutil.LevelBasic || got.NextStep != protectionutil.NextStepStartBackup {
+		t.Errorf("status = %+v, want basic and start-backup onto usb-b", got)
+	}
+	if state := backupDrive(t, got, "usb-b").State; state != protectionutil.BackupStateNoCopies {
+		t.Errorf("usb-b state = %s, want no-copies", state)
+	}
+}
+
+// A copy on built-in storage protects a USB main-storage drive (#4022), and a
+// backup drive on the same disk as the data drive is no copy of it.
+func TestStatus_DifferentDiskRule(t *testing.T) {
+	fresh := testNow.Add(-time.Hour)
+	got := protectionutil.Status(protectionutil.StatusParams{
+		Now: testNow,
+		Roles: []protectionutil.Role{
+			backupRole(""), backupRole("main-part"), {Serial: "main", Role: "default-storage"},
+		},
+		Devices: []protectionutil.Device{
+			builtIn,
+			{Serial: "main", Name: "Main", DevicePath: "/dev/sda1"},
+			{Serial: "main-part", Name: "Same disk", DevicePath: "/dev/sda2"},
+		},
+		Copies: []protectionutil.Copy{copyOf("", "main", fresh), copyOf("main-part", "main", fresh)},
+	})
+	main := dataDrive(t, got, "main")
+	if main.Level != protectionutil.LevelBasic || len(main.Copies) != 2 {
+		t.Fatalf("main = %+v, want basic with two copies", main)
+	}
+	for _, c := range main.Copies {
+		switch c.BackupSerial {
+		case "":
+			if !c.Counts || c.BackupName != "Built-in storage" {
+				t.Errorf("copy on built-in storage = %+v, want it to count", c)
+			}
+		case "main-part":
+			if c.Counts || c.Reason != protectionutil.ReasonSameDisk {
+				t.Errorf("copy on the same disk = %+v, want it not to count", c)
+			}
+		}
+	}
+	if len(got.DataDrives) != 1 {
+		t.Errorf("data drives = %+v, want only main: built-in storage is a backup drive", got.DataDrives)
+	}
+	// The same-disk drive can never give main another copy, and nothing else can.
 	if got.NextStep != protectionutil.NextStepAssignRole {
 		t.Errorf("next = %s, want assign-backup-role", got.NextStep)
 	}
-	if len(got.Drives) != 2 {
-		t.Fatalf("drives = %+v, want both internal drives listed", got.Drives)
+}
+
+func TestStatus_StaleCopy(t *testing.T) {
+	// A copy exactly StaleAfter old is stale, matching backup_stale.
+	stale := testNow.Add(-protectionutil.StaleAfter)
+	got := protectionutil.Status(protectionutil.StatusParams{
+		Now:     testNow,
+		Roles:   []protectionutil.Role{backupRole("usb-a")},
+		Devices: []protectionutil.Device{builtIn, {Serial: "usb-a", Name: "A", DevicePath: "/dev/sdb1"}},
+		Copies:  []protectionutil.Copy{copyOf("usb-a", "", stale)},
+	})
+	if got.Level != protectionutil.LevelUnprotected || got.NextStep != protectionutil.NextStepStartBackup {
+		t.Fatalf("status = %+v, want unprotected and start-backup", got)
 	}
-	for _, drive := range got.Drives {
-		if drive.Counts || drive.Reason != protectionutil.ReasonInternal {
-			t.Errorf("drive %+v counts or has the wrong reason", drive)
-		}
+	const want = "Built-in storage has no recent backup. Back up onto your backup drive."
+	if got.Sentence != want {
+		t.Errorf("sentence = %q, want %q", got.Sentence, want)
+	}
+	copies := dataDrive(t, got, "").Copies
+	if len(copies) != 1 || copies[0].Counts || copies[0].Reason != protectionutil.ReasonStale {
+		t.Errorf("copies = %+v, want one stale copy", copies)
+	}
+	if state := backupDrive(t, got, "usb-a").State; state != protectionutil.BackupStateBehind {
+		t.Errorf("state = %s, want behind", state)
 	}
 }
 
-func TestStatus_ReplaceSoonDoesNotCount(t *testing.T) {
-	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	fresh := now.Add(-time.Hour)
+func TestStatus_ReplaceSoonIsRetired(t *testing.T) {
+	fresh := testNow.Add(-time.Hour)
 	got := protectionutil.Status(protectionutil.StatusParams{
-		Now: now,
-		Roles: []protectionutil.Role{
-			{Serial: "worn", Role: "snapshot-backup"},
-			{Serial: "good", Role: "snapshot-backup"},
-		},
+		Now:   testNow,
+		Roles: []protectionutil.Role{backupRole("worn"), backupRole("good")},
 		Devices: []protectionutil.Device{
+			builtIn,
 			{Serial: "worn", Name: "Worn", DevicePath: "/dev/sdb1", ReplaceSoon: true},
 			{Serial: "good", Name: "Good", DevicePath: "/dev/sdc1"},
 		},
-		Completions: []protectionutil.Completion{
-			{Serial: "worn", CompletedAt: fresh},
-			{Serial: "good", CompletedAt: fresh},
-		},
+		Copies:    []protectionutil.Copy{copyOf("worn", "", fresh), copyOf("good", "", fresh)},
+		Receiving: []string{"worn"},
 	})
-	if got.Level != protectionutil.LevelBasic {
-		t.Errorf("level = %s, want basic", got.Level)
+	if got.Level != protectionutil.LevelBasic || got.NextStep != protectionutil.NextStepAssignRole {
+		t.Fatalf("status = %+v, want basic and assign-backup-role", got)
 	}
-	if got.NextStep != protectionutil.NextStepAssignRole {
-		t.Errorf("next = %s, want assign-backup-role", got.NextStep)
+	for _, c := range dataDrive(t, got, "").Copies {
+		if c.BackupSerial == "worn" && (c.Counts || c.Reason != protectionutil.ReasonReplaceSoon) {
+			t.Errorf("copy on the worn drive = %+v, want it not to count", c)
+		}
 	}
-	bySerial := map[string]protectionutil.DriveStatus{}
-	for _, drive := range got.Drives {
-		bySerial[drive.Serial] = drive
-	}
-	if bySerial["worn"].Counts || bySerial["worn"].Reason != protectionutil.ReasonReplaceSoon {
-		t.Errorf("worn = %+v, want it not to count", bySerial["worn"])
-	}
-	if !bySerial["good"].Counts {
-		t.Errorf("good = %+v, want it to count inside 30 days", bySerial["good"])
+	if state := backupDrive(t, got, "worn").State; state != protectionutil.BackupStateRetired {
+		t.Errorf("worn state = %s, want retired before receiving", state)
 	}
 }
 
-func TestStatus_ReplaceSoonAloneIsUnprotected(t *testing.T) {
-	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	got := protectionutil.Status(protectionutil.StatusParams{
-		Now:   now,
-		Roles: []protectionutil.Role{{Serial: "worn", Role: "snapshot-backup"}},
-		Devices: []protectionutil.Device{{
-			Serial: "worn", Name: "Worn", DevicePath: "/dev/sdb1", ReplaceSoon: true,
-		}},
-		Completions: []protectionutil.Completion{{Serial: "worn", CompletedAt: now.Add(-time.Hour)}},
-	})
-	if got.Level != protectionutil.LevelUnprotected {
-		t.Errorf("level = %s, want unprotected", got.Level)
-	}
-	if got.NextStep != protectionutil.NextStepAssignRole {
-		t.Errorf("next = %s, want another drive rather than a backup onto this one", got.NextStep)
-	}
-	if len(got.Drives) != 1 || got.Drives[0].Counts || got.Drives[0].Reason != protectionutil.ReasonReplaceSoon {
-		t.Fatalf("drives = %+v", got.Drives)
-	}
-}
-
-func TestStatus_StaleJob(t *testing.T) {
-	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	// A backup exactly StaleAfter old is stale, matching backup_stale.
-	stale := now.Add(-protectionutil.StaleAfter)
-	got := protectionutil.Status(protectionutil.StatusParams{
-		Now:   now,
-		Roles: []protectionutil.Role{{Serial: "usb-a", Role: "snapshot-backup"}},
-		Devices: []protectionutil.Device{{
-			Serial: "usb-a", Name: "Backup", DevicePath: "/dev/sdb1",
-		}},
-		Completions: []protectionutil.Completion{{Serial: "usb-a", CompletedAt: stale}},
-	})
-	if got.Level != protectionutil.LevelUnprotected {
-		t.Errorf("level = %s, want unprotected", got.Level)
-	}
-	if got.NextStep != protectionutil.NextStepStartBackup {
-		t.Errorf("next = %s, want start-backup", got.NextStep)
-	}
-	if len(got.Drives) != 1 || got.Drives[0].Counts || got.Drives[0].Reason != protectionutil.ReasonStale {
-		t.Fatalf("drives = %+v, want a stale drive", got.Drives)
-	}
-	if got.Drives[0].LastBackedUp == nil || !got.Drives[0].LastBackedUp.Equal(stale) {
-		t.Errorf("last backed up = %v, want %v", got.Drives[0].LastBackedUp, stale)
-	}
-}
-
-func TestStatus_FailedJob(t *testing.T) {
-	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	// A failed job is not a completion, and neither is a zero timestamp.
-	got := protectionutil.Status(protectionutil.StatusParams{
-		Now:   now,
-		Roles: []protectionutil.Role{{Serial: "usb-a", Role: "snapshot-backup"}},
-		Devices: []protectionutil.Device{{
-			Serial: "usb-a", Name: "Backup", DevicePath: "/dev/sdb1",
-		}},
-		Completions: []protectionutil.Completion{{Serial: "usb-a", CompletedAt: time.Time{}}},
-	})
-	if got.Level != protectionutil.LevelUnprotected {
-		t.Errorf("level = %s, want unprotected", got.Level)
-	}
-	if got.NextStep != protectionutil.NextStepStartBackup {
-		t.Errorf("next = %s, want start-backup", got.NextStep)
-	}
-	if len(got.Drives) != 1 || got.Drives[0].Counts || got.Drives[0].Reason != protectionutil.ReasonNoCompletedBackup {
-		t.Fatalf("drives = %+v, want no completed backup", got.Drives)
-	}
-	if got.Drives[0].LastBackedUp != nil {
-		t.Errorf("last backed up = %v, want none", got.Drives[0].LastBackedUp)
-	}
-}
-
-func TestStatus_TwoPartitionsCountOnce(t *testing.T) {
-	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	fresh := now.Add(-time.Hour)
-
-	t.Run("mac", func(t *testing.T) {
-		got := protectionutil.Status(twoPartitions(now, fresh, "/dev/disk3s1", "/dev/disk3s5"))
-		assertOneDisk(t, got)
-	})
-	t.Run("linux", func(t *testing.T) {
-		got := protectionutil.Status(twoPartitions(now, fresh, "/dev/sda1", "/dev/sda2"))
-		assertOneDisk(t, got)
-	})
-	t.Run("one partition qualifies", func(t *testing.T) {
-		got := protectionutil.Status(protectionutil.StatusParams{
-			Now: now,
-			Roles: []protectionutil.Role{
-				{Serial: "part-a", Role: "snapshot-backup"},
-				{Serial: "part-b", Role: "snapshot-backup"},
-			},
-			Devices: []protectionutil.Device{
-				{Serial: "part-a", DevicePath: "/dev/sda1"},
-				{Serial: "part-b", DevicePath: "/dev/sda2"},
-			},
-			Completions: []protectionutil.Completion{
-				{Serial: "part-a", CompletedAt: fresh},
-			},
+func TestStatus_TwoPartitionsOfOneBackupDiskCountOnce(t *testing.T) {
+	fresh := testNow.Add(-time.Hour)
+	for name, paths := range map[string][2]string{
+		"mac":   {"/dev/disk3s1", "/dev/disk3s5"},
+		"linux": {"/dev/sda1", "/dev/sda2"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := protectionutil.Status(protectionutil.StatusParams{
+				Now:   testNow,
+				Roles: []protectionutil.Role{backupRole("part-b"), backupRole("part-a")},
+				Devices: []protectionutil.Device{
+					builtIn,
+					{Serial: "part-a", Name: "A", DevicePath: paths[0]},
+					{Serial: "part-b", Name: "B", DevicePath: paths[1]},
+				},
+				Copies: []protectionutil.Copy{copyOf("part-a", "", fresh), copyOf("part-b", "", fresh)},
+			})
+			if got.Level != protectionutil.LevelBasic || got.NextStep != protectionutil.NextStepAssignRole {
+				t.Fatalf("status = %+v, want basic and assign-backup-role", got)
+			}
+			for _, c := range dataDrive(t, got, "").Copies {
+				counts := c.BackupSerial == "part-a"
+				if c.Counts != counts || (!counts && c.Reason != protectionutil.ReasonDuplicateDisk) {
+					t.Errorf("copy %+v, want only part-a to count", c)
+				}
+			}
 		})
-		if got.Level != protectionutil.LevelBasic {
-			t.Fatalf("level = %s, want basic", got.Level)
-		}
-		if !got.Drives[0].Counts || got.Drives[1].Counts {
-			t.Fatalf("drives = %+v, want only part-a to count", got.Drives)
-		}
-		if got.Drives[1].Reason != protectionutil.ReasonNoCompletedBackup {
-			t.Errorf("part-b reason = %q", got.Drives[1].Reason)
-		}
-	})
+	}
 }
 
-func TestStatus_EmptyDevicePathStandsAlone(t *testing.T) {
-	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	fresh := now.Add(-time.Hour)
+// The whole Quark is as protected as its weakest data drive, and the next
+// step names the backup drive that could give that drive another copy.
+func TestStatus_LevelIsTheWeakestDataDrive(t *testing.T) {
+	fresh := testNow.Add(-time.Hour)
 	got := protectionutil.Status(protectionutil.StatusParams{
-		Now: now,
-		Roles: []protectionutil.Role{
-			{Serial: "usb-a", Role: "snapshot-backup"},
-			{Serial: "usb-b", Role: "snapshot-backup"},
-		},
+		Now:   testNow,
+		Roles: []protectionutil.Role{backupRole("usb-a"), backupRole("usb-b")},
 		Devices: []protectionutil.Device{
-			{Serial: "usb-a", Name: "Unplugged A"},
-			{Serial: "usb-b", Name: "Unplugged B"},
+			builtIn,
+			{Serial: "photos", Name: "Photos", DevicePath: "/dev/sdd1"},
+			{Serial: "usb-a", Name: "A", DevicePath: "/dev/sdb1"},
+			{Serial: "usb-b", Name: "B", DevicePath: "/dev/sdc1"},
 		},
-		Completions: []protectionutil.Completion{
-			{Serial: "usb-a", CompletedAt: fresh},
-			{Serial: "usb-b", CompletedAt: fresh},
+		Copies: []protectionutil.Copy{
+			copyOf("usb-a", "", fresh), copyOf("usb-b", "", fresh), copyOf("usb-a", "photos", fresh),
 		},
+	})
+	if dataDrive(t, got, "").Level != protectionutil.LevelProtected || dataDrive(t, got, "photos").Level != protectionutil.LevelBasic {
+		t.Fatalf("data drives = %+v, want built-in protected and photos basic", got.DataDrives)
+	}
+	if got.Level != protectionutil.LevelBasic || got.NextStep != protectionutil.NextStepStartBackup {
+		t.Fatalf("status = %+v, want basic and start-backup", got)
+	}
+	const want = "Every drive has a copy on one backup drive. Back up onto your other backup drive."
+	if got.Sentence != want {
+		t.Errorf("sentence = %q, want %q", got.Sentence, want)
+	}
+	if state := backupDrive(t, got, "usb-a").State; state != protectionutil.BackupStateCurrent {
+		t.Errorf("usb-a = %s, want current", state)
+	}
+	if state := backupDrive(t, got, "usb-b").State; state != protectionutil.BackupStateBehind {
+		t.Errorf("usb-b = %s, want behind: it lacks photos", state)
+	}
+}
+
+// An unplugged backup drive is away, and its records still count.
+func TestStatus_AwayAndReceiving(t *testing.T) {
+	fresh := testNow.Add(-time.Hour)
+	got := protectionutil.Status(protectionutil.StatusParams{
+		Now: testNow,
+		Roles: []protectionutil.Role{
+			{Serial: "gone", Role: "snapshot-backup", Name: "Offsite"},
+			backupRole("busy"),
+		},
+		Devices:   []protectionutil.Device{builtIn, {Serial: "busy", Name: "Busy", DevicePath: "/dev/sdb1"}},
+		Copies:    []protectionutil.Copy{copyOf("gone", "", fresh)},
+		Receiving: []string{"busy"},
+	})
+	gone := backupDrive(t, got, "gone")
+	if gone.State != protectionutil.BackupStateAway || gone.Name != "Offsite" {
+		t.Errorf("gone = %+v, want away and named from its role", gone)
+	}
+	if got.Level != protectionutil.LevelBasic {
+		t.Errorf("level = %s, want basic from the away drive's record", got.Level)
+	}
+	if state := backupDrive(t, got, "busy").State; state != protectionutil.BackupStateReceiving {
+		t.Errorf("busy = %s, want receiving", state)
+	}
+	if b := backupDrive(t, got, "busy"); b.Holds == nil || len(b.Holds) != 0 || b.NewestCopy != nil {
+		t.Errorf("busy = %+v, want no holds and no newest copy", b)
+	}
+}
+
+// Two unplugged backup drives have no paths. Each stands alone, so both count.
+func TestStatus_EmptyDevicePathStandsAlone(t *testing.T) {
+	fresh := testNow.Add(-time.Hour)
+	got := protectionutil.Status(protectionutil.StatusParams{
+		Now:     testNow,
+		Roles:   []protectionutil.Role{backupRole("usb-a"), backupRole("usb-b")},
+		Devices: []protectionutil.Device{{Serial: "", Name: "Built-in storage"}},
+		Copies:  []protectionutil.Copy{copyOf("usb-a", "", fresh), copyOf("usb-b", "", fresh)},
 	})
 	if got.Level != protectionutil.LevelProtected {
-		t.Errorf("level = %s, want protected", got.Level)
-	}
-	if len(got.Drives) != 2 || !got.Drives[0].Counts || !got.Drives[1].Counts {
-		t.Fatalf("drives = %+v, want each empty path to count on its own", got.Drives)
-	}
-}
-
-func twoPartitions(now, fresh time.Time, pathA, pathB string) protectionutil.StatusParams {
-	return protectionutil.StatusParams{
-		Now: now,
-		Roles: []protectionutil.Role{
-			{Serial: "part-b", Role: "snapshot-backup"},
-			{Serial: "part-a", Role: "snapshot-backup"},
-		},
-		Devices: []protectionutil.Device{
-			{Serial: "part-a", Name: "A", DevicePath: pathA},
-			{Serial: "part-b", Name: "B", DevicePath: pathB},
-		},
-		Completions: []protectionutil.Completion{
-			{Serial: "part-a", CompletedAt: fresh},
-			{Serial: "part-b", CompletedAt: fresh},
-		},
-	}
-}
-
-func assertOneDisk(t *testing.T, got protectionutil.StatusResult) {
-	t.Helper()
-	if got.Level != protectionutil.LevelBasic {
-		t.Fatalf("level = %s, want basic", got.Level)
-	}
-	if got.NextStep != protectionutil.NextStepAssignRole {
-		t.Errorf("next = %s, want assign-backup-role", got.NextStep)
-	}
-	var counting int
-	for _, drive := range got.Drives {
-		if drive.Counts {
-			counting++
-			if drive.Serial != "part-a" {
-				t.Errorf("counting drive = %s, want part-a", drive.Serial)
-			}
-			continue
-		}
-		if drive.Reason != protectionutil.ReasonSameDisk {
-			t.Errorf("drive %s reason = %q, want same disk", drive.Serial, drive.Reason)
-		}
-	}
-	if counting != 1 {
-		t.Fatalf("counting drives = %d, want 1 (%+v)", counting, got.Drives)
+		t.Errorf("level = %s, want protected (%+v)", got.Level, got.DataDrives)
 	}
 }

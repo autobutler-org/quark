@@ -3,9 +3,12 @@ package deviceutil
 import (
 	"context"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -126,5 +129,46 @@ func TestListStatusesLeavesUnreadyDriveUnregistered(t *testing.T) {
 	}
 	if invalidations != 0 {
 		t.Fatalf("invalidations = %d, want 0", invalidations)
+	}
+}
+
+// TestListStatusesReportsActiveBackupJob checks each backup drive reports the
+// snapshot backup pending or running onto it, so every tab knows a backup is
+// running, and no other drive reports one (#4037).
+func TestListStatusesReportsActiveBackupJob(t *testing.T) {
+	ctx := context.Background()
+	database := dbtest.NewDB(t)
+	for serial, role := range map[string]string{"BUSY": "snapshot-backup", "IDLE": "snapshot-backup", "DATA": "default-storage"} {
+		if err := database.Queries.UpsertDeviceRole(ctx, db.UpsertDeviceRoleParams{DeviceSerial: serial, Role: role}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	job, err := database.Queries.CreateJob(ctx, db.CreateJobParams{
+		Kind:   "snapshot-backup",
+		Name:   "Back up onto BUSY",
+		Params: `{"targetDeviceSerial":"BUSY"}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := storageutil.NewStorageService(healthDetector{devices: []storageutil.Device{
+		healthDevice("BUSY", "/dev/sdb1"),
+		healthDevice("IDLE", "/dev/sdc1"),
+		healthDevice("DATA", "/dev/sdd1"),
+	}})
+
+	result, err := ListStatuses(ListStatusesParams{Ctx: ctx, Storage: svc, Database: database, Health: unknownHealth})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"BUSY": strconv.FormatInt(job.ID, 10), "IDLE": "", "DATA": ""}
+	if len(result.Statuses) != len(want) {
+		t.Fatalf("statuses = %+v, want %d", result.Statuses, len(want))
+	}
+	for _, status := range result.Statuses {
+		serial := status.UsbInfo.GetSerial()
+		if status.ActiveBackupJobID != want[serial] {
+			t.Errorf("%s activeBackupJobId = %q, want %q", serial, status.ActiveBackupJobID, want[serial])
+		}
 	}
 }

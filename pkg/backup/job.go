@@ -89,7 +89,11 @@ func runSnapshotJob(ctx context.Context, params NewHandlerParams, raw json.RawMe
 	if err != nil {
 		return ErrTargetNotManaged
 	}
-	sources, err := gatherSourceDevices(params.Storage, params.Registry, jobParams.TargetDeviceSerial)
+	backups, err := backupSerials(ctx, params.Database.Queries)
+	if err != nil {
+		return err
+	}
+	sources, err := gatherSourceDevices(params.Storage, params.Registry, backups, jobParams.TargetDeviceSerial)
 	if err != nil {
 		return fmt.Errorf("failed to gather sources: %w", err)
 	}
@@ -123,6 +127,7 @@ func runSnapshotJob(ctx context.Context, params NewHandlerParams, raw json.RawMe
 			ID:                 strconv.FormatInt(id, 10),
 			Status:             BackupStatusPending,
 			TargetDeviceSerial: jobParams.TargetDeviceSerial,
+			TargetName:         driveName(driveNames(params.Storage), jobParams.TargetDeviceSerial),
 		},
 		Save:        save,
 		EventBus:    params.EventBus,

@@ -10546,7 +10546,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Reports how protected the files are. unprotected means no snapshot-backup drive has a completed backup within 30 days, basic means one such drive after partitions of one disk are grouped, and protected means two or more. The live copy on the default-storage drive and the internal drive never count. A failed, unfinished, or stale backup does not count. A drive whose health verdict is replace-soon does not count, even inside 30 days. Watch and unknown still follow the 30-day rule. sentence is one plain sentence. nextStep is assign-backup-role, start-backup, or keep-one-elsewhere. drives lists each snapshot-backup drive, whether it counts, why not, and when it was last backed up. Refetch when a backup completes or fails (backup_completed, backup_failed).",
+                "description": "Reports how protected the files are, per drive. A data drive is every connected drive that is not a snapshot-backup drive: built-in storage, the default-storage drive, and unassigned drives. A backup drive is every snapshot-backup drive, connected or not. A backup drive's copy of a data drive is its newest complete run folder under backups/ whose manifest names that data drive, dated when the run completed. An attached backup drive's run folders are read on every request, and a backup drive that is away answers from the scan cached when it was last attached; one never scanned has no copies. A copy counts when the backup drive's health verdict is not replace-soon, the copy is inside 30 days, and the backup drive is on a different physical disk from the data drive; two partitions of one backup disk count once per data drive. A data drive with no counting copy is unprotected, one is basic, and two or more is protected. level is the weakest data drive's. sentence is one plain sentence. nextStep is start-backup when a backup drive could give the weakest data drive another counting copy, assign-backup-role when none can, and keep-one-elsewhere when every data drive is protected. dataDrives lists each data drive's copies with whether each counts and why not. backupDrives lists each backup drive's state (retired, receiving, away, no-copies, current, or behind, first match wins) and the data drives it holds. Refetch when a backup completes or fails (backup_completed, backup_failed).",
                 "produces": [
                     "application/json"
                 ],
@@ -12501,6 +12501,10 @@ const docTemplate = `{
                 "createdAt": {
                     "type": "string"
                 },
+                "currentSource": {
+                    "description": "CurrentSource is the name of the drive being copied now. Empty before\ncopying starts and after the backup completes.",
+                    "type": "string"
+                },
                 "errorMsg": {
                     "type": "string"
                 },
@@ -12522,10 +12526,21 @@ const docTemplate = `{
                         "$ref": "#/definitions/backup.SourceDeviceProgress"
                     }
                 },
+                "sourceNames": {
+                    "description": "SourceNames is what the app calls each drive copied, in the order\nthey are copied. It is set when the backup starts scanning.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "status": {
                     "$ref": "#/definitions/backup.BackupJobStatus"
                 },
                 "targetDeviceSerial": {
+                    "type": "string"
+                },
+                "targetName": {
+                    "description": "TargetName is what the app calls the drive backed up onto.",
                     "type": "string"
                 },
                 "totalBytes": {
@@ -15896,22 +15911,97 @@ const docTemplate = `{
                 }
             }
         },
-        "v0_storage.ProtectionDrive": {
+        "v0_storage.ProtectionBackupDrive": {
             "type": "object",
             "properties": {
-                "counts": {
-                    "description": "Counts is whether this drive adds a backup copy. Partitions of one disk share a single count.",
-                    "type": "boolean"
-                },
-                "lastBackedUp": {
-                    "description": "LastBackedUp is when this drive's newest completed snapshot backup finished.\nNil when it has no completed backup.",
-                    "type": "string"
+                "holds": {
+                    "description": "Holds is one per current data drive this drive has a copy of, newest first.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v0_storage.ProtectionHeldCopy"
+                    }
                 },
                 "name": {
                     "type": "string"
                 },
+                "newestCopy": {
+                    "description": "NewestCopy is the newest of Holds. Null when Holds is empty.",
+                    "type": "string"
+                },
+                "serial": {
+                    "type": "string"
+                },
+                "state": {
+                    "description": "State is retired, receiving, away, no-copies, current, or behind; the first that applies.",
+                    "type": "string",
+                    "enum": [
+                        "no-copies",
+                        "receiving",
+                        "current",
+                        "behind",
+                        "away",
+                        "retired"
+                    ]
+                }
+            }
+        },
+        "v0_storage.ProtectionCopy": {
+            "type": "object",
+            "properties": {
+                "backupName": {
+                    "type": "string"
+                },
+                "backupSerial": {
+                    "type": "string"
+                },
+                "copiedAt": {
+                    "type": "string"
+                },
+                "counts": {
+                    "description": "Counts is whether this copy protects the drive.",
+                    "type": "boolean"
+                },
                 "reason": {
-                    "description": "Reason is why Counts is false. Empty when Counts is true.",
+                    "description": "Reason is why Counts is false, in one plain sentence. Empty when Counts is true.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_storage.ProtectionDataDrive": {
+            "type": "object",
+            "properties": {
+                "copies": {
+                    "description": "Copies is one per backup drive with a copy of this drive, newest first.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v0_storage.ProtectionCopy"
+                    }
+                },
+                "level": {
+                    "description": "Level is unprotected (no counting copy), basic (one), or protected (two or more).",
+                    "type": "string",
+                    "enum": [
+                        "unprotected",
+                        "basic",
+                        "protected"
+                    ]
+                },
+                "name": {
+                    "type": "string"
+                },
+                "serial": {
+                    "description": "Serial is empty for built-in storage.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_storage.ProtectionHeldCopy": {
+            "type": "object",
+            "properties": {
+                "copiedAt": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 },
                 "serial": {
@@ -15922,15 +16012,22 @@ const docTemplate = `{
         "v0_storage.ProtectionStatus": {
             "type": "object",
             "properties": {
-                "drives": {
-                    "description": "Drives lists every snapshot-backup drive.",
+                "backupDrives": {
+                    "description": "BackupDrives lists every snapshot-backup drive, connected or not.",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/v0_storage.ProtectionDrive"
+                        "$ref": "#/definitions/v0_storage.ProtectionBackupDrive"
+                    }
+                },
+                "dataDrives": {
+                    "description": "DataDrives lists every connected drive that is not a backup drive, built-in storage first.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v0_storage.ProtectionDataDrive"
                     }
                 },
                 "level": {
-                    "description": "Level is unprotected, basic, or protected.",
+                    "description": "Level is the weakest data drive's: unprotected, basic, or protected.",
                     "type": "string",
                     "enum": [
                         "unprotected",
@@ -15948,7 +16045,7 @@ const docTemplate = `{
                     ]
                 },
                 "sentence": {
-                    "description": "Sentence is one plain sentence describing that level.",
+                    "description": "Sentence is one plain sentence describing the whole Quark from its weakest data drive.",
                     "type": "string"
                 }
             }

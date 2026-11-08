@@ -98,6 +98,12 @@ func TestSnapshotBackup_RecordsCompletion(t *testing.T) {
 	if got, want := lastDriveSnapshot(t, queries, "TARGET"), job.CompletedAt.Truncate(time.Second); !got.Equal(want) {
 		t.Errorf("LastDriveSnapshot(TARGET) = %v, want the job's completion time %v", got, want)
 	}
+	// The target's run cache holds the new run, so it counts while the
+	// drive is away.
+	copies, err := cachedRunCopies(context.Background(), queries, "TARGET")
+	if err != nil || len(copies) != 1 || copies[0].Serial != "SER1" || !copies[0].CompletedAt.Equal(*job.CompletedAt) {
+		t.Errorf("cached copies = %+v, %v; want SER1 at the job's completion time %v", copies, err, job.CompletedAt)
+	}
 }
 
 func TestSnapshotBackup_FailedBackupRecordsNothing(t *testing.T) {
@@ -121,6 +127,9 @@ func TestSnapshotBackup_FailedBackupRecordsNothing(t *testing.T) {
 	}
 	if got := lastDriveSnapshot(t, queries, "TARGET"); !got.IsZero() {
 		t.Errorf("LastDriveSnapshot(TARGET) = %v after a failed backup, want the zero time", got)
+	}
+	if copies, err := cachedRunCopies(context.Background(), queries, "TARGET"); err != nil || len(copies) != 0 {
+		t.Errorf("cached copies = %+v, %v after a failed backup, want none", copies, err)
 	}
 }
 

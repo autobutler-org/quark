@@ -416,8 +416,9 @@ stateDiagram-v2
 - A copy counts for a data drive only when it sits on a different physical disk. This replaces "the internal
   drive never counts": a backup on built-in storage protects a USB default-storage drive, and never built-in's own
   files.
-- Each completion writes `lastSnapshotBackup:<target>:<source>` to the `settings` table beside the per-target row,
-  so a data drive keeps its status while its backup drive is unplugged. No migration.
+- A backup drive's copies come from its run folders: per data drive, the newest run whose manifest names it. Each
+  scan of an attached drive rewrites `backupRuns:<serial>` in the `settings` table, so a data drive keeps its
+  status while its backup drive is unplugged. No migration.
 - The live mirror on a USB default-storage drive still does not count as a copy. It is a mirror, not a snapshot.
 - A failed run leaves each data drive where it was and shows the error on the backup drive that failed.
 - Backups stay manual here. A cadence is #3984.
