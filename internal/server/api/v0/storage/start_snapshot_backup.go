@@ -61,6 +61,7 @@ func startSnapshotBackup(c *gin.Context) *serverutil.Response {
 		Queue:              deps.JobQueue(),
 		UserID:             userID,
 		TargetDeviceSerial: req.TargetDeviceSerial,
+		Storage:            deps.StorageService(),
 	})
 	var inProgress *backup.BackupInProgressError
 	switch {

@@ -148,7 +148,9 @@ Covers the System page's Storage tab (`/system/storage`) — listing, mounting, 
   restart". Start a new backup.
 - If the status poll gets a 404, the job is gone for good: polling stops, the progress card clears and a snack bar
   says the backup couldn't be checked. Any other poll error keeps polling.
-- Backups are not listed on the Jobs tab (JN-JOB-001), which shows video conversions only.
+- The backup is also listed on the Jobs tab (JN-JOB-001), with Cancel and Retry. Its name says which drives it copies
+  and onto which drive, such as **Back up Quark, Photos onto Built-in storage**; past two drives it counts the rest
+  ("and 2 more").
 
 ---
 
@@ -323,7 +325,8 @@ including one that is not mounted.
 - The dialog is titled **Restore files from this drive**. It says each drive's files go back onto that drive, and that a file already there is kept as it is. It also says a snapshot keeps files that were deleted since, so the restore brings them back.
 - Canceling restores nothing.
 - After **Restore**, a snack bar says how many drives' files are being restored. Each drive's files come back onto that drive. Files already there are kept, and files deleted since the snapshot return.
-- The copy runs as a job named **Restore files from snapshot**. The Jobs tab follows it.
+- The copy runs as a job named after the snapshot drive, such as **Restore files from Backup**. The Jobs tab follows
+  it.
 
 **Notes:**
 

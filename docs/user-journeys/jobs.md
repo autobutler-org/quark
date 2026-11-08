@@ -23,8 +23,8 @@ Cancel and Retry.
 **Notes:**
 
 - The old `/jobs` address redirects here, with the query kept.
-- Only video conversions are listed. A snapshot backup is also a job on the Quark's queue, but its progress shows
-  on the Storage tab (JN-SD-008), not here.
+- Video conversions, snapshot backups (JN-SD-008) and file restores from a snapshot are listed. A backup also
+  shows its progress on the Storage tab.
 - The list reloads when the event stream reconnects (a `resync`), so a conversion that finished while the connection
   was down shows its final state without a refresh.
 

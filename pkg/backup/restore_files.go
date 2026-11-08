@@ -17,6 +17,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -72,6 +73,9 @@ type StartRestoreFilesParams struct {
 	UserID int64
 	// BackupSerial is the snapshot drive, "" for built-in storage.
 	BackupSerial string
+	// Storage names the snapshot drive in the job name. Nil names it by
+	// serial.
+	Storage *storageutil.StorageService
 	// MissingToBuiltIn puts the files of a device that is no longer attached
 	// on built-in storage. Unset, they stay on the snapshot drive and are
 	// named in [StartRestoreFilesResult.Missing].
@@ -137,7 +141,7 @@ func StartRestoreFiles(params StartRestoreFilesParams) (StartRestoreFilesResult,
 
 	queued, err := params.Queue.Enqueue(ctx, jobutil.EnqueueParams{
 		Kind:   RestoreKind,
-		Name:   "Restore files from snapshot",
+		Name:   restoreJobName(driveNames(params.Storage), params.BackupSerial),
 		Params: RestoreJobParams{BackupSerial: params.BackupSerial, Folders: result.Folders},
 		UserID: params.UserID,
 	})

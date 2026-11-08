@@ -49,6 +49,7 @@ func restoreSnapshotFiles(c *gin.Context) *serverutil.Response {
 		UserID:           userID,
 		BackupSerial:     req.DeviceSerial,
 		MissingToBuiltIn: req.MissingToBuiltIn,
+		Storage:          deps.StorageService(),
 	})
 	var notFound *fileutil.NotFoundError
 	switch {
