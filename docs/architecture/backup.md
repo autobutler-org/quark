@@ -245,6 +245,154 @@ snapshot-backup drive still counts when the rules above say so.
 When a snapshot backup completes or fails, `SnapshotBackup` publishes `backup_completed` or `backup_failed`.
 An open client should refetch protection status on either one.
 
+## Backup state machine
+
+The Storage tab has no explicit state machine for backups. These diagrams draw the one implied by the code, and
+the redesign that replaces it.
+
+### Today
+
+Three regions run independently, and nothing ties the job, the badge, and the level together. Red states are
+reachable and misleading.
+
+```mermaid
+stateDiagram-v2
+  state "Storage tab today" as Today {
+    state "Whole-Quark level (protection card)" as Level {
+      [*] --> UAssign
+      UAssign : Unprotected · Assign the backup role
+      UStart : Unprotected · Start a backup
+      BAssign : Basic · Add a second backup drive
+      BStart : Basic · Start a backup on your other backup drive
+      Prot : Protected · Keep one backup drive somewhere else
+      UAssign --> UStart : role on an external drive
+      UAssign --> UAssign : role on built-in or Replace soon drive
+      UStart --> BAssign : snapshot completes
+      BAssign --> BStart : role on a second external drive
+      BStart --> Prot : snapshot completes
+      Prot --> BStart : a copy passes 30 days
+      BAssign --> UStart : the copy passes 30 days
+      UStart --> UAssign : role removed
+    }
+    --
+    state "Snapshot Backup drive card" as Card {
+      [*] --> Unassigned
+      Unassigned --> BadgeTarget : Set Role, first backup drive in list
+      Unassigned --> PlainTarget : Set Role, later in list
+      Unassigned --> BuiltInTarget : Set Role on built-in storage
+      BadgeTarget : Back Up + whole-Quark badge, e.g. Unprotected
+      PlainTarget : Back Up, no status at all
+      BuiltInTarget : Back Up + Unprotected forever, never counts
+      BadgeTarget --> PlainTarget : list order changes
+      PlainTarget --> BadgeTarget : list order changes
+      BadgeTarget --> EjectedBadge : Eject
+      EjectedBadge : Unmounted, still wears the badge
+    }
+    --
+    state "Backup job (local to this tab)" as Job {
+      [*] --> Idle
+      Idle --> Running : Back Up, then Start Backup
+      Running --> Done : job completes
+      Running --> Failed : job fails
+      Running --> Idle : status poll returns 404
+      Done : Backup complete card, never cleared
+      Failed : Backup failed card, never cleared
+      Idle : also shown while another session runs a backup
+    }
+    --
+    state "Data drives (built-in, Default Storage)" as Data {
+      [*] --> NoState
+      NoState : no backup state shown or stored
+    }
+  }
+  classDef broken fill:#fdecea,stroke:#b42318,color:#5c1010
+  class BadgeTarget, BuiltInTarget, EjectedBadge, Done, Failed, Idle, NoState broken
+```
+
+- The whole-Quark level is drawn as a badge on a backup drive, beside **Back Up**, so it reads as "this drive is
+  unprotected".
+- The badge goes on the first snapshot-backup drive in list order, so a fresh drive can show a stale drive's level.
+- Built-in storage as the backup drive reads Unprotected forever, yet a backup onto it clears the "Back up this
+  Quark" reminder, which reads the global `lastSnapshotBackup` row.
+- An ejected backup drive keeps the badge.
+- The Backup complete and Backup failed cards stay until the tab is rebuilt.
+- The running state belongs to the tab that started the job, so a backup started elsewhere leaves every button
+  enabled until the server answers 409.
+- Every drive but the target is a source, other backup drives included, so one backup drive holds a copy of
+  another.
+- The drives holding the files never show whether they are backed up, and nothing records it per drive.
+
+### Planned redesign
+
+Not built yet. Drives split into two roles. A data drive (built-in storage, the default-storage drive, any other
+drive with files) is backed up or not. A backup drive holds copies and is current or behind. The whole-Quark level
+is the weakest data drive, and the running state comes from the server rather than the tab.
+
+```mermaid
+stateDiagram-v2
+  state "Storage tab redesigned" as Next {
+    state "Each data drive (built-in, main storage, other drives)" as DataDrive {
+      [*] --> NotBackedUp
+      NotBackedUp : Not backed up · Back up now
+      OneCopy : Backed up · Backup A, Nov 2
+      TwoCopies : Protected · on 2 backup drives
+      BackingUp : Backing up to Backup A · progress
+      NotBackedUp --> BackingUp : Back up now
+      OneCopy --> BackingUp : Back up now
+      TwoCopies --> BackingUp : Back up now
+      BackingUp --> OneCopy : first fresh copy lands
+      BackingUp --> TwoCopies : copy lands on a second disk
+      OneCopy --> NotBackedUp : copy passes 30 days or its drive is retired
+      TwoCopies --> OneCopy : one copy passes 30 days
+    }
+    --
+    state "Each backup drive" as BackupDrive {
+      [*] --> Empty : Set role to Backup drive
+      Empty : No copies yet · Back up onto this drive
+      Writing : Receiving copies of the named drives
+      Current : Holds every data drive · newest Nov 2
+      Behind : Missing a data drive, or older than 30 days
+      Away : Unplugged · still counts from its record
+      Retired : Replace soon · does not count
+      Empty --> Writing : Back up onto this drive
+      Behind --> Writing : Back up onto this drive
+      Current --> Writing : Back up onto this drive
+      Writing --> Current : completes
+      Writing --> Behind : fails, error shown on this card
+      Current --> Behind : 30 days pass or a data drive is added
+      Current --> Away : unplugged
+      Behind --> Away : unplugged
+      Away --> Current : plugged back in, still fresh
+      Away --> Behind : plugged back in, stale
+      Current --> Retired : health turns Replace soon
+      Behind --> Retired : health turns Replace soon
+    }
+    --
+    state "Whole Quark = weakest data drive" as Quark {
+      [*] --> QUnprotected
+      QUnprotected : Unprotected · a data drive has no fresh copy
+      QBasic : Basic · every data drive has one fresh copy
+      QProt : Protected · every data drive has two, on different disks
+      QUnprotected --> QBasic : last uncovered drive backed up
+      QBasic --> QProt : second backup drive catches up
+      QProt --> QBasic : a copy ages out
+      QBasic --> QUnprotected : a copy ages out or a data drive is added
+    }
+  }
+  classDef good fill:#e7f3ec,stroke:#2f6b4f,color:#123323
+  class TwoCopies, Current, QProt good
+```
+
+- Sources are data drives only. Backup drives stop copying each other.
+- A copy counts for a data drive only when it sits on a different physical disk. This replaces "the internal
+  drive never counts": a backup on built-in storage protects a USB default-storage drive, and never built-in's own
+  files.
+- Each completion writes `lastSnapshotBackup:<target>:<source>` to the `settings` table beside the per-target row,
+  so a data drive keeps its status while its backup drive is unplugged. No migration.
+- The live mirror on a USB default-storage drive still does not count as a copy. It is a mirror, not a snapshot.
+- A failed run leaves each data drive where it was and shows the error on the backup drive that failed.
+- Backups stay manual here. A cadence is #3984.
+
 ## Drive health
 
 Every managed drive gets a verdict on `GET /api/v0/storage/devices/status`, in `health` on each device. The
