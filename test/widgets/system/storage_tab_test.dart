@@ -117,7 +117,7 @@ void main() {
   });
 
   testWidgets('a snapshot backup asks for no password', (tester) async {
-    await openFromCard(tester, 'Back Up');
+    await openFromCard(tester, 'Back up onto this drive');
 
     expect(find.byType(CredentialsDialog), findsNothing);
     expect(find.byType(SnapshotBackupDialog), findsOneWidget);
@@ -136,7 +136,7 @@ void main() {
   });
 
   testWidgets('Start Backup sends the target and nothing else', (tester) async {
-    await openFromCard(tester, 'Back Up');
+    await openFromCard(tester, 'Back up onto this drive');
 
     await closeWith(tester, 'Start Backup');
 

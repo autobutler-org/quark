@@ -20,7 +20,11 @@ void main() {
     final calls = <(String, String)>[];
     final controller = RestoreVaultController(
       restoreVault:
-          ({required String deviceSerial, required String password}) async {
+          ({
+            required String deviceSerial,
+            required String password,
+            String? run,
+          }) async {
             calls.add((deviceSerial, password));
             return const VaultRestoreResult(
               accounts: 2,
@@ -45,12 +49,15 @@ void main() {
 
     final one = RestoreVaultController(
       restoreVault:
-          ({required String deviceSerial, required String password}) async =>
-              const VaultRestoreResult(
-                accounts: 1,
-                items: 1,
-                backupPasswordAccounts: ['alice'],
-              ),
+          ({
+            required String deviceSerial,
+            required String password,
+            String? run,
+          }) async => const VaultRestoreResult(
+            accounts: 1,
+            items: 1,
+            backupPasswordAccounts: ['alice'],
+          ),
     );
     addTearDown(one.dispose);
     await one.restore(deviceSerial: 'USB2', password: 'secret');
@@ -128,8 +135,12 @@ void main() {
 
 RestoreVaultController _refusing(Object error) {
   final controller = RestoreVaultController(
-    restoreVault: ({required String deviceSerial, required String password}) =>
-        Future<VaultRestoreResult>.error(error),
+    restoreVault:
+        ({
+          required String deviceSerial,
+          required String password,
+          String? run,
+        }) => Future<VaultRestoreResult>.error(error),
   );
   addTearDown(controller.dispose);
   return controller;

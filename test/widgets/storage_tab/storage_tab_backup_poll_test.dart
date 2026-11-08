@@ -16,6 +16,10 @@ import '../../support/tap_target_guidelines.dart' show setViewport;
 /// #3084: the Storage tab polls a snapshot backup's status every two seconds.
 /// A 404 means the job is gone for good, so the poll stops and the tab drops
 /// the job; any other error is one bad moment, so the poll keeps going.
+///
+/// #4037: a backup the device list reports is followed too, wherever it was
+/// started. Its progress is on the receiving drive's card, the drive's
+/// actions wait for it, and the progress goes once it finishes.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -24,6 +28,12 @@ void main() {
 
   late int statusCalls;
   late int statusCode;
+
+  /// The job id the device list reports for the backup drive, if any.
+  late String? activeJobId;
+
+  /// The status the job reports.
+  late String jobStatus;
 
   setUpAll(mockSecureStorage);
 
@@ -38,6 +48,9 @@ void main() {
     AppSettings.instance.isAdmin.value = true;
     StorageService.invalidateDeviceCache();
     statusCalls = 0;
+    statusCode = 200;
+    activeJobId = null;
+    jobStatus = 'COPYING';
     resetSharedHttpClient();
     sharedHttpClientFactory = () => MockClient((request) async {
       switch (request.url.path) {
@@ -51,6 +64,7 @@ void main() {
                   'mountPoint': '/mnt/backups',
                   'role': 'snapshot-backup',
                   'isEnabled': true,
+                  'activeBackupJobId': ?activeJobId,
                 },
               ],
             }),
@@ -61,7 +75,14 @@ void main() {
         case statusPath:
           statusCalls++;
           return http.Response(
-            jsonEncode({'id': 'job-1', 'status': 'COPYING'}),
+            jsonEncode({
+              'id': 'job-1',
+              'status': jobStatus,
+              'progress': 0.42,
+              'targetName': 'Backup A',
+              'sourceNames': ['Built-in storage', 'Photos'],
+              'currentSource': 'Built-in storage',
+            }),
             statusCode,
           );
       }
@@ -83,7 +104,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Back Up'));
+    await tester.tap(find.text('Back up onto this drive'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Start Backup'));
     await tester.pump();
@@ -121,4 +142,41 @@ void main() {
     expect(statusCalls, callsAt500 + 4, reason: 'the poll stopped on a 500');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'a backup started elsewhere shows, holds the actions, and clears',
+    (tester) async {
+      activeJobId = 'job-1';
+      setViewport(tester, const Size(1280, 800));
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: StorageTab())),
+      );
+      await tester.pumpAndSettle();
+      await poll(tester, 1);
+
+      expect(
+        find.text('Copying Built-in storage onto Backup A · 42%'),
+        findsOneWidget,
+      );
+      final backUp = tester.widget<ButtonStyleButton>(
+        find.ancestor(
+          of: find.text('Back up onto this drive'),
+          matching: find.bySubtype<ButtonStyleButton>(),
+        ),
+      );
+      expect(backUp.onPressed, isNull);
+
+      activeJobId = null;
+      jobStatus = 'COMPLETED';
+      await poll(tester, 1);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('backup_progress_text')), findsNothing);
+      expect(find.text('Backup completed successfully'), findsOneWidget);
+      final after = statusCalls;
+      await poll(tester, 3);
+      expect(statusCalls, after, reason: 'polled a finished backup');
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

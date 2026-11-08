@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:quark/services/storage_service.dart';
+import 'package:quark/utils/backup_run_label.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Asks an admin to restore every vault from this snapshot-backup drive, and
 /// to enter their own login password again.
 ///
-/// Pops with that password, or with nothing on Cancel. An empty password does
-/// not confirm. The dialog owns its text controller, so it lives until the
-/// route has finished animating out (#3102).
+/// Names the backup it restores, the newest of [runs] unless another is
+/// picked (#4032). Pops with that password and the picked run, null when
+/// [runs] is empty, or with nothing on Cancel. An empty password does not
+/// confirm. The dialog owns its text controller, so it lives until the route
+/// has finished animating out (#3102).
 class RestoreVaultDialog extends StatefulWidget {
-  /// Creates the dialog.
-  const RestoreVaultDialog({super.key});
+  /// Creates the dialog. [runs] are the drive's backups, newest first.
+  const RestoreVaultDialog({this.runs = const [], super.key});
+
+  /// The backups the restore can read, newest first.
+  final List<BackupRun> runs;
 
   @override
   State<RestoreVaultDialog> createState() => _RestoreVaultDialogState();
@@ -17,6 +25,7 @@ class RestoreVaultDialog extends StatefulWidget {
 
 class _RestoreVaultDialogState extends State<RestoreVaultDialog> {
   final _password = TextEditingController();
+  late String? _run = widget.runs.firstOrNull?.folder;
 
   @override
   void dispose() {
@@ -27,7 +36,7 @@ class _RestoreVaultDialogState extends State<RestoreVaultDialog> {
   void _confirm() {
     final password = _password.text;
     if (password.isEmpty) return;
-    Navigator.pop(context, password);
+    Navigator.pop(context, (password: password, run: _run));
   }
 
   @override
@@ -39,6 +48,14 @@ class _RestoreVaultDialogState extends State<RestoreVaultDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (_run case final run?) ...[
+            BackupRunPicker(
+              runs: [for (final r in widget.runs) backupRunItem(r)],
+              selected: run,
+              onSelected: (picked) => setState(() => _run = picked),
+            ),
+            const SizedBox(height: 12),
+          ],
           const Text(
             'Each vault goes to the account with exactly the same username. '
             'Carol is not carol.',

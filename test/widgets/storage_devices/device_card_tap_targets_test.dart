@@ -49,7 +49,7 @@ void main() {
           ),
         );
 
-        for (final text in ['Set Role', 'Back Up', 'Verify']) {
+        for (final text in ['Set Role', 'Back up onto this drive', 'Verify']) {
           final button = find.ancestor(
             of: find.text(text),
             matching: find.bySubtype<ButtonStyleButton>(),

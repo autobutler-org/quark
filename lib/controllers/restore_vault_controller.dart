@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/utils/backup_run_label.dart';
 
 /// Restores every account's vault from a snapshot-backup drive (#3664).
 ///
@@ -14,6 +15,7 @@ class RestoreVaultController extends ChangeNotifier {
     Future<VaultRestoreResult> Function({
       required String deviceSerial,
       required String password,
+      String? run,
     })?
     restoreVault,
   }) : _restoreVault = restoreVault ?? StorageService.restoreSnapshotVault;
@@ -21,6 +23,7 @@ class RestoreVaultController extends ChangeNotifier {
   final Future<VaultRestoreResult> Function({
     required String deviceSerial,
     required String password,
+    String? run,
   })
   _restoreVault;
 
@@ -39,17 +42,20 @@ class RestoreVaultController extends ChangeNotifier {
     return result == null ? null : restoreVaultSummary(result);
   }
 
-  /// Restores the vaults on [deviceSerial]. [password] is the admin's login
+  /// Restores the vaults on [deviceSerial] from the backup [run], or the
+  /// newest one when [run] is null. [password] is the admin's login
   /// password. Success sets [result] and clears [error]; a throw does the
   /// opposite.
   Future<void> restore({
     required String deviceSerial,
     required String password,
+    String? run,
   }) async {
     try {
       _result = await _restoreVault(
         deviceSerial: deviceSerial,
         password: password,
+        run: run,
       );
       _error = null;
     } catch (e) {
@@ -61,14 +67,16 @@ class RestoreVaultController extends ChangeNotifier {
 }
 
 /// The sentence for [result]: how many vaults and entries came
-/// back, and, when [VaultRestoreResult.backupPasswordAccounts] is not empty,
+/// back and from which backup, and, when [VaultRestoreResult.backupPasswordAccounts] is not empty,
 /// who unlocks with the password they had when the backup was taken.
 String restoreVaultSummary(VaultRestoreResult result) {
   final accounts = result.accounts == 1
       ? '1 vault'
       : '${result.accounts} vaults';
   final items = result.items == 1 ? '1 entry' : '${result.items} entries';
-  final summary = 'Restored $accounts and $items.';
+  final run = result.run;
+  final when = run == null ? '' : ', backed up ${backupRunLabel(run)}';
+  final summary = 'Restored $accounts and $items$when.';
   final names = result.backupPasswordAccounts;
   if (names.isEmpty) return summary;
   final who = switch (names.length) {

@@ -1,28 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:quark/controllers/backup_runs_controller.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/data_protection_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
-import 'package:quark/widgets/storage_devices/backup_progress_card.dart';
 import 'package:quark/widgets/storage_devices/device_card.dart';
 import 'package:quark/widgets/storage_devices/restore_files_flow.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// Body of the devices page: no host, error, spinner, or the device list with
-/// the backup progress card on top.
+/// Body of the devices page: no host, error, spinner, or the device list.
 ///
-/// [header] is drawn above that list. [protectionBadge] is drawn on the first
-/// snapshot-backup drive. [onRestore], like backup and verify, is drawn only
+/// [header] is drawn above that list. Each drive card shows its own backup
+/// state from [protection]: a data drive its copies, a backup drive what it
+/// holds and, from [backupStatuses], the backup running onto it.
+/// [onRestore], like backup and verify, is drawn only
 /// on a drive with the snapshot-backup role, and only when the page passes it.
 /// **Restore files** shows wherever [onRestore] does: it is admin-only too,
-/// and [onRestoreFiles] defaults to [restoreFilesFrom].
+/// and [onRestoreFiles] defaults to [restoreFilesFrom], offering the drive's
+/// runs from [backupRuns]. A backup drive lists its backups when
+/// [backupRuns] is set, and [onDeleteRun] deletes one.
 class StorageDevicesBody extends StatelessWidget {
   const StorageDevicesBody({
     required this.devices,
     required this.error,
     required this.mounting,
-    required this.backupStatus,
-    required this.activeBackupJobId,
     required this.onRefresh,
     required this.onRetry,
     required this.onManageHosts,
@@ -35,7 +37,11 @@ class StorageDevicesBody extends StatelessWidget {
     this.onEject,
     this.ejecting = const {},
     this.header,
-    this.protectionBadge,
+    this.protection,
+    this.backupStatuses = const {},
+    this.isBackupRunning = false,
+    this.backupRuns,
+    this.onDeleteRun,
     super.key,
   });
 
@@ -48,8 +54,6 @@ class StorageDevicesBody extends StatelessWidget {
 
   /// Serials whose mount is in progress.
   final Set<String> mounting;
-  final BackupJobStatus? backupStatus;
-  final String? activeBackupJobId;
   final RefreshCallback onRefresh;
   final VoidCallback onRetry;
   final VoidCallback onManageHosts;
@@ -76,8 +80,24 @@ class StorageDevicesBody extends StatelessWidget {
   /// Drawn above the drive list. Null leaves the list as it was.
   final Widget? header;
 
-  /// Drawn on the first snapshot-backup drive. Null draws nothing.
-  final Widget? protectionBadge;
+  /// Each drive's copies and holdings. Null draws no backup state.
+  final DataProtectionStatus? protection;
+
+  /// The running backup onto each backup drive, by serial.
+  final Map<String, BackupJobStatus> backupStatuses;
+
+  /// Whether any backup is running, which disables the backup, verify,
+  /// restore, and eject buttons on every card, and hides delete on every
+  /// backup.
+  final bool isBackupRunning;
+
+  /// Each backup drive's backups. Null draws none: listing them is
+  /// admin-only on the Quark.
+  final BackupRunsController? backupRuns;
+
+  /// Deletes a backup, by folder, from a backup drive. Null draws no delete
+  /// action.
+  final void Function(StorageDevice device, String run)? onDeleteRun;
 
   @override
   Widget build(BuildContext context) {
@@ -113,26 +133,27 @@ class StorageDevicesBody extends StatelessWidget {
     }
     final widgets = <Widget>[?header];
 
-    if (backupStatus != null && activeBackupJobId != null) {
-      widgets.add(BackupProgressCard(status: backupStatus!));
-    }
-
     final onMount = this.onMount;
     final onSetRole = this.onSetRole;
     final onBackup = this.onBackup;
     final onVerify = this.onVerify;
     final onRestore = this.onRestore;
+    final backupRuns = this.backupRuns;
     final onRestoreFiles =
-        this.onRestoreFiles ?? (device) => restoreFilesFrom(context, device);
+        this.onRestoreFiles ??
+        (device) => restoreFilesFrom(
+          context,
+          device,
+          runs: backupRuns?.runsFor(device.serial) ?? const [],
+        );
     final onEject = this.onEject;
-    final protectionBadge = this.protectionBadge;
-    var badgePlaced = false;
+    final onDeleteRun = isBackupRunning ? null : this.onDeleteRun;
     for (final device in devices) {
       final isUsb = device.serial.isNotEmpty;
       final isBackupDrive = device.role == 'snapshot-backup';
-      final placeBadge =
-          protectionBadge != null && isBackupDrive && !badgePlaced;
-      if (placeBadge) badgePlaced = true;
+      // An empty serial is built-in storage's alone; a USB drive the Quark
+      // could not read a serial from is not matched to it.
+      final protection = isUsb || device.isInternal ? this.protection : null;
       widgets.add(
         DeviceCard(
           device: device,
@@ -156,8 +177,21 @@ class StorageDevicesBody extends StatelessWidget {
               : null,
           onEject: onEject != null && isUsb ? () => onEject(device) : null,
           isEjecting: ejecting.contains(device.serial),
-          isBackupRunning: backupStatus?.isRunning == true,
-          protectionBadge: placeBadge ? protectionBadge : null,
+          isBackupRunning: isBackupRunning,
+          dataDrive: isBackupDrive
+              ? null
+              : protection?.dataDrive(device.serial),
+          backupDrive: isBackupDrive
+              ? protection?.backupDrive(device.serial)
+              : null,
+          backupStatus: isBackupDrive ? backupStatuses[device.serial] : null,
+          showBackupRuns:
+              isBackupDrive && device.isEnabled && backupRuns != null,
+          backupRuns: backupRuns?.runsFor(device.serial),
+          backupRunsError: backupRuns?.errorFor(device.serial),
+          onDeleteRun: onDeleteRun != null && isBackupDrive
+              ? (run) => onDeleteRun(device, run)
+              : null,
         ),
       );
     }

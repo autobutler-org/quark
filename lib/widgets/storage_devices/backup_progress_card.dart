@@ -2,36 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-/// Progress of the running (or just-finished) snapshot backup job.
+/// Progress of a backup running onto one backup drive, drawn on that drive's
+/// card: "Copying Built-in storage onto Backup A · 42%".
+///
+/// The source is [BackupJobStatus.currentSource], or every source when the
+/// Quark has not started one yet. The target is [BackupJobStatus.targetName],
+/// or [targetName] when the Quark did not send one. The page drops the
+/// status once the backup finishes, so only a running backup is drawn.
 class BackupProgressCard extends StatelessWidget {
+  /// Creates the progress for [status] onto the drive named [targetName].
+  const BackupProgressCard({
+    required this.status,
+    required this.targetName,
+    super.key,
+  });
+
+  /// The running backup.
   final BackupJobStatus status;
-  const BackupProgressCard({required this.status, super.key});
+
+  /// The card's drive name, used when [status] carries none.
+  final String targetName;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final pct = (status.progress * 100).toStringAsFixed(0);
+    final target = status.targetName ?? targetName;
+    final sources = status.currentSource ?? status.sourceNames.join(', ');
+    final what = sources.isEmpty ? '' : ' $sources';
 
-    String statusText;
-    switch (status.status) {
-      case 'PENDING':
-        statusText = 'Preparing backup...';
-      case 'SCANNING':
-        statusText = 'Scanning files...';
-      case 'COPYING':
-        statusText = 'Copying files ($pct%)';
-      case 'COMPLETED':
-        statusText = 'Backup complete';
-      case 'FAILED':
-        statusText = 'Backup failed';
-      default:
-        statusText = status.status;
-    }
+    final statusText = switch (status.status) {
+      'PENDING' => 'Preparing to back up onto $target',
+      'SCANNING' => 'Scanning$what',
+      _ => 'Copying$what onto $target · $pct%',
+    };
 
     return Card(
-      color: status.isFailed
-          ? theme.colorScheme.errorContainer
-          : theme.colorScheme.primaryContainer,
+      color: theme.colorScheme.primaryContainer,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -39,47 +46,26 @@ class BackupProgressCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(
-                  status.isRunning
-                      ? QuarkIcons.backup_outlined
-                      : status.isComplete
-                      ? QuarkIcons.check_circle_outline
-                      : QuarkIcons.error_outline,
-                  size: 20,
-                ),
+                const Icon(QuarkIcons.backup_outlined, size: 20),
                 const SizedBox(width: 8),
-                Text(statusText, style: theme.textTheme.titleSmall),
+                Expanded(
+                  child: Text(
+                    statusText,
+                    key: const ValueKey('backup_progress_text'),
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ),
               ],
             ),
-            if (status.isRunning) ...[
-              const SizedBox(height: 12),
-              LinearProgressIndicator(value: status.progress),
-              const SizedBox(height: 8),
-              Text(
-                '${status.filesCopied} / ${status.totalFiles} files  ·  '
-                '${StorageDevice.formatBytes(status.bytesCopied)} / '
-                '${StorageDevice.formatBytes(status.totalBytes)}',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-            if (status.isComplete) ...[
-              const SizedBox(height: 8),
-              Text(
-                '${status.filesCopied} files copied, '
-                '${status.filesSkipped} skipped  ·  '
-                '${StorageDevice.formatBytes(status.bytesCopied)}',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-            if (status.isFailed && status.errorMsg != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                status.errorMsg!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.error,
-                ),
-              ),
-            ],
+            const SizedBox(height: 12),
+            LinearProgressIndicator(value: status.progress),
+            const SizedBox(height: 8),
+            Text(
+              '${status.filesCopied} / ${status.totalFiles} files  ·  '
+              '${StorageDevice.formatBytes(status.bytesCopied)} / '
+              '${StorageDevice.formatBytes(status.totalBytes)}',
+              style: theme.textTheme.bodySmall,
+            ),
           ],
         ),
       ),

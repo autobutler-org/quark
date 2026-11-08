@@ -79,7 +79,11 @@ void main() {
   }) {
     final restore = RestoreVaultController(
       restoreVault:
-          ({required String deviceSerial, required String password}) async {
+          ({
+            required String deviceSerial,
+            required String password,
+            String? run,
+          }) async {
             calls.add((deviceSerial, password));
             if (error != null) throw error;
             return result ??
@@ -216,11 +220,7 @@ void main() {
           'Quark, and a restore never replaces one; that account can delete '
           'its empty vault, then restore again (carol).',
     ),
-    (
-      'a missing drive',
-      const ApiException(404),
-      "Couldn't restore the vaults — it's no longer there.",
-    ),
+    ('a drive with no backups', const ApiException(404), Errors.noBackupsYet),
     (
       'no vault backup',
       const MessageException('the drive holds no vault backup'),

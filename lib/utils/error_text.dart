@@ -351,6 +351,35 @@ abstract final class Errors {
       ? restoreConflict
       : message(error, action);
 
+  /// A restore or verify of a backup drive's newest backup, when the drive
+  /// holds no complete backup yet (#4032).
+  static const String noBackupsYet =
+      'There are no backups on this drive yet. Back up onto it first.';
+
+  /// A backup deleted while a backup onto its drive, or a restore from it,
+  /// is running: the Quark answers 409 (#4044).
+  static const String backupDriveBusy =
+      'A backup or restore is using this drive. Try again once it finishes.';
+
+  /// A failed request about a backup drive's backups. A 404 the service
+  /// raised for the newest backup gets [noBackupsYet], a 409 gets
+  /// [backupDriveBusy]. [action] is as in [message].
+  static String backupRun(Object? error, String action) => switch (error) {
+    ApiException(statusCode: 404) => noBackupsYet,
+    ApiException(statusCode: 409) => backupDriveBusy,
+    _ => message(error, action),
+  };
+
+  /// A snapshot backup job that ended FAILED, from its `errorMsg`. A backup
+  /// that did not fit says so in words the Quark wrote for the user ("not
+  /// enough space on Backup A for this backup: delete old backups or use a
+  /// bigger drive"), which reads as a sentence (#4044). Any other `errorMsg`
+  /// is a diagnostic and never reaches this copy.
+  static String backupFailed(String? errorMsg) =>
+      errorMsg != null && errorMsg.startsWith('not enough space on ')
+      ? _sentence(errorMsg)
+      : "The backup didn't finish. Try again.";
+
   /// A conversion or retry refused with a 403. The output lands beside the
   /// video, so the account has to be able to save files in its folder.
   static const String cantSaveInFolder = "You can't save files in that folder.";

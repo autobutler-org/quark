@@ -16,7 +16,8 @@ import '../../support/secure_storage.dart';
 import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// The Storage tab shows the protection status the Quark reported and follows
-/// its next step into the existing drive dialogs.
+/// its next step into the existing drive dialogs. Back up now starts onto
+/// each connected backup drive, and no drive card carries the level (#4037).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -45,6 +46,9 @@ void main() {
     ],
   };
 
+  /// The target of every backup the tab started.
+  final started = <String>[];
+
   setUpAll(mockSecureStorage);
 
   setUp(() async {
@@ -57,6 +61,7 @@ void main() {
     await AppSettings.instance.load();
     StorageService.invalidateDeviceCache();
     resetSharedHttpClient();
+    started.clear();
   });
 
   tearDown(() {
@@ -76,6 +81,10 @@ void main() {
       }
       if (path == '/api/v0/storage/protection') {
         return http.Response(jsonEncode(protection), 200);
+      }
+      if (path == '/api/v0/storage/devices/snapshot-backup') {
+        started.add(jsonDecode(request.body)['targetDeviceSerial'] as String);
+        return http.Response(jsonEncode({'jobId': '${started.length}'}), 202);
       }
       return http.Response(jsonEncode({'error': ''}), 404);
     });
@@ -97,13 +106,16 @@ void main() {
       'level': 'unprotected',
       'sentence': 'Your files are only on this Quark.',
       'nextStep': 'assign-backup-role',
-      'drives': [
+      'dataDrives': [
+        {'serial': 'USB1', 'name': 'Stick', 'level': 'unprotected'},
+      ],
+      'backupDrives': [
         {
           'serial': 'USB2',
-          'name': 'Vault disk',
-          'counts': false,
-          'reason': 'No completed backup yet.',
-          'lastBackedUp': null,
+          'name': 'Backups',
+          'state': 'no-copies',
+          'holds': <Object?>[],
+          'newestCopy': null,
         },
       ],
     });
@@ -111,15 +123,9 @@ void main() {
     await pumpTab(tester);
 
     expect(find.text('Your files are only on this Quark.'), findsOneWidget);
-    expect(find.text('Vault disk'), findsOneWidget);
-    expect(find.text('No completed backup yet.'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('data_protection_badge')),
-        matching: find.text('Unprotected'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Not backed up'), findsOneWidget);
+    expect(find.text('No copies yet.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('data_protection_badge')), findsNothing);
 
     await tester.tap(find.text('Assign the backup role'));
     await tester.pumpAndSettle();
@@ -128,35 +134,38 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('an admin follows start-backup into the backup dialog', (
+  testWidgets('Back up now starts onto each connected backup drive', (
     tester,
   ) async {
     AppSettings.instance.isAdmin.value = true;
+    Map<String, Object?> backup(String serial, String state) => {
+      'serial': serial,
+      'name': serial,
+      'state': state,
+      'holds': <Object?>[],
+      'newestCopy': null,
+    };
     serve({
       'level': 'basic',
-      'sentence': 'Start a backup on your other backup drive.',
+      'sentence':
+          'Every drive has a copy on one backup drive. Back up onto your other backup drive.',
       'nextStep': 'start-backup',
-      'drives': [
-        {
-          'serial': 'USB2',
-          'name': 'Vault disk',
-          'counts': false,
-          'reason': 'No completed backup yet.',
-          'lastBackedUp': null,
-        },
+      'dataDrives': <Object?>[],
+      'backupDrives': [
+        backup('USB2', 'behind'),
+        backup('AWAY', 'away'),
+        backup('BUSY', 'receiving'),
       ],
     });
 
     await pumpTab(tester);
 
-    expect(
-      find.text('Start a backup on your other backup drive.'),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('Start a backup'));
+    expect(find.text('Start a backup'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('data_protection_back_up_now')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(SnapshotBackupDialog), findsOneWidget);
+    expect(find.byType(SnapshotBackupDialog), findsNothing);
+    expect(started, ['USB2']);
     expect(tester.takeException(), isNull);
   });
 
@@ -167,13 +176,14 @@ void main() {
       'sentence':
           'Your files are on 3 drives. Keep one backup drive somewhere else.',
       'nextStep': 'keep-one-elsewhere',
-      'drives': [
+      'dataDrives': <Object?>[],
+      'backupDrives': [
         {
           'serial': 'USB2',
-          'name': 'Vault disk',
-          'counts': true,
-          'reason': '',
-          'lastBackedUp': '2026-10-01T12:00:00Z',
+          'name': 'Backups',
+          'state': 'current',
+          'holds': <Object?>[],
+          'newestCopy': null,
         },
       ],
     });
@@ -188,8 +198,9 @@ void main() {
     );
     expect(find.text('Assign the backup role'), findsNothing);
     expect(find.text('Start a backup'), findsNothing);
-    expect(find.text('Back Up'), findsNothing);
-    expect(find.byKey(const ValueKey('data_protection_badge')), findsOneWidget);
+    expect(find.text('Back up onto this drive'), findsNothing);
+    expect(find.text('Back up now'), findsNothing);
+    expect(find.byKey(const ValueKey('data_protection_badge')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('data_protection_next_step')));
     await tester.pumpAndSettle();
@@ -211,39 +222,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('assign-backup-role can open Set Role on built-in storage', (
+  const builtIn = {
+    'name': 'Quark',
+    'devicePath': '/dev/mmcblk0p2',
+    'mountPoint': '/',
+    'fileSystem': 'ext4',
+    'isInternal': true,
+    'isEnabled': true,
+    'role': 'unassigned',
+  };
+  Map<String, Object?> stick(String role) => {
+    'name': 'Stick',
+    'devicePath': '/dev/sdb1',
+    'mountPoint': '/mnt/stick',
+    'fileSystem': 'exfat',
+    'isInternal': false,
+    'isEnabled': true,
+    'role': role,
+    'usbInfo': {'serial': 'USB1'},
+  };
+  const assignRole = {
+    'level': 'unprotected',
+    'sentence': 'Your files are only on this Quark.',
+    'nextStep': 'assign-backup-role',
+  };
+
+  testWidgets('assign-backup-role skips built-in storage while it is main', (
     tester,
   ) async {
     AppSettings.instance.isAdmin.value = true;
     serve(
-      {
-        'level': 'unprotected',
-        'sentence': 'Your files are only on this Quark.',
-        'nextStep': 'assign-backup-role',
-        'drives': <Object?>[],
-      },
+      assignRole,
       devicesBody: {
-        'devices': [
-          {
-            'name': 'Quark',
-            'devicePath': '/dev/mmcblk0p2',
-            'mountPoint': '/',
-            'fileSystem': 'ext4',
-            'isInternal': true,
-            'isEnabled': true,
-            'role': 'unassigned',
-          },
-          {
-            'name': 'Stick',
-            'devicePath': '/dev/sdb1',
-            'mountPoint': '/mnt/stick',
-            'fileSystem': 'exfat',
-            'isInternal': false,
-            'isEnabled': true,
-            'role': 'unassigned',
-            'usbInfo': {'serial': 'USB1'},
-          },
-        ],
+        'devices': [builtIn, stick('unassigned')],
       },
     );
 
@@ -252,9 +263,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(RoleDialog), findsOneWidget);
-    expect(find.text('Snapshot Backup'), findsOneWidget);
-    expect(find.text('Other drives are backed up onto it'), findsOneWidget);
-    expect(find.textContaining('also copied onto it'), findsNothing);
+    expect(
+      tester.widget<RoleDialog>(find.byType(RoleDialog)).isInternal,
+      false,
+    );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('assign-backup-role offers built-in once a USB drive is main', (
+    tester,
+  ) async {
+    AppSettings.instance.isAdmin.value = true;
+    serve(
+      assignRole,
+      devicesBody: {
+        'devices': [builtIn, stick('default-storage')],
+      },
+    );
+
+    await pumpTab(tester);
+    await tester.tap(find.text('Assign the backup role'));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<RoleDialog>(find.byType(RoleDialog)).isInternal, true);
+    expect(find.text('Other drives are backed up onto it'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('assign-backup-role is not offered on the main drive alone', (
+    tester,
+  ) async {
+    AppSettings.instance.isAdmin.value = true;
+    serve(
+      assignRole,
+      devicesBody: {
+        'devices': [builtIn],
+      },
+    );
+
+    await pumpTab(tester);
+
+    expect(find.text('Assign the backup role'), findsNothing);
   });
 }

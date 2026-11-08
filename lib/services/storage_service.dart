@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:http/http.dart' as http;
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_secret.dart';
 import 'package:quark/services/authenticated_service.dart';
@@ -121,6 +122,7 @@ class StorageDevice {
     this.role = 'unassigned',
     this.categories = const {},
     this.health,
+    this.activeBackupJobId,
   });
 
   factory StorageDevice.fromJson(Map<String, dynamic> json) {
@@ -148,6 +150,7 @@ class StorageDevice {
       role: json['role'] as String? ?? 'unassigned',
       categories: categories,
       health: _driveHealth(json),
+      activeBackupJobId: json['activeBackupJobId'] as String?,
     );
   }
 
@@ -173,6 +176,10 @@ class StorageDevice {
 
   /// Health the Quark reported. Null when the status omitted it.
   final StorageDriveHealth? health;
+
+  /// The snapshot backup pending or running onto this drive, whoever started
+  /// it. Only a backup drive has one; null when nothing is running onto it.
+  final String? activeBackupJobId;
 
   /// Whether this device is detected but not yet mounted.
   bool get isUnmounted => !isInternal && mountPoint.isEmpty;
@@ -344,9 +351,12 @@ class StorageService with AuthenticatedService {
     return BackupJobStatus.fromJson(data);
   }
 
+  /// Checks the backup [run] on [deviceSerial] against its manifest, or the
+  /// newest complete run when [run] is null. The answer names the run.
   static Future<VerifyResult> verifySnapshotBackup({
     required String deviceSerial,
     bool full = false,
+    String? run,
   }) async {
     final uri = apiBaseUri.resolve(
       '/api/v0/storage/devices/snapshot-backup/verify',
@@ -354,9 +364,15 @@ class StorageService with AuthenticatedService {
     final response = await instance.authenticatedPost(
       uri,
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'deviceSerial': deviceSerial, 'full': full}),
+      body: jsonEncode({
+        'deviceSerial': deviceSerial,
+        'full': full,
+        'run': ?run,
+      }),
     );
-    throwUnlessOk(response, 'Verify failed');
+    // A drive with no complete run is a 400 here, in the Quark's words, and
+    // a 404 is a drive that is not attached: neither is [Errors.noBackupsYet].
+    throwUnlessOk(response, 'Verify failed', clientErrorsOnly: true);
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return VerifyResult.fromJson(data);
   }
@@ -366,9 +382,12 @@ class StorageService with AuthenticatedService {
   /// request sends its auth key, the same re-confirmation `DELETE /vault`
   /// takes. A 4xx whose body carries `error` is a [MessageException]; a 5xx
   /// stays an [ApiException].
+  ///
+  /// [run] is the backup to restore from; null is the newest complete one.
   static Future<VaultRestoreResult> restoreSnapshotVault({
     required String deviceSerial,
     required String password,
+    String? run,
   }) async {
     final username = AppSettings.instance.username;
     if (username == null) throw const UnauthorizedException();
@@ -386,9 +405,10 @@ class StorageService with AuthenticatedService {
       body: jsonEncode({
         'deviceSerial': deviceSerial,
         'password': secret.authKey,
+        'run': ?run,
       }),
     );
-    throwUnlessOk(response, 'restore the vaults', clientErrorsOnly: true);
+    _throwUnlessRunOk(response, 'restore the vaults', run);
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return VaultRestoreResult.fromJson(data);
   }
@@ -397,9 +417,11 @@ class StorageService with AuthenticatedService {
   /// the drives they came from (#4009). With [missingToBuiltIn], the files of
   /// a drive that is no longer attached go to built-in storage. The copy runs
   /// as a job; a 4xx whose body carries `error` is a [MessageException].
+  /// [run] is the backup to restore; null is the newest complete one.
   static Future<FilesRestoreResult> restoreSnapshotFiles({
     required String deviceSerial,
     required bool missingToBuiltIn,
+    String? run,
   }) async {
     final uri = apiBaseUri.resolve(
       '/api/v0/storage/devices/snapshot-backup/restore-files',
@@ -410,12 +432,110 @@ class StorageService with AuthenticatedService {
       body: jsonEncode({
         'deviceSerial': deviceSerial,
         'missingToBuiltIn': missingToBuiltIn,
+        'run': ?run,
       }),
     );
-    throwUnlessOk(response, 'restore the files', clientErrorsOnly: true);
+    _throwUnlessRunOk(response, 'restore the files', run);
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return FilesRestoreResult.fromJson(data);
   }
+
+  /// The complete backups on the backup drive [deviceSerial], newest first.
+  /// Admin-only on the Quark.
+  static Future<List<BackupRun>> listBackupRuns(String deviceSerial) async {
+    final uri = apiBaseUri.replace(
+      path: '/api/v0/storage/devices/snapshot-backup/runs',
+      queryParameters: {'deviceSerial': deviceSerial},
+    );
+    final response = await instance.authenticatedGet(uri);
+    throwUnlessOk(response, 'list the backups', clientErrorsOnly: true);
+    final runs = (jsonDecode(response.body) as Map<String, dynamic>)['runs'];
+    return [
+      if (runs is List)
+        for (final run in runs.whereType<Map<String, dynamic>>())
+          BackupRun.fromJson(run),
+    ];
+  }
+
+  /// Deletes the backup [run] from [deviceSerial] for good. A 409, a backup
+  /// or restore using the drive, is an [ApiException] for
+  /// [Errors.backupRun] to word.
+  static Future<void> deleteBackupRun({
+    required String deviceSerial,
+    required String run,
+  }) async {
+    final uri = apiBaseUri.resolve(
+      '/api/v0/storage/devices/snapshot-backup/runs',
+    );
+    final response = await instance.authenticatedDelete(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'deviceSerial': deviceSerial, 'run': run}),
+    );
+    if (response.statusCode == 409) {
+      throw const ApiException(409, 'delete the backup');
+    }
+    throwUnlessOk(response, 'delete the backup', clientErrorsOnly: true);
+  }
+
+  /// A refused restore. A 404 for the newest backup ([run] null) means the
+  /// drive holds none yet, an [ApiException] for [Errors.backupRun]; anything
+  /// else keeps the Quark's 4xx text.
+  static void _throwUnlessRunOk(
+    http.Response response,
+    String context,
+    String? run,
+  ) {
+    if (run == null && response.statusCode == 404) {
+      throw ApiException(404, context);
+    }
+    throwUnlessOk(response, context, clientErrorsOnly: true);
+  }
+}
+
+/// One complete backup on a backup drive, as
+/// `GET /storage/devices/snapshot-backup/runs` lists it.
+class BackupRun {
+  /// Creates a run.
+  const BackupRun({
+    required this.folder,
+    this.completedAt,
+    this.sizeBytes = 0,
+    this.drives = const [],
+  });
+
+  /// Parses one entry of `runs`. A missing list is empty, a missing size 0.
+  factory BackupRun.fromJson(Map<String, dynamic> json) {
+    final drives = json['drives'];
+    return BackupRun(
+      folder: json['folder'] as String? ?? '',
+      completedAt: DateTime.tryParse(json['completedAt'] as String? ?? ''),
+      sizeBytes: (json['sizeBytes'] as num?)?.toInt() ?? 0,
+      drives: [
+        if (drives is List)
+          for (final d in drives.whereType<Map<String, dynamic>>())
+            (
+              folder: d['folder'] as String? ?? '',
+              serial: d['serial'] as String? ?? '',
+              name: d['name'] as String? ?? '',
+            ),
+      ],
+    );
+  }
+
+  /// The run's folder under `backups/`, as "2026-11-02 09.00". It names the
+  /// run in every request.
+  final String folder;
+
+  /// When the run completed. Null when the Quark did not say.
+  final DateTime? completedAt;
+
+  /// The bytes the run's files hold. Files unchanged between runs are shared,
+  /// so deleting the run can free less than this.
+  final int sizeBytes;
+
+  /// Each data drive the run holds: its folder in the run, serial, and name.
+  final List<({String folder, String serial, String name})> drives;
 }
 
 class BackupJobStatus {
@@ -429,6 +549,18 @@ class BackupJobStatus {
   final int bytesCopied;
   final String? errorMsg;
 
+  /// What the app calls the drive backed up onto. Null when the Quark did
+  /// not say.
+  final String? targetName;
+
+  /// What the app calls each drive copied, in copy order. Empty before the
+  /// backup starts scanning.
+  final List<String> sourceNames;
+
+  /// The drive being copied now. Null before copying starts and after the
+  /// backup completes.
+  final String? currentSource;
+
   const BackupJobStatus({
     required this.id,
     required this.status,
@@ -439,6 +571,9 @@ class BackupJobStatus {
     required this.totalBytes,
     required this.bytesCopied,
     this.errorMsg,
+    this.targetName,
+    this.sourceNames = const [],
+    this.currentSource,
   });
 
   factory BackupJobStatus.fromJson(Map<String, dynamic> json) {
@@ -452,6 +587,12 @@ class BackupJobStatus {
       totalBytes: (json['totalBytes'] as num?)?.toInt() ?? 0,
       bytesCopied: (json['bytesCopied'] as num?)?.toInt() ?? 0,
       errorMsg: json['errorMsg'] as String?,
+      targetName: _nonEmpty(json['targetName']),
+      sourceNames: [
+        if (json['sourceNames'] case final List<dynamic> names)
+          ...names.whereType<String>(),
+      ],
+      currentSource: _nonEmpty(json['currentSource']),
     );
   }
 
@@ -467,15 +608,20 @@ class VerifyResult {
   final List<String> corrupted;
   final List<String> added;
 
+  /// The run the Quark checked. Null when it did not say.
+  final String? run;
+
   const VerifyResult({
     required this.ok,
     this.missing = const [],
     this.corrupted = const [],
     this.added = const [],
+    this.run,
   });
 
   factory VerifyResult.fromJson(Map<String, dynamic> json) {
     return VerifyResult(
+      run: _nonEmpty(json['run']),
       ok: (json['ok'] as num?)?.toInt() ?? 0,
       missing: (json['missing'] as List<dynamic>?)?.cast<String>() ?? [],
       corrupted: (json['corrupted'] as List<dynamic>?)?.cast<String>() ?? [],
@@ -500,11 +646,13 @@ class VaultRestoreResult {
     this.unmatchedUsers = const [],
     this.backupPasswordAccounts = const [],
     this.restoredAccounts = const [],
+    this.run,
   });
 
   /// Parses the restore answer. A missing field is zero or an empty list.
   factory VaultRestoreResult.fromJson(Map<String, dynamic> json) {
     return VaultRestoreResult(
+      run: _nonEmpty(json['run']),
       accounts: (json['accounts'] as num?)?.toInt() ?? 0,
       items: (json['items'] as num?)?.toInt() ?? 0,
       unmatchedUsers: _names(json['unmatchedUsers']),
@@ -528,6 +676,9 @@ class VaultRestoreResult {
 
   /// Every account that got a vault back.
   final List<String> restoredAccounts;
+
+  /// The run the vaults came from. Null when the Quark did not say.
+  final String? run;
 }
 
 /// A file restore the Quark queued, as
@@ -538,6 +689,7 @@ class FilesRestoreResult {
     required this.jobId,
     this.folders = const [],
     this.missing = const [],
+    this.run,
   });
 
   /// Parses the answer. A missing list is empty.
@@ -545,6 +697,7 @@ class FilesRestoreResult {
     final folders = json['folders'];
     return FilesRestoreResult(
       jobId: json['jobId'] as String? ?? '',
+      run: _nonEmpty(json['run']),
       folders: [
         if (folders is List)
           for (final f in folders.whereType<Map<String, dynamic>>())
@@ -566,6 +719,9 @@ class FilesRestoreResult {
 
   /// The folders left on the backup drive because their drive is gone.
   final List<String> missing;
+
+  /// The run being restored. Null when the Quark did not say.
+  final String? run;
 }
 
 List<String> _names(Object? value) {
@@ -575,3 +731,5 @@ List<String> _names(Object? value) {
       if (name is String) name,
   ];
 }
+
+String? _nonEmpty(Object? raw) => raw is String && raw.isNotEmpty ? raw : null;

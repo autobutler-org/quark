@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/data_protection_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/storage_devices/storage_devices_body.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -75,6 +76,8 @@ void main() {
     ValueChanged<StorageDevice>? onBackup,
     ValueChanged<StorageDevice>? onVerify,
     ValueChanged<StorageDevice>? onRestore,
+    DataProtectionStatus? protection,
+    Map<String, BackupJobStatus> backupStatuses = const {},
   }) async {
     setViewport(tester, const Size(1280, 800));
 
@@ -85,8 +88,6 @@ void main() {
             devices: devices,
             error: null,
             mounting: const {},
-            backupStatus: null,
-            activeBackupJobId: null,
             onRefresh: () async {},
             onRetry: () {},
             onManageHosts: () {},
@@ -95,6 +96,8 @@ void main() {
             onBackup: onBackup,
             onVerify: onVerify,
             onRestore: onRestore,
+            protection: protection,
+            backupStatuses: backupStatuses,
           ),
         ),
       ),
@@ -112,7 +115,12 @@ void main() {
       onVerify: (d) => actions.add('verify ${d.serial}'),
     );
 
-    for (final label in ['Mount', 'Set Role', 'Back Up', 'Verify']) {
+    for (final label in [
+      'Mount',
+      'Set Role',
+      'Back up onto this drive',
+      'Verify',
+    ]) {
       await tester.tap(find.text(label));
       await tester.pump();
     }
@@ -128,7 +136,7 @@ void main() {
     for (final label in [
       'Mount',
       'Set Role',
-      'Back Up',
+      'Back up onto this drive',
       'Verify',
       'Restore vaults',
     ]) {
@@ -176,5 +184,128 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('device_card_restore_')), findsNothing);
+  });
+
+  // #4037: a data drive shows its own copies, a backup drive what it holds,
+  // and neither carries the whole Quark's level.
+  testWidgets('each drive shows its own backup state and no level badge', (
+    tester,
+  ) async {
+    final copiedAt = DateTime(2026, 11, 2, 12);
+    await pumpBody(
+      tester,
+      devices: const [builtIn, backupDrive],
+      onBackup: (_) {},
+      protection: DataProtectionStatus(
+        level: 'basic',
+        sentence: 'Every drive has a copy on one backup drive.',
+        action: DataProtectionAction.startBackup,
+        dataDrives: [
+          DataProtectionDataDrive(
+            serial: '',
+            name: 'Built-in storage',
+            level: 'basic',
+            copies: [
+              DataProtectionCopy(
+                backupSerial: 'USB2',
+                backupName: 'Backups',
+                copiedAt: copiedAt,
+                counts: true,
+              ),
+            ],
+          ),
+        ],
+        backupDrives: [
+          DataProtectionBackupDrive(
+            serial: 'USB2',
+            name: 'Backups',
+            state: DataProtectionBackupState.behind,
+            holds: [
+              DataProtectionHeldCopy(
+                serial: '',
+                name: 'Built-in storage',
+                copiedAt: copiedAt,
+              ),
+            ],
+            newestCopy: copiedAt,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Backed up Nov 2 · Backups'), findsOneWidget);
+    expect(
+      find.text(
+        'Holds copies of Built-in storage. Newest Nov 2. '
+        'Back up onto this drive to bring it up to date.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Back up onto this drive'), findsOneWidget);
+    for (final level in ['Unprotected', 'Basic', 'Protected']) {
+      expect(find.text(level), findsNothing, reason: '$level badge drawn');
+    }
+
+    await tester.tap(find.text('Backed up Nov 2 · Backups'));
+    await tester.pump();
+    expect(find.text('Backups · Nov 2'), findsOneWidget);
+  });
+
+  testWidgets('a drive with no copies reads as not backed up', (tester) async {
+    await pumpBody(
+      tester,
+      devices: const [builtIn, backupDrive],
+      protection: const DataProtectionStatus(
+        level: 'unprotected',
+        sentence: 'Built-in storage is only on this Quark.',
+        action: DataProtectionAction.startBackup,
+        dataDrives: [
+          DataProtectionDataDrive(
+            serial: '',
+            name: 'Built-in storage',
+            level: 'unprotected',
+          ),
+        ],
+        backupDrives: [
+          DataProtectionBackupDrive(
+            serial: 'USB2',
+            name: 'Backups',
+            state: DataProtectionBackupState.noCopies,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Not backed up'), findsOneWidget);
+    expect(find.text('No copies yet.'), findsOneWidget);
+  });
+
+  testWidgets('progress names the drives on the receiving card', (
+    tester,
+  ) async {
+    await pumpBody(
+      tester,
+      devices: const [builtIn, backupDrive],
+      backupStatuses: const {
+        'USB2': BackupJobStatus(
+          id: '7',
+          status: 'COPYING',
+          progress: 0.42,
+          totalFiles: 10,
+          filesCopied: 4,
+          filesSkipped: 0,
+          totalBytes: 100,
+          bytesCopied: 42,
+          targetName: 'Backup A',
+          sourceNames: ['Built-in storage', 'Photos'],
+          currentSource: 'Built-in storage',
+        ),
+      },
+    );
+
+    expect(
+      find.text('Copying Built-in storage onto Backup A · 42%'),
+      findsOneWidget,
+    );
   });
 }

@@ -91,6 +91,48 @@ void main() {
     });
   });
 
+  group('Errors.backupRun', () {
+    test('a 404 is a drive with no backups yet', () {
+      expect(
+        Errors.backupRun(const ApiException(404), 'restore the files'),
+        Errors.noBackupsYet,
+      );
+    });
+
+    test('a 409 is a drive a backup or restore is using', () {
+      expect(
+        Errors.backupRun(const ApiException(409), 'delete the backup'),
+        Errors.backupDriveBusy,
+      );
+    });
+
+    test('anything else reads like Errors.message', () {
+      expect(
+        Errors.backupRun(const MessageException('no such run'), 'x'),
+        'No such run.',
+      );
+    });
+  });
+
+  group('Errors.backupFailed', () {
+    test('a backup that did not fit reads as a sentence', () {
+      expect(
+        Errors.backupFailed(
+          'not enough space on Backup A for this backup: delete old backups '
+          'or use a bigger drive',
+        ),
+        'Not enough space on Backup A for this backup: delete old backups or '
+        'use a bigger drive.',
+      );
+    });
+
+    test('any other failure keeps its diagnostic out of the copy', () {
+      const fallback = "The backup didn't finish. Try again.";
+      expect(Errors.backupFailed('copy a.txt: input/output error'), fallback);
+      expect(Errors.backupFailed(null), fallback);
+    });
+  });
+
   group('Errors.restore', () {
     test('a 409 says the original location is taken', () {
       expect(
