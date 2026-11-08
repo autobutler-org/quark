@@ -229,6 +229,24 @@ func TestSyncWorker_HandleEvent_Move(t *testing.T) {
 	}
 }
 
+// A move onto the internal drive carries no serial, so it reaches the worker
+// as a rename of a path the target never held (#4030).
+func TestSyncWorker_HandleEvent_MoveArrival(t *testing.T) {
+	w, srcDir, dstDir := newTestSyncWorker(t)
+	writeTestFile(t, srcDir, "arrived.txt", "data")
+
+	w.handleEvent(context.Background(), eventbus.Event{
+		Kind:    eventbus.EventMove,
+		Path:    "arrived.txt",
+		NewPath: "arrived.txt",
+	})
+
+	got := readTestFile(t, dstDir, "arrived.txt")
+	if got != "data" {
+		t.Errorf("expected 'data', got %q", got)
+	}
+}
+
 func TestSyncWorker_StartStop(t *testing.T) {
 	w, srcDir, dstDir := newTestSyncWorker(t)
 	bus := w.bus

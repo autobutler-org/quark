@@ -169,6 +169,14 @@ func (w *SyncWorker) movePath(ctx context.Context, oldPath, newPath string) {
 		log.Printf("sync: move %s → %s: destination exists on target, leaving both", oldPath, newPath)
 		return
 	}
+	// A move carries one serial, the destination's, so a move landing on the
+	// internal drive looks like a rename here even when the file came from
+	// another drive, possibly the target itself. With nothing at the old path
+	// to rename, mirror the new one (#4030).
+	if _, err := dst.Stat(ctx, oldPath); errors.Is(err, vfs.ErrNotFound) {
+		w.syncPath(ctx, newPath)
+		return
+	}
 	if dir := path.Dir(newPath); dir != "." {
 		// A failure here surfaces as the move error just below.
 		_ = dst.MkdirAll(ctx, dir)
