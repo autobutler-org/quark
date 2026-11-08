@@ -267,15 +267,12 @@ func TestGetProtectionStatus_PartialRunDoesNotCount(t *testing.T) {
 	}
 }
 
-// The per-target record and the job rows do not say which drives were
-// copied, so neither counts on its own (#4037).
-func TestGetProtectionStatus_PerTargetRecordAloneDoesNotCount(t *testing.T) {
+// A completed job row does not say which drives were copied, so it does not
+// count on its own (#4037).
+func TestGetProtectionStatus_JobRowAloneDoesNotCount(t *testing.T) {
 	database := dbtest.NewDB(t)
 	const serial = "USB-1"
 	setRole(t, database, serial, "snapshot-backup")
-	if err := backup.RecordDriveSnapshot(context.Background(), database.Queries, serial, time.Now()); err != nil {
-		t.Fatal(err)
-	}
 	finishBackup(t, database, serial, "completed")
 	got := getProtection(t, protectionEngine(t, database, []storageutil.Device{
 		internalDevice(t),

@@ -27,6 +27,11 @@ const (
 	EventBackupProgress  EventKind = "backup_progress"
 	EventBackupCompleted EventKind = "backup_completed"
 	EventBackupFailed    EventKind = "backup_failed"
+	// EventBackupDeleted fires when a run is deleted from a backup drive, by
+	// hand or pruned to make room for a new one (#4044). Data is a
+	// BackupDeleted; Path is empty. Like the other backup events it reaches
+	// admins only.
+	EventBackupDeleted EventKind = "backup_deleted"
 
 	// Background job lifecycle (jobutil). Data is the jobutil.Job as it stands
 	// after the change; Path is empty. A job that changes the file tree also
@@ -229,6 +234,15 @@ type ChatReadMarkerChanged struct {
 	UnreadCount int64 `json:"unreadCount"`
 	// UserID is the account whose marker moved. It is never sent.
 	UserID int64 `json:"-"`
+}
+
+// BackupDeleted is the data of a backup_deleted event.
+type BackupDeleted struct {
+	// DeviceSerial is the backup drive the run was on, "" for built-in
+	// storage.
+	DeviceSerial string `json:"deviceSerial"`
+	// Run is the deleted run's folder under backups/.
+	Run string `json:"run"`
 }
 
 // VaultChanged is the data of a vault_changed event. Like a read marker it

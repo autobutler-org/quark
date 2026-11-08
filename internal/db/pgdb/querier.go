@@ -222,6 +222,9 @@ type Querier interface {
 	// The backup holding a target device's lock (#3084): idx_jobs_backup_target
 	// allows one pending or running snapshot backup per target.
 	GetActiveBackupJob(ctx context.Context, targetDeviceSerial string) (Job, error)
+	// A pending or running restore reading from a backup drive (#4044): deleting
+	// one of the drive's runs waits for it.
+	GetActiveRestoreJob(ctx context.Context, backupSerial string) (Job, error)
 	// Album reads and writes are scoped to the owning account (#1912): another
 	// account's album id reads as missing. The CAST keeps the nullable user_id
 	// column (014) a plain id parameter.

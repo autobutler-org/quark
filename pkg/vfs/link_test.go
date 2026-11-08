@@ -49,3 +49,16 @@ func TestLocalVFS_Link(t *testing.T) {
 		t.Errorf("Link of a symlink = %v, want ErrPermissionDenied", err)
 	}
 }
+
+// A disk-backed namespace reports its filesystem's free space.
+func TestLocalVFS_FreeSpace(t *testing.T) {
+	fsys, err := NewLocalVFS(t.TempDir(), FilesNamespace(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var space SpaceReporter = fsys
+	free, err := space.FreeSpace(context.Background())
+	if err != nil || free == 0 {
+		t.Errorf("FreeSpace = %d, %v; want some bytes", free, err)
+	}
+}

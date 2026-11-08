@@ -1,0 +1,2 @@
+-- The deleted times are gone, and nothing reads them. Rolling back leaves
+-- them unset, which read as no backup on record.

@@ -28,7 +28,18 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 		verifySnapshotBackupRoute,
 		restoreSnapshotVaultRoute,
 		restoreSnapshotFilesRoute,
+		listBackupRunsRoute,
+		deleteBackupRunRoute,
 	}
+}
+
+// deleteBackupRunBody is what deleting a backup run reads.
+type deleteBackupRunBody struct {
+	// "" is built-in storage, so the field is not binding:"required".
+	DeviceSerial string `json:"deviceSerial"`
+	// Run is the run's folder under backups/ on the drive. Any name that
+	// is not a listed run, empty included, is 404.
+	Run string `json:"run"`
 }
 
 // restoreSnapshotFilesBody is what the file restore reads.

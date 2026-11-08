@@ -21,7 +21,10 @@ import (
 // so nothing that reads runs ever sees half of one, and a run that fails or
 // is canceled removes its partial folder. A file unchanged since the
 // previous complete run is hard-linked from it where the drive can link, so
-// each run is complete on its own without taking the space twice.
+// each run is complete on its own without taking the space twice. Before
+// copying, a drive without room for what the run will copy has its oldest
+// runs deleted, never the newest, and a run that still does not fit fails
+// with [ErrNotEnoughSpace] (#4044).
 func SnapshotBackup(
 	ctx context.Context,
 	params SnapshotBackupParams,
@@ -73,17 +76,11 @@ func SnapshotBackup(
 	job.UpdatedAt = completedAt
 	params.save()
 
-	// Recorded before the event, so a client that asks again on it sees the
-	// new time. The backup itself succeeded, so a failed record is only logged.
-	// The target's run cache is rewritten so the new run counts while the
-	// drive is away.
+	// The target's run cache is rewritten before the event, so a client that
+	// asks again on it sees the new run, and so the run counts while the
+	// drive is away. The backup itself succeeded, so a failure is only logged.
 	if params.Queries != nil {
-		_, cacheErr := RefreshRunCache(ctx, params.Queries, params.TargetDeviceSerial, target)
-		if err := errors.Join(
-			RecordSnapshot(ctx, params.Queries, completedAt),
-			RecordDriveSnapshot(ctx, params.Queries, params.TargetDeviceSerial, completedAt),
-			cacheErr,
-		); err != nil {
+		if _, err := RefreshRunCache(ctx, params.Queries, params.TargetDeviceSerial, target); err != nil {
 			log.Printf("snapshot backup: %v", err)
 		}
 	}
@@ -117,26 +114,35 @@ func writeRun(
 	job := params.Job
 	partial := partialDir(folder)
 
-	// Where each source drive's files sit in the previous complete run.
+	// Where each source drive's files sit in the previous complete run, and
+	// whether this run can link to them.
 	runs, err := ListRuns(ctx, target)
 	if err != nil {
 		return time.Time{}, err
 	}
 	previous := map[string]string{}
+	canLink := false
 	if len(runs) > 0 {
 		for _, d := range runs[0].Drives {
 			previous[d.Serial] = path.Join(runDir(runs[0].Folder), d.Folder)
 		}
+		canLink = linksWork(ctx, target, runDir(runs[0].Folder), partial)
 	}
 
-	// Phase 1: scan all sources to count files and bytes.
+	// Phase 1: scan all sources to count files and bytes, and the bytes the
+	// run will copy rather than link.
 	job.SourceDevices = make([]SourceDeviceProgress, len(sources))
+	var need int64
 	for i, src := range sources {
 		sdp := SourceDeviceProgress{
 			DeviceSerial: src.Serial,
 			DeviceName:   src.Name,
 		}
-		files, bytes, err := scanTree(ctx, src.Files)
+		prevBase, hasPrevious := previous[src.Serial]
+		linked := func(fi vfs.FileInfo) bool {
+			return canLink && hasPrevious && unchanged(ctx, target, path.Join(prevBase, fi.Path), fi)
+		}
+		files, bytes, copyBytes, err := scanTree(ctx, src.Files, linked)
 		if err != nil {
 			return time.Time{}, fmt.Errorf("scan %s: %w", src.Name, err)
 		}
@@ -145,9 +151,15 @@ func writeRun(
 		job.TotalFiles += files
 		job.TotalBytes += bytes
 		job.SourceDevices[i] = sdp
+		need += copyBytes
 	}
 	job.UpdatedAt = time.Now()
 	params.save()
+
+	// Phase 1b: make room for what the run will copy.
+	if err := makeRoom(ctx, params, target, runs, need); err != nil {
+		return time.Time{}, err
+	}
 
 	// Phase 2: copy files from each source to the target.
 	job.Status = BackupStatusCopying
@@ -182,7 +194,7 @@ func writeRun(
 			}
 
 			// Unchanged since the previous run: linked from there, not copied.
-			if hasPrevious && linkUnchanged(ctx, target, path.Join(prevBase, relPath), targetPath, srcInfo) {
+			if canLink && hasPrevious && linkUnchanged(ctx, target, path.Join(prevBase, relPath), targetPath, srcInfo) {
 				job.FilesSkipped++
 				job.SourceDevices[i].FilesSkipped++
 				return nil
@@ -271,14 +283,32 @@ func writeRun(
 // namespace with no [vfs.Linker]. Both paths are on the backup drive.
 func linkUnchanged(ctx context.Context, target vfs.VFS, prev, dst string, src vfs.FileInfo) bool {
 	linker, ok := target.(vfs.Linker)
+	return ok && unchanged(ctx, target, prev, src) && linker.Link(ctx, prev, dst) == nil
+}
+
+// unchanged reports whether prev, a file's copy in the previous run on
+// target, is still the source file src: the same size, and not older.
+func unchanged(ctx context.Context, target vfs.VFS, prev string, src vfs.FileInfo) bool {
+	info, err := target.Stat(ctx, prev)
+	return err == nil && !info.IsDir && info.Size == src.Size && !info.ModTime.Before(src.ModTime)
+}
+
+// linksWork reports whether target makes hard links, by linking the manifest
+// of prev, a complete run's folder, into dir and removing the link. A
+// namespace with no [vfs.Linker] makes none, and FAT and exFAT refuse.
+func linksWork(ctx context.Context, target vfs.VFS, prev, dir string) bool {
+	linker, ok := target.(vfs.Linker)
 	if !ok {
 		return false
 	}
-	info, err := target.Stat(ctx, prev)
-	if err != nil || info.IsDir || info.Size != src.Size || info.ModTime.Before(src.ModTime) {
+	probe := path.Join(dir, ".link-probe")
+	if linker.Link(ctx, path.Join(prev, manifestFilename), probe) != nil {
 		return false
 	}
-	return linker.Link(ctx, prev, dst) == nil
+	if err := target.Delete(ctx, probe, vfs.DeleteOptions{}); err != nil {
+		log.Printf("snapshot backup: remove %s: %v", probe, err)
+	}
+	return true
 }
 
 func (p SnapshotBackupParams) save() {
@@ -304,8 +334,10 @@ func failJob(params SnapshotBackupParams, err error) error {
 	return err
 }
 
-// scanTree counts the files under fsys and the bytes they hold.
-func scanTree(ctx context.Context, fsys vfs.VFS) (files int, bytes int64, err error) {
+// scanTree counts the files under fsys, the bytes they hold, and copyBytes,
+// the bytes of the files a run copies rather than links: those linked
+// reports false for.
+func scanTree(ctx context.Context, fsys vfs.VFS, linked func(vfs.FileInfo) bool) (files int, bytes, copyBytes int64, err error) {
 	err = vfs.Walk(ctx, fsys, "", func(fi vfs.FileInfo) error {
 		if err := skipBackupsDir(fi); err != nil {
 			return err
@@ -313,6 +345,9 @@ func scanTree(ctx context.Context, fsys vfs.VFS) (files int, bytes int64, err er
 		if !fi.IsDir {
 			files++
 			bytes += fi.Size
+			if !linked(fi) {
+				copyBytes += fi.Size
+			}
 		}
 		return nil
 	})

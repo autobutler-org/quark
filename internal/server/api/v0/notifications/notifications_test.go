@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 	"time"
 
@@ -18,8 +19,31 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/notificationutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
+
+// backedUp gives a backup drive one complete run, completed at, and scans it
+// into the drive's run cache, which the notifications read.
+func (h harness) backedUp(t *testing.T, at time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	if err := h.queries.UpsertDeviceRole(ctx, db.UpsertDeviceRoleParams{DeviceSerial: "BK", Role: "snapshot-backup"}); err != nil {
+		t.Fatal(err)
+	}
+	drive := vfs.NewMemVFS(vfs.FilesNamespace("BK"))
+	dir := path.Join(backup.BackupsDir, "2026-10-01 09.00")
+	if err := drive.MkdirAll(ctx, dir); err != nil {
+		t.Fatal(err)
+	}
+	manifest := &backup.Manifest{CompletedAt: at, Drives: []backup.ManifestDrive{{Folder: "Built-in storage"}}}
+	if err := backup.WriteManifest(ctx, manifest, drive, dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := backup.RefreshRunCache(ctx, h.queries, "BK", drive); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // harness is the router on a real database holding an admin and a member.
 type harness struct {
@@ -98,9 +122,7 @@ func TestListNotifications_AdminWithNoBackupIsDue(t *testing.T) {
 
 func TestListNotifications_ClearsAfterSnapshot(t *testing.T) {
 	h := newHarness(t)
-	if err := backup.RecordSnapshot(context.Background(), h.queries, time.Now()); err != nil {
-		t.Fatal(err)
-	}
+	h.backedUp(t, time.Now())
 	if got := h.list(t, "admin"); len(got) != 0 {
 		t.Fatalf("notifications after a snapshot = %+v, want none", got)
 	}
@@ -109,9 +131,7 @@ func TestListNotifications_ClearsAfterSnapshot(t *testing.T) {
 func TestListNotifications_AdminWithOldBackupIsStale(t *testing.T) {
 	h := newHarness(t)
 	last := time.Now().Add(-notificationutil.BackupStaleAfter - time.Hour)
-	if err := backup.RecordSnapshot(context.Background(), h.queries, last); err != nil {
-		t.Fatal(err)
-	}
+	h.backedUp(t, last)
 	got := h.list(t, "admin")
 	if len(got) != 1 || got[0].Type != notificationutil.TypeBackupStale || got[0].LastBackupAt == nil {
 		t.Fatalf("notifications = %+v, want one backup_stale with lastBackupAt", got)

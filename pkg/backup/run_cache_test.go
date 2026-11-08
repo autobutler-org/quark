@@ -146,3 +146,40 @@ func TestDriveCopies_FailedScanUsesLastScan(t *testing.T) {
 		t.Errorf("cache row after a failed scan = %s, %v; want %s untouched", after, err, before)
 	}
 }
+
+// A completed snapshot rewrites its target's run cache, so the new run counts
+// while the drive is away.
+func TestSnapshotBackup_RefreshesTheRunCache(t *testing.T) {
+	src := makeSource(t, "Drive", "SER1", map[string]string{"file.txt": "data"})
+	job := newJob("TARGET")
+	queries := dbtest.NewDB(t).Queries
+	if err := SnapshotBackup(context.Background(), SnapshotBackupParams{
+		TargetDeviceSerial: "TARGET",
+		Job:                job,
+		Queries:            queries,
+	}, []SourceDevice{src}, makeTarget(t)); err != nil {
+		t.Fatalf("SnapshotBackup failed: %v", err)
+	}
+	copies, err := cachedRunCopies(context.Background(), queries, "TARGET")
+	if err != nil || len(copies) != 1 || copies[0].Serial != "SER1" || !copies[0].CompletedAt.Equal(*job.CompletedAt) {
+		t.Errorf("cached copies = %+v, %v; want SER1 at the job's completion time %v", copies, err, job.CompletedAt)
+	}
+}
+
+// A snapshot that fails leaves no run, and so nothing in the cache.
+func TestSnapshotBackup_FailedBackupCachesNothing(t *testing.T) {
+	src := makeSource(t, "Drive", "SER1", map[string]string{"file.txt": "data"})
+	queries := dbtest.NewDB(t).Queries
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := SnapshotBackup(ctx, SnapshotBackupParams{
+		TargetDeviceSerial: "TARGET",
+		Job:                newJob("TARGET"),
+		Queries:            queries,
+	}, []SourceDevice{src}, makeTarget(t)); err == nil {
+		t.Fatal("SnapshotBackup succeeded with a canceled context")
+	}
+	if copies, err := cachedRunCopies(context.Background(), queries, "TARGET"); err != nil || len(copies) != 0 {
+		t.Errorf("cached copies = %+v, %v after a failed backup, want none", copies, err)
+	}
+}

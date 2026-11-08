@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -56,6 +57,31 @@ func RefreshRunCache(ctx context.Context, queries db.Querier, serial string, fsy
 		return nil, fmt.Errorf("cache the runs of drive %q: %w", serial, err)
 	}
 	return copies, nil
+}
+
+// LastSnapshot returns when the newest complete run on any backup drive
+// completed, or the zero time when no backup drive holds one. It reads each
+// snapshot-backup drive's run cache, which every scan of the drive, every
+// backup, delete and prune rewrites from the run folders, so it follows the
+// folders and answers for a drive that is away (#4044).
+func LastSnapshot(ctx context.Context, queries db.Querier) (time.Time, error) {
+	backups, err := backupSerials(ctx, queries)
+	if err != nil {
+		return time.Time{}, err
+	}
+	var last time.Time
+	for serial := range backups {
+		copies, err := cachedRunCopies(ctx, queries, serial)
+		if err != nil {
+			return time.Time{}, err
+		}
+		for _, c := range copies {
+			if c.CompletedAt.After(last) {
+				last = c.CompletedAt
+			}
+		}
+	}
+	return last, nil
 }
 
 // cachedRunCopies reads the copies the drive held at its last scan. A drive

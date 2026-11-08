@@ -267,6 +267,12 @@ func (v *LocalVFS) Link(_ context.Context, src, dst string) error {
 	return hostLink(filepath.Clean(srcAbs), filepath.Clean(dstAbs))
 }
 
+// FreeSpace is the bytes a write under the root can use. See
+// [SpaceReporter].
+func (v *LocalVFS) FreeSpace(ctx context.Context) (uint64, error) {
+	return hostFreeSpace(ctx, v.root)
+}
+
 // Copy copies the file at src to dst through Write. See [VFS.Copy].
 func (v *LocalVFS) Copy(ctx context.Context, src, dst string, opts CopyOptions) error {
 	return copyFile(ctx, v, src, v, dst, opts)

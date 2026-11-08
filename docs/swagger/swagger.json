@@ -8033,7 +8033,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the caller's current notifications. The list is derived on each request and not stored, so a notification is there for as long as its condition holds. An admin gets backup_due while this Quark has no completed snapshot backup on record, and backup_stale, with lastBackupAt, once the last one is 30 days old; other accounts get neither. A type listed in the caller's disabledNotifications setting (PUT /settings/me) is left out. link is the app route to open. There is no notification event: refetch on backup_completed, after changing your own settings, and when the app comes back to the foreground.",
+                "description": "Returns the caller's current notifications. The list is derived on each request and not stored, so a notification is there for as long as its condition holds. An admin gets backup_due while no snapshot-backup drive holds a complete backup run, and backup_stale, with lastBackupAt, once the newest run on any of them is 30 days old; other accounts get neither. The runs are read from each drive's backup folders as last scanned, so a drive that is away still counts, and deleting or pruning its last run brings backup_due back. A type listed in the caller's disabledNotifications setting (PUT /settings/me) is left out. link is the app route to open. There is no notification event: refetch on backup_completed and backup_deleted, after changing your own settings, and when the app comes back to the foreground.",
                 "produces": [
                     "application/json"
                 ],
@@ -10084,7 +10084,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Queues a job that aggregates all files from all managed devices onto the target snapshot-backup device. Answers 409 while the target already has a pending or running backup, whichever instance started it, and 409 when the target's health.verdict is replace-soon unless acknowledgeHealth is true. Watch does not block. It asks for no password. On SQLite the snapshot also copies the chat and every account's vault, as the ciphertext they are, into chat_backup.db and vault_items_backup.db. On PostgreSQL the snapshot is the device directories and backup_manifest.json only: the chat and the vault are in the operator's database backup.\nEach backup is a new run in its own folder under backups/, named for the minute it started in the Quark's local time, as \"2026-11-07 21.57\", with \" (2)\" and so on when two start in the same minute. A run holds one folder per source drive (\"Built-in storage\", or the drive's name and the first 8 characters of its serial, as \"Photos (USB 90C82C65)\"), the chat and vault files, and the manifest, which records each drive folder's source serial.\nA run is written under a hidden folder ending in .partial and renamed when it completes; a failed or canceled run's partial folder is removed. A file unchanged since the previous complete run is hard-linked from it where the drive's filesystem allows, and copied otherwise. No source's own backups/ folder is copied. The backup never deletes a file or an earlier run. jobId is what the status route takes.",
+                "description": "Queues a job that aggregates all files from all managed devices onto the target snapshot-backup device. Answers 409 while the target already has a pending or running backup, whichever instance started it, and 409 when the target's health.verdict is replace-soon unless acknowledgeHealth is true. Watch does not block. It asks for no password. On SQLite the snapshot also copies the chat and every account's vault, as the ciphertext they are, into chat_backup.db and vault_items_backup.db. On PostgreSQL the snapshot is the device directories and backup_manifest.json only: the chat and the vault are in the operator's database backup.\nEach backup is a new run in its own folder under backups/, named for the minute it started in the Quark's local time, as \"2026-11-07 21.57\", with \" (2)\" and so on when two start in the same minute. A run holds one folder per source drive (\"Built-in storage\", or the drive's name and the first 8 characters of its serial, as \"Photos (USB 90C82C65)\"), the chat and vault files, and the manifest, which records each drive folder's source serial.\nA run is written under a hidden folder ending in .partial and renamed when it completes; a failed or canceled run's partial folder is removed. A file unchanged since the previous complete run is hard-linked from it where the drive's filesystem allows, and copied otherwise. No source's own backups/ folder is copied. The backup never deletes a file. jobId is what the status route takes.\nBefore copying, the backup compares the drive's free space with the bytes the run will copy, every file it cannot hard-link. While that is short it deletes the oldest complete run, one at a time, and publishes backup_deleted for each; it never deletes the newest complete run, nor a run a restore is reading. If the drive is still short, the backup fails before copying with a message naming the drive, such as \"not enough space on Backup for this backup: delete old backups or use a bigger drive\". A drive whose free space cannot be read is not pruned.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10295,6 +10295,130 @@
                     },
                     "501": {
                         "description": "the Quark runs on PostgreSQL",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/storage/devices/snapshot-backup/runs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lists the complete runs on a drive with the snapshot-backup role, newest first: each run's folder under backups/, when it completed, its size, and the drive folders it holds. A run still being written is not listed. A drive with no backups lists none.\nsizeBytes is the bytes the run's files hold, from its manifest. A file unchanged between runs is one hard-linked file counted in each, so deleting one run frees less space than its size.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "storage"
+                ],
+                "summary": "List the backups on a backup drive",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The backup drive's serial; empty or absent is built-in storage",
+                        "name": "deviceSerial",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/backup.ListDriveRunsResult"
+                        }
+                    },
+                    "400": {
+                        "description": "a drive without the snapshot-backup role",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the drive is not attached",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently deletes one complete run, a folder under backups/ on a drive with the snapshot-backup role, as GET /storage/devices/snapshot-backup/runs names it. It does not go to the trash. Every run is complete on its own, so no other run loses a file, and because unchanged files are hard-linked between runs, the space freed can be less than the run's size.\nOnly a listed run is deleted: any other name, a run still being written or a path out of backups/ included, is 404. While a backup onto the drive is pending or running, or a restore reads the run, it is 409. The drive's protection status reads without the run afterwards, and backup_deleted is published with the drive's serial and the run.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "storage"
+                ],
+                "summary": "Delete a backup from a backup drive",
+                "parameters": [
+                    {
+                        "description": "The backup drive and the run",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_storage.deleteBackupRunBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/backup.DeleteRunResult"
+                        }
+                    },
+                    "400": {
+                        "description": "bad request, or a drive without the snapshot-backup role",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the drive is not attached, or holds no complete run of that name",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "a backup onto the drive or a restore of the run is pending or running",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -12564,6 +12688,43 @@
                 "BackupStatusFailed"
             ]
         },
+        "backup.DeleteRunResult": {
+            "type": "object",
+            "properties": {
+                "run": {
+                    "$ref": "#/definitions/backup.Run"
+                }
+            }
+        },
+        "backup.ListDriveRunsResult": {
+            "type": "object",
+            "properties": {
+                "runs": {
+                    "description": "Runs is newest first, and empty, never nil, on a drive with none.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/backup.Run"
+                    }
+                }
+            }
+        },
+        "backup.ManifestDrive": {
+            "type": "object",
+            "properties": {
+                "folder": {
+                    "description": "Folder is the folder's name in the run: \"Built-in storage\", or the\ndrive's name and the first 8 characters of its serial, as\n\"Photos (USB 90C82C65)\".",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the source drive's name when the run was taken.",
+                    "type": "string"
+                },
+                "serial": {
+                    "description": "Serial is the source drive's serial, \"\" for built-in storage.",
+                    "type": "string"
+                }
+            }
+        },
         "backup.RestoreFolder": {
             "type": "object",
             "properties": {
@@ -12578,6 +12739,30 @@
                 "toBuiltIn": {
                     "description": "ToBuiltIn is set when the device the files came from is gone. They go\ninto a folder of the same name on built-in storage, beside its own.",
                     "type": "boolean"
+                }
+            }
+        },
+        "backup.Run": {
+            "type": "object",
+            "properties": {
+                "completedAt": {
+                    "description": "CompletedAt is when the run completed, from its manifest.",
+                    "type": "string"
+                },
+                "drives": {
+                    "description": "Drives is what the run holds, one folder per source drive.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/backup.ManifestDrive"
+                    }
+                },
+                "folder": {
+                    "description": "Folder is the run's folder under backups/, named after the minute it\nstarted in the Quark's local time (\"2026-11-07 21.57\"), with \" (2)\"\nand so on after it when two runs started in the same minute.",
+                    "type": "string"
+                },
+                "sizeBytes": {
+                    "description": "SizeBytes is the bytes the run's files hold, its manifest's\ntotalBytes. A file hard-linked from another run counts in both, so\ndeleting a run frees less than this.",
+                    "type": "integer"
                 }
             }
         },
@@ -16039,6 +16224,19 @@
                 },
                 "sentence": {
                     "description": "Sentence is one plain sentence describing the whole Quark from its weakest data drive.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_storage.deleteBackupRunBody": {
+            "type": "object",
+            "properties": {
+                "deviceSerial": {
+                    "description": "\"\" is built-in storage, so the field is not binding:\"required\".",
+                    "type": "string"
+                },
+                "run": {
+                    "description": "Run is the run's folder under backups/ on the drive. Any name that\nis not a listed run, empty included, is 404.",
                     "type": "string"
                 }
             }

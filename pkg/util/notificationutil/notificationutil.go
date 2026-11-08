@@ -20,11 +20,10 @@ import (
 type Type string
 
 const (
-	// TypeBackupDue means this Quark has no completed snapshot backup on
-	// record.
+	// TypeBackupDue means no backup drive holds a complete snapshot run.
 	TypeBackupDue Type = "backup_due"
-	// TypeBackupStale means the last completed snapshot backup is at least
-	// BackupStaleAfter old.
+	// TypeBackupStale means the newest complete snapshot run on any backup
+	// drive is at least BackupStaleAfter old.
 	TypeBackupStale Type = "backup_stale"
 )
 
@@ -60,7 +59,8 @@ type Notification struct {
 
 // ListParams describes the account to list notifications for.
 type ListParams struct {
-	// Queries is the database the last snapshot backup is recorded in.
+	// Queries holds the device roles and each backup drive's run cache,
+	// which [backup.LastSnapshot] reads.
 	Queries db.Querier
 	// IsAdmin is whether the account is an admin.
 	IsAdmin bool
@@ -79,10 +79,12 @@ type ListResult struct {
 // List returns an account's current notifications.
 //
 // The backup types go to admins only, since only an admin can start a backup.
-// An admin gets TypeBackupDue while no snapshot backup is on record and
-// TypeBackupStale once the last one is BackupStaleAfter old. Because the list
-// is derived, there is at most one backup notification however often it is
-// asked for, and it clears itself when a snapshot backup completes. That is
+// An admin gets TypeBackupDue while no backup drive holds a complete run and
+// TypeBackupStale once the newest run is BackupStaleAfter old. The runs are
+// the record (#4044): deleting or pruning the last one brings TypeBackupDue
+// back. Because the list is derived, there is at most one backup notification
+// however often it is asked for, and it clears itself when a snapshot backup
+// completes. That is
 // all the coalescing and rate limiting these types need.
 func List(ctx context.Context, params ListParams) (ListResult, error) {
 	result := ListResult{Notifications: []Notification{}}

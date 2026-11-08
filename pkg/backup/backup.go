@@ -118,6 +118,10 @@ type Run struct {
 	CompletedAt time.Time `json:"completedAt"`
 	// Drives is what the run holds, one folder per source drive.
 	Drives []ManifestDrive `json:"drives"`
+	// SizeBytes is the bytes the run's files hold, its manifest's
+	// totalBytes. A file hard-linked from another run counts in both, so
+	// deleting a run frees less than this.
+	SizeBytes int64 `json:"sizeBytes"`
 }
 
 // RunCopy is one data drive a backup drive holds a copy of: the newest
@@ -210,8 +214,9 @@ type SnapshotBackupParams struct {
 	// both exports.
 	LiveDB      *sql.DB
 	IOSemaphore *iosemutil.Semaphore // throttles file copies to yield to interactive requests
-	// Queries is the database a completed snapshot is recorded in for
-	// [LastSnapshot]. Nil records nothing.
+	// Queries holds the target's run cache, rewritten after a prune and
+	// when the run completes, and the restore jobs a prune keeps clear of.
+	// Nil does neither.
 	Queries db.Querier
 }
 
