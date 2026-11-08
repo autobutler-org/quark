@@ -281,7 +281,15 @@ class _StorageTabState extends State<StorageTab>
 
     final confirmed = await QuarkWidget.showDialog<bool>(
       context,
-      builder: (ctx) => SnapshotBackupDialog(targetName: target.name),
+      builder: (ctx) => SnapshotBackupDialog(
+        targetName: target.name,
+        // The data drives the Quark copies: every attached drive but the
+        // backup drives (#4037).
+        sourceNames: [
+          for (final d in _devices ?? const <StorageDevice>[])
+            if (d.role != 'snapshot-backup' && !d.isUnmounted) d.name,
+        ],
+      ),
     );
     if (confirmed != true || !mounted) return;
 
@@ -452,7 +460,7 @@ class _StorageTabState extends State<StorageTab>
       case 'default-storage':
         return 'Default Storage';
       case 'snapshot-backup':
-        return 'Snapshot Backup';
+        return 'Backup drive';
       default:
         return 'Unassigned';
     }

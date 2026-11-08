@@ -22,7 +22,7 @@ const manifestFilename = "backup_manifest.json"
 // ErrNoManifest is what verifying a drive with no finished backup returns: a
 // manifest is written only when a snapshot completes, so there is nothing to
 // check yet.
-var ErrNoManifest = errors.New("nothing to verify yet: run Back Up on this drive first")
+var ErrNoManifest = errors.New("nothing to verify yet: back up onto this drive first")
 
 // GenerateManifest hashes every file under dir in fsys but the manifest
 // itself, keyed by its path relative to dir. An empty dir is the root.

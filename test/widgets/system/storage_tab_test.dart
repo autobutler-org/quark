@@ -56,6 +56,27 @@ void main() {
                 'role': 'snapshot-backup',
                 'isEnabled': true,
               },
+              {
+                'name': 'Built-in storage',
+                'isInternal': true,
+                'mountPoint': '/',
+                'role': 'unassigned',
+                'isEnabled': true,
+              },
+              {
+                'name': 'Photos',
+                'usbInfo': {'serial': 'USB3'},
+                'mountPoint': '/mnt/photos',
+                'role': 'default-storage',
+                'isEnabled': true,
+              },
+              {
+                'name': 'Unplugged',
+                'usbInfo': {'serial': 'USB4'},
+                'mountPoint': '',
+                'role': 'unassigned',
+                'isEnabled': false,
+              },
             ],
           }),
           200,
@@ -86,7 +107,7 @@ void main() {
       const MaterialApp(home: Scaffold(body: StorageTab())),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text(button));
+    await tester.tap(find.text(button).first);
     await tester.pumpAndSettle();
   }
 
@@ -133,6 +154,20 @@ void main() {
 
     expect(find.byType(SnapshotBackupDialog), findsNothing);
     expect(backupBody, isNull);
+  });
+
+  testWidgets('the dialog names the data drives it copies onto the target', (
+    tester,
+  ) async {
+    await openFromCard(tester, 'Back up onto this drive');
+
+    // The backup drive and an unplugged drive are not copied.
+    expect(
+      find.text('Copy Built-in storage and Photos onto Backups.'),
+      findsOneWidget,
+    );
+
+    await closeWith(tester, 'Cancel');
   });
 
   testWidgets('Start Backup sends the target and nothing else', (tester) async {

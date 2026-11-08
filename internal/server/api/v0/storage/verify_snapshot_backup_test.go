@@ -139,8 +139,8 @@ func TestVerifySnapshotBackup_NoManifestIsBadRequest(t *testing.T) {
 		t.Errorf("verify without a manifest = %d %s, want 400", w.Code, w.Body.String())
 	}
 	body := w.Body.String()
-	if strings.Contains(body, "vfs: not found") || !strings.Contains(body, "Back Up") {
-		t.Errorf("verify without a manifest body = %s, want it to name Back Up and not the vfs error", body)
+	if strings.Contains(body, "vfs: not found") || !strings.Contains(body, "back up onto this drive") {
+		t.Errorf("verify without a manifest body = %s, want it to say back up onto this drive and not the vfs error", body)
 	}
 }
 
@@ -148,7 +148,7 @@ func TestVerifySnapshotBackup_NoManifestIsBadRequest(t *testing.T) {
 // finds no manifest there.
 func TestVerifySnapshotBackup_BuiltInStorage(t *testing.T) {
 	w := verify(newVerifyEngine(t, nil), "")
-	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Back Up") {
-		t.Errorf("verify on built-in storage = %d %s, want 400 naming Back Up", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "back up onto this drive") {
+		t.Errorf("verify on built-in storage = %d %s, want 400 saying back up onto this drive", w.Code, w.Body.String())
 	}
 }

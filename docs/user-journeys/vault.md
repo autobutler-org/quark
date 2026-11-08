@@ -383,13 +383,15 @@ account here of the same username, letter for letter. The caller is an admin.
 
 **Steps:**
 
-1. The admin opens Storage and taps **Restore vaults** on the snapshot-backup drive.
+1. The admin opens Storage and taps **Restore vaults** on the backup drive.
 2. The dialog says each vault goes to the account with exactly the same username (`Carol` is not `carol`), that every
    vault in the backup must have its account here first or nothing is restored, and that after a move to new hardware
-   each person unlocks their vault with the password they had when the backup was taken.
+   each person unlocks their vault with the password they had when the backup was taken. It names the backup it
+   reads, "From the backup of Nov 2, 09.00.", the newest on the drive; on a drive with more than one, the admin can
+   pick another from the **Backup** menu.
 3. The admin enters their login password and confirms.
-4. The snack bar reports how many vaults and entries were restored, and names anyone who must unlock with the
-   password they had when the backup was taken.
+4. The snack bar reports how many vaults and entries were restored and from which backup, and names anyone who must
+   unlock with the password they had when the backup was taken.
 5. Each of those accounts opens `/vault`, enters the password they had when the backup was taken and the password
    they sign in with now. The vault then opens with the sign-in password.
 
@@ -401,7 +403,9 @@ nothing changes. An account that already has a vault key, even an empty vault, i
 changes: the account deletes its empty vault first. A backed-up vault with no account of its username is a 409 naming
 the usernames, and nothing changes. A drive without the `snapshot-backup` role, a backup this version cannot read,
 or a backed-up key or item this Quark would refuse from the app is a 400 naming the account when one is at fault,
-and nothing changes. A drive that is gone, or that holds no vault backup, is a 404. A wrong password is a 403.
+and nothing changes. A drive that is gone, or whose chosen backup holds no vault backup, is a 404; a drive that holds
+no backup yet says so and to back up onto it first. Backups taken before the dated `backups/` folders, at the drive's
+root, are not read. A wrong password is a 403.
 Every restored account's open sessions get `vault_changed`, and the restore is written to the server log.
 
 The old `POST /api/v0/vault/import-backup` is gone (#3460), and a `vault_backup.db` from an older snapshot cannot be

@@ -58,8 +58,8 @@ class AdminMapCard extends StatelessWidget {
       icon: QuarkIcons.storage_rounded,
       title: 'Disks',
       what:
-          'The drives that hold everyone’s files, and which one keeps the '
-          'backup.',
+          'The drives that hold everyone’s files, and which ones keep the '
+          'backups.',
       where: 'System › Storage',
       route: AppRoutes.systemTab(SystemTab.storage),
     ),
