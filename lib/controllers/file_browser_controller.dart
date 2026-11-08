@@ -18,6 +18,7 @@ import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_menu.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/slides/import/import_power_point.dart';
 import 'package:quark/widgets/video_viewer/convert_video.dart';
@@ -40,11 +41,105 @@ typedef DeleteFilesFn =
       String? deviceSerial,
     });
 
+/// Moves one file or folder — [FilesService.moveFile].
+typedef MoveFileFn =
+    Future<void> Function(
+      String oldPath,
+      String newPath, {
+      String? oldDeviceSerial,
+      String? newDeviceSerial,
+    });
+
+/// What moving a selection did, and what to tell the person who asked.
+///
+/// [leaveSelection] is true only when every selected item is where it was
+/// asked to be. A skip or a refusal leaves the rest selected (#3989).
+class MoveSelectionOutcome {
+  const MoveSelectionOutcome({
+    required this.moved,
+    required this.failed,
+    required this.left,
+    required this.intoSelf,
+    required this.movedPaths,
+    required this.unchanged,
+  });
+
+  /// How many items the Quark accepted a move for.
+  final int moved;
+
+  /// How many moves the Quark refused. The ones in [moved] stay moved.
+  final int failed;
+
+  /// Names the context menu would not move, so they stayed put.
+  final List<String> left;
+
+  /// Folder names that would have landed inside themselves.
+  final List<String> intoSelf;
+
+  /// Paths that no longer need to stay selected: they moved, or they were
+  /// already in the destination.
+  final List<String> movedPaths;
+
+  /// How many selected items were already at the destination.
+  final int unchanged;
+
+  /// Selection mode ends only when nothing selected was skipped or refused.
+  bool get leaveSelection => failed == 0 && left.isEmpty && intoSelf.isEmpty;
+
+  /// The sentence for the snack bar. Empty when there is nothing to say.
+  String get message {
+    final parts = <String>[
+      if (moved == 1) 'Moved 1 item.' else if (moved > 1) 'Moved $moved items.',
+      if (failed == 1)
+        Errors.couldNot('move 1 item')
+      else if (failed > 1)
+        Errors.couldNot('move $failed items'),
+      if (left.length == 1)
+        'Left ${left.single} where it is.'
+      else if (left.length > 1)
+        'Left ${_nameList(left)} where they are.',
+      if (intoSelf.length == 1)
+        "${intoSelf.single} can't be moved into itself or one of its subfolders."
+      else if (intoSelf.length > 1)
+        "${_nameList(intoSelf)} can't be moved into themselves or one of their subfolders.",
+    ];
+    if (parts.isEmpty && unchanged > 0 && leaveSelection) {
+      return 'Nothing was moved.';
+    }
+    return parts.join(' ');
+  }
+}
+
+String _nameList(List<String> names) {
+  if (names.length <= 1) return names.join();
+  if (names.length == 2) return '${names[0]} and ${names[1]}';
+  return '${names.sublist(0, names.length - 1).join(', ')}, and ${names.last}';
+}
+
+/// Whether a folder at [fromPath] on [fromSerial] would land inside itself
+/// at [toPath] on [toSerial]. The same path on another device is a move.
+bool folderLandsInsideItself({
+  required bool isDir,
+  required String fromPath,
+  required String toPath,
+  required String fromSerial,
+  required String toSerial,
+}) {
+  if (!isDir) return false;
+  if (fromSerial.trim() != toSerial.trim()) return false;
+  final from = normalizePath(fromPath);
+  final to = normalizePath(toPath);
+  if (from.isEmpty) return false;
+  return to == from || to.startsWith('$from/');
+}
+
 /// The Files page's calls to the Quark and the platform: listing a folder, picking and uploading files, folders
-/// and photos, creating folders, deleting, and the actions in a file's menu.
+/// and photos, creating folders, deleting, moving a selection, and the actions in a file's menu.
 class FileBrowserController {
   const FileBrowserController({
     this.deleteFiles = FilesService.deleteFiles,
+    this.moveFile = FilesService.moveFile,
+    this.createFolderAt = createFolderAtCurrentPath,
     this.listTranscodeFormats = FilesService.listTranscodeFormats,
     this.transcodeVideo = FilesService.transcodeVideo,
     this.importPowerPoint = SlidesService.importPowerPoint,
@@ -68,6 +163,17 @@ class FileBrowserController {
 
   /// The batch delete call, injectable so a test can see the batches.
   final DeleteFilesFn deleteFiles;
+
+  /// One `PUT /api/v0/files`, injectable so a test can see each move.
+  final MoveFileFn moveFile;
+
+  /// Creates a folder, injectable so a test can refuse a taken name.
+  final Future<void> Function({
+    required String currentPath,
+    required String folderName,
+    String? serial,
+  })
+  createFolderAt;
 
   /// The formats Convert video offers for a video, injectable so a test can
   /// fake them.
@@ -217,10 +323,123 @@ class FileBrowserController {
     required String folderName,
     String? serial,
   }) {
-    return createFolderAtCurrentPath(
+    return createFolderAt(
       currentPath: currentPath,
       folderName: folderName,
       serial: serial,
+    );
+  }
+
+  /// Asks where to put [nodes], then moves each one that can move.
+  ///
+  /// The picker is the Move/Rename browser without the name field. Null when
+  /// the person cancels: nothing is moved and the selection is unchanged.
+  /// [devices] is the list the page already holds (#3995).
+  Future<MoveSelectionOutcome?> moveSelection({
+    required BuildContext context,
+    required List<FileNode> nodes,
+    List<StorageDevice> devices = const [],
+    required bool isAdmin,
+    bool inArchive = false,
+  }) async {
+    if (nodes.isEmpty) return null;
+    final serials = {for (final node in nodes) node.deviceSerial.trim()};
+    final startSerial = nodes.first.deviceSerial.trim();
+    final picked = await promptForMoveRenamePath(
+      context,
+      startPath: parentPath(nodes.first.apiPath),
+      devices: [
+        for (final device in devices)
+          if (device.isEnabled || serials.contains(device.serial)) device,
+      ],
+      deviceSerial: startSerial,
+      destinationOnly: true,
+      onCreateFolder: (parent, name, serial) => createFolder(
+        currentPath: parent,
+        folderName: name,
+        serial: serialOrNull(serial ?? ''),
+      ),
+    );
+    if (picked == null || !context.mounted) return null;
+    return moveNodes(
+      nodes: nodes,
+      destinationPath: picked.targetInput,
+      destinationSerial: picked.deviceSerial,
+      isAdmin: isAdmin,
+      inArchive: inArchive,
+    );
+  }
+
+  /// Moves [nodes] into [destinationPath], keeping each item's name.
+  ///
+  /// [destinationPath] is the folder, empty for the top of the device.
+  /// [destinationSerial] is empty for built-in storage and null when each
+  /// item stays on its own drive. One existing move per item. A refusal
+  /// leaves the earlier moves in place.
+  Future<MoveSelectionOutcome> moveNodes({
+    required List<FileNode> nodes,
+    required String destinationPath,
+    String? destinationSerial,
+    required bool isAdmin,
+    bool inArchive = false,
+  }) async {
+    final left = <String>[];
+    final intoSelf = <String>[];
+    final movedPaths = <String>[];
+    var moved = 0;
+    var failed = 0;
+    var unchanged = 0;
+    final chosenSerial = destinationSerial?.trim();
+
+    for (final node in nodes) {
+      final display = trimTrailingSlashes(node.name);
+      if (!canChangeFileNode(node, isAdmin: isAdmin, inArchive: inArchive)) {
+        left.add(display);
+        continue;
+      }
+      final target = joinPath(destinationPath, display);
+      final nodeSerial = node.deviceSerial.trim();
+      final landedSerial = chosenSerial ?? nodeSerial;
+      if (normalizePath(target) == normalizePath(node.apiPath) &&
+          landedSerial == nodeSerial) {
+        unchanged++;
+        movedPaths.add(node.apiPath);
+        continue;
+      }
+      if (folderLandsInsideItself(
+        isDir: node.isDir,
+        fromPath: node.apiPath,
+        toPath: target,
+        fromSerial: nodeSerial,
+        toSerial: landedSerial,
+      )) {
+        intoSelf.add(display);
+        continue;
+      }
+      try {
+        final serial = serialOrNull(node.deviceSerial);
+        await moveFile(
+          normalizePath(node.apiPath),
+          normalizePath(target),
+          oldDeviceSerial: serial,
+          newDeviceSerial: destinationSerial == null
+              ? serial
+              : serialOrNull(destinationSerial),
+        );
+        moved++;
+        movedPaths.add(node.apiPath);
+      } catch (_) {
+        failed++;
+      }
+    }
+
+    return MoveSelectionOutcome(
+      moved: moved,
+      failed: failed,
+      left: left,
+      intoSelf: intoSelf,
+      movedPaths: movedPaths,
+      unchanged: unchanged,
     );
   }
 
@@ -308,30 +527,30 @@ class FileBrowserController {
 
         // Prevent moving a directory into itself or its own subtree. On
         // another drive the same path is a different folder.
-        if (node.isDir &&
-            (moveResult.deviceSerial ?? nodeSerial) == nodeSerial) {
-          final normalizedOld = normalizePath(node.apiPath);
-          final normalizedTarget = normalizePath(targetPath);
-          if (normalizedTarget == normalizedOld ||
-              normalizedTarget.startsWith('$normalizedOld/')) {
-            await QuarkWidget.showDialog<void>(
-              context,
-              useRootNavigator: true,
-              builder: (dialogContext) => QuarkWidget.alertDialog(
-                title: const Text('Invalid target'),
-                content: const Text(
-                  'Cannot move a folder into itself or one of its subfolders.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: const Text('OK'),
-                  ),
-                ],
+        if (folderLandsInsideItself(
+          isDir: node.isDir,
+          fromPath: node.apiPath,
+          toPath: targetPath,
+          fromSerial: nodeSerial,
+          toSerial: moveResult.deviceSerial ?? nodeSerial,
+        )) {
+          await QuarkWidget.showDialog<void>(
+            context,
+            useRootNavigator: true,
+            builder: (dialogContext) => QuarkWidget.alertDialog(
+              title: const Text('Invalid target'),
+              content: const Text(
+                'Cannot move a folder into itself or one of its subfolders.',
               ),
-            );
-            return null;
-          }
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+          return null;
         }
 
         await moveRenameNode(

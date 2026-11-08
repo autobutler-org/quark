@@ -246,6 +246,39 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 
 ---
 
+### JN-FB-048: Move a multi-selection into a folder or onto a device
+
+**Preconditions:** Several files and folders exist in Files, on more than one mounted storage device (JN-FB-011,
+JN-FB-013).
+
+**Steps:**
+
+1. Enter multi-select with **Select files** and select two or more items.
+2. Tap **Move selected**.
+3. Choose a destination folder. With more than one mounted device, optionally choose a **Destination device**.
+   The top of a device is a destination too.
+4. Confirm **Move**.
+5. Repeat, and instead of confirming choose **New folder**, name it, and confirm that name.
+6. Repeat once more and choose **Cancel**.
+
+**Expected result:**
+
+- Each selected item lands in the folder on screen, on the chosen device, under its own name. Nothing is renamed.
+  The top of a device receives the items directly.
+- **New folder** creates that folder in the folder on screen and moves the selection into it. One confirm. A name
+  that is taken, or a create that fails, moves nothing.
+- **Cancel** moves nothing and leaves the selection as it was.
+- An item **Move/Rename** would not offer stays put, and the message names it: inside an archive, and the
+  `users` or `groups` folder, a home folder, or a group's own folder unless the viewer is an admin (JN-FB-037).
+- A folder is not moved into itself or one of its subfolders on the same device. The same path on another device
+  is a move.
+- A file whose name is already in the destination replaces that file. A folder whose name is taken is refused.
+- When some moves fail, the ones that succeeded stay moved and the message says how many failed. Selection mode
+  ends only when every selected item moved. Unselected items stay.
+- The single-item **Move/Rename** dialog is unchanged, name field included (JN-FB-011).
+
+---
+
 ### JN-FB-014: Search for a file by name
 
 **Preconditions:** At least one file exists in Files.

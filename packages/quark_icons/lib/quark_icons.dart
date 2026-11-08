@@ -470,6 +470,10 @@ class QuarkIcons {
   static const IconData restore = Icons.restore;
   static const IconData drive_folder_upload_outlined =
       Icons.drive_folder_upload_outlined;
+
+  /// A file moving into a folder: Move on the Files selection bar.
+  static const IconData drive_file_move_outlined =
+      Icons.drive_file_move_outlined;
   static const IconData link_outlined = Icons.link_outlined;
   static const IconData link_rounded = Icons.link_rounded;
   static const IconData link_off = Icons.link_off;

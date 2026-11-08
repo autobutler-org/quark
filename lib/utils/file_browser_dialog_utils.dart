@@ -58,6 +58,9 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
   String? initialName,
   List<StorageDevice> devices = const [],
   String deviceSerial = '',
+  bool destinationOnly = false,
+  Future<void> Function(String parentPath, String folderName, String? serial)?
+  onCreateFolder,
 }) async {
   await Future<void>.delayed(Duration.zero);
   if (!context.mounted) return null;
@@ -132,6 +135,8 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
       initialText: initialName?.trim().replaceAll('/', '') ?? '',
       builder: (_, nameController) {
         bool hasInvalidChar = nameController.text.contains('/');
+        var creating = false;
+        String? createError;
         return StatefulBuilder(
           builder: (context, setState) {
             void goTo(String path) {
@@ -191,7 +196,7 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
                 : fileNameProblem(nameController.text);
 
             return QuarkWidget.alertDialog(
-              title: const Text('Move / Rename'),
+              title: Text(destinationOnly ? 'Move' : 'Move / Rename'),
               scrollable: true,
               content: SizedBox(
                 width: double.maxFinite,
@@ -268,81 +273,156 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Text field that prevents typing '/' and shows validation
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        QuarkWidget.textField(
-                          controller: nameController,
-                          hintText: 'New file name',
-                          autofocus: true,
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) {},
-                          onChanged: (v) {
-                            setState(() {
-                              hasInvalidChar = v.contains('/');
-                            });
-                          },
-                          inputFormatters: [
-                            FilteringTextInputFormatter.deny(RegExp(r'/')),
-                          ],
+                    if (createError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          createError!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
                         ),
-                        if (hasInvalidChar)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6.0),
-                            child: Text(
-                              'The file name cannot contain "/"',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                                fontSize: 12,
+                      ),
+                    // Text field that prevents typing '/' and shows validation.
+                    // A selection move has no name: each item keeps its own.
+                    if (!destinationOnly)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          QuarkWidget.textField(
+                            controller: nameController,
+                            hintText: 'New file name',
+                            autofocus: true,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) {},
+                            onChanged: (v) {
+                              setState(() {
+                                hasInvalidChar = v.contains('/');
+                              });
+                            },
+                            inputFormatters: [
+                              FilteringTextInputFormatter.deny(RegExp(r'/')),
+                            ],
+                          ),
+                          if (hasInvalidChar)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6.0),
+                              child: Text(
+                                'The file name cannot contain "/"',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
-                          ),
-                        if (nameProblem != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6.0),
-                            child: Text(
-                              nameProblem,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                                fontSize: 12,
+                          if (nameProblem != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6.0),
+                              child: Text(
+                                nameProblem,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
+                        ],
+                      ),
                   ],
                 ),
               ),
               actions: [
+                if (destinationOnly && onCreateFolder != null)
+                  TextButton(
+                    key: const ValueKey('move_destination_new_folder'),
+                    onPressed: creating
+                        ? null
+                        : () async {
+                            final name = await promptForFolderName(
+                              dialogContext,
+                            );
+                            if (name == null || !dialogContext.mounted) return;
+                            setState(() {
+                              creating = true;
+                              createError = null;
+                            });
+                            try {
+                              await onCreateFolder(
+                                currentAbsolutePath,
+                                name,
+                                selectedDevice?.serial,
+                              );
+                              if (!dialogContext.mounted) return;
+                              Navigator.of(dialogContext).pop(
+                                MoveRenameResult(
+                                  targetInput: joinPath(
+                                    currentAbsolutePath,
+                                    name,
+                                  ),
+                                  deviceSerial: selectedDevice?.serial,
+                                ),
+                              );
+                            } catch (error) {
+                              if (!dialogContext.mounted) return;
+                              setState(() {
+                                creating = false;
+                                createError = Errors.upload(
+                                  error,
+                                  'create the folder',
+                                );
+                              });
+                            }
+                          },
+                    child: const Text('New folder'),
+                  ),
                 TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  onPressed: creating
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
                   child: const Text('Cancel'),
                 ),
-                TextButton(
-                  autofocus: true,
-                  onPressed: hasInvalidChar || nameProblem != null
-                      ? null
-                      : () {
-                          final name = nameController.text.trim();
-                          final rel = relativeToStart();
-                          String out;
-                          if (rel.isEmpty) {
-                            out = name;
-                          } else {
-                            out = '$rel/$name';
-                          }
-                          // The internal drive's serial is empty, and that
-                          // is a choice: only "no device offered" is null.
-                          Navigator.of(dialogContext).pop(
-                            MoveRenameResult(
-                              targetInput: out,
-                              deviceSerial: selectedDevice?.serial,
-                            ),
-                          );
-                        },
-                  child: const Text('Save'),
-                ),
+                if (destinationOnly)
+                  TextButton(
+                    key: const ValueKey('move_destination_confirm'),
+                    autofocus: true,
+                    onPressed: creating
+                        ? null
+                        : () {
+                            Navigator.of(dialogContext).pop(
+                              MoveRenameResult(
+                                targetInput: currentAbsolutePath,
+                                deviceSerial: selectedDevice?.serial,
+                              ),
+                            );
+                          },
+                    child: const Text('Move'),
+                  )
+                else
+                  TextButton(
+                    autofocus: true,
+                    onPressed: hasInvalidChar || nameProblem != null
+                        ? null
+                        : () {
+                            final name = nameController.text.trim();
+                            final rel = relativeToStart();
+                            String out;
+                            if (rel.isEmpty) {
+                              out = name;
+                            } else {
+                              out = '$rel/$name';
+                            }
+                            // The internal drive's serial is empty, and that
+                            // is a choice: only "no device offered" is null.
+                            Navigator.of(dialogContext).pop(
+                              MoveRenameResult(
+                                targetInput: out,
+                                deviceSerial: selectedDevice?.serial,
+                              ),
+                            );
+                          },
+                    child: const Text('Save'),
+                  ),
               ],
             );
           },
@@ -353,6 +433,14 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
   closed.complete();
 
   if (result == null) return null;
+  // The top of a device is a destination for a selection move. An empty name
+  // on Move/Rename is still a cancel.
+  if (destinationOnly) {
+    return MoveRenameResult(
+      targetInput: normalizePath(result.targetInput),
+      deviceSerial: result.deviceSerial,
+    );
+  }
   final normalized = result.targetInput.trim();
   if (normalized.isEmpty) return null;
   // Collapse duplicate slashes and remove trailing slashes, preserving a single leading
