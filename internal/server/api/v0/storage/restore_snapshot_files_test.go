@@ -21,7 +21,8 @@ import (
 )
 
 // newRestoreFilesEngine serves the admin storage routes over a backup drive
-// holding a snapshot of built-in storage and of a drive that is gone.
+// holding one run, a snapshot of built-in storage and of a drive that is
+// gone.
 func newRestoreFilesEngine(t *testing.T, role string) *gin.Engine {
 	t.Helper()
 	database := dbtest.NewDB(t)
@@ -30,15 +31,10 @@ func newRestoreFilesEngine(t *testing.T, role string) *gin.Engine {
 		t.Fatal(err)
 	}
 	drive := vfs.NewMemVFS(vfs.FilesNamespace(backupSerial))
-	ctx := context.Background()
-	for _, p := range []string{"internal/a.txt", "Gone_GONE1234/b.txt"} {
-		if err := drive.MkdirAll(ctx, p[:strings.Index(p, "/")]); err != nil {
-			t.Fatal(err)
-		}
-		if err := drive.Write(ctx, p, strings.NewReader("x"), vfs.WriteOptions{}); err != nil {
-			t.Fatal(err)
-		}
-	}
+	putRun(t, drive, testRun, []backup.ManifestDrive{
+		{Folder: "Built-in storage", Serial: "", Name: "Pi"},
+		{Folder: "Gone (USB GONE1234)", Serial: "GONE12345678", Name: "Gone"},
+	}, map[string]string{"Built-in storage/a.txt": "x", "Gone (USB GONE1234)/b.txt": "x"})
 	reg := vfs.NewRegistry()
 	for serial, fsys := range map[string]vfs.VFS{"": vfs.NewMemVFS(vfs.FilesNamespace("")), backupSerial: drive} {
 		if err := reg.Register(vfs.Namespace{ID: vfs.FilesNamespace(serial)}, fsys); err != nil {
@@ -77,9 +73,9 @@ func TestRestoreSnapshotFiles_QueuesTheRestore(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.JobID == "" || len(result.Folders) != 1 || result.Folders[0].Folder != "internal" ||
-		strings.Join(result.Missing, ",") != "Gone_GONE1234" {
-		t.Errorf("result = %+v, want built-in queued and the gone drive missing", result)
+	if result.JobID == "" || result.Run != testRun || len(result.Folders) != 1 || result.Folders[0].Folder != "Built-in storage" ||
+		strings.Join(result.Missing, ",") != "Gone (USB GONE1234)" {
+		t.Errorf("result = %+v, want built-in queued from %s and the gone drive missing", result, testRun)
 	}
 
 	w = restoreFiles(engine, `{"deviceSerial":"`+backupSerial+`","missingToBuiltIn":true}`)
@@ -96,6 +92,8 @@ func TestRestoreSnapshotFiles_Refusals(t *testing.T) {
 		{"built-in storage without the role", "snapshot-backup", `{}`, http.StatusBadRequest},
 		{"not the snapshot drive", "default-storage", `{"deviceSerial":"` + backupSerial + `"}`, http.StatusBadRequest},
 		{"drive not attached", "snapshot-backup", `{"deviceSerial":"NOPE"}`, http.StatusBadRequest},
+		{"no such run", "snapshot-backup", `{"deviceSerial":"` + backupSerial + `","run":"nope"}`, http.StatusNotFound},
+		{"a path out of backups", "snapshot-backup", `{"deviceSerial":"` + backupSerial + `","run":"../../x"}`, http.StatusNotFound},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if w := restoreFiles(newRestoreFilesEngine(t, tc.role), tc.body); w.Code != tc.want {

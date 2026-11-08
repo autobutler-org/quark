@@ -38,4 +38,18 @@ type restoreSnapshotFilesBody struct {
 	// MissingToBuiltIn puts the files of a device that is no longer attached
 	// on built-in storage.
 	MissingToBuiltIn bool `json:"missingToBuiltIn"`
+	// Run is the run to restore, a folder under backups/ on the drive. Empty
+	// is the newest complete run.
+	Run string `json:"run"`
+}
+
+// verifySnapshotBackupBody is what the verify reads.
+type verifySnapshotBackupBody struct {
+	// "" is built-in storage, so the field is not binding:"required".
+	DeviceSerial string `json:"deviceSerial"`
+	// Full hashes every file; otherwise only sizes are compared.
+	Full bool `json:"full"`
+	// Run is the run to verify, a folder under backups/ on the drive. Empty
+	// is the newest complete run.
+	Run string `json:"run"`
 }

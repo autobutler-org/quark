@@ -507,7 +507,7 @@ func TestSnapshotBackup_ExportsChatAndVault(t *testing.T) {
 		t.Fatalf("SnapshotBackup: %v", err)
 	}
 
-	manifest, err := ReadManifest(context.Background(), target)
+	manifest, err := ReadManifest(context.Background(), target, runDir(onlyRun(t, target).Folder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -520,14 +520,14 @@ func TestSnapshotBackup_ExportsChatAndVault(t *testing.T) {
 	// What the snapshot wrote is what a restore reads.
 	live := dbtest.NewDB(t).Db
 	addChatUsers(t, live, "alice", "bob", "carol")
-	result, err := ImportChat(context.Background(), live, target.FilesDir)
+	result, err := ImportChat(context.Background(), live, runHostDir(t, target))
 	if err != nil {
 		t.Fatalf("ImportChat: %v", err)
 	}
 	if result.Messages != 4 {
 		t.Errorf("restored %d messages from the snapshot, want 4", result.Messages)
 	}
-	vault, err := ImportVault(context.Background(), live, target.FilesDir)
+	vault, err := ImportVault(context.Background(), live, runHostDir(t, target))
 	if err != nil {
 		t.Fatalf("ImportVault: %v", err)
 	}

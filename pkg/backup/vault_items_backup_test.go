@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
@@ -342,9 +343,13 @@ func TestRestoreVault_ReadsTheBackupDrive(t *testing.T) {
 	source := dbtest.NewDB(t).Db
 	addChatUsers(t, source, "alice")
 	seedVault(t, source, vaultOwner{"alice", randomBytes(t, 32), []string{"a", "b"}})
-	driveDir := exportVault(t, source)
+	driveDir := t.TempDir()
 	drive, err := vfs.NewLocalVFS(driveDir, vfs.FilesNamespace("BACKUP-1"))
 	if err != nil {
+		t.Fatal(err)
+	}
+	putRun(t, drive, newestRun, time.Now(), nil, nil)
+	if _, err := ExportVault(context.Background(), source, filepath.Join(driveDir, BackupsDir, newestRun)); err != nil {
 		t.Fatal(err)
 	}
 	reg := vfs.NewRegistry()

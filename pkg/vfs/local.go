@@ -253,6 +253,20 @@ func (v *LocalVFS) Move(_ context.Context, src, dst string) error {
 	return os.Rename(srcAbs, dstAbs)
 }
 
+// Link makes dst a hard link to the file at src under the root. See
+// [Linker].
+func (v *LocalVFS) Link(_ context.Context, src, dst string) error {
+	srcAbs, err := v.abs(src)
+	if err != nil {
+		return err
+	}
+	dstAbs, err := v.abs(dst)
+	if err != nil {
+		return err
+	}
+	return hostLink(filepath.Clean(srcAbs), filepath.Clean(dstAbs))
+}
+
 // Copy copies the file at src to dst through Write. See [VFS.Copy].
 func (v *LocalVFS) Copy(ctx context.Context, src, dst string, opts CopyOptions) error {
 	return copyFile(ctx, v, src, v, dst, opts)

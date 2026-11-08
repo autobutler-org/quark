@@ -20,8 +20,8 @@ import (
 // restoreSnapshotVault godoc
 // @Summary Restore every account's vault from a snapshot backup
 // @Description Re-confirms the caller with password, which carries the auth key of the admin's login password, exactly as DELETE /vault takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is restored. Shares the sign-in rate limit, and the body is at most 1 KiB.
-// @Description Then restores the vault backup a snapshot wrote to the drive, which must have the snapshot-backup role, each vault under the account of the same
-// @Description username, letter for letter. Refused while any vault has items, when an account the backup has a vault for already has a vault key here (a restore never replaces one),
+// @Description Then restores the vault backup a snapshot wrote into one run on the drive, which must have the snapshot-backup role: run, a folder under backups/, or the newest complete run when it is empty. The answer names the run.
+// @Description Each vault comes back under the account of the same username, letter for letter. Refused while any vault has items, when an account the backup has a vault for already has a vault key here (a restore never replaces one),
 // @Description when a backed-up vault has no account of its username here, and when a backed-up key or item would be refused as an API write. Every refusal names the accounts and changes nothing.
 // @Description Also refused, changing nothing, when this Quark did not write the backup: its MAC is another Quark's, the file changed after the snapshot, or its MAC is gone from a drive this Quark binds its snapshots to. A snapshot taken before binding still restores.
 // @Description restoredAccounts names every account that got a vault back, and each is sent vault_changed. backupPasswordAccounts names the accounts whose vault opens with the
@@ -29,12 +29,12 @@ import (
 // @Tags storage
 // @Accept json
 // @Produce json
-// @Param body body restoreSnapshotVaultBody true "The backup drive and the admin's auth key"
+// @Param body body restoreSnapshotVaultBody true "The backup drive, the run, and the admin's auth key"
 // @Success 200 {object} backup.VaultImportResult
 // @Failure 400 {object} serverutil.Response "bad request, a drive without the snapshot-backup role, a backup this version cannot read, a backed-up key or item this Quark does not accept, or a backup this Quark did not write"
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response "password is not the caller's auth key"
-// @Failure 404 {object} serverutil.Response "the device is not attached, or holds no vault backup"
+// @Failure 404 {object} serverutil.Response "the device is not attached, holds no complete run or none of that name, or the run holds no vault backup"
 // @Failure 409 {object} serverutil.Response "a vault already has items, an account already has a vault key, or a backed-up vault has no account"
 // @Failure 413 {object} serverutil.Response "a body over 1 KiB"
 // @Failure 426 {object} serverutil.Response "password is a raw password: the app is too old"
@@ -72,20 +72,22 @@ func restoreSnapshotVault(c *gin.Context) *serverutil.Response {
 		Queries:      deps.Database().Queries,
 		Registry:     deps.VFSRegistry(),
 		DeviceSerial: req.DeviceSerial,
+		Run:          req.Run,
 	})
 	// Audited to the log, as the account deletion is, whichever way it ends.
 	if err != nil {
 		slog.Warn("vault restore from snapshot backup refused",
-			"adminId", adminID, "admin", username, "deviceSerial", req.DeviceSerial, "error", err)
+			"adminId", adminID, "admin", username, "deviceSerial", req.DeviceSerial, "run", req.Run, "error", err)
 	} else {
 		slog.Warn("vault restored from snapshot backup",
-			"adminId", adminID, "admin", username, "deviceSerial", req.DeviceSerial,
+			"adminId", adminID, "admin", username, "deviceSerial", req.DeviceSerial, "run", result.Run,
 			"accounts", result.RestoredAccounts, "items", result.Items)
 	}
 
 	var notFound *fileutil.NotFoundError
 	switch {
-	case errors.As(err, &notFound), errors.Is(err, fs.ErrNotExist):
+	case errors.As(err, &notFound), errors.Is(err, fs.ErrNotExist), errors.Is(err, backup.ErrNoSnapshot),
+		errors.Is(err, backup.ErrRunNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, backup.ErrVaultNotEmpty), errors.Is(err, backup.ErrVaultAccountMissing),
 		errors.Is(err, backup.ErrVaultKeyExists):
@@ -114,6 +116,9 @@ type restoreSnapshotVaultBody struct {
 	// Password is the standard base64 auth key of the admin's login
 	// password, as DELETE /vault takes it.
 	Password string `json:"password"`
+	// Run is the run to restore from, a folder under backups/ on the drive.
+	// Empty is the newest complete run.
+	Run string `json:"run"`
 }
 
 // maxRestoreVaultRequestBytes bounds the restore's body, a serial and an

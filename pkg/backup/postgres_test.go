@@ -63,18 +63,12 @@ func TestChatAndVaultBackupOnPostgresAreRefused(t *testing.T) {
 }
 
 // A snapshot of a PostgreSQL-backed Quark is the files and the manifest: no
-// chat or vault file is written beside them, and the ones an earlier SQLite
-// snapshot left at the root are removed rather than listed in the manifest. A
-// source file of the same name inside a device directory stays.
+// chat or vault file is written beside them in the run. A source file of the
+// same name inside a device directory is copied as any other.
 func TestSnapshotBackupOnPostgresHoldsFilesOnly(t *testing.T) {
 	database := postgresDatabase(t)
 	src := makeSource(t, "Drive A", "SERIAL-A", map[string]string{"a.txt": "a", backupChatFilename: "mine"})
 	target := makeTarget(t)
-	for _, name := range []string{backupChatFilename, backupVaultFilename} {
-		if err := os.WriteFile(filepath.Join(target.FilesDir, name), []byte("stale"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
 
 	if err := SnapshotBackup(context.Background(), SnapshotBackupParams{
 		TargetDeviceSerial: "TARGET",
@@ -84,12 +78,13 @@ func TestSnapshotBackupOnPostgresHoldsFilesOnly(t *testing.T) {
 		t.Fatalf("SnapshotBackup: %v", err)
 	}
 
+	dir := runHostDir(t, target)
 	for _, name := range []string{backupChatFilename, backupVaultFilename} {
-		if _, err := os.Stat(filepath.Join(target.FilesDir, name)); !os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
 			t.Errorf("the snapshot wrote %s (%v)", name, err)
 		}
 	}
-	manifest, err := ReadManifest(context.Background(), target)
+	manifest, err := ReadManifest(context.Background(), target, runDir(onlyRun(t, target).Folder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +96,7 @@ func TestSnapshotBackupOnPostgresHoldsFilesOnly(t *testing.T) {
 			t.Errorf("the manifest lists %s", name)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(target.FilesDir, deviceDirName(src.Name, src.Serial), backupChatFilename)); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, driveDirName(src.Name, src.Serial), backupChatFilename)); err != nil {
 		t.Errorf("the device directory's %s is gone: %v", backupChatFilename, err)
 	}
 }

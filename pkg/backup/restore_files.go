@@ -9,7 +9,6 @@ import (
 	"path"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -30,19 +29,20 @@ var (
 	// ErrRestoreRoleRequired reports a drive without the snapshot-backup
 	// role: files are restored only from the drive snapshots are written to.
 	ErrRestoreRoleRequired = errors.New("files are restored only from a drive with the snapshot-backup role")
-	// ErrNoSnapshot reports a drive that holds no device's folder.
+	// ErrNoSnapshot reports a drive that holds no complete run, or a run
+	// that holds no device's folder.
 	ErrNoSnapshot = errors.New("the drive holds no snapshot of any device")
 	// ErrRestoreDevicesMissing reports a snapshot whose every device is
 	// gone, when built-in storage was not chosen to take their files.
 	ErrRestoreDevicesMissing = errors.New("the drives these files came from are not attached; restore them to built-in storage instead")
 )
 
-// RestoreFolder is one device's folder on the snapshot drive and where its
-// files go back to.
+// RestoreFolder is one device's folder in a run and where its files go back
+// to.
 type RestoreFolder struct {
-	// Folder is the device's folder at the drive's root, as the snapshot
-	// named it: "internal", or the device name, an underscore, and the
-	// first 8 characters of its serial.
+	// Folder is the device's folder in the run, as its manifest names it:
+	// "Built-in storage", or the drive's name and the first 8 characters of
+	// its serial, as "Photos (USB 90C82C65)".
 	Folder string `json:"folder"`
 	// TargetSerial is the device the files go back onto, "" for built-in
 	// storage.
@@ -54,8 +54,10 @@ type RestoreFolder struct {
 
 // RestoreJobParams is what a restore job stores. Nothing secret goes here.
 type RestoreJobParams struct {
-	BackupSerial string          `json:"backupSerial"`
-	Folders      []RestoreFolder `json:"folders"`
+	BackupSerial string `json:"backupSerial"`
+	// Run is the run's folder under backups/.
+	Run     string          `json:"run"`
+	Folders []RestoreFolder `json:"folders"`
 }
 
 // StartRestoreFilesParams asks for the files a snapshot holds to go back.
@@ -80,11 +82,16 @@ type StartRestoreFilesParams struct {
 	// on built-in storage. Unset, they stay on the snapshot drive and are
 	// named in [StartRestoreFilesResult.Missing].
 	MissingToBuiltIn bool
+	// Run is the run to restore, a folder under backups/. Empty is the
+	// newest complete run.
+	Run string
 }
 
 // StartRestoreFilesResult is the restore that was queued.
 type StartRestoreFilesResult struct {
 	JobID string `json:"jobId"`
+	// Run is the run being restored, a folder under backups/.
+	Run string `json:"run"`
 	// Folders is where each device's files are going, in folder order.
 	Folders []RestoreFolder `json:"folders"`
 	// Missing is the folders, sorted, whose device is gone and whose files
@@ -92,8 +99,10 @@ type StartRestoreFilesResult struct {
 	Missing []string `json:"missing"`
 }
 
-// StartRestoreFiles matches each device folder on the snapshot drive to the
-// device it was copied from and queues a job that copies the files back.
+// StartRestoreFiles matches each device folder in a run on the snapshot
+// drive to the device it was copied from, as the run's manifest records it,
+// and queues a job that copies the files back. The run is params.Run, or the
+// newest complete one; a run the drive does not hold is [ErrRunNotFound].
 func StartRestoreFiles(params StartRestoreFilesParams) (StartRestoreFilesResult, error) {
 	ctx := params.Ctx
 	role, err := params.Queries.GetDeviceRole(ctx, params.BackupSerial)
@@ -107,27 +116,24 @@ func StartRestoreFiles(params StartRestoreFilesParams) (StartRestoreFilesResult,
 	if err != nil {
 		return StartRestoreFilesResult{}, err
 	}
-	entries, err := drive.List(ctx, "", nil)
+	run, err := resolveRun(ctx, drive, params.Run)
 	if err != nil {
-		return StartRestoreFilesResult{}, fmt.Errorf("list the snapshot drive: %w", err)
+		return StartRestoreFilesResult{}, err
 	}
 
 	devices := vfs.FilesNamespaces(params.Registry)
-	result := StartRestoreFilesResult{Folders: []RestoreFolder{}, Missing: []string{}}
-	for _, entry := range entries {
-		if !entry.IsDir || strings.HasPrefix(entry.Name, ".") {
-			continue
-		}
-		serial, attached := folderDevice(entry.Name, devices)
+	result := StartRestoreFilesResult{Run: run.Folder, Folders: []RestoreFolder{}, Missing: []string{}}
+	for _, d := range run.Drives {
+		_, attached := devices[d.Serial]
 		switch {
-		case attached && serial == params.BackupSerial:
+		case attached && d.Serial == params.BackupSerial:
 			// The snapshot drive's own files, from before it took the role.
 		case attached:
-			result.Folders = append(result.Folders, RestoreFolder{Folder: entry.Name, TargetSerial: serial})
+			result.Folders = append(result.Folders, RestoreFolder{Folder: d.Folder, TargetSerial: d.Serial})
 		case params.MissingToBuiltIn:
-			result.Folders = append(result.Folders, RestoreFolder{Folder: entry.Name, ToBuiltIn: true})
+			result.Folders = append(result.Folders, RestoreFolder{Folder: d.Folder, ToBuiltIn: true})
 		default:
-			result.Missing = append(result.Missing, entry.Name)
+			result.Missing = append(result.Missing, d.Folder)
 		}
 	}
 	sort.Slice(result.Folders, func(i, j int) bool { return result.Folders[i].Folder < result.Folders[j].Folder })
@@ -142,7 +148,7 @@ func StartRestoreFiles(params StartRestoreFilesParams) (StartRestoreFilesResult,
 	queued, err := params.Queue.Enqueue(ctx, jobutil.EnqueueParams{
 		Kind:   RestoreKind,
 		Name:   restoreJobName(driveNames(params.Storage), params.BackupSerial),
-		Params: RestoreJobParams{BackupSerial: params.BackupSerial, Folders: result.Folders},
+		Params: RestoreJobParams{BackupSerial: params.BackupSerial, Run: run.Folder, Folders: result.Folders},
 		UserID: params.UserID,
 	})
 	if err != nil {
@@ -152,35 +158,14 @@ func StartRestoreFiles(params StartRestoreFilesParams) (StartRestoreFilesResult,
 	return result, nil
 }
 
-// folderDevice is the attached device a snapshot folder was copied from:
-// "internal" is built-in storage, and "<name>_<suffix>" the one device whose
-// serial starts with suffix, as [deviceDirName] spelled it. A suffix two
-// serials share names neither, so their files are not guessed onto one.
-func folderDevice(folder string, devices map[string]vfs.VFS) (string, bool) {
-	if folder == "internal" {
-		_, ok := devices[""]
-		return "", ok
-	}
-	cut := strings.LastIndex(folder, "_")
-	if cut < 0 {
-		return "", false
-	}
-	suffix := folder[cut+1:]
-	found, matches := "", 0
-	for serial := range devices {
-		if serial != "" && serial[:min(len(serial), 8)] == suffix {
-			found, matches = serial, matches+1
-		}
-	}
-	return found, matches == 1
-}
-
 // RestoreFilesParams is a restore to run.
 type RestoreFilesParams struct {
 	Ctx          context.Context
 	Registry     vfs.Registry
 	BackupSerial string
-	Folders      []RestoreFolder
+	// Run is the run's folder under backups/ the folders are in.
+	Run     string
+	Folders []RestoreFolder
 	// EventBus is told of every file restored. Nil publishes nothing.
 	EventBus *eventbus.Bus
 	// IOSemaphore throttles the copies to yield to interactive requests.
@@ -198,8 +183,8 @@ type RestoreFilesResult struct {
 	BytesCopied int64
 }
 
-// RestoreFiles copies each folder's files from the snapshot drive back onto
-// its device. A file already at the target path is kept as it is, so a
+// RestoreFiles copies each folder's files from a run on the snapshot drive
+// back onto its device. A file already at the target path is kept as it is, so a
 // restore never overwrites what changed since the snapshot, and each copy
 // lands under its name only once it is whole. A failure stops the restore
 // and leaves every file already copied, and everything else on the target,
@@ -212,7 +197,7 @@ func RestoreFiles(params RestoreFilesParams) (RestoreFilesResult, error) {
 	}
 	total := 0
 	for _, folder := range params.Folders {
-		files, err := countFiles(ctx, drive, folder.Folder)
+		files, err := countFiles(ctx, drive, path.Join(runDir(params.Run), folder.Folder))
 		if err != nil {
 			return RestoreFilesResult{}, fmt.Errorf("scan %s: %w", folder.Folder, err)
 		}
@@ -226,11 +211,12 @@ func RestoreFiles(params RestoreFilesParams) (RestoreFilesResult, error) {
 		if err != nil {
 			return result, fmt.Errorf("restore %s: %w", folder.Folder, err)
 		}
-		err = vfs.Walk(ctx, drive, folder.Folder, func(info vfs.FileInfo) error {
+		root := path.Join(runDir(params.Run), folder.Folder)
+		err = vfs.Walk(ctx, drive, root, func(info vfs.FileInfo) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			rel := strings.TrimPrefix(info.Path, folder.Folder+"/")
+			rel := relTo(root, info.Path)
 			if folder.ToBuiltIn {
 				rel = path.Join(folder.Folder, rel)
 			}
@@ -318,6 +304,7 @@ func NewRestoreHandler(params NewRestoreHandlerParams) jobutil.Handler {
 				Ctx:          ctx,
 				Registry:     params.Registry,
 				BackupSerial: job.BackupSerial,
+				Run:          job.Run,
 				Folders:      job.Folders,
 				EventBus:     params.EventBus,
 				IOSemaphore:  params.IOSemaphore,

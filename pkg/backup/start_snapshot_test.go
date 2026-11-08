@@ -77,10 +77,32 @@ func TestStartSnapshotBackup_InternalTargetCopiesOtherDrivesOnly(t *testing.T) {
 	}
 
 	assertFileContent(t, filepath.Join(f.internal, "docs/live.txt"), "live")
-	copied := filepath.Join(f.internal, "internal", "docs/live.txt")
-	if _, err := os.Stat(copied); !os.IsNotExist(err) {
+	run := onlyRun(t, localFS(t, f.internal))
+	for _, d := range run.Drives {
+		if d.Serial == "" {
+			t.Fatalf("the run holds %+v, want the USB drives and not built-in storage", run.Drives)
+		}
+	}
+	dir := filepath.Join(f.internal, BackupsDir, run.Folder)
+	if _, err := os.Stat(filepath.Join(dir, builtInFolder)); !os.IsNotExist(err) {
 		t.Fatalf("built-in storage was copied onto itself: %v", err)
 	}
-	usbDir := deviceDirName("USB "+targetSerial, targetSerial)
-	assertFileContent(t, filepath.Join(f.internal, usbDir, "docs/usb.txt"), "from-usb")
+	assertFileContent(t, filepath.Join(dir, driveDirName("USB "+targetSerial, targetSerial), "docs/usb.txt"), "from-usb")
+
+	// A second run onto built-in storage does not copy the first into itself.
+	if jobID, err = f.start(inst, ""); err != nil {
+		t.Fatal(err)
+	}
+	f.waitStatus(t, jobID, BackupStatusCompleted)
+	runs, err := ListRuns(context.Background(), localFS(t, f.internal))
+	if err != nil || len(runs) != 2 {
+		t.Fatalf("runs = %+v, %v; want two", runs, err)
+	}
+	for _, run := range runs {
+		for _, d := range run.Drives {
+			if d.Serial == "" {
+				t.Errorf("run %s holds built-in storage", run.Folder)
+			}
+		}
+	}
 }

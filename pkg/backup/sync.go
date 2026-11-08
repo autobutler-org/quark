@@ -113,7 +113,12 @@ func (w *SyncWorker) namespaces(ctx context.Context) (src, dst vfs.VFS, ok bool)
 // syncPath mirrors relPath onto the target. A folder is created there along
 // with the files directly in it that the target lacks or holds an older copy
 // of: an upload event names the folder it landed in, not the file (#2649).
+// The top-level backups/ folder, where built-in storage keeps snapshot runs
+// when it is the backup drive, is never mirrored (#4032).
 func (w *SyncWorker) syncPath(ctx context.Context, relPath string) {
+	if inBackupsDir(relPath) {
+		return
+	}
 	src, dst, ok := w.namespaces(ctx)
 	if !ok {
 		return
@@ -132,7 +137,7 @@ func (w *SyncWorker) syncPath(ctx context.Context, relPath string) {
 		return
 	}
 	for _, fi := range entries {
-		if storageutil.IsInternalName(fi.Name) {
+		if storageutil.IsInternalName(fi.Name) || inBackupsDir(fi.Path) {
 			continue
 		}
 		w.mirror(ctx, src, dst, fi)
@@ -158,7 +163,18 @@ func (w *SyncWorker) mirror(ctx context.Context, src, dst vfs.VFS, fi vfs.FileIn
 	}
 }
 
+// movePath mirrors a rename onto the target. Nothing is moved into or out of
+// the target's top-level backups/ folder: a move into built-in storage's is
+// not mirrored, and one out of it mirrors the new path instead, so the
+// target's own backups/ is never moved away.
 func (w *SyncWorker) movePath(ctx context.Context, oldPath, newPath string) {
+	if inBackupsDir(newPath) {
+		return
+	}
+	if inBackupsDir(oldPath) {
+		w.syncPath(ctx, newPath)
+		return
+	}
 	_, dst, ok := w.namespaces(ctx)
 	if !ok {
 		return
@@ -191,12 +207,16 @@ func (w *SyncWorker) movePath(ctx context.Context, oldPath, newPath string) {
 // lacks, or holds a different-sized or older copy of, is copied. It deletes
 // nothing: a file only the target holds may be a missed delete or may have
 // been written to the device directly, and the two look the same from here.
+// The top-level backups/ folder is left out.
 func (w *SyncWorker) reconcile(ctx context.Context) {
 	src, dst, ok := w.namespaces(ctx)
 	if !ok {
 		return
 	}
 	err := vfs.Walk(ctx, src, "", func(fi vfs.FileInfo) error {
+		if err := skipBackupsDir(fi); err != nil {
+			return err
+		}
 		w.mirror(ctx, src, dst, fi)
 		return nil
 	})

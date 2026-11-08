@@ -14,6 +14,14 @@ import (
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
+// SnapshotBackup copies every source onto target as a new run: a folder
+// under backups/ named after the minute it started, holding one folder per
+// source drive, the chat and vault exports, and the manifest (#4032). The run
+// is written under backups/.<run>.partial/ and renamed once it is complete,
+// so nothing that reads runs ever sees half of one, and a run that fails or
+// is canceled removes its partial folder. A file unchanged since the
+// previous complete run is hard-linked from it where the drive can link, so
+// each run is complete on its own without taking the space twice.
 func SnapshotBackup(
 	ctx context.Context,
 	params SnapshotBackupParams,
@@ -34,6 +42,83 @@ func SnapshotBackup(
 		})
 	}
 
+	removeStalePartials(ctx, target)
+	folder, err := newRunFolder(ctx, target, now)
+	if err != nil {
+		return failJob(params, fmt.Errorf("name the run: %w", err))
+	}
+	partial := partialDir(folder)
+	if err := target.MkdirAll(ctx, partial); err != nil {
+		return failJob(params, fmt.Errorf("create %s: %w", partial, err))
+	}
+	completedAt, err := writeRun(ctx, params, sources, target, folder)
+	if err != nil {
+		// On a context of its own, so a canceled run is cleaned up too.
+		if rmErr := target.Delete(context.WithoutCancel(ctx), partial, vfs.DeleteOptions{Recursive: true}); rmErr != nil {
+			log.Printf("snapshot backup: remove %s: %v", partial, rmErr)
+		}
+		return failJob(params, err)
+	}
+
+	// Phase 5: complete.
+	job.Status = BackupStatusCompleted
+	job.Progress = 1.0
+	job.CompletedAt = &completedAt
+	job.UpdatedAt = completedAt
+	params.save()
+
+	// Recorded before the event, so a client that asks again on it sees the
+	// new time. The backup itself succeeded, so a failed record is only logged.
+	if params.Queries != nil {
+		if err := errors.Join(
+			RecordSnapshot(ctx, params.Queries, completedAt),
+			RecordDriveSnapshot(ctx, params.Queries, params.TargetDeviceSerial, completedAt),
+		); err != nil {
+			log.Printf("snapshot backup: %v", err)
+		}
+	}
+
+	if params.EventBus != nil {
+		params.EventBus.Publish(eventbus.Event{
+			Kind: eventbus.EventBackupCompleted,
+			Data: BackupProgressData{
+				JobID:       job.ID,
+				Progress:    1.0,
+				FilesCopied: job.FilesCopied,
+				TotalFiles:  job.TotalFiles,
+				BytesCopied: job.BytesCopied,
+				TotalBytes:  job.TotalBytes,
+			},
+		})
+	}
+
+	return nil
+}
+
+// writeRun fills the run's partial folder, then renames it to the run's
+// folder, and returns when the run completed.
+func writeRun(
+	ctx context.Context,
+	params SnapshotBackupParams,
+	sources []SourceDevice,
+	target vfs.VFS,
+	folder string,
+) (time.Time, error) {
+	job := params.Job
+	partial := partialDir(folder)
+
+	// Where each source drive's files sit in the previous complete run.
+	runs, err := ListRuns(ctx, target)
+	if err != nil {
+		return time.Time{}, err
+	}
+	previous := map[string]string{}
+	if len(runs) > 0 {
+		for _, d := range runs[0].Drives {
+			previous[d.Serial] = path.Join(runDir(runs[0].Folder), d.Folder)
+		}
+	}
+
 	// Phase 1: scan all sources to count files and bytes.
 	job.SourceDevices = make([]SourceDeviceProgress, len(sources))
 	for i, src := range sources {
@@ -43,7 +128,7 @@ func SnapshotBackup(
 		}
 		files, bytes, err := scanTree(ctx, src.Files)
 		if err != nil {
-			return failJob(params, fmt.Errorf("scan %s: %w", src.Name, err))
+			return time.Time{}, fmt.Errorf("scan %s: %w", src.Name, err)
 		}
 		sdp.FilesTotal = files
 		sdp.BytesTotal = bytes
@@ -59,12 +144,22 @@ func SnapshotBackup(
 	job.UpdatedAt = time.Now()
 	params.save()
 
+	drives := make([]ManifestDrive, 0, len(sources))
 	lastPublish := time.Time{}
 	for i, src := range sources {
-		targetBase := deviceDirName(src.Name, src.Serial)
+		driveFolder := driveDirName(src.Name, src.Serial)
+		drives = append(drives, ManifestDrive{Folder: driveFolder, Serial: src.Serial, Name: src.Name})
+		targetBase := path.Join(partial, driveFolder)
+		if err := target.MkdirAll(ctx, targetBase); err != nil {
+			return time.Time{}, fmt.Errorf("create %s: %w", targetBase, err)
+		}
+		prevBase, hasPrevious := previous[src.Serial]
 
 		err := vfs.Walk(ctx, src.Files, "", func(srcInfo vfs.FileInfo) error {
 			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := skipBackupsDir(srcInfo); err != nil {
 				return err
 			}
 
@@ -75,13 +170,11 @@ func SnapshotBackup(
 				return target.MkdirAll(ctx, targetPath)
 			}
 
-			// Smart skip: if target exists with matching size and mtime >= source, skip.
-			if tgtInfo, err := target.Stat(ctx, targetPath); err == nil && !tgtInfo.IsDir {
-				if tgtInfo.Size == srcInfo.Size && !tgtInfo.ModTime.Before(srcInfo.ModTime) {
-					job.FilesSkipped++
-					job.SourceDevices[i].FilesSkipped++
-					return nil
-				}
+			// Unchanged since the previous run: linked from there, not copied.
+			if hasPrevious && linkUnchanged(ctx, target, path.Join(prevBase, relPath), targetPath, srcInfo) {
+				job.FilesSkipped++
+				job.SourceDevices[i].FilesSkipped++
+				return nil
 			}
 
 			// Acquire IO semaphore before copying to yield to interactive requests.
@@ -129,64 +222,52 @@ func SnapshotBackup(
 		})
 
 		if err != nil {
-			return failJob(params, fmt.Errorf("backup %s: %w", src.Name, err))
+			return time.Time{}, fmt.Errorf("backup %s: %w", src.Name, err)
 		}
 	}
 
 	// Phase 3: the chat and vault exports. They are ciphertext and need no
 	// password, so every snapshot of a SQLite-backed Quark carries both. On
-	// PostgreSQL the database's own backups carry them, the snapshot is the
-	// files and the manifest, and a previous SQLite snapshot's two files are
-	// removed so the manifest does not list them.
+	// PostgreSQL the database's own backups carry them, and the run is the
+	// files and the manifest.
 	if params.LiveDB != nil {
-		if err := exportCiphertextTo(ctx, params, target); err != nil {
-			return failJob(params, err)
+		if err := exportCiphertextTo(ctx, params, target, partial); err != nil {
+			return time.Time{}, err
 		}
 	}
 
-	// Phase 4: generate integrity manifest.
-	manifest, err := GenerateManifest(ctx, target)
+	// Phase 4: generate integrity manifest, then put the run in place.
+	manifest, err := GenerateManifest(ctx, target, partial)
 	if err != nil {
-		return failJob(params, fmt.Errorf("generate manifest: %w", err))
+		return time.Time{}, fmt.Errorf("generate manifest: %w", err)
 	}
-	if err := WriteManifest(ctx, manifest, target); err != nil {
-		return failJob(params, fmt.Errorf("write manifest: %w", err))
-	}
-
-	// Phase 5: complete.
 	completedAt := time.Now()
-	job.Status = BackupStatusCompleted
-	job.Progress = 1.0
-	job.CompletedAt = &completedAt
-	job.UpdatedAt = completedAt
-	params.save()
-
-	// Recorded before the event, so a client that asks again on it sees the
-	// new time. The backup itself succeeded, so a failed record is only logged.
-	if params.Queries != nil {
-		if err := errors.Join(
-			RecordSnapshot(ctx, params.Queries, completedAt),
-			RecordDriveSnapshot(ctx, params.Queries, params.TargetDeviceSerial, completedAt),
-		); err != nil {
-			log.Printf("snapshot backup: %v", err)
-		}
+	manifest.CompletedAt = completedAt
+	manifest.Drives = drives
+	if err := WriteManifest(ctx, manifest, target, partial); err != nil {
+		return time.Time{}, fmt.Errorf("write manifest: %w", err)
 	}
-
-	if params.EventBus != nil {
-		params.EventBus.Publish(eventbus.Event{
-			Kind: eventbus.EventBackupCompleted,
-			Data: BackupProgressData{
-				JobID:       job.ID,
-				Progress:    1.0,
-				FilesCopied: job.FilesCopied,
-				TotalFiles:  job.TotalFiles,
-				BytesCopied: job.BytesCopied,
-				TotalBytes:  job.TotalBytes,
-			},
-		})
+	if err := target.Move(ctx, partial, runDir(folder)); err != nil {
+		return time.Time{}, fmt.Errorf("complete the run: %w", err)
 	}
+	return completedAt, nil
+}
 
-	return nil
+// linkUnchanged hard-links dst to prev, the file's copy in the previous run,
+// when the source has not changed since: the same size, and not newer than
+// that copy. It reports false, and the caller copies, when there is no such
+// copy, the file changed, or the drive cannot link: FAT, exFAT, or a
+// namespace with no [vfs.Linker]. Both paths are on the backup drive.
+func linkUnchanged(ctx context.Context, target vfs.VFS, prev, dst string, src vfs.FileInfo) bool {
+	linker, ok := target.(vfs.Linker)
+	if !ok {
+		return false
+	}
+	info, err := target.Stat(ctx, prev)
+	if err != nil || info.IsDir || info.Size != src.Size || info.ModTime.Before(src.ModTime) {
+		return false
+	}
+	return linker.Link(ctx, prev, dst) == nil
 }
 
 func (p SnapshotBackupParams) save() {
@@ -215,6 +296,9 @@ func failJob(params SnapshotBackupParams, err error) error {
 // scanTree counts the files under fsys and the bytes they hold.
 func scanTree(ctx context.Context, fsys vfs.VFS) (files int, bytes int64, err error) {
 	err = vfs.Walk(ctx, fsys, "", func(fi vfs.FileInfo) error {
+		if err := skipBackupsDir(fi); err != nil {
+			return err
+		}
 		if !fi.IsDir {
 			files++
 			bytes += fi.Size
@@ -224,24 +308,14 @@ func scanTree(ctx context.Context, fsys vfs.VFS) (files int, bytes int64, err er
 	return
 }
 
-// exportCiphertextTo writes the chat and vault exports onto the target, each
-// bound to this Quark by a MAC beside it (#4010). On PostgreSQL it writes
-// neither: the database's own backups carry both. It removes the ones, and
-// their bindings, a SQLite snapshot left at the target's root instead, so the
-// manifest never vouches for a chat or vault the snapshot did not take.
-// Device directories are the user's files and are left alone.
-func exportCiphertextTo(ctx context.Context, params SnapshotBackupParams, target vfs.VFS) error {
+// exportCiphertextTo writes the chat and vault exports into dir on the
+// target, each bound to this Quark by a MAC beside it (#4010). On PostgreSQL
+// it writes neither: the database's own backups carry both.
+func exportCiphertextTo(ctx context.Context, params SnapshotBackupParams, target vfs.VFS, dir string) error {
 	if db.BackendOf(params.LiveDB) == db.Postgres {
-		for _, b := range ciphertextBackups {
-			for _, name := range []string{b.filename, b.filename + bindingSuffix} {
-				if err := target.Delete(ctx, name, vfs.DeleteOptions{}); err != nil && !errors.Is(err, vfs.ErrNotFound) {
-					return fmt.Errorf("remove %s: %w", name, err)
-				}
-			}
-		}
 		return nil
 	}
-	dir, err := hostDir(ctx, target)
+	hostPath, err := hostDir(ctx, target, dir)
 	if err != nil {
 		return err
 	}
@@ -256,38 +330,22 @@ func exportCiphertextTo(ctx context.Context, params SnapshotBackupParams, target
 		}
 	}
 	for _, b := range ciphertextBackups {
-		if _, err := b.export(ctx, params.LiveDB, dir, key); err != nil {
+		if _, err := b.export(ctx, params.LiveDB, hostPath, key); err != nil {
 			return fmt.Errorf("export %s: %w", b.filename, err)
 		}
 	}
 	return nil
 }
 
-// hostDir is the target's host directory. SQLite writes the chat and vault
-// exports and can only open them by a host path, so they are the one reason
-// the target's host directory is asked for.
-func hostDir(ctx context.Context, target vfs.VFS) (string, error) {
-	hp, ok := target.(vfs.HostPather)
+// hostDir is the host directory of dir on fsys. SQLite writes the chat and
+// vault exports and can only open them by a host path, so they are the one
+// reason a backup drive's host directory is asked for.
+func hostDir(ctx context.Context, fsys vfs.VFS, dir string) (string, error) {
+	hp, ok := fsys.(vfs.HostPather)
 	if !ok {
 		return "", errors.New("target device has no host directory")
 	}
-	return hp.HostPath(ctx, "")
-}
-
-// deviceDirName produces a filesystem-safe directory name for a source device.
-func deviceDirName(name, serial string) string {
-	if serial == "" {
-		return "internal"
-	}
-	suffix := serial
-	if len(suffix) > 8 {
-		suffix = suffix[:8]
-	}
-	safe := sanitizeName(name)
-	if safe == "" {
-		safe = "device"
-	}
-	return safe + "_" + suffix
+	return hp.HostPath(ctx, dir)
 }
 
 func sanitizeName(name string) string {

@@ -328,7 +328,9 @@ func ImportVault(ctx context.Context, liveDB *sql.DB, backupDir string) (VaultIm
 }
 
 // RestoreVault restores, as [ImportVault] does, the vault backup a snapshot
-// wrote to the drive params.DeviceSerial names. A drive that is not attached
+// wrote to the drive params.DeviceSerial names, from the run params.Run
+// names or the newest complete one. A drive with no complete run is
+// [ErrNoSnapshot], and a run it does not hold [ErrRunNotFound]. A drive that is not attached
 // is a *fileutil.NotFoundError, and one without the snapshot-backup role is
 // [ErrVaultRestoreRoleRequired]: a restore reads only the drive snapshots are
 // written to, never whatever drive holds a file of the right name. A file
@@ -346,12 +348,21 @@ func RestoreVault(params RestoreVaultParams) (VaultImportResult, error) {
 	if err != nil {
 		return VaultImportResult{}, fmt.Errorf("read the drive's role: %w", err)
 	}
-	dir, err := hostDir(params.Ctx, drive)
+	run, err := resolveRun(params.Ctx, drive, params.Run)
+	if err != nil {
+		return VaultImportResult{}, err
+	}
+	dir, err := hostDir(params.Ctx, drive, runDir(run.Folder))
 	if err != nil {
 		return VaultImportResult{}, err
 	}
 	if err := vaultBackup.checkBinding(params.Ctx, params.Queries, params.DeviceSerial, dir); err != nil {
 		return VaultImportResult{}, err
 	}
-	return ImportVault(params.Ctx, params.LiveDB, dir)
+	result, err := ImportVault(params.Ctx, params.LiveDB, dir)
+	if err != nil {
+		return VaultImportResult{}, err
+	}
+	result.Run = run.Folder
+	return result, nil
 }

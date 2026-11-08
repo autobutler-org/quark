@@ -1,11 +1,14 @@
 package v0_storage_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"testing"
+	"time"
 
 	v0_storage "github.com/autobutler-org/quark/internal/server/api/v0/storage"
 	"github.com/autobutler-org/quark/pkg/backup"
@@ -45,31 +48,58 @@ func newVerifyEngine(t *testing.T, backupDrive vfs.VFS) *gin.Engine {
 	return engine
 }
 
+// testRun is the run folder the tests put on a backup drive.
+const testRun = "2026-11-07 21.57"
+
+// putRun puts a complete run named folder on fsys, holding files keyed by
+// their path in the run, with a manifest that names drives.
+func putRun(t *testing.T, fsys vfs.VFS, folder string, drives []backup.ManifestDrive, files map[string]string) {
+	t.Helper()
+	ctx := context.Background()
+	dir := path.Join(backup.BackupsDir, folder)
+	if err := fsys.MkdirAll(ctx, dir); err != nil {
+		t.Fatal(err)
+	}
+	for p, content := range files {
+		full := path.Join(dir, p)
+		if err := fsys.MkdirAll(ctx, path.Dir(full)); err != nil {
+			t.Fatal(err)
+		}
+		if err := fsys.Write(ctx, full, strings.NewReader(content), vfs.WriteOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m, err := backup.GenerateManifest(ctx, fsys, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.CompletedAt, m.Drives = time.Now(), drives
+	if err := backup.WriteManifest(ctx, m, fsys, dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func verify(engine *gin.Engine, serial string) *httptest.ResponseRecorder {
+	return verifyBody(engine, `{"deviceSerial":"`+serial+`","full":true}`)
+}
+
+func verifyBody(engine *gin.Engine, body string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v0/storage/devices/snapshot-backup/verify",
-		strings.NewReader(`{"deviceSerial":"`+serial+`","full":true}`))
+		strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	engine.ServeHTTP(w, req)
 	return w
 }
 
-// The backup is read through the device's namespace.
+// The backup is read through the device's namespace, from the newest run
+// unless the body names one.
 func TestVerifySnapshotBackup_ReadsTheDeviceNamespace(t *testing.T) {
 	drive := vfs.NewMemVFS(vfs.FilesNamespace(backupSerial))
-	ctx := t.Context()
-	if err := drive.Write(ctx, "internal/a.txt", strings.NewReader("aaa"), vfs.WriteOptions{}); err != nil {
-		t.Fatal(err)
-	}
-	m, err := backup.GenerateManifest(ctx, drive)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backup.WriteManifest(ctx, m, drive); err != nil {
-		t.Fatal(err)
-	}
+	putRun(t, drive, testRun, nil, map[string]string{"Built-in storage/a.txt": "aaa"})
+	engine := newVerifyEngine(t, drive)
 
-	w := verify(newVerifyEngine(t, drive), backupSerial)
+	w := verify(engine, backupSerial)
 	if w.Code != http.StatusOK {
 		t.Fatalf("verify = %d %s, want 200", w.Code, w.Body.String())
 	}
@@ -77,8 +107,19 @@ func TestVerifySnapshotBackup_ReadsTheDeviceNamespace(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.OK != 1 {
-		t.Errorf("verify = %s, want 1 OK", w.Body.String())
+	if result.OK != 1 || result.Run != testRun {
+		t.Errorf("verify = %s, want 1 OK in run %s", w.Body.String(), testRun)
+	}
+
+	body := `{"deviceSerial":"` + backupSerial + `","run":"` + testRun + `"}`
+	if w := verifyBody(engine, body); w.Code != http.StatusOK {
+		t.Errorf("verify of run %s = %d %s, want 200", testRun, w.Code, w.Body.String())
+	}
+	for _, run := range []string{"nope", "../" + testRun, "." + testRun + ".partial"} {
+		body := `{"deviceSerial":"` + backupSerial + `","run":"` + run + `"}`
+		if w := verifyBody(engine, body); w.Code != http.StatusNotFound {
+			t.Errorf("verify of run %q = %d %s, want 404", run, w.Code, w.Body.String())
+		}
 	}
 }
 
