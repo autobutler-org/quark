@@ -2,7 +2,6 @@ package backup
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -140,7 +139,7 @@ func SnapshotBackup(
 	// files and the manifest, and a previous SQLite snapshot's two files are
 	// removed so the manifest does not list them.
 	if params.LiveDB != nil {
-		if err := exportCiphertextTo(ctx, params.LiveDB, target); err != nil {
+		if err := exportCiphertextTo(ctx, params, target); err != nil {
 			return failJob(params, err)
 		}
 	}
@@ -225,16 +224,19 @@ func scanTree(ctx context.Context, fsys vfs.VFS) (files int, bytes int64, err er
 	return
 }
 
-// exportCiphertextTo writes the chat and vault exports onto the target. On
-// PostgreSQL it writes neither: the database's own backups carry both. It
-// removes the ones a SQLite snapshot left at the target's root instead, so the
+// exportCiphertextTo writes the chat and vault exports onto the target, each
+// bound to this Quark by a MAC beside it (#4010). On PostgreSQL it writes
+// neither: the database's own backups carry both. It removes the ones, and
+// their bindings, a SQLite snapshot left at the target's root instead, so the
 // manifest never vouches for a chat or vault the snapshot did not take.
 // Device directories are the user's files and are left alone.
-func exportCiphertextTo(ctx context.Context, liveDB *sql.DB, target vfs.VFS) error {
-	if db.BackendOf(liveDB) == db.Postgres {
+func exportCiphertextTo(ctx context.Context, params SnapshotBackupParams, target vfs.VFS) error {
+	if db.BackendOf(params.LiveDB) == db.Postgres {
 		for _, b := range ciphertextBackups {
-			if err := target.Delete(ctx, b.filename, vfs.DeleteOptions{}); err != nil && !errors.Is(err, vfs.ErrNotFound) {
-				return fmt.Errorf("remove %s: %w", b.filename, err)
+			for _, name := range []string{b.filename, b.filename + bindingSuffix} {
+				if err := target.Delete(ctx, name, vfs.DeleteOptions{}); err != nil && !errors.Is(err, vfs.ErrNotFound) {
+					return fmt.Errorf("remove %s: %w", name, err)
+				}
 			}
 		}
 		return nil
@@ -243,8 +245,18 @@ func exportCiphertextTo(ctx context.Context, liveDB *sql.DB, target vfs.VFS) err
 	if err != nil {
 		return err
 	}
+	// No Queries is a snapshot nothing records, in tests: it writes unbound.
+	var key []byte
+	if params.Queries != nil {
+		if key, err = bindingKey(ctx, params.Queries); err != nil {
+			return err
+		}
+		if err := markDriveBound(ctx, params.Queries, params.TargetDeviceSerial); err != nil {
+			return err
+		}
+	}
 	for _, b := range ciphertextBackups {
-		if _, err := b.export(ctx, liveDB, dir); err != nil {
+		if _, err := b.export(ctx, params.LiveDB, dir, key); err != nil {
 			return fmt.Errorf("export %s: %w", b.filename, err)
 		}
 	}

@@ -287,7 +287,7 @@ func restoredVaultAccounts(ctx context.Context, conn *sql.Conn) ([]restoredAccou
 // A failed export leaves the previous backup whole, and a PostgreSQL-backed
 // Quark gets [ErrDatabaseBackedUpSeparately] and nothing written.
 func ExportVault(ctx context.Context, liveDB *sql.DB, targetDir string) (string, error) {
-	return vaultBackup.export(ctx, liveDB, targetDir)
+	return vaultBackup.export(ctx, liveDB, targetDir, nil)
 }
 
 // ImportVault restores the vault_items_backup.db that [ExportVault] wrote to
@@ -331,7 +331,9 @@ func ImportVault(ctx context.Context, liveDB *sql.DB, backupDir string) (VaultIm
 // wrote to the drive params.DeviceSerial names. A drive that is not attached
 // is a *fileutil.NotFoundError, and one without the snapshot-backup role is
 // [ErrVaultRestoreRoleRequired]: a restore reads only the drive snapshots are
-// written to, never whatever drive holds a file of the right name.
+// written to, never whatever drive holds a file of the right name. A file
+// this Quark did not write, or one changed since, is
+// [ErrBackupNotFromThisQuark] and nothing is restored (#4010).
 func RestoreVault(params RestoreVaultParams) (VaultImportResult, error) {
 	drive, err := fileutil.FilesVFS(params.Registry, params.DeviceSerial)
 	if err != nil {
@@ -346,6 +348,9 @@ func RestoreVault(params RestoreVaultParams) (VaultImportResult, error) {
 	}
 	dir, err := hostDir(params.Ctx, drive)
 	if err != nil {
+		return VaultImportResult{}, err
+	}
+	if err := vaultBackup.checkBinding(params.Ctx, params.Queries, params.DeviceSerial, dir); err != nil {
 		return VaultImportResult{}, err
 	}
 	return ImportVault(params.Ctx, params.LiveDB, dir)

@@ -10601,6 +10601,7 @@ paths:
         Then restores the vault backup a snapshot wrote to the drive, which must have the snapshot-backup role, each vault under the account of the same
         username, letter for letter. Refused while any vault has items, when an account the backup has a vault for already has a vault key here (a restore never replaces one),
         when a backed-up vault has no account of its username here, and when a backed-up key or item would be refused as an API write. Every refusal names the accounts and changes nothing.
+        Also refused, changing nothing, when this Quark did not write the backup: its MAC is another Quark's, the file changed after the snapshot, or its MAC is gone from a drive this Quark binds its snapshots to. A snapshot taken before binding still restores.
         restoredAccounts names every account that got a vault back, and each is sent vault_changed. backupPasswordAccounts names the accounts whose vault opens with the
         password they had when the backup was taken, as every vault restored onto new hardware does. Every attempt past the password check is written to the server log.
       parameters:
@@ -10619,8 +10620,8 @@ paths:
             $ref: '#/definitions/backup.VaultImportResult'
         "400":
           description: bad request, a drive without the snapshot-backup role, a backup
-            this version cannot read, or a backed-up key or item this Quark does not
-            accept
+            this version cannot read, a backed-up key or item this Quark does not
+            accept, or a backup this Quark did not write
           schema:
             $ref: '#/definitions/serverutil.Response'
         "401":

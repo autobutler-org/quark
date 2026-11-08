@@ -14,6 +14,7 @@ protected the files are. How the file copies survive a power cut is in
 | `<device>_<serial>/`, `internal/` | every other managed device's files, one directory per source device       | `SnapshotBackup` |
 | `chat_backup.db`                  | the chat tables (SQLite installs only)                                    | `ExportChat`     |
 | `vault_items_backup.db`           | every account's vault key and vault items (SQLite installs only)          | `ExportVault`    |
+| `chat_backup.db.mac`, `vault_items_backup.db.mac` | the MAC that binds each file above to this Quark ([Binding](#binding-a-backup-to-this-quark)) | `SnapshotBackup` |
 | `backup_manifest.json`            | the SHA-256 and size of every file above                                  | `WriteManifest`  |
 
 The rest of `quark.db` is not in a snapshot. Accounts, sessions, groups, albums and access grants are lost with
@@ -80,7 +81,8 @@ A restored account's chat identity replaces the one a sign-in on the new install
 it with the password or recovery phrase they had when the backup was taken. `ImportChat` returns the usernames
 it could not match in `UnmatchedUsers`.
 
-No handler calls `ImportChat` yet; the chat's restore route and its page are still to come (#2428).
+No handler calls `ImportChat` yet; the chat's restore route and its page are still to come (#2428). That route checks
+the file's [binding](#binding-a-backup-to-this-quark) first, with `chatBackup.checkBinding`, as the vault's does.
 
 ## The vault export
 
@@ -128,9 +130,8 @@ one transaction, the way `ImportChat` restores the chat. A restore that is refus
   past the password check is written to the server log with the admin, the drive's serial, and the accounts and item
   count, or the refusal.
 - A drive with no backup file is a 404 that names the file but not where the drive is mounted.
-
-The backup file itself is not authenticated: nothing proves that `vault_items_backup.db` is the one this household's
-snapshot wrote. Binding a backup to the Quark that wrote it is a follow-up (quark-project#267).
+- **The file must be one this Quark wrote** (`ErrBackupNotFromThisQuark`, a 400 saying why): see
+  [Binding a backup to this Quark](#binding-a-backup-to-this-quark).
 
 **Which password opens a restored vault.** The wrapped key carries the salt it was derived over (`salt_pw`), and
 the app unlocks over that salt, so a restored vault opens with the password its account had when the backup was
@@ -143,6 +144,34 @@ password, once the old one has opened it, is the app's to do.
 The backup holds the wrapped keys and never the accounts' auth salts, auth key hashes or recovery key hashes. Carrying
 those would let a restore bring the old password and phrase back as sign-in credentials, at the price of a backup
 drive that holds what a password guess is checked against.
+
+<!-- cspell:ignore HMAC -->
+
+## Binding a backup to this Quark
+
+Restore checks the drive's role, the usernames and the ciphertext's shape, and none of those say who wrote the file.
+So a snapshot binds `chat_backup.db` and `vault_items_backup.db` to the Quark that wrote them (#4010), and a restore
+refuses a file this Quark did not write, changes nothing, and says why.
+
+- **The MAC.** Beside each file a snapshot writes `<file>.mac`: the hex of HMAC-SHA256 over the file's name, a NUL,
+  and its bytes. The key is HKDF-SHA256 over the install's salt secret (`settingsutil.AuthSaltSecretIn`, the 32
+  random bytes in the `authSaltSecret` settings row that already key `/auth/salt`), with its own label. The secret is
+  in `quark.db`, which no snapshot copies, so nothing on the drive can produce the key. HKDF rather than
+  `HMAC(secret, label)`, because `/auth/salt` answers `HMAC(secret, username)` for any name asked. No new table, no
+  new dependency, and no new secret to lose.
+- **The drive record.** Before it writes the first bound file to a drive, a snapshot writes the settings row
+  `backupBound:<serial>`. A file with no MAC on a drive this Quark has bound is refused, so deleting the MAC does not
+  pass a planted file off as an old snapshot.
+- **Older snapshots.** A file with no MAC, on a drive with no record, is a snapshot taken before binding and restores
+  as before. Drives already on the shelf keep working; the next snapshot onto a drive binds it.
+- **What it does not cover.** The key is this install's. A Quark rebuilt on new hardware has a new salt secret and
+  refuses the bound files of the one it replaces; a bundle (`quark bundle export`) carries the settings rows, secret
+  included, so a Quark moved by bundle keeps restoring its own snapshots. A drive this Quark never bound still takes an
+  unbound file. The MAC is written just before the file is renamed into place, so a power cut between the two leaves
+  a pair that is refused until the next snapshot.
+
+`ExportChat` and `ExportVault` on their own write unbound files and remove a stale MAC; only `SnapshotBackup` binds.
+On PostgreSQL a snapshot removes the MACs with the files.
 
 ## On PostgreSQL
 
