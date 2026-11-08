@@ -14,7 +14,7 @@ require (
 	github.com/bep/imagemeta v1.1.1
 	github.com/coder/websocket v1.8.15
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
-	github.com/gin-contrib/cors v1.7.10
+	github.com/gin-contrib/cors v1.7.11
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/validator/v10 v10.30.6
 	github.com/golang-migrate/migrate/v4 v4.20.1
@@ -36,7 +36,7 @@ require (
 	golang.org/x/term v0.47.0
 	golang.org/x/time v0.16.0
 	howett.net/plist v1.0.1
-	modernc.org/sqlite v1.61.1
+	modernc.org/sqlite v1.62.0
 	tailscale.com v1.104.5
 )
 
@@ -150,7 +150,7 @@ require (
 	golang.org/x/arch v0.29.0 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
 	golang.org/x/mod v0.42.0 // indirect
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
@@ -159,7 +159,7 @@ require (
 	golang.zx2c4.com/wireguard/windows v1.0.1 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gvisor.dev/gvisor v0.0.0-20260915211658-a6f909f08a72 // indirect
-	modernc.org/libc v1.79.0 // indirect
+	modernc.org/libc v1.80.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
