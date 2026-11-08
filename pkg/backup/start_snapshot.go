@@ -51,6 +51,8 @@ type StartSnapshotBackupParams struct {
 	// TargetDeviceSerial is the device to back up onto. It must already hold
 	// the snapshot-backup role. An empty serial is the internal drive.
 	TargetDeviceSerial string
+	// Storage names the drives in the job name. Nil names them by serial.
+	Storage *storageutil.StorageService
 }
 
 // StartSnapshotBackupResult reports the job that was queued. The backup is
@@ -85,7 +87,7 @@ func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupR
 
 	queued, err := params.Queue.Enqueue(ctx, jobutil.EnqueueParams{
 		Kind:   Kind,
-		Name:   "Snapshot backup",
+		Name:   backupJobName(driveNames(params.Storage), params.TargetDeviceSerial),
 		Params: JobParams{TargetDeviceSerial: params.TargetDeviceSerial},
 		UserID: params.UserID,
 	})

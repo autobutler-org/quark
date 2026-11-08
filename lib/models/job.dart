@@ -5,11 +5,18 @@ abstract final class JobKinds {
   /// Converting a video to another format.
   static const String videoTranscode = 'video-transcode';
 
+  /// Copying every managed drive onto the snapshot drive.
+  static const String snapshotBackup = 'snapshot-backup';
+
   /// Copying a snapshot drive's files back onto the Quark (#4009).
   static const String snapshotRestore = 'snapshot-restore';
 
   /// Every kind above, for a listing that shows them all.
-  static const List<String> all = [videoTranscode, snapshotRestore];
+  static const List<String> all = [
+    videoTranscode,
+    snapshotBackup,
+    snapshotRestore,
+  ];
 }
 
 /// Where a [Job] is in its life.
