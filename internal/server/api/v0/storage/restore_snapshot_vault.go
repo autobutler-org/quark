@@ -109,7 +109,8 @@ func restoreSnapshotVault(c *gin.Context) *serverutil.Response {
 
 // restoreSnapshotVaultBody is what the vault restore reads.
 type restoreSnapshotVaultBody struct {
-	DeviceSerial string `json:"deviceSerial" binding:"required"`
+	// "" is built-in storage, so the field is not binding:"required".
+	DeviceSerial string `json:"deviceSerial"`
 	// Password is the standard base64 auth key of the admin's login
 	// password, as DELETE /vault takes it.
 	Password string `json:"password"`

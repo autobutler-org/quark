@@ -15911,11 +15911,9 @@ const docTemplate = `{
         },
         "v0_storage.restoreSnapshotFilesBody": {
             "type": "object",
-            "required": [
-                "deviceSerial"
-            ],
             "properties": {
                 "deviceSerial": {
+                    "description": "\"\" is built-in storage, so the field is not binding:\"required\".",
                     "type": "string"
                 },
                 "missingToBuiltIn": {
@@ -15926,11 +15924,9 @@ const docTemplate = `{
         },
         "v0_storage.restoreSnapshotVaultBody": {
             "type": "object",
-            "required": [
-                "deviceSerial"
-            ],
             "properties": {
                 "deviceSerial": {
+                    "description": "\"\" is built-in storage, so the field is not binding:\"required\".",
                     "type": "string"
                 },
                 "password": {

@@ -212,7 +212,7 @@ func TestRestoreSnapshotVault_Refusals(t *testing.T) {
 			live: map[string]bool{"carol": false}, want: http.StatusNotFound},
 		{name: "drive holds no vault backup", dir: emptyDrive, body: withPassword(backupSerial, dbtest.AuthKey(adminPassword)),
 			live: map[string]bool{"carol": false}, want: http.StatusNotFound, wantBody: "vault_items_backup.db not found"},
-		{name: "no device named", dir: driveDir, body: withPassword("", dbtest.AuthKey(adminPassword)),
+		{name: "built-in storage without the role", dir: driveDir, body: withPassword("", dbtest.AuthKey(adminPassword)),
 			live: map[string]bool{"carol": false}, want: http.StatusBadRequest},
 		{name: "no password", dir: driveDir, body: `{"deviceSerial":"` + backupSerial + `"}`,
 			live: map[string]bool{"carol": false}, want: http.StatusForbidden},

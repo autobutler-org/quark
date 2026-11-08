@@ -102,3 +102,12 @@ func TestVerifySnapshotBackup_NoManifestIsBadRequest(t *testing.T) {
 		t.Errorf("verify without a manifest body = %s, want it to name Back Up and not the vfs error", body)
 	}
 }
+
+// Built-in storage is the drive with serial "": it reaches the verify, which
+// finds no manifest there.
+func TestVerifySnapshotBackup_BuiltInStorage(t *testing.T) {
+	w := verify(newVerifyEngine(t, nil), "")
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Back Up") {
+		t.Errorf("verify on built-in storage = %d %s, want 400 naming Back Up", w.Code, w.Body.String())
+	}
+}

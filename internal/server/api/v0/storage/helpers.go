@@ -96,7 +96,7 @@ func protectionStatus(ctx context.Context, deps deputil.Dependencies) (protectio
 			continue
 		}
 		var decoded backup.JobParams
-		if err := json.Unmarshal([]byte(job.Params), &decoded); err != nil || decoded.TargetDeviceSerial == "" {
+		if err := json.Unmarshal([]byte(job.Params), &decoded); err != nil {
 			continue
 		}
 		params.Completions = append(params.Completions, protectionutil.Completion{

@@ -33,7 +33,8 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 
 // restoreSnapshotFilesBody is what the file restore reads.
 type restoreSnapshotFilesBody struct {
-	DeviceSerial string `json:"deviceSerial" binding:"required"`
+	// "" is built-in storage, so the field is not binding:"required".
+	DeviceSerial string `json:"deviceSerial"`
 	// MissingToBuiltIn puts the files of a device that is no longer attached
 	// on built-in storage.
 	MissingToBuiltIn bool `json:"missingToBuiltIn"`

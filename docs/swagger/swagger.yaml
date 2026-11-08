@@ -2731,26 +2731,24 @@ definitions:
   v0_storage.restoreSnapshotFilesBody:
     properties:
       deviceSerial:
+        description: '"" is built-in storage, so the field is not binding:"required".'
         type: string
       missingToBuiltIn:
         description: |-
           MissingToBuiltIn puts the files of a device that is no longer attached
           on built-in storage.
         type: boolean
-    required:
-    - deviceSerial
     type: object
   v0_storage.restoreSnapshotVaultBody:
     properties:
       deviceSerial:
+        description: '"" is built-in storage, so the field is not binding:"required".'
         type: string
       password:
         description: |-
           Password is the standard base64 auth key of the admin's login
           password, as DELETE /vault takes it.
         type: string
-    required:
-    - deviceSerial
     type: object
   v0_thumbnails.clientRenderResponse:
     properties:

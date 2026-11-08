@@ -219,3 +219,19 @@ func TestGetProtectionStatus_TwoPartitionsCountOnce(t *testing.T) {
 		t.Fatalf("counting drives = %d, want 1 (%+v)", counting, got.Drives)
 	}
 }
+
+// A completed backup onto built-in storage, serial "", is its last backup.
+func TestGetProtectionStatus_BuiltInStorageLastBackedUp(t *testing.T) {
+	database := dbtest.NewDB(t)
+	if err := database.Queries.UpsertDeviceRole(context.Background(), db.UpsertDeviceRoleParams{
+		DeviceSerial: "",
+		Role:         "snapshot-backup",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	finishBackup(t, database, "", "completed")
+	got := getProtection(t, protectionEngine(t, database, nil))
+	if len(got.Drives) != 1 || got.Drives[0].LastBackedUp == nil {
+		t.Fatalf("drives = %+v, want built-in storage with a last backup", got.Drives)
+	}
+}
