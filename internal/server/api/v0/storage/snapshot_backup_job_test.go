@@ -50,10 +50,10 @@ func newBackupJobEngine(t *testing.T, database *db.DatabaseSqlc) *gin.Engine {
 	return engine
 }
 
-func startBackup(engine *gin.Engine) *httptest.ResponseRecorder {
+func startBackup(engine *gin.Engine, serial string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v0/storage/devices/snapshot-backup",
-		strings.NewReader(`{"targetDeviceSerial":"`+backupSerial+`"}`))
+		strings.NewReader(`{"targetDeviceSerial":"`+serial+`"}`))
 	req.Header.Set("Content-Type", "application/json")
 	engine.ServeHTTP(w, req)
 	return w
@@ -77,7 +77,7 @@ func TestSnapshotBackup_IsOneJobOnEveryInstance(t *testing.T) {
 	}
 	a, b := newBackupJobEngine(t, database), newBackupJobEngine(t, database)
 
-	w := startBackup(a)
+	w := startBackup(a, backupSerial)
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("start = %d %s, want 202", w.Code, w.Body.String())
 	}
@@ -89,7 +89,7 @@ func TestSnapshotBackup_IsOneJobOnEveryInstance(t *testing.T) {
 		t.Fatalf("start = %s, want a string jobId (%v)", w.Body.String(), err)
 	}
 
-	if w := startBackup(b); w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "job "+started.JobID) {
+	if w := startBackup(b, backupSerial); w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "job "+started.JobID) {
 		t.Errorf("second start on the other instance = %d %s, want 409 naming job %s", w.Code, w.Body.String(), started.JobID)
 	}
 
@@ -114,5 +114,19 @@ func TestSnapshotBackup_IsOneJobOnEveryInstance(t *testing.T) {
 		if w := backupStatus(b, jobID); w.Code != http.StatusNotFound {
 			t.Errorf("status of %s = %d %s, want 404", jobID, w.Code, w.Body.String())
 		}
+	}
+}
+
+// Built-in storage is the drive with serial "", and it can hold the role.
+func TestSnapshotBackup_StartsOnBuiltInStorage(t *testing.T) {
+	database := dbtest.NewDB(t)
+	if err := database.Queries.UpsertDeviceRole(t.Context(), db.UpsertDeviceRoleParams{
+		DeviceSerial: "",
+		Role:         "snapshot-backup",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if w := startBackup(newBackupJobEngine(t, database), ""); w.Code != http.StatusAccepted {
+		t.Fatalf("start on built-in storage = %d %s, want 202", w.Code, w.Body.String())
 	}
 }

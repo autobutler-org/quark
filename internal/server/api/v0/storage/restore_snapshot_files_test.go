@@ -93,7 +93,7 @@ func TestRestoreSnapshotFiles_Refusals(t *testing.T) {
 		name, role, body string
 		want             int
 	}{
-		{"no serial", "snapshot-backup", `{}`, http.StatusBadRequest},
+		{"built-in storage without the role", "snapshot-backup", `{}`, http.StatusBadRequest},
 		{"not the snapshot drive", "default-storage", `{"deviceSerial":"` + backupSerial + `"}`, http.StatusBadRequest},
 		{"drive not attached", "snapshot-backup", `{"deviceSerial":"NOPE"}`, http.StatusBadRequest},
 	} {
@@ -102,5 +102,14 @@ func TestRestoreSnapshotFiles_Refusals(t *testing.T) {
 				t.Errorf("restore = %d %s, want %d", w.Code, w.Body.String(), tc.want)
 			}
 		})
+	}
+}
+
+// Built-in storage is the drive with serial "": it reaches the restore, which
+// checks its role.
+func TestRestoreSnapshotFiles_BuiltInStorage(t *testing.T) {
+	w := restoreFiles(newRestoreFilesEngine(t, "snapshot-backup"), `{"deviceSerial":""}`)
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "snapshot-backup role") {
+		t.Errorf("restore from built-in storage = %d %s, want 400 naming the role", w.Code, w.Body.String())
 	}
 }

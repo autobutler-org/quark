@@ -32,7 +32,8 @@ func verifySnapshotBackup(c *gin.Context) *serverutil.Response {
 	}
 
 	var req struct {
-		DeviceSerial string `json:"deviceSerial" binding:"required"`
+		// "" is built-in storage, so the field is not binding:"required".
+		DeviceSerial string `json:"deviceSerial"`
 		Full         bool   `json:"full"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
