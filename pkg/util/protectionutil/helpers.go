@@ -3,16 +3,15 @@
 package protectionutil
 
 import (
-	"fmt"
 	"path"
 	"slices"
 	"strings"
 	"time"
 )
 
-// collectDrives joins snapshot-backup roles with devices and the newest
-// completion for each serial. The result is ordered by serial.
-func collectDrives(params StatusParams) []backupDrive {
+// collect joins roles, devices, and copies into data drives and backup
+// drives, each ordered by serial.
+func collect(params StatusParams) inputs {
 	devices := make(map[string]Device, len(params.Devices))
 	for _, device := range params.Devices {
 		prev, ok := devices[device.Serial]
@@ -21,164 +20,208 @@ func collectDrives(params StatusParams) []backupDrive {
 		}
 	}
 
-	completed := make(map[string]time.Time, len(params.Completions))
-	for _, completion := range params.Completions {
-		if completion.CompletedAt.IsZero() {
-			continue
-		}
-		if prev, ok := completed[completion.Serial]; !ok || completion.CompletedAt.After(prev) {
-			completed[completion.Serial] = completion.CompletedAt
-		}
+	in := inputs{
+		copies:    make(map[string]map[string]time.Time),
+		receiving: make(map[string]bool, len(params.Receiving)),
 	}
-
-	now := params.Now
-	if now.IsZero() {
-		now = time.Now()
-	}
-
-	seen := make(map[string]bool, len(params.Roles))
-	drives := make([]backupDrive, 0)
+	isBackup := make(map[string]bool)
 	for _, role := range params.Roles {
-		if role.Role != roleSnapshotBackup || seen[role.Serial] {
+		if role.Role != roleSnapshotBackup || isBackup[role.Serial] {
 			continue
 		}
-		seen[role.Serial] = true
-		device := devices[role.Serial]
-		at, has := completed[role.Serial]
-		// An empty serial is the internal drive. It can hold the role, and it
-		// still does not count as a backup copy.
-		internal := device.IsInternal || role.Serial == ""
-		drive := backupDrive{
-			serial:       role.Serial,
-			name:         device.Name,
-			internal:     internal,
-			completedAt:  at,
-			hasCompleted: has,
-			diskKey:      groupKey(role.Serial, device.DevicePath),
-			replaceSoon:  device.ReplaceSoon,
+		isBackup[role.Serial] = true
+		device, connected := devices[role.Serial]
+		name := device.Name
+		if name == "" {
+			name = role.Name
 		}
-		drive.qualifies = !internal && !device.ReplaceSoon && has && now.Sub(at) < StaleAfter
-		drives = append(drives, drive)
+		in.backups = append(in.backups, drive{
+			serial:      role.Serial,
+			name:        name,
+			diskKey:     groupKey(role.Serial, device.DevicePath),
+			connected:   connected,
+			replaceSoon: device.ReplaceSoon,
+		})
 	}
-	slices.SortFunc(drives, func(a, b backupDrive) int {
-		return strings.Compare(a.serial, b.serial)
-	})
-	return drives
-}
-
-// representatives maps each qualifying whole disk to the one drive that
-// counts for it: the newest completion, then the lowest serial.
-func representatives(drives []backupDrive) map[string]string {
-	type best struct {
-		serial string
-		at     time.Time
-	}
-	chosen := make(map[string]best)
-	for _, drive := range drives {
-		if !drive.qualifies {
+	for serial, device := range devices {
+		if isBackup[serial] {
 			continue
 		}
-		cur, ok := chosen[drive.diskKey]
-		if !ok || drive.completedAt.After(cur.at) || (drive.completedAt.Equal(cur.at) && drive.serial < cur.serial) {
-			chosen[drive.diskKey] = best{serial: drive.serial, at: drive.completedAt}
+		in.data = append(in.data, drive{
+			serial:    serial,
+			name:      device.Name,
+			diskKey:   groupKey(serial, device.DevicePath),
+			connected: true,
+		})
+	}
+	bySerial := func(a, b drive) int { return strings.Compare(a.serial, b.serial) }
+	slices.SortFunc(in.backups, bySerial)
+	slices.SortFunc(in.data, bySerial)
+
+	for _, c := range params.Copies {
+		if c.CopiedAt.IsZero() {
+			continue
+		}
+		held := in.copies[c.BackupSerial]
+		if held == nil {
+			held = make(map[string]time.Time)
+			in.copies[c.BackupSerial] = held
+		}
+		if prev, ok := held[c.SourceSerial]; !ok || c.CopiedAt.After(prev) {
+			held[c.SourceSerial] = c.CopiedAt
 		}
 	}
-	reps := make(map[string]string, len(chosen))
-	for key, winner := range chosen {
-		reps[key] = winner.serial
+	for _, serial := range params.Receiving {
+		in.receiving[serial] = true
 	}
-	return reps
+	return in
 }
 
-// chooseNextStep picks the one recommendation. A drive that could become a
-// new copy by finishing a backup asks for that. Otherwise the next copy has
-// to be a drive that does not have the role yet. Two copies already in hand
-// only need the keep-one-elsewhere tip.
-func chooseNextStep(groups int, drives []backupDrive) NextStep {
-	if groups >= 2 {
+// judgeDataDrive lists every backup drive's copy of data, says which count,
+// and derives its level. Of two counting copies on one backup disk, the newer
+// counts, then the lower serial.
+func judgeDataDrive(data drive, in inputs, now time.Time) DataDrive {
+	copies := make([]DataDriveCopy, 0)
+	disks := make([]string, 0)
+	for _, backup := range in.backups {
+		at, ok := in.copies[backup.serial][data.serial]
+		if !ok {
+			continue
+		}
+		c := DataDriveCopy{BackupSerial: backup.serial, BackupName: backup.name, CopiedAt: at}
+		switch {
+		case backup.replaceSoon:
+			c.Reason = ReasonReplaceSoon
+		case backup.diskKey == data.diskKey:
+			c.Reason = ReasonSameDisk
+		case now.Sub(at) >= StaleAfter:
+			c.Reason = ReasonStale
+		}
+		copies = append(copies, c)
+		disks = append(disks, backup.diskKey)
+	}
+
+	counting := 0
+	chosen := make(map[string]int)
+	for i := range copies {
+		if copies[i].Reason != "" {
+			continue
+		}
+		j, ok := chosen[disks[i]]
+		switch {
+		case !ok:
+			chosen[disks[i]] = i
+			counting++
+		case copies[i].CopiedAt.After(copies[j].CopiedAt):
+			copies[j].Reason = ReasonDuplicateDisk
+			chosen[disks[i]] = i
+		default:
+			copies[i].Reason = ReasonDuplicateDisk
+		}
+	}
+	for i := range copies {
+		copies[i].Counts = copies[i].Reason == ""
+	}
+	slices.SortStableFunc(copies, func(a, b DataDriveCopy) int { return b.CopiedAt.Compare(a.CopiedAt) })
+
+	level := LevelUnprotected
+	switch {
+	case counting >= 2:
+		level = LevelProtected
+	case counting == 1:
+		level = LevelBasic
+	}
+	return DataDrive{Serial: data.serial, Name: data.name, Level: level, Copies: copies}
+}
+
+// judgeBackupDrive lists the data drives backup holds a copy of and where it
+// stands. The first state that applies wins.
+func judgeBackupDrive(backup drive, in inputs, now time.Time) BackupDrive {
+	held := in.copies[backup.serial]
+	holds := make([]HeldCopy, 0)
+	current := true
+	for _, data := range in.data {
+		at, ok := held[data.serial]
+		if ok {
+			holds = append(holds, HeldCopy{Serial: data.serial, Name: data.name, CopiedAt: at})
+		}
+		if data.diskKey != backup.diskKey && (!ok || now.Sub(at) >= StaleAfter) {
+			current = false
+		}
+	}
+	slices.SortStableFunc(holds, func(a, b HeldCopy) int { return b.CopiedAt.Compare(a.CopiedAt) })
+
+	result := BackupDrive{Serial: backup.serial, Name: backup.name, Holds: holds}
+	if len(holds) > 0 {
+		newest := holds[0].CopiedAt
+		result.NewestCopy = &newest
+	}
+	switch {
+	case backup.replaceSoon:
+		result.State = BackupStateRetired
+	case in.receiving[backup.serial]:
+		result.State = BackupStateReceiving
+	case !backup.connected:
+		result.State = BackupStateAway
+	case len(held) == 0:
+		result.State = BackupStateNoCopies
+	case current:
+		result.State = BackupStateCurrent
+	default:
+		result.State = BackupStateBehind
+	}
+	return result
+}
+
+// chooseNextStep picks the one recommendation from the weakest data drive's
+// view. A backup drive that could add a counting copy of it asks for a
+// backup. Otherwise the next copy needs a drive that does not have the role
+// yet.
+func chooseNextStep(weakest drive, judged DataDrive, in inputs) NextStep {
+	if judged.Level == LevelProtected {
 		return NextStepKeepElsewhere
 	}
 	counted := make(map[string]bool)
-	for _, drive := range drives {
-		if drive.qualifies {
-			counted[drive.diskKey] = true
+	for _, backup := range in.backups {
+		for _, c := range judged.Copies {
+			if c.Counts && c.BackupSerial == backup.serial {
+				counted[backup.diskKey] = true
+			}
 		}
 	}
-	for _, drive := range drives {
-		if drive.internal || drive.qualifies || drive.replaceSoon || counted[drive.diskKey] {
-			continue
+	for _, backup := range in.backups {
+		if !backup.replaceSoon && backup.diskKey != weakest.diskKey && !counted[backup.diskKey] {
+			return NextStepStartBackup
 		}
-		return NextStepStartBackup
 	}
 	return NextStepAssignRole
 }
 
-func summarize(groups int, next NextStep) (Level, string) {
-	copies := groups + 1
-	level := LevelUnprotected
-	switch {
-	case groups >= 2:
-		level = LevelProtected
-	case groups == 1:
-		level = LevelBasic
+// describe is one plain sentence about the whole Quark from its weakest data
+// drive's view.
+func describe(weakest DataDrive, next NextStep) string {
+	switch weakest.Level {
+	case LevelProtected:
+		return "Every drive is on two backup drives. Keep one somewhere else."
+	case LevelBasic:
+		if next == NextStepStartBackup {
+			return "Every drive has a copy on one backup drive. Back up onto your other backup drive."
+		}
+		return "Every drive has a copy on one backup drive. Add a second backup drive and keep it somewhere else."
 	}
-	return level, sentence(copies, level, next)
+	lead := weakest.Name + " is only on this Quark."
+	if len(weakest.Copies) > 0 {
+		lead = weakest.Name + " has no recent backup."
+	}
+	if next == NextStepStartBackup {
+		return lead + " Back up onto your backup drive."
+	}
+	return lead + " Assign the backup role to another drive."
 }
 
-func sentence(copies int, level Level, next NextStep) string {
-	lead := fmt.Sprintf("Your files are on %d drives.", copies)
-	if copies == 1 {
-		lead = "Your files are only on this Quark."
-	}
-	var tail string
-	switch next {
-	case NextStepStartBackup:
-		tail = "Start a backup onto your backup drive."
-		if level == LevelBasic {
-			tail = "Start a backup on your other backup drive."
-		}
-	case NextStepKeepElsewhere:
-		tail = "Keep one backup drive somewhere else."
-	default:
-		tail = "Assign the backup role to another drive."
-		if level == LevelBasic {
-			tail = "Add a second backup drive and keep it somewhere else."
-		}
-	}
-	return lead + " " + tail
-}
-
-func reportDrive(drive backupDrive, reps map[string]string) DriveStatus {
-	status := DriveStatus{
-		Serial: drive.serial,
-		Name:   drive.name,
-		Reason: reasonFor(drive, reps),
-	}
-	if drive.hasCompleted {
-		at := drive.completedAt
-		status.LastBackedUp = &at
-	}
-	status.Counts = status.Reason == ""
-	return status
-}
-
-func reasonFor(drive backupDrive, reps map[string]string) string {
-	if drive.internal {
-		return ReasonInternal
-	}
-	if drive.replaceSoon {
-		return ReasonReplaceSoon
-	}
-	if !drive.qualifies {
-		if drive.hasCompleted {
-			return ReasonStale
-		}
-		return ReasonNoCompletedBackup
-	}
-	if reps[drive.diskKey] != drive.serial {
-		return ReasonSameDisk
-	}
-	return ""
+// levelRank orders levels from weakest to strongest.
+func levelRank(level Level) int {
+	return map[Level]int{LevelBasic: 1, LevelProtected: 2}[level]
 }
 
 // groupKey is the whole disk a drive belongs to. An empty device path gets a

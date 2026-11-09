@@ -123,6 +123,11 @@ definitions:
         type: string
       createdAt:
         type: string
+      currentSource:
+        description: |-
+          CurrentSource is the name of the drive being copied now. Empty before
+          copying starts and after the backup completes.
+        type: string
       errorMsg:
         type: string
       filesCopied:
@@ -137,9 +142,19 @@ definitions:
         items:
           $ref: '#/definitions/backup.SourceDeviceProgress'
         type: array
+      sourceNames:
+        description: |-
+          SourceNames is what the app calls each drive copied, in the order
+          they are copied. It is set when the backup starts scanning.
+        items:
+          type: string
+        type: array
       status:
         $ref: '#/definitions/backup.BackupJobStatus'
       targetDeviceSerial:
+        type: string
+      targetName:
+        description: TargetName is what the app calls the drive backed up onto.
         type: string
       totalBytes:
         type: integer
@@ -2716,34 +2731,96 @@ definitions:
           not_service, sshd_missing, helper_missing or no_login_shell.
         type: string
     type: object
-  v0_storage.ProtectionDrive:
+  v0_storage.ProtectionBackupDrive:
     properties:
+      holds:
+        description: Holds is one per current data drive this drive has a copy of,
+          newest first.
+        items:
+          $ref: '#/definitions/v0_storage.ProtectionHeldCopy'
+        type: array
+      name:
+        type: string
+      newestCopy:
+        description: NewestCopy is the newest of Holds. Null when Holds is empty.
+        type: string
+      serial:
+        type: string
+      state:
+        description: State is retired, receiving, away, no-copies, current, or behind;
+          the first that applies.
+        enum:
+        - no-copies
+        - receiving
+        - current
+        - behind
+        - away
+        - retired
+        type: string
+    type: object
+  v0_storage.ProtectionCopy:
+    properties:
+      backupName:
+        type: string
+      backupSerial:
+        type: string
+      copiedAt:
+        type: string
       counts:
-        description: Counts is whether this drive adds a backup copy. Partitions of
-          one disk share a single count.
+        description: Counts is whether this copy protects the drive.
         type: boolean
-      lastBackedUp:
-        description: |-
-          LastBackedUp is when this drive's newest completed snapshot backup finished.
-          Nil when it has no completed backup.
+      reason:
+        description: Reason is why Counts is false, in one plain sentence. Empty when
+          Counts is true.
+        type: string
+    type: object
+  v0_storage.ProtectionDataDrive:
+    properties:
+      copies:
+        description: Copies is one per backup drive with a copy of this drive, newest
+          first.
+        items:
+          $ref: '#/definitions/v0_storage.ProtectionCopy'
+        type: array
+      level:
+        description: Level is unprotected (no counting copy), basic (one), or protected
+          (two or more).
+        enum:
+        - unprotected
+        - basic
+        - protected
         type: string
       name:
         type: string
-      reason:
-        description: Reason is why Counts is false. Empty when Counts is true.
+      serial:
+        description: Serial is empty for built-in storage.
+        type: string
+    type: object
+  v0_storage.ProtectionHeldCopy:
+    properties:
+      copiedAt:
+        type: string
+      name:
         type: string
       serial:
         type: string
     type: object
   v0_storage.ProtectionStatus:
     properties:
-      drives:
-        description: Drives lists every snapshot-backup drive.
+      backupDrives:
+        description: BackupDrives lists every snapshot-backup drive, connected or
+          not.
         items:
-          $ref: '#/definitions/v0_storage.ProtectionDrive'
+          $ref: '#/definitions/v0_storage.ProtectionBackupDrive'
+        type: array
+      dataDrives:
+        description: DataDrives lists every connected drive that is not a backup drive,
+          built-in storage first.
+        items:
+          $ref: '#/definitions/v0_storage.ProtectionDataDrive'
         type: array
       level:
-        description: Level is unprotected, basic, or protected.
+        description: 'Level is the weakest data drive''s: unprotected, basic, or protected.'
         enum:
         - unprotected
         - basic
@@ -2757,7 +2834,8 @@ definitions:
         - keep-one-elsewhere
         type: string
       sentence:
-        description: Sentence is one plain sentence describing that level.
+        description: Sentence is one plain sentence describing the whole Quark from
+          its weakest data drive.
         type: string
     type: object
   v0_storage.restoreSnapshotFilesBody:
@@ -10876,16 +10954,26 @@ paths:
       - storage
   /storage/protection:
     get:
-      description: Reports how protected the files are. unprotected means no snapshot-backup
-        drive has a completed backup within 30 days, basic means one such drive after
-        partitions of one disk are grouped, and protected means two or more. The live
-        copy on the default-storage drive and the internal drive never count. A failed,
-        unfinished, or stale backup does not count. A drive whose health verdict is
-        replace-soon does not count, even inside 30 days. Watch and unknown still
-        follow the 30-day rule. sentence is one plain sentence. nextStep is assign-backup-role,
-        start-backup, or keep-one-elsewhere. drives lists each snapshot-backup drive,
-        whether it counts, why not, and when it was last backed up. Refetch when a
-        backup completes or fails (backup_completed, backup_failed).
+      description: 'Reports how protected the files are, per drive. A data drive is
+        every connected drive that is not a snapshot-backup drive: built-in storage,
+        the default-storage drive, and unassigned drives. A backup drive is every
+        snapshot-backup drive, connected or not. A backup drive''s copy of a data
+        drive is its newest complete run folder under backups/ whose manifest names
+        that data drive, dated when the run completed. An attached backup drive''s
+        run folders are read on every request, and a backup drive that is away answers
+        from the scan cached when it was last attached; one never scanned has no copies.
+        A copy counts when the backup drive''s health verdict is not replace-soon,
+        the copy is inside 30 days, and the backup drive is on a different physical
+        disk from the data drive; two partitions of one backup disk count once per
+        data drive. A data drive with no counting copy is unprotected, one is basic,
+        and two or more is protected. level is the weakest data drive''s. sentence
+        is one plain sentence. nextStep is start-backup when a backup drive could
+        give the weakest data drive another counting copy, assign-backup-role when
+        none can, and keep-one-elsewhere when every data drive is protected. dataDrives
+        lists each data drive''s copies with whether each counts and why not. backupDrives
+        lists each backup drive''s state (retired, receiving, away, no-copies, current,
+        or behind, first match wins) and the data drives it holds. Refetch when a
+        backup completes or fails (backup_completed, backup_failed).'
       produces:
       - application/json
       responses:

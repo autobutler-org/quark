@@ -2,6 +2,7 @@ package deviceutil
 
 import (
 	"context"
+	"strconv"
 	"sync"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -75,6 +76,11 @@ func ListStatuses(params ListStatusesParams) (ListStatusesResult, error) {
 				statuses[i].Role = role
 			} else {
 				statuses[i].Role = RoleUnassigned
+			}
+			if statuses[i].Role == "snapshot-backup" {
+				if job, err := params.Database.Queries.GetActiveBackupJob(ctx, serial); err == nil {
+					statuses[i].ActiveBackupJobID = strconv.FormatInt(job.ID, 10)
+				}
 			}
 		}
 	}

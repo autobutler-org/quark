@@ -52,15 +52,17 @@ func TestStartSnapshotBackup_RejectsUnknownDevice(t *testing.T) {
 	}
 }
 
-// Built-in storage can be the snapshot target (#3999). The external drive's
-// files land on it, and its own files are not copied onto itself.
+// Built-in storage can be the snapshot target (#3999). The external data
+// drive's files land on it, and its own files are not copied onto itself.
 func TestStartSnapshotBackup_InternalTargetCopiesOtherDrivesOnly(t *testing.T) {
 	f := newJobFixture(t, dbtest.NewDB(t))
-	if err := f.database.Queries.UpsertDeviceRole(context.Background(), db.UpsertDeviceRoleParams{
-		DeviceSerial: "",
-		Role:         "snapshot-backup",
-	}); err != nil {
-		t.Fatal(err)
+	for serial, role := range map[string]string{"": "snapshot-backup", targetSerial: "default-storage"} {
+		if err := f.database.Queries.UpsertDeviceRole(context.Background(), db.UpsertDeviceRoleParams{
+			DeviceSerial: serial,
+			Role:         role,
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	writeTestFile(t, f.internal, "docs/live.txt", "live")
 	writeTestFile(t, f.target, "docs/usb.txt", "from-usb")
@@ -104,5 +106,47 @@ func TestStartSnapshotBackup_InternalTargetCopiesOtherDrivesOnly(t *testing.T) {
 				t.Errorf("run %s holds built-in storage", run.Folder)
 			}
 		}
+	}
+}
+
+// Backup drives are never sources (#4037): a backup onto one copies every
+// data drive and none of the other backup drives, and the job names both
+// sides for the progress card.
+func TestStartSnapshotBackup_SkipsOtherBackupDrives(t *testing.T) {
+	f := newJobFixture(t, dbtest.NewDB(t))
+	writeTestFile(t, f.internal, "docs/live.txt", "live")
+	writeTestFile(t, f.other, "docs/other-backup.txt", "backup")
+
+	inst := f.instance(nil)
+	inst.run(t)
+	jobID, err := f.start(inst, targetSerial)
+	if err != nil {
+		t.Fatalf("StartSnapshotBackup: %v", err)
+	}
+	job := f.waitStatus(t, jobID, BackupStatusCompleted)
+
+	run := onlyRun(t, localFS(t, f.target))
+	dir := filepath.Join(f.target, BackupsDir, run.Folder)
+	assertFileContent(t, filepath.Join(dir, builtInFolder, "docs/live.txt"), "live")
+	otherDir := filepath.Join(dir, driveDirName("USB "+otherSerial, otherSerial))
+	if _, err := os.Stat(otherDir); !os.IsNotExist(err) {
+		t.Fatalf("another backup drive was copied onto the target: %v", err)
+	}
+	if len(job.SourceDevices) != 1 || job.SourceDevices[0].DeviceSerial != "" {
+		t.Errorf("sources = %+v, want built-in storage only", job.SourceDevices)
+	}
+	if job.TargetName != "USB "+targetSerial {
+		t.Errorf("target name = %q, want %q", job.TargetName, "USB "+targetSerial)
+	}
+	if len(job.SourceNames) != 1 || job.SourceNames[0] != "Built-in storage" {
+		t.Errorf("source names = %q, want built-in storage only", job.SourceNames)
+	}
+	if job.CurrentSource != "" {
+		t.Errorf("current source = %q after completion, want none", job.CurrentSource)
+	}
+
+	copies, err := cachedRunCopies(context.Background(), f.database.Queries, targetSerial)
+	if err != nil || len(copies) != 1 || copies[0].Serial != "" {
+		t.Errorf("the target's cached copies = %+v, %v; want built-in storage only", copies, err)
 	}
 }

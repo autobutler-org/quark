@@ -31,6 +31,11 @@ func SnapshotBackup(
 	job := params.Job
 	now := time.Now()
 
+	job.SourceNames = make([]string, len(sources))
+	for i, src := range sources {
+		job.SourceNames[i] = sourceName(src)
+	}
+
 	job.Status = BackupStatusScanning
 	job.UpdatedAt = now
 	params.save()
@@ -62,6 +67,7 @@ func SnapshotBackup(
 
 	// Phase 5: complete.
 	job.Status = BackupStatusCompleted
+	job.CurrentSource = ""
 	job.Progress = 1.0
 	job.CompletedAt = &completedAt
 	job.UpdatedAt = completedAt
@@ -69,10 +75,14 @@ func SnapshotBackup(
 
 	// Recorded before the event, so a client that asks again on it sees the
 	// new time. The backup itself succeeded, so a failed record is only logged.
+	// The target's run cache is rewritten so the new run counts while the
+	// drive is away.
 	if params.Queries != nil {
+		_, cacheErr := RefreshRunCache(ctx, params.Queries, params.TargetDeviceSerial, target)
 		if err := errors.Join(
 			RecordSnapshot(ctx, params.Queries, completedAt),
 			RecordDriveSnapshot(ctx, params.Queries, params.TargetDeviceSerial, completedAt),
+			cacheErr,
 		); err != nil {
 			log.Printf("snapshot backup: %v", err)
 		}
@@ -153,6 +163,7 @@ func writeRun(
 		if err := target.MkdirAll(ctx, targetBase); err != nil {
 			return time.Time{}, fmt.Errorf("create %s: %w", targetBase, err)
 		}
+		job.CurrentSource = job.SourceNames[i]
 		prevBase, hasPrevious := previous[src.Serial]
 
 		err := vfs.Walk(ctx, src.Files, "", func(srcInfo vfs.FileInfo) error {

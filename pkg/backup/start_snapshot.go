@@ -85,9 +85,13 @@ func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupR
 		return StartSnapshotBackupResult{}, ErrTargetNotManaged
 	}
 
+	backups, err := backupSerials(ctx, params.Queries)
+	if err != nil {
+		return StartSnapshotBackupResult{}, err
+	}
 	queued, err := params.Queue.Enqueue(ctx, jobutil.EnqueueParams{
 		Kind:   Kind,
-		Name:   backupJobName(driveNames(params.Storage), params.TargetDeviceSerial),
+		Name:   backupJobName(driveNames(params.Storage), backups, params.TargetDeviceSerial),
 		Params: JobParams{TargetDeviceSerial: params.TargetDeviceSerial},
 		UserID: params.UserID,
 	})
@@ -113,10 +117,26 @@ func activeBackup(ctx context.Context, queries db.Querier, targetSerial string) 
 	return &BackupInProgressError{JobID: strconv.FormatInt(row.ID, 10)}
 }
 
-// gatherSourceDevices lists every managed device the backup should copy from —
-// which is all of them but the one being copied onto. A device with no files
-// namespace has been unplugged since it was listed, and is left out.
-func gatherSourceDevices(storage *storageutil.StorageService, registry vfs.Registry, targetSerial string) ([]SourceDevice, error) {
+// backupSerials is the set of drives holding the snapshot-backup role.
+func backupSerials(ctx context.Context, queries db.Querier) (map[string]bool, error) {
+	roles, err := queries.GetAllDeviceRoles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list device roles: %w", err)
+	}
+	backups := make(map[string]bool)
+	for _, role := range roles {
+		if role.Role == "snapshot-backup" {
+			backups[role.DeviceSerial] = true
+		}
+	}
+	return backups, nil
+}
+
+// gatherSourceDevices lists every managed device the backup should copy from:
+// the data drives, every one but the target and the other backup drives
+// (#4037). A device with no files namespace has been unplugged since it was
+// listed, and is left out.
+func gatherSourceDevices(storage *storageutil.StorageService, registry vfs.Registry, backups map[string]bool, targetSerial string) ([]SourceDevice, error) {
 	managed, err := storage.GetManagedDevices()
 	if err != nil {
 		return nil, err
@@ -129,7 +149,9 @@ func gatherSourceDevices(storage *storageutil.StorageService, registry vfs.Regis
 		if d.UsbInfo != nil {
 			serial = d.UsbInfo.GetSerial()
 		}
-		if serial == targetSerial {
+		// The target is skipped by serial too: its role may have changed since
+		// the job was queued, and a drive is never copied onto itself.
+		if serial == targetSerial || backups[serial] {
 			continue
 		}
 		files, err := fileutil.FilesVFS(registry, serial)

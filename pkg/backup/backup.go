@@ -58,6 +58,15 @@ type BackupJob struct {
 	CreatedAt          time.Time              `json:"createdAt"`
 	UpdatedAt          time.Time              `json:"updatedAt"`
 	CompletedAt        *time.Time             `json:"completedAt,omitempty"`
+
+	// TargetName is what the app calls the drive backed up onto.
+	TargetName string `json:"targetName,omitempty"`
+	// SourceNames is what the app calls each drive copied, in the order
+	// they are copied. It is set when the backup starts scanning.
+	SourceNames []string `json:"sourceNames,omitempty"`
+	// CurrentSource is the name of the drive being copied now. Empty before
+	// copying starts and after the backup completes.
+	CurrentSource string `json:"currentSource,omitempty"`
 }
 
 type BackupProgressData struct {
@@ -109,6 +118,17 @@ type Run struct {
 	CompletedAt time.Time `json:"completedAt"`
 	// Drives is what the run holds, one folder per source drive.
 	Drives []ManifestDrive `json:"drives"`
+}
+
+// RunCopy is one data drive a backup drive holds a copy of: the newest
+// complete run on that drive whose manifest names the data drive.
+type RunCopy struct {
+	// Serial is the data drive's serial, "" for built-in storage.
+	Serial string `json:"serial"`
+	// Name is the data drive's name when that run was taken.
+	Name string `json:"name"`
+	// CompletedAt is when that run completed.
+	CompletedAt time.Time `json:"completedAt"`
 }
 
 type ManifestFile struct {

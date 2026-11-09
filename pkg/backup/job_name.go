@@ -48,12 +48,18 @@ func driveName(names map[string]string, serial string) string {
 	}
 }
 
+// sourceName is what the app calls a source drive.
+func sourceName(src SourceDevice) string {
+	return driveName(map[string]string{src.Serial: src.Name}, src.Serial)
+}
+
 // backupJobName names a backup after the drives it copies and the drive it
 // copies them onto: "Back up Quark, Photos and 1 more onto Built-in storage".
-func backupJobName(names map[string]string, target string) string {
+// The target and the other backup drives are not copied.
+func backupJobName(names map[string]string, backups map[string]bool, target string) string {
 	sources := make([]string, 0, len(names))
 	for serial := range names {
-		if serial != target {
+		if serial != target && !backups[serial] {
 			sources = append(sources, driveName(names, serial))
 		}
 	}
