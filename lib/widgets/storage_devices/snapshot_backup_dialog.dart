@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/widgets/storage_devices/backup_source_list.dart';
 
 /// Confirms a snapshot backup onto the backup drive named [targetName] and
 /// asks which of the data drives in [sources] it copies (#3984). Every drive
 /// starts checked, and Start Backup is off while none is. Pops with the
 /// checked serials on Start Backup, or with nothing on Cancel.
 ///
-/// Each drive's checkbox is keyed `backup_source_<serial>`; built-in storage
-/// is the serial "", so its key is `backup_source_`. Start Backup is
-/// `snapshot_backup_start`.
+/// Each drive's checkbox is a [BackupSourceList] key,
+/// `backup_source_<serial>`. Start Backup is `snapshot_backup_start`.
 ///
 /// It asks for no password (#3460): the chat and every account's vault stay
 /// the ciphertext they already are, and open afterwards with what opened them
@@ -49,19 +49,13 @@ class _SnapshotBackupDialogState extends State<SnapshotBackupDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Choose the drives to copy onto $target.'),
-          for (final MapEntry(key: serial, value: name)
-              in widget.sources.entries)
-            CheckboxListTile(
-              key: ValueKey('backup_source_$serial'),
-              contentPadding: EdgeInsets.zero,
-              value: _checked.contains(serial),
-              onChanged: (value) => setState(
-                () => value == true
-                    ? _checked.add(serial)
-                    : _checked.remove(serial),
-              ),
-              title: Text(name),
+          BackupSourceList(
+            sources: widget.sources,
+            checked: _checked,
+            onChanged: (serial, checked) => setState(
+              () => checked ? _checked.add(serial) : _checked.remove(serial),
             ),
+          ),
           const SizedBox(height: 16),
           const Text(
             "Chat and every account's vault are backed up still encrypted: "

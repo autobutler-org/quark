@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/backup_runs_controller.dart';
+import 'package:quark/controllers/backup_schedule_controller.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/data_protection_service.dart';
 import 'package:quark/services/storage_service.dart';
@@ -19,7 +20,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// **Restore files** shows wherever [onRestore] does: it is admin-only too,
 /// and [onRestoreFiles] defaults to [restoreFilesFrom], offering the drive's
 /// runs from [backupRuns]. A backup drive lists its backups when
-/// [backupRuns] is set, and [onDeleteRun] deletes one.
+/// [backupRuns] is set, and [onDeleteRun] deletes one. It says its schedule
+/// from [backupSchedules], and [onSchedule] opens it.
 class StorageDevicesBody extends StatelessWidget {
   const StorageDevicesBody({
     required this.devices,
@@ -42,6 +44,8 @@ class StorageDevicesBody extends StatelessWidget {
     this.isBackupRunning = false,
     this.backupRuns,
     this.onDeleteRun,
+    this.backupSchedules,
+    this.onSchedule,
     super.key,
   });
 
@@ -99,6 +103,13 @@ class StorageDevicesBody extends StatelessWidget {
   /// action.
   final void Function(StorageDevice device, String run)? onDeleteRun;
 
+  /// Each backup drive's schedule. Null says none: reading them is
+  /// admin-only on the Quark.
+  final BackupScheduleController? backupSchedules;
+
+  /// Opens a backup drive's schedule. Null draws no Schedule button.
+  final ValueChanged<StorageDevice>? onSchedule;
+
   @override
   Widget build(BuildContext context) {
     if (AppSettings.instance.activeHost == null) {
@@ -148,6 +159,7 @@ class StorageDevicesBody extends StatelessWidget {
         );
     final onEject = this.onEject;
     final onDeleteRun = isBackupRunning ? null : this.onDeleteRun;
+    final onSchedule = this.onSchedule;
     for (final device in devices) {
       final isUsb = device.serial.isNotEmpty;
       final isBackupDrive = device.role == 'snapshot-backup';
@@ -191,6 +203,12 @@ class StorageDevicesBody extends StatelessWidget {
           backupRunsError: backupRuns?.errorFor(device.serial),
           onDeleteRun: onDeleteRun != null && isBackupDrive
               ? (run) => onDeleteRun(device, run)
+              : null,
+          schedule: isBackupDrive
+              ? backupSchedules?.scheduleFor(device.serial)
+              : null,
+          onSchedule: onSchedule != null && isBackupDrive
+              ? () => onSchedule(device)
               : null,
         ),
       );
