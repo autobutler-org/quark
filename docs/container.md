@@ -220,9 +220,8 @@ In Kubernetes, put the URL in a `Secret` and reference it from the Deployment's 
 ### Backup and restore
 
 On PostgreSQL the database is backed up with PostgreSQL's tools, and Quark's snapshot backup covers the files
-only: a snapshot there writes no `chat_backup.db` or `vault_items_backup.db`, and removes the ones an earlier SQLite
-snapshot left at the drive's root, because the chat and the vault are
-in the database ([Backup](architecture/backup.md#on-postgresql)).
+only: a snapshot there writes no `chat_backup.db` or `vault_items_backup.db` into its run folder, because the chat
+and the vault are in the database ([Backup](architecture/backup.md#on-postgresql)).
 
 To back up:
 
@@ -250,7 +249,9 @@ To restore:
    ```
 
 3. Put the files back under the volume's `data/files/` directory. From a snapshot, that is the contents of
-   its `internal/` directory; each other drive's files are in its `<device>_<serial>/` directory.
+   the `Built-in storage/` folder in one of the drive's `backups/<YYYY-MM-DD HH.MM>/` run folders, normally the
+   newest; each other drive's files are in its `<name> (USB <serial>)/` folder there
+   ([What a snapshot holds](architecture/backup.md#what-a-snapshot-holds)).
 4. Start Quark. It finds `schema_migrations` and carries the schema forward. A dump from a newer build than
    the image refuses to start, saying so.
 

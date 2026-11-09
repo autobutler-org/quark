@@ -19,9 +19,8 @@ class RoleDialog extends StatelessWidget {
 
   final String currentRole;
 
-  /// Whether the device is built-in storage. Snapshot backup is offered
-  /// there too: other drives are copied onto it, and it is not copied onto
-  /// itself.
+  /// Whether the device is built-in storage. It can be a backup drive too:
+  /// other drives are copied onto it, and it is not copied onto itself.
   final bool isInternal;
 
   /// The drive's health. Omitted callers see Unknown, never Healthy.
@@ -49,10 +48,11 @@ class RoleDialog extends StatelessWidget {
           onTap: () => Navigator.pop(context, 'default-storage'),
         ),
         RoleOption(
-          title: 'Snapshot Backup',
+          title: 'Backup drive',
           subtitle: isInternal
               ? 'Other drives are backed up onto it'
-              : 'Plug in, back up everything, unplug',
+              : 'Your other drives are copied onto it when you back up. Keep it '
+                    'somewhere safe between backups.',
           selected: currentRole == 'snapshot-backup',
           onTap: () => Navigator.pop(context, 'snapshot-backup'),
         ),

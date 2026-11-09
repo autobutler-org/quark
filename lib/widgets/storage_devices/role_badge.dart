@@ -20,7 +20,7 @@ class RoleBadge extends StatelessWidget {
       case 'snapshot-backup':
         bg = Colors.orange.shade100;
         fg = Colors.orange.shade800;
-        label = 'Snapshot Backup';
+        label = 'Backup drive';
       default:
         return const SizedBox.shrink();
     }

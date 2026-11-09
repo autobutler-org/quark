@@ -98,14 +98,13 @@ The small state files Quark keeps beside the database go through the same helper
 
 A power cut during one of those writes leaves the previous version whole, never an empty or partial file.
 
-Four things that used to be files beside the database are rows in it now, so that every instance on one database
+Three things that used to be files beside the database are rows in it now, so that every instance on one database
 shares them (#3083) and SQLite's own journal is what makes a write whole: the Quark's settings (`settingsutil`, one
-row of `settings` each), when the last snapshot backup completed (`backup.RecordSnapshot`, the `lastSnapshotBackup`
-row of `settings`), each account's own settings
-(`usersettingsutil.Save`, `user_settings`), and the account request history (`requestlogutil.Append`,
-`account_request_history`). On start the server imports `settings.json`, `last-snapshot-backup`, `user-settings/` and
-`account-request-history.jsonl` from the data directory of an older Quark and renames each with an `.imported`
-suffix; a value already in the database wins.
+row of `settings` each), each account's own settings (`usersettingsutil.Save`, `user_settings`), and the account
+request history (`requestlogutil.Append`, `account_request_history`). On start the server imports `settings.json`,
+`user-settings/` and `account-request-history.jsonl` from the data directory of an older Quark and renames each
+with an `.imported` suffix; a value already in the database wins. When the last snapshot backup completed is no
+longer recorded apart from the backups: it is read from the run folders on the backup drives (#4044).
 
 Resumable uploads stage under `<data dir>/tmp/upload-sessions`. A session interrupted by a crash is never
 committed, so no partial file reaches the user's folders; `storageutil.ClearTmpDir` removes the staged bytes on

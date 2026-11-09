@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/storage_devices/role_dialog.dart';
 
-/// #3194, #3999: the roles Set Role offers. Built-in storage can be the
-/// snapshot backup, so an external drive's files have somewhere to land.
+/// #3194, #3999: the roles Set Role offers. Built-in storage can be a backup
+/// drive, so an external drive's files have somewhere to land.
 void main() {
   Future<List<String?>> pumpDialog(
     WidgetTester tester, {
@@ -36,21 +36,28 @@ void main() {
   testWidgets('a USB drive is offered every role', (tester) async {
     await pumpDialog(tester, isInternal: false);
 
-    for (final role in ['Default Storage', 'Snapshot Backup', 'Unassigned']) {
+    for (final role in ['Default Storage', 'Backup drive', 'Unassigned']) {
       expect(find.text(role), findsOneWidget);
     }
-    expect(find.textContaining('copied onto it'), findsOneWidget);
+    expect(find.textContaining('also copied onto it'), findsOneWidget);
+    expect(
+      find.text(
+        'Your other drives are copied onto it when you back up. Keep it '
+        'somewhere safe between backups.',
+      ),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('built-in storage can be the snapshot backup', (tester) async {
+  testWidgets('built-in storage can be a backup drive', (tester) async {
     final popped = await pumpDialog(tester, isInternal: true);
 
-    expect(find.text('Snapshot Backup'), findsOneWidget);
+    expect(find.text('Backup drive'), findsOneWidget);
     expect(find.text('Other drives are backed up onto it'), findsOneWidget);
     expect(find.text('Unassigned'), findsOneWidget);
     expect(find.textContaining('also copied onto it'), findsNothing);
 
-    await tester.tap(find.text('Snapshot Backup'));
+    await tester.tap(find.text('Backup drive'));
     await tester.pumpAndSettle();
 
     expect(popped, ['snapshot-backup']);

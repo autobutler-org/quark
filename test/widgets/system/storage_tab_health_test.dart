@@ -234,7 +234,7 @@ void main() {
 
     await tester.tap(find.text('Set Role'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Snapshot Backup'));
+    await tester.tap(find.text('Backup drive'));
     await tester.pumpAndSettle();
 
     expect(find.text('Use this drive anyway'), findsNothing);
