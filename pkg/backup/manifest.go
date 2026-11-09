@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -22,22 +24,25 @@ const manifestFilename = "backup_manifest.json"
 // check yet.
 var ErrNoManifest = errors.New("nothing to verify yet: run Back Up on this drive first")
 
-// GenerateManifest hashes every file in fsys but the manifest itself.
-func GenerateManifest(ctx context.Context, fsys vfs.VFS) (*Manifest, error) {
+// GenerateManifest hashes every file under dir in fsys but the manifest
+// itself, keyed by its path relative to dir. An empty dir is the root.
+func GenerateManifest(ctx context.Context, fsys vfs.VFS, dir string) (*Manifest, error) {
 	m := &Manifest{
 		CreatedAt: time.Now(),
+		Drives:    []ManifestDrive{},
 		Files:     make(map[string]ManifestFile),
 	}
 
-	err := vfs.Walk(ctx, fsys, "", func(fi vfs.FileInfo) error {
-		if fi.IsDir || fi.Path == manifestFilename {
+	err := vfs.Walk(ctx, fsys, dir, func(fi vfs.FileInfo) error {
+		rel := relTo(dir, fi.Path)
+		if fi.IsDir || rel == manifestFilename {
 			return nil
 		}
 		hash, err := hashFile(ctx, fsys, fi.Path)
 		if err != nil {
-			return fmt.Errorf("hash %s: %w", fi.Path, err)
+			return fmt.Errorf("hash %s: %w", rel, err)
 		}
-		m.Files[fi.Path] = ManifestFile{SHA256: hash, Size: fi.Size}
+		m.Files[rel] = ManifestFile{SHA256: hash, Size: fi.Size}
 		m.TotalFiles++
 		m.TotalBytes += fi.Size
 		return nil
@@ -49,18 +54,19 @@ func GenerateManifest(ctx context.Context, fsys vfs.VFS) (*Manifest, error) {
 	return m, nil
 }
 
-// WriteManifest writes m at the root of fsys, replacing any earlier one whole.
-func WriteManifest(ctx context.Context, m *Manifest, fsys vfs.VFS) error {
+// WriteManifest writes m in dir on fsys, replacing any earlier one whole.
+func WriteManifest(ctx context.Context, m *Manifest, fsys vfs.VFS, dir string) error {
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
-	return fsys.Write(ctx, manifestFilename, bytes.NewReader(data), vfs.WriteOptions{ContentType: "application/json"})
+	return fsys.Write(ctx, path.Join(dir, manifestFilename), bytes.NewReader(data), vfs.WriteOptions{ContentType: "application/json"})
 }
 
-// ReadManifest reads the manifest at the root of fsys.
-func ReadManifest(ctx context.Context, fsys vfs.VFS) (*Manifest, error) {
-	f, err := fsys.Open(ctx, manifestFilename)
+// ReadManifest reads the manifest in dir on fsys: a run's folder,
+// backups/<run>.
+func ReadManifest(ctx context.Context, fsys vfs.VFS, dir string) (*Manifest, error) {
+	f, err := fsys.Open(ctx, path.Join(dir, manifestFilename))
 	if err != nil {
 		return nil, err
 	}
@@ -81,21 +87,38 @@ type VerifyBackupParams struct {
 	DeviceSerial string
 	// Full hashes every file; otherwise only sizes are compared.
 	Full bool
+	// Run is the run to verify, a folder under backups/. Empty is the newest
+	// complete run.
+	Run string
 }
 
-// VerifyBackup checks the backup on a device against its manifest. A device
-// that is not attached is the error [fileutil.FilesVFS] reports for it.
+// VerifyBackup checks one run on a device against its manifest. A device
+// that is not attached is the error [fileutil.FilesVFS] reports for it, one
+// with no complete run is [ErrNoManifest], and a run it does not hold is
+// [ErrRunNotFound].
 func VerifyBackup(params VerifyBackupParams) (*VerifyResult, error) {
 	fsys, err := fileutil.FilesVFS(params.Registry, params.DeviceSerial)
 	if err != nil {
 		return nil, err
 	}
-	return verifyTree(params.Ctx, fsys, params.Full)
+	run, err := resolveRun(params.Ctx, fsys, params.Run)
+	if errors.Is(err, ErrNoSnapshot) {
+		return nil, ErrNoManifest
+	}
+	if err != nil {
+		return nil, err
+	}
+	result, err := verifyTree(params.Ctx, fsys, runDir(run.Folder), params.Full)
+	if err != nil {
+		return nil, err
+	}
+	result.Run = run.Folder
+	return result, nil
 }
 
-// verifyTree checks the backup in fsys against its manifest.
-func verifyTree(ctx context.Context, fsys vfs.VFS, full bool) (*VerifyResult, error) {
-	m, err := ReadManifest(ctx, fsys)
+// verifyTree checks the files under dir in fsys against the manifest there.
+func verifyTree(ctx context.Context, fsys vfs.VFS, dir string, full bool) (*VerifyResult, error) {
+	m, err := ReadManifest(ctx, fsys, dir)
 	if errors.Is(err, vfs.ErrNotFound) {
 		return nil, ErrNoManifest
 	}
@@ -109,7 +132,7 @@ func verifyTree(ctx context.Context, fsys vfs.VFS, full bool) (*VerifyResult, er
 	for rel, mf := range m.Files {
 		checked[rel] = true
 
-		info, err := fsys.Stat(ctx, rel)
+		info, err := fsys.Stat(ctx, path.Join(dir, rel))
 		if err != nil || info.IsDir {
 			result.Missing = append(result.Missing, rel)
 			continue
@@ -124,7 +147,7 @@ func verifyTree(ctx context.Context, fsys vfs.VFS, full bool) (*VerifyResult, er
 			continue
 		}
 
-		hash, err := hashFile(ctx, fsys, rel)
+		hash, err := hashFile(ctx, fsys, path.Join(dir, rel))
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", rel, err))
 			continue
@@ -139,14 +162,22 @@ func verifyTree(ctx context.Context, fsys vfs.VFS, full bool) (*VerifyResult, er
 
 	// Find files on the device not in the manifest. The walk is best-effort
 	// and the callback never fails, so neither can the walk.
-	_ = vfs.Walk(ctx, fsys, "", func(fi vfs.FileInfo) error {
-		if !fi.IsDir && fi.Path != manifestFilename && !checked[fi.Path] {
-			result.Added = append(result.Added, fi.Path)
+	_ = vfs.Walk(ctx, fsys, dir, func(fi vfs.FileInfo) error {
+		if rel := relTo(dir, fi.Path); !fi.IsDir && rel != manifestFilename && !checked[rel] {
+			result.Added = append(result.Added, rel)
 		}
 		return nil
 	})
 
 	return result, nil
+}
+
+// relTo is p, a path a walk of dir visited, relative to dir.
+func relTo(dir, p string) string {
+	if dir == "" {
+		return p
+	}
+	return strings.TrimPrefix(p, dir+"/")
 }
 
 // hashFile streams the file at path in fsys through SHA-256.

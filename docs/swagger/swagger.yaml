@@ -166,9 +166,9 @@ definitions:
     properties:
       folder:
         description: |-
-          Folder is the device's folder at the drive's root, as the snapshot
-          named it: "internal", or the device name, an underscore, and the
-          first 8 characters of its serial.
+          Folder is the device's folder in the run, as its manifest names it:
+          "Built-in storage", or the drive's name and the first 8 characters of
+          its serial, as "Photos (USB 90C82C65)".
         type: string
       targetSerial:
         description: |-
@@ -214,6 +214,9 @@ definitions:
         items:
           type: string
         type: array
+      run:
+        description: Run is the run being restored, a folder under backups/.
+        type: string
     type: object
   backup.VaultImportResult:
     properties:
@@ -240,6 +243,11 @@ definitions:
         items:
           type: string
         type: array
+      run:
+        description: |-
+          Run is the run [RestoreVault] read the vault from, a folder under
+          backups/. [ImportVault] leaves it empty.
+        type: string
       unmatchedUsers:
         description: |-
           UnmatchedUsers is the usernames in the backup with no account on this
@@ -248,6 +256,30 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  backup.VerifyResult:
+    properties:
+      added:
+        items:
+          type: string
+        type: array
+      corrupted:
+        items:
+          type: string
+        type: array
+      errors:
+        items:
+          type: string
+        type: array
+      missing:
+        items:
+          type: string
+        type: array
+      ok:
+        type: integer
+      run:
+        description: Run is the run that was verified, a folder under backups/.
+        type: string
     type: object
   chatutil.Channel:
     properties:
@@ -2738,6 +2770,11 @@ definitions:
           MissingToBuiltIn puts the files of a device that is no longer attached
           on built-in storage.
         type: boolean
+      run:
+        description: |-
+          Run is the run to restore, a folder under backups/ on the drive. Empty
+          is the newest complete run.
+        type: string
     type: object
   v0_storage.restoreSnapshotVaultBody:
     properties:
@@ -2748,6 +2785,25 @@ definitions:
         description: |-
           Password is the standard base64 auth key of the admin's login
           password, as DELETE /vault takes it.
+        type: string
+      run:
+        description: |-
+          Run is the run to restore from, a folder under backups/ on the drive.
+          Empty is the newest complete run.
+        type: string
+    type: object
+  v0_storage.verifySnapshotBackupBody:
+    properties:
+      deviceSerial:
+        description: '"" is built-in storage, so the field is not binding:"required".'
+        type: string
+      full:
+        description: Full hashes every file; otherwise only sizes are compared.
+        type: boolean
+      run:
+        description: |-
+          Run is the run to verify, a folder under backups/ on the drive. Empty
+          is the newest complete run.
         type: string
     type: object
   v0_thumbnails.clientRenderResponse:
@@ -10498,18 +10554,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: 'Queues a job that aggregates all files from all managed devices
-        onto the target snapshot-backup device. Answers 409 while the target already
-        has a pending or running backup, whichever instance started it, and 409 when
-        the target''s health.verdict is replace-soon unless acknowledgeHealth is true.
-        Watch does not block. It asks for no password. On SQLite the snapshot also
-        copies the chat and every account''s vault, as the ciphertext they are, into
-        chat_backup.db and vault_items_backup.db. On PostgreSQL the snapshot is the
-        device directories and backup_manifest.json only: the chat and the vault are
-        in the operator''s database backup. The backup does not delete files already
-        on the drive; it removes only its own temp files and, on PostgreSQL, a chat_backup.db
-        or vault_items_backup.db an earlier snapshot left at the drive''s root. jobId
-        is what the status route takes.'
+      description: |-
+        Queues a job that aggregates all files from all managed devices onto the target snapshot-backup device. Answers 409 while the target already has a pending or running backup, whichever instance started it, and 409 when the target's health.verdict is replace-soon unless acknowledgeHealth is true. Watch does not block. It asks for no password. On SQLite the snapshot also copies the chat and every account's vault, as the ciphertext they are, into chat_backup.db and vault_items_backup.db. On PostgreSQL the snapshot is the device directories and backup_manifest.json only: the chat and the vault are in the operator's database backup.
+        Each backup is a new run in its own folder under backups/, named for the minute it started in the Quark's local time, as "2026-11-07 21.57", with " (2)" and so on when two start in the same minute. A run holds one folder per source drive ("Built-in storage", or the drive's name and the first 8 characters of its serial, as "Photos (USB 90C82C65)"), the chat and vault files, and the manifest, which records each drive folder's source serial.
+        A run is written under a hidden folder ending in .partial and renamed when it completes; a failed or canceled run's partial folder is removed. A file unchanged since the previous complete run is hard-linked from it where the drive's filesystem allows, and copied otherwise. No source's own backups/ folder is copied. The backup never deletes a file or an earlier run. jobId is what the status route takes.
       parameters:
       - description: '{targetDeviceSerial: string, acknowledgeHealth: bool}'
         in: body
@@ -10546,12 +10594,13 @@ paths:
       consumes:
       - application/json
       description: |-
-        Queues a snapshot-restore job that copies each device's folder on the drive, which must have the snapshot-backup role, back onto the device it was copied from.
+        Queues a snapshot-restore job that copies each device's folder in one run on the drive, which must have the snapshot-backup role, back onto the device the run's manifest says it was copied from.
+        run names the run, a folder under backups/; empty is the newest complete one. A run still being written is never restored. The answer names the run.
         A file already at the target path is kept as it is: a restore never overwrites. Each copy lands under its name only once it is whole, so a failed restore leaves every file already copied and the rest of the target in place.
         A snapshot never removes a file that left its source, so a restore brings back files deleted since. The folder of a device that is no longer attached goes into a folder of the same name on built-in storage when missingToBuiltIn is true, and is named in missing otherwise.
       parameters:
-      - description: The snapshot drive, and whether a gone device's files go to built-in
-          storage
+      - description: The snapshot drive, the run, and whether a gone device's files
+          go to built-in storage
         in: body
         name: body
         required: true
@@ -10573,7 +10622,8 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
-          description: the drive is not attached, or holds no snapshot
+          description: the drive is not attached, holds no snapshot, or holds no complete
+            run of that name
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":
@@ -10596,14 +10646,14 @@ paths:
       - application/json
       description: |-
         Re-confirms the caller with password, which carries the auth key of the admin's login password, exactly as DELETE /vault takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is restored. Shares the sign-in rate limit, and the body is at most 1 KiB.
-        Then restores the vault backup a snapshot wrote to the drive, which must have the snapshot-backup role, each vault under the account of the same
-        username, letter for letter. Refused while any vault has items, when an account the backup has a vault for already has a vault key here (a restore never replaces one),
+        Then restores the vault backup a snapshot wrote into one run on the drive, which must have the snapshot-backup role: run, a folder under backups/, or the newest complete run when it is empty. The answer names the run.
+        Each vault comes back under the account of the same username, letter for letter. Refused while any vault has items, when an account the backup has a vault for already has a vault key here (a restore never replaces one),
         when a backed-up vault has no account of its username here, and when a backed-up key or item would be refused as an API write. Every refusal names the accounts and changes nothing.
         Also refused, changing nothing, when this Quark did not write the backup: its MAC is another Quark's, the file changed after the snapshot, or its MAC is gone from a drive this Quark binds its snapshots to. A snapshot taken before binding still restores.
         restoredAccounts names every account that got a vault back, and each is sent vault_changed. backupPasswordAccounts names the accounts whose vault opens with the
         password they had when the backup was taken, as every vault restored onto new hardware does. Every attempt past the password check is written to the server log.
       parameters:
-      - description: The backup drive and the admin's auth key
+      - description: The backup drive, the run, and the admin's auth key
         in: body
         name: body
         required: true
@@ -10631,7 +10681,8 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
-          description: the device is not attached, or holds no vault backup
+          description: the device is not attached, holds no complete run or none of
+            that name, or the run holds no vault backup
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":
@@ -10695,27 +10746,30 @@ paths:
     post:
       consumes:
       - application/json
-      description: Walks all files on the backup device and checks against the manifest
+      description: |-
+        Checks one run on the backup device, a folder under backups/, against the manifest it holds: by size, or by SHA-256 when full is true.
+        run names the run; empty is the newest complete one. A run still being written is never verified. The answer names the run it checked.
       parameters:
-      - description: '{deviceSerial: string, full: bool}'
+      - description: The backup drive, the run, and whether to hash every file
         in: body
         name: body
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/v0_storage.verifySnapshotBackupBody'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            type: object
+            $ref: '#/definitions/backup.VerifyResult'
         "400":
-          description: Bad Request
+          description: bad request, or a drive with no complete run
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
-          description: the device is not attached
+          description: the device is not attached, or holds no complete run of that
+            name
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":

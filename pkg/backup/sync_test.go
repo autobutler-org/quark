@@ -355,3 +355,38 @@ func TestSyncWorker_MirrorsEveryUploadInABurst(t *testing.T) {
 		waitForFile(t, dstDir, fmt.Sprintf("burst/%d.txt", i))
 	}
 }
+
+// Built-in storage as the backup drive holds its runs in backups/. The mirror
+// onto main storage never copies them, by resync, upload or move, and never
+// moves away the backups/ folder main storage holds. A backups folder deeper
+// down is the user's and is mirrored.
+func TestSyncWorker_LeavesBackupsAlone(t *testing.T) {
+	ctx := context.Background()
+	w, srcDir, dstDir := newTestSyncWorker(t)
+	run := filepath.Join(BackupsDir, "2026-11-07 21.57", "Photos (USB 90C82C65)")
+	writeTestFile(t, srcDir, filepath.Join(run, "a.jpg"), "run")
+	writeTestFile(t, srcDir, "photos/backups/keep.txt", "keep")
+	writeTestFile(t, dstDir, filepath.Join(BackupsDir, "mine.txt"), "main storage's own")
+
+	w.handleEvent(ctx, eventbus.Event{Kind: eventbus.EventResync})
+	w.handleEvent(ctx, eventbus.Event{Kind: eventbus.EventUpload, Path: filepath.ToSlash(run)})
+	w.handleEvent(ctx, eventbus.Event{Kind: eventbus.EventUpload, Path: ""})
+	w.handleEvent(ctx, eventbus.Event{Kind: eventbus.EventMove, Path: "photos/backups/keep.txt", NewPath: BackupsDir + "/keep.txt"})
+
+	if _, err := os.Stat(filepath.Join(dstDir, BackupsDir, "2026-11-07 21.57")); !os.IsNotExist(err) {
+		t.Errorf("a backup run was mirrored onto main storage: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dstDir, BackupsDir, "keep.txt")); !os.IsNotExist(err) {
+		t.Errorf("a move into backups/ was mirrored: %v", err)
+	}
+	if got := readTestFile(t, dstDir, "photos/backups/keep.txt"); got != "keep" {
+		t.Errorf("photos/backups/keep.txt = %q, want it mirrored", got)
+	}
+
+	// Renaming built-in's backups/ never renames main storage's.
+	w.handleEvent(ctx, eventbus.Event{Kind: eventbus.EventMove, Path: BackupsDir, NewPath: "old backups"})
+	w.handleEvent(ctx, eventbus.Event{Kind: eventbus.EventMove, Path: BackupsDir + "/mine.txt", NewPath: "mine.txt"})
+	if got := readTestFile(t, dstDir, filepath.Join(BackupsDir, "mine.txt")); got != "main storage's own" {
+		t.Errorf("backups/mine.txt = %q, want main storage's backups/ left in place", got)
+	}
+}

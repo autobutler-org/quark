@@ -87,6 +87,15 @@ type FileMover interface {
 	StagingDir(ctx context.Context, name string) (string, error)
 }
 
+// Linker is implemented by namespaces backed by a host directory. Link makes
+// dst a hard link to the regular file at src, both in this namespace, so a
+// file kept in two places takes its space once. dst's folder must exist and
+// dst must not. A filesystem without hard links (FAT, exFAT) answers with an
+// error, and a caller that only wanted to save space copies instead.
+type Linker interface {
+	Link(ctx context.Context, src, dst string) error
+}
+
 // Trasher is implemented by namespaces with a trash: a user delete moves an
 // item there, where it can be listed, restored or deleted for good, and
 // [VFS.Delete] stays the permanent removal (#2641). A trashed item keeps an

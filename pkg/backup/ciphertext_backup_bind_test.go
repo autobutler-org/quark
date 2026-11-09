@@ -16,7 +16,8 @@ import (
 // bindFixture is a Quark that took a snapshot of alice's vault onto the
 // BACKUP-1 drive, and the restore params of a second database that reads it.
 type bindFixture struct {
-	source   *db.DatabaseSqlc
+	source *db.DatabaseSqlc
+	// driveDir is the host folder of the run the snapshot wrote.
 	driveDir string
 	live     *db.DatabaseSqlc
 	params   RestoreVaultParams
@@ -54,7 +55,7 @@ func newBindFixture(t *testing.T) bindFixture {
 	chatExec(t, live.Db, `INSERT INTO device_roles (device_serial, role) VALUES ('BACKUP-1', 'snapshot-backup')`)
 	return bindFixture{
 		source:   source,
-		driveDir: target.FilesDir,
+		driveDir: runHostDir(t, target),
 		live:     live,
 		params: RestoreVaultParams{
 			Ctx: context.Background(), LiveDB: live.Db, Queries: live.Queries,

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -201,8 +203,9 @@ func TestSnapshotBackup_BetweenMemNamespaces(t *testing.T) {
 		t.Fatalf("SnapshotBackup: %v", err)
 	}
 
-	assertMemContent(t, target, "internal/photos/a.jpg", "photo-a")
-	assertMemContent(t, target, "Stick_USB-1/docs/b.txt", "doc-b")
+	dir := runDir(onlyRun(t, target).Folder)
+	assertMemContent(t, target, path.Join(dir, "Built-in storage/photos/a.jpg"), "photo-a")
+	assertMemContent(t, target, path.Join(dir, "Stick (USB USB-1)/docs/b.txt"), "doc-b")
 	if job.FilesCopied != 2 || job.BytesCopied != int64(len("photo-a")+len("doc-b")) {
 		t.Errorf("copied %d files, %d bytes", job.FilesCopied, job.BytesCopied)
 	}
@@ -238,7 +241,7 @@ func TestSnapshotBackup_InterruptedCopyLeavesNoPartialFile(t *testing.T) {
 	if job.Status != BackupStatusFailed {
 		t.Errorf("status = %s, want FAILED", job.Status)
 	}
-	entries, err := os.ReadDir(target.FilesDir + "/Stick_USB-1")
+	entries, err := os.ReadDir(filepath.Join(target.FilesDir, BackupsDir))
 	if err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}

@@ -64,9 +64,10 @@ func TestSnapshotBackup_MultiSource(t *testing.T) {
 	}
 
 	// Verify files are namespaced by device.
-	assertFileContent(t, filepath.Join(target.FilesDir, "Drive A_SERIAL-A", "photos/a.jpg"), "photo-a")
-	assertFileContent(t, filepath.Join(target.FilesDir, "Drive A_SERIAL-A", "docs/a.txt"), "doc-a")
-	assertFileContent(t, filepath.Join(target.FilesDir, "Drive B_SERIAL-B", "photos/b.jpg"), "photo-b")
+	dir := runHostDir(t, target)
+	assertFileContent(t, filepath.Join(dir, "Drive A (USB SERIAL-A)", "photos/a.jpg"), "photo-a")
+	assertFileContent(t, filepath.Join(dir, "Drive A (USB SERIAL-A)", "docs/a.txt"), "doc-a")
+	assertFileContent(t, filepath.Join(dir, "Drive B (USB SERIAL-B)", "photos/b.jpg"), "photo-b")
 
 	if job.Status != BackupStatusCompleted {
 		t.Errorf("expected COMPLETED, got %s", job.Status)
@@ -94,7 +95,7 @@ func TestSnapshotBackup_InternalDevice(t *testing.T) {
 		t.Fatalf("SnapshotBackup failed: %v", err)
 	}
 
-	assertFileContent(t, filepath.Join(target.FilesDir, "internal", "data.txt"), "internal-data")
+	assertFileContent(t, filepath.Join(runHostDir(t, target), "Built-in storage", "data.txt"), "internal-data")
 }
 
 func TestSnapshotBackup_SmartSkip(t *testing.T) {
@@ -103,13 +104,11 @@ func TestSnapshotBackup_SmartSkip(t *testing.T) {
 	})
 	target := makeTarget(t)
 
-	// Pre-populate target with matching file.
-	destDir := filepath.Join(target.FilesDir, "Drive_SER1")
-	os.MkdirAll(destDir, 0755)
-	destFile := filepath.Join(destDir, "file.txt")
-	os.WriteFile(destFile, []byte("content"), 0644)
-	// Set mtime to match source.
+	// A previous run holds a matching file, with the source's mtime.
+	putRun(t, target, "2026-01-01 00.00", time.Now(), []ManifestDrive{{Folder: "Drive (USB SER1)", Serial: "SER1", Name: "Drive"}},
+		map[string]string{"Drive (USB SER1)/file.txt": "content"})
 	srcInfo, _ := src.Files.Stat(t.Context(), "file.txt")
+	destFile := filepath.Join(target.FilesDir, BackupsDir, "2026-01-01 00.00", "Drive (USB SER1)", "file.txt")
 	os.Chtimes(destFile, srcInfo.ModTime, srcInfo.ModTime)
 
 	job := newJob("TARGET")
@@ -136,10 +135,9 @@ func TestSnapshotBackup_OverwriteStale(t *testing.T) {
 	})
 	target := makeTarget(t)
 
-	// Pre-populate target with smaller (stale) file.
-	destDir := filepath.Join(target.FilesDir, "Drive_SER1")
-	os.MkdirAll(destDir, 0755)
-	os.WriteFile(filepath.Join(destDir, "file.txt"), []byte("old"), 0644)
+	// A previous run holds a smaller (stale) copy.
+	putRun(t, target, "2026-01-01 00.00", time.Now(), []ManifestDrive{{Folder: "Drive (USB SER1)", Serial: "SER1", Name: "Drive"}},
+		map[string]string{"Drive (USB SER1)/file.txt": "old"})
 
 	job := newJob("TARGET")
 
@@ -154,7 +152,12 @@ func TestSnapshotBackup_OverwriteStale(t *testing.T) {
 	if job.FilesCopied != 1 {
 		t.Errorf("expected 1 file copied (overwrite stale), got %d", job.FilesCopied)
 	}
-	assertFileContent(t, filepath.Join(destDir, "file.txt"), "new-content")
+	runs, err := ListRuns(t.Context(), target)
+	if err != nil || len(runs) != 2 {
+		t.Fatalf("runs = %+v, %v; want two", runs, err)
+	}
+	assertFileContent(t, filepath.Join(target.FilesDir, BackupsDir, runs[0].Folder, "Drive (USB SER1)", "file.txt"), "new-content")
+	assertFileContent(t, filepath.Join(target.FilesDir, BackupsDir, "2026-01-01 00.00", "Drive (USB SER1)", "file.txt"), "old")
 }
 
 func TestSnapshotBackup_EmptySource(t *testing.T) {
@@ -248,20 +251,21 @@ done:
 	}
 }
 
-func TestDeviceDirName(t *testing.T) {
+func TestDriveDirName(t *testing.T) {
 	tests := []struct {
 		name, serial, want string
 	}{
-		{"My Drive", "ABCDEF123456", "My Drive_ABCDEF12"},
-		{"Drive", "SHORT", "Drive_SHORT"},
-		{"", "SER", "device_SER"},
-		{"Pi Storage", "", "internal"},
-		{"Bad/Name:Here", "SER1", "Bad_Name_Here_SER1"},
+		{"My Drive", "ABCDEF123456", "My Drive (USB ABCDEF12)"},
+		{"Drive", "SHORT", "Drive (USB SHORT)"},
+		{"", "SER", "Drive (USB SER)"},
+		{"Pi Storage", "", "Built-in storage"},
+		{"Bad/Name:Here", "SER1", "Bad_Name_Here (USB SER1)"},
+		{"Quark", "SER/../X", "Quark (USB SER_.._X)"},
 	}
 	for _, tt := range tests {
-		got := deviceDirName(tt.name, tt.serial)
+		got := driveDirName(tt.name, tt.serial)
 		if got != tt.want {
-			t.Errorf("deviceDirName(%q, %q) = %q, want %q", tt.name, tt.serial, got, tt.want)
+			t.Errorf("driveDirName(%q, %q) = %q, want %q", tt.name, tt.serial, got, tt.want)
 		}
 	}
 }

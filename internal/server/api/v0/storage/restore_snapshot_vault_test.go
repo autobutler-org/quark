@@ -128,6 +128,25 @@ func newRestoreEngine(t *testing.T, live *db.DatabaseSqlc, driveDir string) rest
 	return restoreEngine{Engine: engine, events: events}
 }
 
+// exportRun writes source's vault backup into a run on the drive at driveDir,
+// as a snapshot does.
+func exportRun(t *testing.T, source *db.DatabaseSqlc, driveDir string) {
+	t.Helper()
+	drive, err := vfs.NewLocalVFS(driveDir, vfs.FilesNamespace(backupSerial))
+	if err != nil {
+		t.Fatal(err)
+	}
+	putRun(t, drive, testRun, nil, nil)
+	if _, err := backup.ExportVault(context.Background(), source.Db, runHostDir(driveDir)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// runHostDir is the host folder of the test run on the drive at driveDir.
+func runHostDir(driveDir string) string {
+	return filepath.Join(driveDir, backup.BackupsDir, testRun)
+}
+
 // restoreVault restores from serial's drive as the admin, re-confirmed.
 func restoreVault(engine restoreEngine, serial string) *httptest.ResponseRecorder {
 	return restoreVaultBody(engine, `{"deviceSerial":"`+serial+`","password":"`+dbtest.AuthKey(adminPassword)+`"}`)
@@ -148,9 +167,7 @@ func restoreVaultBody(engine restoreEngine, body string) *httptest.ResponseRecor
 func TestRestoreSnapshotVault_RestoresOntoANewQuark(t *testing.T) {
 	driveDir := t.TempDir()
 	source := vaultQuark(t, map[string]bool{"alice": true, "bob": true, "carol": false})
-	if _, err := backup.ExportVault(context.Background(), source.Db, driveDir); err != nil {
-		t.Fatal(err)
-	}
+	exportRun(t, source, driveDir)
 
 	live := vaultQuark(t, map[string]bool{"bob": false, "alice": false})
 	engine := newRestoreEngine(t, live, driveDir)
@@ -162,11 +179,11 @@ func TestRestoreSnapshotVault_RestoresOntoANewQuark(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Accounts != 2 || result.Items != 2 ||
+	if result.Accounts != 2 || result.Items != 2 || result.Run != testRun ||
 		strings.Join(result.UnmatchedUsers, ",") != "carol" ||
 		strings.Join(result.BackupPasswordAccounts, ",") != "alice,bob" ||
 		strings.Join(result.RestoredAccounts, ",") != "alice,bob" {
-		t.Errorf("result = %+v, want 2 accounts, 2 items, carol unmatched, alice and bob restored and on the backup's password", result)
+		t.Errorf("result = %+v, want 2 accounts, 2 items, carol unmatched, alice and bob restored and on the backup's password, from run %s", result, testRun)
 	}
 
 	// Each restored account's sessions are told, and nobody else's.
@@ -188,11 +205,16 @@ func TestRestoreSnapshotVault_RestoresOntoANewQuark(t *testing.T) {
 func TestRestoreSnapshotVault_Refusals(t *testing.T) {
 	driveDir := t.TempDir()
 	source := vaultQuark(t, map[string]bool{"carol": true})
-	if _, err := backup.ExportVault(context.Background(), source.Db, driveDir); err != nil {
+	exportRun(t, source, driveDir)
+
+	// A drive with a run that holds no vault backup, and one with no run.
+	emptyRun := t.TempDir()
+	emptyDrive, err := vfs.NewLocalVFS(emptyRun, vfs.FilesNamespace(backupSerial))
+	if err != nil {
 		t.Fatal(err)
 	}
-
-	emptyDrive := t.TempDir()
+	putRun(t, emptyDrive, testRun, nil, nil)
+	noRun := t.TempDir()
 	withPassword := func(serial, password string) string {
 		return `{"deviceSerial":"` + serial + `","password":"` + password + `"}`
 	}
@@ -210,8 +232,13 @@ func TestRestoreSnapshotVault_Refusals(t *testing.T) {
 			live: map[string]bool{"Carol": false}, want: http.StatusConflict, wantBody: "carol"},
 		{name: "drive not attached", dir: driveDir, body: withPassword("GONE", dbtest.AuthKey(adminPassword)),
 			live: map[string]bool{"carol": false}, want: http.StatusNotFound},
-		{name: "drive holds no vault backup", dir: emptyDrive, body: withPassword(backupSerial, dbtest.AuthKey(adminPassword)),
+		{name: "run holds no vault backup", dir: emptyRun, body: withPassword(backupSerial, dbtest.AuthKey(adminPassword)),
 			live: map[string]bool{"carol": false}, want: http.StatusNotFound, wantBody: "vault_items_backup.db not found"},
+		{name: "drive holds no run", dir: noRun, body: withPassword(backupSerial, dbtest.AuthKey(adminPassword)),
+			live: map[string]bool{"carol": false}, want: http.StatusNotFound, wantBody: "holds no snapshot"},
+		{name: "no such run", dir: driveDir,
+			body: `{"deviceSerial":"` + backupSerial + `","run":"../` + testRun + `","password":"` + dbtest.AuthKey(adminPassword) + `"}`,
+			live: map[string]bool{"carol": false}, want: http.StatusNotFound, wantBody: "no complete backup of that name"},
 		{name: "built-in storage without the role", dir: driveDir, body: withPassword("", dbtest.AuthKey(adminPassword)),
 			live: map[string]bool{"carol": false}, want: http.StatusBadRequest},
 		{name: "no password", dir: driveDir, body: `{"deviceSerial":"` + backupSerial + `"}`,
@@ -270,10 +297,8 @@ func TestRestoreSnapshotVault_Refusals(t *testing.T) {
 func TestRestoreSnapshotVault_RefusesARowOutsideTheValidationBounds(t *testing.T) {
 	driveDir := t.TempDir()
 	source := vaultQuark(t, map[string]bool{"carol": true, "dave": true})
-	if _, err := backup.ExportVault(context.Background(), source.Db, driveDir); err != nil {
-		t.Fatal(err)
-	}
-	backupDB, err := sql.Open("sqlite", db.DSN(filepath.Join(driveDir, "vault_items_backup.db")))
+	exportRun(t, source, driveDir)
+	backupDB, err := sql.Open("sqlite", db.DSN(filepath.Join(runHostDir(driveDir), "vault_items_backup.db")))
 	if err != nil {
 		t.Fatal(err)
 	}

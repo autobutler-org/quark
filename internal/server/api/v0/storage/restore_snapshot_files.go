@@ -15,17 +15,18 @@ import (
 
 // restoreSnapshotFiles godoc
 // @Summary Restore files from a snapshot backup
-// @Description Queues a snapshot-restore job that copies each device's folder on the drive, which must have the snapshot-backup role, back onto the device it was copied from.
+// @Description Queues a snapshot-restore job that copies each device's folder in one run on the drive, which must have the snapshot-backup role, back onto the device the run's manifest says it was copied from.
+// @Description run names the run, a folder under backups/; empty is the newest complete one. A run still being written is never restored. The answer names the run.
 // @Description A file already at the target path is kept as it is: a restore never overwrites. Each copy lands under its name only once it is whole, so a failed restore leaves every file already copied and the rest of the target in place.
 // @Description A snapshot never removes a file that left its source, so a restore brings back files deleted since. The folder of a device that is no longer attached goes into a folder of the same name on built-in storage when missingToBuiltIn is true, and is named in missing otherwise.
 // @Tags storage
 // @Accept json
 // @Produce json
-// @Param body body restoreSnapshotFilesBody true "The snapshot drive, and whether a gone device's files go to built-in storage"
+// @Param body body restoreSnapshotFilesBody true "The snapshot drive, the run, and whether a gone device's files go to built-in storage"
 // @Success 202 {object} backup.StartRestoreFilesResult
 // @Failure 400 {object} serverutil.Response "bad request, or a drive without the snapshot-backup role"
 // @Failure 401 {object} serverutil.Response
-// @Failure 404 {object} serverutil.Response "the drive is not attached, or holds no snapshot"
+// @Failure 404 {object} serverutil.Response "the drive is not attached, holds no snapshot, or holds no complete run of that name"
 // @Failure 409 {object} serverutil.Response "every device in the snapshot is gone and missingToBuiltIn is false"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
@@ -49,13 +50,15 @@ func restoreSnapshotFiles(c *gin.Context) *serverutil.Response {
 		UserID:           userID,
 		BackupSerial:     req.DeviceSerial,
 		MissingToBuiltIn: req.MissingToBuiltIn,
+		Run:              req.Run,
 		Storage:          deps.StorageService(),
 	})
 	var notFound *fileutil.NotFoundError
 	switch {
 	case errors.Is(err, backup.ErrRestoreRoleRequired):
 		return serverutil.BadRequest(err)
-	case errors.As(err, &notFound), errors.Is(err, fs.ErrNotExist), errors.Is(err, backup.ErrNoSnapshot):
+	case errors.As(err, &notFound), errors.Is(err, fs.ErrNotExist), errors.Is(err, backup.ErrNoSnapshot),
+		errors.Is(err, backup.ErrRunNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, backup.ErrRestoreDevicesMissing):
 		return serverutil.Conflict(err)

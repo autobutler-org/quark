@@ -340,6 +340,20 @@ func (v *StorageServiceVFS) Move(_ context.Context, src, dst string) error {
 	return hostMove(filesDir, src, dst)
 }
 
+// Link makes dst a hard link to the file at src on this namespace's device.
+// See [Linker].
+func (v *StorageServiceVFS) Link(_ context.Context, src, dst string) error {
+	srcAbs, err := v.resolve(src)
+	if err != nil {
+		return err
+	}
+	dstAbs, err := v.resolve(dst)
+	if err != nil {
+		return err
+	}
+	return hostLink(srcAbs, dstAbs)
+}
+
 // Copy copies the file at src to dst through Write. See [VFS.Copy].
 func (v *StorageServiceVFS) Copy(ctx context.Context, src, dst string, opts CopyOptions) error {
 	return copyFile(ctx, v, src, v, dst, opts)

@@ -14,14 +14,15 @@ import (
 
 // verifySnapshotBackup godoc
 // @Summary Verify integrity of a snapshot backup
-// @Description Walks all files on the backup device and checks against the manifest
+// @Description Checks one run on the backup device, a folder under backups/, against the manifest it holds: by size, or by SHA-256 when full is true.
+// @Description run names the run; empty is the newest complete one. A run still being written is never verified. The answer names the run it checked.
 // @Tags storage
 // @Accept json
 // @Produce json
-// @Param body body object true "{deviceSerial: string, full: bool}"
-// @Success 200 {object} object
-// @Failure 400 {object} serverutil.Response
-// @Failure 404 {object} serverutil.Response "the device is not attached"
+// @Param body body verifySnapshotBackupBody true "The backup drive, the run, and whether to hash every file"
+// @Success 200 {object} backup.VerifyResult
+// @Failure 400 {object} serverutil.Response "bad request, or a drive with no complete run"
+// @Failure 404 {object} serverutil.Response "the device is not attached, or holds no complete run of that name"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /storage/devices/snapshot-backup/verify [post]
@@ -31,11 +32,7 @@ func verifySnapshotBackup(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
-	var req struct {
-		// "" is built-in storage, so the field is not binding:"required".
-		DeviceSerial string `json:"deviceSerial"`
-		Full         bool   `json:"full"`
-	}
+	var req verifySnapshotBackupBody
 	if err := c.ShouldBindJSON(&req); err != nil {
 		return serverutil.BadRequest(fmt.Errorf("invalid request: %w", err))
 	}
@@ -45,10 +42,11 @@ func verifySnapshotBackup(c *gin.Context) *serverutil.Response {
 		Registry:     deps.VFSRegistry(),
 		DeviceSerial: req.DeviceSerial,
 		Full:         req.Full,
+		Run:          req.Run,
 	})
 	var notFound *fileutil.NotFoundError
 	switch {
-	case errors.As(err, &notFound):
+	case errors.As(err, &notFound), errors.Is(err, backup.ErrRunNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, backup.ErrNoManifest):
 		return serverutil.BadRequest(err)

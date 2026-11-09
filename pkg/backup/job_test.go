@@ -249,7 +249,7 @@ func TestSnapshotBackupStatus_ADeadOwnersBackupIsRunAgain(t *testing.T) {
 	if job.CompletedAt == nil {
 		t.Error("the rerun backup carries no completion time")
 	}
-	assertFileContent(t, filepath.Join(f.target, "internal", "docs/a.txt"), "aaa")
+	assertFileContent(t, filepath.Join(f.target, BackupsDir, onlyRun(t, localFS(t, f.target)).Folder, builtInFolder, "docs/a.txt"), "aaa")
 	if _, err := f.start(restarted, targetSerial); err != nil {
 		t.Errorf("the finished backup still holds the target: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestSnapshotBackupStatus_ReadsCountsFromTheRow(t *testing.T) {
 	if job.CompletedAt == nil || len(job.SourceDevices) == 0 {
 		t.Errorf("finished status = %+v, want a completion time and the source devices", job)
 	}
-	assertFileContent(t, filepath.Join(f.target, "internal", "docs/a.txt"), "aaa")
+	assertFileContent(t, filepath.Join(f.target, BackupsDir, onlyRun(t, localFS(t, f.target)).Folder, builtInFolder, "docs/a.txt"), "aaa")
 }
 
 func TestGetSnapshotBackupStatus_UnknownJobIsNotFound(t *testing.T) {
@@ -354,8 +354,10 @@ func TestSnapshotBackupJob_ExportsTheVaultWithNoPassword(t *testing.T) {
 	a.run(t)
 	f.waitStatus(t, result.JobID, BackupStatusCompleted)
 
-	assertNoTemps(t, f.target)
-	manifest, err := ReadManifest(ctx, localFS(t, f.target))
+	target := localFS(t, f.target)
+	dir := filepath.Join(f.target, BackupsDir, onlyRun(t, target).Folder)
+	assertNoTemps(t, dir)
+	manifest, err := ReadManifest(ctx, target, runDir(onlyRun(t, target).Folder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +367,7 @@ func TestSnapshotBackupJob_ExportsTheVaultWithNoPassword(t *testing.T) {
 
 	live := dbtest.NewDB(t).Db
 	addChatUsers(t, live, "alice", "bob")
-	restored, err := ImportVault(ctx, live, f.target)
+	restored, err := ImportVault(ctx, live, dir)
 	if err != nil {
 		t.Fatalf("ImportVault: %v", err)
 	}

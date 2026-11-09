@@ -10091,7 +10091,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Queues a job that aggregates all files from all managed devices onto the target snapshot-backup device. Answers 409 while the target already has a pending or running backup, whichever instance started it, and 409 when the target's health.verdict is replace-soon unless acknowledgeHealth is true. Watch does not block. It asks for no password. On SQLite the snapshot also copies the chat and every account's vault, as the ciphertext they are, into chat_backup.db and vault_items_backup.db. On PostgreSQL the snapshot is the device directories and backup_manifest.json only: the chat and the vault are in the operator's database backup. The backup does not delete files already on the drive; it removes only its own temp files and, on PostgreSQL, a chat_backup.db or vault_items_backup.db an earlier snapshot left at the drive's root. jobId is what the status route takes.",
+                "description": "Queues a job that aggregates all files from all managed devices onto the target snapshot-backup device. Answers 409 while the target already has a pending or running backup, whichever instance started it, and 409 when the target's health.verdict is replace-soon unless acknowledgeHealth is true. Watch does not block. It asks for no password. On SQLite the snapshot also copies the chat and every account's vault, as the ciphertext they are, into chat_backup.db and vault_items_backup.db. On PostgreSQL the snapshot is the device directories and backup_manifest.json only: the chat and the vault are in the operator's database backup.\nEach backup is a new run in its own folder under backups/, named for the minute it started in the Quark's local time, as \"2026-11-07 21.57\", with \" (2)\" and so on when two start in the same minute. A run holds one folder per source drive (\"Built-in storage\", or the drive's name and the first 8 characters of its serial, as \"Photos (USB 90C82C65)\"), the chat and vault files, and the manifest, which records each drive folder's source serial.\nA run is written under a hidden folder ending in .partial and renamed when it completes; a failed or canceled run's partial folder is removed. A file unchanged since the previous complete run is hard-linked from it where the drive's filesystem allows, and copied otherwise. No source's own backups/ folder is copied. The backup never deletes a file or an earlier run. jobId is what the status route takes.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10148,7 +10148,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Queues a snapshot-restore job that copies each device's folder on the drive, which must have the snapshot-backup role, back onto the device it was copied from.\nA file already at the target path is kept as it is: a restore never overwrites. Each copy lands under its name only once it is whole, so a failed restore leaves every file already copied and the rest of the target in place.\nA snapshot never removes a file that left its source, so a restore brings back files deleted since. The folder of a device that is no longer attached goes into a folder of the same name on built-in storage when missingToBuiltIn is true, and is named in missing otherwise.",
+                "description": "Queues a snapshot-restore job that copies each device's folder in one run on the drive, which must have the snapshot-backup role, back onto the device the run's manifest says it was copied from.\nrun names the run, a folder under backups/; empty is the newest complete one. A run still being written is never restored. The answer names the run.\nA file already at the target path is kept as it is: a restore never overwrites. Each copy lands under its name only once it is whole, so a failed restore leaves every file already copied and the rest of the target in place.\nA snapshot never removes a file that left its source, so a restore brings back files deleted since. The folder of a device that is no longer attached goes into a folder of the same name on built-in storage when missingToBuiltIn is true, and is named in missing otherwise.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10161,7 +10161,7 @@ const docTemplate = `{
                 "summary": "Restore files from a snapshot backup",
                 "parameters": [
                     {
-                        "description": "The snapshot drive, and whether a gone device's files go to built-in storage",
+                        "description": "The snapshot drive, the run, and whether a gone device's files go to built-in storage",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -10190,7 +10190,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "the drive is not attached, or holds no snapshot",
+                        "description": "the drive is not attached, holds no snapshot, or holds no complete run of that name",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -10217,7 +10217,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Re-confirms the caller with password, which carries the auth key of the admin's login password, exactly as DELETE /vault takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is restored. Shares the sign-in rate limit, and the body is at most 1 KiB.\nThen restores the vault backup a snapshot wrote to the drive, which must have the snapshot-backup role, each vault under the account of the same\nusername, letter for letter. Refused while any vault has items, when an account the backup has a vault for already has a vault key here (a restore never replaces one),\nwhen a backed-up vault has no account of its username here, and when a backed-up key or item would be refused as an API write. Every refusal names the accounts and changes nothing.\nAlso refused, changing nothing, when this Quark did not write the backup: its MAC is another Quark's, the file changed after the snapshot, or its MAC is gone from a drive this Quark binds its snapshots to. A snapshot taken before binding still restores.\nrestoredAccounts names every account that got a vault back, and each is sent vault_changed. backupPasswordAccounts names the accounts whose vault opens with the\npassword they had when the backup was taken, as every vault restored onto new hardware does. Every attempt past the password check is written to the server log.",
+                "description": "Re-confirms the caller with password, which carries the auth key of the admin's login password, exactly as DELETE /vault takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is restored. Shares the sign-in rate limit, and the body is at most 1 KiB.\nThen restores the vault backup a snapshot wrote into one run on the drive, which must have the snapshot-backup role: run, a folder under backups/, or the newest complete run when it is empty. The answer names the run.\nEach vault comes back under the account of the same username, letter for letter. Refused while any vault has items, when an account the backup has a vault for already has a vault key here (a restore never replaces one),\nwhen a backed-up vault has no account of its username here, and when a backed-up key or item would be refused as an API write. Every refusal names the accounts and changes nothing.\nAlso refused, changing nothing, when this Quark did not write the backup: its MAC is another Quark's, the file changed after the snapshot, or its MAC is gone from a drive this Quark binds its snapshots to. A snapshot taken before binding still restores.\nrestoredAccounts names every account that got a vault back, and each is sent vault_changed. backupPasswordAccounts names the accounts whose vault opens with the\npassword they had when the backup was taken, as every vault restored onto new hardware does. Every attempt past the password check is written to the server log.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10230,7 +10230,7 @@ const docTemplate = `{
                 "summary": "Restore every account's vault from a snapshot backup",
                 "parameters": [
                     {
-                        "description": "The backup drive and the admin's auth key",
+                        "description": "The backup drive, the run, and the admin's auth key",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -10265,7 +10265,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "the device is not attached, or holds no vault backup",
+                        "description": "the device is not attached, holds no complete run or none of that name, or the run holds no vault backup",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -10356,7 +10356,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Walks all files on the backup device and checks against the manifest",
+                "description": "Checks one run on the backup device, a folder under backups/, against the manifest it holds: by size, or by SHA-256 when full is true.\nrun names the run; empty is the newest complete one. A run still being written is never verified. The answer names the run it checked.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10369,12 +10369,12 @@ const docTemplate = `{
                 "summary": "Verify integrity of a snapshot backup",
                 "parameters": [
                     {
-                        "description": "{deviceSerial: string, full: bool}",
+                        "description": "The backup drive, the run, and whether to hash every file",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/v0_storage.verifySnapshotBackupBody"
                         }
                     }
                 ],
@@ -10382,17 +10382,17 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/backup.VerifyResult"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "bad request, or a drive with no complete run",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
                     "404": {
-                        "description": "the device is not attached",
+                        "description": "the device is not attached, or holds no complete run of that name",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -12560,7 +12560,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "folder": {
-                    "description": "Folder is the device's folder at the drive's root, as the snapshot\nnamed it: \"internal\", or the device name, an underscore, and the\nfirst 8 characters of its serial.",
+                    "description": "Folder is the device's folder in the run, as its manifest names it:\n\"Built-in storage\", or the drive's name and the first 8 characters of\nits serial, as \"Photos (USB 90C82C65)\".",
                     "type": "string"
                 },
                 "targetSerial": {
@@ -12618,6 +12618,10 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "run": {
+                    "description": "Run is the run being restored, a folder under backups/.",
+                    "type": "string"
                 }
             }
         },
@@ -12645,12 +12649,52 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "run": {
+                    "description": "Run is the run [RestoreVault] read the vault from, a folder under\nbackups/. [ImportVault] leaves it empty.",
+                    "type": "string"
+                },
                 "unmatchedUsers": {
                     "description": "UnmatchedUsers is the usernames in the backup with no account on this\nQuark, sorted. None of them had a vault: a backup vault with no account\nto go to refuses the restore ([ErrVaultAccountMissing]).",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "backup.VerifyResult": {
+            "type": "object",
+            "properties": {
+                "added": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "corrupted": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "missing": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ok": {
+                    "type": "integer"
+                },
+                "run": {
+                    "description": "Run is the run that was verified, a folder under backups/.",
+                    "type": "string"
                 }
             }
         },
@@ -15919,6 +15963,10 @@ const docTemplate = `{
                 "missingToBuiltIn": {
                     "description": "MissingToBuiltIn puts the files of a device that is no longer attached\non built-in storage.",
                     "type": "boolean"
+                },
+                "run": {
+                    "description": "Run is the run to restore, a folder under backups/ on the drive. Empty\nis the newest complete run.",
+                    "type": "string"
                 }
             }
         },
@@ -15931,6 +15979,27 @@ const docTemplate = `{
                 },
                 "password": {
                     "description": "Password is the standard base64 auth key of the admin's login\npassword, as DELETE /vault takes it.",
+                    "type": "string"
+                },
+                "run": {
+                    "description": "Run is the run to restore from, a folder under backups/ on the drive.\nEmpty is the newest complete run.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_storage.verifySnapshotBackupBody": {
+            "type": "object",
+            "properties": {
+                "deviceSerial": {
+                    "description": "\"\" is built-in storage, so the field is not binding:\"required\".",
+                    "type": "string"
+                },
+                "full": {
+                    "description": "Full hashes every file; otherwise only sizes are compared.",
+                    "type": "boolean"
+                },
+                "run": {
+                    "description": "Run is the run to verify, a folder under backups/ on the drive. Empty\nis the newest complete run.",
                     "type": "string"
                 }
             }

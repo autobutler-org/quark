@@ -70,11 +70,45 @@ type BackupProgressData struct {
 	CurrentFile string  `json:"currentFile,omitempty"`
 }
 
+// Manifest is backup_manifest.json, at the root of each run. Files' paths are
+// relative to the run's folder. CompletedAt and Drives come before Files in
+// the JSON, so [ListRuns] reads them without decoding the file list.
 type Manifest struct {
-	CreatedAt  time.Time               `json:"createdAt"`
+	CreatedAt time.Time `json:"createdAt"`
+	// CompletedAt is when the run completed.
+	CompletedAt time.Time `json:"completedAt"`
+	// Drives is the source drive behind each drive folder in the run. A
+	// restore finds a folder's drive here, never from the folder's name.
+	Drives     []ManifestDrive         `json:"drives"`
 	TotalFiles int                     `json:"totalFiles"`
 	TotalBytes int64                   `json:"totalBytes"`
 	Files      map[string]ManifestFile `json:"files"`
+}
+
+// ManifestDrive is one source drive's folder in a run.
+type ManifestDrive struct {
+	// Folder is the folder's name in the run: "Built-in storage", or the
+	// drive's name and the first 8 characters of its serial, as
+	// "Photos (USB 90C82C65)".
+	Folder string `json:"folder"`
+	// Serial is the source drive's serial, "" for built-in storage.
+	Serial string `json:"serial"`
+	// Name is the source drive's name when the run was taken.
+	Name string `json:"name"`
+}
+
+// Run is one complete snapshot run: a folder under backups/ on the backup
+// drive holding a copy of every source drive, the chat and vault exports, and
+// the manifest. [ListRuns] lists them.
+type Run struct {
+	// Folder is the run's folder under backups/, named after the minute it
+	// started in the Quark's local time ("2026-11-07 21.57"), with " (2)"
+	// and so on after it when two runs started in the same minute.
+	Folder string `json:"folder"`
+	// CompletedAt is when the run completed, from its manifest.
+	CompletedAt time.Time `json:"completedAt"`
+	// Drives is what the run holds, one folder per source drive.
+	Drives []ManifestDrive `json:"drives"`
 }
 
 type ManifestFile struct {
@@ -83,6 +117,8 @@ type ManifestFile struct {
 }
 
 type VerifyResult struct {
+	// Run is the run that was verified, a folder under backups/.
+	Run       string   `json:"run"`
 	OK        int      `json:"ok"`
 	Missing   []string `json:"missing,omitempty"`
 	Corrupted []string `json:"corrupted,omitempty"`
@@ -112,6 +148,9 @@ type VaultImportResult struct {
 	// RestoredUserIDs is RestoredAccounts' user ids, in the same order, for
 	// the caller to publish vault_changed to. Not part of the answer.
 	RestoredUserIDs []int64 `json:"-"`
+	// Run is the run [RestoreVault] read the vault from, a folder under
+	// backups/. [ImportVault] leaves it empty.
+	Run string `json:"run,omitempty"`
 }
 
 // RestoreVaultParams asks for the vault backup a snapshot wrote to a drive.
@@ -124,6 +163,9 @@ type RestoreVaultParams struct {
 	// Registry holds the backup drive's files namespace.
 	Registry     vfs.Registry
 	DeviceSerial string
+	// Run is the run to restore from, a folder under backups/. Empty is the
+	// newest complete run.
+	Run string
 }
 
 // ChatImportResult reports what [ImportChat] restored.

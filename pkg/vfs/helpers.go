@@ -184,6 +184,19 @@ func hostDelete(absPath string, opts DeleteOptions) error {
 	return hostErr(err)
 }
 
+// hostLink is the body of every [Linker]. Only a regular file is linked, so a
+// symlink sitting where a file is expected is never linked in its place.
+func hostLink(srcAbs, dstAbs string) error {
+	fi, err := os.Lstat(srcAbs)
+	if err != nil {
+		return hostErr(err)
+	}
+	if !fi.Mode().IsRegular() {
+		return fmt.Errorf("%w: %s is not a regular file", ErrPermissionDenied, fi.Name())
+	}
+	return hostErr(os.Link(srcAbs, dstAbs))
+}
+
 // hostMove renames src to dst under filesDir, creating dst's folder first.
 // Across filesystems, where a rename cannot go, it copies and then removes
 // the source.
