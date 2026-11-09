@@ -27,6 +27,7 @@ import 'package:quark/utils/startup.dart';
 import 'package:quark/utils/startup_config.dart';
 import 'package:quark/widgets/jobs/job_finish_announcer.dart';
 import 'package:quark/widgets/layout/app_bar_trailing_host.dart';
+import 'package:quark/widgets/layout/dismiss_keyboard_on_tap_outside.dart';
 import 'package:quark/widgets/layout/startup_loader.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/probe_bootstrap.dart';
@@ -139,21 +140,23 @@ class QuarkApp extends StatelessWidget {
           themeMode: settings.themeMode.value,
           routerConfig: router,
           scaffoldMessengerKey: rootScaffoldMessengerKey,
-          builder: (context, child) => JobFinishAnnouncer(
-            controller: JobsController.instance,
-            messengerKey: rootScaffoldMessengerKey,
-            onNavigate: router.go,
-            child: AppBarTrailingHost(
-              jobs: JobsController.instance,
-              uploads: UploadSessionsController.instance,
-              connection: ConnectionController.instance,
-              notifications: NotificationsController.instance,
+          builder: (context, child) => DismissKeyboardOnTapOutside(
+            child: JobFinishAnnouncer(
+              controller: JobsController.instance,
+              messengerKey: rootScaffoldMessengerKey,
               onNavigate: router.go,
-              // Every page's bar, drawer and floating button reads this, so
-              // the whole app mirrors from the one setting (#1812).
-              child: QuarkHandedness(
-                leftHanded: settings.leftHanded.value,
-                child: child ?? const SizedBox.shrink(),
+              child: AppBarTrailingHost(
+                jobs: JobsController.instance,
+                uploads: UploadSessionsController.instance,
+                connection: ConnectionController.instance,
+                notifications: NotificationsController.instance,
+                onNavigate: router.go,
+                // Every page's bar, drawer and floating button reads this, so
+                // the whole app mirrors from the one setting (#1812).
+                child: QuarkHandedness(
+                  leftHanded: settings.leftHanded.value,
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
             ),
           ),
