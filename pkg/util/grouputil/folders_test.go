@@ -223,6 +223,39 @@ func TestRenameGroupOnlyChangingCaseOntoAnotherFolderIsRefused(t *testing.T) {
 	}
 }
 
+// slashDirs is a VFS whose List names each directory with a trailing slash,
+// as the disk-backed files namespace does (#4043).
+type slashDirs struct{ vfs.VFS }
+
+func (s slashDirs) List(ctx context.Context, p string, filter *vfs.ListFilter) ([]vfs.FileInfo, error) {
+	entries, err := s.VFS.List(ctx, p, filter)
+	for i := range entries {
+		if entries[i].IsDir {
+			entries[i].Name += "/"
+		}
+	}
+	return entries, err
+}
+
+// TestRenameGroupOnlyChangingCaseOntoAnotherFolderIsRefusedOnDisk checks the
+// refusal above when the listing names folders "family/", as the disk-backed
+// files namespace does (#4043).
+func TestRenameGroupOnlyChangingCaseOntoAnotherFolderIsRefusedOnDisk(t *testing.T) {
+	database := dbtest.NewDB(t)
+	files := slashDirs{vfs.NewMemVFS("files")}
+	useFiles(t, database, files)
+	family := create(t, database, "Family")
+	writeFile(t, files, "groups/family/theirs.txt")
+
+	_, err := grouputil.RenameGroup(context.Background(), renameParams(t, database, family.ID, "family"))
+	if !errors.Is(err, grouputil.ErrGroupFolderTaken) {
+		t.Fatalf("rename = %v, want ErrGroupFolderTaken", err)
+	}
+	if !isDir(t, files, "groups/Family") || !exists(t, files, "groups/family/theirs.txt") {
+		t.Error("a refused rename moved a folder")
+	}
+}
+
 func TestCreateGroupWithAFileInTheWayIsRefused(t *testing.T) {
 	database := dbtest.NewDB(t)
 	files := filesFor(t, database)

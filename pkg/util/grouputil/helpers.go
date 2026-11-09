@@ -105,7 +105,8 @@ func ensureFolderFree(ctx context.Context, files vfs.VFS, oldRel, newRel string)
 	}
 	newName := path.Base(newRel)
 	for _, sibling := range siblings {
-		if sibling.Name == newName {
+		// The disk-backed namespace lists a folder as "name/" (#4043).
+		if strings.TrimSuffix(sibling.Name, "/") == newName {
 			return ErrGroupFolderTaken
 		}
 	}
