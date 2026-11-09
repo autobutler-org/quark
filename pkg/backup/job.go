@@ -37,6 +37,10 @@ type JobParams struct {
 	// TargetDeviceSerial is the device backed up onto. The per-target lock
 	// reads it out of the stored params.
 	TargetDeviceSerial string `json:"targetDeviceSerial"`
+	// SourceSerials are the data drives the backup copies, built-in storage
+	// as "". Empty is every data drive, which is what a job queued before
+	// #3984 stored.
+	SourceSerials []string `json:"sourceSerials,omitempty"`
 }
 
 // NewHandlerParams configures NewHandler.
@@ -93,7 +97,7 @@ func runSnapshotJob(ctx context.Context, params NewHandlerParams, raw json.RawMe
 	if err != nil {
 		return err
 	}
-	sources, err := gatherSourceDevices(params.Storage, params.Registry, backups, jobParams.TargetDeviceSerial)
+	sources, err := gatherSourceDevices(params.Storage, params.Registry, backups, jobParams.TargetDeviceSerial, jobParams.SourceSerials)
 	if err != nil {
 		return fmt.Errorf("failed to gather sources: %w", err)
 	}

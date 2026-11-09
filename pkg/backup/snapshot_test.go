@@ -298,3 +298,16 @@ func assertFileContent(t *testing.T, path, expected string) {
 		t.Errorf("file %s: expected %q, got %q", path, expected, string(data))
 	}
 }
+
+// A run that copies one drive links its unchanged files from that drive's
+// newest run, even when a newer run holds only other drives (#3984).
+func TestSnapshotBackup_LinksFromEachDrivesNewestRun(t *testing.T) {
+	a := makeSource(t, "A", "SERA", map[string]string{"a.txt": "a"})
+	b := makeSource(t, "B", "SERB", map[string]string{"b.txt": "b"})
+	target := makeTarget(t)
+	snapshot(t, target.VFS, a, b)
+	snapshot(t, target.VFS, b)
+	if job := snapshot(t, target.VFS, a); job.FilesSkipped != 1 || job.FilesCopied != 0 {
+		t.Errorf("linked %d and copied %d files of A, want it linked from the run that holds it", job.FilesSkipped, job.FilesCopied)
+	}
+}

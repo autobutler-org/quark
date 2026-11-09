@@ -26,7 +26,7 @@ backups/
 
 | Entry                                             | What it is                                                                                    | Written by       |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------- |
-| `Built-in storage/`, `<name> (USB <serial8>)/`    | every data drive's files, one folder per source drive                                         | `SnapshotBackup` |
+| `Built-in storage/`, `<name> (USB <serial8>)/`    | each source drive's files, one folder per source drive                                        | `SnapshotBackup` |
 | `chat_backup.db`                                  | the chat tables (SQLite installs only)                                                        | `ExportChat`     |
 | `vault_items_backup.db`                           | every account's vault key and vault items (SQLite installs only)                              | `ExportVault`    |
 | `chat_backup.db.mac`, `vault_items_backup.db.mac` | the MAC that binds each file above to this Quark ([Binding](#binding-a-backup-to-this-quark)) | `SnapshotBackup` |
@@ -45,8 +45,9 @@ backups/
   manifest is written. A run that fails or is canceled deletes its partial folder, and every run first deletes any
   partial folder a stopped Quark left behind (`removeStalePartials`). Nothing that reads runs (listing, restore,
   verify, protection) ever sees a partial folder, and one cannot be deleted through the API.
-- **Hard links.** A file whose size matches its copy in the newest complete run, and that is not newer than that
-  copy, is hard-linked from it rather than copied (`linkUnchanged`, through `vfs.Linker`). Each run is still
+- **Hard links.** A file whose size matches its copy in the newest complete run holding its drive, and that is not
+  newer than that copy, is hard-linked from it rather than copied (`linkUnchanged`, through `vfs.Linker`). That run
+  need not be the newest, since a run may hold only some drives. Each run is still
   complete on its own, so deleting any run never breaks another. A drive that cannot link (FAT, exFAT, or a namespace
   with no `vfs.Linker`) gets a full copy of every file; `linksWork` finds that out once per run by linking the
   previous run's manifest into the partial folder and removing the link.
@@ -56,7 +57,11 @@ backups/
   built-in storage's `backups/` is mirrored onto the default-storage drive.
 
 The sources are the data drives: every managed device but the target and the other `snapshot-backup` drives
-(`gatherSourceDevices`), so one backup drive never holds a copy of another (#4037). The rest of `quark.db` is not
+(`gatherSourceDevices`), so one backup drive never holds a copy of another (#4037). A backup can be given
+`sourceSerials`, the data drives to copy, and then copies only those and is named after them (#3984). Built-in
+storage is the serial `""`, as it is for a target. A named serial that is the target, another backup drive, or not
+attached is refused before the job is queued (`ErrSourceNotDataDrive`, a 400). Empty or absent is every data drive.
+A drive named but unplugged between the start and the run is skipped, as any source is. The rest of `quark.db` is not
 in a snapshot. Accounts, sessions, groups, albums and access grants are lost with
 the internal disk and are set up again by hand.
 
@@ -104,13 +109,14 @@ stateDiagram-v2
   status reads without the run, and `backup_deleted` is published with the drive's serial and the run. Like the
   other backup events it reaches admins only.
 - **Pruning.** Before a backup copies anything, it works out how many bytes the run will copy rather than link: every
-  file that is new or changed since the newest complete run, or every file when the drive cannot link. When the
+  file that is new or changed since its drive's newest complete run, or every file when the drive cannot link. When the
   drive's free space is less than that, it deletes the oldest complete run, one at a time, reading the free space
   again after each, because a run sharing hard-linked files frees less than its `sizeBytes` (`makeRoom`). The newest
-  complete run is never pruned, nor a run a restore is reading. Each prune publishes `backup_deleted`, and the
-  drive's cache row is rewritten once pruning ends. When even deleting every other run would leave too little room,
-  the backup fails before copying with "not enough space on <drive> for this backup: delete old backups or use a
-  bigger drive" (`ErrNotEnoughSpace`), and the app shows that sentence; runs already pruned stay deleted. Free space
+  complete run is never pruned, nor any drive's newest copy (the newest run whose manifest's `drives` names that
+  drive, since a run may hold only some drives), nor a run a restore is reading (`prunable`). Each prune publishes
+  `backup_deleted`, and the drive's cache row is rewritten once pruning ends. When even deleting every run pruning
+  may delete would leave too little room, the backup fails before copying with "not enough space on <drive> for
+  this backup: delete old backups or use a bigger drive" (`ErrNotEnoughSpace`), and the app shows that sentence; runs already pruned stay deleted. Free space
   comes from `vfs.SpaceReporter`, which the disk-backed namespaces implement through `statfs`; a drive that cannot
   report it is not pruned, and a backup onto it fails only if it runs out of room mid-copy.
 
