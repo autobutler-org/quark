@@ -3,15 +3,15 @@ import 'package:flutter/material.dart';
 import '../theme/quark_tokens.dart';
 
 /// A small outlined chip with one word in [color], on a light tint of the
-/// same color: a beta mark, a drive's health verdict, a backup's protection
-/// level.
+/// same color: a beta mark, a drive's health verdict, a data drive's backup
+/// state.
 ///
 /// The word is always drawn. Color repeats it and never replaces it. It is
 /// decoration, not a control, so it takes no callbacks.
 ///
 /// Key prefixes: `beta_badge` on [QuarkTintBadge.beta]. Every other badge
-/// takes its key from the caller: `drive_health_badge[_<id>]` and
-/// `data_protection_badge[_<id>]` in this package and the app.
+/// takes its key from the caller, such as `drive_health_badge[_<id>]` in
+/// this package and the app.
 ///
 /// ```dart
 /// QuarkTintBadge(

@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/drive_health_controller.dart';
+import 'package:quark/services/data_protection_service.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/widgets/storage_devices/backup_drive_runs_section.dart';
+import 'package:quark/widgets/storage_devices/backup_progress_card.dart';
+import 'package:quark/widgets/storage_devices/data_drive_backup_section.dart';
 import 'package:quark/widgets/storage_devices/drive_health_section.dart';
 import 'package:quark/widgets/storage_devices/role_badge.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// One storage device: identity, usage bar, category chips, and the actions
-/// that apply to it. A null callback hides its button.
+/// One storage device: identity, usage bar, category chips, its backup
+/// state, and the actions that apply to it. A null callback hides its
+/// button.
+///
+/// A data drive shows [dataDrive]'s chip. A backup drive shows what
+/// [backupDrive] holds, its backups when [showBackupRuns], and
+/// [backupStatus] while a backup onto it runs.
+/// Neither carries a protection level: that is the whole Quark's, on the
+/// protection card.
 class DeviceCard extends StatelessWidget {
   const DeviceCard({
     required this.device,
@@ -21,7 +32,13 @@ class DeviceCard extends StatelessWidget {
     this.onEject,
     this.isEjecting = false,
     this.isBackupRunning = false,
-    this.protectionBadge,
+    this.dataDrive,
+    this.backupDrive,
+    this.backupStatus,
+    this.showBackupRuns = false,
+    this.backupRuns,
+    this.backupRunsError,
+    this.onDeleteRun,
     super.key,
   });
 
@@ -46,11 +63,31 @@ class DeviceCard extends StatelessWidget {
 
   /// Whether this drive's eject is in flight.
   final bool isEjecting;
+
+  /// Whether a backup is running, which disables the backup, verify,
+  /// restore, and eject buttons.
   final bool isBackupRunning;
 
-  /// The protection level, drawn beside **Back Up** when that button is
-  /// shown and in the header otherwise. Null draws nothing.
-  final Widget? protectionBadge;
+  /// This drive's copies, when it holds files. Null draws no chip.
+  final DataProtectionDataDrive? dataDrive;
+
+  /// What this drive holds, when it is a backup drive. Null draws nothing.
+  final DataProtectionBackupDrive? backupDrive;
+
+  /// The backup running onto this drive. Null draws no progress.
+  final BackupJobStatus? backupStatus;
+
+  /// Whether to draw this backup drive's backups, from [backupRuns].
+  final bool showBackupRuns;
+
+  /// This backup drive's backups, newest first. Null while they are listed.
+  final List<BackupRun>? backupRuns;
+
+  /// The thrown object from a failed listing of [backupRuns].
+  final Object? backupRunsError;
+
+  /// Deletes one of [backupRuns], by folder. Null draws no delete action.
+  final ValueChanged<String>? onDeleteRun;
 
   static const _categoryColors = <String, Color>{
     'documents': Color(0xFF4A90D9),
@@ -64,10 +101,9 @@ class DeviceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final usedPct = device.usedPercent.clamp(0.0, 100.0) / 100.0;
-    final showActions =
-        device.isEnabled && (!device.isInternal || onSetRole != null);
-    final badge = protectionBadge;
-    final badgeBesideBackup = badge != null && onBackup != null && showActions;
+    final dataDrive = this.dataDrive;
+    final backupDrive = this.backupDrive;
+    final backupStatus = this.backupStatus;
 
     return Card(
       child: Padding(
@@ -103,7 +139,6 @@ class DeviceCard extends StatelessWidget {
                       ),
                       if (device.role != 'unassigned')
                         RoleBadge(role: device.role),
-                      if (badge != null && !badgeBesideBackup) badge,
                       if (device.role == 'unassigned' && device.isEnabled)
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -172,6 +207,35 @@ class DeviceCard extends StatelessWidget {
               health: DriveHealthController.view(device.health),
               id: DriveHealthController.idFor(device),
             ),
+
+            if (dataDrive != null) ...[
+              const SizedBox(height: 8),
+              DataDriveBackupSection(
+                drive: dataDrive,
+                id: DriveHealthController.idFor(device),
+              ),
+            ],
+            if (backupDrive != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                key: ValueKey('device_card_holds_${device.serial}'),
+                _holdsText(backupDrive, MaterialLocalizations.of(context)),
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
+            if (showBackupRuns) ...[
+              const SizedBox(height: 4),
+              BackupDriveRunsSection(
+                id: DriveHealthController.idFor(device),
+                runs: backupRuns,
+                error: backupRunsError,
+                onDelete: onDeleteRun,
+              ),
+            ],
+            if (backupStatus != null) ...[
+              const SizedBox(height: 8),
+              BackupProgressCard(status: backupStatus, targetName: device.name),
+            ],
 
             if (device.totalBytes > 0) ...[
               const SizedBox(height: 12),
@@ -249,9 +313,8 @@ class DeviceCard extends StatelessWidget {
                     FilledButton.icon(
                       onPressed: isBackupRunning ? null : onBackup,
                       icon: const Icon(QuarkIcons.backup_outlined, size: 16),
-                      label: const Text('Back Up'),
+                      label: const Text('Back up onto this drive'),
                     ),
-                  if (badgeBesideBackup) badge,
                   if (onVerify != null)
                     OutlinedButton.icon(
                       onPressed: isBackupRunning ? null : onVerify,
@@ -290,6 +353,27 @@ class DeviceCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// "Holds copies of Built-in storage, Photos. Newest Nov 2.", or "No
+  /// copies yet.", and what to do about a behind or retired drive.
+  static String _holdsText(
+    DataProtectionBackupDrive drive,
+    MaterialLocalizations localizations,
+  ) {
+    final newest = drive.newestCopy;
+    final holds = drive.holds.isEmpty || newest == null
+        ? 'No copies yet.'
+        : 'Holds copies of ${drive.holds.map((h) => h.name).join(', ')}. '
+              'Newest ${localizations.formatShortMonthDay(newest.toLocal())}.';
+    final next = switch (drive.state) {
+      DataProtectionBackupState.behind =>
+        ' Back up onto this drive to bring it up to date.',
+      DataProtectionBackupState.retired =>
+        ' Replace this drive soon. Its copies no longer count.',
+      _ => '',
+    };
+    return holds + next;
   }
 
   static String _capitalize(String s) =>

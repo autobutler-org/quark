@@ -4,19 +4,15 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
 
-/// The protection card. Each level renders the sentence and next step it was
-/// given, at both viewports, without counting the drives itself.
+/// The protection card. Each level renders the sentence, next step, and
+/// Back up now it was given, at both viewports.
 void main() {
-  const drives = [
-    DataProtectionDrive(id: 'usb-1', name: 'Backup', lastBackedUp: null),
-  ];
-
   DataProtectionStatusCard card(
     DataProtectionLevel level, {
     String? sentence,
-    List<DataProtectionDrive> driveRows = const [],
     String? nextStepLabel,
     VoidCallback? onNextStep,
+    VoidCallback? onBackUpNow,
     VoidCallback? onExplain,
     bool isLoading = false,
     String? error,
@@ -24,9 +20,9 @@ void main() {
     return DataProtectionStatusCard(
       level: level,
       sentence: sentence ?? 'Sentence for ${level.label}.',
-      drives: driveRows,
       nextStepLabel: nextStepLabel,
       onNextStep: onNextStep,
+      onBackUpNow: onBackUpNow,
       onExplain: onExplain,
       isLoading: isLoading,
       error: error,
@@ -57,7 +53,7 @@ void main() {
     });
   }
 
-  testBothViewports('keeps an unprotected level when two drives are listed', (
+  testBothViewports('fills the meter through the level it was given', (
     tester,
     size,
   ) async {
@@ -65,21 +61,7 @@ void main() {
       tester,
       card(
         DataProtectionLevel.unprotected,
-        sentence: 'Your files are only on this Quark.',
-        driveRows: const [
-          DataProtectionDrive(
-            id: 'a',
-            name: 'First',
-            lastBackedUp: null,
-            reason: 'No completed backup yet.',
-          ),
-          DataProtectionDrive(
-            id: 'b',
-            name: 'Second',
-            lastBackedUp: null,
-            reason: 'No completed backup yet.',
-          ),
-        ],
+        sentence: 'Built-in storage is only on this Quark.',
       ),
       size: size,
     );
@@ -103,38 +85,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('shows when each drive was last backed up', (tester) async {
+  testWidgets('Back up now reports a tap and is hidden without a callback', (
+    tester,
+  ) async {
+    var taps = 0;
     await pumpAt(
       tester,
-      card(
-        DataProtectionLevel.protected,
-        driveRows: [
-          DataProtectionDrive(
-            id: 'usb-1',
-            name: 'Backup',
-            lastBackedUp: DateTime(2026, 10, 1),
-          ),
-          const DataProtectionDrive(
-            id: 'usb-2',
-            name: 'Office',
-            reason: 'The last backup is more than 30 days old.',
-          ),
-        ],
-      ),
+      card(DataProtectionLevel.basic, onBackUpNow: () => taps++),
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const ValueKey('data_protection_back_up_now')));
+    await tester.pump();
+    expect(taps, 1);
+    expect(find.text('Back up now'), findsOneWidget);
+
+    await pumpAt(tester, card(DataProtectionLevel.basic));
+    await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('data_protection_drive_usb-1')),
-      findsOneWidget,
-    );
-    expect(find.text('Last backed up October 1, 2026'), findsOneWidget);
-    expect(
-      find.text('The last backup is more than 30 days old.'),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('data_protection_drive_usb-2_backed_up')),
+      find.byKey(const ValueKey('data_protection_back_up_now')),
       findsNothing,
     );
   });
@@ -222,26 +191,16 @@ void main() {
     expect(find.byType(QuarkLoader), findsNothing);
   });
 
-  testBothViewports('survives a long sentence and a long drive name', (
-    tester,
-    size,
-  ) async {
+  testBothViewports('survives a long sentence', (tester, size) async {
     await pumpAt(
       tester,
       SingleChildScrollView(
         child: card(
           DataProtectionLevel.protected,
           sentence: 'Your files are on 3 drives. ' * 40,
-          driveRows: [
-            DataProtectionDrive(
-              id: 'long',
-              name: 'Vacation drive ' * 30,
-              lastBackedUp: DateTime(2026, 10, 1),
-              reason: 'Kept somewhere else. ' * 20,
-            ),
-          ],
           nextStepLabel: 'Keep one backup drive somewhere else',
           onNextStep: () {},
+          onBackUpNow: () {},
           onExplain: () {},
         ),
       ),
@@ -272,12 +231,4 @@ void main() {
       );
     });
   }
-
-  testWidgets('lays out the sample drives without an exception', (
-    tester,
-  ) async {
-    await pumpAt(tester, card(DataProtectionLevel.basic, driveRows: drives));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-  });
 }

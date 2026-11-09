@@ -184,7 +184,7 @@ void main() {
     expect(find.text('Watch'), findsOneWidget);
     expect(find.text('This spinning drive is heavily used.'), findsOneWidget);
     expect(find.text('Set Role'), findsNothing);
-    expect(find.text('Back Up'), findsNothing);
+    expect(find.text('Back up onto this drive'), findsNothing);
   });
 
   testWidgets(
@@ -280,7 +280,7 @@ void main() {
     serve(drive(verdict: 'replace-soon', role: 'snapshot-backup'));
     await pumpTab(tester);
 
-    await tester.tap(find.text('Back Up'));
+    await tester.tap(find.text('Back up onto this drive'));
     await tester.pumpAndSettle();
     expect(
       find.text(

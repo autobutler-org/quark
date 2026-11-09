@@ -31,6 +31,7 @@ void main() {
           ({
             required String deviceSerial,
             required bool missingToBuiltIn,
+            String? run,
           }) async {
             calls.add((deviceSerial, missingToBuiltIn));
             return const FilesRestoreResult(

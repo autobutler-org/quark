@@ -2,19 +2,23 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/controllers/backup_runs_controller.dart';
 import 'package:quark/controllers/data_protection_controller.dart';
 import 'package:quark/controllers/drive_health_controller.dart';
 import 'package:quark/controllers/restore_vault_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/data_protection_service.dart';
+import 'package:quark/services/events_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
+import 'package:quark/utils/backup_run_label.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/widgets/layout/admin_map_card.dart';
 import 'package:quark/widgets/storage_devices/credentials_dialog.dart';
+import 'package:quark/widgets/storage_devices/delete_backup_run_dialog.dart';
 import 'package:quark/widgets/storage_devices/eject_drive_dialog.dart';
 import 'package:quark/widgets/storage_devices/restore_vault_dialog.dart';
 import 'package:quark/widgets/storage_devices/role_dialog.dart';
@@ -23,11 +27,19 @@ import 'package:quark/widgets/storage_devices/storage_devices_body.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The System page's Storage tab: how protected the files are, the drives the
-/// Quark can see, their status and role, and the actions to mount, eject,
-/// rename or back them up. An admin can also restore every vault from the
-/// snapshot-backup drive. An admin also gets the [AdminMapCard] (#2484).
+/// Quark can see, their status, role and backup state, and the actions to
+/// mount, eject, rename or back up onto them. A backup running onto a drive
+/// is found from the device list, so one started elsewhere shows here too.
+/// An admin also sees each backup drive's backups and can delete one
+/// (#4044), restore the vaults or files from a backup they pick (#4032), and
+/// gets the [AdminMapCard] (#2484).
 class StorageTab extends StatefulWidget {
-  const StorageTab({this.onRefreshingChanged, this.restoreVault, super.key});
+  const StorageTab({
+    this.onRefreshingChanged,
+    this.restoreVault,
+    this.events,
+    super.key,
+  });
 
   /// Called with whether a refresh is in flight whenever that changes, so
   /// the page's app bar can show it.
@@ -35,6 +47,10 @@ class StorageTab extends StatefulWidget {
 
   /// The vault restore. Tests pass one; otherwise the tab builds its own.
   final RestoreVaultController? restoreVault;
+
+  /// The Quark's events, which reload the protection status and the backups.
+  /// Null is the app's event stream.
+  final Stream<FileEvent>? events;
 
   @override
   State<StorageTab> createState() => _StorageTabState();
@@ -49,23 +65,31 @@ class _StorageTabState extends State<StorageTab>
   Object? _error;
   final Set<String> _mounting = {};
   final Set<String> _ejecting = {};
-  String? _activeBackupJobId;
-  BackupJobStatus? _backupStatus;
+
+  /// The backup pending or running onto each backup drive, by serial: the
+  /// ones the device list reports and the ones this tab started.
+  final Map<String, String> _activeJobs = {};
+
+  /// The last status of each job in [_activeJobs], by serial.
+  final Map<String, BackupJobStatus> _backupStatuses = {};
   Timer? _pollTimer;
   late final DataProtectionController _protection;
+  late final BackupRunsController _runs;
   late final RestoreVaultController _restore;
   late final bool _ownsRestore;
 
   @override
   void initState() {
-    _protection = DataProtectionController();
-    _protection.addListener(_onProtection);
+    _protection = DataProtectionController(events: widget.events);
+    _protection.addListener(_onControllerChanged);
+    _runs = BackupRunsController(events: widget.events);
+    _runs.addListener(_onControllerChanged);
     _restore = widget.restoreVault ?? RestoreVaultController();
     _ownsRestore = widget.restoreVault == null;
     super.initState();
   }
 
-  void _onProtection() {
+  void _onControllerChanged() {
     if (mounted) setState(() {});
   }
 
@@ -88,7 +112,22 @@ class _StorageTabState extends State<StorageTab>
       setState(() {
         _devices = devices;
         _error = null;
+        for (final device in devices) {
+          final jobId = device.activeBackupJobId;
+          if (jobId != null) _activeJobs[device.serial] = jobId;
+        }
       });
+      if (_activeJobs.isNotEmpty) _startPolling();
+      // Listing a drive's backups is admin-only on the Quark.
+      if (AppSettings.instance.isAdmin.value) {
+        unawaited(
+          _runs.load([
+            for (final device in devices)
+              if (device.role == 'snapshot-backup' && device.isEnabled)
+                device.serial,
+          ]),
+        );
+      }
     } catch (e) {
       debugPrint('[storage_tab.dart] Error: $e');
       if (!mounted) return;
@@ -100,8 +139,10 @@ class _StorageTabState extends State<StorageTab>
   @override
   void dispose() {
     _pollTimer?.cancel();
-    _protection.removeListener(_onProtection);
+    _protection.removeListener(_onControllerChanged);
     _protection.dispose();
+    _runs.removeListener(_onControllerChanged);
+    _runs.dispose();
     if (_ownsRestore) _restore.dispose();
     super.dispose();
   }
@@ -250,7 +291,7 @@ class _StorageTabState extends State<StorageTab>
         acknowledgeHealth: gate.acknowledgeHealth,
       );
       if (!mounted) return;
-      setState(() => _activeBackupJobId = jobId);
+      setState(() => _activeJobs[target.serial] = jobId);
       _startPolling();
     } catch (e) {
       if (!mounted) return;
@@ -258,50 +299,80 @@ class _StorageTabState extends State<StorageTab>
     }
   }
 
+  /// Starts a backup onto every connected backup drive, then reloads so the
+  /// device list names the jobs to follow.
+  Future<void> _backUpNow() async {
+    final error = await _protection.backUpNow();
+    if (!mounted) return;
+    if (error != null) {
+      showMessage(context, Errors.message(error, 'start the backup'));
+    }
+    StorageService.invalidateDeviceCache();
+    await refresh();
+  }
+
+  /// Polls every two seconds while any backup is pending or running.
   void _startPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(
+    _pollTimer ??= Timer.periodic(
       const Duration(seconds: 2),
       (_) => _pollStatus(),
     );
   }
 
   Future<void> _pollStatus() async {
-    final jobId = _activeBackupJobId;
-    if (jobId == null) return;
-    try {
-      final status = await StorageService.getSnapshotBackupStatus(jobId);
-      if (!mounted) return;
-      setState(() => _backupStatus = status);
-      if (!status.isRunning) {
-        _pollTimer?.cancel();
-        _pollTimer = null;
+    if (_activeJobs.isEmpty) {
+      _pollTimer?.cancel();
+      _pollTimer = null;
+      return;
+    }
+    var finished = false;
+    for (final MapEntry(key: serial, value: jobId) in [
+      ..._activeJobs.entries,
+    ]) {
+      try {
+        final status = await StorageService.getSnapshotBackupStatus(jobId);
+        if (!mounted) return;
+        if (status.isRunning) {
+          setState(() => _backupStatuses[serial] = status);
+          continue;
+        }
+        // The result stays on the drive card through the reloaded protection
+        // status, so the progress goes.
+        _dropJob(serial);
+        finished = true;
         if (status.isComplete) {
           showMessage(context, 'Backup completed successfully');
         } else if (status.isFailed) {
-          showMessage(
-            context,
-            'Backup failed: ${status.errorMsg ?? "unknown error"}',
-          );
+          showMessage(context, Errors.backupFailed(status.errorMsg));
         }
-        await refresh();
+      } catch (e) {
+        debugPrint('[storage_tab.dart] Poll error: $e');
+        // The job is a row every instance of the Quark reads, so a 404 means
+        // it is gone for good and another poll will not find it. Anything
+        // else may be one instance's bad moment: keep polling.
+        if (e is! ApiException || e.statusCode != 404 || !mounted) continue;
+        _dropJob(serial);
+        showMessage(context, Errors.message(e, 'check the backup'));
       }
-    } catch (e) {
-      debugPrint('[storage_tab.dart] Poll error: $e');
-      // The job is a row every instance of the Quark reads, so a 404 means
-      // it is gone for good and another poll will not find it. Anything else
-      // may be one instance's bad moment: keep polling.
-      if (e is! ApiException || e.statusCode != 404 || !mounted) return;
+    }
+    if (_activeJobs.isEmpty) {
       _pollTimer?.cancel();
       _pollTimer = null;
-      setState(() {
-        _activeBackupJobId = null;
-        _backupStatus = null;
-      });
-      showMessage(context, Errors.message(e, 'check the backup'));
     }
+    if (!finished) return;
+    // The cached list still names the finished job; it would be followed
+    // again.
+    StorageService.invalidateDeviceCache();
+    await refresh();
   }
 
+  void _dropJob(String serial) => setState(() {
+    _activeJobs.remove(serial);
+    _backupStatuses.remove(serial);
+  });
+
+  /// Verifies the newest backup on [device], and names the backup the Quark
+  /// checked.
   Future<void> _verifyBackup(StorageDevice device) async {
     showMessage(context, 'Verifying backup integrity...');
     try {
@@ -310,11 +381,16 @@ class _StorageTabState extends State<StorageTab>
         full: true,
       );
       if (!mounted) return;
+      final run = result.run;
+      final backup = run == null
+          ? 'the backup'
+          : 'the backup of ${backupRunLabel(run)}';
       showMessage(
         context,
         result.isHealthy
-            ? 'Backup verified: ${result.ok} files OK'
-            : 'Issues found: ${result.missing.length} missing, ${result.corrupted.length} corrupted',
+            ? 'Verified $backup: ${result.ok} files OK.'
+            : 'Issues found in $backup: ${result.missing.length} missing, '
+                  '${result.corrupted.length} corrupted.',
       );
     } catch (e) {
       if (!mounted) return;
@@ -322,25 +398,53 @@ class _StorageTabState extends State<StorageTab>
     }
   }
 
-  /// Restores every vault from [device] once the admin re-enters their login
-  /// password. Cancel leaves the vaults alone. The snack bar is the counts,
-  /// or why the Quark refused.
+  /// Restores every vault from the backup on [device] the admin picks, once
+  /// they re-enter their login password. Cancel leaves the vaults alone. The
+  /// snack bar is the counts and the backup, or why the Quark refused.
   Future<void> _restoreVaults(StorageDevice device) async {
-    final password = await QuarkWidget.showDialog<String>(
-      context,
-      builder: (ctx) => const RestoreVaultDialog(),
+    final choice =
+        await QuarkWidget.showDialog<({String password, String? run})>(
+          context,
+          builder: (ctx) => RestoreVaultDialog(
+            runs: _runs.runsFor(device.serial) ?? const [],
+          ),
+        );
+    if (choice == null || !mounted) return;
+    await _restore.restore(
+      deviceSerial: device.serial,
+      password: choice.password,
+      run: choice.run,
     );
-    if (password == null || !mounted) return;
-    await _restore.restore(deviceSerial: device.serial, password: password);
     if (!mounted) return;
     final error = _restore.error;
     final summary = _restore.summary;
     showMessage(
       context,
       error != null
-          ? Errors.message(error, 'restore the vaults')
+          ? Errors.backupRun(error, 'restore the vaults')
           : summary ?? Errors.couldNot('restore the vaults'),
     );
+  }
+
+  /// Deletes the backup [run] from [device] once the admin confirms, then
+  /// reloads the protection status, which no longer counts it. The controller
+  /// lists the drive's backups again.
+  Future<void> _deleteRun(StorageDevice device, String run) async {
+    final label = backupRunLabel(run);
+    final confirmed = await QuarkWidget.showDialog<bool>(
+      context,
+      builder: (ctx) => DeleteBackupRunDialog(runLabel: label),
+    );
+    if (confirmed != true || !mounted) return;
+    final error = await _runs.delete(device.serial, run);
+    if (!mounted) return;
+    showMessage(
+      context,
+      error != null
+          ? Errors.backupRun(error, 'delete the backup')
+          : 'Deleted the backup of $label.',
+    );
+    if (error == null) await _protection.load();
   }
 
   static String _roleLabel(String role) {
@@ -362,28 +466,26 @@ class _StorageTabState extends State<StorageTab>
     );
   }
 
-  /// The first enabled drive that is not already a backup drive, built-in
-  /// storage included. A USB drive with no serial is not one: an empty serial
-  /// is built-in storage. Set Role is only offered for an enabled drive.
+  /// The first enabled drive that is neither a backup drive nor the main
+  /// storage drive. Built-in storage is the main storage drive unless a USB
+  /// drive holds default storage, so it is offered only then. A USB drive
+  /// with no serial is not offered: an empty serial is built-in storage. Set
+  /// Role is only offered for an enabled drive.
   StorageDevice? _assignTarget() {
     final devices = _devices;
     if (devices == null) return null;
+    final usbIsMain = devices.any(
+      (d) => !d.isInternal && d.role == 'default-storage',
+    );
     for (final device in devices) {
       if (!device.isEnabled) continue;
       if (!device.isInternal && device.serial.isEmpty) continue;
-      if (device.role == 'snapshot-backup') continue;
+      if (device.isInternal && !usbIsMain) continue;
+      if (device.role == 'snapshot-backup' ||
+          device.role == 'default-storage') {
+        continue;
+      }
       return device;
-    }
-    return null;
-  }
-
-  /// The drive the Quark named for a start-backup step.
-  StorageDevice? _backupTarget() {
-    final serial = _protection.status?.backupTargetSerial;
-    final devices = _devices;
-    if (serial == null || devices == null) return null;
-    for (final device in devices) {
-      if (device.serial == serial) return device;
     }
     return null;
   }
@@ -392,8 +494,9 @@ class _StorageTabState extends State<StorageTab>
     switch (_protection.status?.action) {
       case DataProtectionAction.assignBackupRole:
         return 'Assign the backup role';
+      // Back up now is that step, and the card always draws it.
       case DataProtectionAction.startBackup:
-        return 'Start a backup';
+        return null;
       case DataProtectionAction.keepElsewhere:
         return 'Keep one backup drive somewhere else';
       case null:
@@ -410,13 +513,9 @@ class _StorageTabState extends State<StorageTab>
         final device = _assignTarget();
         if (device == null) return null;
         return () => _showRoleDialog(device);
-      case DataProtectionAction.startBackup:
-        if (!isAdmin) return null;
-        final device = _backupTarget();
-        if (device == null) return null;
-        return () => _startBackup(device);
       case DataProtectionAction.keepElsewhere:
         return _showExplainer;
+      case DataProtectionAction.startBackup:
       case null:
         return null;
     }
@@ -436,8 +535,9 @@ class _StorageTabState extends State<StorageTab>
           devices: _devices,
           error: _error,
           mounting: _mounting,
-          backupStatus: _backupStatus,
-          activeBackupJobId: _activeBackupJobId,
+          protection: _protection.status,
+          backupStatuses: _backupStatuses,
+          isBackupRunning: _activeJobs.isNotEmpty,
           onRefresh: refresh,
           onRetry: manualRefresh,
           onManageHosts: () =>
@@ -449,6 +549,8 @@ class _StorageTabState extends State<StorageTab>
           onRestore: isAdmin ? _restoreVaults : null,
           onEject: isAdmin ? _ejectDevice : null,
           ejecting: _ejecting,
+          backupRuns: isAdmin ? _runs : null,
+          onDeleteRun: isAdmin ? _deleteRun : null,
           header: showCard
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -462,9 +564,12 @@ class _StorageTabState extends State<StorageTab>
                     DataProtectionStatusCard(
                       level: level,
                       sentence: _protection.status?.sentence,
-                      drives: _protection.drives,
                       nextStepLabel: _nextStepLabel(),
                       onNextStep: _nextStepAction(isAdmin),
+                      onBackUpNow:
+                          isAdmin && _protection.backUpNowTargets.isNotEmpty
+                          ? _backUpNow
+                          : null,
                       onExplain: _showExplainer,
                       isLoading: _protection.isLoading,
                       error: error == null
@@ -474,17 +579,6 @@ class _StorageTabState extends State<StorageTab>
                   ],
                 )
               : null,
-          protectionBadge: level == null
-              ? null
-              : QuarkTintBadge(
-                  key: const ValueKey('data_protection_badge'),
-                  label: level.label,
-                  color: dataProtectionLevelColor(
-                    QuarkTokens.of(context),
-                    level,
-                  ),
-                  semanticLabel: '${level.label} protection',
-                ),
         );
       },
     );

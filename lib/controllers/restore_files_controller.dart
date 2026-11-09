@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/utils/backup_run_label.dart';
 
 /// Starts a restore of a snapshot drive's files (#4009).
 ///
@@ -13,6 +14,7 @@ class RestoreFilesController extends ChangeNotifier {
     Future<FilesRestoreResult> Function({
       required String deviceSerial,
       required bool missingToBuiltIn,
+      String? run,
     })?
     restoreFiles,
   }) : _restoreFiles = restoreFiles ?? StorageService.restoreSnapshotFiles;
@@ -20,6 +22,7 @@ class RestoreFilesController extends ChangeNotifier {
   final Future<FilesRestoreResult> Function({
     required String deviceSerial,
     required bool missingToBuiltIn,
+    String? run,
   })
   _restoreFiles;
 
@@ -38,16 +41,19 @@ class RestoreFilesController extends ChangeNotifier {
     return result == null ? null : restoreFilesSummary(result);
   }
 
-  /// Starts restoring the files on [deviceSerial]. Success sets [result] and
-  /// clears [error]; a throw does the opposite.
+  /// Starts restoring the files on [deviceSerial] from the backup [run], or
+  /// the newest one when [run] is null. Success sets [result] and clears
+  /// [error]; a throw does the opposite.
   Future<void> restore({
     required String deviceSerial,
     required bool missingToBuiltIn,
+    String? run,
   }) async {
     try {
       _result = await _restoreFiles(
         deviceSerial: deviceSerial,
         missingToBuiltIn: missingToBuiltIn,
+        run: run,
       );
       _error = null;
     } catch (e) {
@@ -58,12 +64,15 @@ class RestoreFilesController extends ChangeNotifier {
   }
 }
 
-/// The sentence for [result]: how many drives' files are coming back, which
-/// go to built-in storage, and which stay on the backup drive.
+/// The sentence for [result]: how many drives' files are coming back and
+/// from which backup, which go to built-in storage, and which stay on the
+/// backup drive.
 String restoreFilesSummary(FilesRestoreResult result) {
   final count = result.folders.length;
+  final run = result.run;
+  final when = run == null ? '' : ', backed up ${backupRunLabel(run)}';
   final parts = [
-    'Restoring files from $count ${count == 1 ? 'drive' : 'drives'}.',
+    'Restoring files from $count ${count == 1 ? 'drive' : 'drives'}$when.',
   ];
   final toBuiltIn = [
     for (final f in result.folders)

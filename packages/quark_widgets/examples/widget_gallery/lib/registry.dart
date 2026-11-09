@@ -2990,6 +2990,126 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'BackupRunsList',
+    group: 'Storage',
+    build: (context, log) {
+      var expanded = true;
+      const runs = [
+        BackupRunItem(
+          id: '2026-11-02 09.00',
+          time: 'Nov 2, 09.00',
+          size: '1.2 GB',
+          drives: 'Built-in storage, Photos',
+        ),
+        BackupRunItem(
+          id: '2026-10-26 09.00',
+          time: 'Oct 26, 09.00',
+          size: '1.1 GB',
+          drives: 'Built-in storage',
+        ),
+      ];
+      return StatefulBuilder(
+        builder: (context, setState) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            BackupRunsList(
+              id: 'gallery',
+              summary: '2 backups · newest Nov 2',
+              runs: runs,
+              expanded: expanded,
+              onExpandedChanged: (open) {
+                log('BackupRunsList.onExpandedChanged($open)');
+                setState(() => expanded = open);
+              },
+              onDelete: (run) => log('BackupRunsList.onDelete($run)'),
+            ),
+            const SizedBox(height: 12),
+            BackupRunsList(
+              id: 'empty',
+              summary: 'No backups yet',
+              runs: const [],
+              expanded: false,
+              onExpandedChanged: (open) => log('BackupRunsList.empty($open)'),
+            ),
+            const SizedBox(height: 12),
+            BackupRunsList(
+              id: 'error',
+              summary: '',
+              runs: const [],
+              expanded: false,
+              error: "Couldn't list the backups.",
+              onExpandedChanged: (open) => log('BackupRunsList.error($open)'),
+            ),
+          ],
+        ),
+      );
+    },
+  ),
+  GalleryEntry(
+    name: 'BackupRunPicker',
+    group: 'Storage',
+    build: (context, log) {
+      var selected = '2026-11-02 09.00';
+      return StatefulBuilder(
+        builder: (context, setState) => BackupRunPicker(
+          runs: const [
+            BackupRunItem(
+              id: '2026-11-02 09.00',
+              time: 'Nov 2, 09.00',
+              size: '1.2 GB',
+            ),
+            BackupRunItem(
+              id: '2026-10-26 09.00',
+              time: 'Oct 26, 09.00',
+              size: '1.1 GB',
+            ),
+          ],
+          selected: selected,
+          onSelected: (run) {
+            log('BackupRunPicker.onSelected($run)');
+            setState(() => selected = run);
+          },
+        ),
+      );
+    },
+  ),
+  GalleryEntry(
+    name: 'DriveBackupChip',
+    group: 'Storage',
+    build: (context, log) {
+      var expanded = false;
+      return StatefulBuilder(
+        builder: (context, setState) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DriveBackupChip(
+              id: 'none',
+              level: DataProtectionLevel.unprotected,
+              label: 'Not backed up',
+              expanded: false,
+              onExpandedChanged: (open) => log('DriveBackupChip.none($open)'),
+            ),
+            const SizedBox(height: 12),
+            DriveBackupChip(
+              id: 'gallery',
+              level: DataProtectionLevel.basic,
+              label: 'Backed up Nov 2 · Backup A',
+              copies: const [
+                'Backup A · Nov 2',
+                'Office · Sep 1 · This copy is more than 30 days old.',
+              ],
+              expanded: expanded,
+              onExpandedChanged: (open) {
+                log('DriveBackupChip.onExpandedChanged($open)');
+                setState(() => expanded = open);
+              },
+            ),
+          ],
+        ),
+      );
+    },
+  ),
+  GalleryEntry(
     name: 'DriveHealthDetail',
     group: 'Storage',
     build: (context, log) {
@@ -3099,20 +3219,9 @@ final List<GalleryEntry> registry = [
       level: DataProtectionLevel.basic,
       sentence:
           'Your files are on 2 drives. Add a second backup drive and keep it somewhere else.',
-      drives: [
-        DataProtectionDrive(
-          id: 'usb-1',
-          name: 'Backup',
-          lastBackedUp: DateTime(2026, 10, 1),
-        ),
-        const DataProtectionDrive(
-          id: 'usb-2',
-          name: 'Second backup',
-          reason: 'No completed backup yet.',
-        ),
-      ],
       nextStepLabel: 'Assign the backup role',
       onNextStep: () => log('DataProtectionStatusCard.onNextStep'),
+      onBackUpNow: () => log('DataProtectionStatusCard.onBackUpNow'),
       onExplain: () => log('DataProtectionStatusCard.onExplain'),
     ),
   ),
