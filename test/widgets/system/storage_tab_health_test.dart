@@ -86,7 +86,11 @@ void main() {
     authHttpClientFactory = () => sharedHttpClient;
   });
 
-  void serve(Map<String, Object?> deviceJson) {
+  /// Serves [deviceJson] as the device list, after [others].
+  void serve(
+    Map<String, Object?> deviceJson, {
+    List<Map<String, Object?>> others = const [],
+  }) {
     sharedHttpClientFactory = () => AuthSaltClient(
       MockClient((request) async {
         sent.add(request);
@@ -94,7 +98,7 @@ void main() {
         if (path == '/api/v0/storage/devices/status') {
           return http.Response(
             jsonEncode({
-              'devices': [deviceJson],
+              'devices': [...others, deviceJson],
             }),
             200,
           );
@@ -277,7 +281,19 @@ void main() {
   testWidgets('starting a backup on replace soon sends the acknowledgment', (
     tester,
   ) async {
-    serve(drive(verdict: 'replace-soon', role: 'snapshot-backup'));
+    // A data drive to copy: with none, Start Backup is off.
+    serve(
+      drive(verdict: 'replace-soon', role: 'snapshot-backup'),
+      others: [
+        {
+          'name': 'Built-in storage',
+          'isInternal': true,
+          'mountPoint': '/',
+          'role': 'unassigned',
+          'isEnabled': true,
+        },
+      ],
+    );
     await pumpTab(tester);
 
     await tester.tap(find.text('Back up onto this drive'));

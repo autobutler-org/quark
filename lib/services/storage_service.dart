@@ -319,10 +319,12 @@ class StorageService with AuthenticatedService {
   }
 
   /// Starts a snapshot backup onto [targetDeviceSerial] and returns its job
-  /// id. It sends no password: the chat and vault are backed up as ciphertext
-  /// (#3460).
+  /// id. [sourceSerials] names the data drives to copy, built-in storage as
+  /// ""; null copies every data drive (#3984). It sends no password: the chat
+  /// and vault are backed up as ciphertext (#3460).
   static Future<String> startSnapshotBackup({
     required String targetDeviceSerial,
+    List<String>? sourceSerials,
     bool acknowledgeHealth = false,
   }) async {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/snapshot-backup');
@@ -331,6 +333,7 @@ class StorageService with AuthenticatedService {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'targetDeviceSerial': targetDeviceSerial,
+        'sourceSerials': ?sourceSerials,
         if (acknowledgeHealth) 'acknowledgeHealth': true,
       }),
     );

@@ -279,23 +279,25 @@ class _StorageTabState extends State<StorageTab>
     );
     if (!gate.proceed || !mounted) return;
 
-    final confirmed = await QuarkWidget.showDialog<bool>(
+    // The data drives the Quark can copy: every attached drive but the
+    // backup drives (#4037).
+    final sources = {
+      for (final d in _devices ?? const <StorageDevice>[])
+        if (d.role != 'snapshot-backup' && !d.isUnmounted) d.serial: d.name,
+    };
+    final chosen = await QuarkWidget.showDialog<List<String>>(
       context,
-      builder: (ctx) => SnapshotBackupDialog(
-        targetName: target.name,
-        // The data drives the Quark copies: every attached drive but the
-        // backup drives (#4037).
-        sourceNames: [
-          for (final d in _devices ?? const <StorageDevice>[])
-            if (d.role != 'snapshot-backup' && !d.isUnmounted) d.name,
-        ],
-      ),
+      builder: (ctx) =>
+          SnapshotBackupDialog(targetName: target.name, sources: sources),
     );
-    if (confirmed != true || !mounted) return;
+    if (chosen == null || !mounted) return;
 
     try {
       final jobId = await StorageService.startSnapshotBackup(
         targetDeviceSerial: target.serial,
+        // Every drive sends none, so the Quark copies every data drive,
+        // including one attached after this dialog (#3984).
+        sourceSerials: chosen.length == sources.length ? null : chosen,
         acknowledgeHealth: gate.acknowledgeHealth,
       );
       if (!mounted) return;

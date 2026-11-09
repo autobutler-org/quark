@@ -161,22 +161,46 @@ void main() {
   ) async {
     await openFromCard(tester, 'Back up onto this drive');
 
-    // The backup drive and an unplugged drive are not copied.
+    expect(find.text('Choose the drives to copy onto Backups.'), findsOne);
+    // The backup drive and an unplugged drive are not offered.
     expect(
-      find.text('Copy Built-in storage and Photos onto Backups.'),
-      findsOneWidget,
+      find.descendant(
+        of: find.byType(SnapshotBackupDialog),
+        matching: find.byType(CheckboxListTile),
+      ),
+      findsNWidgets(2),
     );
+    expect(find.byKey(const ValueKey('backup_source_')), findsOne);
+    expect(find.byKey(const ValueKey('backup_source_USB3')), findsOne);
 
     await closeWith(tester, 'Cancel');
   });
 
-  testWidgets('Start Backup sends the target and nothing else', (tester) async {
+  testWidgets('Start Backup with every drive sends the target and nothing '
+      'else', (tester) async {
     await openFromCard(tester, 'Back up onto this drive');
 
     await closeWith(tester, 'Start Backup');
 
+    // No sourceSerials: a drive attached later is still copied (#3984).
     expect(backupBody, {'targetDeviceSerial': 'USB2'});
     // Unmounts the tab, which stops its status poll.
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Start Backup sends only the drives left checked', (
+    tester,
+  ) async {
+    await openFromCard(tester, 'Back up onto this drive');
+    await tester.tap(find.byKey(const ValueKey('backup_source_USB3')));
+    await tester.pump();
+
+    await closeWith(tester, 'Start Backup');
+
+    expect(backupBody, {
+      'targetDeviceSerial': 'USB2',
+      'sourceSerials': [''],
+    });
     await tester.pumpWidget(const SizedBox());
   });
 
