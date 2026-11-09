@@ -301,17 +301,17 @@ func repairHomes(deps deputil.Dependencies) {
 }
 
 // importLegacyState moves the state an older Quark kept as files in the data
-// directory into the database: the account request history, each account's
-// own settings and when the last snapshot backup completed (#3083). Each
-// import retires its file, so on every later start this finds nothing. All
-// three are tried, so one that fails does not hold the others back.
+// directory into the database: the account request history and each
+// account's own settings (#3083). Each import retires its file, so on every
+// later start this finds nothing. Both are tried, so one that fails does not
+// hold the other back.
 func importLegacyState(deps deputil.Dependencies) error {
 	ctx := context.Background()
 	queries := deps.Database().Queries
 	dataDir := storageutil.GetDataDir()
 	_, historyErr := requestlogutil.Import(ctx, requestlogutil.ImportParams{Queries: queries, DataDir: dataDir})
 	_, settingsErr := usersettingsutil.Import(ctx, usersettingsutil.ImportParams{Queries: queries, DataDir: dataDir})
-	if err := errors.Join(historyErr, settingsErr, backup.ImportLastSnapshot(ctx, queries, dataDir)); err != nil {
+	if err := errors.Join(historyErr, settingsErr); err != nil {
 		return fmt.Errorf("failed to import state from the data directory: %w", err)
 	}
 	return nil

@@ -224,6 +224,16 @@ func exerciseQuerier(t *testing.T, conn *sql.DB) {
 		t.Fatal("idx_jobs_backup_target let a second active backup for one target through")
 	}
 
+	// GetActiveRestoreJob, on JSON in a column like GetActiveBackupJob.
+	_, err = q.CreateJob(ctx, db.CreateJobParams{Kind: "snapshot-restore", Name: "restore", Params: `{"backupSerial":"abc","run":"r"}`})
+	must(err)
+	if restore, err := q.GetActiveRestoreJob(ctx, "abc"); err != nil || restore.Name != "restore" {
+		t.Fatalf("GetActiveRestoreJob(abc) = %+v, %v", restore, err)
+	}
+	if _, err := q.GetActiveRestoreJob(ctx, "other"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetActiveRestoreJob(other) = %v, want sql.ErrNoRows", err)
+	}
+
 	// RotateInstallID takes the id from Go.
 	id := db.NewInstallID()
 	must(q.RotateInstallID(ctx, id))

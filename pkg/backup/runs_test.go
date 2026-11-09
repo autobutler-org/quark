@@ -281,7 +281,8 @@ func TestSnapshotBackup_LeavesOutEverySourcesBackups(t *testing.T) {
 }
 
 // ListRuns reads a drive whose listing ends folder names with "/", leaves out
-// partial runs and folders with no manifest, and lists newest first. A
+// partial runs and folders with no manifest, and lists newest first, each
+// run sized by its manifest. A
 // manifest's drive folder that is not one entry in the run is dropped.
 func TestListRuns(t *testing.T) {
 	mem := vfs.NewMemVFS(vfs.FilesNamespace("B"))
@@ -300,8 +301,8 @@ func TestListRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Run{
-		{Folder: "2026-11-02 08.00", CompletedAt: newer, Drives: []ManifestDrive{{Folder: "Built-in storage"}}},
-		{Folder: "2026-11-01 08.00", CompletedAt: older, Drives: []ManifestDrive{{Folder: "Built-in storage"}}},
+		{Folder: "2026-11-02 08.00", CompletedAt: newer, Drives: []ManifestDrive{{Folder: "Built-in storage"}}, SizeBytes: 1},
+		{Folder: "2026-11-01 08.00", CompletedAt: older, Drives: []ManifestDrive{{Folder: "Built-in storage"}}, SizeBytes: 1},
 	}
 	if !reflect.DeepEqual(runs, want) {
 		t.Errorf("runs = %+v\nwant %+v", runs, want)

@@ -15,7 +15,7 @@ import (
 
 // listNotifications godoc
 // @Summary List your notifications
-// @Description Returns the caller's current notifications. The list is derived on each request and not stored, so a notification is there for as long as its condition holds. An admin gets backup_due while this Quark has no completed snapshot backup on record, and backup_stale, with lastBackupAt, once the last one is 30 days old; other accounts get neither. A type listed in the caller's disabledNotifications setting (PUT /settings/me) is left out. link is the app route to open. There is no notification event: refetch on backup_completed, after changing your own settings, and when the app comes back to the foreground.
+// @Description Returns the caller's current notifications. The list is derived on each request and not stored, so a notification is there for as long as its condition holds. An admin gets backup_due while no snapshot-backup drive holds a complete backup run, and backup_stale, with lastBackupAt, once the newest run on any of them is 30 days old; other accounts get neither. The runs are read from each drive's backup folders as last scanned, so a drive that is away still counts, and deleting or pruning its last run brings backup_due back. A type listed in the caller's disabledNotifications setting (PUT /settings/me) is left out. link is the app route to open. There is no notification event: refetch on backup_completed and backup_deleted, after changing your own settings, and when the app comes back to the foreground.
 // @Tags notifications
 // @Produce json
 // @Success 200 {object} notificationutil.ListResult

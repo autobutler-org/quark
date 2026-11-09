@@ -69,8 +69,8 @@ func ListRuns(ctx context.Context, fsys vfs.VFS) ([]Run, error) {
 	return runs, nil
 }
 
-// readRunHeader reads a run's completion time and drives from its manifest.
-// They are written ahead of the file list, which grows with the drive, so the
+// readRunHeader reads a run's completion time, drives and size from its
+// manifest. They are written ahead of the file list, which grows with the drive, so the
 // manifest is read as a stream of tokens and the list is never decoded.
 func readRunHeader(ctx context.Context, fsys vfs.VFS, folder string) (Run, error) {
 	f, err := fsys.Open(ctx, path.Join(BackupsDir, folder, manifestFilename))
@@ -100,6 +100,8 @@ func readRunHeader(ctx context.Context, fsys vfs.VFS, folder string) (Run, error
 					return d.Folder != path.Base(d.Folder) || strings.HasPrefix(d.Folder, ".")
 				})
 			}
+		case "totalBytes":
+			err = dec.Decode(&run.SizeBytes)
 		case "files":
 			// Everything a run is listed by comes before the file list.
 			return run, nil

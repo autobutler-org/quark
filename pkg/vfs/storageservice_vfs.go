@@ -354,6 +354,16 @@ func (v *StorageServiceVFS) Link(_ context.Context, src, dst string) error {
 	return hostLink(srcAbs, dstAbs)
 }
 
+// FreeSpace is the bytes a write to this namespace's device can use. See
+// [SpaceReporter].
+func (v *StorageServiceVFS) FreeSpace(ctx context.Context) (uint64, error) {
+	filesDir, err := v.filesDir()
+	if err != nil {
+		return 0, err
+	}
+	return hostFreeSpace(ctx, filesDir)
+}
+
 // Copy copies the file at src to dst through Write. See [VFS.Copy].
 func (v *StorageServiceVFS) Copy(ctx context.Context, src, dst string, opts CopyOptions) error {
 	return copyFile(ctx, v, src, v, dst, opts)

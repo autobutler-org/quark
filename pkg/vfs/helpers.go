@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/shirou/gopsutil/v4/disk"
 )
 
 // readBounded reads r whole, refusing more than [MaxInMemoryWriteBytes]. It
@@ -195,6 +196,17 @@ func hostLink(srcAbs, dstAbs string) error {
 		return fmt.Errorf("%w: %s is not a regular file", ErrPermissionDenied, fi.Name())
 	}
 	return hostErr(os.Link(srcAbs, dstAbs))
+}
+
+// hostFreeSpace is the body of every [SpaceReporter]: the bytes a write
+// under dir can use, statfs's available blocks, which leave out the blocks
+// reserved for root.
+func hostFreeSpace(ctx context.Context, dir string) (uint64, error) {
+	usage, err := disk.UsageWithContext(ctx, dir)
+	if err != nil {
+		return 0, hostErr(err)
+	}
+	return usage.Free, nil
 }
 
 // hostMove renames src to dst under filesDir, creating dst's folder first.

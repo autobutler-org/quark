@@ -411,6 +411,11 @@ func (a *postgresQueries) GetActiveBackupJob(ctx context.Context, targetDeviceSe
 	return Job(row), err
 }
 
+func (a *postgresQueries) GetActiveRestoreJob(ctx context.Context, backupSerial string) (Job, error) {
+	row, err := a.q.GetActiveRestoreJob(ctx, backupSerial)
+	return Job(row), err
+}
+
 func (a *postgresQueries) GetAlbum(ctx context.Context, arg GetAlbumParams) (PhotoAlbum, error) {
 	row, err := a.q.GetAlbum(ctx, pgdb.GetAlbumParams(arg))
 	return PhotoAlbum(row), err

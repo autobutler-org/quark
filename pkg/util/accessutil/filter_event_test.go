@@ -38,6 +38,7 @@ func TestFilterEvent(t *testing.T) {
 		{name: "music library changed", access: stranger, event: eventbus.Event{Kind: eventbus.EventMusicLibraryChanged, DeviceSerial: "USB-1"}},
 		{name: "resync", access: stranger, event: eventbus.Event{Kind: eventbus.EventResync, Data: eventbus.Resync{Dropped: 3}}},
 		{name: "backup dropped", access: before, event: eventbus.Event{Kind: eventbus.EventBackupProgress}, want: &eventbus.Event{}},
+		{name: "backup deletion dropped", access: before, event: eventbus.Event{Kind: eventbus.EventBackupDeleted}, want: &eventbus.Event{}},
 		{name: "readable upload", access: before, event: eventbus.Event{Kind: eventbus.EventUpload, Path: "shared/sub"}},
 		{name: "unreadable upload", access: before, event: eventbus.Event{Kind: eventbus.EventUpload, Path: "private"}, want: &eventbus.Event{}},
 		{name: "upload at the root", access: before, event: eventbus.Event{Kind: eventbus.EventUpload}, want: &eventbus.Event{}},

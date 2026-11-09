@@ -96,6 +96,14 @@ type Linker interface {
 	Link(ctx context.Context, src, dst string) error
 }
 
+// SpaceReporter is implemented by namespaces backed by a host directory.
+// FreeSpace is the bytes a write to the namespace can still use on its
+// filesystem, read afresh on every call, so it reflects a delete made just
+// before it.
+type SpaceReporter interface {
+	FreeSpace(ctx context.Context) (uint64, error)
+}
+
 // Trasher is implemented by namespaces with a trash: a user delete moves an
 // item there, where it can be listed, restored or deleted for good, and
 // [VFS.Delete] stays the permanent removal (#2641). A trashed item keeps an

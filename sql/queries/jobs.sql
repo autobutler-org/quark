@@ -222,6 +222,20 @@ WHERE
 LIMIT
     1;
 
+-- A pending or running restore reading from a backup drive (#4044): deleting
+-- one of the drive's runs waits for it.
+-- name: GetActiveRestoreJob :one
+SELECT
+    *
+FROM
+    jobs
+WHERE
+    kind = 'snapshot-restore'
+    AND status IN ('pending', 'running')
+    AND json_extract(params, '$.backupSerial') = CAST(sqlc.arg(backup_serial) AS TEXT)
+LIMIT
+    1;
+
 -- The status guard keeps a job finished or canceled since from being touched.
 -- name: UpdateJobDetail :exec
 UPDATE jobs

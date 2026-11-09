@@ -12,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/deviceutil"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/protectionutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -36,6 +37,20 @@ func deviceError(err error) *serverutil.Response {
 		return serverutil.Unauthorized(err)
 	case errors.As(err, &notFound):
 		return serverutil.NotFound(err)
+	}
+	return serverutil.InternalServerError(err)
+}
+
+// backupRunsError answers a failure to list or delete a backup drive's runs.
+func backupRunsError(err error) *serverutil.Response {
+	var notFound *fileutil.NotFoundError
+	switch {
+	case errors.Is(err, backup.ErrBackupRoleRequired):
+		return serverutil.BadRequest(err)
+	case errors.As(err, &notFound), errors.Is(err, backup.ErrRunNotFound):
+		return serverutil.NotFound(err)
+	case errors.Is(err, backup.ErrDriveBusy):
+		return serverutil.Conflict(err)
 	}
 	return serverutil.InternalServerError(err)
 }

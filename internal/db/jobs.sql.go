@@ -312,6 +312,45 @@ func (q *Queries) GetActiveBackupJob(ctx context.Context, targetDeviceSerial str
 	return i, err
 }
 
+const getActiveRestoreJob = `-- name: GetActiveRestoreJob :one
+SELECT
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
+FROM
+    jobs
+WHERE
+    kind = 'snapshot-restore'
+    AND status IN ('pending', 'running')
+    AND json_extract(params, '$.backupSerial') = CAST(?1 AS TEXT)
+LIMIT
+    1
+`
+
+// A pending or running restore reading from a backup drive (#4044): deleting
+// one of the drive's runs waits for it.
+func (q *Queries) GetActiveRestoreJob(ctx context.Context, backupSerial string) (Job, error) {
+	row := q.db.QueryRowContext(ctx, getActiveRestoreJob, backupSerial)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Name,
+		&i.Status,
+		&i.Params,
+		&i.Progress,
+		&i.Lane,
+		&i.Attempts,
+		&i.Error,
+		&i.CreatedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.UserID,
+		&i.Detail,
+		&i.Owner,
+		&i.HeartbeatAt,
+	)
+	return i, err
+}
+
 const getJob = `-- name: GetJob :one
 SELECT
     id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id, detail, owner, heartbeat_at
