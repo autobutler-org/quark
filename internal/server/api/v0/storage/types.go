@@ -30,7 +30,19 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 		restoreSnapshotFilesRoute,
 		listBackupRunsRoute,
 		deleteBackupRunRoute,
+		getBackupScheduleRoute,
+		setBackupScheduleRoute,
 	}
+}
+
+// setBackupScheduleBody is what setting a backup drive's schedule reads.
+type setBackupScheduleBody struct {
+	// "" is built-in storage, so the field is not binding:"required".
+	DeviceSerial string `json:"deviceSerial"`
+	// Cadence is off, daily, weekly or monthly.
+	Cadence string `json:"cadence"`
+	// SourceSerials are the data drives to copy; empty is every data drive.
+	SourceSerials []string `json:"sourceSerials"`
 }
 
 // deleteBackupRunBody is what deleting a backup run reads.

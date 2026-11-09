@@ -10426,6 +10426,112 @@
                 }
             }
         },
+        "/storage/devices/snapshot-backup/schedule": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reads how often the Quark backs up onto a drive with the snapshot-backup role. cadence is off, daily, weekly or monthly, off when none was set. sourceSerials are the data drives the schedule copies, built-in storage as \"\"; empty is every data drive.\ndue is true when the cadence is not off and the newest run on the drive holding a scheduled source (any run, when every data drive is scheduled) completed longer ago than the cadence (24 hours, 7 days, 30 days), or there is none. The runs are read from the drive when it is attached and from its last scan when it is away. waitingForDrive is true when the backup is due and the drive is not attached: it starts once the drive is plugged in.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "storage"
+                ],
+                "summary": "Read a backup drive's schedule",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The backup drive's serial; empty or absent is built-in storage",
+                        "name": "deviceSerial",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/backup.GetScheduleResult"
+                        }
+                    },
+                    "400": {
+                        "description": "a drive without the snapshot-backup role",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sets how often the Quark backs up onto a drive with the snapshot-backup role, which need not be attached. cadence is off, daily, weekly or monthly; anything else is a 400. sourceSerials names the data drives to copy, built-in storage as \"\"; empty or absent is every data drive. A source that is the drive itself or another snapshot-backup drive is a 400. A source that is not attached is kept, and left out of a backup while it is away.\nEvery 15 minutes, and whenever a drive is plugged in or removed, the Quark starts a backup onto each attached drive whose schedule is due, as GET /storage/devices/snapshot-backup/schedule reports it. It skips a drive with a backup already pending or running, and a drive whose health.verdict is replace-soon, which still needs a backup started by hand with acknowledgeHealth. When the schedule set here is due and the drive is attached, the backup starts at once and jobId names it. Publishes backup_schedule_changed with the drive's serial.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "storage"
+                ],
+                "summary": "Set a backup drive's schedule",
+                "parameters": [
+                    {
+                        "description": "The backup drive and its schedule",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_storage.setBackupScheduleBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/backup.SetScheduleResult"
+                        }
+                    },
+                    "400": {
+                        "description": "bad request, an unknown cadence, a drive without the snapshot-backup role, or a source that is not a data drive",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/storage/devices/snapshot-backup/status/{jobId}": {
             "get": {
                 "security": [
@@ -12696,6 +12802,33 @@
                 }
             }
         },
+        "backup.GetScheduleResult": {
+            "type": "object",
+            "properties": {
+                "cadence": {
+                    "description": "Cadence is off, daily, weekly or monthly.",
+                    "type": "string"
+                },
+                "deviceSerial": {
+                    "type": "string"
+                },
+                "due": {
+                    "description": "Due is true when the cadence is not off and the newest run holding a\nscheduled source (any run, when every data drive is scheduled) is older\nthan the cadence, or there is none.",
+                    "type": "boolean"
+                },
+                "sourceSerials": {
+                    "description": "SourceSerials are the data drives the schedule copies; empty, never\nnil, is every data drive.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "waitingForDrive": {
+                    "description": "WaitingForDrive is true when the backup is due and the drive is not\nattached: it starts once the drive is plugged in.",
+                    "type": "boolean"
+                }
+            }
+        },
         "backup.ListDriveRunsResult": {
             "type": "object",
             "properties": {
@@ -12763,6 +12896,37 @@
                 "sizeBytes": {
                     "description": "SizeBytes is the bytes the run's files hold, its manifest's\ntotalBytes. A file hard-linked from another run counts in both, so\ndeleting a run frees less than this.",
                     "type": "integer"
+                }
+            }
+        },
+        "backup.SetScheduleResult": {
+            "type": "object",
+            "properties": {
+                "cadence": {
+                    "description": "Cadence is off, daily, weekly or monthly.",
+                    "type": "string"
+                },
+                "deviceSerial": {
+                    "type": "string"
+                },
+                "due": {
+                    "description": "Due is true when the cadence is not off and the newest run holding a\nscheduled source (any run, when every data drive is scheduled) is older\nthan the cadence, or there is none.",
+                    "type": "boolean"
+                },
+                "jobId": {
+                    "description": "JobID is the backup the schedule started because it was due and the\ndrive attached, or empty.",
+                    "type": "string"
+                },
+                "sourceSerials": {
+                    "description": "SourceSerials are the data drives the schedule copies; empty, never\nnil, is every data drive.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "waitingForDrive": {
+                    "description": "WaitingForDrive is true when the backup is due and the drive is not\nattached: it starts once the drive is plugged in.",
+                    "type": "boolean"
                 }
             }
         },
@@ -16272,6 +16436,26 @@
                 "run": {
                     "description": "Run is the run to restore from, a folder under backups/ on the drive.\nEmpty is the newest complete run.",
                     "type": "string"
+                }
+            }
+        },
+        "v0_storage.setBackupScheduleBody": {
+            "type": "object",
+            "properties": {
+                "cadence": {
+                    "description": "Cadence is off, daily, weekly or monthly.",
+                    "type": "string"
+                },
+                "deviceSerial": {
+                    "description": "\"\" is built-in storage, so the field is not binding:\"required\".",
+                    "type": "string"
+                },
+                "sourceSerials": {
+                    "description": "SourceSerials are the data drives to copy; empty is every data drive.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

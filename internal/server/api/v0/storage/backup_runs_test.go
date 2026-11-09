@@ -43,6 +43,7 @@ func (s slashVFS) List(ctx context.Context, p string, filter *vfs.ListFilter) ([
 type runsEngine struct {
 	*gin.Engine
 	database *db.DatabaseSqlc
+	deps     deputil.Dependencies
 	events   <-chan eventbus.Event
 }
 
@@ -76,7 +77,7 @@ func newRunsEngine(t *testing.T, backupDrive vfs.VFS) runsEngine {
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_storage.NewAdminRouter())
-	return runsEngine{Engine: engine, database: database, events: events}
+	return runsEngine{Engine: engine, database: database, deps: deps, events: events}
 }
 
 func (e runsEngine) list(query string) *httptest.ResponseRecorder {

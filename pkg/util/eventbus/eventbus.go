@@ -32,6 +32,10 @@ const (
 	// BackupDeleted; Path is empty. Like the other backup events it reaches
 	// admins only.
 	EventBackupDeleted EventKind = "backup_deleted"
+	// EventBackupScheduleChanged fires when an admin sets a backup drive's
+	// schedule (#3984). Data is a BackupScheduleChanged; Path is empty. Like
+	// the other backup events it reaches admins only.
+	EventBackupScheduleChanged EventKind = "backup_schedule_changed"
 
 	// Background job lifecycle (jobutil). Data is the jobutil.Job as it stands
 	// after the change; Path is empty. A job that changes the file tree also
@@ -243,6 +247,13 @@ type BackupDeleted struct {
 	DeviceSerial string `json:"deviceSerial"`
 	// Run is the deleted run's folder under backups/.
 	Run string `json:"run"`
+}
+
+// BackupScheduleChanged is the data of a backup_schedule_changed event.
+type BackupScheduleChanged struct {
+	// DeviceSerial is the backup drive whose schedule changed, "" for
+	// built-in storage.
+	DeviceSerial string `json:"deviceSerial"`
 }
 
 // VaultChanged is the data of a vault_changed event. Like a read marker it
