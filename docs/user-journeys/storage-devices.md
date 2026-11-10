@@ -126,14 +126,16 @@ one other drive holds files.
 
 1. Navigate to `/system/storage`.
 2. Tap **Back up onto this drive** on the backup drive's card.
-3. Read the dialog, then tap **Start Backup**.
+3. Read the dialog, uncheck any data drive to leave out, then tap **Start Backup**.
 4. Watch the backup drive's card until the backup finishes.
 
 **Expected result:**
 
-- The dialog is titled **Back up onto this drive** and names what it copies and where: "Copy Built-in storage and
-  Photos onto Backup A." The drives named are the data drives, every attached drive that is not a backup drive.
-  Another backup drive is never named, and never copied.
+- The dialog is titled **Back up onto this drive**, says "Choose the drives to copy onto Backup A.", and lists a
+  checkbox for each data drive, every attached drive that is not a backup drive. Another backup drive is never
+  listed, and never copied. Every drive starts checked, and **Start Backup** is off while none is.
+- With every drive checked the backup copies every data drive, as **Back up now** does (JN-SD-012). With one
+  unchecked it copies only the checked drives, and the progress names only those.
 - No password is asked. The dialog says chat and every account's vault are backed up still encrypted: on the drive
   when Quark keeps its own database, or in the operator's PostgreSQL backups on a PostgreSQL-backed install.
 - The progress shows on the backup drive's card and names the drives: "Preparing to back up onto Backup A",

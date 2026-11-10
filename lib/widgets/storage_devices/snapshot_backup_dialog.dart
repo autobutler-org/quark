@@ -1,47 +1,67 @@
 import 'package:flutter/material.dart';
 import 'package:quark/utils/quark_widget.dart';
 
-/// Confirms a snapshot backup that copies the data drives named
-/// [sourceNames] onto the backup drive named [targetName]. Pops with `true`
-/// on Start Backup, or with nothing on Cancel.
+/// Confirms a snapshot backup onto the backup drive named [targetName] and
+/// asks which of the data drives in [sources] it copies (#3984). Every drive
+/// starts checked, and Start Backup is off while none is. Pops with the
+/// checked serials on Start Backup, or with nothing on Cancel.
+///
+/// Each drive's checkbox is keyed `backup_source_<serial>`; built-in storage
+/// is the serial "", so its key is `backup_source_`. Start Backup is
+/// `snapshot_backup_start`.
 ///
 /// It asks for no password (#3460): the chat and every account's vault stay
 /// the ciphertext they already are, and open afterwards with what opened them
 /// before. A SQLite-backed Quark writes them to the drive; on PostgreSQL they
 /// are in the operator's database backup, not the snapshot (#2963). The app
 /// cannot tell which, so the copy names both.
-class SnapshotBackupDialog extends StatelessWidget {
+class SnapshotBackupDialog extends StatefulWidget {
+  /// Creates the dialog over [sources], serial to name, in display order.
   const SnapshotBackupDialog({
     required this.targetName,
-    required this.sourceNames,
+    required this.sources,
     super.key,
   });
 
   /// The backup drive's name; empty reads as "this drive".
   final String targetName;
 
-  /// The data drives the backup copies; none reads as "your other drives".
-  final List<String> sourceNames;
+  /// The data drives the backup can copy, serial to name.
+  final Map<String, String> sources;
 
-  /// Joins [names] the way a sentence does: "A", "A and B", "A, B and C".
-  static String _list(List<String> names) => switch (names.length) {
-    0 => 'your other drives',
-    1 => names.first,
-    _ => '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}',
-  };
+  @override
+  State<SnapshotBackupDialog> createState() => _SnapshotBackupDialogState();
+}
+
+class _SnapshotBackupDialogState extends State<SnapshotBackupDialog> {
+  late final Set<String> _checked = widget.sources.keys.toSet();
 
   @override
   Widget build(BuildContext context) {
+    final target = widget.targetName.isNotEmpty
+        ? widget.targetName
+        : 'this drive';
     return QuarkWidget.alertDialog(
       title: const Text('Back up onto this drive'),
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Copy ${_list(sourceNames)} onto '
-            '${targetName.isNotEmpty ? targetName : "this drive"}.',
-          ),
+          Text('Choose the drives to copy onto $target.'),
+          for (final MapEntry(key: serial, value: name)
+              in widget.sources.entries)
+            CheckboxListTile(
+              key: ValueKey('backup_source_$serial'),
+              contentPadding: EdgeInsets.zero,
+              value: _checked.contains(serial),
+              onChanged: (value) => setState(
+                () => value == true
+                    ? _checked.add(serial)
+                    : _checked.remove(serial),
+              ),
+              title: Text(name),
+            ),
           const SizedBox(height: 16),
           const Text(
             "Chat and every account's vault are backed up still encrypted: "
@@ -56,7 +76,13 @@ class SnapshotBackupDialog extends StatelessWidget {
           child: const Text('Cancel'),
         ),
         TextButton(
-          onPressed: () => Navigator.pop(context, true),
+          key: const ValueKey('snapshot_backup_start'),
+          onPressed: _checked.isEmpty
+              ? null
+              : () => Navigator.pop(context, [
+                  for (final serial in widget.sources.keys)
+                    if (_checked.contains(serial)) serial,
+                ]),
           child: const Text('Start Backup'),
         ),
       ],

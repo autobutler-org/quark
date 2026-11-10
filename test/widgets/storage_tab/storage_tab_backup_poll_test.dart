@@ -66,6 +66,14 @@ void main() {
                   'isEnabled': true,
                   'activeBackupJobId': ?activeJobId,
                 },
+                // A data drive to copy: with none, Start Backup is off.
+                {
+                  'name': 'Built-in storage',
+                  'isInternal': true,
+                  'mountPoint': '/',
+                  'role': 'unassigned',
+                  'isEnabled': true,
+                },
               ],
             }),
             200,
