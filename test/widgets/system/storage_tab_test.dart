@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/widgets/storage_devices/backup_schedule_dialog.dart';
 import 'package:quark/widgets/storage_devices/credentials_dialog.dart';
 import 'package:quark/widgets/storage_devices/eject_drive_dialog.dart';
 import 'package:quark/widgets/storage_devices/snapshot_backup_dialog.dart';
@@ -29,10 +30,18 @@ void main() {
   /// The method and path of every unmount the tab sent.
   final ejectRequests = <String>[];
 
+  /// The body of the last schedule the tab saved.
+  Object? scheduleBody;
+
+  /// The paths of every backup status the tab polled.
+  final statusPolls = <String>[];
+
   setUpAll(mockSecureStorage);
 
   setUp(() async {
     backupBody = null;
+    scheduleBody = null;
+    statusPolls.clear();
     ejectRequests.clear();
     SharedPreferences.setMockInitialValues({
       'hosts': jsonEncode([
@@ -89,6 +98,33 @@ void main() {
       if (request.url.path == '/api/v0/storage/devices/snapshot-backup') {
         backupBody = jsonDecode(request.body);
         return http.Response(jsonEncode({'jobId': '7'}), 202);
+      }
+      if (request.url.path ==
+          '/api/v0/storage/devices/snapshot-backup/schedule') {
+        if (request.method == 'GET') {
+          return http.Response(
+            jsonEncode({
+              'deviceSerial': request.url.queryParameters['deviceSerial'],
+              'cadence': 'off',
+              'sourceSerials': <String>[],
+              'due': false,
+              'waitingForDrive': false,
+            }),
+            200,
+          );
+        }
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        scheduleBody = body;
+        // Due and attached, so the Quark started the backup.
+        return http.Response(
+          jsonEncode({...body, 'due': true, 'jobId': '8'}),
+          200,
+        );
+      }
+      if (request.url.path.startsWith(
+        '/api/v0/storage/devices/snapshot-backup/status/',
+      )) {
+        statusPolls.add(request.url.path);
       }
       return http.Response(jsonEncode({'error': ''}), 404);
     });
@@ -200,6 +236,47 @@ void main() {
     expect(backupBody, {
       'targetDeviceSerial': 'USB2',
       'sourceSerials': [''],
+    });
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Schedule saves the cadence and the drives left checked, and '
+      'follows the backup it started', (tester) async {
+    await openFromCard(tester, 'Schedule');
+    expect(find.byType(BackupScheduleDialog), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('backup_schedule_cadence_weekly')),
+    );
+    await tester.tap(find.byKey(const ValueKey('backup_source_USB3')));
+    await tester.pump();
+
+    await closeWith(tester, 'Save');
+
+    expect(scheduleBody, {
+      'deviceSerial': 'USB2',
+      'cadence': 'weekly',
+      'sourceSerials': [''],
+    });
+    expect(find.text('Backs up weekly.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(statusPolls, contains(endsWith('/status/8')));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Schedule with every drive checked sends none', (tester) async {
+    await openFromCard(tester, 'Schedule');
+    await tester.tap(
+      find.byKey(const ValueKey('backup_schedule_cadence_daily')),
+    );
+    await tester.pump();
+
+    await closeWith(tester, 'Save');
+
+    // None is every data drive, one plugged in later included.
+    expect(scheduleBody, {
+      'deviceSerial': 'USB2',
+      'cadence': 'daily',
+      'sourceSerials': <String>[],
     });
     await tester.pumpWidget(const SizedBox());
   });

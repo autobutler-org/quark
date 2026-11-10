@@ -25,6 +25,8 @@ Cancel and Retry.
 - The old `/jobs` address redirects here, with the query kept.
 - Video conversions, snapshot backups (JN-SD-008) and file restores from a snapshot are listed. A backup also
   shows its progress on the Storage tab.
+- A backup the Quark starts on a drive's schedule (JN-SD-019) is a system job: admins see it here, and other accounts
+  do not.
 - The list reloads when the event stream reconnects (a `resync`), so a conversion that finished while the connection
   was down shows its final state without a refresh.
 

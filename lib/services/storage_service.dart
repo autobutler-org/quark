@@ -481,6 +481,47 @@ class StorageService with AuthenticatedService {
     throwUnlessOk(response, 'delete the backup', clientErrorsOnly: true);
   }
 
+  /// The schedule of the backup drive [deviceSerial] (#3984). Admin-only on
+  /// the Quark; a drive without the backup role is a 400.
+  static Future<BackupSchedule> getBackupSchedule(String deviceSerial) async {
+    final uri = apiBaseUri.replace(
+      path: '/api/v0/storage/devices/snapshot-backup/schedule',
+      queryParameters: {'deviceSerial': deviceSerial},
+    );
+    final response = await instance.authenticatedGet(uri);
+    throwUnlessOk(response, 'read the backup schedule', clientErrorsOnly: true);
+    return BackupSchedule.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// Saves how often the Quark backs up onto [deviceSerial] and which data
+  /// drives it copies, built-in storage as ""; an empty [sourceSerials] is
+  /// every data drive. When the backup is due and the drive is attached, the
+  /// Quark starts it at once and the answer's [BackupSchedule.jobId] names it.
+  static Future<BackupSchedule> setBackupSchedule({
+    required String deviceSerial,
+    required BackupCadence cadence,
+    required List<String> sourceSerials,
+  }) async {
+    final uri = apiBaseUri.resolve(
+      '/api/v0/storage/devices/snapshot-backup/schedule',
+    );
+    final response = await instance.authenticatedPut(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'deviceSerial': deviceSerial,
+        'cadence': cadence.name,
+        'sourceSerials': sourceSerials,
+      }),
+    );
+    throwUnlessOk(response, 'save the backup schedule', clientErrorsOnly: true);
+    return BackupSchedule.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   /// A refused restore. A 404 for the newest backup ([run] null) means the
   /// drive holds none yet, an [ApiException] for [Errors.backupRun]; anything
   /// else keeps the Quark's 4xx text.
@@ -539,6 +580,55 @@ class BackupRun {
 
   /// Each data drive the run holds: its folder in the run, serial, and name.
   final List<({String folder, String serial, String name})> drives;
+}
+
+/// How often a backup drive backs up on its own (#3984). Each name is the
+/// word the Quark sends.
+enum BackupCadence {
+  off,
+  daily,
+  weekly,
+  monthly;
+
+  /// The cadence named [raw]. A word the app does not know is [off], as it
+  /// is on the Quark.
+  static BackupCadence parse(Object? raw) =>
+      values.firstWhere((c) => c.name == raw, orElse: () => off);
+}
+
+/// A backup drive's schedule, as `GET` and
+/// `PUT /storage/devices/snapshot-backup/schedule` answer it.
+class BackupSchedule {
+  /// Creates a schedule. The defaults are a drive with none.
+  const BackupSchedule({
+    this.cadence = BackupCadence.off,
+    this.sourceSerials = const [],
+    this.waitingForDrive = false,
+    this.jobId,
+  });
+
+  /// Parses the answer. A missing field is its default.
+  factory BackupSchedule.fromJson(Map<String, dynamic> json) {
+    final sources = json['sourceSerials'];
+    return BackupSchedule(
+      cadence: BackupCadence.parse(json['cadence']),
+      sourceSerials: [if (sources is List) ...sources.whereType<String>()],
+      waitingForDrive: json['waitingForDrive'] as bool? ?? false,
+      jobId: json['jobId'] as String?,
+    );
+  }
+
+  /// How often the Quark backs up onto the drive.
+  final BackupCadence cadence;
+
+  /// The data drives it copies, built-in storage as ""; empty is every one.
+  final List<String> sourceSerials;
+
+  /// Whether a backup is due and waits for the drive to be plugged in.
+  final bool waitingForDrive;
+
+  /// The backup a save started because it was due. Null when none started.
+  final String? jobId;
 }
 
 class BackupJobStatus {

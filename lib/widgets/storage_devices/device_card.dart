@@ -15,8 +15,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// button.
 ///
 /// A data drive shows [dataDrive]'s chip. A backup drive shows what
-/// [backupDrive] holds, its backups when [showBackupRuns], and
-/// [backupStatus] while a backup onto it runs.
+/// [backupDrive] holds, its [schedule] ("Backs up weekly."), its backups
+/// when [showBackupRuns], and [backupStatus] while a backup onto it runs.
 /// Neither carries a protection level: that is the whole Quark's, on the
 /// protection card.
 class DeviceCard extends StatelessWidget {
@@ -39,6 +39,8 @@ class DeviceCard extends StatelessWidget {
     this.backupRuns,
     this.backupRunsError,
     this.onDeleteRun,
+    this.schedule,
+    this.onSchedule,
     super.key,
   });
 
@@ -89,6 +91,14 @@ class DeviceCard extends StatelessWidget {
   /// Deletes one of [backupRuns], by folder. Null draws no delete action.
   final ValueChanged<String>? onDeleteRun;
 
+  /// This backup drive's schedule, said under what it holds when it is on.
+  /// Null draws nothing.
+  final BackupSchedule? schedule;
+
+  /// Opens this backup drive's schedule. Null hides the Schedule button,
+  /// keyed `device_card_schedule_<serial>`.
+  final VoidCallback? onSchedule;
+
   static const _categoryColors = <String, Color>{
     'documents': Color(0xFF4A90D9),
     'media': Color(0xFF7CB342),
@@ -104,6 +114,7 @@ class DeviceCard extends StatelessWidget {
     final dataDrive = this.dataDrive;
     final backupDrive = this.backupDrive;
     final backupStatus = this.backupStatus;
+    final schedule = this.schedule;
 
     return Card(
       child: Padding(
@@ -223,6 +234,15 @@ class DeviceCard extends StatelessWidget {
                 style: theme.textTheme.bodyMedium,
               ),
             ],
+            if (schedule != null && schedule.cadence != BackupCadence.off) ...[
+              const SizedBox(height: 4),
+              Text(
+                key: ValueKey('device_card_schedule_text_${device.serial}'),
+                'Backs up ${schedule.cadence.name}.'
+                '${schedule.waitingForDrive ? ' Due, will run when plugged in.' : ''}',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
             if (showBackupRuns) ...[
               const SizedBox(height: 4),
               BackupDriveRunsSection(
@@ -314,6 +334,13 @@ class DeviceCard extends StatelessWidget {
                       onPressed: isBackupRunning ? null : onBackup,
                       icon: const Icon(QuarkIcons.backup_outlined, size: 16),
                       label: const Text('Back up onto this drive'),
+                    ),
+                  if (onSchedule != null)
+                    OutlinedButton.icon(
+                      key: ValueKey('device_card_schedule_${device.serial}'),
+                      onPressed: onSchedule,
+                      icon: const Icon(QuarkIcons.schedule_rounded, size: 16),
+                      label: const Text('Schedule'),
                     ),
                   if (onVerify != null)
                     OutlinedButton.icon(

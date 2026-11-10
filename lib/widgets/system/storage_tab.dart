@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/backup_runs_controller.dart';
+import 'package:quark/controllers/backup_schedule_controller.dart';
 import 'package:quark/controllers/data_protection_controller.dart';
 import 'package:quark/controllers/drive_health_controller.dart';
 import 'package:quark/controllers/restore_vault_controller.dart';
@@ -17,6 +18,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/widgets/layout/admin_map_card.dart';
+import 'package:quark/widgets/storage_devices/backup_schedule_dialog.dart';
 import 'package:quark/widgets/storage_devices/credentials_dialog.dart';
 import 'package:quark/widgets/storage_devices/delete_backup_run_dialog.dart';
 import 'package:quark/widgets/storage_devices/eject_drive_dialog.dart';
@@ -31,8 +33,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// mount, eject, rename or back up onto them. A backup running onto a drive
 /// is found from the device list, so one started elsewhere shows here too.
 /// An admin also sees each backup drive's backups and can delete one
-/// (#4044), restore the vaults or files from a backup they pick (#4032), and
-/// gets the [AdminMapCard] (#2484).
+/// (#4044), restore the vaults or files from a backup they pick (#4032), set
+/// how often the Quark backs up onto it (#3984), and gets the
+/// [AdminMapCard] (#2484).
 class StorageTab extends StatefulWidget {
   const StorageTab({
     this.onRefreshingChanged,
@@ -75,6 +78,7 @@ class _StorageTabState extends State<StorageTab>
   Timer? _pollTimer;
   late final DataProtectionController _protection;
   late final BackupRunsController _runs;
+  late final BackupScheduleController _schedules;
   late final RestoreVaultController _restore;
   late final bool _ownsRestore;
 
@@ -84,6 +88,8 @@ class _StorageTabState extends State<StorageTab>
     _protection.addListener(_onControllerChanged);
     _runs = BackupRunsController(events: widget.events);
     _runs.addListener(_onControllerChanged);
+    _schedules = BackupScheduleController(events: widget.events);
+    _schedules.addListener(_onControllerChanged);
     _restore = widget.restoreVault ?? RestoreVaultController();
     _ownsRestore = widget.restoreVault == null;
     super.initState();
@@ -118,13 +124,21 @@ class _StorageTabState extends State<StorageTab>
         }
       });
       if (_activeJobs.isNotEmpty) _startPolling();
-      // Listing a drive's backups is admin-only on the Quark.
+      // Listing a drive's backups and reading its schedule are admin-only
+      // on the Quark.
       if (AppSettings.instance.isAdmin.value) {
         unawaited(
           _runs.load([
             for (final device in devices)
               if (device.role == 'snapshot-backup' && device.isEnabled)
                 device.serial,
+          ]),
+        );
+        // An unmounted drive too: its schedule may be waiting for it.
+        unawaited(
+          _schedules.load([
+            for (final device in devices)
+              if (device.role == 'snapshot-backup') device.serial,
           ]),
         );
       }
@@ -143,6 +157,8 @@ class _StorageTabState extends State<StorageTab>
     _protection.dispose();
     _runs.removeListener(_onControllerChanged);
     _runs.dispose();
+    _schedules.removeListener(_onControllerChanged);
+    _schedules.dispose();
     if (_ownsRestore) _restore.dispose();
     super.dispose();
   }
@@ -279,12 +295,7 @@ class _StorageTabState extends State<StorageTab>
     );
     if (!gate.proceed || !mounted) return;
 
-    // The data drives the Quark can copy: every attached drive but the
-    // backup drives (#4037).
-    final sources = {
-      for (final d in _devices ?? const <StorageDevice>[])
-        if (d.role != 'snapshot-backup' && !d.isUnmounted) d.serial: d.name,
-    };
+    final sources = _sources();
     final chosen = await QuarkWidget.showDialog<List<String>>(
       context,
       builder: (ctx) =>
@@ -306,6 +317,56 @@ class _StorageTabState extends State<StorageTab>
     } catch (e) {
       if (!mounted) return;
       showMessage(context, Errors.message(e, 'start the backup'));
+    }
+  }
+
+  /// The data drives the Quark can copy, serial to name: every attached
+  /// drive but the backup drives (#4037).
+  Map<String, String> _sources() => {
+    for (final d in _devices ?? const <StorageDevice>[])
+      if (d.role != 'snapshot-backup' && !d.isUnmounted) d.serial: d.name,
+  };
+
+  /// Asks how often to back up onto [target] and what to copy, then saves
+  /// it. A backup the save started because it was due is followed like one
+  /// started from the card.
+  Future<void> _editSchedule(StorageDevice target) async {
+    final current =
+        _schedules.scheduleFor(target.serial) ?? const BackupSchedule();
+    final sources = _sources();
+    // A scheduled drive that is unplugged stays offered, so saving keeps it.
+    for (final serial in current.sourceSerials) {
+      sources.putIfAbsent(
+        serial,
+        () => _protection.status?.dataDrive(serial)?.name ?? serial,
+      );
+    }
+    final choice =
+        await QuarkWidget.showDialog<
+          ({BackupCadence cadence, List<String> sourceSerials})
+        >(
+          context,
+          builder: (ctx) => BackupScheduleDialog(
+            targetName: target.name,
+            sources: sources,
+            cadence: current.cadence,
+            sourceSerials: current.sourceSerials,
+          ),
+        );
+    if (choice == null || !mounted) return;
+    try {
+      final saved = await _schedules.save(
+        deviceSerial: target.serial,
+        cadence: choice.cadence,
+        sourceSerials: choice.sourceSerials,
+      );
+      final jobId = saved.jobId;
+      if (jobId == null || !mounted) return;
+      setState(() => _activeJobs[target.serial] = jobId);
+      _startPolling();
+    } catch (e) {
+      if (!mounted) return;
+      showMessage(context, Errors.message(e, 'save the backup schedule'));
     }
   }
 
@@ -561,6 +622,8 @@ class _StorageTabState extends State<StorageTab>
           ejecting: _ejecting,
           backupRuns: isAdmin ? _runs : null,
           onDeleteRun: isAdmin ? _deleteRun : null,
+          backupSchedules: isAdmin ? _schedules : null,
+          onSchedule: isAdmin ? _editSchedule : null,
           header: showCard
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,

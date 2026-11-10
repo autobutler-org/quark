@@ -493,3 +493,43 @@ free space than the next backup needs to copy.
 - A drive whose free space the Quark cannot read is not pruned.
 - Pruning is not shown while it happens. Each pruned backup is announced like a delete, so open pages reload their
   lists and protection status.
+
+---
+
+### JN-SD-019: Back up onto a backup drive on a schedule
+
+**Preconditions:** User is signed in as an admin. A drive with the **Backup drive** role is connected, and at least
+one other drive holds files.
+
+**Steps:**
+
+1. Navigate to `/system/storage`.
+2. Tap **Schedule** on the backup drive's card.
+3. Choose **Daily**, **Weekly** or **Monthly**, uncheck any data drive to leave out, then tap **Save**.
+
+**Expected result:**
+
+- The dialog is titled **Back up on a schedule**. It offers **Off**, **Daily**, **Weekly** and **Monthly**, starting
+  on the drive's current schedule (**Off** when it has none), and a checkbox for each data drive, as in JN-SD-008.
+  Every drive starts checked unless the schedule names some, and **Save** is off while none is.
+- After **Save** the card says how often the drive backs up, such as "Backs up weekly.". **Off** says nothing.
+- When a backup is already due, it starts at once: the card shows its progress and follows it to the end, as in
+  JN-SD-008.
+- From then on the Quark starts a backup onto the drive on its own whenever the newest backup on it is older than
+  the schedule (a day, a week, or 30 days), copying the checked drives.
+- A due drive that is listed but not mounted says "Backs up weekly. Due, will run when plugged in." on its card. The
+  backup starts once the drive is attached. An unplugged drive has no card, so it shows nothing until it is back.
+
+**Notes:**
+
+- With every drive checked the schedule copies every data drive, a drive plugged in later included.
+- A data drive the schedule names but that is unplugged stays in the dialog, and is left out of a backup until it is
+  back.
+- The schedule belongs to the drive and outlives it being unplugged. Plugging an overdue drive back in starts its
+  backup within moments.
+- A **Replace soon** drive is never backed up on a schedule; back it up from its card, which asks for the
+  acknowledgment first (JN-SD-013).
+- A scheduled backup is a job like any other: it shows on the backup drive's card and on the Jobs tab (JN-JOB-001),
+  and only one backup per drive runs at a time.
+- Other open pages see the change: their cards reread the schedule.
+- Only admins see **Schedule** and the schedule line.
