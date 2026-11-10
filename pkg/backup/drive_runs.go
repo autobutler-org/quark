@@ -121,14 +121,23 @@ func DeleteRun(params DeleteRunParams) (DeleteRunResult, error) {
 // backupDrive is the files namespace of a drive holding the snapshot-backup
 // role.
 func backupDrive(ctx context.Context, queries db.Querier, registry vfs.Registry, serial string) (vfs.VFS, error) {
-	role, err := queries.GetDeviceRole(ctx, serial)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && role != "snapshot-backup") {
-		return nil, ErrBackupRoleRequired
-	}
-	if err != nil {
-		return nil, fmt.Errorf("read the drive's role: %w", err)
+	if err := requireBackupRole(ctx, queries, serial); err != nil {
+		return nil, err
 	}
 	return fileutil.FilesVFS(registry, serial)
+}
+
+// requireBackupRole is [ErrBackupRoleRequired] unless the drive holds the
+// snapshot-backup role.
+func requireBackupRole(ctx context.Context, queries db.Querier, serial string) error {
+	role, err := queries.GetDeviceRole(ctx, serial)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && role != "snapshot-backup") {
+		return ErrBackupRoleRequired
+	}
+	if err != nil {
+		return fmt.Errorf("read the drive's role: %w", err)
+	}
+	return nil
 }
 
 // restoringRun is the run a pending or running restore from the drive reads,

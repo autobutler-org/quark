@@ -55,6 +55,15 @@ func backupRunsError(err error) *serverutil.Response {
 	return serverutil.InternalServerError(err)
 }
 
+// backupScheduleError answers a failure to read or set a backup drive's
+// schedule.
+func backupScheduleError(err error) *serverutil.Response {
+	if errors.Is(err, backup.ErrUnknownCadence) || errors.Is(err, backup.ErrSourceNotDataDrive) {
+		return serverutil.BadRequest(err)
+	}
+	return backupRunsError(err)
+}
+
 // builtInStorageName is what the app calls the internal drive, whatever its
 // volume is named.
 const builtInStorageName = "Built-in storage"

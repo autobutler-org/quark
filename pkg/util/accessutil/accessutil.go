@@ -610,7 +610,7 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 		eventbus.EventMusicLibraryChanged, eventbus.EventResync:
 		return FilterEventResult{Event: evt, Deliver: true}
 	case eventbus.EventBackupStarted, eventbus.EventBackupProgress, eventbus.EventBackupCompleted,
-		eventbus.EventBackupFailed, eventbus.EventBackupDeleted:
+		eventbus.EventBackupFailed, eventbus.EventBackupDeleted, eventbus.EventBackupScheduleChanged:
 		return FilterEventResult{}
 	case eventbus.EventMove:
 		oldReadable, newReadable := readable(evt.Path), readable(evt.NewPath)

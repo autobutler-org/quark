@@ -182,6 +182,32 @@ definitions:
       run:
         $ref: '#/definitions/backup.Run'
     type: object
+  backup.GetScheduleResult:
+    properties:
+      cadence:
+        description: Cadence is off, daily, weekly or monthly.
+        type: string
+      deviceSerial:
+        type: string
+      due:
+        description: |-
+          Due is true when the cadence is not off and the newest run holding a
+          scheduled source (any run, when every data drive is scheduled) is older
+          than the cadence, or there is none.
+        type: boolean
+      sourceSerials:
+        description: |-
+          SourceSerials are the data drives the schedule copies; empty, never
+          nil, is every data drive.
+        items:
+          type: string
+        type: array
+      waitingForDrive:
+        description: |-
+          WaitingForDrive is true when the backup is due and the drive is not
+          attached: it starts once the drive is plugged in.
+        type: boolean
+    type: object
   backup.ListDriveRunsResult:
     properties:
       runs:
@@ -246,6 +272,37 @@ definitions:
           totalBytes. A file hard-linked from another run counts in both, so
           deleting a run frees less than this.
         type: integer
+    type: object
+  backup.SetScheduleResult:
+    properties:
+      cadence:
+        description: Cadence is off, daily, weekly or monthly.
+        type: string
+      deviceSerial:
+        type: string
+      due:
+        description: |-
+          Due is true when the cadence is not off and the newest run holding a
+          scheduled source (any run, when every data drive is scheduled) is older
+          than the cadence, or there is none.
+        type: boolean
+      jobId:
+        description: |-
+          JobID is the backup the schedule started because it was due and the
+          drive attached, or empty.
+        type: string
+      sourceSerials:
+        description: |-
+          SourceSerials are the data drives the schedule copies; empty, never
+          nil, is every data drive.
+        items:
+          type: string
+        type: array
+      waitingForDrive:
+        description: |-
+          WaitingForDrive is true when the backup is due and the drive is not
+          attached: it starts once the drive is plugged in.
+        type: boolean
     type: object
   backup.SourceDeviceProgress:
     properties:
@@ -2931,6 +2988,21 @@ definitions:
           Run is the run to restore from, a folder under backups/ on the drive.
           Empty is the newest complete run.
         type: string
+    type: object
+  v0_storage.setBackupScheduleBody:
+    properties:
+      cadence:
+        description: Cadence is off, daily, weekly or monthly.
+        type: string
+      deviceSerial:
+        description: '"" is built-in storage, so the field is not binding:"required".'
+        type: string
+      sourceSerials:
+        description: SourceSerials are the data drives to copy; empty is every data
+          drive.
+        items:
+          type: string
+        type: array
     type: object
   v0_storage.verifySnapshotBackupBody:
     properties:
@@ -10944,6 +11016,78 @@ paths:
       security:
       - BearerAuth: []
       summary: List the backups on a backup drive
+      tags:
+      - storage
+  /storage/devices/snapshot-backup/schedule:
+    get:
+      description: |-
+        Reads how often the Quark backs up onto a drive with the snapshot-backup role. cadence is off, daily, weekly or monthly, off when none was set. sourceSerials are the data drives the schedule copies, built-in storage as ""; empty is every data drive.
+        due is true when the cadence is not off and the newest run on the drive holding a scheduled source (any run, when every data drive is scheduled) completed longer ago than the cadence (24 hours, 7 days, 30 days), or there is none. The runs are read from the drive when it is attached and from its last scan when it is away. waitingForDrive is true when the backup is due and the drive is not attached: it starts once the drive is plugged in.
+      parameters:
+      - description: The backup drive's serial; empty or absent is built-in storage
+        in: query
+        name: deviceSerial
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/backup.GetScheduleResult'
+        "400":
+          description: a drive without the snapshot-backup role
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Read a backup drive's schedule
+      tags:
+      - storage
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Sets how often the Quark backs up onto a drive with the snapshot-backup role, which need not be attached. cadence is off, daily, weekly or monthly; anything else is a 400. sourceSerials names the data drives to copy, built-in storage as ""; empty or absent is every data drive. A source that is the drive itself or another snapshot-backup drive is a 400. A source that is not attached is kept, and left out of a backup while it is away.
+        Every 15 minutes, and whenever a drive is plugged in or removed, the Quark starts a backup onto each attached drive whose schedule is due, as GET /storage/devices/snapshot-backup/schedule reports it. It skips a drive with a backup already pending or running, and a drive whose health.verdict is replace-soon, which still needs a backup started by hand with acknowledgeHealth. When the schedule set here is due and the drive is attached, the backup starts at once and jobId names it. Publishes backup_schedule_changed with the drive's serial.
+      parameters:
+      - description: The backup drive and its schedule
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_storage.setBackupScheduleBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/backup.SetScheduleResult'
+        "400":
+          description: bad request, an unknown cadence, a drive without the snapshot-backup
+            role, or a source that is not a data drive
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Set a backup drive's schedule
       tags:
       - storage
   /storage/devices/snapshot-backup/status/{jobId}:

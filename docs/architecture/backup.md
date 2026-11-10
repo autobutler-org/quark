@@ -1,7 +1,7 @@
 # Backup
 
 `pkg/backup` copies a Quark onto a managed device that holds the `snapshot-backup` role. This page covers what a
-snapshot holds, how its runs are listed, deleted and pruned, how a restore or verify picks one, how the chat and vault
+snapshot holds, how its runs are listed, deleted and pruned, how a backup drive is backed up onto on a schedule, how a restore or verify picks one, how the chat and vault
 tables get into it and back out, how an admin is reminded to take one, and how protected the files are. How the file copies survive a power cut is in
 [Durability](durability.md).
 
@@ -119,6 +119,39 @@ stateDiagram-v2
   this backup: delete old backups or use a bigger drive" (`ErrNotEnoughSpace`), and the app shows that sentence; runs already pruned stay deleted. Free space
   comes from `vfs.SpaceReporter`, which the disk-backed namespaces implement through `statfs`; a drive that cannot
   report it is not pruned, and a backup onto it fails only if it runs out of room mid-copy.
+
+## Scheduled backups
+
+Each backup drive can carry a schedule (#3984), kept in one settings row, `backupSchedule:<serial>`, as JSON:
+`{"cadence": "off|daily|weekly|monthly", "sourceSerials": [...]}`. No row, a row that does not parse, or an unknown
+cadence is `off`. Empty `sourceSerials` is every data drive. A schedule is the drive's own, so it outlives the drive
+being unplugged; one left on a drive that loses the role does nothing until the role comes back.
+
+- **Due.** A schedule is due when its cadence is not `off` and the newest run on the drive holding any of its sources
+  (any run, when every data drive is scheduled) completed longer ago than the cadence, 24 hours, 7 days or 30 days, or
+  there is no such run. The runs are read as protection status reads them (`DriveCopies`): from the folders when the
+  drive is attached, from its `backupRuns:<serial>` row when it is away. "Any" rather than "all" of the sources keeps a
+  source that is gone for good from making the drive due again after every run.
+- **Trigger.** `backup.StartDueBackups` runs every 15 minutes, once across instances (`workerutil.RunPeriodically`,
+  `backup-schedule`), and on every device change (`OnDevicesChanged`, registered after the VFS namespace sync), so an
+  overdue drive starts within one USB poll of being plugged in. For each `snapshot-backup` drive whose schedule is on,
+  it skips a drive that is not attached or not due, and starts `StartSnapshotBackup` as the system (user 0) with the
+  schedule's sources. A source that is no longer an attached data drive is left out of that run, and when none is
+  left nothing starts. A backup already pending or running is skipped silently: two triggers at once, on one instance
+  or two, queue one backup, because the jobs table allows one per target. A Replace soon drive is skipped and
+  logged: a schedule never stands in for the health acknowledgment. Any other failure is logged and the next drive is
+  tried.
+- **Backoff.** A backup that fails leaves no run, so its drive stays due. The row records `lastStartedAt` each time
+  the schedule queues a backup, and no other starts until 6 hours have passed (`scheduleRetryAfter`), or the cadence
+  if that is shorter. Retry in Jobs still starts one at once, and saving the schedule clears `lastStartedAt`.
+- **API.** Both routes are admin-only. `GET /api/v0/storage/devices/snapshot-backup/schedule?deviceSerial=` answers
+  `{deviceSerial, cadence, sourceSerials, due, waitingForDrive}`; `waitingForDrive` is `due` on a drive that is not
+  attached, which the app shows as due and starting once the drive is plugged in.
+  `PUT /api/v0/storage/devices/snapshot-backup/schedule`, body `{deviceSerial, cadence, sourceSerials}`, saves it for
+  a drive that may be away. An unknown cadence, a drive without the role, or a source that is the drive or another
+  backup drive is a 400; a source that is not attached is kept. When the new schedule is due and the drive is
+  attached, the backup starts at once and the response carries its `jobId`. It publishes `backup_schedule_changed`
+  with the drive's serial, which reaches admins only, like the other backup events.
 
 ## Restoring and verifying a run
 
@@ -469,9 +502,10 @@ stateDiagram-v2
       Behind : behind · Back up onto this drive to bring it up to date
       Away : away · unplugged, its copies count from its last scan
       Retired : retired · Replace this drive soon
-      NoCopies --> Receiving : Back up onto this drive, or Back up now
-      Behind --> Receiving : Back up onto this drive, or Back up now
-      Current --> Receiving : Back up onto this drive, or Back up now
+      NoCopies --> Receiving : Back up onto this drive, Back up now, or its schedule comes due
+      Behind --> Receiving : Back up onto this drive, Back up now, or its schedule comes due
+      Current --> Receiving : Back up onto this drive, Back up now, or its schedule comes due
+      Away --> Receiving : plugged back in while its schedule is due
       Receiving --> Current : completes
       Receiving --> NoCopies : fails, or is short of space, with no run on the drive
       Receiving --> Behind : fails, or is short of space, while a copy is missing or stale
@@ -518,8 +552,9 @@ stateDiagram-v2
 - A failed backup is a snack bar, not an error kept on the backup drive's card; the drive goes back to the state its
   runs give it. A backup that failed for lack of space shows the Quark's sentence, and any other failure says the
   backup didn't finish without its diagnostic.
-- Backups stay manual here. A cadence, and starting a waiting scheduled backup when an away drive comes back, is
-  #3984.
+- A backup drive with a schedule moves to Receiving on its own when the schedule comes due, and an away drive does
+  the moment it is plugged back in while due ([Scheduled backups](#scheduled-backups)). A Replace soon drive never
+  does.
 
 ### Where the build differs from the issues
 

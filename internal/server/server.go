@@ -169,7 +169,7 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 
 	go usbDeviceMonitor(deps)
 
-	// The three periodic tasks below each run once per interval across every
+	// The periodic tasks below each run once per interval across every
 	// instance on the database, not once per instance (#2966): an instance
 	// that starts inside another's interval skips its turn.
 
@@ -246,6 +246,28 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 			Queries: deps.Database().Queries, Name: "device-and-job-prune", Interval: time.Hour, Run: prune,
 		})
 	}()
+
+	// Start the scheduled backups that are due (#3984): every 15 minutes, and
+	// whenever the device set changes, so an overdue backup drive starts
+	// within one USB poll of being plugged in. This listener is registered
+	// after the VFS namespace sync, so the drive's namespace is there. Two
+	// triggers at once queue one backup: the jobs table allows one per target.
+	startDueBackups := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if _, err := backup.StartDueBackups(backup.StartDueBackupsParams{
+			Ctx: ctx, Queries: deps.Database().Queries, Registry: deps.VFSRegistry(),
+			Queue: jobs, Storage: deps.StorageService(),
+		}); err != nil {
+			log.Printf("[backup] start scheduled backups: %v", err)
+		}
+	}
+	if svc := deps.StorageService(); svc != nil {
+		svc.OnDevicesChanged(func() { go startDueBackups() })
+	}
+	go workerutil.RunPeriodically(context.Background(), workerutil.RunPeriodicallyParams{
+		Queries: deps.Database().Queries, Name: "backup-schedule", Interval: 15 * time.Minute, Run: startDueBackups,
+	})
 
 	// Give the resumable upload sessions their heartbeat. The store itself is
 	// built in deputil.NewDependencies so every dependency graph has one, but
