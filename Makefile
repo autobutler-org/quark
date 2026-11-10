@@ -1649,11 +1649,11 @@ upgrade/go: generate/backend ## Upgrade dependencies (go)
 
 .PHONY: watch/backend
 watch/backend: check/db build/backend ## Watch backend for changes, plain HTTP on :8080 (insecure; DB_BACKEND=sqlite|postgres)
-	$(SUDO) env $(DB_ENV) QUARK_INSECURE=true $(AIR)
+	$(SUDO) env $(DB_ENV) QUARK_INSECURE=true $(AIR) -build.cmd "$(MAKE) build/backend"
 
 .PHONY: watch/backend/secure
 watch/backend/secure: check/db build/backend ## Watch backend for changes, HTTPS on :443 (self-signed)
-	$(SUDO) env $(DB_ENV) $(AIR)
+	$(SUDO) env $(DB_ENV) $(AIR) -build.cmd "$(MAKE) build/backend"
 
 .PHONY: watch/frontend
 watch/frontend: generate/frontend ## Watch frontend on web
