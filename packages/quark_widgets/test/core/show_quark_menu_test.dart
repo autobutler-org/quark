@@ -80,6 +80,57 @@ void main() {
     expect(row.top, greaterThanOrEqualTo(200 - 16));
   });
 
+  // A phone keyboard covers the bottom of the overlay, and the stock menu
+  // layout only keeps clear of the overlay's edge (#4051).
+  const keyboard = 300.0;
+
+  testBothViewports('a menu opened just above the keyboard stays above it', (
+    tester,
+    size,
+  ) async {
+    tester.view.viewInsets = const FakeViewPadding(bottom: keyboard);
+    final visibleBottom = size.height - keyboard;
+    await openAt(
+      tester,
+      size: size,
+      position: Offset(100, visibleBottom - 10),
+      [
+        for (final label in ['Copy text', 'Add reaction', 'Edit', 'Delete'])
+          QuarkMenuEntry(key: ValueKey(label), label: label, onSelected: () {}),
+      ],
+    );
+
+    for (final label in ['Copy text', 'Add reaction', 'Edit', 'Delete']) {
+      expect(
+        tester.getRect(find.byKey(ValueKey(label))).bottom,
+        lessThanOrEqualTo(visibleBottom),
+        reason: '$label is behind the keyboard',
+      );
+    }
+  });
+
+  testBothViewports('a menu taller than the room the keyboard leaves scrolls', (
+    tester,
+    size,
+  ) async {
+    tester.view.viewInsets = const FakeViewPadding(bottom: keyboard);
+    final visibleBottom = size.height - keyboard;
+    await openAt(
+      tester,
+      size: size,
+      position: Offset(100, visibleBottom - 10),
+      [
+        for (var i = 0; i < 20; i++)
+          QuarkMenuEntry(label: 'Row $i', onSelected: () {}),
+      ],
+    );
+
+    expect(
+      tester.getRect(find.byType(SingleChildScrollView)).bottom,
+      lessThanOrEqualTo(visibleBottom),
+    );
+  });
+
   testWidgets('dismissing runs nothing', (tester) async {
     final events = <String>[];
     await openAt(tester, [

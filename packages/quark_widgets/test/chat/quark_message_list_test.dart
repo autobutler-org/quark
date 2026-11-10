@@ -1730,4 +1730,33 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('dragging the list closes the keyboard (#4051)', (tester) async {
+    final focus = FocusNode();
+    addTearDown(focus.dispose);
+    await pumpAt(
+      tester,
+      Column(
+        children: [
+          Expanded(
+            child: QuarkMessageList(
+              messages: [
+                for (var i = 40; i > 0; i--)
+                  msg('n$i', day1.add(Duration(minutes: i))),
+              ],
+            ),
+          ),
+          TextField(focusNode: focus),
+        ],
+      ),
+      size: narrowViewport,
+    );
+    focus.requestFocus();
+    await tester.pump();
+
+    await tester.drag(find.byType(QuarkMessageList), const Offset(0, 200));
+    await tester.pump();
+
+    expect(focus.hasFocus, isFalse);
+  });
 }

@@ -396,134 +396,140 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
               widget.onAttach != null &&
               (permissions == null ||
                   permissions.contains(ChatPermission.attachFiles));
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (suggestions != null)
-                Padding(
-                  padding: EdgeInsets.only(bottom: tokens.spacingSm),
-                  child: QuarkMentionSuggestions(
-                    names: suggestions.names,
-                    highlighted: highlighted,
-                    onSelect: (name) => _mention(suggestions.start, name),
+          // A tap outside a field closes the keyboard (#4051). The send
+          // button, the attach button and a mention are part of the field,
+          // so tapping one does not close it only for [_send] to reopen it.
+          return TextFieldTapRegion(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (suggestions != null)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: tokens.spacingSm),
+                    child: QuarkMentionSuggestions(
+                      names: suggestions.names,
+                      highlighted: highlighted,
+                      onSelect: (name) => _mention(suggestions.start, name),
+                    ),
                   ),
-                ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (canAttach) ...[
-                    QuarkBarIconButton(
-                      key: const ValueKey('message_composer_attach'),
-                      icon: QuarkIcons.attach_file,
-                      tooltip: 'Attach a file',
-                      onPressed: widget.onAttach,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (canAttach) ...[
+                      QuarkBarIconButton(
+                        key: const ValueKey('message_composer_attach'),
+                        icon: QuarkIcons.attach_file,
+                        tooltip: 'Attach a file',
+                        onPressed: widget.onAttach,
+                      ),
+                      SizedBox(width: tokens.spacingSm),
+                    ],
+                    Expanded(
+                      child: CallbackShortcuts(
+                        bindings: {
+                          if (suggestions != null) ...{
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowDown,
+                            ): () =>
+                                setState(() => _highlight++),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowUp,
+                            ): () =>
+                                setState(() => _highlight--),
+                            const SingleActivator(LogicalKeyboardKey.tab): pick,
+                            const SingleActivator(
+                              LogicalKeyboardKey.escape,
+                            ): () => setState(
+                              () => _dismissedAt = suggestions.start,
+                            ),
+                          },
+                          const SingleActivator(
+                            LogicalKeyboardKey.enter,
+                            shift: true,
+                          ): () =>
+                              onEnterKey(shift: true),
+                          const SingleActivator(
+                            LogicalKeyboardKey.numpadEnter,
+                            shift: true,
+                          ): () =>
+                              onEnterKey(shift: true),
+                          const SingleActivator(LogicalKeyboardKey.enter): () =>
+                              onEnterKey(shift: false),
+                          const SingleActivator(
+                            LogicalKeyboardKey.numpadEnter,
+                          ): () =>
+                              onEnterKey(shift: false),
+                        },
+                        child: TextField(
+                          key: const ValueKey('message_composer_field'),
+                          controller: _text,
+                          focusNode: _focus,
+                          minLines: 1,
+                          maxLines: widget.maxLines,
+                          keyboardType: TextInputType.multiline,
+                          // Send's default drops focus. The caret stays so the
+                          // next message can be typed.
+                          onEditingComplete: () => _focus.requestFocus(),
+                          onSubmitted: (_) => onEnterKey(
+                            shift: HardwareKeyboard.instance.isShiftPressed,
+                          ),
+                          textInputAction: TextInputAction.send,
+                          decoration: InputDecoration(
+                            hintText: widget.hintText,
+                            helper: _showBlankHint
+                                ? const Text(
+                                    QuarkMessageComposer.blankHint,
+                                    key: ValueKey('message_composer_hint'),
+                                  )
+                                : null,
+                            error: over
+                                ? Text(
+                                    QuarkMessageComposer.overLimitText(overBy),
+                                    key: const ValueKey(
+                                      'message_composer_too_long',
+                                    ),
+                                  )
+                                : null,
+                            counter: counter == null
+                                ? null
+                                : Text(
+                                    counter,
+                                    key: const ValueKey(
+                                      'message_composer_counter',
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ),
                     ),
                     SizedBox(width: tokens.spacingSm),
+                    IconButton.filled(
+                      key: const ValueKey('message_composer_send'),
+                      tooltip: sendReason ?? 'Send',
+                      icon: const Icon(QuarkIcons.send_rounded),
+                      // The theme's icon color overrode the filled button's
+                      // own, a slate glyph on the accent at 1.4:1 in dark mode,
+                      // so the glyph is the accent's foreground. Material's
+                      // disabled fill, the text color at 12%, all but vanished
+                      // on a dark page, and the composer is empty most of the
+                      // time: disabled, it is an input outlined in
+                      // [QuarkTokens.outline] with a muted glyph, unlike the
+                      // filled button but 3:1 (#3257).
+                      style: ButtonStyle(
+                        backgroundColor: disabledOr(tokens.input),
+                        foregroundColor: disabledOr(
+                          tokens.mutedForeground,
+                          tokens.primaryForeground,
+                        ),
+                        side: disabledOr(BorderSide(color: tokens.outline)),
+                      ),
+                      onPressed: sendReason == null ? _send : null,
+                    ),
                   ],
-                  Expanded(
-                    child: CallbackShortcuts(
-                      bindings: {
-                        if (suggestions != null) ...{
-                          const SingleActivator(
-                            LogicalKeyboardKey.arrowDown,
-                          ): () =>
-                              setState(() => _highlight++),
-                          const SingleActivator(
-                            LogicalKeyboardKey.arrowUp,
-                          ): () =>
-                              setState(() => _highlight--),
-                          const SingleActivator(LogicalKeyboardKey.tab): pick,
-                          const SingleActivator(
-                            LogicalKeyboardKey.escape,
-                          ): () =>
-                              setState(() => _dismissedAt = suggestions.start),
-                        },
-                        const SingleActivator(
-                          LogicalKeyboardKey.enter,
-                          shift: true,
-                        ): () =>
-                            onEnterKey(shift: true),
-                        const SingleActivator(
-                          LogicalKeyboardKey.numpadEnter,
-                          shift: true,
-                        ): () =>
-                            onEnterKey(shift: true),
-                        const SingleActivator(LogicalKeyboardKey.enter): () =>
-                            onEnterKey(shift: false),
-                        const SingleActivator(
-                          LogicalKeyboardKey.numpadEnter,
-                        ): () =>
-                            onEnterKey(shift: false),
-                      },
-                      child: TextField(
-                        key: const ValueKey('message_composer_field'),
-                        controller: _text,
-                        focusNode: _focus,
-                        minLines: 1,
-                        maxLines: widget.maxLines,
-                        keyboardType: TextInputType.multiline,
-                        // Send's default drops focus. The caret stays so the
-                        // next message can be typed.
-                        onEditingComplete: () => _focus.requestFocus(),
-                        onSubmitted: (_) => onEnterKey(
-                          shift: HardwareKeyboard.instance.isShiftPressed,
-                        ),
-                        textInputAction: TextInputAction.send,
-                        decoration: InputDecoration(
-                          hintText: widget.hintText,
-                          helper: _showBlankHint
-                              ? const Text(
-                                  QuarkMessageComposer.blankHint,
-                                  key: ValueKey('message_composer_hint'),
-                                )
-                              : null,
-                          error: over
-                              ? Text(
-                                  QuarkMessageComposer.overLimitText(overBy),
-                                  key: const ValueKey(
-                                    'message_composer_too_long',
-                                  ),
-                                )
-                              : null,
-                          counter: counter == null
-                              ? null
-                              : Text(
-                                  counter,
-                                  key: const ValueKey(
-                                    'message_composer_counter',
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: tokens.spacingSm),
-                  IconButton.filled(
-                    key: const ValueKey('message_composer_send'),
-                    tooltip: sendReason ?? 'Send',
-                    icon: const Icon(QuarkIcons.send_rounded),
-                    // The theme's icon color overrode the filled button's
-                    // own, a slate glyph on the accent at 1.4:1 in dark mode,
-                    // so the glyph is the accent's foreground. Material's
-                    // disabled fill, the text color at 12%, all but vanished
-                    // on a dark page, and the composer is empty most of the
-                    // time: disabled, it is an input outlined in
-                    // [QuarkTokens.outline] with a muted glyph, unlike the
-                    // filled button but 3:1 (#3257).
-                    style: ButtonStyle(
-                      backgroundColor: disabledOr(tokens.input),
-                      foregroundColor: disabledOr(
-                        tokens.mutedForeground,
-                        tokens.primaryForeground,
-                      ),
-                      side: disabledOr(BorderSide(color: tokens.outline)),
-                    ),
-                    onPressed: sendReason == null ? _send : null,
-                  ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           );
         },
       ),

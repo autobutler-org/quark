@@ -514,6 +514,8 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
         child: ListView.builder(
           controller: _scroll,
           reverse: true,
+          // A phone keyboard stays up until something closes it (#4051).
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: EdgeInsets.symmetric(vertical: tokens.spacingSm),
           itemCount: messages.length + 1,
           itemBuilder: (context, index) {

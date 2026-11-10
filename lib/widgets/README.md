@@ -108,6 +108,11 @@ lib/widgets/
     connection_sheet_button.dart
                                 ConnectionIndicator that opens ConnectionSheet
                                 and navigates to Settings › Network
+    dismiss_keyboard_on_tap_outside.dart
+                                DismissKeyboardOnTapOutside, closes a phone's
+                                keyboard on a tap outside the focused field;
+                                wraps the app's navigator once, so it stays
+                                with `main`
     leave_pop_scope.dart        LeavePopScope, a system back on a page opened
                                 at its own URL leaves instead of closing the
                                 app; tied to the router's history

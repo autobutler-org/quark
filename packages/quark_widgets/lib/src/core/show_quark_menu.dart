@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/quark_menu_entry.dart';
@@ -27,13 +29,43 @@ Future<void> showQuarkMenu(
 }) async {
   if (entries.every((e) => e.isDivider)) return;
   final tokens = QuarkTokens.of(context);
-  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+  final overlayContext = Overlay.of(context).context;
+  final overlay = overlayContext.findRenderObject()! as RenderBox;
+  // The stock layout keeps a menu inside the overlay, not above a phone's
+  // keyboard, so a menu opened near the keyboard ran under it (#4051). With
+  // the keyboard up, a menu that would cross it opens upward from [position]
+  // instead, and one taller than the room left scrolls.
+  // The overlay's media query: a Scaffold strips the insets from its body's.
+  final media = MediaQuery.of(overlayContext);
+  final keyboard = media.viewInsets.bottom;
+  var top = position.dy;
+  BoxConstraints? constraints;
+  if (keyboard > 0) {
+    const screenPadding = 8.0;
+    final floor = overlay.size.height - keyboard - screenPadding;
+    // ponytail: assumes the stock 48px rows and 8px menu padding; measure
+    // the menu if a theme ever changes them.
+    final height = entries.fold<double>(
+      2 * screenPadding,
+      (sum, e) => sum + (e.isDivider ? 1 : kMinInteractiveDimension),
+    );
+    if (top + height > floor) {
+      top = math.max(media.padding.top + screenPadding, top - height);
+    }
+    // The stock menu's width limits, which `constraints` replaces.
+    constraints = BoxConstraints(
+      minWidth: 112,
+      maxWidth: 280,
+      maxHeight: floor - top,
+    );
+  }
   final picked = await showMenu<int>(
     context: context,
     position: RelativeRect.fromRect(
-      position & Size.zero,
+      Offset(position.dx, top) & Size.zero,
       Offset.zero & overlay.size,
     ),
+    constraints: constraints,
     items: [
       for (final (index, entry) in entries.indexed)
         if (entry.isDivider)

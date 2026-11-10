@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -578,5 +579,34 @@ void main() {
     await pumpAt(tester, QuarkMessageComposer(onSend: (_) {}));
 
     expect(find.byKey(attach), findsNothing);
+  });
+
+  testWidgets('sending keeps the keyboard up, even when a tap outside a field '
+      'closes it (#4051)', (tester) async {
+    await pumpAt(
+      tester,
+      // The app closes the keyboard on any tap outside a field; a mouse tap
+      // does that by default, so the send button has to count as inside.
+      Align(
+        alignment: Alignment.bottomCenter,
+        child: QuarkMessageComposer(onSend: (_) {}),
+      ),
+    );
+    await tester.enterText(find.byKey(field), 'hello');
+    await tester.pump();
+    final focus = tester.widget<TextField>(find.byKey(field)).focusNode!;
+    final lost = <bool>[];
+    void listener() {
+      if (!focus.hasFocus) lost.add(true);
+    }
+
+    focus.addListener(listener);
+    addTearDown(() => focus.removeListener(listener));
+
+    await tester.tap(find.byKey(send), kind: PointerDeviceKind.mouse);
+    await tester.pump();
+
+    expect(lost, isEmpty);
+    expect(focus.hasFocus, isTrue);
   });
 }
