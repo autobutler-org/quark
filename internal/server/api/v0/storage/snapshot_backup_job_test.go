@@ -130,3 +130,33 @@ func TestSnapshotBackup_StartsOnBuiltInStorage(t *testing.T) {
 		t.Fatalf("start on built-in storage = %d %s, want 202", w.Code, w.Body.String())
 	}
 }
+
+// sourceSerials names the data drives to copy (#3984). A source that is the
+// target or is not attached is a 400 and queues nothing; built-in storage,
+// the serial "", is a data drive.
+func TestSnapshotBackup_ChecksTheChosenSources(t *testing.T) {
+	database := dbtest.NewDB(t)
+	if err := database.Queries.UpsertDeviceRole(t.Context(), db.UpsertDeviceRoleParams{
+		DeviceSerial: backupSerial,
+		Role:         "snapshot-backup",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	engine := newBackupJobEngine(t, database)
+	post := func(sources string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v0/storage/devices/snapshot-backup",
+			strings.NewReader(`{"targetDeviceSerial":"`+backupSerial+`","sourceSerials":`+sources+`}`))
+		req.Header.Set("Content-Type", "application/json")
+		engine.ServeHTTP(w, req)
+		return w
+	}
+	for _, sources := range []string{`["` + backupSerial + `"]`, `["GONE-1"]`, `["", "GONE-1"]`} {
+		if w := post(sources); w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "a source must be an attached data drive") {
+			t.Errorf("sources %s = %d %s, want 400 naming the rule", sources, w.Code, w.Body.String())
+		}
+	}
+	if w := post(`[""]`); w.Code != http.StatusAccepted {
+		t.Fatalf("built-in storage as the source = %d %s, want 202", w.Code, w.Body.String())
+	}
+}

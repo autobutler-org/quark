@@ -29,8 +29,9 @@ func folders(runs []Run) []string {
 	return names
 }
 
-// planPrune deletes oldest first, stops as soon as there is room, never
-// deletes the newest run, and says so when even that is not enough.
+// planPrune deletes oldest first, stops as soon as there is room, and says so
+// when even deleting every run it is given is not enough. Which runs it is
+// given is prunable's to decide.
 func TestPlanPrune(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -42,8 +43,8 @@ func TestPlanPrune(t *testing.T) {
 		{"room already", sizedRuns(10, 10, 10), 50, 50, []string{}, true},
 		{"oldest is enough", sizedRuns(10, 10, 10), 45, 50, []string{"a"}, true},
 		{"two oldest", sizedRuns(10, 10, 10), 35, 50, []string{"a", "b"}, true},
-		{"newest is never pruned", sizedRuns(10, 10, 100), 35, 60, nil, false},
-		{"only the newest", sizedRuns(100), 0, 50, nil, false},
+		{"every run it is given", sizedRuns(10, 10, 100), 35, 60, []string{"a", "b", "c"}, true},
+		{"not enough even then", sizedRuns(10, 10), 35, 60, nil, false},
 		{"no runs, no room", nil, 0, 1, nil, false},
 		{"no runs, room", nil, 1, 1, []string{}, true},
 	} {
@@ -169,5 +170,73 @@ func TestSnapshotBackup_NeedsRoomOnlyForWhatItCopies(t *testing.T) {
 	}
 	if err := SnapshotBackup(t.Context(), SnapshotBackupParams{Job: newJob("BK")}, []SourceDevice{src}, tight); !errors.Is(err, ErrNotEnoughSpace) {
 		t.Errorf("a changed file on a nearly full drive = %v, want ErrNotEnoughSpace", err)
+	}
+}
+
+// prunable keeps the newest run, every drive's newest copy, and the run a
+// restore reads, and offers the rest oldest first (#3984).
+func TestPrunable(t *testing.T) {
+	holding := func(folder string, serials ...string) Run {
+		run := Run{Folder: folder}
+		for _, s := range serials {
+			run.Drives = append(run.Drives, ManifestDrive{Serial: s, Folder: s})
+		}
+		return run
+	}
+	// Newest first, as ListRuns returns them.
+	runs := []Run{
+		holding("5", "B"),
+		holding("4", "B"),
+		holding("3", "A"),
+		holding("2", "A", "B"),
+		holding("1", ""),
+		holding("0", "", "A"),
+	}
+	for _, tc := range []struct {
+		name    string
+		reading string
+		want    []string
+	}{
+		{"no restore", "", []string{"0", "2", "4"}},
+		{"a restore reads one", "2", []string{"0", "4"}},
+		{"a restore reads a kept run", "5", []string{"0", "2", "4"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := folders(prunable(runs, tc.reading)); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("prunable = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	if got := prunable(nil, ""); len(got) != 0 {
+		t.Errorf("prunable of no runs = %v", folders(got))
+	}
+}
+
+// A backup short of room never deletes the only copy of a drive it is not
+// backing up: the oldest run, the only one holding drive A, stays, and the
+// older of the two runs holding B goes instead.
+func TestSnapshotBackup_KeepsEveryDrivesNewestCopy(t *testing.T) {
+	mem := vfs.NewMemVFS(vfs.FilesNamespace("BK"))
+	at := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	for i, serial := range []string{"A", "", ""} {
+		folder := driveDirName("Drive "+serial, serial)
+		putRun(t, mem, at.Add(time.Duration(i)*24*time.Hour).Format(runFolderLayout), at.Add(time.Duration(i)*24*time.Hour),
+			[]ManifestDrive{{Folder: folder, Serial: serial, Name: "Drive " + serial}},
+			map[string]string{folder + "/a.txt": strings.Repeat("x", 100)})
+	}
+	used, err := usedBytes(t.Context(), mem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drive := sizedDrive{MemVFS: mem, capacity: used + 60}
+	if _, err := snapshotOnto(t, drive, map[string]string{"new.bin": strings.Repeat("n", 150)}); err != nil {
+		t.Fatalf("SnapshotBackup: %v", err)
+	}
+	runs, err := ListRuns(t.Context(), drive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := folders(runs[1:]); !reflect.DeepEqual(got, []string{"2026-11-03 09.00", "2026-11-01 09.00"}) {
+		t.Errorf("runs kept beside the new one = %v, want B's newest and A's only copy", got)
 	}
 }

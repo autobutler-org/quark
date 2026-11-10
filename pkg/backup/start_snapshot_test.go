@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -149,4 +150,102 @@ func TestStartSnapshotBackup_SkipsOtherBackupDrives(t *testing.T) {
 	if err != nil || len(copies) != 1 || copies[0].Serial != "" {
 		t.Errorf("the target's cached copies = %+v, %v; want built-in storage only", copies, err)
 	}
+}
+
+// A backup given sources copies those drives and no other data drive, and the
+// job is named after them alone (#3984).
+func TestStartSnapshotBackup_CopiesOnlyTheChosenSources(t *testing.T) {
+	f := newJobFixture(t, dbtest.NewDB(t))
+	// otherSerial becomes a second data drive beside built-in storage.
+	if err := f.database.Queries.UpsertDeviceRole(t.Context(), db.UpsertDeviceRoleParams{
+		DeviceSerial: otherSerial,
+		Role:         "default-storage",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, f.internal, "docs/live.txt", "live")
+	writeTestFile(t, f.other, "docs/photos.txt", "photos")
+
+	inst := f.instance(nil)
+	inst.run(t)
+	result, err := StartSnapshotBackup(StartSnapshotBackupParams{
+		Ctx:                t.Context(),
+		Queries:            f.database.Queries,
+		Registry:           f.registry,
+		Queue:              inst.queue,
+		TargetDeviceSerial: targetSerial,
+		SourceSerials:      []string{otherSerial, otherSerial},
+		Storage:            f.storage,
+	})
+	if err != nil {
+		t.Fatalf("StartSnapshotBackup: %v", err)
+	}
+	row, err := f.database.Queries.GetJob(t.Context(), mustID(t, result.JobID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "Back up USB " + otherSerial + " onto USB " + targetSerial; row.Name != want {
+		t.Errorf("job name = %q, want %q", row.Name, want)
+	}
+	job := f.waitStatus(t, result.JobID, BackupStatusCompleted)
+	if len(job.SourceDevices) != 1 || job.SourceDevices[0].DeviceSerial != otherSerial {
+		t.Errorf("sources = %+v, want %s only", job.SourceDevices, otherSerial)
+	}
+	run := onlyRun(t, localFS(t, f.target))
+	if len(run.Drives) != 1 || run.Drives[0].Serial != otherSerial {
+		t.Errorf("the run holds %+v, want %s only", run.Drives, otherSerial)
+	}
+	dir := filepath.Join(f.target, BackupsDir, run.Folder)
+	assertFileContent(t, filepath.Join(dir, driveDirName("USB "+otherSerial, otherSerial), "docs/photos.txt"), "photos")
+	if _, err := os.Stat(filepath.Join(dir, builtInFolder)); !os.IsNotExist(err) {
+		t.Fatalf("built-in storage was copied though it was not chosen: %v", err)
+	}
+}
+
+// A source must be an attached data drive: not the target, not another
+// backup drive, and not a drive with no files namespace. Built-in storage is
+// the serial "".
+func TestStartSnapshotBackup_RejectsASourceThatIsNotADataDrive(t *testing.T) {
+	f := newJobFixture(t, dbtest.NewDB(t))
+	inst := f.instance(nil)
+	for _, tc := range []struct {
+		name   string
+		source string
+		ok     bool
+	}{
+		{"the target", targetSerial, false},
+		{"another backup drive", otherSerial, false},
+		{"a drive that is not attached", "GONE-1", false},
+		// Last: it queues a job, which holds the target.
+		{"built-in storage", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := StartSnapshotBackup(StartSnapshotBackupParams{
+				Ctx:                t.Context(),
+				Queries:            f.database.Queries,
+				Registry:           f.registry,
+				Queue:              inst.queue,
+				TargetDeviceSerial: targetSerial,
+				SourceSerials:      []string{tc.source},
+			})
+			if tc.ok {
+				if err != nil || result.JobID == "" {
+					t.Fatalf("StartSnapshotBackup = %+v, %v; want it queued", result, err)
+				}
+				return
+			}
+			if !errors.Is(err, ErrSourceNotDataDrive) {
+				t.Fatalf("StartSnapshotBackup = %v, want ErrSourceNotDataDrive", err)
+			}
+		})
+	}
+}
+
+func mustID(t *testing.T, id string) int64 {
+	t.Helper()
+	n, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
 }

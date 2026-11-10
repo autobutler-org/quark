@@ -55,13 +55,20 @@ func sourceName(src SourceDevice) string {
 
 // backupJobName names a backup after the drives it copies and the drive it
 // copies them onto: "Back up Quark, Photos and 1 more onto Built-in storage".
-// The target and the other backup drives are not copied.
-func backupJobName(names map[string]string, backups map[string]bool, target string) string {
-	sources := make([]string, 0, len(names))
-	for serial := range names {
-		if serial != target && !backups[serial] {
-			sources = append(sources, driveName(names, serial))
+// chosen are the sources asked for; none is every data drive, every drive in
+// names but the target and the other backup drives.
+func backupJobName(names map[string]string, backups map[string]bool, target string, chosen []string) string {
+	serials := chosen
+	if len(serials) == 0 {
+		for serial := range names {
+			if serial != target && !backups[serial] {
+				serials = append(serials, serial)
+			}
 		}
+	}
+	sources := make([]string, 0, len(serials))
+	for _, serial := range serials {
+		sources = append(sources, driveName(names, serial))
 	}
 	slices.Sort(sources)
 	onto := driveName(names, target)

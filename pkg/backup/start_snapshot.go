@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strconv"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -21,6 +22,9 @@ import (
 var (
 	ErrTargetRoleRequired = errors.New("target device must have the snapshot-backup role")
 	ErrTargetNotManaged   = errors.New("target device not found or not managed")
+	// ErrSourceNotDataDrive reports a chosen source that is the target,
+	// another backup drive, or not attached (#3984).
+	ErrSourceNotDataDrive = errors.New("a source must be an attached data drive, not a backup drive")
 )
 
 // BackupInProgressError reports a target device that already has a backup
@@ -51,6 +55,11 @@ type StartSnapshotBackupParams struct {
 	// TargetDeviceSerial is the device to back up onto. It must already hold
 	// the snapshot-backup role. An empty serial is the internal drive.
 	TargetDeviceSerial string
+	// SourceSerials are the data drives to copy; empty is every data drive.
+	// The serial "" is built-in storage. Each must be attached and must not be
+	// the target or another backup drive, or the start fails with
+	// [ErrSourceNotDataDrive].
+	SourceSerials []string
 	// Storage names the drives in the job name. Nil names them by serial.
 	Storage *storageutil.StorageService
 }
@@ -89,10 +98,18 @@ func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupR
 	if err != nil {
 		return StartSnapshotBackupResult{}, err
 	}
+	names := driveNames(params.Storage)
+	sources := slices.Compact(slices.Sorted(slices.Values(params.SourceSerials)))
+	for _, serial := range sources {
+		_, err := fileutil.FilesVFS(params.Registry, serial)
+		if serial == params.TargetDeviceSerial || backups[serial] || err != nil {
+			return StartSnapshotBackupResult{}, fmt.Errorf("%s: %w", driveName(names, serial), ErrSourceNotDataDrive)
+		}
+	}
 	queued, err := params.Queue.Enqueue(ctx, jobutil.EnqueueParams{
 		Kind:   Kind,
-		Name:   backupJobName(driveNames(params.Storage), backups, params.TargetDeviceSerial),
-		Params: JobParams{TargetDeviceSerial: params.TargetDeviceSerial},
+		Name:   backupJobName(names, backups, params.TargetDeviceSerial, sources),
+		Params: JobParams{TargetDeviceSerial: params.TargetDeviceSerial, SourceSerials: sources},
 		UserID: params.UserID,
 	})
 	if err != nil {
@@ -134,9 +151,10 @@ func backupSerials(ctx context.Context, queries db.Querier) (map[string]bool, er
 
 // gatherSourceDevices lists every managed device the backup should copy from:
 // the data drives, every one but the target and the other backup drives
-// (#4037). A device with no files namespace has been unplugged since it was
-// listed, and is left out.
-func gatherSourceDevices(storage *storageutil.StorageService, registry vfs.Registry, backups map[string]bool, targetSerial string) ([]SourceDevice, error) {
+// (#4037), and of those only the chosen serials when any are (#3984). A
+// device with no files namespace has been unplugged since it was listed, and
+// is left out.
+func gatherSourceDevices(storage *storageutil.StorageService, registry vfs.Registry, backups map[string]bool, targetSerial string, chosen []string) ([]SourceDevice, error) {
 	managed, err := storage.GetManagedDevices()
 	if err != nil {
 		return nil, err
@@ -151,7 +169,7 @@ func gatherSourceDevices(storage *storageutil.StorageService, registry vfs.Regis
 		}
 		// The target is skipped by serial too: its role may have changed since
 		// the job was queued, and a drive is never copied onto itself.
-		if serial == targetSerial || backups[serial] {
+		if serial == targetSerial || backups[serial] || (len(chosen) > 0 && !slices.Contains(chosen, serial)) {
 			continue
 		}
 		files, err := fileutil.FilesVFS(registry, serial)

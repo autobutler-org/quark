@@ -19,12 +19,12 @@ import (
 // source drive, the chat and vault exports, and the manifest (#4032). The run
 // is written under backups/.<run>.partial/ and renamed once it is complete,
 // so nothing that reads runs ever sees half of one, and a run that fails or
-// is canceled removes its partial folder. A file unchanged since the
-// previous complete run is hard-linked from it where the drive can link, so
+// is canceled removes its partial folder. A file unchanged since its drive's
+// newest complete run is hard-linked from it where the drive can link, so
 // each run is complete on its own without taking the space twice. Before
 // copying, a drive without room for what the run will copy has its oldest
-// runs deleted, never the newest, and a run that still does not fit fails
-// with [ErrNotEnoughSpace] (#4044).
+// runs deleted, never the newest nor any drive's newest copy, and a run that
+// still does not fit fails with [ErrNotEnoughSpace] (#4044, #3984).
 func SnapshotBackup(
 	ctx context.Context,
 	params SnapshotBackupParams,
@@ -114,20 +114,23 @@ func writeRun(
 	job := params.Job
 	partial := partialDir(folder)
 
-	// Where each source drive's files sit in the previous complete run, and
-	// whether this run can link to them.
+	// Where each source drive's files sit in the newest complete run holding
+	// that drive, which need not be the newest run when a run holds only some
+	// drives (#3984), and whether this run can link to them. Pruning keeps
+	// every such run.
 	runs, err := ListRuns(ctx, target)
 	if err != nil {
 		return time.Time{}, err
 	}
 	previous := map[string]string{}
-	canLink := false
-	if len(runs) > 0 {
-		for _, d := range runs[0].Drives {
-			previous[d.Serial] = path.Join(runDir(runs[0].Folder), d.Folder)
+	for _, run := range runs {
+		for _, d := range run.Drives {
+			if _, ok := previous[d.Serial]; !ok {
+				previous[d.Serial] = path.Join(runDir(run.Folder), d.Folder)
+			}
 		}
-		canLink = linksWork(ctx, target, runDir(runs[0].Folder), partial)
 	}
+	canLink := len(runs) > 0 && linksWork(ctx, target, runDir(runs[0].Folder), partial)
 
 	// Phase 1: scan all sources to count files and bytes, and the bytes the
 	// run will copy rather than link.
