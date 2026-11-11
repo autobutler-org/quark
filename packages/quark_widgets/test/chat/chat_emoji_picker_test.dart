@@ -51,6 +51,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  bool searchFocused(WidgetTester tester) => tester
+      .widget<EditableText>(
+        find.descendant(
+          of: find.byKey(search),
+          matching: find.byType(EditableText),
+        ),
+      )
+      .focusNode
+      .hasFocus;
+
+  testWidgets('the search waits for a tap on a touch screen (#4073)', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      ChatEmojiPicker(messageId: 'm1', onPick: (_) {}, onClose: () {}),
+    );
+
+    // Focused, it would raise the keyboard over the grid.
+    expect(searchFocused(tester), isFalse);
+  }, variant: TargetPlatformVariant.mobile());
+
+  testWidgets('the search takes focus with a keyboard and pointer', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      ChatEmojiPicker(messageId: 'm1', onPick: (_) {}, onClose: () {}),
+    );
+
+    expect(searchFocused(tester), isTrue);
+  }, variant: TargetPlatformVariant.desktop());
+
   testWidgets('a search with no name match says so', (tester) async {
     await pumpAt(
       tester,

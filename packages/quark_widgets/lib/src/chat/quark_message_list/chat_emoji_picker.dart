@@ -55,9 +55,11 @@ Future<String?> showChatEmojiPicker(
 /// not list.
 ///
 /// The quick six stay on [ChatReactionPicker]. This dialog is what "More
-/// emoji" opens, and what a caller can replace with [requestMoreEmoji]'s
-/// `pickMore` when the platform has its own keyboard. Search matches the
-/// Unicode name. Nothing here animates.
+/// emoji" opens on every platform, unless a caller replaces it with
+/// [requestMoreEmoji]'s `pickMore`. Search matches the Unicode name. The
+/// search field takes focus when the dialog opens on macOS, Windows and
+/// Linux; on a touch screen it waits for a tap, so the keyboard does not
+/// cover the grid. Nothing here animates.
 ///
 /// It does not close itself: [onPick] and [onClose] fire, and the caller
 /// that pushed the dialog pops it. [showChatEmojiPicker] does that and
@@ -153,7 +155,16 @@ class _ChatEmojiPickerState extends State<ChatEmojiPicker> {
                 TextField(
                   key: ValueKey('message_emoji_search_$messageId'),
                   controller: _search,
-                  autofocus: true,
+                  // On a touch screen the keyboard would rise over the grid
+                  // before anyone asked to search (#4073).
+                  autofocus: switch (Theme.of(context).platform) {
+                    TargetPlatform.macOS ||
+                    TargetPlatform.windows ||
+                    TargetPlatform.linux => true,
+                    TargetPlatform.android ||
+                    TargetPlatform.iOS ||
+                    TargetPlatform.fuchsia => false,
+                  },
                   decoration: InputDecoration(
                     hintText: 'Search emoji',
                     prefixIcon: const Icon(QuarkIcons.search),

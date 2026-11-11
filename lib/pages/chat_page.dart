@@ -23,7 +23,6 @@ import 'package:quark/widgets/chat/chat_channel_not_found.dart';
 import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
 import 'package:quark/widgets/chat/chat_search_bar.dart';
 import 'package:quark/widgets/chat/chat_unlock_prompt.dart';
-import 'package:quark/widgets/chat/native_emoji_dialog.dart';
 import 'package:quark/widgets/chat/show_chat_poll_editor.dart';
 import 'package:quark/widgets/chat/show_chat_poll_export.dart';
 import 'package:quark/widgets/chat/show_chat_save_folder.dart';
@@ -721,10 +720,6 @@ class _ChatPageState extends State<ChatPage>
                                 onCopy: _copyMessage,
                                 onDelete: _deleteMessage,
                                 onReact: _react,
-                                pickMoreEmoji: useNativeEmojiKeyboard()
-                                    ? (pickerContext, _) =>
-                                          showNativeEmojiDialog(pickerContext)
-                                    : null,
                                 onAnswerPoll: _answerPoll,
                                 onClosePoll: _closePoll,
                                 onExportPoll: _exportPoll,
