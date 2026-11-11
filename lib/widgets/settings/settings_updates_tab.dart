@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/settings/repair_installation_section.dart';
+import 'package:quark/widgets/settings/restart_quark_section.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The Updates tab of Settings (#2350): the Quark's installed version, and,
-/// for an admin, updating it and repairing the installation. Updates are
-/// manual and the tab says so: the automatic updates switch it had stored a
-/// setting nothing read (#2792).
+/// for an admin, updating it, repairing the installation and restarting it.
+/// Updates are manual and the tab says so: the automatic updates switch it had
+/// stored a setting nothing read (#2792).
 ///
 /// Called Updates rather than System, which names the Health, Storage and
 /// Jobs page (#2351). The page owns the values; this tab renders them and
@@ -219,6 +220,8 @@ class SettingsUpdatesTab extends StatelessWidget {
           const SizedBox(height: 24),
           // Renders nothing unless this Quark can repair itself (#2121).
           const RepairInstallationSection(),
+          // Renders nothing unless something starts Quark again (#4019).
+          const RestartQuarkSection(),
         ],
       ],
     );
