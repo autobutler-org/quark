@@ -2,13 +2,11 @@ package v0_storage
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
 
 	"github.com/autobutler-org/quark/pkg/backup"
-	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -29,7 +27,7 @@ import (
 // @Tags storage
 // @Accept json
 // @Produce json
-// @Param body body restoreSnapshotVaultBody true "The backup drive, the run, and the admin's auth key"
+// @Param body body restoreSnapshotBody true "The backup drive, the run, and the admin's auth key"
 // @Success 200 {object} backup.VaultImportResult
 // @Failure 400 {object} serverutil.Response "bad request, a drive without the snapshot-backup role, a backup this version cannot read, a backed-up key or item this Quark does not accept, or a backup this Quark did not write"
 // @Failure 401 {object} serverutil.Response
@@ -49,21 +47,12 @@ func restoreSnapshotVault(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRestoreVaultRequestBytes)
-	var req restoreSnapshotVaultBody
-	if err := c.ShouldBindJSON(&req); err != nil {
-		if _, tooLarge := errors.AsType[*http.MaxBytesError](err); tooLarge {
-			return serverutil.NewResponse().WithStatusCode(http.StatusRequestEntityTooLarge).
-				WithError(errors.New("request body too large"))
-		}
-		return serverutil.BadRequest(fmt.Errorf("invalid request: %w", err))
-	}
-
 	// Nothing goes before this: a restore puts a vault under every account.
-	username, _ := ctxutil.Get[string](c, "username")
-	if failed := reconfirmAdmin(c, deps, username, req.Password); failed != nil {
+	req, failed := confirmRestore(c, deps)
+	if failed != nil {
 		return failed
 	}
+	username, _ := ctxutil.Get[string](c, "username")
 	adminID, _ := ctxutil.Get[int64](c, "userID")
 
 	result, err := backup.RestoreVault(backup.RestoreVaultParams{
@@ -107,45 +96,6 @@ func restoreSnapshotVault(c *gin.Context) *serverutil.Response {
 		vaultutil.PublishChanged(vaultutil.PublishChangedParams{EventBus: deps.EventBus(), UserID: userID})
 	}
 	return serverutil.Ok().WithData(result)
-}
-
-// restoreSnapshotVaultBody is what the vault restore reads.
-type restoreSnapshotVaultBody struct {
-	// "" is built-in storage, so the field is not binding:"required".
-	DeviceSerial string `json:"deviceSerial"`
-	// Password is the standard base64 auth key of the admin's login
-	// password, as DELETE /vault takes it.
-	Password string `json:"password"`
-	// Run is the run to restore from, a folder under backups/ on the drive.
-	// Empty is the newest complete run.
-	Run string `json:"run"`
-}
-
-// maxRestoreVaultRequestBytes bounds the restore's body, a serial and an
-// auth key.
-const maxRestoreVaultRequestBytes = 1 << 10
-
-// reconfirmAdmin checks that password is the auth key of the caller's login
-// password, as DELETE /vault and PUT /vault/key do (#3615), so a session
-// alone cannot restore a vault. A wrong or empty key is a 403 and a raw
-// password a 426; nil means it matched.
-func reconfirmAdmin(c *gin.Context, deps deputil.Dependencies, username, password string) *serverutil.Response {
-	_, err := authutil.VerifyPassword(c.Request.Context(), authutil.VerifyPasswordParams{
-		Queries:  deps.Database().Queries,
-		Username: username,
-		Password: password,
-	})
-	switch {
-	case err == nil:
-		return nil
-	case errors.Is(err, authutil.ErrIncorrectPassword):
-		return serverutil.NewResponse().WithStatusCode(http.StatusForbidden).WithError(err)
-	case errors.Is(err, authutil.ErrUserNotFound):
-		return serverutil.Unauthorized(errors.New("not authenticated"))
-	default:
-		// ErrAppTooOld is a 426 HttpError, whatever status this names.
-		return serverutil.InternalServerError(err)
-	}
 }
 
 var restoreSnapshotVaultRoute = serverutil.ApiRoute(

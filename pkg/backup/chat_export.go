@@ -35,6 +35,7 @@ var chatBackup = ciphertextBackup{
 	ddl:        db.ChatBackupSchemaDDL,
 	version:    db.ChatBackupVersion,
 	errVersion: ErrChatBackupVersion,
+	errRole:    ErrChatRestoreRoleRequired,
 	directory: []string{
 		`INSERT INTO chat_backup.users (id, username) SELECT id, username FROM main.users`,
 		`INSERT INTO chat_backup.groups (id, name) SELECT id, name FROM main.groups`,

@@ -1609,6 +1609,41 @@ func NotifyKeyNeeded(params NotifyKeyNeededParams) (NotifyKeyNeededResult, error
 	return NotifyKeyNeededResult{ChannelIDs: notified}, nil
 }
 
+// PublishChannelsChangedParams asks for every channel's members to be told
+// it changed.
+type PublishChannelsChangedParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	EventBus *eventbus.Bus
+}
+
+// PublishChannelsChanged publishes chat_channel_changed for every channel to
+// its members, for a change made underneath the chat, such as a restore from
+// a backup (#2428). Each open client reloads its channels and members, and
+// WatchKeyNeeds asks the key holders to fill any grant the change left out.
+// Call it once the change has committed. A nil bus publishes nothing.
+func PublishChannelsChanged(params PublishChannelsChangedParams) error {
+	if params.EventBus == nil {
+		return nil
+	}
+	if params.Database == nil {
+		return accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	ids, err := queries.ListChatChannelIDs(params.Ctx)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		members, err := memberIDs(params.Ctx, queries, id)
+		if err != nil {
+			return err
+		}
+		publish(params.EventBus, id, members)
+	}
+	return nil
+}
+
 // WatchKeyNeedsParams runs the Quark's key-need watcher.
 type WatchKeyNeedsParams struct {
 	Ctx      context.Context

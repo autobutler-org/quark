@@ -155,10 +155,10 @@ being unplugged; one left on a drive that loses the role does nothing until the 
 
 ## Restoring and verifying a run
 
-Restore files (`POST /api/v0/storage/devices/snapshot-backup/restore-files`), restore vaults (`.../restore-vault`)
-and verify (`.../verify`) each take an optional `run`, a folder as the run list names it. Empty or absent is the
-newest complete run, and each answer's `run` names the one used. Only a listed run is read: an unknown name, a
-partial run, or a path out of `backups/` is a 404.
+Restore files (`POST /api/v0/storage/devices/snapshot-backup/restore-files`), restore vaults (`.../restore-vault`),
+restore chat (`.../restore-chat`) and verify (`.../verify`) each take an optional `run`, a folder as the run list
+names it. Empty or absent is the newest complete run, and each answer's `run` names the one used. Only a listed run
+is read: an unknown name, a partial run, or a path out of `backups/` is a 404.
 
 - **Restore files** (`backup.StartRestoreFiles`) maps each drive folder in the run to its drive through the manifest's
   `drives`, never through the folder's name. A drive that is attached gets its files back; a file already there is
@@ -167,6 +167,7 @@ partial run, or a path out of `backups/` is a 404.
   run, which is what holds a delete of that run off while the restore runs.
 - **Restore vaults** reads `vault_items_backup.db` and its MAC from the run's folder
   ([Restoring the vault](#restoring-the-vault)).
+- **Restore chat** reads `chat_backup.db` and its MAC from the run's folder ([Restoring chat](#restoring-chat)).
 - **Verify** (`backup.VerifyBackup`) checks the run's files against its manifest: sizes, or hashes with `full`. A
   drive with no complete run is a 400 with `ErrNoManifest`, "nothing to verify yet: back up onto this drive first".
   Restore on such a drive is a 404 (`ErrNoSnapshot`), which the app shows as "There are no backups on this drive yet.
@@ -235,8 +236,14 @@ A restored account's chat identity replaces the one a sign-in on the new install
 it with the password or recovery phrase they had when the backup was taken. `ImportChat` returns the usernames
 it could not match in `UnmatchedUsers`.
 
-No handler calls `ImportChat` yet; the chat's restore route and its page are still to come (#2428). That route checks
-the file's [binding](#binding-a-backup-to-this-quark) first, with `chatBackup.checkBinding`, as the vault's does.
+An admin restores it with `POST /api/v0/storage/devices/snapshot-backup/restore-chat` (#2428), which takes the
+vault restore's body, `{"deviceSerial": ..., "password": ..., "run": ...}`, re-confirms the admin's auth key the same
+way, and shares the sign-in rate limit. `backup.RestoreChat` checks the drive, the run and the file exactly as
+`RestoreVault` does, through `ciphertextBackup.fromDrive`: the drive must have the `snapshot-backup` role
+(`ErrChatRestoreRoleRequired`, a 400), and the file its [binding](#binding-a-backup-to-this-quark). A chat that is
+not empty is a 409. Once it commits, every channel's members are sent `chat_channel_changed`
+(`chatutil.PublishChannelsChanged`): open clients reload their channels, and `WatchKeyNeeds` asks the key holders to
+hand out any grant the restore left behind.
 
 ## The vault export
 

@@ -27,6 +27,7 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 		startSnapshotBackupRoute,
 		verifySnapshotBackupRoute,
 		restoreSnapshotVaultRoute,
+		restoreSnapshotChatRoute,
 		restoreSnapshotFilesRoute,
 		listBackupRunsRoute,
 		deleteBackupRunRoute,
@@ -76,3 +77,19 @@ type verifySnapshotBackupBody struct {
 	// is the newest complete run.
 	Run string `json:"run"`
 }
+
+// restoreSnapshotBody is what the vault and chat restores read.
+type restoreSnapshotBody struct {
+	// "" is built-in storage, so the field is not binding:"required".
+	DeviceSerial string `json:"deviceSerial"`
+	// Password is the standard base64 auth key of the admin's login
+	// password, as DELETE /vault takes it.
+	Password string `json:"password"`
+	// Run is the run to restore from, a folder under backups/ on the drive.
+	// Empty is the newest complete run.
+	Run string `json:"run"`
+}
+
+// maxRestoreRequestBytes bounds a restore's body, a serial, a run and an auth
+// key.
+const maxRestoreRequestBytes = 1 << 10

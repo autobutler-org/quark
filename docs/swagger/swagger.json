@@ -10218,6 +10218,105 @@
                 }
             }
         },
+        "/storage/devices/snapshot-backup/restore-chat": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Re-confirms the caller with password, which carries the auth key of the admin's login password, exactly as POST /storage/devices/snapshot-backup/restore-vault takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is restored. Shares the sign-in rate limit, and the body is at most 1 KiB.\nThen restores the chat backup a snapshot wrote into one run on the drive, which must have the snapshot-backup role: run, a folder under backups/, or the newest complete run when it is empty. The answer names the run.\nThe restore replaces an empty chat: one with no message and no channel but general. A chat that already has messages or channels is refused, and a refused or failed restore changes nothing.\nThe backup does not carry accounts. Every account it names is matched by username on this Quark; unmatchedUsers names the ones that are not here, whose messages stay with no author and whose memberships, reactions and chat keys are not restored.\nAlso refused, changing nothing, when this Quark did not write the backup: its MAC is another Quark's, the file changed after the snapshot, or its MAC is gone from a drive this Quark binds its snapshots to. A snapshot taken before binding still restores.\nEvery channel's members are sent chat_channel_changed. Every attempt past the password check is written to the server log.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "storage"
+                ],
+                "summary": "Restore the chat from a snapshot backup",
+                "parameters": [
+                    {
+                        "description": "The backup drive, the run, and the admin's auth key",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_storage.restoreSnapshotBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/backup.ChatImportResult"
+                        }
+                    },
+                    "400": {
+                        "description": "bad request, a drive without the snapshot-backup role, a backup this version cannot read, or a backup this Quark did not write",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "password is not the caller's auth key",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the device is not attached, holds no complete run or none of that name, or the run holds no chat backup",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the chat already has messages or channels",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "413": {
+                        "description": "a body over 1 KiB",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "426": {
+                        "description": "password is a raw password: the app is too old",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "501": {
+                        "description": "the Quark runs on PostgreSQL",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/storage/devices/snapshot-backup/restore-files": {
             "post": {
                 "security": [
@@ -10312,7 +10411,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/v0_storage.restoreSnapshotVaultBody"
+                            "$ref": "#/definitions/v0_storage.restoreSnapshotBody"
                         }
                     }
                 ],
@@ -12877,6 +12976,28 @@
                 "BackupStatusCompleted",
                 "BackupStatusFailed"
             ]
+        },
+        "backup.ChatImportResult": {
+            "type": "object",
+            "properties": {
+                "channels": {
+                    "type": "integer"
+                },
+                "messages": {
+                    "type": "integer"
+                },
+                "run": {
+                    "description": "Run is the run [RestoreChat] read the chat from, a folder under\nbackups/. [ImportChat] leaves it empty.",
+                    "type": "string"
+                },
+                "unmatchedUsers": {
+                    "description": "UnmatchedUsers is the usernames in the backup with no account on this\nQuark, sorted. Their messages read as a deleted account's, and their\nmemberships, reactions and chat keys were not restored.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
         },
         "backup.DeleteRunResult": {
             "type": "object",
@@ -16501,6 +16622,23 @@
                 }
             }
         },
+        "v0_storage.restoreSnapshotBody": {
+            "type": "object",
+            "properties": {
+                "deviceSerial": {
+                    "description": "\"\" is built-in storage, so the field is not binding:\"required\".",
+                    "type": "string"
+                },
+                "password": {
+                    "description": "Password is the standard base64 auth key of the admin's login\npassword, as DELETE /vault takes it.",
+                    "type": "string"
+                },
+                "run": {
+                    "description": "Run is the run to restore from, a folder under backups/ on the drive.\nEmpty is the newest complete run.",
+                    "type": "string"
+                }
+            }
+        },
         "v0_storage.restoreSnapshotFilesBody": {
             "type": "object",
             "properties": {
@@ -16514,23 +16652,6 @@
                 },
                 "run": {
                     "description": "Run is the run to restore, a folder under backups/ on the drive. Empty\nis the newest complete run.",
-                    "type": "string"
-                }
-            }
-        },
-        "v0_storage.restoreSnapshotVaultBody": {
-            "type": "object",
-            "properties": {
-                "deviceSerial": {
-                    "description": "\"\" is built-in storage, so the field is not binding:\"required\".",
-                    "type": "string"
-                },
-                "password": {
-                    "description": "Password is the standard base64 auth key of the admin's login\npassword, as DELETE /vault takes it.",
-                    "type": "string"
-                },
-                "run": {
-                    "description": "Run is the run to restore from, a folder under backups/ on the drive.\nEmpty is the newest complete run.",
                     "type": "string"
                 }
             }
