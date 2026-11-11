@@ -1,6 +1,9 @@
 package chatutil
 
-import "slices"
+import (
+	"io"
+	"slices"
+)
 
 // keyState is a channel's key versions against its members, the ground truth
 // for pending grants and rotation (#2417).
@@ -73,4 +76,21 @@ func (s keyState) keyHolders() []int64 {
 	}
 	slices.Sort(holders)
 	return holders
+}
+
+// attachmentReader counts the bytes of an upload as they are read, and fails
+// with ErrAttachmentTooLarge on the read that passes MaxAttachmentBytes, so an
+// oversized upload fails before it is committed to its final path.
+type attachmentReader struct {
+	r io.Reader
+	n int64
+}
+
+func (a *attachmentReader) Read(p []byte) (int, error) {
+	n, err := a.r.Read(p)
+	a.n += int64(n)
+	if a.n > MaxAttachmentBytes {
+		return n, ErrAttachmentTooLarge
+	}
+	return n, err
 }

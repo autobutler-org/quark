@@ -16,6 +16,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/sqlutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
 // MaxAttachmentBytes is the most ciphertext one attachment may store. It is a
@@ -312,43 +313,19 @@ func sweepUnboundAttachments(ctx context.Context, queries db.Querier, dataDir st
 	}
 }
 
+// writeAttachment streams r to path as a private file and returns its size. The
+// commit refuses a taken path, so two uploads of one id cannot overwrite each
+// other, and works on a data directory without hard links (#4050).
 func writeAttachment(path string, r io.Reader) (int64, error) {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return 0, err
+	body := &attachmentReader{r: io.LimitReader(r, MaxAttachmentBytes+1)}
+	err := storageutil.WriteFileAtomicExclusivePerm(path, body, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		return 0, ErrAttachmentExists
 	}
-	// A private temp name, then a link onto the final path. The link fails
-	// when the path exists, so two uploads of one id cannot overwrite each
-	// other. The temp name is removed either way; the linked file stays.
-	file, err := os.CreateTemp(dir, ".attachment-*")
 	if err != nil {
 		return 0, err
 	}
-	part := file.Name()
-	defer func() { _ = os.Remove(part) }()
-	n, err := io.Copy(file, io.LimitReader(r, MaxAttachmentBytes+1))
-	if err != nil {
-		_ = file.Close()
-		return 0, err
-	}
-	if n > MaxAttachmentBytes {
-		_ = file.Close()
-		return 0, ErrAttachmentTooLarge
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return 0, err
-	}
-	if err := file.Close(); err != nil {
-		return 0, err
-	}
-	if err := os.Link(part, path); err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return 0, ErrAttachmentExists
-		}
-		return 0, err
-	}
-	return n, nil
+	return body.n, nil
 }
 
 func removeAttachment(dataDir string, channelID int64, id string) error {

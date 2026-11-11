@@ -29,7 +29,5 @@ func FailAtomicSyncForTesting(t *testing.T, err error) {
 // the way exFAT refuses one. The test must not run in parallel.
 func NoHardLinksForTesting(t *testing.T) {
 	t.Helper()
-	saved := linkFile
-	t.Cleanup(func() { linkFile = saved })
-	linkFile = func(string, string) error { return &os.LinkError{Op: "link", Err: syscall.EPERM} }
+	t.Cleanup(FailHardLinksForTesting(syscall.EPERM))
 }

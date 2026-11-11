@@ -34,11 +34,17 @@ func WriteFileAtomicPerm(absPath string, r io.Reader, perm os.FileMode) error {
 // one step, so of two writers racing for one name exactly one wins — a stat
 // before the rename let both through (#2640).
 func WriteFileAtomicExclusive(absPath string, r io.Reader) error {
-	return writeFileAtomic(absPath, r, 0o644, commitExclusive)
+	return WriteFileAtomicExclusivePerm(absPath, r, 0o644)
+}
+
+// WriteFileAtomicExclusivePerm is [WriteFileAtomicExclusive] for a file that
+// must carry perm, as [WriteFileAtomicPerm] is for [WriteFileAtomic].
+func WriteFileAtomicExclusivePerm(absPath string, r io.Reader, perm os.FileMode) error {
+	return writeFileAtomic(absPath, r, perm, commitExclusive)
 }
 
 // writeFileAtomic is the body of [WriteFileAtomicPerm] and
-// [WriteFileAtomicExclusive]: it streams r into a flushed temp beside absPath
+// [WriteFileAtomicExclusivePerm]: it streams r into a flushed temp beside absPath
 // and hands the temp's name to commit to put in place.
 func writeFileAtomic(absPath string, r io.Reader, perm os.FileMode, commit func(tmpName, absPath string) error) error {
 	dir := filepath.Dir(absPath)
@@ -76,7 +82,7 @@ func writeFileAtomic(absPath string, r io.Reader, perm os.FileMode, commit func(
 
 // commitExclusive puts the finished temp at absPath only if absPath is free.
 // os.Link refuses a taken name atomically where os.Rename would replace it. A
-// filesystem without hard links (exFAT, common on USB drives) gets the same
+// filesystem without hard links (exFAT on a USB drive, an SMB share) gets the same
 // guarantee from O_EXCL: the name is reserved as an empty file and the temp
 // renamed over the reservation, so the empty file exists only for the instant
 // between the two calls.
@@ -109,6 +115,18 @@ var (
 	syncFile   = (*os.File).Sync
 	linkFile   = os.Link
 )
+
+// FailHardLinksForTesting makes every hard link [WriteFileAtomicExclusive]
+// tries fail with err until restore runs, the way a filesystem without hard
+// links refuses one. It is for tests in other packages, which must not run in
+// parallel while it is in effect.
+func FailHardLinksForTesting(err error) (restore func()) {
+	saved := linkFile
+	linkFile = func(src, dst string) error {
+		return &os.LinkError{Op: "link", Old: src, New: dst, Err: err}
+	}
+	return func() { linkFile = saved }
+}
 
 // SyncFile flushes the file at path to disk. A file that is about to be renamed
 // or linked into place is flushed first, so the name never outlives its bytes
