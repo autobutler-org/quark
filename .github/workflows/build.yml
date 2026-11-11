@@ -324,6 +324,15 @@ jobs:
         # this stops at the .app and uploads nothing.
         run: |
           make build/frontend/ios FLUTTER_BUILD_MODE=release
+      # The build runs pod install, which rewrites Podfile.lock whenever a pub bump
+      # changes the plugins' pods. Renovate never runs pod install, so this is where a
+      # stale lock is caught. The COCOAPODS line only records the runner's pod version.
+      - name: Check Podfile.lock
+        run: |
+          if ! git diff --exit-code -I '^COCOAPODS:' ios/Podfile.lock; then
+            echo "::error file=ios/Podfile.lock::Podfile.lock is stale. Run 'gmake tidy/flutter' on macOS and commit ios/Podfile.lock."
+            exit 1
+          fi
       - name: Upload artifact
         if: steps.signing.outputs.available == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -1,22 +1,21 @@
 PODS:
-  - bonsoir_darwin (0.0.1):
-    - Flutter
-    - FlutterMacOS
   - Flutter (1.0.0)
+  - media_kit_video (0.0.1):
+    - Flutter
 
 DEPENDENCIES:
-  - bonsoir_darwin (from `.symlinks/plugins/bonsoir_darwin/darwin`)
   - Flutter (from `Flutter`)
+  - media_kit_video (from `.symlinks/plugins/media_kit_video/ios`)
 
 EXTERNAL SOURCES:
-  bonsoir_darwin:
-    :path: ".symlinks/plugins/bonsoir_darwin/darwin"
   Flutter:
     :path: Flutter
+  media_kit_video:
+    :path: ".symlinks/plugins/media_kit_video/ios"
 
 SPEC CHECKSUMS:
-  bonsoir_darwin: 29c7ccf356646118844721f36e1de4b61f6cbd0e
   Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
+  media_kit_video: f3b0d035d89def15cfbbcf7dc2ae278f201e2f83
 
 PODFILE CHECKSUM: 53a6aebc29ccee84c41f92f409fc20cd4ca011f1
 
