@@ -780,6 +780,7 @@ class _SettingsPageState extends State<SettingsPage> {
               appReleaseUrl: releaseNotesUrl(appBuildName),
               onOpenReleaseNotes: _openReleaseNotes,
               onOpenTerms: () => context.push(AppRoutes.terms),
+              onOpenApiExplorer: () => context.push(AppRoutes.apiExplorer),
               isLoadingSbom: _isLoadingSbom,
               sbomError: _sbomError,
               flutterSbom: _flutterSbom,

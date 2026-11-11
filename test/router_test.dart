@@ -871,6 +871,28 @@ void main() {
       expect(paths.indexOf(AppRoutes.accountAndData), isNot(-1));
     });
 
+    // #4077: the API explorer is a sibling of the tabs, open to every
+    // signed-in user.
+    test('the app declares the API explorer before the Settings tabs', () {
+      final paths = router.configuration.routes
+          .whereType<GoRoute>()
+          .map((route) => route.path)
+          .toList();
+      expect(paths.indexOf(AppRoutes.apiExplorer), isNot(-1));
+      expect(
+        paths.indexOf(AppRoutes.apiExplorer),
+        lessThan(paths.indexOf('/settings/:tab')),
+      );
+      expect(
+        adminRoutes.where(
+          (admin) =>
+              AppRoutes.apiExplorer == admin ||
+              AppRoutes.apiExplorer.startsWith('$admin/'),
+        ),
+        isEmpty,
+      );
+    });
+
     test('are General, Account, Network, Updates, About and Features', () {
       expect(SettingsTab.values.map(AppRoutes.settingsTab), [
         '/settings/general',
