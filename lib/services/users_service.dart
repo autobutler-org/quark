@@ -24,6 +24,8 @@ class UsersService with AuthenticatedService {
   static final UsersService instance = UsersService._();
 
   /// Every account on the Quark, pending requests included.
+  ///
+  /// api: GET /api/v0/admin/users
   static Future<List<UserAccount>> list() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/admin/users'),
@@ -36,6 +38,8 @@ class UsersService with AuthenticatedService {
   }
 
   /// Makes [username] an admin. Only an active account can be promoted.
+  ///
+  /// api: PUT /api/v0/admin/promote/{username}
   static Future<void> promote(String username) async {
     final response = await instance.authenticatedPut(
       _accountUri('/api/v0/admin/promote', username),
@@ -45,6 +49,8 @@ class UsersService with AuthenticatedService {
 
   /// Stops [username] being an admin. Refused while they are the last active
   /// admin.
+  ///
+  /// api: PUT /api/v0/admin/demote/{username}
   static Future<void> demote(String username) async {
     final response = await instance.authenticatedPut(
       _accountUri('/api/v0/admin/demote', username),
@@ -53,6 +59,8 @@ class UsersService with AuthenticatedService {
   }
 
   /// Approves the pending request from [username], who can then sign in.
+  ///
+  /// api: PUT /api/v0/admin/approve/{username}
   static Future<void> approve(String username) async {
     final response = await instance.authenticatedPut(
       _accountUri('/api/v0/admin/approve', username),
@@ -61,6 +69,8 @@ class UsersService with AuthenticatedService {
   }
 
   /// Denies the pending request from [username]. The username is free again.
+  ///
+  /// api: PUT /api/v0/admin/deny/{username}
   static Future<void> deny(String username) async {
     final response = await instance.authenticatedPut(
       _accountUri('/api/v0/admin/deny', username),
@@ -71,6 +81,8 @@ class UsersService with AuthenticatedService {
   /// Turns [username]'s account off (#1909): it keeps its files and shares
   /// but cannot sign in, and its sessions end. Refused for your own account,
   /// and while it is the last active admin.
+  ///
+  /// api: PUT /api/v0/admin/disable/{username}
   static Future<void> disable(String username) async {
     final response = await instance.authenticatedPut(
       _accountUri('/api/v0/admin/disable', username),
@@ -79,6 +91,8 @@ class UsersService with AuthenticatedService {
   }
 
   /// Turns [username]'s account back on, with everything it had.
+  ///
+  /// api: PUT /api/v0/admin/enable/{username}
   static Future<void> enable(String username) async {
     final response = await instance.authenticatedPut(
       _accountUri('/api/v0/admin/enable', username),
@@ -90,6 +104,8 @@ class UsersService with AuthenticatedService {
   /// Quark and become the signed-in admin's. Returns how many owner rows
   /// moved. Refused for your own account, and while it is the last active
   /// admin.
+  ///
+  /// api: DELETE /api/v0/admin/users/{username}
   static Future<int> delete(String username) async {
     final response = await instance.authenticatedDelete(
       _accountUri('/api/v0/admin/users', username),
@@ -108,6 +124,8 @@ class UsersService with AuthenticatedService {
 
   /// Turns account requests on or off, and returns the setting the Quark
   /// saved.
+  ///
+  /// api: PUT /api/v0/settings/access-requests
   static Future<bool> setAccessRequestsEnabled(bool enabled) async {
     final response = await instance.authenticatedPut(
       apiBaseUri.resolve('/api/v0/settings/access-requests'),
@@ -126,6 +144,8 @@ class UsersService with AuthenticatedService {
   /// The account has no recovery phrase until its first sign-in, when the
   /// app there gives it one (#2430). A taken username or an existing home is a
   /// 409 whose text the Quark writes, passed on as is.
+  ///
+  /// api: POST /api/v0/admin/users
   static Future<UserAccount> create({
     required String username,
     required String password,
@@ -155,6 +175,8 @@ class UsersService with AuthenticatedService {
   /// [version] is the picture's `avatarUpdatedAt` (from `/auth/status`, or
   /// [setAvatar]'s return), added as `v` so a changed picture is a new URL and
   /// no image cache serves the old one. A user with no picture is a 404.
+  ///
+  /// api: GET /api/v0/users/{id}/avatar
   static Uri avatarUrl(int userId, {int? version}) {
     final token = AppSettings.instance.bearerToken;
     return apiBaseUri
@@ -174,6 +196,8 @@ class UsersService with AuthenticatedService {
   ///
   /// Over [maxAvatarBytes] throws [Errors.avatarTooLarge] without sending
   /// anything. A refusal is an [ApiException] that [Errors.avatar] reads.
+  ///
+  /// api: PUT /api/v0/users/me/avatar
   static Future<int> setAvatar({
     required Stream<List<int>> bytes,
     required int length,
@@ -206,6 +230,8 @@ class UsersService with AuthenticatedService {
 
   /// Removes the signed-in user's profile picture; apps fall back to
   /// initials. Removing a picture that isn't there succeeds.
+  ///
+  /// api: DELETE /api/v0/users/me/avatar
   static Future<void> removeAvatar() async {
     final response = await instance.authenticatedDelete(
       apiBaseUri.resolve('/api/v0/users/me/avatar'),

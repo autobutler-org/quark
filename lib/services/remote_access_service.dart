@@ -86,6 +86,7 @@ class RemoteAccessService with AuthenticatedService {
   static final RemoteAccessService instance = RemoteAccessService._();
   RemoteAccessService._();
 
+  /// api: GET /api/v0/settings/remote-access
   static Future<RemoteAccessStatus> getStatus() async {
     final uri = apiBaseUri.resolve('/api/v0/settings/remote-access');
     final response = await instance.authenticatedGet(uri);
@@ -100,6 +101,8 @@ class RemoteAccessService with AuthenticatedService {
   }
 
   /// Asks the Quark, over the home network, for a key this phone can join with.
+  ///
+  /// api: POST /api/v0/settings/remote-access/devices
   static Future<PairedDevice> pairDevice() async {
     final uri = apiBaseUri.resolve('/api/v0/settings/remote-access/devices');
     final response = await instance.authenticatedPost(uri);
@@ -112,6 +115,7 @@ class RemoteAccessService with AuthenticatedService {
     return PairedDevice.fromJson(json);
   }
 
+  /// api: POST /api/v0/settings/remote-access
   static Future<RemoteAccessStatus> enable() async {
     final uri = apiBaseUri.resolve('/api/v0/settings/remote-access');
     final response = await instance.authenticatedPost(
@@ -124,6 +128,7 @@ class RemoteAccessService with AuthenticatedService {
     return RemoteAccessStatus.fromJson(json);
   }
 
+  /// api: DELETE /api/v0/settings/remote-access
   static Future<RemoteAccessStatus> disable() async {
     final uri = apiBaseUri.resolve('/api/v0/settings/remote-access');
     final response = await instance.authenticatedDelete(uri);

@@ -201,6 +201,8 @@ class SlidesService {
   /// The size of the picture at [path] on the Quark, read from a ranged
   /// download of its first [imageHeadLimit] bytes, or null when its header
   /// cannot be read. A failed request throws an [ApiException].
+  ///
+  /// api: GET /api/v0/files/download
   static Future<SlideImageSize?> readImageSize(
     String path, {
     String? serial,
@@ -238,6 +240,8 @@ class SlidesService {
   /// Asks the Quark to import the PowerPoint file at [path] as a presentation
   /// beside it (#1171). The Quark reads the file in place; nothing is
   /// downloaded here. A refused import throws an [ApiException].
+  ///
+  /// api: POST /api/v0/files/import/pptx
   static Future<PowerPointImport> importPowerPoint(
     String path, {
     String? serial,

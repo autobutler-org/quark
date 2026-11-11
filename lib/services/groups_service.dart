@@ -24,6 +24,8 @@ class GroupsService with AuthenticatedService {
   static const _accountCannotJoin = 'no account has that username';
 
   /// Every group, `everyone` first, each with its members.
+  ///
+  /// api: GET /api/v0/admin/groups
   static Future<List<Group>> list() async {
     final response = await instance.authenticatedGet(_groupsUri());
     _check(response, 'list groups');
@@ -34,6 +36,8 @@ class GroupsService with AuthenticatedService {
   }
 
   /// Creates a group named [name], with no members.
+  ///
+  /// api: POST /api/v0/admin/groups
   static Future<void> create(String name) async {
     final response = await instance.authenticatedPost(
       _groupsUri(),
@@ -45,6 +49,8 @@ class GroupsService with AuthenticatedService {
 
   /// Renames the group [id] to [name]. The Quark's answer leaves the members
   /// out, so a caller lists the groups again rather than reading it.
+  ///
+  /// api: PUT /api/v0/admin/groups/{id}
   static Future<void> rename(int id, String name) async {
     final response = await instance.authenticatedPut(
       _groupsUri('/$id'),
@@ -56,6 +62,8 @@ class GroupsService with AuthenticatedService {
 
   /// Deletes the group [id]. Whatever was shared with it stops being shared
   /// with its members.
+  ///
+  /// api: DELETE /api/v0/admin/groups/{id}
   static Future<void> delete(int id) async {
     final response = await instance.authenticatedDelete(_groupsUri('/$id'));
     _check(response, 'delete group $id');
@@ -63,6 +71,8 @@ class GroupsService with AuthenticatedService {
 
   /// Adds the account [userId] to the group [groupId]. Adding a member twice
   /// changes nothing. Only an account that can sign in can be added.
+  ///
+  /// api: PUT /api/v0/admin/groups/{id}/members/{userId}
   static Future<void> addMember(int groupId, int userId) async {
     final response = await instance.authenticatedPut(
       _groupsUri('/$groupId/members/$userId'),
@@ -75,6 +85,8 @@ class GroupsService with AuthenticatedService {
   }
 
   /// Takes the account [userId] out of the group [groupId].
+  ///
+  /// api: DELETE /api/v0/admin/groups/{id}/members/{userId}
   static Future<void> removeMember(int groupId, int userId) async {
     final response = await instance.authenticatedDelete(
       _groupsUri('/$groupId/members/$userId'),
@@ -82,6 +94,7 @@ class GroupsService with AuthenticatedService {
     _check(response, 'remove member $userId from group $groupId');
   }
 
+  /// api: none
   static Uri _groupsUri([String suffix = '']) =>
       apiBaseUri.resolve('/api/v0/admin/groups$suffix');
 

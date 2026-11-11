@@ -18,6 +18,8 @@ class SshAccessService with AuthenticatedService {
   static const _json = {'Content-Type': 'application/json'};
 
   /// Whether SSH access can be managed, whether it is on, and the keys.
+  ///
+  /// api: GET /api/v0/ssh/status
   static Future<SshAccessStatus> getStatus() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/ssh/status'),
@@ -29,6 +31,8 @@ class SshAccessService with AuthenticatedService {
   }
 
   /// Turns SSH access on or off.
+  ///
+  /// api: PUT /api/v0/ssh/enabled
   static Future<void> setEnabled(bool enabled) async {
     final response = await instance.authenticatedPut(
       apiBaseUri.resolve('/api/v0/ssh/enabled'),
@@ -39,6 +43,8 @@ class SshAccessService with AuthenticatedService {
   }
 
   /// Allows [key], one public key line, to sign in.
+  ///
+  /// api: POST /api/v0/ssh/keys
   static Future<void> addKey(String key) async {
     final response = await instance.authenticatedPost(
       apiBaseUri.resolve('/api/v0/ssh/keys'),
@@ -49,6 +55,8 @@ class SshAccessService with AuthenticatedService {
   }
 
   /// Stops the key with [fingerprint] signing in.
+  ///
+  /// api: DELETE /api/v0/ssh/keys
   static Future<void> removeKey(String fingerprint) async {
     final response = await instance.authenticatedDelete(
       apiBaseUri.replace(
@@ -60,6 +68,8 @@ class SshAccessService with AuthenticatedService {
   }
 
   /// Sets the quark login account's password.
+  ///
+  /// api: PUT /api/v0/ssh/password
   static Future<void> setPassword(String password) async {
     final response = await instance.authenticatedPut(
       apiBaseUri.resolve('/api/v0/ssh/password'),
@@ -70,6 +80,8 @@ class SshAccessService with AuthenticatedService {
   }
 
   /// Clears the quark login account's password.
+  ///
+  /// api: DELETE /api/v0/ssh/password
   static Future<void> clearPassword() async {
     final response = await instance.authenticatedDelete(
       apiBaseUri.resolve('/api/v0/ssh/password'),

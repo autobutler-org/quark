@@ -39,6 +39,7 @@ class FileUploadChunkSource implements UploadChunkSource {
   @override
   final DateTime? lastModified;
 
+  /// api: none
   @override
   Future<http.Response> putRange({
     required Uri uri,

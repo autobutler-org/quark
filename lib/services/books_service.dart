@@ -14,6 +14,8 @@ class BooksService with AuthenticatedService {
   static final BooksService instance = BooksService._();
 
   /// Lists the books, in the order the Quark walked them.
+  ///
+  /// api: GET /api/v0/books
   static Future<List<FileNode>> list() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.replace(path: '/api/v0/books'),

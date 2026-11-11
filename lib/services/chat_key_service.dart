@@ -20,6 +20,8 @@ class ChatKeyService with AuthenticatedService {
   ///
   /// [sessionToken] is for a session the app hasn't stored yet: a first
   /// sign-in whose recovery phrase is still on screen.
+  ///
+  /// api: GET /api/v0/chat/keys/me
   static Future<WrappedChatKeys?> fetchMine({String? sessionToken}) async {
     final response = await instance.authenticatedGet(
       _uri('/me'),
@@ -33,6 +35,8 @@ class ChatKeyService with AuthenticatedService {
   }
 
   /// Stores [keys] as the signed-in account's identity, replacing any.
+  ///
+  /// api: PUT /api/v0/chat/keys/me
   static Future<void> putMine(
     WrappedChatKeys keys, {
     String? sessionToken,
@@ -48,6 +52,7 @@ class ChatKeyService with AuthenticatedService {
   static Map<String, String> _bearer(String? token) =>
       token == null ? const {} : {'Authorization': 'Bearer $token'};
 
+  /// api: none
   static Uri _uri(String suffix) =>
       apiBaseUri.resolve('/api/v0/chat/keys$suffix');
 }

@@ -1046,7 +1046,7 @@ generate/backend/swagger: ## Generate Swagger docs
 	swag init -g ./cmd/quark/main.go -o ./docs/swagger --parseInternal
 
 .PHONY: generate/frontend
-generate/frontend: generate/frontend/icons generate/frontend/quark-icons generate/frontend/sbom generate/frontend/widget-docs ## Generate frontend files
+generate/frontend: generate/frontend/icons generate/frontend/quark-icons generate/frontend/sbom generate/frontend/widget-docs generate/frontend/api-explorer ## Generate frontend files
 
 .PHONY: generate/frontend/pub-get
 generate/frontend/pub-get: ## Refresh the workspace resolution for `dart run`
@@ -1085,6 +1085,11 @@ generate/frontend/android/lockfile: ## Regenerate android/app/gradle.lockfile (n
 	# The Gradle wrapper is gitignored; --config-only has Flutter write it.
 	flutter build apk --config-only
 	cd android && ./gradlew :app:dependencies --write-locks
+
+.PHONY: generate/frontend/api-explorer
+generate/frontend/api-explorer: ## Generate the API explorer's endpoint registry from swagger.json and the api: tags in lib/services
+	# Plain `dart`, as for the SBOM above: the script imports only dart: libraries.
+	dart scripts/generate_api_explorer_registry.dart
 
 # The graph is a build output, not a committed artifact: it regenerates from the tree
 # in a couple of seconds, so there is nothing to keep in sync or diff in CI.

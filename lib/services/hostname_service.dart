@@ -17,6 +17,8 @@ class HostnameService with AuthenticatedService {
   static final HostnameService instance = HostnameService._();
 
   /// What the Quark is called and whether it can be renamed.
+  ///
+  /// api: GET /api/v0/hostname
   static Future<HostnameStatus> getStatus() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/hostname'),
@@ -27,6 +29,8 @@ class HostnameService with AuthenticatedService {
   /// Renames the Quark to [hostname], with no reboot. The answer names what
   /// the device ended up advertising, which is another name when a device on
   /// the network already had this one.
+  ///
+  /// api: PUT /api/v0/hostname
   static Future<HostnameStatus> setHostname(String hostname) async {
     final response = await instance.authenticatedPut(
       apiBaseUri.resolve('/api/v0/hostname'),

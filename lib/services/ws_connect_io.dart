@@ -17,6 +17,8 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// bug where [HttpClient.badCertificateCallback] receives a hostname that
 /// doesn't match the IP stored in AppSettings (e.g. mDNS resolution or SNI
 /// mismatch), causing the callback to return false and the handshake to fail.
+///
+/// api: none
 WebSocketChannel connectLocalTrustWs(Uri uri, {Map<String, dynamic>? headers}) {
   if (!isLocalTrustHost(uri.host)) {
     // Non-local host: use standard TLS verification.

@@ -55,6 +55,7 @@ Future<Uint8List?> renderThumbnailFromPathPlatform(
   String path,
 ) async => null;
 
+/// api: none
 Future<Uint8List?> renderDroppedFileThumbnailPlatform(DropItemFile file) async {
   if (!wantsClientThumbnail(file.name) || file.path.isEmpty) {
     return null;

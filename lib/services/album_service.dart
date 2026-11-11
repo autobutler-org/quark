@@ -16,8 +16,10 @@ class AlbumService with AuthenticatedService {
   AlbumService._();
   static AlbumService get instance => _instance;
 
+  /// api: none
   static Uri _apiUri(String path) => apiBaseUri.replace(path: '/api/v0$path');
 
+  /// api: GET /api/v0/albums
   static Future<List<PhotoAlbum>> listAlbums({bool tree = false}) async {
     final uri = _apiUri(
       '/albums',
@@ -32,6 +34,7 @@ class AlbumService with AuthenticatedService {
         .toList();
   }
 
+  /// api: POST /api/v0/albums
   static Future<PhotoAlbum> createAlbum(String name, {int? parentId}) async {
     final body = <String, dynamic>{'name': name};
     if (parentId != null) body['parentId'] = parentId;
@@ -53,6 +56,7 @@ class AlbumService with AuthenticatedService {
     );
   }
 
+  /// api: PATCH /api/v0/albums/{id}/rename
   static Future<PhotoAlbum> renameAlbum(int id, String name) async {
     final response = await instance.authenticatedPatch(
       _apiUri('/albums/$id/rename'),
@@ -72,6 +76,7 @@ class AlbumService with AuthenticatedService {
     );
   }
 
+  /// api: DELETE /api/v0/albums/{id}
   static Future<void> deleteAlbum(int id) async {
     final response = await instance.authenticatedDelete(_apiUri('/albums/$id'));
     if (response.statusCode != 204) {
@@ -82,6 +87,7 @@ class AlbumService with AuthenticatedService {
       ..dropItems(id);
   }
 
+  /// api: GET /api/v0/albums/{id}/items
   static Future<List<PhotoAlbumItem>> listAlbumItems(
     int albumId, {
     PhotoSortField sort = PhotoSortField.added,
@@ -104,6 +110,8 @@ class AlbumService with AuthenticatedService {
   /// Adds the photo at [relPath] on [deviceSerial] to [albumId]. Answers
   /// whether it was new to the album: the Quark answers 200 for a photo
   /// already in it, which changes nothing (#3361).
+  ///
+  /// api: POST /api/v0/albums/{id}/items
   static Future<bool> addPhotoToAlbum(
     int albumId, {
     required String deviceSerial,
@@ -125,6 +133,7 @@ class AlbumService with AuthenticatedService {
     return true;
   }
 
+  /// api: DELETE /api/v0/albums/{id}/items
   static Future<void> removePhotoFromAlbum(
     int albumId, {
     required String deviceSerial,

@@ -72,6 +72,8 @@ const Duration kConnectTimeout = Duration(seconds: 5);
 ///
 /// On web, the browser manages TLS trust natively and imposes its own connect
 /// deadline, so the default client is returned unchanged.
+///
+/// api: none
 http.Client buildLocalTrustHttpClient([String? hostAddress]) {
   if (kIsWeb) return http.Client();
 
@@ -121,6 +123,8 @@ http.Client Function() sharedHttpClientFactory = buildLocalTrustHttpClient;
 /// (see [isLocalTrustHost]) is decided per host and pooled connections to the
 /// old one are worthless. That covers a switch between a Quark's home and
 /// remote-access address (#1880) as well as a switch of Quark.
+///
+/// api: none
 http.Client get sharedHttpClient {
   final host = _extractHost(activeBaseUrl);
   final cached = _sharedClient;
@@ -173,12 +177,16 @@ mixin AuthenticatedService {
   ///
   /// Do not close it. It is reused by every other call on every other service,
   /// and closing it drops the pooled connections that make it worth having.
+  ///
+  /// api: none
   http.Client get httpClient => sharedHttpClient;
 
   /// Authenticated GET — injects auth headers and checks for 401 automatically.
   ///
   /// Completing [abortTrigger] cancels the request; it then throws
   /// [http.RequestAbortedException].
+  ///
+  /// api: none
   Future<http.Response> authenticatedGet(
     Uri uri, {
     Map<String, String>? headers,
@@ -198,6 +206,8 @@ mixin AuthenticatedService {
   ///
   /// The caller owns the returned file and must [DownloadedFile.delete] it.
   /// Not available on web, which has no filesystem to stream onto.
+  ///
+  /// api: none
   Future<DownloadedFile> authenticatedDownload(Uri uri) async {
     final response = await authenticatedSend(http.Request('GET', uri));
 
@@ -225,6 +235,8 @@ mixin AuthenticatedService {
   ///
   /// The caller owns the returned body and must read or drain it: an unread
   /// body pins the connection out of the pool for good.
+  ///
+  /// api: none
   Future<http.StreamedResponse> authenticatedSend(
     http.BaseRequest request,
   ) async {
@@ -241,6 +253,8 @@ mixin AuthenticatedService {
   }
 
   /// Authenticated POST — injects auth headers and checks for 401 automatically.
+  ///
+  /// api: none
   Future<http.Response> authenticatedPost(
     Uri uri, {
     Map<String, String>? headers,
@@ -250,6 +264,8 @@ mixin AuthenticatedService {
   );
 
   /// Authenticated PATCH — injects auth headers and checks for 401 automatically.
+  ///
+  /// api: none
   Future<http.Response> authenticatedPatch(
     Uri uri, {
     Map<String, String>? headers,
@@ -259,6 +275,8 @@ mixin AuthenticatedService {
   );
 
   /// Authenticated DELETE — injects auth headers and checks for 401 automatically.
+  ///
+  /// api: none
   Future<http.Response> authenticatedDelete(
     Uri uri, {
     Map<String, String>? headers,
@@ -268,6 +286,8 @@ mixin AuthenticatedService {
   );
 
   /// Authenticated PUT — injects auth headers and checks for 401 automatically.
+  ///
+  /// api: none
   Future<http.Response> authenticatedPut(
     Uri uri, {
     Map<String, String>? headers,

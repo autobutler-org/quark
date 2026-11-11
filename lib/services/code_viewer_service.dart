@@ -21,6 +21,8 @@ class CodeViewerService {
   /// A [start] at or past the end of the file answers with no bytes. A Quark
   /// that ignores the range sends the whole file; reading stops at [length]
   /// either way. A refused request throws an [ApiException].
+  ///
+  /// api: GET /api/v0/files/download
   static Future<CodeViewerRange> readRange(
     String path, {
     required int start,

@@ -17,6 +17,8 @@ class SessionsService with AuthenticatedService {
   static final SessionsService instance = SessionsService._();
 
   /// The account's active sessions, with the one in use marked current.
+  ///
+  /// api: GET /api/v0/auth/sessions
   static Future<List<AuthSession>> list() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/auth/sessions'),
@@ -30,6 +32,8 @@ class SessionsService with AuthenticatedService {
   }
 
   /// Signs out the session with [id].
+  ///
+  /// api: DELETE /api/v0/auth/sessions/{id}
   static Future<void> revoke(String id) async {
     final response = await instance.authenticatedDelete(
       apiBaseUri.resolve('/api/v0/auth/sessions/${Uri.encodeComponent(id)}'),
@@ -38,6 +42,8 @@ class SessionsService with AuthenticatedService {
   }
 
   /// Signs out every session of the account except the one in use.
+  ///
+  /// api: DELETE /api/v0/auth/sessions
   static Future<void> revokeOthers() async {
     final response = await instance.authenticatedDelete(
       apiBaseUri.resolve('/api/v0/auth/sessions'),
