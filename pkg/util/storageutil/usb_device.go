@@ -1,10 +1,13 @@
 package storageutil
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -109,30 +112,52 @@ func (u *usbDevice) IsStorageDevice() bool {
 	return exists
 }
 
-// Partitions returns all partitions for this USB device (e.g., /dev/sda1, /dev/sda2, ...).
-// If no sub-partitions exist (whole-disk filesystem), the block device itself is returned
-// as a single partition entry so that mount detection still works.
+// Partitions returns the device's partitions in partition-number order, so
+// /dev/sda10 follows /dev/sda2. If it has none (a whole-disk filesystem), the
+// block device itself is returned as the one partition, so mount detection and
+// mounting still work.
 func (u *usbDevice) Partitions() ([]Partition, error) {
 	blockDev, exists := u.BlockDevicePath()
 	if !exists {
 		return nil, errors.New("block device not found")
 	}
-	pattern := blockDev + "*"
-	matches, err := filepath.Glob(pattern)
+	return sysfsPartitions("/sys/block", filepath.Base(blockDev))
+}
+
+// sysfsPartitions lists block device name's partitions from sysfs: each child
+// directory of sysBlock/<name> holding a "partition" file, which carries its
+// number. Reading sysfs rather than globbing /dev orders them by that number
+// and does not depend on the /dev nodes.
+func sysfsPartitions(sysBlock, name string) ([]Partition, error) {
+	entries, err := os.ReadDir(filepath.Join(sysBlock, name))
 	if err != nil {
 		return nil, err
 	}
-	var partitions []Partition
-	for _, m := range matches {
-		if m != blockDev {
-			partitions = append(partitions, &partition{path: m})
-		}
+	type numbered struct {
+		number int
+		name   string
 	}
-	// If no sub-partitions found, the drive may use a whole-disk filesystem
-	// (e.g., mkfs.ext4 /dev/sda without a partition table). Include the block
-	// device itself so checkIfMounted can find it in /proc/mounts.
-	if len(partitions) == 0 {
-		partitions = append(partitions, &partition{path: blockDev})
+	var found []numbered
+	for _, entry := range entries {
+		data, err := os.ReadFile(filepath.Join(sysBlock, name, entry.Name(), "partition"))
+		if err != nil {
+			continue
+		}
+		number, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err != nil {
+			continue
+		}
+		found = append(found, numbered{number: number, name: entry.Name()})
+	}
+	slices.SortFunc(found, func(a, b numbered) int { return cmp.Compare(a.number, b.number) })
+	// No partitions: the drive may carry a whole-disk filesystem (mkfs.ext4
+	// /dev/sda without a partition table), so offer the disk itself.
+	if len(found) == 0 {
+		return []Partition{&partition{path: filepath.Join("/dev", name)}}, nil
+	}
+	partitions := make([]Partition, 0, len(found))
+	for _, f := range found {
+		partitions = append(partitions, &partition{path: filepath.Join("/dev", f.name)})
 	}
 	return partitions, nil
 }

@@ -13,7 +13,7 @@ type AutoMountResult struct {
 	MountTargetPath string
 }
 
-// AutoMountDevice mounts the first partition of the given USB storage device
+// AutoMountDevice mounts the [PickPartition] choice of the given USB storage device
 // under the quark mounts directory, then initializes the files data
 // directory structure on it.
 //
@@ -33,8 +33,9 @@ func AutoMountDevice(device UsbDevice) (*AutoMountResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list partitions: %w", err)
 	}
-	if len(partitions) == 0 {
-		return nil, errors.New("no partitions found on device")
+	partition, err := PickPartition(partitions)
+	if err != nil {
+		return nil, err
 	}
 
 	mountsDir, err := GetMountsDir()
@@ -47,7 +48,7 @@ func AutoMountDevice(device UsbDevice) (*AutoMountResult, error) {
 		return nil, fmt.Errorf("failed to create mount target %s: %w", mountTargetPath, err)
 	}
 
-	if err := RunMountCommand(partitions[0].MountCommand(mountTargetPath)); err != nil {
+	if err := RunMountCommand(partition.MountCommand(mountTargetPath)); err != nil {
 		return nil, fmt.Errorf("mount command failed: %w", err)
 	}
 

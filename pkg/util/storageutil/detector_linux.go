@@ -78,12 +78,10 @@ func detectDevices(categorize bool) ([]Device, error) {
 				continue
 			}
 
-			partitions, err := usb.Partitions()
-			if err != nil || len(partitions) == 0 {
-				continue
-			}
-			stat, err := partitions[0].Stat()
-			if err != nil {
+			// Measure what is mounted, not the first partition: on a drive
+			// formatted by Windows that is a 16 MiB reserved one (#4017).
+			var stat syscall.Statfs_t
+			if err := syscall.Statfs(mountPath, &stat); err != nil {
 				continue
 			}
 			devicePath, exists := usb.BlockDevicePath()

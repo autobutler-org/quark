@@ -14,6 +14,12 @@ type partition struct {
 	path string
 }
 
+// FsType is always "": macOS mounts an external drive itself, so Quark is
+// never asked to pick one of its partitions to mount.
+func (p *partition) FsType() string {
+	return ""
+}
+
 func (p *partition) MountCommand(mountTargetPath string) *exec.Cmd {
 	return exec.Command("mount", p.path, mountTargetPath)
 }

@@ -31,15 +31,40 @@ var nonUnixFilesystems = map[string]bool{
 	"msdos":   true,
 }
 
-// detectFsType uses blkid to identify the filesystem type of a block device.
-// Returns an empty string if detection fails — callers should treat this as
-// "unknown" and fall back to a plain mount.
+// detectFsType names the filesystem on a block device, or "" when it has none
+// or it cannot be read. udev's database comes first because anyone can read
+// it, where blkid has to open the device and prints nothing for a service user
+// outside the disk group (#4017). blkid covers a host without udev, such as
+// the container image, which puts quark in the disk group.
 func detectFsType(devicePath string) string {
+	if fsType := udevFsType("/sys/class/block", "/run/udev/data", filepath.Base(devicePath)); fsType != "" {
+		return fsType
+	}
 	out, err := exec.Command("blkid", "-o", "value", "-s", "TYPE", devicePath).Output()
 	if err != nil {
 		return ""
 	}
 	return strings.ToLower(strings.TrimSpace(string(out)))
+}
+
+// udevFsType reads the filesystem type udev recorded for block device name:
+// the ID_FS_TYPE line of udevData/b<major>:<minor>, the numbers coming from
+// sysClassBlock/<name>/dev. It is "" when either file is missing.
+func udevFsType(sysClassBlock, udevData, name string) string {
+	dev, err := os.ReadFile(filepath.Join(sysClassBlock, name, "dev"))
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(udevData, "b"+strings.TrimSpace(string(dev))))
+	if err != nil {
+		return ""
+	}
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if fsType, ok := strings.CutPrefix(line, "E:ID_FS_TYPE="); ok {
+			return strings.ToLower(strings.TrimSpace(fsType))
+		}
+	}
+	return ""
 }
 
 // mountServiceUID returns the uid and gid of the quark service user,
@@ -54,9 +79,12 @@ func mountServiceUID() (uid, gid string) {
 	return "0", "0"
 }
 
+func (p *partition) FsType() string {
+	return detectFsType(p.path)
+}
+
 func (p *partition) MountCommand(mountTargetPath string) *exec.Cmd {
-	fsType := detectFsType(p.path)
-	if nonUnixFilesystems[fsType] {
+	if nonUnixFilesystems[p.FsType()] {
 		// Filesystems without native Unix permissions (exFAT, NTFS, FAT32)
 		// need uid/gid mount options so the quark service user can write.
 		uid, gid := mountServiceUID()
