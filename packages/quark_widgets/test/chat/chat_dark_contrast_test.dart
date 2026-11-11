@@ -74,6 +74,8 @@ void main() {
       );
 
       expectAtLeast3('add reaction', iconIn('message_react_m1'), surfaces);
+      // The three-dot button is the pointer presentation's, so this runs as
+      // macOS; `flutter test` is Android, which has none.
       expectAtLeast3('message menu', iconIn('message_menu_m1'), surfaces);
 
       final field = tester.widget<InputDecorator>(find.byType(InputDecorator));
@@ -101,6 +103,6 @@ void main() {
       expectAtLeast3('send glyph', iconIn('message_composer_send'), {
         'its fill': readyFill,
       });
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
   }
 }

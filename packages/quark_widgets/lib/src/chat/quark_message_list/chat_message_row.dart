@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:quark_icons/quark_icons.dart';
 
 import '../../core/quark_menu_button.dart';
@@ -13,6 +14,7 @@ import '../chat_mentions.dart';
 import '../quark_poll_card.dart';
 import 'chat_emoji_picker.dart';
 import 'chat_message_row/chat_message_body.dart';
+import 'chat_message_row/chat_message_context_menu.dart';
 import 'chat_message_row/chat_reaction_bar.dart';
 import 'chat_message_row/chat_reaction_picker.dart';
 
@@ -33,15 +35,24 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// menu, opens the full picker, or [pickMoreEmoji] when the caller supplies
 /// one.
 ///
-/// A text message has one menu, through `showQuarkMenu`: "Copy text" with
-/// [onCopy], "Add reaction" with [onReact], which opens the picker's emoji and
-/// "More emoji" as a second menu in the same place, and "Delete" with
-/// [onDelete]. A null
-/// callback leaves its entry out, and with all three null there is no menu. A
-/// right-click opens it at the pointer, the three-dot button at the row's end
-/// opens it for the keyboard, and with [longPressOpensMenu] a long press opens
-/// it under the finger. `QuarkMessageList` turns the long press off on the
-/// desktop platforms, where it makes the text selectable by dragging instead.
+/// A text message's actions are "Copy text" with [onCopy], "Add reaction"
+/// with [onReact], and "Delete" with [onDelete]. A null callback leaves its
+/// action out, and with all three null there are none. They come in one of
+/// two presentations, which [touchMenu] picks:
+///
+/// - **Pointer** (the default, and what `QuarkMessageList` uses on the
+///   desktop platforms): a menu through `showQuarkMenu`, opened at the
+///   pointer by a right-click or by the three-dot button at the row's end,
+///   which the keyboard reaches. "Add reaction" opens the picker's emoji and
+///   "More emoji" as a second menu in the same place. A long press is left
+///   to whatever is above the row, such as a `SelectionArea`.
+/// - **Touch** (iOS and Android): a long press opens a
+///   `ChatMessageContextMenu`, which lifts a copy of the message over a
+///   blurred page, with the emoji as a bar above it and the other actions
+///   in full under it, all clear of the keyboard. There is no three-dot
+///   button, and a screen reader finds every action on the row as a custom
+///   action, "Add reaction" opening the context menu at its bar. A
+///   right-click still opens the pointer menu.
 ///
 /// With [onOpenLink] set, the web addresses in a text message are links (see
 /// `ChatMessageBody`), except in a message whose sender is unverified: an
@@ -54,8 +65,8 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// leading edge, and a screen reader hears "Mentions you". An unverified
 /// message draws no mentions: its text is not the sender's.
 ///
-/// While the menu a long press or right-click opened is open, the row stands
-/// on a tint of the primary color. It clears when an entry is chosen or the
+/// While a menu a long press or right-click opened is open, the row stands
+/// on a tint of the primary color. It clears when an action is chosen or the
 /// menu is dismissed, and "Add reaction" keeps it until its emoji menu closes.
 ///
 /// A part of `QuarkMessageList`, tested through it.
@@ -64,11 +75,15 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// null when no menu is open), `message_mention_<id>` on the highlight of a message that
 /// mentions the reader, `message_body_<id>` on a text message's body,
 /// `message_menu_<id>` on the menu button, `message_copy_<id>`,
-/// `message_menu_react_<id>` and `message_delete_<id>` on the menu's entries,
-/// `message_menu_react_<id>_<emoji>` on each emoji "Add reaction" offers,
-/// `message_menu_react_<id>_more` on its "More emoji", and
-/// those of `ChatReactionBar`, `ChatReactionPicker`, `ChatAttachmentTile`
-/// and `QuarkPollCard`.
+/// `message_menu_react_<id>` and `message_delete_<id>` on the menu's entries
+/// (the touch menu has no `message_menu_react_<id>`: its bar replaces it),
+/// `message_menu_react_<id>_<emoji>` on each emoji "Add reaction" or the
+/// touch menu's bar offers, `message_menu_react_<id>_more` on their "More
+/// emoji", `message_context_copy_<id>` and `message_context_lift_<id>` on the
+/// touch menu's copy of the message, and those of `ChatReactionBar`,
+/// `ChatReactionPicker`, `ChatAttachmentTile` and `QuarkPollCard`. While the
+/// touch menu is open its copy is a second row, so the row's own keys are
+/// found twice.
 class ChatMessageRow extends StatefulWidget {
   /// Creates the row for [message].
   const ChatMessageRow({
@@ -90,7 +105,7 @@ class ChatMessageRow extends StatefulWidget {
     this.thumbnailBuilder,
     this.mentionNames = const [],
     this.selfName,
-    this.longPressOpensMenu = true,
+    this.touchMenu = false,
     super.key,
   });
 
@@ -162,15 +177,21 @@ class ChatMessageRow extends StatefulWidget {
   /// highlights nothing.
   final String? selfName;
 
-  /// Whether a long press opens the menu. False leaves the long press to
-  /// whatever is above the row, such as a `SelectionArea`.
-  final bool longPressOpensMenu;
+  /// Whether the row uses the touch presentation: a long press opens the
+  /// `ChatMessageContextMenu`, there is no three-dot button, and the actions
+  /// are the row's semantics custom actions. False is the pointer
+  /// presentation, which leaves the long press to whatever is above the row,
+  /// such as a `SelectionArea`.
+  final bool touchMenu;
 
-  /// The menu's rows for a menu opened at [position], which is read when "Add
-  /// reaction" opens its emoji there. Empty for anything but a text message.
+  /// The actions of a text message, as menu entries; empty for anything
+  /// else. [reactionMenuAt] is where "Add reaction" opens its emoji, read
+  /// when it does, and [onReactionMenu] gets that menu's future. A null
+  /// [reactionMenuAt] leaves "Add reaction" out, for the touch menu, whose
+  /// bar offers the emoji instead.
   List<QuarkMenuEntry> menuEntries(
-    BuildContext context,
-    Offset Function() position, {
+    BuildContext context, {
+    Offset Function()? reactionMenuAt,
     ValueChanged<Future<void>>? onReactionMenu,
   }) {
     final onCopy = this.onCopy;
@@ -186,7 +207,7 @@ class ChatMessageRow extends StatefulWidget {
           icon: QuarkIcons.content_copy,
           onSelected: onCopy,
         ),
-      if (onReact != null)
+      if (onReact != null && reactionMenuAt != null)
         QuarkMenuEntry(
           key: ValueKey('message_menu_react_${message.id}'),
           label: 'Add reaction',
@@ -195,7 +216,7 @@ class ChatMessageRow extends StatefulWidget {
             if (!context.mounted) return;
             final emojiMenu = showQuarkMenu(
               context,
-              position: position(),
+              position: reactionMenuAt(),
               entries: [
                 for (final emoji in ChatReactionPicker.choices)
                   QuarkMenuEntry(
@@ -244,32 +265,71 @@ class ChatMessageRow extends StatefulWidget {
   State<ChatMessageRow> createState() => _ChatMessageRowState();
 }
 
-/// The state of a [ChatMessageRow]: whether its long-press or right-click menu
-/// is open, which tints the row until that menu, and the emoji menu "Add
-/// reaction" opens in its place, has closed.
+/// The state of a [ChatMessageRow]: whether a menu it opened is open, which
+/// tints the row until that menu, and the emoji menu "Add reaction" opens in
+/// its place, has closed.
 class _ChatMessageRowState extends State<ChatMessageRow> {
   bool _menuOpen = false;
 
-  Future<void> _openMenu(BuildContext context, Offset position) async {
-    // "Add reaction" opens its emoji menu as the first one closes; that
-    // future is waited on too, so the tint does not blink off between them.
-    Future<void>? emojiMenu;
+  /// Tints the row until [menu] has closed.
+  Future<void> _tintWhile(Future<void> Function() menu) async {
     setState(() => _menuOpen = true);
     try {
-      await showQuarkMenu(
-        context,
-        position: position,
-        entries: widget.menuEntries(
-          context,
-          () => position,
-          onReactionMenu: (menu) => emojiMenu = menu,
-        ),
-      );
-      await emojiMenu;
+      await menu();
     } finally {
       if (mounted) setState(() => _menuOpen = false);
     }
   }
+
+  /// Opens the pointer menu at [position].
+  Future<void> _openMenu(Offset position) => _tintWhile(() async {
+    // "Add reaction" opens its emoji menu as the first one closes; that
+    // future is waited on too, so the tint does not blink off between them.
+    Future<void>? emojiMenu;
+    await showQuarkMenu(
+      context,
+      position: position,
+      entries: widget.menuEntries(
+        context,
+        reactionMenuAt: () => position,
+        onReactionMenu: (menu) => emojiMenu = menu,
+      ),
+    );
+    await emojiMenu;
+  });
+
+  /// Opens the touch menu over this row.
+  Future<void> _openContextMenu() => _tintWhile(() {
+    final row = widget;
+    final onReact = row.onReact;
+    final tokens = QuarkTokens.of(context);
+    return showChatMessageContextMenu(
+      context,
+      messageId: row.message.id,
+      indent: tokens.spacingMd + row.avatarSize + tokens.spacingSm,
+      // The row as it looks, with nothing to tap: no menu and no picker.
+      copy: ChatMessageRow(
+        message: row.message,
+        avatar: row.avatar,
+        avatarSize: row.avatarSize,
+        onOpenLink: row.onOpenLink,
+        thumbnailBuilder: row.thumbnailBuilder,
+        mentionNames: row.mentionNames,
+        selfName: row.selfName,
+        touchMenu: true,
+      ),
+      entries: row.menuEntries(context),
+      onReact: onReact,
+      onMoreEmoji: onReact == null
+          ? null
+          : () => requestMoreEmoji(
+              context,
+              messageId: row.message.id,
+              onPick: onReact,
+              pickMore: row.pickMoreEmoji,
+            ),
+    );
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -279,7 +339,7 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
     final onCopy = widget.onCopy;
     final onDelete = widget.onDelete;
     final onOpenLink = widget.onOpenLink;
-    final longPressOpensMenu = widget.longPressOpensMenu;
+    final touchMenu = widget.touchMenu;
     final avatar = widget.avatar;
     final onReact = widget.onReact;
     final reacts = message.kind == ChatMessageKind.text;
@@ -292,7 +352,6 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
         ChatMentions.mentions(message.body, mentionNames, selfName);
     final hasMenu =
         reacts && (onCopy != null || onReact != null || onDelete != null);
-    void openMenu(Offset position) => _openMenu(context, position);
     final poll = message.poll;
     final muted = TextStyle(
       color: tokens.mutedForeground,
@@ -353,18 +412,16 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
       ),
     };
 
-    final row = DecoratedBox(
+    final tinted = DecoratedBox(
       key: ValueKey('message_menu_open_${message.id}'),
       decoration: BoxDecoration(
         color: _menuOpen ? tokens.primary.withValues(alpha: 0.16) : null,
       ),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onLongPressStart: hasMenu && longPressOpensMenu
-            ? (details) => openMenu(details.globalPosition)
-            : null,
+        onLongPress: hasMenu && touchMenu ? _openContextMenu : null,
         onSecondaryTapUp: hasMenu
-            ? (details) => openMenu(details.globalPosition)
+            ? (details) => _openMenu(details.globalPosition)
             : null,
         child: Padding(
           padding: EdgeInsetsDirectional.only(
@@ -521,7 +578,7 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
                             onPick: onReact,
                             pickMoreEmoji: widget.pickMoreEmoji,
                           ),
-                        if (hasMenu)
+                        if (hasMenu && !touchMenu)
                           // The same 48dp touch target as the picker beside it,
                           // so the two glyphs share a center (#2605). The
                           // Builder makes the button the anchor of "Add
@@ -533,7 +590,7 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
                               iconSize: 18,
                               entries: widget.menuEntries(
                                 context,
-                                () => quarkMenuAnchor(context),
+                                reactionMenuAt: () => quarkMenuAnchor(context),
                               ),
                             ),
                           ),
@@ -547,6 +604,21 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
         ),
       ),
     );
+    // On a touch screen the row is the menu's only way in, so a screen
+    // reader gets its actions here.
+    final row = hasMenu && touchMenu
+        ? Semantics(
+            container: true,
+            customSemanticsActions: {
+              for (final entry in widget.menuEntries(context))
+                CustomSemanticsAction(label: entry.label): ?entry.onSelected,
+              if (onReact != null)
+                const CustomSemanticsAction(label: 'Add reaction'):
+                    _openContextMenu,
+            },
+            child: tinted,
+          )
+        : tinted;
     if (!mentionsSelf) return row;
     return Semantics(
       label: 'Mentions you',

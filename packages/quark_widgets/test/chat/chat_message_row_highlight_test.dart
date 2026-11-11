@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -6,7 +7,8 @@ import 'package:quark_widgets/src/chat/quark_message_list/chat_message_row/chat_
 
 import '../support/pump.dart';
 
-/// The tint a message row wears while its long-press menu is open (#3453).
+/// The tint a message row wears while its menu is open (#3453): the touch
+/// menu a long press opens (#4052), or the pointer menu of a right-click.
 void main() {
   ChatMessageItem msg(String id) => ChatMessageItem(
     id: id,
@@ -18,30 +20,37 @@ void main() {
 
   Finder key(String k) => find.byKey(ValueKey(k));
 
+  // The touch menu's copy of the row carries the same key, after the row.
   Color? tint(WidgetTester tester, String id) =>
-      ((tester.widget<DecoratedBox>(key('message_menu_open_$id'))).decoration
+      ((tester.widgetList<DecoratedBox>(key('message_menu_open_$id')).first)
+                  .decoration
               as BoxDecoration)
           .color;
 
-  Future<void> pumpRows(WidgetTester tester, Size size, List<String> reacted) =>
-      pumpAt(
-        tester,
-        Column(
-          children: [
-            for (final id in ['a', 'b'])
-              ChatMessageRow(
-                message: msg(id),
-                avatar: null,
-                onCopy: () {},
-                onDelete: () {},
-                onReact: reacted.add,
-              ),
-          ],
-        ),
-        size: size,
-      );
+  Future<void> pumpRows(
+    WidgetTester tester,
+    Size size,
+    List<String> reacted, {
+    bool touch = true,
+  }) => pumpAt(
+    tester,
+    Column(
+      children: [
+        for (final id in ['a', 'b'])
+          ChatMessageRow(
+            message: msg(id),
+            avatar: null,
+            onCopy: () {},
+            onDelete: () {},
+            onReact: reacted.add,
+            touchMenu: touch,
+          ),
+      ],
+    ),
+    size: size,
+  );
 
-  testBothViewports('a long press tints the row until an entry is chosen', (
+  testBothViewports('a long press tints the row until an action is chosen', (
     tester,
     size,
   ) async {
@@ -51,7 +60,7 @@ void main() {
     await tester.longPress(key('message_body_a'));
     await tester.pumpAndSettle();
     final primary = QuarkTokens.of(
-      tester.element(key('message_body_a')),
+      tester.element(key('message_body_a').first),
     ).primary;
     expect(tint(tester, 'a'), isNotNull);
     expect(tint(tester, 'a')!.withValues(alpha: 1), primary);
@@ -78,13 +87,30 @@ void main() {
     expect(tint(tester, 'b'), isNull);
   });
 
-  testBothViewports('Add reaction keeps the tint until the emoji menu closes', (
+  testBothViewports('an emoji from the touch menu\'s bar clears the tint', (
     tester,
     size,
   ) async {
     final reacted = <String>[];
     await pumpRows(tester, size, reacted);
     await tester.longPress(key('message_body_a'));
+    await tester.pumpAndSettle();
+    final emoji = ChatReactionPicker.choices.first;
+    expect(tint(tester, 'a'), isNotNull);
+
+    await tester.tap(key('message_menu_react_a_$emoji'));
+    await tester.pumpAndSettle();
+    expect(reacted, [emoji]);
+    expect(tint(tester, 'a'), isNull);
+  });
+
+  testBothViewports('Add reaction keeps the tint until the emoji menu closes', (
+    tester,
+    size,
+  ) async {
+    final reacted = <String>[];
+    await pumpRows(tester, size, reacted, touch: false);
+    await tester.tap(key('message_body_a'), buttons: kSecondaryButton);
     await tester.pumpAndSettle();
     await tester.tap(key('message_menu_react_a'));
     await tester.pumpAndSettle();
