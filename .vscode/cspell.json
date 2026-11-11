@@ -620,6 +620,7 @@
     "rescan",
     "resends",
     "resetutil",
+    "restartutil",
     "resync",
     "resynced",
     "resyncing",

@@ -26,6 +26,8 @@ func (r *router) Routes() []*serverutil.Route {
 		removeGroupMemberRoute,
 		getRepairStatusRoute,
 		repairInstallationRoute,
+		getRestartStatusRoute,
+		restartQuarkRoute,
 	}
 }
 
@@ -70,5 +72,14 @@ type repairStatusResponse struct {
 	Available bool `json:"available"`
 	// Reason is why not, when available is false: unsupported_os,
 	// not_service or unit_outdated. Empty when available.
+	Reason string `json:"reason"`
+}
+
+// restartStatusResponse is whether restarting Quark from Settings will bring
+// it back.
+type restartStatusResponse struct {
+	Available bool `json:"available"`
+	// Reason is why not, when available is false: not_supervised. Empty when
+	// available.
 	Reason string `json:"reason"`
 }
