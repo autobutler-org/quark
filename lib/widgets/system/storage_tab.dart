@@ -6,6 +6,7 @@ import 'package:quark/controllers/backup_runs_controller.dart';
 import 'package:quark/controllers/backup_schedule_controller.dart';
 import 'package:quark/controllers/data_protection_controller.dart';
 import 'package:quark/controllers/drive_health_controller.dart';
+import 'package:quark/controllers/restore_chat_controller.dart';
 import 'package:quark/controllers/restore_vault_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -22,6 +23,7 @@ import 'package:quark/widgets/storage_devices/backup_schedule_dialog.dart';
 import 'package:quark/widgets/storage_devices/credentials_dialog.dart';
 import 'package:quark/widgets/storage_devices/delete_backup_run_dialog.dart';
 import 'package:quark/widgets/storage_devices/eject_drive_dialog.dart';
+import 'package:quark/widgets/storage_devices/restore_chat_dialog.dart';
 import 'package:quark/widgets/storage_devices/restore_vault_dialog.dart';
 import 'package:quark/widgets/storage_devices/role_dialog.dart';
 import 'package:quark/widgets/storage_devices/snapshot_backup_dialog.dart';
@@ -33,13 +35,15 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// mount, eject, rename or back up onto them. A backup running onto a drive
 /// is found from the device list, so one started elsewhere shows here too.
 /// An admin also sees each backup drive's backups and can delete one
-/// (#4044), restore the vaults or files from a backup they pick (#4032), set
+/// (#4044), restore the vaults, the chat (#2428) or the files from a backup
+/// they pick (#4032), set
 /// how often the Quark backs up onto it (#3984), and gets the
 /// [AdminMapCard] (#2484).
 class StorageTab extends StatefulWidget {
   const StorageTab({
     this.onRefreshingChanged,
     this.restoreVault,
+    this.restoreChat,
     this.events,
     super.key,
   });
@@ -50,6 +54,9 @@ class StorageTab extends StatefulWidget {
 
   /// The vault restore. Tests pass one; otherwise the tab builds its own.
   final RestoreVaultController? restoreVault;
+
+  /// The chat restore. Tests pass one; otherwise the tab builds its own.
+  final RestoreChatController? restoreChat;
 
   /// The Quark's events, which reload the protection status and the backups.
   /// Null is the app's event stream.
@@ -81,6 +88,8 @@ class _StorageTabState extends State<StorageTab>
   late final BackupScheduleController _schedules;
   late final RestoreVaultController _restore;
   late final bool _ownsRestore;
+  late final RestoreChatController _chatRestore;
+  late final bool _ownsRestoreChat;
 
   @override
   void initState() {
@@ -92,6 +101,8 @@ class _StorageTabState extends State<StorageTab>
     _schedules.addListener(_onControllerChanged);
     _restore = widget.restoreVault ?? RestoreVaultController();
     _ownsRestore = widget.restoreVault == null;
+    _chatRestore = widget.restoreChat ?? RestoreChatController();
+    _ownsRestoreChat = widget.restoreChat == null;
     super.initState();
   }
 
@@ -160,6 +171,7 @@ class _StorageTabState extends State<StorageTab>
     _schedules.removeListener(_onControllerChanged);
     _schedules.dispose();
     if (_ownsRestore) _restore.dispose();
+    if (_ownsRestoreChat) _chatRestore.dispose();
     super.dispose();
   }
 
@@ -497,6 +509,34 @@ class _StorageTabState extends State<StorageTab>
     );
   }
 
+  /// Restores the chat from the backup on [device] the admin picks, once they
+  /// re-enter their login password. Cancel leaves the chat alone. The snack
+  /// bar is the counts, the backup and any unmatched usernames, or why the
+  /// Quark refused.
+  Future<void> _restoreChat(StorageDevice device) async {
+    final choice =
+        await QuarkWidget.showDialog<({String password, String? run})>(
+          context,
+          builder: (ctx) =>
+              RestoreChatDialog(runs: _runs.runsFor(device.serial) ?? const []),
+        );
+    if (choice == null || !mounted) return;
+    await _chatRestore.restore(
+      deviceSerial: device.serial,
+      password: choice.password,
+      run: choice.run,
+    );
+    if (!mounted) return;
+    final error = _chatRestore.error;
+    final summary = _chatRestore.summary;
+    showMessage(
+      context,
+      error != null
+          ? Errors.backupRun(error, 'restore the chat')
+          : summary ?? Errors.couldNot('restore the chat'),
+    );
+  }
+
   /// Deletes the backup [run] from [device] once the admin confirms, then
   /// reloads the protection status, which no longer counts it. The controller
   /// lists the drive's backups again.
@@ -618,6 +658,7 @@ class _StorageTabState extends State<StorageTab>
           onBackup: isAdmin ? _startBackup : null,
           onVerify: isAdmin ? _verifyBackup : null,
           onRestore: isAdmin ? _restoreVaults : null,
+          onRestoreChat: isAdmin ? _restoreChat : null,
           onEject: isAdmin ? _ejectDevice : null,
           ejecting: _ejecting,
           backupRuns: isAdmin ? _runs : null,

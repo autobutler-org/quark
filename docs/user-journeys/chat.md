@@ -671,3 +671,41 @@ channel open.
 - The file is decrypted on this device and uploaded as a normal file. The Quark does not decrypt it.
 - Up goes to the parent folder. It is absent at the top, which is the same place the file browser opens for this account.
 - Any kind of file can be saved this way, including an image or a video.
+
+---
+
+### JN-CHAT-029: Restore chat from a backup drive
+
+**Preconditions:** The Quark runs on SQLite, a snapshot backup (JN-SD-008) on an attached drive holds
+`chat_backup.db`, and the drive has the `snapshot-backup` role. Chat on this Quark is empty: no message, and no channel
+but general. The accounts whose chat should come back exist here under the same usernames. The caller is an admin.
+
+**Steps:**
+
+1. The admin opens Storage and taps **Restore chat** on the backup drive.
+2. The dialog is titled **Restore chat from this drive**. It says the restore replaces an empty chat and is refused,
+   changing nothing, if chat already has messages or channels. It says the backup does not carry accounts, that each
+   person is matched by username, and to create their accounts first. It names the backup it reads, the newest on the
+   drive; on a drive with more than one, the admin can pick another from the **Backup** menu.
+3. The admin enters their login password and taps **Restore**.
+
+**Expected result:**
+
+- The snack bar says how many channels and messages came back and from which backup, "Restored 3 channels and 12
+  messages, backed up Nov 2, 09.00.".
+- When a username in the backup has no account here, the snack bar names it. That person's messages show no author,
+  and their memberships, reactions and chat keys are not restored.
+- Every channel, message, channel key and grant comes back as it was, ciphertext and all. Each person unlocks chat
+  with the password they had when the backup was taken.
+- Open chat pages reload their channels, and members missing a channel key are handed it again.
+
+**Notes:**
+
+- Canceling restores nothing.
+- A chat that already has messages or channels is refused, and nothing changes. There is no merge.
+- A drive without the `snapshot-backup` role, a backup this version cannot read, or a backup another Quark wrote, or
+  one changed since, is refused, and nothing changes. A drive that holds no backup yet says so and to back up onto it
+  first. A wrong password is refused.
+- Attachments are files the snapshot already copies; the restore brings back only the chat's rows.
+- On PostgreSQL the chat is in the operator's database backup instead, and the route answers 501.
+- `POST /api/v0/storage/devices/snapshot-backup/restore-chat`, admin-only (#2428).

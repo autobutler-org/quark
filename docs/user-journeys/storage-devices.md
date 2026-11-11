@@ -146,8 +146,8 @@ one other drive holds files.
   (JN-SD-016), and each data drive's chip shows the new copy (JN-SD-012).
 - On failure a snack bar says the backup failed and why, and the progress goes. What the drive held before stays on
   its card.
-- While any backup runs, **Back up onto this drive**, **Verify**, **Restore vaults**, **Restore files** and **Eject**
-  are disabled on every drive card. That holds for a backup started in another tab, on another device, or by another
+- While any backup runs, **Back up onto this drive**, **Verify**, **Restore vaults**, **Restore chat**, **Restore
+  files** and **Eject** are disabled on every drive card. That holds for a backup started in another tab, on another device, or by another
   admin: the page finds it in the device list, shows its progress, and follows it to the end.
 
 **Notes:**
