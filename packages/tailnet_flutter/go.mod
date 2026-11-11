@@ -4,7 +4,7 @@ go 1.27.3
 
 // Keep tailscale.com on the same version as the repo root module. The phone
 // bridge and pkg/util/remoteutil both link it.
-require tailscale.com v1.104.5
+require tailscale.com v1.104.6
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
@@ -34,7 +34,7 @@ require (
 	github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f // indirect
 	github.com/tailscale/peercred v0.0.0-20250107143737-35a0c7bd7edc // indirect
 	github.com/tailscale/web-client-prebuilt v0.0.0-20260917222731-e0ed2d0d0fea // indirect
-	github.com/tailscale/wireguard-go v0.0.0-20260928213032-417aef361226 // indirect
+	github.com/tailscale/wireguard-go v0.0.0-20261106233718-9e0ab45c16ca // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go4.org/mem v0.0.0-20240501181205-ae6ca9944745 // indirect
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb // indirect
