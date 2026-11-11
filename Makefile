@@ -1080,6 +1080,12 @@ generate/frontend/sbom: generate/frontend/pub-get ## Generate Flutter SBOM asset
 	# only dart:convert and dart:io. That took 77s on a clean macOS runner.
 	dart scripts/generate_flutter_sbom.dart
 
+.PHONY: generate/frontend/android/lockfile
+generate/frontend/android/lockfile: ## Regenerate android/app/gradle.lockfile (needs the Android SDK)
+	# The Gradle wrapper is gitignored; --config-only has Flutter write it.
+	flutter build apk --config-only
+	cd android && ./gradlew :app:dependencies --write-locks
+
 # The graph is a build output, not a committed artifact: it regenerates from the tree
 # in a couple of seconds, so there is nothing to keep in sync or diff in CI.
 KNOWLEDGE_GRAPH := docs/architecture/knowledge-graph.json
