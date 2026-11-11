@@ -122,7 +122,12 @@ class ChatMessagesService with AuthenticatedService {
     // The answer is the stored id and byte size, a few dozen bytes, not the
     // file that was just uploaded.
     final wrapped = await http.Response.fromStream(response);
-    throwUnlessOk(wrapped, 'upload attachment $id to channel $channelId');
+    // A 5xx carries a diagnostic, host paths included, not copy (#4050).
+    throwUnlessOk(
+      wrapped,
+      'upload attachment $id to channel $channelId',
+      clientErrorsOnly: true,
+    );
     final decoded = jsonDecode(wrapped.body);
     final size = decoded is Map<String, dynamic> ? decoded['byteSize'] : null;
     if (size is! int) {
