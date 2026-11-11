@@ -1647,13 +1647,16 @@ upgrade/go: generate/backend ## Upgrade dependencies (go)
 	$(GO) get -u ./...
 	$(MAKE) tidy/go
 
+# Air's rebuild uses the make running this recipe, not the `make` in .air.toml, which on
+# macOS is 3.81. $(MAKE_COMMAND), not $(MAKE): a line naming $(MAKE) runs even under
+# `make -n`, which check-db-backend-test.bash relies on to print these recipes.
 .PHONY: watch/backend
 watch/backend: check/db build/backend ## Watch backend for changes, plain HTTP on :8080 (insecure; DB_BACKEND=sqlite|postgres)
-	$(SUDO) env $(DB_ENV) QUARK_INSECURE=true $(AIR)
+	$(SUDO) env $(DB_ENV) QUARK_INSECURE=true $(AIR) -build.cmd "$(MAKE_COMMAND) build/backend"
 
 .PHONY: watch/backend/secure
 watch/backend/secure: check/db build/backend ## Watch backend for changes, HTTPS on :443 (self-signed)
-	$(SUDO) env $(DB_ENV) $(AIR)
+	$(SUDO) env $(DB_ENV) $(AIR) -build.cmd "$(MAKE_COMMAND) build/backend"
 
 .PHONY: watch/frontend
 watch/frontend: generate/frontend ## Watch frontend on web
