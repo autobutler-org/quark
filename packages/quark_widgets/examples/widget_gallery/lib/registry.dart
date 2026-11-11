@@ -662,6 +662,31 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkBarSplitChip',
+    group: 'Layout',
+    build: (context, log) => Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        QuarkBarSplitChip(
+          key: const ValueKey('gallery_upload'),
+          icon: QuarkIcons.upload_rounded,
+          label: 'Upload',
+          onPressed: () => log('QuarkBarSplitChip(Upload).onPressed'),
+          onSecondaryPressed: () =>
+              log('QuarkBarSplitChip(Upload).onSecondaryPressed'),
+        ),
+        // One device: nothing to choose, so a plain chip.
+        QuarkBarSplitChip(
+          icon: QuarkIcons.create_new_folder_outlined,
+          label: 'New folder',
+          onPressed: () => log('QuarkBarSplitChip(New folder).onPressed'),
+          onSecondaryPressed: null,
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkBarIconButton',
     group: 'Layout',
     build: (context, log) => Wrap(

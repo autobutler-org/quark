@@ -228,7 +228,8 @@ including one that is not mounted.
   it to one takes it from the other.
 - With more than one enabled device, an upload (JN-FB-006, JN-PH-006) and a New folder (JN-FB-009) go to the
   default storage device without opening the **Upload to device** sheet. When the sheet does open, the default
-  storage device's row reads **Default**.
+  storage device's row reads **Default**. The **▾** beside **Upload** or **New folder**, or a long press on a phone,
+  opens the sheet anyway, starting on the default, so any other enabled device can be chosen.
 - On a USB drive, **Backup drive** reads "Your other drives are copied onto it when you back up. Keep it somewhere
   safe between backups." The badge on its card reads **Backup drive**.
 - **Set Role** on built-in storage offers **Default Storage**, **Backup drive**, and **Unassigned**.

@@ -102,6 +102,8 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
   asking. With no default storage device connected, or with it not enabled, an **Upload to device** sheet asks
   where the photos go and says why it opened. It starts on the device chosen last time (in Files or Photos) when
   that is still offered, and dismissing it uploads nothing.
+- With more than one storage device listed, the **▾** beside **Upload**, or a long press on it on a phone, picks
+  the photos and then opens the **Upload to device** sheet whatever the default is.
 - A drive that is connected but not enabled is listed in that sheet as unavailable, with a note to mount it
   under System > Storage, and cannot be chosen. One such drive beside a single enabled device is enough for the
   sheet to open.

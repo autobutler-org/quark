@@ -5,8 +5,12 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The three things the wide layout lets the user add to the current folder.
 ///
+/// With [canChooseDevice], Upload and New folder each get a second action
+/// that asks which device to write to (#3194).
+///
 /// Probe keys: `file_top_bar_upload`, `file_top_bar_new_folder` and
-/// `file_top_bar_new_file`.
+/// `file_top_bar_new_file`, and `file_top_bar_upload_choose` and
+/// `file_top_bar_new_folder_choose` on the choose-device segments.
 class FileTopBarActions extends StatelessWidget {
   const FileTopBarActions({
     required this.isUploading,
@@ -20,6 +24,7 @@ class FileTopBarActions extends StatelessWidget {
     this.onUploadFolderPressed,
     this.onCancelUploadPressed,
     this.onShowUploadProgressPressed,
+    this.canChooseDevice = false,
     super.key,
   });
 
@@ -27,13 +32,16 @@ class FileTopBarActions extends StatelessWidget {
   final int uploadTotal;
   final int uploadCompleted;
   final bool isCreatingFolder;
-  final VoidCallback onUploadPressed;
-  final VoidCallback onCreateFolderPressed;
+  final DeviceWriteCallback onUploadPressed;
+  final DeviceWriteCallback onCreateFolderPressed;
   final VoidCallback onNewFilePressed;
-  final VoidCallback? onUploadPhotosPressed;
-  final VoidCallback? onUploadFolderPressed;
+  final DeviceWriteCallback? onUploadPhotosPressed;
+  final DeviceWriteCallback? onUploadFolderPressed;
   final VoidCallback? onCancelUploadPressed;
   final VoidCallback? onShowUploadProgressPressed;
+
+  /// Whether there is more than one device to write to.
+  final bool canChooseDevice;
 
   @override
   Widget build(BuildContext context) {
@@ -49,13 +57,17 @@ class FileTopBarActions extends StatelessWidget {
           onUploadFolderPressed: onUploadFolderPressed,
           onCancelUploadPressed: onCancelUploadPressed,
           onShowUploadProgressPressed: onShowUploadProgressPressed,
+          canChooseDevice: canChooseDevice,
         ),
         const SizedBox(width: 6),
-        QuarkBarChip(
+        QuarkBarSplitChip(
           key: const ValueKey('file_top_bar_new_folder'),
           icon: QuarkIcons.create_new_folder_outlined,
           label: 'New folder',
           onPressed: isCreatingFolder ? null : onCreateFolderPressed,
+          onSecondaryPressed: canChooseDevice
+              ? () => onCreateFolderPressed(chooseDevice: true)
+              : null,
         ),
         const SizedBox(width: 6),
         QuarkBarChip(

@@ -44,6 +44,7 @@ class QuarkBarChip extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.onLongPress,
     this.active = false,
     this.tooltip,
     this.keepLabel = false,
@@ -61,6 +62,10 @@ class QuarkBarChip extends StatelessWidget {
 
   /// Runs the action. Null renders the chip disabled.
   final VoidCallback? onPressed;
+
+  /// Runs a second action on a long press, such as a choice the plain tap
+  /// skips. Null leaves a long press to the tooltip.
+  final VoidCallback? onLongPress;
 
   /// Whether the chip is a toggle that is currently on.
   final bool active;
@@ -80,12 +85,14 @@ class QuarkBarChip extends StatelessWidget {
         icon: icon,
         tooltip: tooltip ?? label,
         onPressed: onPressed,
+        onLongPress: onLongPress,
       );
     }
     final tokens = QuarkTokens.of(context);
     final foreground = active ? tokens.primary : tokens.secondaryForeground;
     final chip = OutlinedButton.icon(
       onPressed: onPressed,
+      onLongPress: onLongPress,
       icon: Icon(icon),
       label: Text(label),
       style:

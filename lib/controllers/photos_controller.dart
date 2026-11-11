@@ -393,6 +393,9 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   int _columns = PhotoGridConfig.defaultColumns;
   bool _isUploading = false;
 
+  /// How many storage devices the Quark listed at the last refresh.
+  int _deviceCount = 0;
+
   /// How the grid orders photos, loaded from the persisted setting so it
   /// survives navigation and restart (#2509).
   PhotoSortField _sortField = AppSettings.instance.photoSortField.value;
@@ -620,6 +623,10 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   /// Whether an upload is in flight.
   bool get isUploading => _isUploading;
 
+  /// Whether the Quark listed more than one storage device at the last
+  /// refresh, so an upload has a device to choose (#3194).
+  bool get canChooseUploadDevice => _deviceCount > 1;
+
   /// Whether photos are being selected.
   bool get selectionMode => _selectionMode;
 
@@ -747,6 +754,18 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     final albums = loadAlbums();
     final albumItems = _loadAlbumItems();
     final search = _search();
+    // Off to the side: it only decides whether Upload offers a choice of
+    // device, so the grid never waits on it, and a listing that fails keeps
+    // the last count.
+    if (!noHost) {
+      unawaited(
+        _listDevices().then((devices) {
+          if (isDisposed || devices.length == _deviceCount) return;
+          _deviceCount = devices.length;
+          notifyListeners();
+        }, onError: (Object _) {}),
+      );
+    }
 
     final quarkPage = await quark;
     final mobilePhotos = await mobile;
@@ -1528,6 +1547,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
 
   /// The serial of the device an upload goes to, as [resolveUploadSerial]
   /// works it out: `''` for built-in storage, null when [pick] was dismissed.
+  /// [chooseDevice] asks even when there is a default storage device (#3194).
   /// Throws when the devices cannot be listed, which stops the upload (#3192).
   Future<String?> uploadSerial({
     required Future<UploadTarget?> Function(
@@ -1536,7 +1556,12 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
       String? notice,
     )
     pick,
-  }) => resolveUploadSerial(pick: pick, listDevices: _listDevices);
+    bool chooseDevice = false,
+  }) => resolveUploadSerial(
+    pick: pick,
+    chooseDevice: chooseDevice,
+    listDevices: _listDevices,
+  );
 
   /// Uploads [files] to the device with [serial], or the default device when
   /// null. Throws what the upload threw.

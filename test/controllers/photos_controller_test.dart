@@ -105,6 +105,9 @@ class _FakeQuark {
 
   int total;
   String? host = 'https://quark.local';
+
+  /// The storage devices the Quark lists.
+  List<StorageDevice> devices = [_device('a'), _device('b', enabled: false)];
   Object? photosError;
   Object? favoriteError;
   Set<String> favorites = {};
@@ -313,7 +316,7 @@ class _FakeQuark {
               ),
           ];
         },
-    listDevices: () async => [_device('a'), _device('b', enabled: false)],
+    listDevices: () async => devices,
     uploadFiles:
         (
           path,
@@ -1889,6 +1892,28 @@ void main() {
       // The drive that is not enabled is shown, and is not where it starts.
       expect(offered, ['a', 'b']);
       expect(serial, 'a');
+    });
+
+    // #3194: Upload offers a choice of device only when there is one.
+    test('a choice of device follows the devices listed at refresh', () async {
+      final controller = _FakeQuark().controller();
+      expect(controller.canChooseUploadDevice, isFalse);
+
+      await controller.refresh();
+      await pumpEventQueue();
+
+      // Two listed, one of them not enabled: still a choice, which the
+      // sheet shows with what enables it.
+      expect(controller.canChooseUploadDevice, isTrue);
+    });
+
+    test('one listed device offers no choice', () async {
+      final controller = (_FakeQuark()..devices = [_device('a')]).controller();
+
+      await controller.refresh();
+      await pumpEventQueue();
+
+      expect(controller.canChooseUploadDevice, isFalse);
     });
 
     // #3192: this used to upload to built-in storage.

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_upload_chip.dart';
+
 import '../support/file_top_bar.dart';
 import '../support/tap_target_guidelines.dart' show setViewport;
 
@@ -264,5 +266,84 @@ void main() {
 
     expect(find.byType(MenuItemButton), findsNothing);
     expect(files, 0);
+  });
+
+  // #3194: the chip uploads to the default device, and its ▾ segment to one
+  // the user picks, from every source.
+  group('choosing a device', () {
+    const choose = ValueKey('file_top_bar_upload_choose');
+    late List<String> calls;
+    setUp(() => calls = []);
+
+    DeviceWriteCallback record(String source) =>
+        ({chooseDevice = false}) =>
+            calls.add('$source${chooseDevice ? ' choosing' : ''}');
+
+    Future<void> pumpChip(
+      WidgetTester tester, {
+      bool sources = true,
+      bool canChooseDevice = true,
+    }) async {
+      setViewport(tester, const Size(1400, 900));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: FileTopBarUploadChip(
+                isUploading: false,
+                uploadTotal: 0,
+                uploadCompleted: 0,
+                onUploadPressed: record('files'),
+                onUploadPhotosPressed: sources ? record('photos') : null,
+                onUploadFolderPressed: sources ? record('folder') : null,
+                canChooseDevice: canChooseDevice,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    Future<void> pick(WidgetTester tester, Finder opener, String item) async {
+      await tester.tap(opener);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, item));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the chip and the ▾ segment open the same sources, and only '
+        'the ▾ one asks for the device', (tester) async {
+      await pumpChip(tester);
+
+      for (final item in ['Photos', 'Files', 'Folder']) {
+        await pick(tester, find.text('Upload'), item);
+        await pick(tester, find.byKey(choose), item);
+      }
+
+      expect(calls, [
+        'photos',
+        'photos choosing',
+        'files',
+        'files choosing',
+        'folder',
+        'folder choosing',
+      ]);
+    });
+
+    testWidgets('with one source the ▾ segment uploads, asking for the '
+        'device', (tester) async {
+      await pumpChip(tester, sources: false);
+
+      await tester.tap(find.byKey(choose));
+      await tester.pumpAndSettle();
+
+      expect(calls, ['files choosing']);
+    });
+
+    testWidgets('with one device there is no ▾ segment', (tester) async {
+      await pumpChip(tester, canChooseDevice: false);
+
+      expect(find.byKey(choose), findsNothing);
+    });
   });
 }

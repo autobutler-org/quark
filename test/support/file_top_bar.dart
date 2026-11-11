@@ -47,12 +47,17 @@ FileTopBar testFileTopBar({
   onSearchDraft: onSearchDraft,
   onSearchClosed: onSearchClosed ?? () {},
   onRefresh: () {},
-  onUploadPressed: onUploadPressed ?? () {},
-  onUploadPhotosPressed: onUploadPhotosPressed,
-  onUploadFolderPressed: onUploadFolderPressed,
+  // A plain press: a test about choosing a device builds the chip itself.
+  onUploadPressed: ({chooseDevice = false}) => onUploadPressed?.call(),
+  onUploadPhotosPressed: onUploadPhotosPressed == null
+      ? null
+      : ({chooseDevice = false}) => onUploadPhotosPressed(),
+  onUploadFolderPressed: onUploadFolderPressed == null
+      ? null
+      : ({chooseDevice = false}) => onUploadFolderPressed(),
   onCancelUploadPressed: onCancelUploadPressed,
   onShowUploadProgressPressed: onShowUploadProgressPressed,
-  onCreateFolderPressed: () {},
+  onCreateFolderPressed: ({chooseDevice = false}) {},
   onNewFilePressed: () {},
   onStartSelection: onStartSelection,
   columns: columns,

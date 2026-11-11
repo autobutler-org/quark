@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_upload_chip.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -16,28 +17,35 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// offered to everyone.
 ///
 /// The actions themselves belong to the page: uploading, creating a folder
-/// and navigating are handed in.
+/// and navigating are handed in. With [canChooseDevice], Upload and New
+/// folder each get a second action that asks which device to write to
+/// (#3194).
 ///
 /// Keys: `files_welcome` for the card, `welcome_upload`, `welcome_new_folder`
-/// and `welcome_vault` for the actions, and the package's
-/// `welcome_card_dismiss`.
+/// and `welcome_vault` for the actions, `welcome_upload_choose` and
+/// `welcome_new_folder_choose` for their choose-device segments, and the
+/// package's `welcome_card_dismiss`.
 class FilesWelcomeCard extends StatelessWidget {
   /// Creates the Files greeting backed by [AppSettings.instance].
   const FilesWelcomeCard({
     required this.onUpload,
     required this.onCreateFolder,
     required this.onOpenVault,
+    this.canChooseDevice = false,
     super.key,
   });
 
   /// Starts an upload into the folder on screen.
-  final VoidCallback onUpload;
+  final DeviceWriteCallback onUpload;
 
   /// Starts creating a folder in the folder on screen.
-  final VoidCallback onCreateFolder;
+  final DeviceWriteCallback onCreateFolder;
 
   /// Opens Vault.
   final VoidCallback onOpenVault;
+
+  /// Whether there is more than one device to write to.
+  final bool canChooseDevice;
 
   @override
   Widget build(BuildContext context) {
@@ -67,19 +75,25 @@ class FilesWelcomeCard extends StatelessWidget {
                 : null,
             actions: [
               if (isOwner) ...[
-                QuarkBarChip(
+                QuarkBarSplitChip(
                   key: const ValueKey('welcome_upload'),
                   icon: QuarkIcons.upload_rounded,
                   label: 'Upload',
                   keepLabel: true,
                   onPressed: onUpload,
+                  onSecondaryPressed: canChooseDevice
+                      ? () => onUpload(chooseDevice: true)
+                      : null,
                 ),
-                QuarkBarChip(
+                QuarkBarSplitChip(
                   key: const ValueKey('welcome_new_folder'),
                   icon: QuarkIcons.create_new_folder_outlined,
                   label: 'New folder',
                   keepLabel: true,
                   onPressed: onCreateFolder,
+                  onSecondaryPressed: canChooseDevice
+                      ? () => onCreateFolder(chooseDevice: true)
+                      : null,
                 ),
                 QuarkBarChip(
                   key: const ValueKey('welcome_vault'),
