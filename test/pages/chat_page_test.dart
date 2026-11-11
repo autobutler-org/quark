@@ -504,7 +504,8 @@ void main() {
       ];
       await pumpChat(tester, size, chat: fake);
 
-      await tester.tap(find.byKey(const ValueKey('message_menu_12')));
+      // A phone has no three-dot button: a long press opens the actions.
+      await tester.longPress(find.byKey(const ValueKey('message_body_12')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('message_delete_12')));
       await tester.pumpAndSettle();

@@ -42,12 +42,10 @@ import 'quark_message_list/chat_system_line.dart';
 /// caller that scrolls to the newest message with [controller] checks
 /// reduced motion itself and jumps rather than animates when it is on.
 ///
-/// Each text message has a menu, opened by a long press on a touch platform,
-/// a right-click, or the three-dot button at its end, which the keyboard
-/// reaches. "Copy text" fires [onCopy], "Add reaction" offers the quick emoji
-/// and "More emoji", which opens a searchable picker of every emoji (or
-/// [pickMoreEmoji], when set) and fires [onReact], and "Delete" fires
-/// [onDelete]; the caller asks for
+/// Each text message has actions: "Copy text" fires [onCopy], "Add
+/// reaction" offers the quick emoji and "More emoji", which opens a
+/// searchable picker of every emoji (or [pickMoreEmoji], when set) and fires
+/// [onReact], and "Delete" fires [onDelete]; the caller asks for
 /// confirmation if it wants one. "Delete" is on each message the user may
 /// delete: their own, which authorship allows, or anyone's when [permissions]
 /// holds [ChatPermission.deleteMessages].
@@ -55,8 +53,16 @@ import 'quark_message_list/chat_system_line.dart';
 /// On macOS, Windows and Linux, in a browser or not, the list is a
 /// `SelectionArea`: dragging selects message text, across messages, and the
 /// platform's copy shortcut copies it. There a long press is the selection's,
-/// not the menu's. On Android and iOS a long press opens the menu, nothing is
-/// selectable, and "Copy text" is how text is copied.
+/// and the actions are a menu, opened by a right-click or by the three-dot
+/// button at a message's end, which the keyboard reaches.
+///
+/// On Android and iOS nothing is selectable, and "Copy text" is how text is
+/// copied. A long press lifts the message over a blurred page, with the
+/// emoji as a bar above it and the other actions in full under it, all kept
+/// clear of the keyboard and the composer; under reduced motion it appears
+/// in place with no lift. There is no three-dot button: a screen reader
+/// finds the actions on the message as custom actions. A right-click still
+/// opens the menu. `ChatMessageRow` has the details.
 ///
 /// A text message's reactions show under it as chips, one per emoji with its
 /// count, highlighted where the user reacted. When [onReact] is set and
@@ -106,12 +112,15 @@ import 'quark_message_list/chat_system_line.dart';
 /// the highlight of one that mentions the user, `message_body_<id>` on a
 /// text message's body (a link is reached by its text inside it),
 /// `message_menu_<id>` on its menu button, `message_copy_<id>`,
-/// `message_menu_react_<id>` and `message_delete_<id>` on the menu's entries,
-/// `message_menu_react_<id>_<emoji>` on each emoji the menu offers,
+/// `message_menu_react_<id>` and `message_delete_<id>` on the menu's entries
+/// (on a touch platform there is no `message_menu_react_<id>`; the bar takes
+/// its place), `message_menu_react_<id>_<emoji>` on each emoji the menu or
+/// the touch bar offers, `message_context_copy_<id>` on the touch menu's
+/// lifted copy of the message and `message_context_lift_<id>` on its lift,
 /// `message_react_<id>` on its add-reaction button,
 /// `message_react_<id>_<emoji>` on each emoji that button offers,
 /// `message_react_<id>_more` on its "More emoji",
-/// `message_menu_react_<id>_more` on the menu's "More emoji",
+/// `message_menu_react_<id>_more` on the menu's or the bar's "More emoji",
 /// `message_emoji_search_<id>` and `message_emoji_close_<id>` on the full
 /// picker,
 /// `message_reaction_<id>_<emoji>` on each reaction chip,
@@ -549,7 +558,7 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
                   ChatMessageRow(
                     message: message,
                     avatarSize: QuarkMessageList.avatarSize,
-                    longPressOpensMenu: !selectable,
+                    touchMenu: !selectable,
                     onCopy:
                         onCopy == null || message.kind != ChatMessageKind.text
                         ? null

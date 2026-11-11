@@ -2432,71 +2432,87 @@ final List<GalleryEntry> registry = [
   GalleryEntry(
     name: 'QuarkMessageList',
     group: 'Chat',
-    build: (context, log) => Wrap(
-      spacing: 24,
-      runSpacing: 24,
-      children: [
-        SizedBox(
-          width: 480,
-          height: 520,
-          child: QuarkMessageList(
-            messages: galleryChatMessages,
-            hasMore: true,
-            onLoadOlder: () => log('QuarkMessageList.onLoadOlder'),
-            permissions: ChatPermissionPreset.moderator.permissions,
-            currentUserId: galleryChatUserId,
-            mentionNames: const ['ada', 'bob', 'eve'],
-            currentUserName: galleryChatUserId,
-            onCopy: (id) => log('QuarkMessageList.onCopy($id)'),
-            onDelete: (id) => log('QuarkMessageList.onDelete($id)'),
-            onReact: (id, emoji) =>
-                log('QuarkMessageList.onReact($id, $emoji)'),
-            onOpenLink: (uri) => log('QuarkMessageList.onOpenLink($uri)'),
-            onAnswerPoll: (id, answer) =>
-                log('QuarkMessageList.onAnswerPoll($id, ${answer.choices})'),
-            onClosePoll: (id) => log('QuarkMessageList.onClosePoll($id)'),
-            onExportPoll: (id) => log('QuarkMessageList.onExportPoll($id)'),
-            onEncryptionHelp: () => log('QuarkMessageList.onEncryptionHelp'),
-            onOpenAttachment: (id, item) =>
-                log('QuarkMessageList.onOpenAttachment($id, ${item.id})'),
-            onPlayAttachment: (id, item) =>
-                log('QuarkMessageList.onPlayAttachment($id, ${item.id})'),
-            onSaveAttachmentToDevice: (id, item) => log(
-              'QuarkMessageList.onSaveAttachmentToDevice($id, ${item.id})',
-            ),
-            onSaveAttachmentToFiles: (id, item) => log(
-              'QuarkMessageList.onSaveAttachmentToFiles($id, ${item.id})',
-            ),
-            thumbnailBuilder: (context, item) => ColoredBox(
-              color: QuarkTokens.of(context).primary,
-              child: const SizedBox(width: 120, height: 80),
+    build: (context, log) {
+      QuarkMessageList full() => QuarkMessageList(
+        messages: galleryChatMessages,
+        hasMore: true,
+        onLoadOlder: () => log('QuarkMessageList.onLoadOlder'),
+        permissions: ChatPermissionPreset.moderator.permissions,
+        currentUserId: galleryChatUserId,
+        mentionNames: const ['ada', 'bob', 'eve'],
+        currentUserName: galleryChatUserId,
+        onCopy: (id) => log('QuarkMessageList.onCopy($id)'),
+        onDelete: (id) => log('QuarkMessageList.onDelete($id)'),
+        onReact: (id, emoji) => log('QuarkMessageList.onReact($id, $emoji)'),
+        onOpenLink: (uri) => log('QuarkMessageList.onOpenLink($uri)'),
+        onAnswerPoll: (id, answer) =>
+            log('QuarkMessageList.onAnswerPoll($id, ${answer.choices})'),
+        onClosePoll: (id) => log('QuarkMessageList.onClosePoll($id)'),
+        onExportPoll: (id) => log('QuarkMessageList.onExportPoll($id)'),
+        onEncryptionHelp: () => log('QuarkMessageList.onEncryptionHelp'),
+        onOpenAttachment: (id, item) =>
+            log('QuarkMessageList.onOpenAttachment($id, ${item.id})'),
+        onPlayAttachment: (id, item) =>
+            log('QuarkMessageList.onPlayAttachment($id, ${item.id})'),
+        onSaveAttachmentToDevice: (id, item) =>
+            log('QuarkMessageList.onSaveAttachmentToDevice($id, ${item.id})'),
+        onSaveAttachmentToFiles: (id, item) =>
+            log('QuarkMessageList.onSaveAttachmentToFiles($id, ${item.id})'),
+        thumbnailBuilder: (context, item) => ColoredBox(
+          color: QuarkTokens.of(context).primary,
+          child: const SizedBox(width: 120, height: 80),
+        ),
+      );
+      final touch = Theme.of(context).copyWith(platform: TargetPlatform.iOS);
+      return Wrap(
+        spacing: 24,
+        runSpacing: 24,
+        children: [
+          SizedBox(width: 480, height: 520, child: full()),
+          // The touch presentation: a long press lifts the message over a
+          // blurred page, with the emoji above it and its actions under it.
+          SizedBox(
+            width: 360,
+            height: 520,
+            child: Theme(data: touch, child: full()),
+          ),
+          // The same under reduced motion: the menu fades in with no lift.
+          SizedBox(
+            width: 360,
+            height: 520,
+            child: Theme(
+              data: touch,
+              child: MediaQuery(
+                data: MediaQuery.of(context).copyWith(disableAnimations: true),
+                child: full(),
+              ),
             ),
           ),
-        ),
-        SizedBox(
-          width: 320,
-          height: 240,
-          child: QuarkMessageList(
-            messages: galleryChatMessages,
-            error: "Couldn't load older messages.",
-            onLoadOlder: () => log('QuarkMessageList.onLoadOlder'),
+          SizedBox(
+            width: 320,
+            height: 240,
+            child: QuarkMessageList(
+              messages: galleryChatMessages,
+              error: "Couldn't load older messages.",
+              onLoadOlder: () => log('QuarkMessageList.onLoadOlder'),
+            ),
           ),
-        ),
-        const SizedBox(
-          width: 320,
-          height: 240,
-          child: QuarkMessageList(messages: []),
-        ),
-        SizedBox(
-          width: 320,
-          height: 240,
-          child: QuarkMessageList(
-            messages: galleryChatMessages,
-            permissions: const {ChatPermission.manageMembers},
+          const SizedBox(
+            width: 320,
+            height: 240,
+            child: QuarkMessageList(messages: []),
           ),
-        ),
-      ],
-    ),
+          SizedBox(
+            width: 320,
+            height: 240,
+            child: QuarkMessageList(
+              messages: galleryChatMessages,
+              permissions: const {ChatPermission.manageMembers},
+            ),
+          ),
+        ],
+      );
+    },
   ),
   GalleryEntry(
     name: 'QuarkPollCard',

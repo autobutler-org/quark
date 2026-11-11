@@ -7,6 +7,7 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark_widgets/src/chat/quark_message_list/chat_message_row.dart';
 import 'package:quark_widgets/src/chat/quark_message_list/chat_message_row/chat_message_body.dart';
+import 'package:quark_widgets/src/chat/quark_message_list/chat_message_row/chat_message_context_menu.dart';
 import 'package:quark_widgets/src/chat/quark_message_list/chat_message_row/chat_reaction_picker.dart';
 
 import '../support/pump.dart';
@@ -366,6 +367,14 @@ void main() {
   group('message menu (#2631)', () {
     Finder key(String value) => find.byKey(ValueKey(value));
 
+    /// Quark's theme on macOS, for the pointer presentation: the three-dot
+    /// button and `showQuarkMenu`. `flutter test` runs as Android, which is
+    /// the touch one.
+    final pointer = QuarkTheme.from(
+      QuarkThemeColor.classic.tokensFor(Brightness.dark),
+      Brightness.dark,
+    ).copyWith(platform: TargetPlatform.macOS);
+
     /// Opens [id]'s menu from its button, says whether it offers Delete, and
     /// closes it again.
     Future<bool> offersDelete(WidgetTester tester, String id) async {
@@ -410,6 +419,7 @@ void main() {
     ) async {
       await pumpAt(
         tester,
+        theme: pointer,
         QuarkMessageList(messages: messages, onCopy: (_) {}),
         size: size,
       );
@@ -428,6 +438,7 @@ void main() {
       final copied = <String>[];
       await pumpAt(
         tester,
+        theme: pointer,
         QuarkMessageList(messages: messages, onCopy: copied.add),
       );
 
@@ -452,6 +463,7 @@ void main() {
     ) async {
       await pumpAt(
         tester,
+        theme: pointer,
         QuarkMessageList(
           messages: messages,
           permissions: ChatPermissionPreset.member.permissions,
@@ -479,6 +491,7 @@ void main() {
       final events = <String>[];
       await pumpAt(
         tester,
+        theme: pointer,
         QuarkMessageList(
           messages: messages,
           permissions: ChatPermissionPreset.member.permissions,
@@ -507,6 +520,7 @@ void main() {
         final events = <String>[];
         await pumpAt(
           tester,
+          theme: pointer,
           QuarkMessageList(
             messages: messages,
             permissions: ChatPermissionPreset.member.permissions,
@@ -558,6 +572,7 @@ void main() {
     ) async {
       await pumpAt(
         tester,
+        theme: pointer,
         QuarkMessageList(
           messages: messages,
           permissions: ChatPermissionPreset.viewer.permissions,
@@ -576,6 +591,7 @@ void main() {
       final deleted = <String>[];
       await pumpAt(
         tester,
+        theme: pointer,
         QuarkMessageList(
           messages: messages,
           permissions: ChatPermissionPreset.moderator.permissions,
@@ -603,6 +619,7 @@ void main() {
     ) async {
       await pumpAt(
         tester,
+        theme: pointer,
         QuarkMessageList(
           messages: messages,
           permissions: ChatPermissionPreset.member.permissions,
@@ -621,6 +638,7 @@ void main() {
     ) async {
       await pumpAt(
         tester,
+        theme: pointer,
         QuarkMessageList(
           messages: messages,
           permissions: ChatPermissionPreset.viewer.permissions,
@@ -640,6 +658,7 @@ void main() {
     ) async {
       await pumpAt(
         tester,
+        theme: pointer,
         QuarkMessageList(
           messages: messages,
           permissions: ChatPermissionPreset.owner.permissions,
@@ -757,6 +776,241 @@ void main() {
 
         expect(opened, [Uri.parse('https://a.com/x')]);
       }, variant: desktop);
+    });
+
+    group('on a touch platform (#4052)', () {
+      Finder contextMenu() => find.byType(ChatMessageContextMenu);
+
+      Widget list(List<String> events, {List<ChatMessageItem>? items}) =>
+          QuarkMessageList(
+            messages: items ?? messages,
+            permissions: ChatPermissionPreset.moderator.permissions,
+            currentUserId: 'ada',
+            onCopy: (id) => events.add('copy $id'),
+            onDelete: (id) => events.add('delete $id'),
+            onReact: (id, emoji) => events.add('react $id $emoji'),
+          );
+
+      /// Expects the bar, the copy and every action of [id]'s menu to lie
+      /// on screen, above [floor].
+      void expectAllAbove(WidgetTester tester, String id, double floor) {
+        for (final part in [
+          'message_menu_react_${id}_👍',
+          'message_menu_react_${id}_more',
+          'message_context_copy_$id',
+          'message_copy_$id',
+          'message_delete_$id',
+        ]) {
+          final rect = tester.getRect(key(part));
+          expect(rect.top, greaterThanOrEqualTo(0), reason: '$part $rect');
+          expect(rect.bottom, lessThanOrEqualTo(floor), reason: '$part $rect');
+        }
+      }
+
+      testWidgets('a long press lifts the message and shows every action', (
+        tester,
+      ) async {
+        final events = <String>[];
+        await pumpAt(tester, list(events));
+
+        Future<void> open() async {
+          await tester.longPress(key('message_body_m4'));
+          await tester.pumpAndSettle();
+        }
+
+        await open();
+        expect(contextMenu(), findsOneWidget);
+        expect(key('message_context_copy_m4'), findsOneWidget);
+        expect(key('message_context_lift_m4'), findsOneWidget);
+        for (final emoji in ChatReactionPicker.choices) {
+          expect(key('message_menu_react_m4_$emoji'), findsOneWidget);
+        }
+        expect(key('message_menu_react_m4_more'), findsOneWidget);
+        expect(key('message_copy_m4'), findsOneWidget);
+        expect(key('message_delete_m4'), findsOneWidget);
+        // The bar replaces the pointer menu's "Add reaction".
+        expect(key('message_menu_react_m4'), findsNothing);
+        expect(
+          tester.widget<Text>(find.text('Delete')).style?.color,
+          QuarkTokens.dark.error,
+        );
+        expect(find.byType(BackdropFilter), findsOneWidget);
+
+        await tester.tap(key('message_delete_m4'));
+        await tester.pumpAndSettle();
+        expect(events, ['delete m4']);
+        expect(contextMenu(), findsNothing);
+
+        await open();
+        await tester.tap(key('message_menu_react_m4_🎉'));
+        await tester.pumpAndSettle();
+        await open();
+        await tester.tap(key('message_copy_m4'));
+        await tester.pumpAndSettle();
+        expect(events, ['delete m4', 'react m4 🎉', 'copy m4']);
+        expect(contextMenu(), findsNothing);
+
+        // A tap outside closes it with nothing chosen.
+        await open();
+        await tester.tapAt(const Offset(1, 1));
+        await tester.pumpAndSettle();
+        expect(contextMenu(), findsNothing);
+        expect(events, hasLength(3));
+        expect(tester.takeException(), isNull);
+      }, variant: TargetPlatformVariant.mobile());
+
+      testWidgets('More emoji in the bar opens the full picker', (
+        tester,
+      ) async {
+        final events = <String>[];
+        await pumpAt(tester, list(events));
+
+        await tester.longPress(key('message_body_m4'));
+        await tester.pumpAndSettle();
+        await tester.tap(key('message_menu_react_m4_more'));
+        await tester.pumpAndSettle();
+        expect(contextMenu(), findsNothing);
+        await tester.enterText(key('message_emoji_search_m4'), 'party popper');
+        await tester.pump();
+        await tester.tap(key('message_react_m4_🎉'));
+        await tester.pumpAndSettle();
+
+        expect(events, ['react m4 🎉']);
+      });
+
+      testWidgets('rows have no three-dot button; a right-click is the '
+          'pointer menu', (tester) async {
+        await pumpAt(tester, list([]));
+        expect(key('message_menu_m4'), findsNothing);
+
+        await tester.tap(key('message_body_m4'), buttons: kSecondaryButton);
+        await tester.pumpAndSettle();
+        expect(find.byType(PopupMenuItem<int>), findsWidgets);
+        expect(contextMenu(), findsNothing);
+      }, variant: TargetPlatformVariant.mobile());
+
+      testWidgets('a screen reader reaches every action on the row', (
+        tester,
+      ) async {
+        final semantics = tester.ensureSemantics();
+        final events = <String>[];
+        await pumpAt(tester, list(events));
+
+        final node = tester.getSemantics(key('message_menu_open_m4'));
+        final actions = {
+          for (final id in node.getSemanticsData().customSemanticsActionIds!)
+            CustomSemanticsAction.getAction(id)!.label: id,
+        };
+        expect(actions.keys, ['Copy text', 'Delete', 'Add reaction']);
+
+        for (final label in ['Copy text', 'Delete']) {
+          node.owner!.performAction(
+            node.id,
+            SemanticsAction.customAction,
+            actions[label],
+          );
+          await tester.pump();
+        }
+        expect(events, ['copy m4', 'delete m4']);
+
+        node.owner!.performAction(
+          node.id,
+          SemanticsAction.customAction,
+          actions['Add reaction'],
+        );
+        await tester.pumpAndSettle();
+        expect(key('message_menu_react_m4_👍'), findsOneWidget);
+        semantics.dispose();
+      });
+
+      testBothViewports('the menu fits above the keyboard', (
+        tester,
+        size,
+      ) async {
+        const keyboard = 300.0;
+        tester.view.viewInsets = const FakeViewPadding(bottom: keyboard);
+        // m4 newest, at the foot of the list, so its actions would fall
+        // under the keyboard.
+        await pumpAt(tester, list([], items: messages.sublist(2)), size: size);
+
+        await tester.longPress(key('message_body_m4'));
+        await tester.pumpAndSettle();
+
+        expectAllAbove(tester, 'm4', size.height - keyboard);
+        expect(tester.takeException(), isNull);
+      });
+
+      testBothViewports('a message taller than the screen keeps every action', (
+        tester,
+        size,
+      ) async {
+        final tall = msg('t', day2, body: List.filled(1500, 'word').join(' '));
+        await pumpAt(tester, list([], items: [tall]), size: size);
+
+        await tester.longPressAt(size.center(Offset.zero));
+        await tester.pumpAndSettle();
+
+        expectAllAbove(tester, 't', size.height);
+        final scroll = tester.state<ScrollableState>(
+          find.descendant(
+            of: key('message_context_copy_t'),
+            matching: find.byType(Scrollable),
+          ),
+        );
+        expect(scroll.position.maxScrollExtent, greaterThan(0));
+        expect(tester.takeException(), isNull);
+      });
+
+      testBothViewports('reduced motion drops the lift', (tester, size) async {
+        reduceMotion(tester);
+        await pumpAt(tester, list([]), size: size);
+
+        await tester.longPress(key('message_body_m4'));
+        await tester.pumpAndSettle();
+
+        expect(key('message_context_copy_m4'), findsOneWidget);
+        expect(key('message_context_lift_m4'), findsNothing);
+        expect(
+          find.descendant(
+            of: contextMenu(),
+            matching: find.byType(ScaleTransition),
+          ),
+          findsNothing,
+        );
+        expect(
+          tester.widget<Material>(key('message_context_copy_m4')).elevation,
+          0,
+        );
+      });
+
+      testWidgets('Remove animations drops the lift too', (tester) async {
+        await pumpAt(
+          tester,
+          Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: list([]),
+            ),
+          ),
+        );
+
+        await tester.longPress(key('message_body_m4'));
+        await tester.pumpAndSettle();
+
+        expect(key('message_context_copy_m4'), findsOneWidget);
+        expect(key('message_context_lift_m4'), findsNothing);
+      });
+
+      testWidgets('deleted, waiting and system lines open nothing', (
+        tester,
+      ) async {
+        await pumpAt(tester, list([]));
+        for (final id in ['m3', 'm5', 'm6']) {
+          await tester.longPressAt(tester.getCenter(key('message_$id')));
+          await tester.pumpAndSettle();
+          expect(contextMenu(), findsNothing);
+        }
+      });
     });
   });
 
