@@ -10,19 +10,32 @@ Future<List<StorageDevice>> listDevicesFresh() {
   return StorageService.listDevices();
 }
 
+/// What the device picker says when no enabled device holds the Default
+/// Storage role. A default drive that is unplugged is not listed at all, so
+/// it reads the same as no default (#3194).
+const noDefaultDeviceNotice = 'No default storage device is connected.';
+
+/// What the device picker says when the default storage device is listed
+/// but not enabled (#3194).
+const defaultDeviceDisabledNotice =
+    'The default storage device is not enabled.';
+
 /// The serial of the device an upload or a new folder goes to — `''` for
 /// built-in storage — or null when the user dismissed the picker.
 ///
 /// Only enabled devices are destinations. [viewedSerial] is the one device
 /// the view is filtered to, null when it shows several: that device is the
 /// destination without asking. Otherwise a device listed alone is the
-/// destination, and [pick] chooses between several, starting on `initial`:
-/// the default storage device an admin set (#3194), else the device chosen
-/// last time, else the first, each only when it can be chosen. What [pick]
-/// answers is kept in [AppSettings] for next time (#3192).
+/// destination, and so is the default storage device an admin set (#3194),
+/// unless [chooseDevice] asks for the picker. [pick] chooses between
+/// several, starting on `initial`: the default storage device, else the
+/// device chosen last time, else the first, each only when it can be
+/// chosen. What [pick] answers is kept in [AppSettings] for next time
+/// (#3192).
 ///
-/// With no default storage device set, or with that drive not enabled or
-/// not connected, nothing says so: the picker only starts somewhere else.
+/// With no enabled default storage device, [pick] is handed a `notice`
+/// saying so: [defaultDeviceDisabledNotice] when the default is listed but
+/// not enabled, else [noDefaultDeviceNotice]. Otherwise the notice is null.
 ///
 /// A drive that is connected but not enabled is passed to [pick] as an
 /// unavailable target, so the user sees it and what enables it: one beside
@@ -36,9 +49,11 @@ Future<String?> resolveUploadSerial({
   required Future<UploadTarget?> Function(
     List<UploadTarget> targets,
     UploadTarget initial,
+    String? notice,
   )
   pick,
   String? viewedSerial,
+  bool chooseDevice = false,
   Future<List<StorageDevice>> Function() listDevices = listDevicesFresh,
 }) async {
   final targets = [
@@ -54,15 +69,22 @@ Future<String?> resolveUploadSerial({
   if (enabled.isEmpty || targets.length == 1) {
     return enabled.firstOrNull?.serial ?? '';
   }
+  final byDefault = enabled.where((target) => target.isDefault).firstOrNull;
+  if (byDefault != null && !chooseDevice) return byDefault.serial;
 
   final settings = AppSettings.instance;
   final picked = await pick(
     targets,
-    enabled.where((target) => target.isDefault).firstOrNull ??
+    byDefault ??
         enabled.firstWhere(
           (target) => target.serial == settings.lastUploadSerial,
           orElse: () => enabled.first,
         ),
+    byDefault != null
+        ? null
+        : targets.any((target) => target.isDefault)
+        ? defaultDeviceDisabledNotice
+        : noDefaultDeviceNotice,
   );
   if (picked != null) await settings.setLastUploadSerial(picked.serial);
   return picked?.serial;

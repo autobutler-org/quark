@@ -3006,6 +3006,26 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'UploadTargetPicker (notice)',
+    group: 'Storage',
+    build: (context, log) => QuarkSheet(
+      title: 'Upload to device',
+      onClose: () => log('QuarkSheet.onClose'),
+      // The default drive is unplugged, so it is not listed at all.
+      child: UploadTargetPicker(
+        targets: [
+          for (final target in _galleryTargets)
+            if (!target.isDefault) target,
+        ],
+        notice: 'No default storage device is connected.',
+        selected: _galleryTargets.first,
+        onSelected: (t) => log('UploadTargetPicker.onSelected(${t.name})'),
+        onCancel: () => log('UploadTargetPicker.onCancel'),
+        onConfirm: () => log('UploadTargetPicker.onConfirm'),
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'BackupRunsList',
     group: 'Storage',
     build: (context, log) {

@@ -97,10 +97,10 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 
 - Upload progress indicator is shown.
 - On completion, the file appears in the current directory listing.
-- With more than one enabled storage device, an **Upload to device** sheet asks where the upload goes, starting on
-  the default storage device (JN-SD-011), or with none set or enabled on the device chosen last time when it is
-  still offered; dismissing it uploads nothing. A view filtered to one
-  device uploads to that device without asking.
+- With more than one enabled storage device, the upload goes to the default storage device (JN-SD-011) without
+  asking. With no default storage device connected, or with it not enabled, an **Upload to device** sheet asks
+  where the upload goes and says why it opened. It starts on the device chosen last time when that is still
+  offered, and dismissing it uploads nothing. A view filtered to one device uploads to that device without asking.
 - A drive that is connected but not enabled is listed in that sheet as unavailable, with a note to mount it
   under System > Storage, and cannot be chosen. One such drive beside a single enabled device is enough for the
   sheet to open.
@@ -121,10 +121,10 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 
 - Drop zone highlights when file is hovered over it.
 - File uploads on drop.
-- With more than one enabled storage device, an **Upload to device** sheet asks where the upload goes, starting on
-  the default storage device (JN-SD-011), or with none set or enabled on the device chosen last time when it is
-  still offered; dismissing it uploads nothing. A view filtered to one
-  device uploads to that device without asking.
+- With more than one enabled storage device, the upload goes to the default storage device (JN-SD-011) without
+  asking. With no default storage device connected, or with it not enabled, an **Upload to device** sheet asks
+  where the upload goes and says why it opened. It starts on the device chosen last time when that is still
+  offered, and dismissing it uploads nothing. A view filtered to one device uploads to that device without asking.
 - A drive that is connected but not enabled is listed in that sheet as unavailable, with a note to mount it
   under System > Storage, and cannot be chosen. One such drive beside a single enabled device is enough for the
   sheet to open.
@@ -164,6 +164,8 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 
 - New folder appears in the current directory listing.
 - Folder is navigable (JN-FB-002).
+- The folder is created on the device an upload would go to (JN-FB-006): the default storage device without
+  asking, or the **Upload to device** sheet when there is no enabled default.
 
 ---
 
@@ -505,10 +507,10 @@ it, so what changed while the client was away shows without a manual refresh.
 
 - The Photos library opens, not the Files app.
 - Selected items upload to the current directory.
-- With more than one enabled storage device, an **Upload to device** sheet asks where the upload goes, starting on
-  the default storage device (JN-SD-011), or with none set or enabled on the device chosen last time when it is
-  still offered; dismissing it uploads nothing. A view filtered to one
-  device uploads to that device without asking.
+- With more than one enabled storage device, the upload goes to the default storage device (JN-SD-011) without
+  asking. With no default storage device connected, or with it not enabled, an **Upload to device** sheet asks
+  where the upload goes and says why it opened. It starts on the device chosen last time when that is still
+  offered, and dismissing it uploads nothing. A view filtered to one device uploads to that device without asking.
 - A drive that is connected but not enabled is listed in that sheet as unavailable, with a note to mount it
   under System > Storage, and cannot be chosen. One such drive beside a single enabled device is enough for the
   sheet to open.

@@ -98,9 +98,10 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 **Expected result:**
 
-- With more than one enabled storage device, an **Upload to device** sheet asks where the photos go, starting on
-  the default storage device (JN-SD-011), or with none set or enabled on the device chosen last time (in Files or
-  Photos) when it is still offered; dismissing it uploads nothing.
+- With more than one enabled storage device, the photos go to the default storage device (JN-SD-011) without
+  asking. With no default storage device connected, or with it not enabled, an **Upload to device** sheet asks
+  where the photos go and says why it opened. It starts on the device chosen last time (in Files or Photos) when
+  that is still offered, and dismissing it uploads nothing.
 - A drive that is connected but not enabled is listed in that sheet as unavailable, with a note to mount it
   under System > Storage, and cannot be chosen. One such drive beside a single enabled device is enough for the
   sheet to open.

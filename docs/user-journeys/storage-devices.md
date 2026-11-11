@@ -226,9 +226,9 @@ including one that is not mounted.
 
 - A snack bar names the new role and the device's badge changes. Only one device holds **Default Storage**: giving
   it to one takes it from the other.
-- With more than one enabled device, the **Upload to device** sheet (JN-FB-006, JN-PH-006) and the one New folder
-  opens start on the default storage device, and its row reads **Default**. The sheet is still shown, and any
-  other enabled device can be chosen.
+- With more than one enabled device, an upload (JN-FB-006, JN-PH-006) and a New folder (JN-FB-009) go to the
+  default storage device without opening the **Upload to device** sheet. When the sheet does open, the default
+  storage device's row reads **Default**.
 - On a USB drive, **Backup drive** reads "Your other drives are copied onto it when you back up. Keep it somewhere
   safe between backups." The badge on its card reads **Backup drive**.
 - **Set Role** on built-in storage offers **Default Storage**, **Backup drive**, and **Unassigned**.
@@ -242,15 +242,17 @@ including one that is not mounted.
 
 **Notes:**
 
-- With no device holding the role, built-in storage is where a request naming no device lands, but no row reads
-  **Default** and the sheet starts on the device chosen last time, then on the first one listed.
+- With no device holding the role, built-in storage is where a request naming no device lands, but an upload or a
+  New folder opens the sheet, which reads "No default storage device is connected." No row reads **Default** and
+  the sheet starts on the device chosen last time, then on the first one listed.
 - When the default storage drive is not enabled it is listed as unavailable, still reading **Default**, and the
-  sheet starts on the fallback above. When it is unplugged it is not listed at all and nothing says it is missing.
+  sheet opens reading "The default storage device is not enabled." and starts on the fallback above. When it is
+  unplugged it is not listed at all, and the sheet reads as it does with no device holding the role.
 - A view filtered to one device still uploads to that device without asking (JN-FB-006).
 - A USB drive holding **Default Storage** is also what live sync copies built-in storage onto. Files uploaded
   straight to that drive are not copied back, and get no version history.
-- The role is the upload sheet's starting point only: a request that names no device still writes to built-in
-  storage.
+- The app resolves the default storage device itself and names it in the request: a request that names no device
+  still writes to built-in storage.
 
 ---
 

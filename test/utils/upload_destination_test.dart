@@ -35,21 +35,24 @@ void main() {
   final builtIn = device('Built-in');
   final stick = device('Stick', serial: 'USB1');
 
-  /// A picker that records what it was offered and where it started, and
-  /// answers [choose].
+  /// A picker that records what it was offered, where it started and what
+  /// it said, and answers [choose].
   late List<List<UploadTarget>> offered;
   late List<String> startedOn;
-  Future<UploadTarget?> Function(List<UploadTarget>, UploadTarget) picker(
-    UploadTarget? Function(List<UploadTarget>) choose,
-  ) => (targets, initial) async {
-    offered.add(targets);
-    startedOn.add(initial.name);
-    return choose(targets);
-  };
+  late List<String?> notices;
+  Future<UploadTarget?> Function(List<UploadTarget>, UploadTarget, String?)
+  picker(UploadTarget? Function(List<UploadTarget>) choose) =>
+      (targets, initial, notice) async {
+        offered.add(targets);
+        startedOn.add(initial.name);
+        notices.add(notice);
+        return choose(targets);
+      };
 
   setUp(() async {
     offered = [];
     startedOn = [];
+    notices = [];
     SharedPreferences.setMockInitialValues({});
     await AppSettings.instance.load();
   });
@@ -62,6 +65,7 @@ void main() {
 
     expect(serial, 'USB1');
     expect(offered.single.map((t) => t.name), ['Built-in', 'Stick']);
+    expect(notices, [noDefaultDeviceNotice]);
   });
 
   test('built-in storage is the empty serial, not a dismissal', () async {
@@ -244,26 +248,46 @@ void main() {
     );
     final other = device('Other', serial: 'USB2');
 
-    test('starts the picker, over the device chosen last time', () async {
+    test('is where a plain upload goes, without the picker', () async {
       await AppSettings.instance.setLastUploadSerial('USB2');
 
-      await resolveUploadSerial(
-        pick: picker((_) => null),
+      final serial = await resolveUploadSerial(
+        pick: picker((targets) => targets.first),
         listDevices: () async => [builtIn, defaultStick, other],
       );
 
-      expect(startedOn, ['Stick']);
-      expect(offered.single.map((t) => t.isDefault), [false, true, false]);
+      expect(serial, 'USB1');
+      expect(offered, isEmpty);
     });
 
-    test('is still asked about, never chosen without the picker', () async {
+    test('built-in storage holding the role is where a plain upload '
+        'goes', () async {
       final serial = await resolveUploadSerial(
-        pick: picker((targets) => targets.first),
-        listDevices: () async => [builtIn, defaultStick],
+        pick: picker((targets) => targets.last),
+        listDevices: () async => [
+          device('Built-in', role: 'default-storage'),
+          stick,
+        ],
       );
 
       expect(serial, '');
-      expect(offered, hasLength(1));
+      expect(offered, isEmpty);
+    });
+
+    test('choosing a device opens the picker on it, over the device chosen '
+        'last time, with nothing to say', () async {
+      await AppSettings.instance.setLastUploadSerial('USB2');
+
+      final serial = await resolveUploadSerial(
+        pick: picker((targets) => targets.last),
+        chooseDevice: true,
+        listDevices: () async => [builtIn, defaultStick, other],
+      );
+
+      expect(serial, 'USB2');
+      expect(startedOn, ['Stick']);
+      expect(notices, [null]);
+      expect(offered.single.map((t) => t.isDefault), [false, true, false]);
     });
 
     test('built-in storage holding the role starts the picker', () async {
@@ -271,6 +295,7 @@ void main() {
 
       await resolveUploadSerial(
         pick: picker((_) => null),
+        chooseDevice: true,
         listDevices: () async => [
           device('Built-in', role: 'default-storage'),
           stick,
@@ -280,8 +305,8 @@ void main() {
       expect(startedOn, ['Built-in']);
     });
 
-    test('not enabled, the picker starts on the device chosen last '
-        'time', () async {
+    test('not enabled, the picker opens on the device chosen last time and '
+        'says so', () async {
       await AppSettings.instance.setLastUploadSerial('USB2');
 
       await resolveUploadSerial(
@@ -299,10 +324,11 @@ void main() {
       );
 
       expect(startedOn, ['Other']);
+      expect(notices, [defaultDeviceDisabledNotice]);
     });
 
-    test('not connected, the picker starts on the device chosen last time, '
-        'then on the first', () async {
+    test('not connected, the picker opens on the device chosen last time, '
+        'then on the first, and says so', () async {
       Future<void> ask() => resolveUploadSerial(
         pick: picker((_) => null),
         listDevices: () async => [builtIn, other],
@@ -313,6 +339,7 @@ void main() {
       await ask();
 
       expect(startedOn, ['Built-in', 'Other']);
+      expect(notices, [noDefaultDeviceNotice, noDefaultDeviceNotice]);
     });
 
     test('does not move an upload out of the one device in view', () async {
@@ -332,6 +359,7 @@ void main() {
 
       await resolveUploadSerial(
         pick: picker((_) => null),
+        chooseDevice: true,
         listDevices: () async => [builtIn, defaultStick, other],
       );
 
