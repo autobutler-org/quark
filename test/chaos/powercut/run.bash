@@ -121,7 +121,11 @@ EOF
         sleep 0.1
     done
     lazyfs_pid=""
-    fusermount3 -uz "$mnt" 2>/dev/null || true
+    # The container has CAP_SYS_ADMIN, so umount -l can detach what fusermount3
+    # refuses to (#4049). Why either failed lands in unmount.log.
+    if ! fusermount3 -uz "$mnt" 2>>"$dir/unmount.log" && ! umount -l "$mnt" 2>>"$dir/unmount.log"; then
+        echo "warning: could not unmount $mnt; see $dir/unmount.log" >&2
+    fi
 
     local verdict="PASS"
     if ! "$POWERCUT" check "$scenario" "$root" "$dir/ledger" >"$dir/check.log" 2>&1; then
@@ -143,7 +147,14 @@ EOF
     if [[ "$verdict" == "PASS" ]]; then
         rm -rf "$root"
     fi
-    chmod -R a+rX "$dir"
+    # A mount that would not detach fails every call into it, so the walk skips
+    # it rather than failing a case that passed.
+    chmod a+rX "$dir"
+    for f in "$dir"/*; do
+        if [[ "$f" != "$mnt" ]]; then
+            chmod -R a+rX "$f"
+        fi
+    done
 }
 
 for round in $(seq 1 "$ROUNDS"); do
