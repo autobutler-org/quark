@@ -4,6 +4,7 @@ package storageutil
 
 import (
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -96,5 +97,30 @@ func TestPartition_MountPath_UsesResolvedPaths(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not mounted") {
 		t.Errorf("error should mention 'not mounted', got: %v", err)
+	}
+}
+
+func TestUdevFsType(t *testing.T) {
+	sys, udev := t.TempDir(), t.TempDir()
+	for name, dev := range map[string]string{"sda1": "8:1", "sda2": "8:2", "sda3": "8:3"} {
+		if err := os.MkdirAll(filepath.Join(sys, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(sys, name, "dev"), []byte(dev+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// sda1 is a Microsoft reserved partition: udev records no ID_FS_TYPE.
+	if err := os.WriteFile(filepath.Join(udev, "b8:1"), []byte("E:ID_PART_ENTRY_TYPE=e3c9e316\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(udev, "b8:2"), []byte("S:disk/by-uuid/1234\nE:ID_FS_TYPE=exfat\nE:ID_FS_USAGE=filesystem\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// sda3 has no udev record at all, as in a container without udev.
+	for name, want := range map[string]string{"sda1": "", "sda2": "exfat", "sda3": "", "sdz9": ""} {
+		if got := udevFsType(sys, udev, name); got != want {
+			t.Errorf("udevFsType(%s) = %q, want %q", name, got, want)
+		}
 	}
 }

@@ -9,8 +9,8 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
-// EnableParams mounts the first partition of a USB storage device under the
-// mounts directory and prepares the Quark data directory on it.
+// EnableParams mounts the [storageutil.PickPartition] choice of a USB storage
+// device under the mounts directory and prepares the Quark data directory on it.
 type EnableParams struct {
 	// Storage finds the device and holds the status cache to invalidate.
 	Storage *storageutil.StorageService
@@ -43,11 +43,10 @@ func Enable(params EnableParams) (EnableResult, error) {
 	if err != nil {
 		return EnableResult{}, fmt.Errorf("failed to retrieve partitions: %w", err)
 	}
-	if len(partitions) == 0 {
-		return EnableResult{}, errors.New("no partitions found on USB storage device")
+	partition, err := storageutil.PickPartition(partitions)
+	if err != nil {
+		return EnableResult{}, invalid(err)
 	}
-
-	partition := partitions[0]
 	mountPath, _ := partition.MountPath()
 	if mountPath != "" {
 		return EnableResult{}, invalid(errors.New("partition is already mounted"))

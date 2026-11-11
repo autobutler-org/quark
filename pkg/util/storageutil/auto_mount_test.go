@@ -15,6 +15,7 @@ type failingPartition struct{}
 func (failingPartition) MountCommand(string) *exec.Cmd {
 	return exec.Command("sh", "-c", "echo 'mount: wrong fs type, boom' >&2; exit 32")
 }
+func (failingPartition) FsType() string                { return "ext4" }
 func (failingPartition) MountPath() (string, error)    { return "", nil }
 func (failingPartition) Path() string                  { return "/dev/fake1" }
 func (failingPartition) SizeBytes() (int, error)       { return 0, nil }
