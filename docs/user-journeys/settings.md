@@ -10,7 +10,7 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 | **General** | `/settings/general` | Backend hosts, theme, left-handed mode, theme color, the view Calendar opens on ([JN-CA-011](calendar.md)), auto-refresh interval, demo mode, a link to the drives |
 | **Account** | `/settings/account` | Sign out, your sessions, then an **Account and data** row at the bottom that leads to Delete account and (admins) Reset this Quark |
 | **Network** | `/settings/network` | Remote access, connected devices, SSH access (admins), and on a phone that phone's own remote access |
-| **Updates** | `/settings/updates` | The Quark's version, a note that updates are manual, updates (admins), Repair installation (admins) |
+| **Updates** | `/settings/updates` | The Quark's version, a note that updates are manual, updates (admins), Repair installation (admins), Restart Quark (admins) |
 | **About** | `/settings/about` | The app's version, Help & Support, Terms of Service, the software bill of materials |
 | **Features** | `/settings/features` | A switch per beta feature (admins, only while a beta exists) |
 
@@ -795,3 +795,32 @@ IP) that it has connected to before.
 **Notes:**
 
 - The Quark's default theme color (JN-ST-031) is the exception: a member who follows it sees the admin's change.
+
+---
+
+### JN-ST-039: Restart Quark
+
+**Preconditions:** Logged in as an admin (JN-AUTH-002). Something starts Quark again after it exits: it runs as its
+installed service (`sudo quark install`), or in a container with a restart policy and `QUARK_RESTART_SUPERVISED=1`
+([container.md](../container.md#updating)).
+
+**Steps:**
+
+1. Navigate to `/settings/updates` and find **Restart Quark**.
+2. Tap **Restart Quark**, then **Cancel** in the confirmation.
+3. Tap **Restart Quark** again and confirm **Restart**.
+4. Wait.
+
+**Expected result:**
+
+- Step 2 does nothing; the confirmation says Quark will be unavailable for a few seconds.
+- Step 3 shows "Restarting…" with a loader, and the button is disabled. Quark exits about two seconds later and its
+  supervisor starts it again.
+- After step 4 the section says "Quark is back." and the button is enabled again.
+- If Quark does not answer within 90 seconds, the section says it didn't come back and to check that it's running.
+- A second restart, a repair, or an update while one is under way is refused with "An update or restart is already in
+  progress."
+- On a Quark nothing would start again (a container without `QUARK_RESTART_SUPERVISED`, `quark serve` by hand), the
+  section does not appear at all.
+
+**Notes:** Admin-only; other accounts don't see the section, and `/api/v0/admin/restart` answers them 403.

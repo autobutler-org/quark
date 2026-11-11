@@ -777,6 +777,12 @@ abstract final class Errors {
   static const String updateDidNotFinish =
       "Quark didn't finish restarting. Check that it's running, then try again.";
 
+  /// An admin restarted the Quark from Settings, and it never answered again
+  /// before the section stopped waiting (#4019).
+  static const String restartDidNotFinish =
+      "Quark didn't come back after restarting. Check that it's running on "
+      'the device, then reload this page.';
+
   /// A failed update. A 409 gets [updateAlreadyInProgress]. Anything else
   /// reads like [message] for starting the update.
   static String update(Object? error) => switch (error) {

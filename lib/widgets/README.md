@@ -176,6 +176,9 @@ lib/widgets/
     repair_installation_section.dart
                                 hosts RepairController: the repair button and
                                 its confirmation, or the one-time install step
+    restart_quark_section.dart  hosts RestartController: the restart button,
+                                its confirmation, and the wait until the
+                                Quark answers again
     remote_access/              remote access diagnostics (#3613): app-side
                                 hosting for phone and Quark diagnostic
                                 sections that read
@@ -370,8 +373,8 @@ maps the Quark's status onto the package `RemoteAccessPanel`),
 along by `RemoteAccessController`) and `connected_devices_card.dart`. The page still loads everything and hands each
 tab its values and callbacks; the tabs stay app-side because they take the
 app's service models and host `HostManager`, `SessionsSection`,
-`HostnameSection`, `SshAccessSection` and
-`RepairInstallationSection`.
+`HostnameSection`, `SshAccessSection`, `RepairInstallationSection` and
+`RestartQuarkSection`.
 
 ## Adding a widget
 
