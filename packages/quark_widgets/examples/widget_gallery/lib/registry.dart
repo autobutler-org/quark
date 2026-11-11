@@ -3904,6 +3904,121 @@ final List<GalleryEntry> registry = [
       ],
     ),
   ),
+  GalleryEntry(
+    name: 'ApiEndpointList',
+    group: 'API explorer',
+    build: (context, log) => SizedBox(
+      height: 640,
+      child: ApiEndpointList(
+        endpoints: _galleryApiEndpoints,
+        expandedId: _galleryApiEndpoints.first.id,
+        expandedChild: ApiEndpointDetails(
+          endpoint: _galleryApiEndpoints.first,
+          onSend: (input) =>
+              log('ApiEndpointDetails.onSend(${input.parameters})'),
+        ),
+        onSearchChanged: (text) =>
+            log('ApiEndpointList.onSearchChanged($text)'),
+        onToggle: (id) => log('ApiEndpointList.onToggle($id)'),
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'ApiEndpointDetails',
+    group: 'API explorer',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 32,
+      children: [
+        ApiEndpointDetails(
+          endpoint: _galleryApiEndpoints[1],
+          input: const ApiTryItInput(parameters: {'path': 'Photos'}),
+          onInputChanged: (input) =>
+              log('ApiEndpointDetails.onInputChanged(${input.parameters})'),
+          onSend: (input) =>
+              log('ApiEndpointDetails.onSend(${input.parameters})'),
+          response: const ApiResponseItem(
+            statusCode: 200,
+            headers: {'content-type': 'application/json'},
+            body: '{\n  "path": "Photos",\n  "entries": []\n}',
+            truncated: true,
+          ),
+        ),
+        ApiEndpointDetails(
+          endpoint: _galleryApiEndpoints[2],
+          onSend: (input) => log('ApiEndpointDetails.onSend(${input.body})'),
+          isSending: true,
+        ),
+        ApiEndpointDetails(
+          endpoint: _galleryApiEndpoints[3],
+          onSend: (input) => log('ApiEndpointDetails.onSend'),
+          error: "Couldn't reach the Quark.",
+        ),
+      ],
+    ),
+  ),
+];
+
+/// Fake endpoints for the API explorer entries: one per marker.
+const List<ApiEndpointItem> _galleryApiEndpoints = [
+  ApiEndpointItem(
+    id: 'get_api_v0_health',
+    method: 'GET',
+    path: '/api/v0/health',
+    tag: 'health',
+    summary: 'Report whether the server is up',
+    description: 'Answers 200 with the server version while it is running.',
+    responses: [
+      ApiResponseSchemaItem(
+        status: '200',
+        description: 'OK',
+        schema: '{\n  "status": "string",\n  "version": "string"\n}',
+      ),
+    ],
+    callers: ['HealthService.getHealth'],
+  ),
+  ApiEndpointItem(
+    id: 'get_api_v0_files_path',
+    method: 'GET',
+    path: '/api/v0/files/{path}',
+    tag: 'files',
+    summary: 'List a folder',
+    parameters: [
+      ApiParameterItem(
+        name: 'path',
+        location: ApiParameterLocation.path,
+        required: true,
+        type: 'string',
+        description: 'The folder, relative to the files root.',
+      ),
+      ApiParameterItem(
+        name: 'serial',
+        location: ApiParameterLocation.query,
+        type: 'string',
+        description: 'The drive to list. Empty lists the internal drive.',
+      ),
+    ],
+    responses: [ApiResponseSchemaItem(status: '200', description: 'OK')],
+    callers: ['FilesService.list'],
+  ),
+  ApiEndpointItem(
+    id: 'post_api_v0_users',
+    method: 'POST',
+    path: '/api/v0/users',
+    tag: 'users',
+    summary: 'Create a user',
+    requestSchema: '{\n  "username": "string",\n  "password": "string"\n}',
+    bodySkeleton: '{\n  "username": "",\n  "password": ""\n}',
+  ),
+  ApiEndpointItem(
+    id: 'delete_api_v0_files_trash',
+    method: 'DELETE',
+    path: '/api/v0/files/trash',
+    tag: 'files',
+    summary: 'Empty the trash',
+    callers: ['TrashService.empty'],
+    inSwagger: false,
+  ),
 ];
 
 /// The fake photo categories the photo entries share.
