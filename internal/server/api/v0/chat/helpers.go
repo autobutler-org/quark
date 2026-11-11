@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -110,7 +111,9 @@ func messageID(c *gin.Context) (int64, *serverutil.Response) {
 }
 
 // chatError maps an error from chatutil to its status code. The sentinels'
-// text is written for the app to show, so it goes out unwrapped.
+// text is written for the app to show, so it goes out unwrapped. Anything else
+// is logged and answered with a generic 500, because its text can carry host
+// paths (#4050).
 func chatError(err error) *serverutil.Response {
 	switch {
 	case errors.Is(err, chatutil.ErrChannelNotFound), errors.Is(err, chatutil.ErrMemberNotFound),
@@ -150,6 +153,7 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, chatutil.ErrInvalidAttachment), errors.Is(err, chatutil.ErrTooManyAttachments):
 		return serverutil.BadRequest(err)
 	default:
-		return serverutil.InternalServerError(err)
+		log.Printf("[chat] %v", err)
+		return serverutil.InternalServerError(errors.New("internal server error"))
 	}
 }

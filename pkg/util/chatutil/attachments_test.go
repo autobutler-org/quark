@@ -11,8 +11,11 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
 func TestAttachmentPathRejectsTraversal(t *testing.T) {
@@ -32,6 +35,38 @@ func TestAttachmentPathRejectsTraversal(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "chat-attachments")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("AttachmentPath touched the disk: %v", err)
+	}
+}
+
+// TestWriteAttachmentWithoutHardLinks is #4050: on a data directory that
+// refuses link(2), an Azure Files SMB share answering EOPNOTSUPP, an upload
+// still lands, still private, and a second upload of the same id is still
+// refused without touching the first.
+func TestWriteAttachmentWithoutHardLinks(t *testing.T) {
+	t.Cleanup(storageutil.FailHardLinksForTesting(syscall.EOPNOTSUPP))
+	path, err := AttachmentPath(t.TempDir(), 1, strings.Repeat("ab", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := writeAttachment(path, strings.NewReader("ciphertext"))
+	if err != nil {
+		t.Fatalf("write without hard links: %v", err)
+	}
+	if n != int64(len("ciphertext")) {
+		t.Errorf("wrote %d bytes, want %d", n, len("ciphertext"))
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("attachment mode %o, want 600", perm)
+	}
+	if _, err := writeAttachment(path, strings.NewReader("other")); !errors.Is(err, ErrAttachmentExists) {
+		t.Errorf("second write = %v, want ErrAttachmentExists", err)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != "ciphertext" {
+		t.Errorf("attachment = %q, %v; want the first upload kept", got, err)
 	}
 }
 
