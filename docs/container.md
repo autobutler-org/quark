@@ -38,6 +38,7 @@ quark-data` starts over. Port 8080 is the one `make serve/backend` uses too, so 
 
 ```bash
 docker run -d --name quark --restart unless-stopped -p 8080:8080 \
+  -e QUARK_RESTART_SUPERVISED=1 \
   -v quark-data:/var/lib/quark ghcr.io/autobutler-org/quark:latest
 ```
 
@@ -98,6 +99,12 @@ database the update had already migrated.
 
 Quark exits to finish an update, so something has to start it again. Run the container with
 `--restart unless-stopped` (or `always`). A Kubernetes Deployment restarts it on its own.
+
+**Restart Quark** in Settings works the same way: Quark exits and its supervisor starts it again.
+The image cannot see the container's restart policy, so the button stays hidden until you say there
+is one: set `QUARK_RESTART_SUPERVISED=1` next to the restart policy, as every `docker run` here does,
+or in the Deployment's `env`. Without a restart policy, leave it unset, or the button stops Quark
+for good.
 `make serve/docker` runs with `--rm`, so after an update the container is gone, and the next
 `make serve/docker` starts the updated binary from the volume.
 
@@ -143,6 +150,10 @@ spec:
             # access; see "Behind a proxy" below.
             - name: QUARK_TRUSTED_PROXIES
               value: "10.244.0.0/16,127.0.0.1,::1"
+            # The Deployment starts Quark again when it exits, so Settings can
+            # offer Restart Quark; see "Updating" above.
+            - name: QUARK_RESTART_SUPERVISED
+              value: "1"
           volumeMounts:
             - name: data
               mountPath: /var/lib/quark
@@ -174,6 +185,7 @@ PostgreSQL server instead, give the container two environment variables and an e
 
 ```bash
 docker run -d --name quark --restart unless-stopped -p 8080:8080 \
+  -e QUARK_RESTART_SUPERVISED=1 \
   -e QUARK_DB_BACKEND=postgres \
   -e QUARK_DATABASE_URL='postgres://quark:password@db.example:5432/quark?sslmode=require' \
   -v quark-data:/var/lib/quark ghcr.io/autobutler-org/quark:latest
@@ -310,6 +322,7 @@ Mounting a USB drive from the Devices page needs a privileged container:
 
 ```bash
 docker run -d --name quark --restart unless-stopped --privileged \
+  -e QUARK_RESTART_SUPERVISED=1 \
   -p 8080:8080 -v quark-data:/var/lib/quark ghcr.io/autobutler-org/quark:latest
 ```
 

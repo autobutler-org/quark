@@ -1156,6 +1156,90 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/restart": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Whether restarting Quark would bring it back, and why not when it would not: not_supervised (it is not the installed service and QUARK_RESTART_SUPERVISED is not set, so nothing would start it again). Admin-only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get whether Quark can restart itself",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_admin.restartStatusResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Restarts Quark. The response goes out first; the process exits about two seconds later, its supervisor starts it again, and it is unavailable for a few seconds. Admin-only.",
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Restart Quark",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Nothing would start Quark again, or an update or restart is already in progress",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/users": {
             "get": {
                 "security": [
@@ -14640,6 +14724,18 @@ const docTemplate = `{
                 },
                 "reason": {
                     "description": "Reason is why not, when available is false: unsupported_os,\nnot_service or unit_outdated. Empty when available.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_admin.restartStatusResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "reason": {
+                    "description": "Reason is why not, when available is false: not_supervised. Empty when\navailable.",
                     "type": "string"
                 }
             }
