@@ -472,9 +472,10 @@ func RunInstalledUpdate() error {
 }
 
 // ErrUpdateInProgress is returned when an update is already installed and this
-// process is waiting to exit into it, or the install is still running. Another
-// attempt would download the release again (#3218).
-var ErrUpdateInProgress = errors.New("update already in progress")
+// process is waiting to exit into it, the install is still running, or a
+// restart (ScheduleRestart) is already pending. Another update would download
+// the release again (#3218), and another restart would only repeat this one.
+var ErrUpdateInProgress = errors.New("an update or restart is already in progress")
 
 // ApplyUpdate installs version from source. It returns ErrUpdateInProgress,
 // and does not download, when an install is already running or this process is
@@ -524,6 +525,19 @@ func AllowInsecureFetchForTest() (restore func()) {
 	previous := allowHTTPInFetchURL
 	allowHTTPInFetchURL = true
 	return func() { allowHTTPInFetchURL = previous }
+}
+
+// ScheduleRestart claims the same in-progress guard ApplyUpdate does and then
+// runs ExitForRestart in the background, so a restart, a repair and an update
+// cannot overlap. It returns ErrUpdateInProgress, and schedules nothing, when
+// one of them is already under way. The guard stays claimed until the process
+// exits.
+func ScheduleRestart() error {
+	if err := beginUpdate(); err != nil {
+		return err
+	}
+	go ExitForRestart()
+	return nil
 }
 
 // ExitForRestart exits the process after a short pause, so the process manager

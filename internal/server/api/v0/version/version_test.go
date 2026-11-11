@@ -190,7 +190,7 @@ func TestDoUpdate_DockerInstallSchedulesOneRestart(t *testing.T) {
 	if second.Code != http.StatusConflict {
 		t.Fatalf("second update returned %d, want 409: %s", second.Code, second.Body.String())
 	}
-	if !strings.Contains(second.Body.String(), "update already in progress") {
+	if !strings.Contains(second.Body.String(), updateutil.ErrUpdateInProgress.Error()) {
 		t.Fatalf("conflict body = %s", second.Body.String())
 	}
 	if archiveDownloads.Load() != 1 {

@@ -4230,7 +4230,8 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":
-          description: The installation can't be repaired from Quark on this device
+          description: The installation can't be repaired from Quark on this device,
+            or an update or restart is already in progress
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":

@@ -45,9 +45,11 @@ type System struct {
 	Service func() Reason
 	// UnitPath is the installed systemd unit to inspect.
 	UnitPath string
-	// Restart exits the process so the service manager starts it again. It
-	// runs in its own goroutine and should give the response time to go out.
-	Restart func()
+	// Restart schedules the exit that lets the service manager start the
+	// process again, and returns at once so the response can go out first.
+	// It returns updateutil.ErrUpdateInProgress when an update, restart or
+	// repair is already under way.
+	Restart func() error
 }
 
 // DefaultSystem is the real host.
@@ -55,7 +57,7 @@ func DefaultSystem() System {
 	return System{
 		Service:  serviceReason,
 		UnitPath: UnitPath,
-		Restart:  updateutil.ExitForRestart,
+		Restart:  updateutil.ScheduleRestart,
 	}
 }
 
@@ -83,13 +85,13 @@ type RepairParams struct {
 
 type RepairResult struct{}
 
-// Repair starts the restart in the background and returns at once, so the
-// caller can answer before the process exits. It refuses with ErrUnavailable
-// when GetStatus would say no.
+// Repair schedules the restart and returns at once, so the caller can answer
+// before the process exits. It refuses with ErrUnavailable when GetStatus
+// would say no, and with updateutil.ErrUpdateInProgress when an update,
+// restart or repair is already under way.
 func Repair(params RepairParams) (RepairResult, error) {
 	if unavailableReason(params.System) != ReasonNone {
 		return RepairResult{}, ErrUnavailable
 	}
-	go params.System.Restart()
-	return RepairResult{}, nil
+	return RepairResult{}, params.System.Restart()
 }

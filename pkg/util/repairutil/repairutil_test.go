@@ -5,7 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/updateutil"
 )
 
 // currentUnit is the relevant part of the unit `quark install` writes since
@@ -37,7 +38,7 @@ func writeUnit(t *testing.T, content string) string {
 	return path
 }
 
-func fakeSystem(service Reason, unitPath string, restart func()) System {
+func fakeSystem(service Reason, unitPath string, restart func() error) System {
 	return System{Service: func() Reason { return service }, UnitPath: unitPath, Restart: restart}
 }
 
@@ -71,7 +72,7 @@ func TestGetStatus(t *testing.T) {
 
 func TestRepairRefusesWhenUnavailable(t *testing.T) {
 	restarted := false
-	system := fakeSystem(ReasonNone, writeUnit(t, outdatedUnit), func() { restarted = true })
+	system := fakeSystem(ReasonNone, writeUnit(t, outdatedUnit), func() error { restarted = true; return nil })
 	if _, err := Repair(RepairParams{System: system}); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("Repair err = %v, want ErrUnavailable", err)
 	}
@@ -81,15 +82,26 @@ func TestRepairRefusesWhenUnavailable(t *testing.T) {
 }
 
 func TestRepairRestarts(t *testing.T) {
-	restarted := make(chan struct{})
-	system := fakeSystem(ReasonNone, writeUnit(t, currentUnit), func() { close(restarted) })
+	restarted := false
+	system := fakeSystem(ReasonNone, writeUnit(t, currentUnit), func() error { restarted = true; return nil })
 	if _, err := Repair(RepairParams{System: system}); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-restarted:
-	case <-time.After(5 * time.Second):
+	if !restarted {
 		t.Fatal("Repair did not restart")
+	}
+}
+
+// A repair is a restart, so it takes the guard an update holds: a second
+// restart, repair or update while one is pending is refused (#4019).
+func TestRepairRefusesWhileRestartPending(t *testing.T) {
+	t.Cleanup(updateutil.SetRestartExitForTest(func(int) {}))
+	if err := updateutil.ScheduleRestart(); err != nil {
+		t.Fatal(err)
+	}
+	system := fakeSystem(ReasonNone, writeUnit(t, currentUnit), updateutil.ScheduleRestart)
+	if _, err := Repair(RepairParams{System: system}); !errors.Is(err, updateutil.ErrUpdateInProgress) {
+		t.Fatalf("Repair err = %v, want ErrUpdateInProgress", err)
 	}
 }
 
