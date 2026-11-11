@@ -7,6 +7,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/repairutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/updateutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,7 +19,7 @@ import (
 // @Success 200
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response
-// @Failure 409 {object} serverutil.Response "The installation can't be repaired from Quark on this device"
+// @Failure 409 {object} serverutil.Response "The installation can't be repaired from Quark on this device, or an update or restart is already in progress"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /admin/repair [post]
@@ -28,7 +29,7 @@ func repairInstallation(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 	if _, err := repairutil.Repair(repairutil.RepairParams{System: deps.RepairSystem()}); err != nil {
-		if errors.Is(err, repairutil.ErrUnavailable) {
+		if errors.Is(err, repairutil.ErrUnavailable) || errors.Is(err, updateutil.ErrUpdateInProgress) {
 			return serverutil.Conflict(err)
 		}
 		return serverutil.InternalServerError(err)
