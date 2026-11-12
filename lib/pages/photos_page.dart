@@ -336,7 +336,7 @@ class PhotosPageState extends State<PhotosPage>
     return _demo ? (bytes, name, null, null) : photo;
   }
 
-  Future<void> _uploadPhotos() async {
+  Future<void> _uploadPhotos({bool chooseDevice = false}) async {
     if (_controller.isUploading) return;
     try {
       final picked = await FilePicker.pickFiles(type: FileType.image);
@@ -349,7 +349,7 @@ class PhotosPageState extends State<PhotosPage>
       final album = showing == null || showing.isSystemAlbum ? null : showing;
 
       try {
-        final serial = await _uploadSerial();
+        final serial = await _uploadSerial(chooseDevice: chooseDevice);
         if (serial == null) return;
         final outcome = await _controller.uploadPhotos(
           picked,
@@ -424,18 +424,21 @@ class PhotosPageState extends State<PhotosPage>
   }
 
   /// The serial of the device an upload goes to — `''` for built-in
-  /// storage — or null when the user dismissed the device picker. Throws
-  /// when the devices cannot be listed (#3192).
-  Future<String?> _uploadSerial() => _controller.uploadSerial(
-    pick: (targets, initial, notice) async => mounted
-        ? showDeviceUploadPicker(
-            context,
-            targets,
-            initial: initial,
-            notice: notice,
-          )
-        : null,
-  );
+  /// storage — or null when the user dismissed the device picker.
+  /// [chooseDevice] asks even when there is a default (#3194). Throws when
+  /// the devices cannot be listed (#3192).
+  Future<String?> _uploadSerial({bool chooseDevice = false}) =>
+      _controller.uploadSerial(
+        chooseDevice: chooseDevice,
+        pick: (targets, initial, notice) async => mounted
+            ? showDeviceUploadPicker(
+                context,
+                targets,
+                initial: initial,
+                notice: notice,
+              )
+            : null,
+      );
 
   Future<void> _pickAlbumForSelection() async {
     final album = await AlbumPickerSheetHost.show(
@@ -770,11 +773,14 @@ class PhotosPageState extends State<PhotosPage>
             // without that row carry them in the top bar.
             final libraryRow = album == null && !_demo;
             final primaryActions = [
-              QuarkBarChip(
+              QuarkBarSplitChip(
                 key: const ValueKey('photos_upload'),
                 icon: QuarkIcons.upload_rounded,
                 label: c.isUploading ? 'Uploading...' : 'Upload',
                 onPressed: c.isUploading ? null : _uploadPhotos,
+                onSecondaryPressed: c.canChooseUploadDevice
+                    ? () => _uploadPhotos(chooseDevice: true)
+                    : null,
               ),
               QuarkBarIconButton(
                 key: const ValueKey('photos_search'),

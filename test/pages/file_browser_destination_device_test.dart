@@ -10,6 +10,7 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/upload_destination.dart';
+import 'package:quark/widgets/file_browser/file_browser_create_fab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
@@ -86,7 +87,10 @@ void main() {
   });
 
   Future<void> pumpPage(WidgetTester tester) async {
-    setViewport(tester, const Size(1600, 1000));
+    // Wide enough for the breadcrumb beside two device chips and the
+    // choose-device segments: the bar's breakpoint counts the segments but
+    // not the device chips.
+    setViewport(tester, const Size(1700, 1000));
     await tester.pumpWidget(const MaterialApp(home: FileBrowserPage()));
     await tester.pumpAndSettle();
   }
@@ -147,6 +151,52 @@ void main() {
 
     expect(find.text('Upload to device'), findsNothing);
     expect(created.single.queryParameters, {'serial': 'USB1'});
+    await drain(tester);
+  });
+
+  testWidgets('choosing a device asks even with a default, and says '
+      'nothing about it', (tester) async {
+    stickRole = 'default-storage';
+    await pumpPage(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('file_top_bar_new_folder_choose')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(EditableText).last, 'Trip');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Upload to device'), findsOneWidget);
+    expect(find.byKey(const ValueKey('upload_target_notice')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('upload_target_0')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('upload_target_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(created.single.queryParameters, isNot(contains('serial')));
+    await drain(tester);
+  });
+
+  testWidgets('on a phone, a long press on New folder chooses the device', (
+    tester,
+  ) async {
+    stickRole = 'default-storage';
+    setViewport(tester, const Size(400, 800));
+    await tester.pumpWidget(const MaterialApp(home: FileBrowserPage()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FileBrowserCreateFab));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.widgetWithText(ListTile, 'New folder'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(EditableText).last, 'Trip');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Upload to device'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('upload_target_cancel')));
+    await tester.pumpAndSettle();
+    expect(created, isEmpty);
     await drain(tester);
   });
 

@@ -48,6 +48,7 @@ class QuarkBarIconButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onPressed,
+    this.onLongPress,
     this.isBusy = false,
     this.destructive = false,
     this.selected,
@@ -81,6 +82,10 @@ class QuarkBarIconButton extends StatelessWidget {
   /// Runs the action. Null renders the button disabled.
   final VoidCallback? onPressed;
 
+  /// Runs a second action on a long press, such as a choice the plain tap
+  /// skips. Null leaves a long press to the tooltip.
+  final VoidCallback? onLongPress;
+
   /// Whether the action is already running. True shows a spinner in place of
   /// [icon] and blocks further taps.
   final bool isBusy;
@@ -108,6 +113,7 @@ class QuarkBarIconButton extends StatelessWidget {
       tooltip: tooltip,
       isSelected: selected,
       onPressed: isBusy ? null : onPressed,
+      onLongPress: isBusy ? null : onLongPress,
       iconSize: glyphSize,
       style:
           IconButton.styleFrom(

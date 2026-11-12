@@ -101,6 +101,10 @@ Covers browsing, uploading, downloading, and managing files via the file browser
   asking. With no default storage device connected, or with it not enabled, an **Upload to device** sheet asks
   where the upload goes and says why it opened. It starts on the device chosen last time when that is still
   offered, and dismissing it uploads nothing. A view filtered to one device uploads to that device without asking.
+- With more than one storage device listed, the upload control also uploads to a device the user picks: the **▾**
+  beside the **Upload** chip on a wide screen, or a long press on it, or on an upload row of the **Create** sheet, on
+  a phone. Where **Upload** opens a source menu, the **▾** opens the same menu, and the source picked there opens the
+  **Upload to device** sheet after its picker. With one device there is no **▾** and no long press.
 - A drive that is connected but not enabled is listed in that sheet as unavailable, with a note to mount it
   under System > Storage, and cannot be chosen. One such drive beside a single enabled device is enough for the
   sheet to open.
@@ -120,7 +124,7 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 **Expected result:**
 
 - Drop zone highlights when file is hovered over it.
-- File uploads on drop.
+- File uploads on drop. A drop always takes the plain destination: there is no second action to choose a device.
 - With more than one enabled storage device, the upload goes to the default storage device (JN-SD-011) without
   asking. With no default storage device connected, or with it not enabled, an **Upload to device** sheet asks
   where the upload goes and says why it opened. It starts on the device chosen last time when that is still
@@ -165,7 +169,8 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 - New folder appears in the current directory listing.
 - Folder is navigable (JN-FB-002).
 - The folder is created on the device an upload would go to (JN-FB-006): the default storage device without
-  asking, or the **Upload to device** sheet when there is no enabled default.
+  asking, or the **Upload to device** sheet when there is no enabled default. With more than one storage device
+  listed, the **▾** beside **New folder**, or a long press on it on a phone, opens that sheet first.
 
 ---
 
@@ -511,6 +516,10 @@ it, so what changed while the client was away shows without a manual refresh.
   asking. With no default storage device connected, or with it not enabled, an **Upload to device** sheet asks
   where the upload goes and says why it opened. It starts on the device chosen last time when that is still
   offered, and dismissing it uploads nothing. A view filtered to one device uploads to that device without asking.
+- With more than one storage device listed, the upload control also uploads to a device the user picks: the **▾**
+  beside the **Upload** chip on a wide screen, or a long press on it, or on an upload row of the **Create** sheet, on
+  a phone. Where **Upload** opens a source menu, the **▾** opens the same menu, and the source picked there opens the
+  **Upload to device** sheet after its picker. With one device there is no **▾** and no long press.
 - A drive that is connected but not enabled is listed in that sheet as unavailable, with a note to mount it
   under System > Storage, and cannot be chosen. One such drive beside a single enabled device is enough for the
   sheet to open.

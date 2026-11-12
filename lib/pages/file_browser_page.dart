@@ -50,6 +50,7 @@ import 'package:quark/widgets/file_browser/file_storage_footer.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer_scope.dart';
 import 'package:quark/widgets/file_browser/file_top_bar.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_path_row.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_upload_chip.dart';
 import 'package:quark/widgets/file_browser/files_welcome_card.dart';
 import 'package:quark/widgets/file_browser/folder_explainer.dart';
 import 'package:quark/widgets/file_browser/folder_route_error_state.dart';
@@ -879,12 +880,16 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     List<PendingUpload> pending,
     String uploadPath, {
     String? note,
+    bool chooseDevice = false,
   }) async {
     if (pending.isEmpty) {
       return;
     }
 
-    final serial = await _destinationSerial('upload your files');
+    final serial = await _destinationSerial(
+      'upload your files',
+      chooseDevice: chooseDevice,
+    );
     if (serial == null) return;
 
     // Handed off rather than run here: an upload outlives the folder the user
@@ -911,8 +916,12 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   /// The serial of the device an upload or a new folder goes to — `''` for
   /// built-in storage — or null when there is none: the user dismissed the
   /// picker, or the devices could not be listed and a message says it
-  /// "Couldn't [action]" (#3191).
-  Future<String?> _destinationSerial(String action) async {
+  /// "Couldn't [action]" (#3191). [chooseDevice] asks even when there is a
+  /// default storage device (#3194).
+  Future<String?> _destinationSerial(
+    String action, {
+    bool chooseDevice = false,
+  }) async {
     try {
       return await resolveUploadSerial(
         pick: (targets, initial, notice) async => mounted
@@ -924,6 +933,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
               )
             : null,
         viewedSerial: _viewedSerial(),
+        chooseDevice: chooseDevice,
       );
     } catch (e) {
       debugPrint('[file_browser_page.dart] Failed to list devices: $e');
@@ -932,7 +942,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     }
   }
 
-  Future<void> _handleUploadFolderPressed() async {
+  Future<void> _handleUploadFolderPressed({bool chooseDevice = false}) async {
     if (_isUploading) {
       return;
     }
@@ -949,6 +959,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         note: uploads.length >= kMaxUploadFiles
             ? 'Stopped at the first $kMaxUploadFiles files'
             : null,
+        chooseDevice: chooseDevice,
       );
     } on MissingPluginException {
       if (!mounted) {
@@ -967,7 +978,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     }
   }
 
-  Future<void> _handleUploadPhotosPressed() async {
+  Future<void> _handleUploadPhotosPressed({bool chooseDevice = false}) async {
     if (_isUploading) {
       return;
     }
@@ -978,7 +989,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         return;
       }
 
-      await _uploadPendingFiles(selectedFiles, _currentPath);
+      await _uploadPendingFiles(
+        selectedFiles,
+        _currentPath,
+        chooseDevice: chooseDevice,
+      );
     } on MissingPluginException {
       if (!mounted) {
         return;
@@ -991,7 +1006,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     }
   }
 
-  Future<void> _handleUploadPressed() async {
+  Future<void> _handleUploadPressed({bool chooseDevice = false}) async {
     if (_isUploading) {
       return;
     }
@@ -1002,7 +1017,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         return;
       }
 
-      await _uploadPendingFiles(selectedFiles, _currentPath);
+      await _uploadPendingFiles(
+        selectedFiles,
+        _currentPath,
+        chooseDevice: chooseDevice,
+      );
     } on MissingPluginException {
       if (!mounted) {
         return;
@@ -1163,7 +1182,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     _fileBrowserScrollController.jumpTo(targetOffset);
   }
 
-  Future<void> _handleCreateFolderPressed() async {
+  Future<void> _handleCreateFolderPressed({bool chooseDevice = false}) async {
     if (_isCreatingFolder) {
       return;
     }
@@ -1174,7 +1193,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     }
 
     // The same destination an upload from here would take (#3191).
-    final serial = await _destinationSerial('create the folder');
+    final serial = await _destinationSerial(
+      'create the folder',
+      chooseDevice: chooseDevice,
+    );
     if (serial == null) {
       return;
     }
@@ -2049,10 +2071,23 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   }
 
   void _showCreateBottomSheet() {
+    // A long press on an upload or New folder asks which device to write to,
+    // when there is more than one (#3194).
+    final canChooseDevice = _allDevices.length > 1;
     showQuarkSheet<void>(
       context,
       title: 'Add to this folder',
       builder: (ctx) {
+        VoidCallback run(
+          DeviceWriteCallback action, {
+          bool chooseDevice = false,
+        }) => () {
+          Navigator.of(ctx).pop();
+          action(chooseDevice: chooseDevice);
+        };
+        VoidCallback? choose(DeviceWriteCallback action) =>
+            canChooseDevice ? run(action, chooseDevice: true) : null;
+
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2062,12 +2097,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                 leading: const Icon(QuarkIcons.photo_library_outlined),
                 title: const Text('Upload photos'),
                 enabled: !_isUploading,
-                onTap: _isUploading
+                onTap: _isUploading ? null : run(_handleUploadPhotosPressed),
+                onLongPress: _isUploading
                     ? null
-                    : () {
-                        Navigator.of(ctx).pop();
-                        _handleUploadPhotosPressed();
-                      },
+                    : choose(_handleUploadPhotosPressed),
               ),
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -2082,12 +2115,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                     : 'Upload files',
               ),
               enabled: !_isUploading,
-              onTap: _isUploading
-                  ? null
-                  : () {
-                      Navigator.of(ctx).pop();
-                      _handleUploadPressed();
-                    },
+              onTap: _isUploading ? null : run(_handleUploadPressed),
+              onLongPress: _isUploading ? null : choose(_handleUploadPressed),
             ),
             if (_controller.isFolderUploadSupported)
               ListTile(
@@ -2095,24 +2124,20 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                 leading: const Icon(Icons.drive_folder_upload_outlined),
                 title: const Text('Upload folder'),
                 enabled: !_isUploading,
-                onTap: _isUploading
+                onTap: _isUploading ? null : run(_handleUploadFolderPressed),
+                onLongPress: _isUploading
                     ? null
-                    : () {
-                        Navigator.of(ctx).pop();
-                        _handleUploadFolderPressed();
-                      },
+                    : choose(_handleUploadFolderPressed),
               ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(QuarkIcons.create_new_folder_outlined),
               title: const Text('New folder'),
               enabled: !_isCreatingFolder,
-              onTap: _isCreatingFolder
+              onTap: _isCreatingFolder ? null : run(_handleCreateFolderPressed),
+              onLongPress: _isCreatingFolder
                   ? null
-                  : () {
-                      Navigator.of(ctx).pop();
-                      _handleCreateFolderPressed();
-                    },
+                  : choose(_handleCreateFolderPressed),
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -2285,6 +2310,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
             FilesWelcomeCard(
               onUpload: _handleUploadPressed,
               onCreateFolder: _handleCreateFolderPressed,
+              canChooseDevice: _allDevices.length > 1,
               onOpenVault: () => context.go(AppRoutes.vault),
             ),
 
@@ -2459,7 +2485,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                         // Mobile create FAB — inside the file-list Stack so it
                         // sits above the footer rather than over the whole page.
                         if (MediaQuery.of(context).size.width <
-                            FileTopBarPathRow.collapseBreakpoint)
+                            FileTopBarPathRow.collapseBreakpointFor(
+                              _allDevices,
+                            ))
                           Positioned(
                             left: leftHanded ? 16 : null,
                             right: leftHanded ? null : 16,

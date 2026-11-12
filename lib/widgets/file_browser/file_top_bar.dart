@@ -5,6 +5,7 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_nav_buttons.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_path_row.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_search_area.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_upload_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -93,13 +94,13 @@ class FileTopBar extends StatefulWidget implements PreferredSizeWidget {
 
   final VoidCallback onSearchClosed;
   final VoidCallback onRefresh;
-  final VoidCallback onUploadPressed;
+  final DeviceWriteCallback onUploadPressed;
 
   /// Photos library upload, when Files cannot see the Camera Roll.
   ///
   /// iOS only. Null everywhere else, where the ordinary file picker already
   /// includes photos. When set, Upload opens a chooser with Photos first.
-  final VoidCallback? onUploadPhotosPressed;
+  final DeviceWriteCallback? onUploadPhotosPressed;
 
   /// Folder upload, when the platform has a folder picker at all.
   ///
@@ -108,7 +109,7 @@ class FileTopBar extends StatefulWidget implements PreferredSizeWidget {
   /// pick, not a different feature. Null on mobile, which has no folder
   /// picker — there Upload goes straight to the file picker unless Photos
   /// is also offered.
-  final VoidCallback? onUploadFolderPressed;
+  final DeviceWriteCallback? onUploadFolderPressed;
 
   /// Abandons an upload in progress.
   ///
@@ -119,7 +120,7 @@ class FileTopBar extends StatefulWidget implements PreferredSizeWidget {
 
   /// Opens the Jobs tab, where each file's progress is shown (#3972).
   final VoidCallback? onShowUploadProgressPressed;
-  final VoidCallback onCreateFolderPressed;
+  final DeviceWriteCallback onCreateFolderPressed;
   final VoidCallback onNewFilePressed;
   final List<StorageDevice>? devices;
   final Set<String>? activeDevicePaths;

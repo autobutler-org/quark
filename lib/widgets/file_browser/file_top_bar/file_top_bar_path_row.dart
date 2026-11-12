@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_actions.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_upload_chip.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_breadcrumb.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_device_chips.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_select_button.dart';
@@ -75,15 +76,15 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onGoHome;
   final VoidCallback onToggleView;
   final VoidCallback onToggleUnifiedView;
-  final VoidCallback onUploadPressed;
-  final VoidCallback onCreateFolderPressed;
+  final DeviceWriteCallback onUploadPressed;
+  final DeviceWriteCallback onCreateFolderPressed;
   final VoidCallback onNewFilePressed;
 
   /// Swaps this row for the search field.
   final VoidCallback onOpenSearch;
   final ValueChanged<String>? onPathSelected;
-  final VoidCallback? onUploadPhotosPressed;
-  final VoidCallback? onUploadFolderPressed;
+  final DeviceWriteCallback? onUploadPhotosPressed;
+  final DeviceWriteCallback? onUploadFolderPressed;
   final VoidCallback? onCancelUploadPressed;
   final VoidCallback? onShowUploadProgressPressed;
   final List<StorageDevice>? devices;
@@ -105,6 +106,15 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
   /// button shows below it too.
   static const double collapseBreakpoint = 1240;
 
+  /// [collapseBreakpoint] for a bar listing [devices]: with more than one,
+  /// Upload's and New folder's choose-device segments need room of their own
+  /// (#3194).
+  static double collapseBreakpointFor(List<StorageDevice>? devices) =>
+      collapseBreakpoint +
+      (devices != null && devices.length > 1
+          ? 2 * QuarkBarIconButton.tapTargetSize
+          : 0);
+
   @override
   Size get preferredSize => const Size.fromHeight(QuarkAppBarBottom.height);
 
@@ -119,12 +129,13 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
       onPathSelected: onPathSelected,
     );
     final devices = this.devices;
+    final canChooseDevice = devices != null && devices.length > 1;
     final onStartSelection = this.onStartSelection;
     final onColumnToggled = isGridView && isUnifiedView
         ? null
         : this.onColumnToggled;
     return QuarkAppBarBottom(
-      collapseBelow: collapseBreakpoint,
+      collapseBelow: collapseBreakpointFor(devices),
       // At the root the breadcrumb is only the home icon: let the pill shrink
       // to it rather than stretch across the row.
       lead: currentPath.isEmpty
@@ -159,6 +170,7 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
           onUploadFolderPressed: onUploadFolderPressed,
           onCancelUploadPressed: onCancelUploadPressed,
           onShowUploadProgressPressed: onShowUploadProgressPressed,
+          canChooseDevice: canChooseDevice,
         ),
         FileTopBarViewChips(
           isGridView: isGridView,

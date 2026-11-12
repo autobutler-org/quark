@@ -152,6 +152,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
         listAlbumItems =
         AlbumService.listAlbumItems,
     Future<List<StorageDevice>> Function() listDevices = listDevicesFresh,
+    bool countDevices = true,
     Future<List<String>> Function(
           String uploadPath,
           List<http.MultipartFile> files, {
@@ -209,6 +210,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
        _removePhotoFromAlbum = removePhotoFromAlbum,
        _listAlbumItems = listAlbumItems,
        _listDevices = listDevices,
+       _countDevices = countDevices,
        _uploadFiles = uploadFiles,
        _readDroppedFile = readDroppedFile,
        _renderFromBytes = renderFromBytes,
@@ -271,6 +273,8 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     // Search goes through getPhotos, which filters the sample names (#3523).
     // The files search stays capped at 500 and is not asked (#2758).
     searchFiles: null,
+    // Upload still asks for the devices when tapped; loading does not.
+    countDevices: false,
   );
 
   /// How many Quark photos one page fetches.
@@ -331,6 +335,10 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   })
   _listAlbumItems;
   final Future<List<StorageDevice>> Function() _listDevices;
+
+  /// Whether a refresh lists the devices for [canChooseUploadDevice]. Demo
+  /// mode turns it off, so loading the page asks nothing of a Quark.
+  final bool _countDevices;
   final Future<List<String>> Function(
     String uploadPath,
     List<http.MultipartFile> files, {
@@ -392,6 +400,9 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   bool _categoriesExpanded = false;
   int _columns = PhotoGridConfig.defaultColumns;
   bool _isUploading = false;
+
+  /// How many storage devices the Quark listed at the last refresh.
+  int _deviceCount = 0;
 
   /// How the grid orders photos, loaded from the persisted setting so it
   /// survives navigation and restart (#2509).
@@ -620,6 +631,10 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   /// Whether an upload is in flight.
   bool get isUploading => _isUploading;
 
+  /// Whether the Quark listed more than one storage device at the last
+  /// refresh, so an upload has a device to choose (#3194).
+  bool get canChooseUploadDevice => _deviceCount > 1;
+
   /// Whether photos are being selected.
   bool get selectionMode => _selectionMode;
 
@@ -747,6 +762,18 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     final albums = loadAlbums();
     final albumItems = _loadAlbumItems();
     final search = _search();
+    // Off to the side: it only decides whether Upload offers a choice of
+    // device, so the grid never waits on it, and a listing that fails keeps
+    // the last count.
+    if (!noHost && _countDevices) {
+      unawaited(
+        _listDevices().then((devices) {
+          if (isDisposed || devices.length == _deviceCount) return;
+          _deviceCount = devices.length;
+          notifyListeners();
+        }, onError: (Object _) {}),
+      );
+    }
 
     final quarkPage = await quark;
     final mobilePhotos = await mobile;
@@ -1528,6 +1555,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
 
   /// The serial of the device an upload goes to, as [resolveUploadSerial]
   /// works it out: `''` for built-in storage, null when [pick] was dismissed.
+  /// [chooseDevice] asks even when there is a default storage device (#3194).
   /// Throws when the devices cannot be listed, which stops the upload (#3192).
   Future<String?> uploadSerial({
     required Future<UploadTarget?> Function(
@@ -1536,7 +1564,12 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
       String? notice,
     )
     pick,
-  }) => resolveUploadSerial(pick: pick, listDevices: _listDevices);
+    bool chooseDevice = false,
+  }) => resolveUploadSerial(
+    pick: pick,
+    chooseDevice: chooseDevice,
+    listDevices: _listDevices,
+  );
 
   /// Uploads [files] to the device with [serial], or the default device when
   /// null. Throws what the upload threw.
