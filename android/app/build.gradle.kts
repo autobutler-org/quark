@@ -100,3 +100,16 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// Pins every Maven dependency the app resolves to android/app/gradle.lockfile; a module
+// not in it fails the build. Regenerate with `make generate/frontend/android/lockfile`
+// after a Flutter SDK, AGP, Kotlin or plugin bump. Only :app is locked: the Flutter plugin
+// projects live in the pub cache, and their external dependencies are locked here through
+// :app's classpaths.
+dependencyLocking {
+    lockAllConfigurations()
+    // --write-locks leaves kotlin-stdlib-common out of the runtime classpaths, where
+    // Kotlin 2 resolves it to kotlin-stdlib by capability, and the lock check then
+    // rejects it. Its version is constrained by kotlin-stdlib's, which is locked.
+    ignoredDependencies.add("org.jetbrains.kotlin:kotlin-stdlib-common")
+}
