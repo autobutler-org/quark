@@ -152,6 +152,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
         listAlbumItems =
         AlbumService.listAlbumItems,
     Future<List<StorageDevice>> Function() listDevices = listDevicesFresh,
+    bool countDevices = true,
     Future<List<String>> Function(
           String uploadPath,
           List<http.MultipartFile> files, {
@@ -209,6 +210,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
        _removePhotoFromAlbum = removePhotoFromAlbum,
        _listAlbumItems = listAlbumItems,
        _listDevices = listDevices,
+       _countDevices = countDevices,
        _uploadFiles = uploadFiles,
        _readDroppedFile = readDroppedFile,
        _renderFromBytes = renderFromBytes,
@@ -271,6 +273,8 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     // Search goes through getPhotos, which filters the sample names (#3523).
     // The files search stays capped at 500 and is not asked (#2758).
     searchFiles: null,
+    // Upload still asks for the devices when tapped; loading does not.
+    countDevices: false,
   );
 
   /// How many Quark photos one page fetches.
@@ -331,6 +335,10 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   })
   _listAlbumItems;
   final Future<List<StorageDevice>> Function() _listDevices;
+
+  /// Whether a refresh lists the devices for [canChooseUploadDevice]. Demo
+  /// mode turns it off, so loading the page asks nothing of a Quark.
+  final bool _countDevices;
   final Future<List<String>> Function(
     String uploadPath,
     List<http.MultipartFile> files, {
@@ -757,7 +765,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     // Off to the side: it only decides whether Upload offers a choice of
     // device, so the grid never waits on it, and a listing that fails keeps
     // the last count.
-    if (!noHost) {
+    if (!noHost && _countDevices) {
       unawaited(
         _listDevices().then((devices) {
           if (isDisposed || devices.length == _deviceCount) return;
