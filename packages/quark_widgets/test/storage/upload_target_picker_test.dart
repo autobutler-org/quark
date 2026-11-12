@@ -114,4 +114,49 @@ void main() {
       ),
     );
   });
+
+  // #3194: the sheet opens on its own only when there is no default device
+  // to upload to, and its notice says why.
+  testBothViewports('a notice reads above the list', (tester, size) async {
+    await pumpInSheet(
+      tester,
+      UploadTargetPicker(
+        targets: const [_internal, _usb],
+        notice: 'No default storage device is connected.',
+        selected: _internal,
+        onSelected: (_) {},
+        onCancel: () {},
+        onConfirm: () {},
+      ),
+      size: size,
+    );
+
+    expect(tester.takeException(), isNull);
+    final notice = find.byKey(const ValueKey('upload_target_notice'));
+    expect(
+      tester.widget<Text>(notice).data,
+      'No default storage device is connected.',
+    );
+    expect(
+      tester.getTopLeft(notice).dy,
+      lessThan(
+        tester.getTopLeft(find.byKey(const ValueKey('upload_target_0'))).dy,
+      ),
+    );
+  });
+
+  testWidgets('no notice shows nothing above the list', (tester) async {
+    await pumpInSheet(
+      tester,
+      UploadTargetPicker(
+        targets: const [_internal, _usb],
+        selected: _internal,
+        onSelected: (_) {},
+        onCancel: () {},
+        onConfirm: () {},
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('upload_target_notice')), findsNothing);
+  });
 }

@@ -1880,7 +1880,7 @@ void main() {
     test('the destination is the device the picker answers', () async {
       final offered = <String>[];
       final serial = await _FakeQuark().controller().uploadSerial(
-        pick: (targets, initial) async {
+        pick: (targets, initial, _) async {
           offered.addAll(targets.map((t) => t.serial));
           return initial;
         },
@@ -1898,7 +1898,7 @@ void main() {
       );
 
       await expectLater(
-        controller.uploadSerial(pick: (_, _) async => fail('asked')),
+        controller.uploadSerial(pick: (_, _, _) async => fail('asked')),
         throwsA(isA<ApiException>()),
       );
     });

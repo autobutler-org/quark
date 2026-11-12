@@ -427,8 +427,13 @@ class PhotosPageState extends State<PhotosPage>
   /// storage — or null when the user dismissed the device picker. Throws
   /// when the devices cannot be listed (#3192).
   Future<String?> _uploadSerial() => _controller.uploadSerial(
-    pick: (targets, initial) async => mounted
-        ? showDeviceUploadPicker(context, targets, initial: initial)
+    pick: (targets, initial, notice) async => mounted
+        ? showDeviceUploadPicker(
+            context,
+            targets,
+            initial: initial,
+            notice: notice,
+          )
         : null,
   );
 

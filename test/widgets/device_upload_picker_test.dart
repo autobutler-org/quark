@@ -44,4 +44,26 @@ void main() {
   testWidgets('starts on the first device when given none', (tester) async {
     expect(await confirmUntouched(tester), builtIn);
   });
+
+  // #3194: the sheet opens on a plain upload only when there is no default
+  // device, and says so.
+  testWidgets('shows the notice it is given', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showDeviceUploadPicker(context, const [
+              builtIn,
+              stick,
+            ], notice: 'No default.'),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No default.'), findsOneWidget);
+  });
 }

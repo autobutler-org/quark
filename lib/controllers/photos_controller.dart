@@ -1533,6 +1533,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     required Future<UploadTarget?> Function(
       List<UploadTarget> targets,
       UploadTarget initial,
+      String? notice,
     )
     pick,
   }) => resolveUploadSerial(pick: pick, listDevices: _listDevices);

@@ -9,6 +9,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/upload_destination.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
@@ -20,8 +21,13 @@ import '../support/tap_target_guidelines.dart' show setViewport;
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  Map<String, Object?> device(String name, {String serial = ''}) => {
+  Map<String, Object?> device(
+    String name, {
+    String serial = '',
+    String role = 'unassigned',
+  }) => {
     'name': name,
+    'role': role,
     'devicePath': '/dev/$name',
     'mountPoint': '/mnt/$name',
     'isInternal': serial.isEmpty,
@@ -31,12 +37,16 @@ void main() {
 
   /// Whether the device listing answers; false is a Quark that cannot say.
   late bool devicesListable;
+
+  /// The role the stick holds.
+  late String stickRole;
   late List<Uri> created;
 
   setUpAll(mockSecureStorage);
 
   setUp(() async {
     devicesListable = true;
+    stickRole = 'unassigned';
     created = [];
     // Before the host is set: the shared client is built once per host and
     // kept (#1782), so it has to come from this factory.
@@ -48,7 +58,7 @@ void main() {
                 jsonEncode({
                   'devices': [
                     device('Built-in'),
-                    device('Stick', serial: 'USB1'),
+                    device('Stick', serial: 'USB1', role: stickRole),
                   ],
                 }),
                 200,
@@ -109,11 +119,13 @@ void main() {
     await drain(tester);
   });
 
-  testWidgets('a view of every drive asks which one', (tester) async {
+  testWidgets('a view of every drive with no default asks which one, and '
+      'says why', (tester) async {
     await pumpPage(tester);
     await nameNewFolder(tester);
 
     expect(find.text('Upload to device'), findsOneWidget);
+    expect(find.text(noDefaultDeviceNotice), findsOneWidget);
     expect(created, isEmpty);
 
     await tester.tap(find.byKey(const ValueKey('upload_target_1')));
@@ -121,6 +133,19 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('upload_target_confirm')));
     await tester.pumpAndSettle();
 
+    expect(created.single.queryParameters, {'serial': 'USB1'});
+    await drain(tester);
+  });
+
+  // #3194: a plain New folder goes to the default storage device.
+  testWidgets('a default storage device takes the folder without asking', (
+    tester,
+  ) async {
+    stickRole = 'default-storage';
+    await pumpPage(tester);
+    await nameNewFolder(tester);
+
+    expect(find.text('Upload to device'), findsNothing);
     expect(created.single.queryParameters, {'serial': 'USB1'});
     await drain(tester);
   });
