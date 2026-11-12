@@ -15,8 +15,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// [header] is drawn above that list. Each drive card shows its own backup
 /// state from [protection]: a data drive its copies, a backup drive what it
 /// holds and, from [backupStatuses], the backup running onto it.
-/// [onRestore], like backup and verify, is drawn only
-/// on a drive with the snapshot-backup role, and only when the page passes it.
+/// [onRestore] and [onRestoreChat], like backup and verify, are drawn only
+/// on a drive with the snapshot-backup role, and only when the page passes
+/// them.
 /// **Restore files** shows wherever [onRestore] does: it is admin-only too,
 /// and [onRestoreFiles] defaults to [restoreFilesFrom], offering the drive's
 /// runs from [backupRuns]. A backup drive lists its backups when
@@ -35,6 +36,7 @@ class StorageDevicesBody extends StatelessWidget {
     this.onBackup,
     this.onVerify,
     this.onRestore,
+    this.onRestoreChat,
     this.onRestoreFiles,
     this.onEject,
     this.ejecting = const {},
@@ -72,6 +74,10 @@ class StorageDevicesBody extends StatelessWidget {
   /// Restores vaults from a snapshot-backup drive. Null draws no button, and
   /// a drive with any other role draws none either.
   final ValueChanged<StorageDevice>? onRestore;
+
+  /// Restores the chat from a snapshot-backup drive. Null draws no button,
+  /// and a drive with any other role draws none either.
+  final ValueChanged<StorageDevice>? onRestoreChat;
 
   /// Restores a snapshot-backup drive's files. Used only where [onRestore]
   /// is set; null there means [restoreFilesFrom].
@@ -149,6 +155,7 @@ class StorageDevicesBody extends StatelessWidget {
     final onBackup = this.onBackup;
     final onVerify = this.onVerify;
     final onRestore = this.onRestore;
+    final onRestoreChat = this.onRestoreChat;
     final backupRuns = this.backupRuns;
     final onRestoreFiles =
         this.onRestoreFiles ??
@@ -183,6 +190,9 @@ class StorageDevicesBody extends StatelessWidget {
               : null,
           onRestore: onRestore != null && isBackupDrive
               ? () => onRestore(device)
+              : null,
+          onRestoreChat: onRestoreChat != null && isBackupDrive
+              ? () => onRestoreChat(device)
               : null,
           onRestoreFiles: onRestore != null && isBackupDrive
               ? () => onRestoreFiles(device)

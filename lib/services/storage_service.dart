@@ -391,6 +391,46 @@ class StorageService with AuthenticatedService {
     required String deviceSerial,
     required String password,
     String? run,
+  }) async => VaultRestoreResult.fromJson(
+    await _restoreFromBackup(
+      'restore-vault',
+      'restore the vaults',
+      deviceSerial: deviceSerial,
+      password: password,
+      run: run,
+    ),
+  );
+
+  /// Restores the chat from the snapshot backup on [deviceSerial] (#2428),
+  /// re-confirmed with the admin's login [password] as
+  /// [restoreSnapshotVault] is. The Quark restores only into an empty chat
+  /// and matches accounts by username. A 4xx whose body carries `error` is a
+  /// [MessageException]; a 5xx stays an [ApiException].
+  ///
+  /// [run] is the backup to restore from; null is the newest complete one.
+  static Future<ChatRestoreResult> restoreSnapshotChat({
+    required String deviceSerial,
+    required String password,
+    String? run,
+  }) async => ChatRestoreResult.fromJson(
+    await _restoreFromBackup(
+      'restore-chat',
+      'restore the chat',
+      deviceSerial: deviceSerial,
+      password: password,
+      run: run,
+    ),
+  );
+
+  /// Posts a vault or chat restore to `snapshot-backup/<route>` with the auth
+  /// key of [password], and answers the Quark's JSON. [context] names the
+  /// action for the errors [_throwUnlessRunOk] raises.
+  static Future<Map<String, dynamic>> _restoreFromBackup(
+    String route,
+    String context, {
+    required String deviceSerial,
+    required String password,
+    String? run,
   }) async {
     final username = AppSettings.instance.username;
     if (username == null) throw const UnauthorizedException();
@@ -400,7 +440,7 @@ class StorageService with AuthenticatedService {
       use: AuthSecretUse.reconfirm,
     );
     final uri = apiBaseUri.resolve(
-      '/api/v0/storage/devices/snapshot-backup/restore-vault',
+      '/api/v0/storage/devices/snapshot-backup/$route',
     );
     final response = await instance.authenticatedPost(
       uri,
@@ -411,9 +451,8 @@ class StorageService with AuthenticatedService {
         'run': ?run,
       }),
     );
-    _throwUnlessRunOk(response, 'restore the vaults', run);
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return VaultRestoreResult.fromJson(data);
+    _throwUnlessRunOk(response, context, run);
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   /// Starts copying the files a snapshot holds on [deviceSerial] back onto
@@ -771,6 +810,43 @@ class VaultRestoreResult {
   final List<String> restoredAccounts;
 
   /// The run the vaults came from. Null when the Quark did not say.
+  final String? run;
+}
+
+/// What `POST /storage/devices/snapshot-backup/restore-chat` restored.
+///
+/// Counts and the name list default to empty when the Quark omits them.
+class ChatRestoreResult {
+  /// Creates a result. An omitted list is empty and omitted counts are zero.
+  const ChatRestoreResult({
+    this.channels = 0,
+    this.messages = 0,
+    this.unmatchedUsers = const [],
+    this.run,
+  });
+
+  /// Parses the restore answer. A missing field is zero or an empty list.
+  factory ChatRestoreResult.fromJson(Map<String, dynamic> json) {
+    return ChatRestoreResult(
+      run: _nonEmpty(json['run']),
+      channels: (json['channels'] as num?)?.toInt() ?? 0,
+      messages: (json['messages'] as num?)?.toInt() ?? 0,
+      unmatchedUsers: _names(json['unmatchedUsers']),
+    );
+  }
+
+  /// How many channels came back, general and direct messages included.
+  final int channels;
+
+  /// How many messages came back.
+  final int messages;
+
+  /// Usernames in the backup with no account here, sorted. Their messages
+  /// show no author, and their memberships, reactions and chat keys were not
+  /// restored.
+  final List<String> unmatchedUsers;
+
+  /// The run the chat came from. Null when the Quark did not say.
   final String? run;
 }
 

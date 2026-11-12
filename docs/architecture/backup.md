@@ -77,9 +77,9 @@ folders. The release note for this change, which the pull request carries becaus
 release-notes file, is:
 
 > Snapshot backups now live in dated folders under `backups/` on the backup drive, one folder per backup. A backup
-> taken before upgrading sits at the drive's root and is no longer read by Restore files, Restore vaults or Verify,
-> so take a new backup after upgrading. Once a new backup exists, the old root folders (`internal/`, each
-> `<name>_<serial>/`, `backup_manifest.json`, `chat_backup.db`, `vault_items_backup.db` and their `.mac` files) can be
+> taken before upgrading sits at the drive's root and is no longer read by Restore files, Restore vaults, Restore
+> chat or Verify, so take a new backup after upgrading. Once a new backup exists, the old root folders (`internal/`,
+> each `<name>_<serial>/`, `backup_manifest.json`, `chat_backup.db`, `vault_items_backup.db` and their `.mac` files) can be
 > deleted by hand.
 
 ## The run lifecycle
@@ -546,8 +546,8 @@ stateDiagram-v2
   reason a copy does not count. It has no backup button: the data drives are copied by backing up onto a backup
   drive.
 - A backup drive's card never carries a protection badge. It says what the drive holds ("Holds copies of Built-in
-  storage, Photos. Newest Nov 2.") and offers **Back up onto this drive**, **Verify**, **Restore files**, and
-  **Restore vaults**. For an admin it also lists the drive's runs, collapsed at first ("2 backups · newest Nov 2"),
+  storage, Photos. Newest Nov 2.") and offers **Back up onto this drive**, **Verify**, **Restore files**,
+  **Restore vaults** and **Restore chat**. For an admin it also lists the drive's runs, collapsed at first ("2 backups · newest Nov 2"),
   each with its time, size and drives and a delete action. An away drive has no card, because the device list has
   only connected drives; its copies still show on the data drives' chips.
 - The protection card keeps the whole-Quark meter and sentence and gains **Back up now**, which starts a backup onto
