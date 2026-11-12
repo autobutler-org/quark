@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
-	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/vaultutil"
 )
 
@@ -66,6 +65,7 @@ var vaultBackup = ciphertextBackup{
 	ddl:        db.VaultItemsBackupSchemaDDL,
 	version:    db.VaultItemsBackupVersion,
 	errVersion: ErrVaultBackupVersion,
+	errRole:    ErrVaultRestoreRoleRequired,
 	directory: []string{
 		`INSERT INTO vault_items_backup.users (id, username) SELECT id, username FROM main.users`,
 	},
@@ -337,26 +337,8 @@ func ImportVault(ctx context.Context, liveDB *sql.DB, backupDir string) (VaultIm
 // this Quark did not write, or one changed since, is
 // [ErrBackupNotFromThisQuark] and nothing is restored (#4010).
 func RestoreVault(params RestoreVaultParams) (VaultImportResult, error) {
-	drive, err := fileutil.FilesVFS(params.Registry, params.DeviceSerial)
+	run, dir, err := vaultBackup.fromDrive(params)
 	if err != nil {
-		return VaultImportResult{}, err
-	}
-	role, err := params.Queries.GetDeviceRole(params.Ctx, params.DeviceSerial)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && role != "snapshot-backup") {
-		return VaultImportResult{}, ErrVaultRestoreRoleRequired
-	}
-	if err != nil {
-		return VaultImportResult{}, fmt.Errorf("read the drive's role: %w", err)
-	}
-	run, err := resolveRun(params.Ctx, drive, params.Run)
-	if err != nil {
-		return VaultImportResult{}, err
-	}
-	dir, err := hostDir(params.Ctx, drive, runDir(run.Folder))
-	if err != nil {
-		return VaultImportResult{}, err
-	}
-	if err := vaultBackup.checkBinding(params.Ctx, params.Queries, params.DeviceSerial, dir); err != nil {
 		return VaultImportResult{}, err
 	}
 	result, err := ImportVault(params.Ctx, params.LiveDB, dir)

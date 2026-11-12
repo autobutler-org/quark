@@ -15,6 +15,10 @@ var (
 	// ErrChatBackupVersion reports a backup file in a format this build does
 	// not read.
 	ErrChatBackupVersion = errors.New("chat backup was written by a different version of Quark")
+	// ErrChatRestoreRoleRequired reports a drive that does not have the
+	// snapshot-backup role. Chat is only restored from the drive the
+	// snapshots write to.
+	ErrChatRestoreRoleRequired = errors.New("chat is restored only from a drive with the snapshot-backup role")
 )
 
 // ImportChat restores the chat_backup.db that [ExportChat] wrote to backupDir
@@ -45,6 +49,24 @@ func ImportChat(ctx context.Context, liveDB *sql.DB, backupDir string) (ChatImpo
 		Messages:       int(rows["chat_messages"]),
 		UnmatchedUsers: unmatched,
 	}, nil
+}
+
+// RestoreChat restores, as [ImportChat] does, the chat backup a snapshot
+// wrote to the drive params.DeviceSerial names, from the run params.Run names
+// or the newest complete one (#2428). The drive, the run and the file are
+// checked as [RestoreVault] checks them, except that a drive without the
+// snapshot-backup role is [ErrChatRestoreRoleRequired].
+func RestoreChat(params RestoreChatParams) (ChatImportResult, error) {
+	run, dir, err := chatBackup.fromDrive(params)
+	if err != nil {
+		return ChatImportResult{}, err
+	}
+	result, err := ImportChat(params.Ctx, params.LiveDB, dir)
+	if err != nil {
+		return ChatImportResult{}, err
+	}
+	result.Run = run.Folder
+	return result, nil
 }
 
 // chatRestoreSteps is the restore, in the order the live foreign keys need.

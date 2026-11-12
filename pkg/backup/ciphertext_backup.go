@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	// Registers the "sqlite" driver with database/sql.
@@ -42,6 +43,9 @@ type ciphertextBackup struct {
 	version int
 	// errVersion is what a restore answers a file of another version with.
 	errVersion error
+	// errRole is what a restore from a drive without the snapshot-backup
+	// role is answered with ([ciphertextBackup.fromDrive]).
+	errRole error
 	// directory copies the names behind every account (or group) id the rows
 	// mention, never a hash, so a restore can find the same account on a
 	// Quark that numbered its accounts differently.
@@ -468,8 +472,6 @@ var ErrBackupNotFromThisQuark = errors.New("this Quark did not write this backup
 // never bound a snapshot to: that is a snapshot taken before binding, and the
 // drives already on the shelf keep working. A missing file is left to the
 // restore, which names it.
-//
-// The chat's restore route, when it comes (#2428), checks the same way.
 func (b ciphertextBackup) checkBinding(ctx context.Context, queries db.Querier, serial, backupDir string) error {
 	dbPath := filepath.Join(backupDir, b.filename)
 	if _, err := os.Stat(dbPath); errors.Is(err, fs.ErrNotExist) {
@@ -504,6 +506,41 @@ func (b ciphertextBackup) checkBinding(ctx context.Context, queries db.Querier, 
 			ErrBackupNotFromThisQuark, b.filename)
 	}
 	return nil
+}
+
+// fromDrive finds the run a restore of b reads from, on the drive
+// params.DeviceSerial names: the run params.Run names, or the newest complete
+// one. It answers the run and the host folder b's file is in, once the drive
+// has the snapshot-backup role and the file passes [ciphertextBackup.checkBinding].
+//
+// A drive that is not attached is a *fileutil.NotFoundError, one without the
+// role b.errRole, one with no complete run [ErrNoSnapshot], and a run it does
+// not hold [ErrRunNotFound]. A restore reads only the drive snapshots are
+// written to, never whatever drive holds a file of the right name.
+func (b ciphertextBackup) fromDrive(params RestoreVaultParams) (Run, string, error) {
+	drive, err := fileutil.FilesVFS(params.Registry, params.DeviceSerial)
+	if err != nil {
+		return Run{}, "", err
+	}
+	role, err := params.Queries.GetDeviceRole(params.Ctx, params.DeviceSerial)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && role != "snapshot-backup") {
+		return Run{}, "", b.errRole
+	}
+	if err != nil {
+		return Run{}, "", fmt.Errorf("read the drive's role: %w", err)
+	}
+	run, err := resolveRun(params.Ctx, drive, params.Run)
+	if err != nil {
+		return Run{}, "", err
+	}
+	dir, err := hostDir(params.Ctx, drive, runDir(run.Folder))
+	if err != nil {
+		return Run{}, "", err
+	}
+	if err := b.checkBinding(params.Ctx, params.Queries, params.DeviceSerial, dir); err != nil {
+		return Run{}, "", err
+	}
+	return run, dir, nil
 }
 
 // readBinding reads the MAC at path. Anything that is not one decodes to a

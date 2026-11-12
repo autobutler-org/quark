@@ -17,7 +17,10 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	_ "modernc.org/sqlite"
 )
 
@@ -533,5 +536,95 @@ func TestSnapshotBackup_ExportsChatAndVault(t *testing.T) {
 	}
 	if vault.Items != 2 {
 		t.Errorf("restored %d vault items from the snapshot, want 2", vault.Items)
+	}
+}
+
+// RestoreChat reads the backup from the drive a snapshot wrote it to, and
+// checks the drive, the run and the file the way RestoreVault does (#2428).
+// Every refusal leaves the live chat as it was.
+func TestRestoreChat_ReadsTheBackupDrive(t *testing.T) {
+	ctx := context.Background()
+	source := dbtest.NewDB(t)
+	seedChat(t, source.Db)
+	want := dumpChat(t, source.Db)
+	target := makeTarget(t)
+	if err := SnapshotBackup(ctx, SnapshotBackupParams{
+		TargetDeviceSerial: "BACKUP-1",
+		Job:                newJob("BACKUP-1"),
+		LiveDB:             source.Db,
+		Queries:            source.Queries,
+	}, nil, target.VFS); err != nil {
+		t.Fatalf("SnapshotBackup: %v", err)
+	}
+	reg := memNamespaces(t, map[string]vfs.VFS{"": vfs.NewMemVFS(vfs.FilesNamespace("")), "BACKUP-1": target.VFS})
+
+	live := dbtest.NewDB(t)
+	addChatUsers(t, live.Db, "alice", "bob", "carol")
+	chatExec(t, live.Db, `INSERT INTO groups (name) VALUES ('family')`)
+	params := RestoreChatParams{Ctx: ctx, LiveDB: live.Db, Queries: live.Queries, Registry: reg, DeviceSerial: "BACKUP-1"}
+	untouched := func(why string) {
+		t.Helper()
+		assertRows(t, live.Db, `SELECT COUNT(*) FROM chat_messages`, "[0]")
+		assertRows(t, live.Db, `SELECT COUNT(*) FROM chat_channels`, "[1]")
+		if t.Failed() {
+			t.Fatalf("a restore refused for %s changed the chat", why)
+		}
+	}
+
+	// A drive holding the file is not enough: it must be the snapshots' drive.
+	for _, role := range []string{"", "unassigned", "default-storage"} {
+		if role != "" {
+			chatExec(t, live.Db, `INSERT OR REPLACE INTO device_roles (device_serial, role) VALUES ('BACKUP-1', ?)`, role)
+		}
+		if _, err := RestoreChat(params); !errors.Is(err, ErrChatRestoreRoleRequired) {
+			t.Errorf("RestoreChat from a drive with role %q = %v, want ErrChatRestoreRoleRequired", role, err)
+		}
+	}
+	untouched("the drive's role")
+	chatExec(t, live.Db, `INSERT OR REPLACE INTO device_roles (device_serial, role) VALUES ('BACKUP-1', 'snapshot-backup')`)
+
+	var notFound *fileutil.NotFoundError
+	if _, err := RestoreChat(RestoreChatParams{Ctx: ctx, LiveDB: live.Db, Queries: live.Queries, Registry: reg, DeviceSerial: "GONE"}); !errors.As(err, &notFound) {
+		t.Errorf("RestoreChat from a drive that is not attached = %v, want *fileutil.NotFoundError", err)
+	}
+	withRun := params
+	withRun.Run = "nope"
+	if _, err := RestoreChat(withRun); !errors.Is(err, ErrRunNotFound) {
+		t.Errorf("RestoreChat of an unknown run = %v, want ErrRunNotFound", err)
+	}
+	untouched("the drive or the run")
+
+	// The live Quark has a secret of its own, so the snapshot is another's.
+	if _, err := settingsutil.AuthSaltSecretIn(ctx, live.Queries); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RestoreChat(params); !errors.Is(err, ErrBackupNotFromThisQuark) {
+		t.Errorf("RestoreChat of another Quark's snapshot = %v, want ErrBackupNotFromThisQuark", err)
+	}
+	untouched("its binding")
+
+	// Made the Quark that wrote it, the chat comes back from the run.
+	for _, key := range []string{"authSaltSecret", boundDriveKeyPrefix + "BACKUP-1"} {
+		value, err := source.Queries.GetSetting(ctx, key)
+		if err != nil {
+			t.Fatalf("read %s: %v", key, err)
+		}
+		if err := live.Queries.SetSetting(ctx, db.SetSettingParams{Key: key, Value: value}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result, err := RestoreChat(params)
+	if err != nil {
+		t.Fatalf("RestoreChat: %v", err)
+	}
+	if run := onlyRun(t, target.VFS).Folder; result.Channels != 3 || result.Messages != 4 || result.Run != run ||
+		len(result.UnmatchedUsers) != 0 {
+		t.Errorf("result = %+v, want 3 channels, 4 messages, nobody unmatched, from run %s", result, run)
+	}
+	got := dumpChat(t, live.Db)
+	for _, table := range chatBackupTables {
+		if !slices.Equal(got[table], want[table]) {
+			t.Errorf("%s after restore\n got %v\nwant %v", table, got[table], want[table])
+		}
 	}
 }

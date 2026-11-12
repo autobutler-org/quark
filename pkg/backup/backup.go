@@ -180,7 +180,7 @@ type VaultImportResult struct {
 // RestoreVaultParams asks for the vault backup a snapshot wrote to a drive.
 type RestoreVaultParams struct {
 	Ctx context.Context
-	// LiveDB is the live database the vaults are restored into.
+	// LiveDB is the live database the backup is restored into.
 	LiveDB *sql.DB
 	// Queries reads the drive's role, which must be snapshot-backup.
 	Queries db.Querier
@@ -192,6 +192,10 @@ type RestoreVaultParams struct {
 	Run string
 }
 
+// RestoreChatParams asks for the chat backup a snapshot wrote to a drive. It
+// reads the same fields [RestoreVault] does.
+type RestoreChatParams = RestoreVaultParams
+
 // ChatImportResult reports what [ImportChat] restored.
 type ChatImportResult struct {
 	Channels int `json:"channels"`
@@ -200,6 +204,9 @@ type ChatImportResult struct {
 	// Quark, sorted. Their messages read as a deleted account's, and their
 	// memberships, reactions and chat keys were not restored.
 	UnmatchedUsers []string `json:"unmatchedUsers"`
+	// Run is the run [RestoreChat] read the chat from, a folder under
+	// backups/. [ImportChat] leaves it empty.
+	Run string `json:"run,omitempty"`
 }
 
 type SnapshotBackupParams struct {

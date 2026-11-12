@@ -7,15 +7,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/backup"
+	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/deviceutil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/protectionutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/gin-gonic/gin"
 )
 
 // deviceError maps what deviceutil reports onto the status codes the client
@@ -191,4 +195,38 @@ func deviceSerial(device storageutil.Device) string {
 		return ""
 	}
 	return device.UsbInfo.GetSerial()
+}
+
+// confirmRestore reads a vault or chat restore's body, at most
+// maxRestoreRequestBytes, and checks that its password is the auth key of the
+// caller's login password, as DELETE /vault and PUT /vault/key do (#3615), so
+// a session alone cannot restore. A wrong or empty key is a 403 and a raw
+// password a 426; a nil response means it matched.
+func confirmRestore(c *gin.Context, deps deputil.Dependencies) (restoreSnapshotBody, *serverutil.Response) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRestoreRequestBytes)
+	var req restoreSnapshotBody
+	if err := c.ShouldBindJSON(&req); err != nil {
+		if _, tooLarge := errors.AsType[*http.MaxBytesError](err); tooLarge {
+			return req, serverutil.NewResponse().WithStatusCode(http.StatusRequestEntityTooLarge).
+				WithError(errors.New("request body too large"))
+		}
+		return req, serverutil.BadRequest(fmt.Errorf("invalid request: %w", err))
+	}
+	username, _ := ctxutil.Get[string](c, "username")
+	_, err := authutil.VerifyPassword(c.Request.Context(), authutil.VerifyPasswordParams{
+		Queries:  deps.Database().Queries,
+		Username: username,
+		Password: req.Password,
+	})
+	switch {
+	case err == nil:
+		return req, nil
+	case errors.Is(err, authutil.ErrIncorrectPassword):
+		return req, serverutil.NewResponse().WithStatusCode(http.StatusForbidden).WithError(err)
+	case errors.Is(err, authutil.ErrUserNotFound):
+		return req, serverutil.Unauthorized(errors.New("not authenticated"))
+	default:
+		// ErrAppTooOld is a 426 HttpError, whatever status this names.
+		return req, serverutil.InternalServerError(err)
+	}
 }
