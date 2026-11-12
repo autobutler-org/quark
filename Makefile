@@ -78,7 +78,7 @@ GOLANGCI_LINT_VERSION := v2.15.0
 GOVULNCHECK_VERSION := v1.9.0
 # The CI images install these. ci-image.yml reads them and passes them as build args.
 # renovate: datasource=github-tags depName=docker/cli extractVersion=^v(?<version>.+)$
-DOCKER_VERSION := 28.0.4
+DOCKER_VERSION := 28.5.2
 # renovate: datasource=github-releases depName=actions/runner extractVersion=^v(?<version>.+)$
 RUNNER_VERSION := 2.338.2
 # renovate: datasource=github-releases depName=mikefarah/yq
