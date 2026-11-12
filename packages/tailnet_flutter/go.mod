@@ -1,6 +1,6 @@
 module github.com/autobutler-org/quark/packages/tailnet_flutter
 
-go 1.27.3
+go 1.27.4
 
 // Keep tailscale.com on the same version as the repo root module. The phone
 // bridge and pkg/util/remoteutil both link it.

@@ -1,6 +1,6 @@
 module github.com/autobutler-org/quark
 
-go 1.27.3
+go 1.27.4
 
 // node_modules holds npm tooling (cspell, fantasticon). One of its transitive
 // packages ships Go source, which would otherwise join this module.
