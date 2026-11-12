@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The state the slide editor's text fields share: a field that commits once
 /// editing ends, on Enter or leaving it, so a value typed key by key is one

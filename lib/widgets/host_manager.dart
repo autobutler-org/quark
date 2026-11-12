@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/local_trust.dart';
 import 'package:quark/utils/error_text.dart';

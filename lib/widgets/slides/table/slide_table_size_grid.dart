@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The table picker's grid of [extent] by [extent] squares: the squares

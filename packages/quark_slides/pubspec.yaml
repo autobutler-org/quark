@@ -12,6 +12,8 @@ publish_to: none
 dependencies:
   flutter:
     sdk: flutter
+  cupertino_ui: ^1.0.2
+  material_ui: ^1.2.0
 
 dev_dependencies:
   flutter_test:

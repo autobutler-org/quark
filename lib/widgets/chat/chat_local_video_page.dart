@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/video_viewer/fullscreen_video_page.dart';
 import 'package:quark/widgets/video_viewer/inline_video_player.dart';

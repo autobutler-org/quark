@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:data_table/data_sheet.dart';
 import 'package:data_table/data_table.dart';
-import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
+import 'package:material_ui/material_ui.dart' hide DataTable, DataRow, DataCell;
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:go_router/go_router.dart';

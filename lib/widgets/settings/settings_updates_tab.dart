@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/settings/repair_installation_section.dart';
 import 'package:quark/widgets/settings/restart_quark_section.dart';
 import 'package:quark_icons/quark_icons.dart';

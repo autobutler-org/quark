@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/widgets/slides/theme/slide_layout_control.dart';
 import 'package:quark/widgets/slides/theme/slide_theme_control.dart';

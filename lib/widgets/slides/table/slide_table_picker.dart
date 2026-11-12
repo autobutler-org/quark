@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/slides/table/slide_table_size_grid.dart';
 import 'package:quark/widgets/slides/table/slide_table_size_stepper.dart';
 import 'package:quark_icons/quark_icons.dart';

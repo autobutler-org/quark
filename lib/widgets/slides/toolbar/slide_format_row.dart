@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/slides/toolbar/slide_format_group_controls.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_group.dart';

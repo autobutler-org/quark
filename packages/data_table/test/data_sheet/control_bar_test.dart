@@ -2,7 +2,7 @@ import 'package:data_table/src/data_sheet/control_bar.dart';
 import 'package:data_table/src/data_sheet/data_sheet_controller.dart';
 // Material ships its own DataTable/DataRow/DataCell — this package's models
 // win here.
-import 'package:flutter/material.dart' hide DataCell, DataRow, DataTable;
+import 'package:material_ui/material_ui.dart' hide DataCell, DataRow, DataTable;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/sheet.dart';

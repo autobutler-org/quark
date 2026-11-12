@@ -4,7 +4,7 @@
 // The cases that matter are the swap-in app bar a page in selection mode
 // uses, and the bottom bar's inset, since both are the reason the shell
 // exists rather than each page writing its own `Scaffold`.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';

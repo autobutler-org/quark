@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/models/calendar_view.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark/widgets/settings/calendar_view_setting.dart';

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// A slide's speaker notes, read-only, for the presenter view (#1166). Long

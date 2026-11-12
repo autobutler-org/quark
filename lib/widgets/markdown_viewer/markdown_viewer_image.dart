@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/markdown_viewer_files.dart';

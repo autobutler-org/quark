@@ -5,7 +5,7 @@
 // tests assert the geometry instead: the system insets are cleared, the
 // token gutter is there when they are zero, the keyboard does not inset the
 // child twice, and an iPhone-sized corner curve misses the child's corner.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 

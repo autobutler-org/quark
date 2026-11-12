@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/image_viewer_config.dart';
 import 'package:quark/widgets/image_viewer/photo_page_scroll_physics.dart';
 import 'package:quark/widgets/image_viewer/single_finger_vertical_drag.dart';

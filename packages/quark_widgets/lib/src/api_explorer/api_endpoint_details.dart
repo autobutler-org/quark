@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../layout/quark_section.dart';
 import '../markdown/quark_markdown_view/markdown_inline_spans.dart';

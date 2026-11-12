@@ -6,7 +6,7 @@ import 'package:flutter/gestures.dart'
         PointerHoverEvent,
         PointerScrollEvent,
         kLongPressTimeout;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';

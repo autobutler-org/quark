@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Confirms deleting an album. Pops with true to delete.
 class DeleteAlbumDialog extends StatelessWidget {

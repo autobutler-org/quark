@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/models/app_notification.dart';
 
 /// The words for each [NotificationType], in the one place the notification

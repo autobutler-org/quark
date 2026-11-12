@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/controllers/upload_sessions_controller.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';

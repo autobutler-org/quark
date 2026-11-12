@@ -2,7 +2,7 @@
 //
 // The narrow cases guard the heading row, which is where a title and three
 // buttons used to overflow before the actions went through a toolbar.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 

@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/chat/chat_attachment_preview.dart';
 import 'package:quark_icons/quark_icons.dart';

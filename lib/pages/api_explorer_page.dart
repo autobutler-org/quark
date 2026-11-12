@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/api_explorer_controller.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';

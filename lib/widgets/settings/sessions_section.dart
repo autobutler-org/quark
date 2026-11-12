@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/sessions_controller.dart';
 import 'package:quark/models/auth_session.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';

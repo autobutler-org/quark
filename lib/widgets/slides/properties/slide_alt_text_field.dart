@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/slides/properties/slide_commit_field.dart';
 
 /// The alt text of the selected picture, what a screen reader reads for it

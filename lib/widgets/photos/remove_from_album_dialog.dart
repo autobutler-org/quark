@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Confirms taking a photo out of an album. Pops with true to remove.
 class RemoveFromAlbumDialog extends StatelessWidget {

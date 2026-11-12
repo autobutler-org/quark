@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// What `main` paints when the saved settings are slow to load (#2066): a

@@ -1,5 +1,5 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/slides/table/slide_table_picker.dart';
 import 'package:quark/widgets/slides/table/slide_table_properties_section.dart';

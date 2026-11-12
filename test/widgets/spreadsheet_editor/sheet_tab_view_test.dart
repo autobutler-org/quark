@@ -1,7 +1,7 @@
 import 'package:data_table/data_sheet.dart';
 import 'package:data_table/data_table.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
+import 'package:material_ui/material_ui.dart' hide DataTable, DataRow, DataCell;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/spreadsheet_editor/sheet_format_palette.dart';

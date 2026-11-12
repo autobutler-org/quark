@@ -1,5 +1,5 @@
 // cspell:words reallocated
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../core/quark_detail_row.dart';
 import '../theme/quark_tokens.dart';

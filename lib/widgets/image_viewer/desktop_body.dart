@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/models/photo_metadata.dart';
 import 'package:quark/widgets/image_viewer/metadata_sidebar.dart';
 

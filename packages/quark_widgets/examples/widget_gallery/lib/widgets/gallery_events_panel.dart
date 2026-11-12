@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The bottom panel: the callbacks the current example has fired.

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:quark_icons/quark_icons.dart';

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 /// The slide editor's keyboard history: Ctrl+Z (Cmd+Z on a Mac) undoes, and

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A link inside a `QuarkMarkdownView`'s text: [child], announced as a link,
 /// that calls [onTap] with [href] when tapped. It opens nothing itself.

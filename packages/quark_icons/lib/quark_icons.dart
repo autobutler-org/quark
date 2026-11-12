@@ -1,7 +1,7 @@
 // The custom icons are generated from svgs/: `make generate/icons` rebuilds the
 // font and its codepoints.
 
-import 'package:flutter/material.dart' show Icons;
+import 'package:material_ui/material_ui.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
 // ignore_for_file: constant_identifier_names

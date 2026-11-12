@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/slides/notes/slide_notes_view.dart';
 import 'package:quark/widgets/slides/present/slide_presenter_clock.dart';
 import 'package:quark/widgets/slides/slide_editor_canvas.dart';

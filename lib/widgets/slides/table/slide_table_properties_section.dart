@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The properties panel's table section (#1160): how many [rows] and

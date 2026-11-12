@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// One key-and-description row of the viewer's keyboard shortcuts dialog.
 class ShortcutRow extends StatelessWidget {

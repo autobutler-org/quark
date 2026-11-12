@@ -13,6 +13,7 @@ dependencies:
   flutter:
     sdk: flutter
   markdown: ^7.1.0
+  material_ui: ^1.2.0
   quark_icons:
     path: ../quark_icons
 

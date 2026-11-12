@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/slides/properties/slide_alt_text_field.dart';
 import 'package:quark/widgets/slides/properties/slide_number_field.dart';

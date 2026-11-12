@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/error_banner.dart';
 import 'package:quark/widgets/notice_banner.dart';
 import 'package:quark/widgets/login/host_switcher.dart';

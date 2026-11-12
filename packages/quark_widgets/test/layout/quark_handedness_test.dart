@@ -4,7 +4,7 @@
 // The cases that matter are the ones a thumb meets: which edge the brand
 // button, the drawer and the floating button are on, and that the brand
 // button still opens the drawer once the drawer has changed sides.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';

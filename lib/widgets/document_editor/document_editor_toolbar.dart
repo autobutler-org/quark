@@ -1,5 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+// flutter_quill's IconButtonData.style is still package:flutter/material's ButtonStyle.
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart' as quill_material;
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The formatting toolbar shown above the document in edit mode.
@@ -43,18 +46,18 @@ class DocumentEditorToolbar extends StatelessWidget {
       iconTheme: QuillIconTheme(
         iconButtonUnselectedData: IconButtonData(
           color: cs.onSurface,
-          style: IconButton.styleFrom(
+          style: quill_material.IconButton.styleFrom(
             backgroundColor: cs.onSurface.withValues(alpha: 0.05),
-            shape: RoundedRectangleBorder(
+            shape: quill_material.RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(6),
             ),
           ),
         ),
         iconButtonSelectedData: IconButtonData(
-          style: IconButton.styleFrom(
+          style: quill_material.IconButton.styleFrom(
             foregroundColor: cs.onPrimary,
             backgroundColor: cs.primary,
-            shape: RoundedRectangleBorder(
+            shape: quill_material.RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(6),
             ),
           ),

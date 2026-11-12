@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/error_text.dart';
 
 /// Asks for an album name, for creating or renaming one.

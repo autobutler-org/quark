@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' hide Icons;
+import 'package:material_ui/material_ui.dart' hide Icons;
 import 'package:quark_icons/quark_icons.dart';
 
 /// The funnel on a column header that opens the column's filter popover.

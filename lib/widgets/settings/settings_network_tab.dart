@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/layout/admin_map_card.dart';
 import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
 import 'package:quark/widgets/settings/hostname_section.dart';

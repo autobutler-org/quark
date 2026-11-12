@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/connected_devices_service.dart';
 import 'package:quark/widgets/settings/connected_devices_card.dart';

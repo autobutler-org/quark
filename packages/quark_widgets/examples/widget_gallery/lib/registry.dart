@@ -1,6 +1,6 @@
 // @dart=3.11
 // cspell:words reallocated
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 

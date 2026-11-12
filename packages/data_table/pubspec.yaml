@@ -11,6 +11,7 @@ publish_to: none
 dependencies:
   flutter:
     sdk: flutter
+  material_ui: ^1.2.0
   quark_formula:
     path: ../quark_formula
   quark_icons:

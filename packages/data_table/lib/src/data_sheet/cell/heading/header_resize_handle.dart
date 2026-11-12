@@ -1,5 +1,5 @@
 import 'package:flutter/gestures.dart' show DragStartBehavior;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'heading_cells.dart' show kResizeHandleSize, kTouchResizeHandleSize;
 

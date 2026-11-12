@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/slides/properties/slide_commit_field.dart';
 
 /// The selected chart's title: a one-line field that saves once editing

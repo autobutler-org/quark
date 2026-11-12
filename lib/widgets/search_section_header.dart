@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The small label that opens a group of search results in the docs and
 /// sheets lists, such as "Content matches" or "In Docs".

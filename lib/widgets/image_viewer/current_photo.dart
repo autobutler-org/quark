@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:video_player/video_player.dart';
 

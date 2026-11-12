@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'edge_inset/quark_edge_inset.dart';
 import 'quark_app_bar.dart';

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../theme/quark_tokens.dart';
 import 'photo_grid_scroll_label/photo_grid_scroll_label_pill.dart';

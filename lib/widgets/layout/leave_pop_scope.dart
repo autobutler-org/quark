@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Catches a system back on a page that was opened at its own URL, with
 /// nothing underneath it to pop to, and calls [onLeave] instead of letting the

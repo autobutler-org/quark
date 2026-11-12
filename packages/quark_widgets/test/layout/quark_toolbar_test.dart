@@ -3,7 +3,7 @@
 // The whole point is the narrow viewport, so every case runs at 360 pixels
 // with more buttons than fit, and asserts that nothing threw and that the
 // buttons are all still there and still tappable.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 

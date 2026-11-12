@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:quark/widgets/image_viewer/shortcut_row.dart';
 import 'package:quark/widgets/video_viewer/player_controls.dart';

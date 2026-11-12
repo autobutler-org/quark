@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/services/connected_devices_service.dart';
 import 'package:quark/utils/device_label.dart';
 import 'package:quark/utils/error_text.dart';

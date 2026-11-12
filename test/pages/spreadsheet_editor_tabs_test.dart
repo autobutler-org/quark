@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:data_table/data_sheet.dart';
 import 'package:data_table/data_table.dart' show DataCell;
-import 'package:flutter/material.dart' hide DataCell;
+import 'package:material_ui/material_ui.dart' hide DataCell;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 // flutter_secure_storage requires a secure context (HTTPS) on web.
 // We only use it on native platforms; on web we fall back to in-memory only.

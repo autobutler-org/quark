@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/slides/transition/slide_enum_chips.dart';
 import 'package:quark/widgets/slides/transition/slide_transition_duration_field.dart';

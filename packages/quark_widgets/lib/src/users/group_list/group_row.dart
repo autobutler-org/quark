@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../core/quark_loader.dart';
 import '../../core/quark_menu_button.dart';

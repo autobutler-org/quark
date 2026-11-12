@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A titled group of metadata rows in the photo viewer's info panel.
 class Section extends StatelessWidget {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/app_log.dart';
 import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark_icons/quark_icons.dart';

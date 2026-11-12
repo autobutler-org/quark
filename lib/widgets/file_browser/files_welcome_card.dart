@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_upload_chip.dart';
 import 'package:quark_icons/quark_icons.dart';

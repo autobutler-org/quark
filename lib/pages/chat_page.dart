@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/chat_channel_share_target.dart';
 import 'package:quark/controllers/chat_controller.dart';

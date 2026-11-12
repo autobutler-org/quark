@@ -1,12 +1,14 @@
 import 'dart:async';
 
+import 'package:cupertino_ui/cupertino_ui.dart' as cupertino_ui;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'
+    show GlobalWidgetsLocalizations;
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/chat_channel_keys_controller.dart';
 import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/controllers/connection_controller.dart';
@@ -140,30 +142,40 @@ class QuarkApp extends StatelessWidget {
           themeMode: settings.themeMode.value,
           routerConfig: router,
           scaffoldMessengerKey: rootScaffoldMessengerKey,
-          builder: (context, child) => DismissKeyboardOnTapOutside(
-            child: JobFinishAnnouncer(
-              controller: JobsController.instance,
-              messengerKey: rootScaffoldMessengerKey,
-              onNavigate: router.go,
-              child: AppBarTrailingHost(
-                jobs: JobsController.instance,
-                uploads: UploadSessionsController.instance,
-                connection: ConnectionController.instance,
-                notifications: NotificationsController.instance,
-                onNavigate: router.go,
-                // Every page's bar, drawer and floating button reads this, so
-                // the whole app mirrors from the one setting (#1812).
-                child: QuarkHandedness(
-                  leftHanded: settings.leftHanded.value,
-                  child: child ?? const SizedBox.shrink(),
+          builder: (context, child) {
+            // Temporary bridges so flutter_quill, still on package:flutter/material
+            // and package:flutter/cupertino, can read this theme.
+            // ignore: deprecated_member_use
+            return cupertino_ui.CupertinoUiCompatibilityBridge(
+              // ignore: deprecated_member_use
+              child: MaterialUiCompatibilityBridge(
+                child: DismissKeyboardOnTapOutside(
+                  child: JobFinishAnnouncer(
+                    controller: JobsController.instance,
+                    messengerKey: rootScaffoldMessengerKey,
+                    onNavigate: router.go,
+                    child: AppBarTrailingHost(
+                      jobs: JobsController.instance,
+                      uploads: UploadSessionsController.instance,
+                      connection: ConnectionController.instance,
+                      notifications: NotificationsController.instance,
+                      onNavigate: router.go,
+                      // Every page's bar, drawer and floating button reads this, so
+                      // the whole app mirrors from the one setting (#1812).
+                      child: QuarkHandedness(
+                        leftHanded: settings.leftHanded.value,
+                        child: child ?? const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
+            cupertino_ui.GlobalCupertinoLocalizations.delegate,
             FlutterQuillLocalizations.delegate,
           ],
           supportedLocales: const [Locale('en')],
