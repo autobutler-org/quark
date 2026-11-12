@@ -24,6 +24,10 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # package:flutter/material.dart and package:flutter/cupertino.dart are
+  # deprecated. These are separate copies, not re-exports.
+  material_ui: ^1.2.0
+  cupertino_ui: ^1.0.2
   # No Dart file imports it, but it ships the font CupertinoIcons draws from:
   # cupertino_ui's CupertinoTextField (QuarkWidget.textField on iOS), search
   # field and nav bar draw its glyphs, and cupertino_ui does not depend on it.

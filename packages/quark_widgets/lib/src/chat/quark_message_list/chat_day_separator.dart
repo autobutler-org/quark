@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../calendar/calendar_labels.dart';
 import '../../theme/quark_tokens.dart';

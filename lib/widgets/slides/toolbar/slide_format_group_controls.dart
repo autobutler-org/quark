@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/slides/chart/slide_chart_colors_menu_button.dart';
 import 'package:quark/widgets/slides/chart/slide_chart_title_field.dart';
 import 'package:quark/widgets/slides/toolbar/slide_choice_button.dart';

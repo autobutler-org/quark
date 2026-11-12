@@ -3,7 +3,7 @@
 // There is nothing to tap and no callbacks, so what these assert is that the
 // child still renders on both viewports, that the painter is there, and that
 // its colors track the theme rather than a hardcoded pair.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark_widgets/src/layout/quark_checkerboard/checkerboard_painter.dart';

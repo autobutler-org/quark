@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 /// One of a set of mutually exclusive choices in the top bar's Views menu. The

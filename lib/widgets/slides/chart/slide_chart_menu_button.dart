@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/slides/chart/slide_chart_picker.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
 import 'package:quark_icons/quark_icons.dart';

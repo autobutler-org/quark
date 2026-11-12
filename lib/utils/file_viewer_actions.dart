@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/pages/generic_file_viewer_open_stub.dart'
     if (dart.library.io) 'package:quark/pages/generic_file_viewer_open_native.dart'
     as native_open;

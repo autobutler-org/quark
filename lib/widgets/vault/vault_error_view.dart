@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// What the Vault page shows when it cannot load, with a way to retry.
 class VaultErrorView extends StatelessWidget {

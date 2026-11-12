@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 
 /// Shows a snack bar whenever [controller] announces a finished job, on

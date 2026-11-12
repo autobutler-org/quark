@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/video_viewer/video_surface_with_controls.dart';
 import 'package:video_player/video_player.dart';
 

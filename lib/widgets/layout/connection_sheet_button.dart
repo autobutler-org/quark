@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/device_pairing_store.dart';
 import 'package:quark/services/remote_access_service.dart';

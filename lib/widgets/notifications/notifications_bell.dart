@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/widgets/notifications/notifications_list.dart';
 import 'package:quark_icons/quark_icons.dart';

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/file_versions_controller.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/pages/svg_viewer_page.dart';

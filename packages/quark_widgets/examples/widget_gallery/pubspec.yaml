@@ -10,6 +10,7 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
+  material_ui: ^1.2.0
   # The registry's fake data needs the same glyphs the widgets do.
   quark_icons:
     path: ../../../quark_icons

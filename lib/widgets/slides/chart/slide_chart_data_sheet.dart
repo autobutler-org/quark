@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/slide_chart_grid.dart';
 import 'package:quark/widgets/slides/chart/slide_chart_data_cell.dart';
 import 'package:quark/widgets/slides/chart/slide_chart_data_row.dart';

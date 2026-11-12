@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A compact chip showing a formula error's [code] (`#DIV/0!`, `#REF!`), in the theme's error colors, with the
 /// [message] saying why in its tooltip and its semantics label.

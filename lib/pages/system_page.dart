@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/router.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';

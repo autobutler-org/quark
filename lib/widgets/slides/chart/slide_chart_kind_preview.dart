@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_slides/quark_slides.dart';
 
 /// A small live picture of a [kind] chart: the package's

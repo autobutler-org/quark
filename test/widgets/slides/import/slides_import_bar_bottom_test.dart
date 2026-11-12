@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/slides/import/slides_import_bar_bottom.dart';
 import 'package:quark_icons/quark_icons.dart';

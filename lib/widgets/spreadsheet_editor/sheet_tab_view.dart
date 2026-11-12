@@ -1,6 +1,6 @@
 import 'package:data_table/data_sheet.dart';
 import 'package:data_table/data_table.dart';
-import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
+import 'package:material_ui/material_ui.dart' hide DataTable, DataRow, DataCell;
 import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/widgets/spreadsheet_editor/sheet_format_palette.dart';
 import 'package:quark_widgets/quark_widgets.dart';

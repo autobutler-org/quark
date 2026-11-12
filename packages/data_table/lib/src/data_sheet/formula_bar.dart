@@ -1,6 +1,6 @@
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart' hide DataCell;
+import 'package:material_ui/material_ui.dart' hide DataCell;
 import 'package:flutter/services.dart';
 
 import '../../data_table.dart';

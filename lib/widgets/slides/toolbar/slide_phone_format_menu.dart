@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/slides/slide_share_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_choice_menu_item.dart';
 import 'package:quark/widgets/slides/toolbar/slide_color_submenu.dart';

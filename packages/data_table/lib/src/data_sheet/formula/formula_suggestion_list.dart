@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_formula/evaluation/evaluation.dart' show BuiltinFunction;
 
 import 'formula_suggestion_tile.dart';

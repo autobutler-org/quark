@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show Locale;
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:material_ui/material_ui.dart' show GlobalMaterialLocalizations;
 import 'package:quark/models/calendar_event.dart';
 import 'package:quark/models/calendar_move.dart';
 import 'package:quark/models/calendar_view.dart';

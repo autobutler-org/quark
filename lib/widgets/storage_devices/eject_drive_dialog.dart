@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/quark_widget.dart';
 
 /// Confirms ejecting the drive named [driveName]. Pops with `true` on Eject,

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/models/account_request_decision.dart';
 import 'package:quark/utils/relative_time.dart';
 import 'package:quark_icons/quark_icons.dart';

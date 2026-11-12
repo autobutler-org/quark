@@ -1,5 +1,5 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/slides/present/slide_present_stage.dart';
 import 'package:quark/widgets/slides/present/slide_presenter_view.dart';

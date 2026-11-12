@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'slide_shortcuts_dialog.dart';
 import 'slide_shortcuts_help_intent.dart';

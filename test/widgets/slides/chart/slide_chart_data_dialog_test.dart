@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/slides/chart/slide_chart_data_dialog.dart';

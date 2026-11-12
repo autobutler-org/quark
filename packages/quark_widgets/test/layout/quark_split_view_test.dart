@@ -6,7 +6,7 @@
 // `Expanded` inside a sliver (#1599), so every case here checks that the
 // sidebar and the content are both actually on screen, not merely that
 // nothing threw.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 

@@ -2,7 +2,7 @@
 
 import 'package:data_table/data_sheet.dart';
 import 'package:data_table/data_table.dart';
-import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
+import 'package:material_ui/material_ui.dart' hide DataTable, DataRow, DataCell;
 
 void main() {
   final table = DataTable([

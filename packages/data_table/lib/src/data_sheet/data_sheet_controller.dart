@@ -3,7 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart'
     show ChangeNotifier, ValueNotifier, mapEquals;
-import 'package:flutter/material.dart' show Color;
+import 'package:material_ui/material_ui.dart' show Color;
 import 'package:flutter/painting.dart'
     show FontStyle, FontWeight, TextPainter, TextSpan, TextStyle;
 import 'package:quark_formula/evaluation/evaluation.dart';

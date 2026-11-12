@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/services/device_pairing_store.dart';
 import 'package:quark_icons/quark_icons.dart';

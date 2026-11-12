@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_icons/quark_icons.dart';

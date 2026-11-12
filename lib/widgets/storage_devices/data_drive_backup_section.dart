@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/data_protection_controller.dart';
 import 'package:quark/services/data_protection_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';

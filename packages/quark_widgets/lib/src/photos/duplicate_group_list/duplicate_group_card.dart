@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../models/duplicate_group_item.dart';
 import '../../models/duplicate_photo_item.dart';

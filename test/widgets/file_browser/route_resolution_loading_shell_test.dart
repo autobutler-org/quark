@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/file_browser/route_resolution_loading_shell.dart';
 import 'package:quark_widgets/quark_widgets.dart';

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The colors and sizes a `SlideCanvas` draws its chrome with: the
 /// selection, handles, guides, letterbox and search highlights. A slide's

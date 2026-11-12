@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../chat/quark_chat_permission_picker.dart';
 import '../../core/quark_loader.dart';

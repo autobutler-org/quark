@@ -1,6 +1,6 @@
 import 'dart:ui' show SemanticsHitTestBehavior;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../../models/calendar_event_item.dart';

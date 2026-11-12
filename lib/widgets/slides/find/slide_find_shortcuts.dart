@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 /// The slide editor's find keys: Ctrl+F (Cmd+F on a Mac) runs [onFind] and

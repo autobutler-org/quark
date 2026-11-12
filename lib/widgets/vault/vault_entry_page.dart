@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/vault_controller.dart';
 import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';

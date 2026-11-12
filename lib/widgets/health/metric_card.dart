@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/health/health_severity.dart';
 
 /// One health metric: a labelled value with a progress bar that turns orange

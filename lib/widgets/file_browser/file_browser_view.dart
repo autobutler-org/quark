@@ -13,7 +13,7 @@ import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.d
 import 'package:quark/widgets/file_browser/file_browser_view/file_sort_header.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/folder_drop_wrapper.dart';
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 

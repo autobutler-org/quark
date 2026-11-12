@@ -3,7 +3,7 @@
 // The content is 900 pixels wide: more than the narrow viewport shows, less
 // than the wide one, so the same widget is asserted both overflowing and not.
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 

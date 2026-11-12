@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:markdown/markdown.dart' as md;
 
 import '../../theme/quark_tokens.dart';

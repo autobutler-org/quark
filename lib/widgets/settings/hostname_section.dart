@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/hostname_controller.dart';
 import 'package:quark/widgets/settings/hostname_field.dart';
 

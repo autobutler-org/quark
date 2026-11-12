@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../core/password_strength_bar.dart';
 import '../core/quark_loader.dart';

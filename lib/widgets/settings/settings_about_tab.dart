@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/services/sbom_service.dart';
 import 'package:quark/widgets/settings/help_support_card.dart';
 import 'package:quark/widgets/settings/sbom_expansion_tile.dart';

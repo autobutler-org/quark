@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/quark_widget.dart';
 
 /// The body of the add-SSH-key dialog: one field for a public key line.

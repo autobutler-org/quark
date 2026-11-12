@@ -1,9 +1,16 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
+
+/// `find.byTooltip` only sees `package:flutter/material`'s Tooltip. The unread
+/// pill sets `excludeFromSemantics`, so its message stays on material_ui's
+/// Tooltip and never reaches a RawTooltip.
+Finder _tooltip(String message) => find.byWidgetPredicate(
+  (widget) => widget is Tooltip && widget.message == message,
+);
 
 /// The chat server's channel list (#2420): every state on its own, the open
 /// channel highlighted, private channels locked, and taps reported by id.
@@ -262,9 +269,9 @@ void main() {
       tester.widget<Text>(find.text('general')).style?.fontWeight,
       FontWeight.w700,
     );
-    expect(find.byTooltip('3 unread messages'), findsOneWidget);
+    expect(_tooltip('3 unread messages'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('3 unread messages')), findsOneWidget);
-    expect(find.byTooltip('1 unread message'), findsOneWidget);
+    expect(_tooltip('1 unread message'), findsOneWidget);
 
     // Read: no pill, and the name exactly as it was drawn before.
     expect(find.byKey(const ValueKey('channel_unread_books')), findsNothing);
@@ -306,7 +313,7 @@ void main() {
       find.descendant(of: mention, matching: find.text('@2')),
       findsOneWidget,
     );
-    expect(find.byTooltip('2 unread mentions'), findsOneWidget);
+    expect(_tooltip('2 unread mentions'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('2 unread mentions')), findsOneWidget);
     expect(find.text('@99+'), findsOneWidget);
     expect(
@@ -344,7 +351,7 @@ void main() {
 
     expect(find.text('99'), findsOneWidget);
     expect(find.text('99+'), findsOneWidget);
-    expect(find.byTooltip('100 unread messages'), findsOneWidget);
+    expect(_tooltip('100 unread messages'), findsOneWidget);
   });
 
   testBothViewports('fits a long name with an unread count and a lock', (

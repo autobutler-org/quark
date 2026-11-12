@@ -1,7 +1,7 @@
 import 'package:quark/models/file_node.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark_widgets/quark_widgets.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 /// One file in the "Recently uploaded" strip: the file's icon and name, with a

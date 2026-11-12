@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:quark_formula/evaluation/evaluation.dart' show BuiltinFunction;
 
 /// One built-in function in the autocomplete list: its signature over its one-line description, at least 48 pixels
