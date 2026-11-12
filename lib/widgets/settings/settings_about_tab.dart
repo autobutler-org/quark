@@ -6,7 +6,7 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The About tab of Settings (#2350): this app's version, help and the terms
-/// of service, and the software bill of materials.
+/// of service, the API explorer (#4077), and the software bill of materials.
 class SettingsAboutTab extends StatelessWidget {
   /// Creates the tab.
   const SettingsAboutTab({
@@ -14,6 +14,7 @@ class SettingsAboutTab extends StatelessWidget {
     required this.appReleaseUrl,
     required this.onOpenReleaseNotes,
     required this.onOpenTerms,
+    required this.onOpenApiExplorer,
     required this.isLoadingSbom,
     required this.sbomError,
     required this.flutterSbom,
@@ -34,6 +35,9 @@ class SettingsAboutTab extends StatelessWidget {
 
   /// Opens the terms of service.
   final VoidCallback onOpenTerms;
+
+  /// Opens the API explorer.
+  final VoidCallback onOpenApiExplorer;
 
   /// Whether the bill of materials is being read.
   final bool isLoadingSbom;
@@ -100,6 +104,19 @@ class SettingsAboutTab extends StatelessWidget {
                   title: const Text('Terms of Service'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: onOpenTerms,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Card(
+                child: ListTile(
+                  key: const ValueKey('settings_api_explorer'),
+                  leading: const Icon(Icons.api),
+                  title: const Text('API Explorer'),
+                  subtitle: const Text(
+                    "Browse and call this Quark's API as yourself",
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: onOpenApiExplorer,
                 ),
               ),
             ],

@@ -4,6 +4,7 @@ import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/models/calendar_view.dart';
 import 'package:quark/models/trash_item.dart';
 import 'package:quark/pages/account_and_data_page.dart';
+import 'package:quark/pages/api_explorer_page.dart';
 import 'package:quark/pages/books_page.dart';
 import 'package:quark/pages/calendar_page.dart';
 import 'package:quark/pages/chat_page.dart';
@@ -155,6 +156,11 @@ class AppRoutes {
   /// Delete account and, for admins, Reset this Quark (#2346). A drill-down
   /// from Settings' Account tab, reached with `context.push`.
   static const accountAndData = '/settings/account-and-data';
+
+  /// The API explorer (#4077), every endpoint of the Quark's API with a way
+  /// to call it as the signed-in user. A drill-down from Settings' About tab,
+  /// reached with `context.push`, open to every signed-in user.
+  static const apiExplorer = '/settings/api-explorer';
 
   /// One tab of the Settings page, e.g. settingsTab(SettingsTab.general) →
   /// '/settings/general', where the backend hosts are managed.
@@ -824,10 +830,14 @@ final router = GoRouter(
           UsersPage(tab: tab, onTabSelected: onTabSelected),
     ),
     // Before the Settings tabs: go_router takes the first match, and
-    // `/settings/:tab` would redirect this unknown slug to General.
+    // `/settings/:tab` would redirect these unknown slugs to General.
     GoRoute(
       path: AppRoutes.accountAndData,
       builder: (context, state) => const AccountAndDataPage(),
+    ),
+    GoRoute(
+      path: AppRoutes.apiExplorer,
+      builder: (context, state) => const ApiExplorerPage(),
     ),
     ...tabbedRoutes(
       path: AppRoutes.settings,

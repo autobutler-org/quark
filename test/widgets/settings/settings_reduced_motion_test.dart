@@ -66,6 +66,7 @@ void main() {
       appReleaseUrl: null,
       onOpenReleaseNotes: (_) {},
       onOpenTerms: () {},
+      onOpenApiExplorer: () {},
       isLoadingSbom: true,
       sbomError: null,
       flutterSbom: null,
