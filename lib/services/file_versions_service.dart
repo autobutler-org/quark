@@ -19,6 +19,8 @@ class FileVersionsService with AuthenticatedService {
   static final FileVersionsService instance = FileVersionsService._();
 
   /// The saved versions of the file at [path], newest first.
+  ///
+  /// api: GET /api/v0/versions
   static Future<List<FileVersion>> list(String path) async {
     final response = await instance.authenticatedGet(_uri('', path));
     _check(response, 'list file versions');
@@ -32,6 +34,8 @@ class FileVersionsService with AuthenticatedService {
   /// The bytes of version [id] of the file at [path]. The whole version is
   /// held in memory, so the caller bounds what it asks for by
   /// [FileVersion.size].
+  ///
+  /// api: GET /api/v0/versions/{id}/content
   static Future<Uint8List> content(String path, String id) async {
     final response = await instance.authenticatedGet(
       _uri('/$id/content', path),
@@ -42,6 +46,8 @@ class FileVersionsService with AuthenticatedService {
 
   /// Puts the file at [path] back to version [id]. The Quark saves what the
   /// file held as a "Before restore" version first, and returns that backup.
+  ///
+  /// api: POST /api/v0/versions/{id}/restore
   static Future<FileVersion> restore(String path, String id) async {
     final response = await instance.authenticatedPost(
       _uri('/$id/restore', path),
@@ -53,6 +59,7 @@ class FileVersionsService with AuthenticatedService {
     );
   }
 
+  /// api: none
   static Uri _uri(String suffix, String path) => apiBaseUri.replace(
     path: '/api/v0/versions$suffix',
     queryParameters: {'path': path},

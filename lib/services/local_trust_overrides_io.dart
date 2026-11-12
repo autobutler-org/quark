@@ -36,6 +36,7 @@ class LocalTrustHttpOverrides extends HttpOverrides {
 
   final List<String?> Function() _chosenAddresses;
 
+  /// api: none
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return TunnelTokenHttpClient(

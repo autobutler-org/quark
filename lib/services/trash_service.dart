@@ -17,6 +17,8 @@ class TrashService with AuthenticatedService {
   static final TrashService instance = TrashService._();
 
   /// Lists [serial]'s trash, stamping each item with the device it came from.
+  ///
+  /// api: GET /api/v0/trash
   static Future<TrashListing> listTrash(
     String serial, {
     String deviceName = '',
@@ -46,6 +48,8 @@ class TrashService with AuthenticatedService {
 
   /// Lists a folder in [serial]'s trash: the trashed item [trashName] when
   /// [path] is empty, or the folder at [path] inside it.
+  ///
+  /// api: GET /api/v0/trash/contents
   static Future<TrashContents> listContents(
     String serial,
     String trashName,
@@ -66,6 +70,8 @@ class TrashService with AuthenticatedService {
   /// paths. An item with a path restores just that from inside a trashed
   /// folder. All or nothing: a 409 means one of them has something in its
   /// way, and none were restored.
+  ///
+  /// api: POST /api/v0/trash/restore
   static Future<List<String>> restore(
     String serial,
     List<TrashRef> items,
@@ -80,6 +86,8 @@ class TrashService with AuthenticatedService {
   }
 
   /// Deletes [items] for good and returns how many went.
+  ///
+  /// api: POST /api/v0/trash/delete
   static Future<int> deletePermanently(
     String serial,
     List<TrashRef> items,
@@ -92,6 +100,8 @@ class TrashService with AuthenticatedService {
   }
 
   /// Deletes everything in [serial]'s trash and returns how many went.
+  ///
+  /// api: POST /api/v0/trash/empty
   static Future<int> empty(String serial) async {
     final body = await _post('/api/v0/trash/empty', {
       'serial': serial,
@@ -99,6 +109,7 @@ class TrashService with AuthenticatedService {
     return (body['deleted'] as num?)?.toInt() ?? 0;
   }
 
+  /// api: none
   static Future<Map<String, dynamic>> _post(
     String path,
     Map<String, Object> payload,

@@ -183,6 +183,7 @@ class EventsService {
     if (activeBaseUrl != _connectedTo) _onTokenChanged();
   }
 
+  /// api: GET /api/v0/events
   void _connect() {
     if (_disposed) return;
     final host = activeBaseUrl;

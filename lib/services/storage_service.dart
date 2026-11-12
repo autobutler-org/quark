@@ -256,6 +256,7 @@ class StorageService with AuthenticatedService {
     return _inFlight!;
   }
 
+  /// api: GET /api/v0/storage/devices/status
   static Future<List<StorageDevice>> _fetchDevices() async {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/status');
     final response = await instance.authenticatedGet(uri);
@@ -272,6 +273,8 @@ class StorageService with AuthenticatedService {
   }
 
   /// Mounts a USB device by serial. Requires the quark to be running as root.
+  ///
+  /// api: POST /api/v0/storage/devices/usb/{serial}
   static Future<void> mountDevice(String serial) async {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/usb/$serial');
     final response = await instance.authenticatedPost(uri);
@@ -283,6 +286,8 @@ class StorageService with AuthenticatedService {
 
   /// Unmounts a USB storage device so it can be removed safely. The Storage
   /// tab's Eject action calls it (#1664).
+  ///
+  /// api: DELETE /api/v0/storage/devices/usb/{serial}
   static Future<void> unmountDevice(String serial) async {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/usb/$serial');
     final response = await instance.authenticatedDelete(uri);
@@ -290,6 +295,7 @@ class StorageService with AuthenticatedService {
     invalidateDeviceCache();
   }
 
+  /// api: PUT /api/v0/storage/devices/role
   static Future<void> setDeviceRole({
     required String serial,
     required String role,
@@ -322,6 +328,8 @@ class StorageService with AuthenticatedService {
   /// id. [sourceSerials] names the data drives to copy, built-in storage as
   /// ""; null copies every data drive (#3984). It sends no password: the chat
   /// and vault are backed up as ciphertext (#3460).
+  ///
+  /// api: POST /api/v0/storage/devices/snapshot-backup
   static Future<String> startSnapshotBackup({
     required String targetDeviceSerial,
     List<String>? sourceSerials,
@@ -342,6 +350,7 @@ class StorageService with AuthenticatedService {
     return data['jobId'] as String;
   }
 
+  /// api: GET /api/v0/storage/devices/snapshot-backup/status/{jobId}
   static Future<BackupJobStatus> getSnapshotBackupStatus(String jobId) async {
     final uri = apiBaseUri.resolve(
       '/api/v0/storage/devices/snapshot-backup/status/$jobId',
@@ -356,6 +365,8 @@ class StorageService with AuthenticatedService {
 
   /// Checks the backup [run] on [deviceSerial] against its manifest, or the
   /// newest complete run when [run] is null. The answer names the run.
+  ///
+  /// api: POST /api/v0/storage/devices/snapshot-backup/verify
   static Future<VerifyResult> verifySnapshotBackup({
     required String deviceSerial,
     bool full = false,
@@ -387,6 +398,8 @@ class StorageService with AuthenticatedService {
   /// stays an [ApiException].
   ///
   /// [run] is the backup to restore from; null is the newest complete one.
+  ///
+  /// api: POST /api/v0/storage/devices/snapshot-backup/restore-vault
   static Future<VaultRestoreResult> restoreSnapshotVault({
     required String deviceSerial,
     required String password,
@@ -408,6 +421,8 @@ class StorageService with AuthenticatedService {
   /// [MessageException]; a 5xx stays an [ApiException].
   ///
   /// [run] is the backup to restore from; null is the newest complete one.
+  ///
+  /// api: POST /api/v0/storage/devices/snapshot-backup/restore-chat
   static Future<ChatRestoreResult> restoreSnapshotChat({
     required String deviceSerial,
     required String password,
@@ -425,6 +440,8 @@ class StorageService with AuthenticatedService {
   /// Posts a vault or chat restore to `snapshot-backup/<route>` with the auth
   /// key of [password], and answers the Quark's JSON. [context] names the
   /// action for the errors [_throwUnlessRunOk] raises.
+  ///
+  /// api: none
   static Future<Map<String, dynamic>> _restoreFromBackup(
     String route,
     String context, {
@@ -460,6 +477,8 @@ class StorageService with AuthenticatedService {
   /// a drive that is no longer attached go to built-in storage. The copy runs
   /// as a job; a 4xx whose body carries `error` is a [MessageException].
   /// [run] is the backup to restore; null is the newest complete one.
+  ///
+  /// api: POST /api/v0/storage/devices/snapshot-backup/restore-files
   static Future<FilesRestoreResult> restoreSnapshotFiles({
     required String deviceSerial,
     required bool missingToBuiltIn,
@@ -484,6 +503,8 @@ class StorageService with AuthenticatedService {
 
   /// The complete backups on the backup drive [deviceSerial], newest first.
   /// Admin-only on the Quark.
+  ///
+  /// api: GET /api/v0/storage/devices/snapshot-backup/runs
   static Future<List<BackupRun>> listBackupRuns(String deviceSerial) async {
     final uri = apiBaseUri.replace(
       path: '/api/v0/storage/devices/snapshot-backup/runs',
@@ -502,6 +523,8 @@ class StorageService with AuthenticatedService {
   /// Deletes the backup [run] from [deviceSerial] for good. A 409, a backup
   /// or restore using the drive, is an [ApiException] for
   /// [Errors.backupRun] to word.
+  ///
+  /// api: DELETE /api/v0/storage/devices/snapshot-backup/runs
   static Future<void> deleteBackupRun({
     required String deviceSerial,
     required String run,
@@ -522,6 +545,8 @@ class StorageService with AuthenticatedService {
 
   /// The schedule of the backup drive [deviceSerial] (#3984). Admin-only on
   /// the Quark; a drive without the backup role is a 400.
+  ///
+  /// api: GET /api/v0/storage/devices/snapshot-backup/schedule
   static Future<BackupSchedule> getBackupSchedule(String deviceSerial) async {
     final uri = apiBaseUri.replace(
       path: '/api/v0/storage/devices/snapshot-backup/schedule',
@@ -538,6 +563,8 @@ class StorageService with AuthenticatedService {
   /// drives it copies, built-in storage as ""; an empty [sourceSerials] is
   /// every data drive. When the backup is due and the drive is attached, the
   /// Quark starts it at once and the answer's [BackupSchedule.jobId] names it.
+  ///
+  /// api: PUT /api/v0/storage/devices/snapshot-backup/schedule
   static Future<BackupSchedule> setBackupSchedule({
     required String deviceSerial,
     required BackupCadence cadence,

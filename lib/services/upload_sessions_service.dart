@@ -18,6 +18,8 @@ class UploadSessionsService with AuthenticatedService {
   static final UploadSessionsService instance = UploadSessionsService._();
 
   /// The caller's sessions, in flight and recently ended.
+  ///
+  /// api: GET /api/v0/files/upload-sessions
   static Future<UploadSessionList> listSessions() async {
     final uri = apiBaseUri.resolve('/api/v0/files/upload-sessions');
     final response = await instance.authenticatedGet(uri);
@@ -32,6 +34,8 @@ class UploadSessionsService with AuthenticatedService {
 
   /// Cancels session [sessionId] and drops what it had staged. A 404 means it
   /// had already ended.
+  ///
+  /// api: DELETE /api/v0/files/upload-session/{sessionId}
   static Future<void> cancelSession(String sessionId) async {
     final uri = apiBaseUri.resolve(
       '/api/v0/files/upload-session/${Uri.encodeComponent(sessionId)}',

@@ -36,6 +36,8 @@ class ChatChannelsService with AuthenticatedService {
   static Future<List<ChatChannel>> listAllChannels() => _list(all: true);
 
   /// Creates channel [name] with [topic], owned by the signed-in account.
+  ///
+  /// api: POST /api/v0/chat/channels
   static Future<ChatChannel> createChannel(String name, String topic) async {
     final response = await instance.authenticatedPost(
       _uri(''),
@@ -47,6 +49,8 @@ class ChatChannelsService with AuthenticatedService {
   }
 
   /// Renames channel [channelId] to [name] and sets its [topic].
+  ///
+  /// api: PATCH /api/v0/chat/channels/{id}
   static Future<ChatChannel> updateChannel(
     int channelId, {
     required String name,
@@ -62,12 +66,16 @@ class ChatChannelsService with AuthenticatedService {
   }
 
   /// Deletes channel [channelId] with its messages and keys.
+  ///
+  /// api: DELETE /api/v0/chat/channels/{id}
   static Future<void> deleteChannel(int channelId) async {
     final response = await instance.authenticatedDelete(_uri('/$channelId'));
     throwUnlessOk(response, 'delete chat channel $channelId');
   }
 
   /// Channel [channelId]'s members: accounts, and groups with their accounts.
+  ///
+  /// api: GET /api/v0/chat/channels/{id}/members
   static Future<List<ChatMember>> listMembers(int channelId) async {
     final response = await instance.authenticatedGet(
       _uri('/$channelId/members'),
@@ -78,6 +86,8 @@ class ChatChannelsService with AuthenticatedService {
 
   /// Gives account [userId] or group [groupId] the set [permissions] on
   /// channel [channelId], replacing its row's.
+  ///
+  /// api: PUT /api/v0/chat/channels/{id}/members
   static Future<ChatMembersChange> setMember(
     int channelId, {
     int? userId,
@@ -102,6 +112,8 @@ class ChatChannelsService with AuthenticatedService {
 
   /// Removes account [userId]'s or group [groupId]'s row from channel
   /// [channelId]. The signed-in account removing its own row leaves.
+  ///
+  /// api: DELETE /api/v0/chat/channels/{id}/members
   static Future<ChatMembersChange> removeMember(
     int channelId, {
     int? userId,
@@ -119,6 +131,8 @@ class ChatChannelsService with AuthenticatedService {
   /// Moves the signed-in account's read marker in channel [channelId] up to
   /// message [messageId]. The Quark never moves it backward: an id at or
   /// before the marker answers with the marker as it stands.
+  ///
+  /// api: PUT /api/v0/chat/channels/{id}/read
   static Future<ChatReadMarker> markRead(int channelId, int messageId) async {
     final response = await instance.authenticatedPut(
       _uri('/$channelId/read'),
@@ -129,6 +143,7 @@ class ChatChannelsService with AuthenticatedService {
     return ChatReadMarker.fromJson(_json(response));
   }
 
+  /// api: GET /api/v0/chat/channels
   static Future<List<ChatChannel>> _list({required bool all}) async {
     final uri = _uri('');
     final response = await instance.authenticatedGet(
@@ -143,6 +158,7 @@ class ChatChannelsService with AuthenticatedService {
 
   static const _jsonHeaders = {'Content-Type': 'application/json'};
 
+  /// api: none
   static Uri _uri(String suffix) =>
       apiBaseUri.resolve('/api/v0/chat/channels$suffix');
 

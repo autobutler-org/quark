@@ -18,6 +18,8 @@ class NotificationsService with AuthenticatedService {
 
   /// The account's current notifications. An entry of a type this app does
   /// not know is left out.
+  ///
+  /// api: GET /api/v0/notifications
   static Future<List<AppNotification>> list() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/notifications'),

@@ -23,6 +23,8 @@ class VaultService with AuthenticatedService {
   ///
   /// [sessionToken] is for a session the app has not stored yet: a sign-in
   /// whose recovery phrase is still on screen.
+  ///
+  /// api: GET /api/v0/vault/key
   static Future<WrappedVaultKey?> fetchKey({String? sessionToken}) async {
     final response = await instance.authenticatedGet(
       _uri('/key'),
@@ -41,6 +43,8 @@ class VaultService with AuthenticatedService {
   /// [authKey], the login password's auth key, re-confirms the caller as
   /// `PUT /auth/recovery-key` does: a wrong one is a 403 and nothing is
   /// stored. It is the only key sent; [key] holds only wraps.
+  ///
+  /// api: PUT /api/v0/vault/key
   static Future<void> putKey(WrappedVaultKey key, String authKey) async {
     final response = await instance.authenticatedPut(
       _uri('/key'),
@@ -55,6 +59,8 @@ class VaultService with AuthenticatedService {
   /// [authKey], the login password's auth key, re-confirms the caller as
   /// [putKey]'s does: a wrong one is a 403 and nothing is deleted, so a
   /// session alone cannot wipe a vault (#3615).
+  ///
+  /// api: DELETE /api/v0/vault
   static Future<void> deleteVault(String authKey) async {
     final response = await instance.authenticatedDelete(
       apiBaseUri.resolve('/api/v0/vault'),
@@ -65,6 +71,8 @@ class VaultService with AuthenticatedService {
   }
 
   /// Every item the account stores.
+  ///
+  /// api: GET /api/v0/vault/items
   static Future<List<VaultCiphertext>> listItems() async {
     final response = await instance.authenticatedGet(_uri('/items'));
     _check(response, 'list vault items');
@@ -75,6 +83,8 @@ class VaultService with AuthenticatedService {
   }
 
   /// Stores a new item and returns it with its id.
+  ///
+  /// api: POST /api/v0/vault/items
   static Future<VaultCiphertext> createItem(VaultCiphertext item) async {
     final response = await instance.authenticatedPost(
       _uri('/items'),
@@ -88,6 +98,8 @@ class VaultService with AuthenticatedService {
   }
 
   /// Replaces item [id]'s ciphertext.
+  ///
+  /// api: PUT /api/v0/vault/items/{id}
   static Future<void> updateItem(int id, VaultCiphertext item) async {
     final response = await instance.authenticatedPut(
       _uri('/items/$id'),
@@ -98,6 +110,8 @@ class VaultService with AuthenticatedService {
   }
 
   /// Deletes item [id].
+  ///
+  /// api: DELETE /api/v0/vault/items/{id}
   static Future<void> deleteItem(int id) async {
     final response = await instance.authenticatedDelete(_uri('/items/$id'));
     _check(response, 'delete vault item $id');
@@ -106,6 +120,7 @@ class VaultService with AuthenticatedService {
   static Map<String, String> _bearer(String? token) =>
       token == null ? const {} : {'Authorization': 'Bearer $token'};
 
+  /// api: none
   static Uri _uri(String suffix) => apiBaseUri.resolve('/api/v0/vault$suffix');
 
   // The Quark's text for a refused vault request is not copy: every status it

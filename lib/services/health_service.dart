@@ -68,6 +68,7 @@ class HealthService with AuthenticatedService {
   HealthService._();
   static HealthService get instance => _instance;
 
+  /// api: GET /api/v0/health
   static Future<HealthStatus> getHealth() async {
     final uri = apiBaseUri.resolve('/api/v0/health');
     final response = await instance.authenticatedGet(uri);

@@ -16,6 +16,8 @@ class JobsService with AuthenticatedService {
 
   /// The jobs of the given [kinds] (see `JobKinds`), newest first. [kinds]
   /// must not be empty: the Quark rejects a listing that names no kind.
+  ///
+  /// api: GET /api/v0/jobs
   static Future<List<Job>> listJobs({required List<String> kinds}) async {
     final uri = listJobsUri(apiBaseUri, kinds);
     final response = await instance.authenticatedGet(uri);
@@ -29,6 +31,8 @@ class JobsService with AuthenticatedService {
   /// `GET /api/v0/jobs` on [base], with one repeated `kind` parameter per
   /// entry in [kinds]: `?kind=a&kind=b`. Throws [ArgumentError] when [kinds] is
   /// empty, which the Quark would answer with a 400.
+  ///
+  /// api: none
   static Uri listJobsUri(Uri base, List<String> kinds) {
     if (kinds.isEmpty) {
       throw ArgumentError.value(kinds, 'kinds', 'must name at least one kind');
@@ -42,6 +46,8 @@ class JobsService with AuthenticatedService {
   /// nothing to return. A 409 means it didn't fail, a 422 that its files are
   /// gone, and a 404 that the Quark doesn't know it. Show a failure with
   /// `Errors.retryJob`.
+  ///
+  /// api: POST /api/v0/jobs/{id}/retry
   static Future<void> retryJob(int id) async {
     final uri = apiBaseUri.resolve('/api/v0/jobs/$id/retry');
     final response = await instance.authenticatedPost(uri);
@@ -52,6 +58,8 @@ class JobsService with AuthenticatedService {
 
   /// Cancels job [id] and returns it as it now stands. A 409 means it had
   /// already finished.
+  ///
+  /// api: DELETE /api/v0/jobs/{id}
   static Future<Job> cancelJob(int id) async {
     final uri = apiBaseUri.resolve('/api/v0/jobs/$id');
     final response = await instance.authenticatedDelete(uri);

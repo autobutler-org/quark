@@ -17,6 +17,8 @@ class SettingsService with AuthenticatedService {
   /// The Quark's default theme color as its storage string, empty when its admin
   /// has not chosen one. `GET /settings/public` needs no session, so the
   /// sign-in page can ask.
+  ///
+  /// api: GET /api/v0/settings/public
   static Future<String> getQuarkThemeColor() async {
     final response = await instance.httpClient.get(
       apiBaseUri.resolve('/api/v0/settings/public'),
@@ -28,6 +30,8 @@ class SettingsService with AuthenticatedService {
 
   /// Sets the Quark's default theme color to the storage string [themeColor]; empty
   /// clears it. Admin-only.
+  ///
+  /// api: PUT /api/v0/settings/theme-color
   static Future<void> setQuarkThemeColor(String themeColor) async {
     final response = await instance.authenticatedPut(
       apiBaseUri.resolve('/api/v0/settings/theme-color'),
@@ -51,6 +55,8 @@ class SettingsService with AuthenticatedService {
   /// The signed-in user's own settings as the Quark holds them: `themeColor`,
   /// `disabledNotifications` (left out when every type is on), and whatever
   /// a newer Quark adds.
+  ///
+  /// api: GET /api/v0/settings/me
   static Future<Map<String, dynamic>> getMySettings() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve(_mySettingsPath),
@@ -65,6 +71,8 @@ class SettingsService with AuthenticatedService {
   /// field goes through here: it reads first and sends the rest back
   /// unchanged. A theme color save that sent only the color would turn every
   /// notification type back on (#2493).
+  ///
+  /// api: PUT /api/v0/settings/me
   static Future<Map<String, dynamic>> updateMySettings(
     Map<String, dynamic> Function(Map<String, dynamic> current) change,
   ) async {

@@ -19,6 +19,8 @@ class SharingService with AuthenticatedService {
 
   /// Who has access to [relPath] on [deviceSerial], and whether the signed-in
   /// account may change it. A reader or writer is refused with 403.
+  ///
+  /// api: GET /api/v0/access
   static Future<PathAccess> load({
     required String deviceSerial,
     required String relPath,
@@ -34,6 +36,8 @@ class SharingService with AuthenticatedService {
   /// Gives the account [userId] or the group [groupId] [level] access to the
   /// path, `read`, `write` or `owner`, or changes the level it has. Answers
   /// with the path's access afterward.
+  ///
+  /// api: PUT /api/v0/access
   static Future<PathAccess> grant({
     required String deviceSerial,
     required String relPath,
@@ -57,6 +61,8 @@ class SharingService with AuthenticatedService {
 
   /// Removes the access set on the path for the account [userId] or the group
   /// [groupId]. Answers with the path's access afterward.
+  ///
+  /// api: DELETE /api/v0/access
   static Future<PathAccess> revoke({
     required String deviceSerial,
     required String relPath,
@@ -77,6 +83,8 @@ class SharingService with AuthenticatedService {
   }
 
   /// Every account and group a path can be shared with.
+  ///
+  /// api: GET /api/v0/access/principals
   static Future<SharePrincipals> principals() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/access/principals'),
@@ -90,6 +98,8 @@ class SharingService with AuthenticatedService {
   /// The roots of what other accounts have shared with the signed-in one, for
   /// the file browser's Shared with me shortcut. An admin reaches every path
   /// without a grant, so the Quark answers them with an empty list.
+  ///
+  /// api: GET /api/v0/access/mine
   static Future<List<SharedRoot>> sharedWithMe() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/access/mine'),
@@ -104,6 +114,7 @@ class SharingService with AuthenticatedService {
     ];
   }
 
+  /// api: none
   static Uri get _accessUri => apiBaseUri.resolve('/api/v0/access');
 
   static PathAccess _access(http.Response response, String context) {

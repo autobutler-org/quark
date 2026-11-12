@@ -16,9 +16,12 @@ class RepairService with AuthenticatedService {
   static final RepairService instance = RepairService._();
 
   // A getter, not a field: the base follows the active host.
+  /// api: none
   static Uri get _uri => apiBaseUri.resolve('/api/v0/admin/repair');
 
   /// Whether the installation can be repaired, and why not when it can't.
+  ///
+  /// api: GET /api/v0/admin/repair
   static Future<RepairStatus> getStatus() async {
     final response = await instance.authenticatedGet(_uri);
     _check(response, 'load repair status');
@@ -31,6 +34,8 @@ class RepairService with AuthenticatedService {
   ///
   /// The answer is an empty 200 sent just before the process exits, so there
   /// is no body to read.
+  ///
+  /// api: POST /api/v0/admin/repair
   static Future<void> repair() async {
     final response = await instance.authenticatedPost(_uri);
     _check(response, 'repair the installation');

@@ -135,6 +135,8 @@ class PhotoIndexService with AuthenticatedService {
   static final PhotoIndexService instance = PhotoIndexService._();
 
   /// The index status.
+  ///
+  /// api: GET /api/v0/photos/index-status
   static Future<PhotoIndexStatus> fetchStatus() async => _read(
     await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/photos/index-status'),
@@ -143,6 +145,8 @@ class PhotoIndexService with AuthenticatedService {
   );
 
   /// Holds the pass before its next photo.
+  ///
+  /// api: POST /api/v0/photos/index/pause
   static Future<PhotoIndexStatus> pause() async => _read(
     await instance.authenticatedPost(
       apiBaseUri.resolve('/api/v0/photos/index/pause'),
@@ -151,6 +155,8 @@ class PhotoIndexService with AuthenticatedService {
   );
 
   /// Lets a paused pass carry on.
+  ///
+  /// api: POST /api/v0/photos/index/resume
   static Future<PhotoIndexStatus> resume() async => _read(
     await instance.authenticatedPost(
       apiBaseUri.resolve('/api/v0/photos/index/resume'),

@@ -10,9 +10,12 @@ class FavoritesService with AuthenticatedService {
   FavoritesService._();
   static FavoritesService get instance => _instance;
 
+  /// api: none
   static Uri _apiUri(String path) => apiBaseUri.resolve('/api/v0$path');
 
   /// Toggles favorite state. Returns the new isFavorite value.
+  ///
+  /// api: POST /api/v0/photos/favorite
   static Future<bool> toggle({required String relPath, String? serial}) async {
     final response = await instance.authenticatedPost(
       _apiUri('/photos/favorite'),
@@ -27,6 +30,8 @@ class FavoritesService with AuthenticatedService {
   }
 
   /// Returns all favorited photo keys in the format "deviceSerial:relPath".
+  ///
+  /// api: GET /api/v0/photos/favorites
   static Future<Set<String>> listFavoriteKeys() async {
     final uri = _apiUri('/photos/favorites');
     final response = await instance.authenticatedGet(uri);

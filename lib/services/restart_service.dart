@@ -16,9 +16,12 @@ class RestartService with AuthenticatedService {
   static final RestartService instance = RestartService._();
 
   // A getter, not a field: the base follows the active host.
+  /// api: none
   static Uri get _uri => apiBaseUri.resolve('/api/v0/admin/restart');
 
   /// Whether the Quark can restart itself, and why not when it can't.
+  ///
+  /// api: GET /api/v0/admin/restart
   static Future<RestartStatus> getStatus() async {
     final response = await instance.authenticatedGet(_uri);
     _check(response, 'load restart status');
@@ -31,6 +34,8 @@ class RestartService with AuthenticatedService {
   ///
   /// The answer is an empty 200 sent about two seconds before the process
   /// exits, so there is no body to read.
+  ///
+  /// api: POST /api/v0/admin/restart
   static Future<void> restart() async {
     final response = await instance.authenticatedPost(_uri);
     _check(response, 'restart Quark');

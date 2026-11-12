@@ -90,6 +90,8 @@ class SbomService with AuthenticatedService {
   static SbomService get instance => _instance;
 
   /// Fetch Go SBOM from the backend.
+  ///
+  /// api: GET /api/v0/sbom
   static Future<GoSbom> getGoSbom() async {
     final uri = apiBaseUri.resolve('/api/v0/sbom');
     final response = await instance.authenticatedGet(uri);

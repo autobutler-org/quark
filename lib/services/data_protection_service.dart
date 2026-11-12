@@ -297,6 +297,8 @@ class DataProtectionService with AuthenticatedService {
   static final DataProtectionService instance = DataProtectionService._();
 
   /// Fetches the current protection status.
+  ///
+  /// api: GET /api/v0/storage/protection
   static Future<DataProtectionStatus> fetch() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/storage/protection'),

@@ -326,9 +326,14 @@ trailers in older history are the predecessor's, and new work goes through schme
 `internal/db/*.sql.go`, `internal/db/querier_postgres.go` and all of `internal/db/pgdb/` but `pgdb.go` and its
 tests (sqlc and `internal/db/genpgadapter`),
 `docs/swagger/` (swag), `internal/server/public/` (the embedded web build),
-`assets/sbom_*.json`, `packages/quark_widgets/examples/widget_gallery/lib/docs.g.dart`, build outputs, and
-generated plugin registrants are all produced by a target. Regenerate them and commit the result; do not edit
-them by hand.
+`assets/sbom_*.json`, `packages/quark_widgets/examples/widget_gallery/lib/docs.g.dart`,
+`lib/generated/api_explorer_registry.g.dart` (from `docs/swagger/swagger.json` and the `/// api:` tags in
+`lib/services/`), build outputs, and generated plugin registrants are all produced by a target. Regenerate them
+and commit the result; do not edit them by hand.
+
+A service method that calls the Quark carries one `/// api: METHOD /api/v0/path` line per endpoint in its doc,
+the path written as the swagger key with `/api/v0` in front, or `/// api: none` when its callers name the
+endpoint. `make generate/frontend/api-explorer` fails, naming the file and line, on a missing or malformed tag.
 
 ## Golang Backend
 

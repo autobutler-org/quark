@@ -14,6 +14,8 @@ class AccountRequestHistoryService with AuthenticatedService {
       AccountRequestHistoryService._();
 
   /// The approvals and denials the Quark still keeps, newest first.
+  ///
+  /// api: GET /api/v0/admin/account-requests/history
   static Future<List<AccountRequestDecision>> list() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/admin/account-requests/history'),

@@ -110,6 +110,8 @@ class ContentSearchService with AuthenticatedService {
   /// One request for [query], or null when it failed. Note that an unmatched
   /// API path does not 404 — the server's SPA fallback answers 200 with
   /// `index.html`, so the body must be validated, not just the status code.
+  ///
+  /// api: GET /api/v0/files/search/content
   static Future<List<ContentSearchResult>?> _fetch(String query) async {
     final uri = apiBaseUri.replace(
       path: '/api/v0/files/search/content',

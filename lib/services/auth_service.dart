@@ -421,6 +421,8 @@ class AuthService {
 
   /// Checks whether initial setup has been completed on the quark and, when
   /// this app holds a session, who is signed in.
+  ///
+  /// api: GET /api/v0/auth/status
   static Future<AuthStatus> checkStatus() async {
     final uri = _baseUri.resolve('/api/v0/auth/status');
     final token = AppSettings.instance.bearerToken;
@@ -443,6 +445,8 @@ class AuthService {
   ///
   /// Throws whatever the attempt threw; the caller decides what unreachable
   /// means for it.
+  ///
+  /// api: GET /api/v0/auth/status
   static Future<AuthStatus> checkStatusAt(String hostAddress) async {
     final client = hostProbeHttpClientFactory(hostAddress);
     try {
@@ -663,6 +667,8 @@ class AuthService {
   /// Returns a [SetupResult] containing the session token and the recovery
   /// phrase the app generated, which is shown exactly once — the caller must
   /// surface it.
+  ///
+  /// api: POST /api/v0/auth/setup
   static Future<SetupResult> setup({
     required String username,
     required String password,
@@ -705,6 +711,8 @@ class AuthService {
   /// password goes beside it only once, to move an account the Quark marks
   /// `legacy` to the key; see [AuthSecret] for that and for the Quarks and
   /// accounts that are refused instead.
+  ///
+  /// api: POST /api/v0/auth/login
   static Future<LoginResult> login({
     required String username,
     required String password,
@@ -827,6 +835,8 @@ class AuthService {
   /// [sessionToken] is a session the app may not have stored yet, or null for
   /// the stored one (a cookie session sends none). A 403 `incorrect password`
   /// throws [Errors.wrongCurrentPassword].
+  ///
+  /// api: PUT /api/v0/auth/recovery-key
   static Future<String> _putNewRecoveryPhrase({
     required String password,
     required AuthSecret secret,
@@ -914,6 +924,8 @@ class AuthService {
   /// [LoginResult.recoveryPhrase] carries that phrase to show. The app
   /// believes a `legacyRecovery` answer every time, so a compromised Quark can
   /// collect the phrase this way (docs/chat-security.md).
+  ///
+  /// api: POST /api/v0/auth/recover
   static Future<LoginResult> recover({
     required String username,
     required String recoveryPhrase,
@@ -1007,6 +1019,8 @@ class AuthService {
   ///
   /// A wrong phrase throws the Quark's own text; a pending or disabled
   /// account is refused as a sign-in is.
+  ///
+  /// api: POST /api/v0/auth/recover/keys
   static Future<WrappedChatKeys?> fetchRecoveryChatKeys({
     required String username,
     String? recoveryPhrase,
@@ -1024,6 +1038,8 @@ class AuthService {
   /// [username]'s wrapped vault key, for recovery (#3461): the vault's half
   /// of [fetchRecoveryChatKeys], checked and answered the same way. Null when
   /// the account has no vault.
+  ///
+  /// api: POST /api/v0/auth/recover/vault-key
   static Future<WrappedVaultKey?> fetchRecoveryVaultKey({
     required String username,
     String? recoveryPhrase,
@@ -1041,6 +1057,8 @@ class AuthService {
   /// Posts a recovery credential to [path], which checks it as
   /// `/auth/recover` does and changes nothing, and returns the 2xx body, or
   /// null for a 404.
+  ///
+  /// api: none
   static Future<Map<String, dynamic>?> _postRecoveryCheck(
     String path, {
     required String username,
@@ -1075,6 +1093,8 @@ class AuthService {
   /// in. A Quark that is not taking requests, or has not been set up, answers
   /// 404, which reads as [Errors.accessRequestsOff]. Any other refusal, such
   /// as a taken username, passes on the Quark's own text.
+  ///
+  /// api: POST /api/v0/auth/request-account
   static Future<String> requestAccount({
     required String username,
     required String password,
@@ -1106,6 +1126,8 @@ class AuthService {
   /// Posts a new account's credentials to [uri] and returns the 2xx body:
   /// [secret]'s auth key and [mine]'s recovery key. A 404 throws [notFound]
   /// when it is set.
+  ///
+  /// api: none
   static Future<Map<String, dynamic>> _postNewAccount(
     Uri uri, {
     required String username,
@@ -1142,6 +1164,8 @@ class AuthService {
   /// An older Quark does not answer 404 alone. Without a session it refuses an
   /// unknown API path with a 401, and before setup its web fallback answers
   /// 200 with the app's `index.html`, so a 2xx with no salt in it counts too.
+  ///
+  /// api: GET /api/v0/auth/salt
   static Future<({Uint8List salt, bool legacy, bool? legacyRecovery})?>
   fetchAuthSalt(String username) async {
     final response = await authHttpClientFactory()
@@ -1187,6 +1211,8 @@ class AuthService {
   ///
   /// A wrong current password throws [Errors.wrongCurrentPassword], and
   /// nothing changed.
+  ///
+  /// api: PUT /api/v0/auth/password
   static Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -1253,6 +1279,8 @@ class AuthService {
   ///
   /// A 204 stores it. A 403, an auth key that is not the account's, throws
   /// [ApiException] with that status. The caller decides what to tell the user.
+  ///
+  /// api: PUT /api/v0/auth/password
   static Future<void> replaceVaultKeyWrap(
     WrappedVaultKey wrapped,
     String authKey,
@@ -1308,6 +1336,8 @@ class AuthService {
   ///
   /// It also forgets this phone's remote-access node and pairing for the
   /// Quark, so whoever signs in next does not inherit them (#3785).
+  ///
+  /// api: POST /api/v0/auth/logout
   static Future<void> logout() async {
     final signedIn = AppSettings.instance.sessionToken != null;
     final authorization = _authorization;
@@ -1382,6 +1412,8 @@ class AuthService {
   /// The Quark revokes the session either way, so the token is dropped on
   /// success and the caller routes the user out. Failure keeps it: nothing was
   /// destroyed and the session still works.
+  ///
+  /// api: DELETE /api/v0/auth/account
   static Future<DeleteAccountResult> _deleteAspects({
     required String password,
     required Map<String, String> aspects,

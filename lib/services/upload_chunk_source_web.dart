@@ -25,6 +25,7 @@ class BlobUploadChunkSource implements UploadChunkSource {
   @override
   final DateTime? lastModified;
 
+  /// api: none
   @override
   Future<http.Response> putRange({
     required Uri uri,
@@ -63,6 +64,7 @@ class BlobUploadChunkSource implements UploadChunkSource {
   void release() {}
 }
 
+/// api: none
 Future<UploadChunkSource?> openDroppedFileChunkSourcePlatform(
   DropItemFile file,
 ) async {

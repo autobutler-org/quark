@@ -67,6 +67,7 @@ class FilesService with AuthenticatedService {
     );
   }
 
+  /// api: GET /api/v0/files/download
   static Uri constructMediaUrl(String filePath, {String? serial}) {
     final querySegments = <String>[
       'filePath=${Uri.encodeQueryComponent(filePath)}',
@@ -89,6 +90,8 @@ class FilesService with AuthenticatedService {
   /// Construct a URL for the thumbnail endpoint.
   /// The backend exposes thumbnails at /api/v0/thumbnails/*filePath where filePath is a
   /// path-like segment. Each path segment is percent-encoded to preserve slashes.
+  ///
+  /// api: GET /api/v0/thumbnails/{filePath}
   static Uri constructThumbnailUrl(
     String filePath, {
     String? serial,
@@ -121,6 +124,8 @@ class FilesService with AuthenticatedService {
   /// Returns a [PaginatedPhotosResponse] with photos, total count, offset, and
   /// limit. [q] is a file-name substring; a blank one lists the library. The
   /// total is the match count either way (#3523).
+  ///
+  /// api: GET /api/v0/photos
   static Future<PaginatedPhotosResponse> getPhotos({
     int offset = 0,
     int limit = 50,
@@ -161,6 +166,8 @@ class FilesService with AuthenticatedService {
   }
 
   /// The groups of duplicate photos the caller can see (#1666).
+  ///
+  /// api: GET /api/v0/photos/duplicates
   static Future<List<DuplicateGroup>> getDuplicates() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/photos/duplicates'),
@@ -185,6 +192,7 @@ class FilesService with AuthenticatedService {
     for (final serial in serials ?? const <String>[]) serial.trim(),
   ];
 
+  /// api: GET /api/v0/files
   static Future<List<FileNode>> getFiles(
     String path, {
     List<String>? serials,
@@ -233,6 +241,8 @@ class FilesService with AuthenticatedService {
 
   /// Returns all files of [fileType] across all devices, newest-modified first.
   /// [fileType] should be one of the server-defined type strings: 'qdoc', 'qsheet', etc.
+  ///
+  /// api: GET /api/v0/files/by-type
   static Future<List<FileNode>> getFilesByType(
     String fileType, {
     List<String>? serials,
@@ -268,6 +278,8 @@ class FilesService with AuthenticatedService {
   }
 
   /// Returns recently modified files across all devices, newest first.
+  ///
+  /// api: GET /api/v0/files/recent
   static Future<List<FileNode>> getRecentFiles({
     int limit = 20,
     List<String>? serials,
@@ -294,6 +306,7 @@ class FilesService with AuthenticatedService {
         .toList(growable: false);
   }
 
+  /// api: GET /api/v0/files/search
   static Future<List<FileNode>> searchFiles(
     String query, {
     List<String>? serials,
@@ -327,6 +340,8 @@ class FilesService with AuthenticatedService {
   /// Lists the direct children of [subPath] inside the archive at [filePath].
   /// Returns the entries as [FileNode]s with [isDir] set appropriately.
   /// No data is extracted to disk — only archive headers are read.
+  ///
+  /// api: GET /api/v0/files/list-archive
   static Future<List<FileNode>> listArchiveEntries(
     String filePath, {
     String subPath = '',
@@ -358,6 +373,7 @@ class FilesService with AuthenticatedService {
         .toList(growable: false);
   }
 
+  /// api: POST /api/v0/files/extract
   static Future<void> extractFile(String filePath, {String? serial}) async {
     final querySegments = <String>[
       'filePath=${Uri.encodeQueryComponent(filePath)}',
@@ -380,6 +396,8 @@ class FilesService with AuthenticatedService {
   /// Throws an [ApiException] with status 409 when a `.qsheet` of that name
   /// already exists and [overwrite] was not set, so the caller can offer to
   /// replace it rather than silently overwriting the user's own work.
+  ///
+  /// api: POST /api/v0/files/convert/xlsx
   static Future<String> convertXlsxToQsheet(
     String filePath, {
     String? serial,
@@ -417,6 +435,8 @@ class FilesService with AuthenticatedService {
   /// Returns filesystem metadata for [filePath]: whether it is a directory
   /// and its resolved [fileType] string (e.g. "image", "qdoc", "folder").
   /// Throws if the path does not exist or the request fails.
+  ///
+  /// api: GET /api/v0/files/stat
   static Future<({bool isDir, String fileType, String name})> statFile(
     String filePath, {
     String? serial,
@@ -451,6 +471,7 @@ class FilesService with AuthenticatedService {
     );
   }
 
+  /// api: DELETE /api/v0/files
   static Future<void> deleteFile(
     String rootDir,
     String fileName, {
@@ -479,6 +500,8 @@ class FilesService with AuthenticatedService {
   /// All [nodes] must share the same device serial (or all belong to the
   /// internal storage). Callers are responsible for grouping nodes by serial
   /// before calling this method.
+  ///
+  /// api: DELETE /api/v0/files
   static Future<void> deleteFiles(
     List<String> filePaths, {
     String? rootDir,
@@ -506,6 +529,7 @@ class FilesService with AuthenticatedService {
     }
   }
 
+  /// api: PUT /api/v0/files
   static Future<void> moveFile(
     String oldPath,
     String newPath, {
@@ -543,6 +567,8 @@ class FilesService with AuthenticatedService {
 
   /// Creates [folderName] inside [folderPath] on the device with [serial],
   /// or on built-in storage when it is null or empty.
+  ///
+  /// api: POST /api/v0/files/folder/{folderDir}
   static Future<void> createFolder(
     String folderPath,
     String folderName, {
@@ -585,6 +611,9 @@ class FilesService with AuthenticatedService {
   /// A refusal partway through the batch throws an [UploadBatchFailure] naming
   /// the files that landed before it (#3533); [sendUploadBatch] resends only
   /// the rest.
+  ///
+  /// api: POST /api/v0/files/upload
+  /// api: POST /api/v0/files/upload/{rootDir}
   static Future<List<String>> uploadFilesFromFormData(
     String uploadPath,
     List<http.MultipartFile> formDataFiles, {
@@ -641,6 +670,8 @@ class FilesService with AuthenticatedService {
   /// Uploads a photo or video's client-rendered [thumbnail] for the file at
   /// [path] (#2379): `PUT /api/v0/thumbnails/{path}`. Used after a resumable
   /// upload, whose session ends when the file lands.
+  ///
+  /// api: PUT /api/v0/thumbnails/{filePath}
   static Future<void> putThumbnail({
     required String path,
     String? serial,
@@ -732,6 +763,8 @@ class FilesService with AuthenticatedService {
   /// /api/v0/files/export/xlsx`. The Quark builds it from the sheet as last
   /// saved, so a caller with unsaved edits saves them first. Returns where it
   /// was saved, or null when the save was canceled.
+  ///
+  /// api: GET /api/v0/files/export/xlsx
   static Future<String?> saveSheetAsXlsx(
     String filePath, {
     String? serial,
@@ -748,6 +781,8 @@ class FilesService with AuthenticatedService {
   /// /api/v0/files/export/pptx`. The Quark builds it from the presentation as
   /// last saved, so a caller with unsaved edits saves them first. Returns
   /// where it was saved, or null when the save was canceled.
+  ///
+  /// api: GET /api/v0/files/export/pptx
   static Future<String?> savePresentationAsPptx(
     String filePath, {
     String? serial,
@@ -762,6 +797,8 @@ class FilesService with AuthenticatedService {
   /// Saves what [endpoint] exports the file at [filePath] as, under
   /// [fileName]: through the browser's download on the web, the platform's
   /// save dialog everywhere else.
+  ///
+  /// api: none
   static Future<String?> _saveExport(
     String filePath, {
     String? serial,
@@ -787,6 +824,8 @@ class FilesService with AuthenticatedService {
   /// dialog. It used to arrive as bodyBytes and then be copied again by
   /// Uint8List.fromList, costing twice the file's size in RAM before the
   /// dialog even opened (#1723).
+  ///
+  /// api: none
   static Future<String?> _saveThroughDialog(
     Uri uri, {
     String? fileName,
@@ -807,6 +846,8 @@ class FilesService with AuthenticatedService {
   /// The other app reads the file after this returns, so it cannot be deleted
   /// here. The previous one is deleted on the next call instead, which keeps
   /// at most one such file on disk. Not available on web.
+  ///
+  /// api: GET /api/v0/files/download
   static Future<String> downloadForOpenWith(
     String filePath, {
     String? serial,
@@ -842,6 +883,8 @@ class FilesService with AuthenticatedService {
   /// With [convertImages], an image `Image.memory` cannot decode is requested
   /// as a JPEG (#1851). `isJpeg` says whether one came back: an older Quark,
   /// or a camera RAW entry, answers with the original bytes instead.
+  ///
+  /// api: GET /api/v0/files/download-archive-file
   static Future<({Uint8List bytes, bool isJpeg})> downloadArchiveFileBytes(
     String archivePath,
     String entryPath, {
@@ -868,6 +911,7 @@ class FilesService with AuthenticatedService {
     );
   }
 
+  /// api: GET /api/v0/files/download
   static Future<Uint8List?> downloadFileBytes(
     String filePath, {
     String? serial,
@@ -897,6 +941,8 @@ class FilesService with AuthenticatedService {
   /// The stored preview of the HEIC at [filePath]: its largest thumbnail, a
   /// JPEG a client rendered, since the Quark decodes no HEIC (#2382). With
   /// none stored yet, this client renders and uploads one first.
+  ///
+  /// api: GET /api/v0/thumbnails/{filePath}
   static Future<Uint8List> _storedPreviewBytes(
     String filePath, {
     String? serial,
@@ -917,6 +963,8 @@ class FilesService with AuthenticatedService {
   /// answer says about it (#2381): served, missing, or missing with
   /// `clientRender`, meaning a client may render one and PUT it, and with the
   /// `reason` the Quark could not (#3559).
+  ///
+  /// api: GET /api/v0/thumbnails/{filePath}
   static Future<ThumbnailProbe> probeThumbnail(
     String filePath, {
     String? serial,
@@ -948,6 +996,8 @@ class FilesService with AuthenticatedService {
 
   /// The original bytes of [filePath], never converted. For files a client
   /// renders a thumbnail from itself: a HEIC is a few MB.
+  ///
+  /// api: GET /api/v0/files/download
   static Future<Uint8List> downloadOriginalBytes(
     String filePath, {
     String? serial,
@@ -961,6 +1011,7 @@ class FilesService with AuthenticatedService {
     return response.bodyBytes;
   }
 
+  /// api: GET /api/v0/photos/metadata
   static Future<PhotoMetadata> getPhotoMetadata(
     String relPath, {
     String? serial,
@@ -982,6 +1033,8 @@ class FilesService with AuthenticatedService {
 
   /// Persists [rotationQuarters] (0–3) for a photo on the server.
   /// A value of 0 removes the rotation record entirely.
+  ///
+  /// api: POST /api/v0/photos/rotate
   static Future<void> rotatePhoto(
     String relPath, {
     String? serial,
@@ -1005,6 +1058,8 @@ class FilesService with AuthenticatedService {
 
   /// Duplicates a photo on the server. Returns the relative path of the new
   /// file (e.g. "photos/IMG_001_copy.jpg").
+  ///
+  /// api: POST /api/v0/photos/copy
   static Future<String> copyPhoto(String relPath, {String? serial}) async {
     final uri = apiBaseUri.resolve('/api/v0/photos/copy');
     final body = jsonEncode({
@@ -1025,6 +1080,8 @@ class FilesService with AuthenticatedService {
 
   /// Asks the Quark for a token that authenticates one download of the file
   /// [downloadQuery] names, so the browser can fetch it with a plain link.
+  ///
+  /// api: POST /api/v0/files/download-token
   static Future<String> _createDownloadToken(
     Map<String, String> downloadQuery,
   ) async {
@@ -1043,6 +1100,7 @@ class FilesService with AuthenticatedService {
     return token;
   }
 
+  /// api: none
   static Uri _buildArchiveFileUri(
     String archivePath,
     String entryPath, {
@@ -1167,6 +1225,7 @@ class FilesService with AuthenticatedService {
     return '$normalizedBase/$strippedAppend';
   }
 
+  /// api: GET /api/v0/version
   static Future<Map<String, dynamic>> getInstalledVersion() async {
     final endpointUri = apiBaseUri.resolve('/api/v0/version');
     final response = await instance.authenticatedGet(endpointUri);
@@ -1183,6 +1242,7 @@ class FilesService with AuthenticatedService {
     return Map<String, dynamic>.from(decoded);
   }
 
+  /// api: GET /api/v0/version/available
   static Future<List<Map<String, dynamic>>> listAvailableVersions() async {
     final uri = apiBaseUri.resolve('/api/v0/version/available');
     final response = await instance.authenticatedGet(uri);
@@ -1204,6 +1264,8 @@ class FilesService with AuthenticatedService {
 
   /// Trims [relPath] to the range [startMs, endMs] and saves a new file.
   /// Returns where the clip was saved and where it really starts.
+  ///
+  /// api: POST /api/v0/videos/trim
   static Future<TrimResult> trimVideo(
     String relPath, {
     String? serial,
@@ -1233,6 +1295,8 @@ class FilesService with AuthenticatedService {
   /// Queues a conversion of [relPath] into [format], one of the formats
   /// [listTranscodeFormats] lists for it, and returns the job's id, which
   /// `JobsService` can look up. The streams are copied, never re-encoded.
+  ///
+  /// api: POST /api/v0/videos/transcode
   static Future<int> transcodeVideo(
     String relPath, {
     String? serial,
@@ -1261,6 +1325,8 @@ class FilesService with AuthenticatedService {
 
   /// The formats the video at [relPath] can be converted to, in the order to
   /// offer them: those whose container holds its codecs, leaving out its own.
+  ///
+  /// api: GET /api/v0/videos/transcode/formats
   static Future<List<TranscodeFormat>> listTranscodeFormats(
     String relPath, {
     String? serial,
@@ -1282,6 +1348,7 @@ class FilesService with AuthenticatedService {
     );
   }
 
+  /// api: POST /api/v0/version/update
   static Future<void> updateToVersion(String version) async {
     final endpointUri = apiBaseUri.resolve('/api/v0/version/update');
     final body = jsonEncode({'version': version});

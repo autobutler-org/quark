@@ -79,6 +79,7 @@ class ResumableUploadService
     return apiBaseUri.resolve(path);
   }
 
+  /// api: POST /api/v0/files/upload-session
   @override
   Future<UploadSession> createSession({
     required String rootDir,
@@ -112,6 +113,7 @@ class ResumableUploadService
     return UploadSession.fromJson(_decode(response));
   }
 
+  /// api: PUT /api/v0/files/upload-session/{sessionId}
   @override
   Future<ChunkUploadOutcome> putChunk({
     required String sessionId,
@@ -157,6 +159,7 @@ class ResumableUploadService
     }
   }
 
+  /// api: GET /api/v0/files/upload-session/{sessionId}
   @override
   Future<UploadSessionStatus?> getSession(String sessionId) async {
     final response = await authenticatedGet(_sessionUri(sessionId));
@@ -172,6 +175,7 @@ class ResumableUploadService
     return UploadSessionStatus.fromJson(_decode(response));
   }
 
+  /// api: DELETE /api/v0/files/upload-session/{sessionId}
   @override
   Future<void> deleteSession(String sessionId) async {
     try {

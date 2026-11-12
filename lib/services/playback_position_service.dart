@@ -20,6 +20,8 @@ class PlaybackPositionService with AuthenticatedService {
 
   /// The stored state of the video at [relPath]; a zero state when the Quark
   /// holds nothing for it.
+  ///
+  /// api: GET /api/v0/playback
   static Future<PlaybackPosition> get(String relPath, {String? serial}) async {
     final response = await instance.authenticatedGet(
       apiBaseUri.replace(
@@ -33,6 +35,8 @@ class PlaybackPositionService with AuthenticatedService {
   /// Stores how far playback has reached and returns the state as stored. The
   /// Quark decides whether [position] is near enough the end to count as
   /// watched, so the caller adopts what comes back.
+  ///
+  /// api: PUT /api/v0/playback
   static Future<PlaybackPosition> save(
     String relPath, {
     String? serial,
@@ -54,6 +58,8 @@ class PlaybackPositionService with AuthenticatedService {
 
   /// Marks the video watched or unwatched and returns the state as stored.
   /// Unwatched clears the stored position too.
+  ///
+  /// api: PUT /api/v0/playback/watched
   static Future<PlaybackPosition> setWatched(
     String relPath, {
     String? serial,

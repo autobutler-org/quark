@@ -48,6 +48,7 @@ class ConnectedDevicesService with AuthenticatedService {
   ConnectedDevicesService._();
   static ConnectedDevicesService get instance => _instance;
 
+  /// api: GET /api/v0/devices
   static Future<List<ConnectedDevice>> listDevices() async {
     final uri = apiBaseUri.resolve('/api/v0/devices');
     final response = await instance.authenticatedGet(uri);
@@ -72,6 +73,7 @@ class ConnectedDevicesService with AuthenticatedService {
         .toList(growable: false);
   }
 
+  /// api: DELETE /api/v0/devices/{id}
   static Future<void> deleteDevice(int id) async {
     final uri = apiBaseUri.resolve('/api/v0/devices/$id');
     final response = await instance.authenticatedDelete(uri);

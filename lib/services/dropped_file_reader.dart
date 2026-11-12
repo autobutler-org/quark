@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 ///
 /// Shared by every page that takes a drop (#2214), so the browser fallback
 /// below is written once.
+///
+/// api: none
 Future<Uint8List?> readDroppedFileBytes(DropItemFile droppedItem) async {
   try {
     return await droppedItem.readAsBytes();

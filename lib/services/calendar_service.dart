@@ -18,10 +18,13 @@ class CalendarService with AuthenticatedService {
   CalendarService._();
   static CalendarService get instance => _instance;
 
+  /// api: none
   static Uri _apiUri(String path) => apiBaseUri.replace(path: '/api/v0$path');
 
   /// The events with an occurrence that may fall in [from, to): one-off events
   /// overlapping it, and every repeating series that starts before [to].
+  ///
+  /// api: GET /api/v0/calendar/events
   static Future<List<CalendarEvent>> listEvents(
     DateTime from,
     DateTime to,
@@ -44,6 +47,9 @@ class CalendarService with AuthenticatedService {
 
   /// Saves [draft]: creates an event, or with [id] replaces that event's
   /// fields (every occurrence of a repeating one).
+  ///
+  /// api: POST /api/v0/calendar/events
+  /// api: PUT /api/v0/calendar/events/{id}
   static Future<CalendarEvent> saveEvent(
     CalendarEventDraft draft, {
     int? id,
@@ -80,6 +86,8 @@ class CalendarService with AuthenticatedService {
   /// moved, and [start] and [end] are where it was dropped, all on the local
   /// clock. [scope] says whether that one, that one and every one after it,
   /// or the whole series moves.
+  ///
+  /// api: POST /api/v0/calendar/events/{id}/move
   static Future<CalendarMoveResult> moveEvent({
     required int id,
     required CalendarMoveScope scope,
@@ -111,6 +119,8 @@ class CalendarService with AuthenticatedService {
   }
 
   /// Deletes event [id], every occurrence of it included.
+  ///
+  /// api: DELETE /api/v0/calendar/events/{id}
   static Future<void> deleteEvent(int id) async {
     final response = await instance.authenticatedDelete(
       _apiUri('/calendar/events/$id'),
@@ -122,6 +132,8 @@ class CalendarService with AuthenticatedService {
 
   /// The link Apple Calendar, Google Calendar or Thunderbird subscribes to. It
   /// carries the caller's session token.
+  ///
+  /// api: GET /api/v0/calendar/ical/url
   static Future<String> subscriptionUrl() async {
     final response = await instance.authenticatedGet(
       _apiUri('/calendar/ical/url'),
@@ -135,6 +147,8 @@ class CalendarService with AuthenticatedService {
 
   /// The calendar as one .ics file, for a one-time import into an app that
   /// cannot reach the Quark. Small: it holds what the household typed in.
+  ///
+  /// api: GET /api/v0/calendar/ical
   static Future<Uint8List> downloadICal() async {
     final response = await instance.authenticatedGet(_apiUri('/calendar/ical'));
     if (response.statusCode != 200) {
@@ -145,6 +159,8 @@ class CalendarService with AuthenticatedService {
 
   /// Adds the events in the iCalendar file [bytes]. Events already on the
   /// calendar and repeats it cannot represent are counted as skipped.
+  ///
+  /// api: POST /api/v0/calendar/ical
   static Future<({int imported, int skipped})> importICal(
     Uint8List bytes,
   ) async {

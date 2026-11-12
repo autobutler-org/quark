@@ -21,6 +21,8 @@ class ChatChannelKeysService with AuthenticatedService {
   static final ChatChannelKeysService instance = ChatChannelKeysService._();
 
   /// Channel [channelId]'s key versions and this account's grants.
+  ///
+  /// api: GET /api/v0/chat/channels/{id}/keys
   static Future<ChatChannelKeys> fetchKeys(int channelId) async {
     final response = await instance.authenticatedGet(_uri(channelId, '/keys'));
     throwUnlessOk(response, 'fetch keys of channel $channelId');
@@ -29,6 +31,8 @@ class ChatChannelKeysService with AuthenticatedService {
 
   /// Creates [version] with this account's own grant of it, and returns the
   /// `key_created` event to sign; null when another member created it first.
+  ///
+  /// api: POST /api/v0/chat/channels/{id}/keys
   static Future<ChatChannelEvent?> createVersion(
     int channelId,
     int version,
@@ -45,6 +49,8 @@ class ChatChannelKeysService with AuthenticatedService {
 
   /// Creates [version] even when the key does not need rotating. Admin only
   /// (#3455). Null when another member created that version first.
+  ///
+  /// api: POST /api/v0/chat/channels/{id}/keys/regenerate
   static Future<ChatChannelEvent?> regenerateVersion(
     int channelId,
     int version,
@@ -59,6 +65,7 @@ class ChatChannelKeysService with AuthenticatedService {
     'regenerate key $version of channel $channelId',
   );
 
+  /// api: none
   static Future<ChatChannelEvent?> _postVersion(
     int channelId,
     String suffix,
@@ -84,6 +91,8 @@ class ChatChannelKeysService with AuthenticatedService {
   }
 
   /// The grants this account holds the key to fill.
+  ///
+  /// api: GET /api/v0/chat/channels/{id}/keys/pending
   static Future<ChatPendingGrants> fetchPending(int channelId) async {
     final response = await instance.authenticatedGet(
       _uri(channelId, '/keys/pending'),
@@ -94,6 +103,8 @@ class ChatChannelKeysService with AuthenticatedService {
 
   /// Uploads [grants]. The Quark keeps the first grant per member and
   /// version, so a duplicate is harmless.
+  ///
+  /// api: POST /api/v0/chat/channels/{id}/keys/grants
   static Future<void> uploadGrants(
     int channelId,
     List<ChatGrantUpload> grants,
@@ -110,6 +121,8 @@ class ChatChannelKeysService with AuthenticatedService {
 
   /// Deletes this account's own grant of [version], one it couldn't open or
   /// verify, so another member refills it (#2486).
+  ///
+  /// api: DELETE /api/v0/chat/channels/{id}/keys/grants/{version}
   static Future<void> rejectGrant(int channelId, int version) async {
     final response = await instance.authenticatedDelete(
       _uri(channelId, '/keys/grants/$version'),
@@ -118,6 +131,8 @@ class ChatChannelKeysService with AuthenticatedService {
   }
 
   /// The channel's events after [after], oldest first, at most 200.
+  ///
+  /// api: GET /api/v0/chat/channels/{id}/events
   static Future<List<ChatChannelEvent>> fetchEvents(
     int channelId, {
     int after = 0,
@@ -133,6 +148,8 @@ class ChatChannelKeysService with AuthenticatedService {
   }
 
   /// Stores this account's [signature] on its own event [eventId].
+  ///
+  /// api: PUT /api/v0/chat/channels/{id}/events/{eventId}/signature
   static Future<void> signEvent(
     int channelId,
     int eventId,
@@ -146,6 +163,7 @@ class ChatChannelKeysService with AuthenticatedService {
     throwUnlessOk(response, 'sign event $eventId of channel $channelId');
   }
 
+  /// api: none
   static Uri _uri(int channelId, String suffix, [Map<String, String>? query]) =>
       apiBaseUri
           .resolve('/api/v0/chat/channels/$channelId$suffix')

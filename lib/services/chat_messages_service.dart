@@ -30,6 +30,8 @@ class ChatMessagesService with AuthenticatedService {
   /// A page of channel [channelId]'s messages, oldest first. With [after],
   /// the page starts after that id (0 is the beginning); otherwise it ends
   /// before [before], or at the newest.
+  ///
+  /// api: GET /api/v0/chat/channels/{id}/messages
   static Future<List<ChatMessage>> fetchMessages(
     int channelId, {
     int? before,
@@ -57,6 +59,8 @@ class ChatMessagesService with AuthenticatedService {
   /// passed, names files already uploaded to this channel; the Quark binds
   /// them to the message. The name, the media type and the key stay inside
   /// [ciphertext].
+  ///
+  /// api: POST /api/v0/chat/channels/{id}/messages
   static Future<ChatMessage> postMessage(
     int channelId,
     int keyVersion,
@@ -109,6 +113,8 @@ class ChatMessagesService with AuthenticatedService {
   /// `application/octet-stream`. A list is sent in slices: a [Uint8List] is
   /// viewed, not copied, and any other list is copied one slice at a time, so
   /// the file is not held in a second buffer. Returns the stored `byteSize`.
+  ///
+  /// api: PUT /api/v0/chat/channels/{id}/attachments/{attachmentId}
   static Future<int> putAttachment(
     int channelId,
     String id,
@@ -143,6 +149,8 @@ class ChatMessagesService with AuthenticatedService {
   /// stream is then empty, because the bytes already went to [sink]. Without
   /// [sink], the returned stream is the body. The caller must read or drain
   /// it. A test may collect a small file from that stream.
+  ///
+  /// api: GET /api/v0/chat/channels/{id}/attachments/{attachmentId}
   static Future<Stream<List<int>>> getAttachment(
     int channelId,
     String id, {
@@ -166,6 +174,8 @@ class ChatMessagesService with AuthenticatedService {
   }
 
   /// Deletes message [messageId] and returns its tombstone.
+  ///
+  /// api: DELETE /api/v0/chat/messages/{id}
   static Future<ChatMessage> deleteMessage(int messageId) async {
     final response = await instance.authenticatedDelete(
       apiBaseUri.resolve('/api/v0/chat/messages/$messageId'),
@@ -176,6 +186,8 @@ class ChatMessagesService with AuthenticatedService {
 
   /// Adds [ciphertext], a reaction encrypted under [keyVersion], to message
   /// [messageId] and returns the stored reaction.
+  ///
+  /// api: POST /api/v0/chat/messages/{id}/reactions
   static Future<ChatReaction> addReaction(
     int messageId,
     int keyVersion,
@@ -194,6 +206,8 @@ class ChatMessagesService with AuthenticatedService {
   }
 
   /// Removes reaction [reactionId].
+  ///
+  /// api: DELETE /api/v0/chat/reactions/{id}
   static Future<void> deleteReaction(int reactionId) async {
     final response = await instance.authenticatedDelete(
       apiBaseUri.resolve('/api/v0/chat/reactions/$reactionId'),
@@ -205,6 +219,8 @@ class ChatMessagesService with AuthenticatedService {
   /// [keyVersion], as its answer to poll [messageId], and returns it. The
   /// Quark refuses a closed poll, and a second answer to one that doesn't
   /// allow changing it, with a 409 and a sentence of its own.
+  ///
+  /// api: PUT /api/v0/chat/messages/{id}/answer
   static Future<ChatPollResponse> answerPoll(
     int messageId,
     int keyVersion,
@@ -224,6 +240,8 @@ class ChatMessagesService with AuthenticatedService {
 
   /// The answers to poll [messageId] this account may see, oldest first, or
   /// not in arrival order when the poll is anonymous.
+  ///
+  /// api: GET /api/v0/chat/messages/{id}/answers
   static Future<List<ChatPollResponse>> fetchPollAnswers(int messageId) async {
     final response = await instance.authenticatedGet(
       _messageUri(messageId, 'answers'),
@@ -237,6 +255,8 @@ class ChatMessagesService with AuthenticatedService {
 
   /// Closes poll [messageId], which only its author may, and returns its
   /// settings and state, without answers.
+  ///
+  /// api: POST /api/v0/chat/messages/{id}/close
   static Future<ChatPoll> closePoll(int messageId) async {
     final response = await instance.authenticatedPost(
       _messageUri(messageId, 'close'),
@@ -245,9 +265,11 @@ class ChatMessagesService with AuthenticatedService {
     return ChatPoll.fromJson(_json(response));
   }
 
+  /// api: none
   static Uri _messageUri(int messageId, String action) =>
       apiBaseUri.resolve('/api/v0/chat/messages/$messageId/$action');
 
+  /// api: none
   static Uri _channelUri(int channelId, [Map<String, String>? query]) =>
       apiBaseUri
           .resolve('/api/v0/chat/channels/$channelId/messages')
@@ -255,6 +277,7 @@ class ChatMessagesService with AuthenticatedService {
             queryParameters: query == null || query.isEmpty ? null : query,
           );
 
+  /// api: none
   static Uri _attachmentUri(int channelId, String id) =>
       apiBaseUri.resolve('/api/v0/chat/channels/$channelId/attachments/$id');
 

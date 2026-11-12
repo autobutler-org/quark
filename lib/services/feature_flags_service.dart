@@ -15,6 +15,8 @@ class FeatureFlagsService with AuthenticatedService {
   static final FeatureFlagsService instance = FeatureFlagsService._();
 
   /// Every flag in the Quark's registry and whether it is on.
+  ///
+  /// api: GET /api/v0/settings/features
   static Future<List<FeatureFlag>> list() async {
     final response = await instance.authenticatedGet(
       apiBaseUri.resolve('/api/v0/settings/features'),
@@ -31,6 +33,8 @@ class FeatureFlagsService with AuthenticatedService {
 
   /// Turns the flag [key] on or off for everyone and returns it as the Quark
   /// saved it. Admin-only.
+  ///
+  /// api: PUT /api/v0/settings/features/{key}
   static Future<FeatureFlag> setFlag(String key, bool enabled) async {
     final response = await instance.authenticatedPut(
       apiBaseUri.resolve(
