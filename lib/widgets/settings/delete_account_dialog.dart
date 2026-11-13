@@ -1,6 +1,6 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/widgets/error_banner.dart';
 import 'package:quark/widgets/settings/confirm_password_field.dart';
 
 /// What the user reads when their files will outlive their account.
@@ -88,7 +88,6 @@ class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final username = widget.username;
 
     return QuarkWidget.alertDialog(
@@ -111,32 +110,10 @@ class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
             'to be set up again before anyone can use it.',
           ),
           const SizedBox(height: 12),
-          Container(
-            key: const ValueKey('delete_account_files_warning'),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: colorScheme.errorContainer,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  QuarkIcons.warning_amber,
-                  size: 20,
-                  color: colorScheme.onErrorContainer,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    kDeleteAccountFilesWarning,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onErrorContainer,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          const ErrorBanner(
+            key: ValueKey('delete_account_files_warning'),
+            message: kDeleteAccountFilesWarning,
+            tone: ErrorBannerTone.warning,
           ),
           const SizedBox(height: 16),
           const Text('Enter your password to confirm.'),

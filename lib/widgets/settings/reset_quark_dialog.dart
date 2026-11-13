@@ -1,7 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/widgets/settings/confirm_password_field.dart';
-import 'package:quark/widgets/settings/reset_quark_warning.dart';
+import 'package:quark/widgets/error_banner.dart';
 
 /// The aspects of an appliance a reset can wipe, as chosen in the dialog.
 @immutable
@@ -283,20 +283,25 @@ class _ResetQuarkDialogState extends State<ResetQuarkDialog> {
               color: colorScheme.onSurfaceVariant,
             ),
           ),
+          // Two warnings, for the two ways a reset surprises someone: a
+          // selection that leaves data on the Quark, and one that reaches
+          // onto a drive the user plugged in (#2052).
           if (_selection.leavesDataBehind) ...[
             const SizedBox(height: 8),
-            ResetQuarkWarning(
+            ErrorBanner(
               key: const ValueKey('reset_quark_warning'),
               message: _selection.database
                   ? kResetQuarkPartialWarning
                   : kResetQuarkAccountsStayWarning,
+              tone: ErrorBannerTone.warning,
             ),
           ],
           if (_selection.devices) ...[
             const SizedBox(height: 8),
-            const ResetQuarkWarning(
+            const ErrorBanner(
               key: ValueKey('reset_quark_devices_warning'),
               message: kResetQuarkDriveWarning,
+              tone: ErrorBannerTone.warning,
             ),
           ],
           const SizedBox(height: 16),
