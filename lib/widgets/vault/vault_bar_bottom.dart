@@ -81,32 +81,40 @@ class VaultBarBottom extends StatelessWidget implements PreferredSizeWidget {
       menuChildren: [
         MenuItemButton(
           key: const ValueKey('vault_new_entry'),
-          leadingIcon: const Icon(QuarkIcons.add),
           onPressed: onNewEntry,
-          child: const Text('New entry'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.add),
+            label: const Text('New entry'),
+          ),
         ),
         MenuItemButton(
           key: const ValueKey('vault_new_folder'),
-          leadingIcon: const Icon(QuarkIcons.create_new_folder_outlined),
           onPressed: onNewFolder,
-          child: const Text('New folder'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.create_new_folder_outlined),
+            label: const Text('New folder'),
+          ),
         ),
         MenuItemButton(
           key: const ValueKey('vault_import'),
-          leadingIcon: const Icon(QuarkIcons.upload_rounded),
           onPressed: onImport,
-          child: const Text('Import'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.upload_rounded),
+            label: const Text('Import'),
+          ),
         ),
-        SubmenuButton(
+        QuarkSubmenuButton(
           key: const ValueKey('vault_export'),
           leadingIcon: const Icon(QuarkIcons.download_outlined),
           menuChildren: [
             for (final format in VaultExportFormat.values)
               MenuItemButton(
                 key: ValueKey('vault_export_${format.name}'),
-                leadingIcon: const Icon(QuarkIcons.download_outlined),
                 onPressed: () => onExport(format),
-                child: Text('Export as ${format.name.toUpperCase()}'),
+                child: quarkMenuLabel(
+                  leading: const Icon(QuarkIcons.download_outlined),
+                  label: Text('Export as ${format.name.toUpperCase()}'),
+                ),
               ),
           ],
           child: const Text('Export'),

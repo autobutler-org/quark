@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../../../core/quark_menu_label.dart';
 import '../../../layout/quark_bar_chip.dart';
 import '../../../theme/quark_tokens.dart';
 
@@ -67,11 +68,13 @@ class ModelViewerChoiceChip<T> extends StatelessWidget {
         for (final option in options)
           MenuItemButton(
             key: ValueKey('${keyPrefix}_option_${option.id}'),
-            trailingIcon: option.value == selected
-                ? Icon(QuarkIcons.check, size: 16, color: tokens.primary)
-                : null,
             onPressed: () => onChanged(option.value),
-            child: Text(option.label),
+            child: quarkMenuLabel(
+              trailing: option.value == selected
+                  ? Icon(QuarkIcons.check, color: tokens.primary)
+                  : null,
+              label: Text(option.label),
+            ),
           ),
       ],
       builder: (context, controller, _) => QuarkBarChip(

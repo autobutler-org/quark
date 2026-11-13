@@ -113,21 +113,27 @@ class SlideEditorBarBottom extends StatelessWidget
           : [
               MenuItemButton(
                 key: const ValueKey('slide_menu_zoom_out'),
-                leadingIcon: const Icon(QuarkIcons.zoom_out),
                 onPressed: onZoomOut,
-                child: const Text('Zoom out'),
+                child: quarkMenuLabel(
+                  leading: const Icon(QuarkIcons.zoom_out),
+                  label: const Text('Zoom out'),
+                ),
               ),
               MenuItemButton(
                 key: const ValueKey('slide_menu_zoom_fit'),
-                leadingIcon: const Icon(QuarkIcons.fit_screen),
                 onPressed: onFit,
-                child: Text(fitLabel),
+                child: quarkMenuLabel(
+                  leading: const Icon(QuarkIcons.fit_screen),
+                  label: Text(fitLabel),
+                ),
               ),
               MenuItemButton(
                 key: const ValueKey('slide_menu_zoom_in'),
-                leadingIcon: const Icon(QuarkIcons.zoom_in),
                 onPressed: onZoomIn,
-                child: const Text('Zoom in'),
+                child: quarkMenuLabel(
+                  leading: const Icon(QuarkIcons.zoom_in),
+                  label: const Text('Zoom in'),
+                ),
               ),
             ],
     );

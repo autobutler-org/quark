@@ -615,13 +615,17 @@ final List<GalleryEntry> registry = [
                   menuChildren: [
                     MenuItemButton(
                       onPressed: () => log('QuarkAppBarBottom menu: List'),
-                      leadingIcon: const Icon(QuarkIcons.view_list_rounded),
-                      child: const Text('List'),
+                      child: quarkMenuLabel(
+                        leading: const Icon(QuarkIcons.view_list_rounded),
+                        label: const Text('List'),
+                      ),
                     ),
                     MenuItemButton(
                       onPressed: () => log('QuarkAppBarBottom menu: Grid'),
-                      leadingIcon: const Icon(QuarkIcons.grid_view),
-                      child: const Text('Grid'),
+                      child: quarkMenuLabel(
+                        leading: const Icon(QuarkIcons.grid_view),
+                        label: const Text('Grid'),
+                      ),
                     ),
                   ],
                 ),

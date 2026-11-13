@@ -83,14 +83,18 @@ class FileTopBarUploadChip extends StatelessWidget {
           MenuItemButton(
             key: const ValueKey('file_top_bar_upload_progress'),
             onPressed: onShowProgress,
-            leadingIcon: const Icon(QuarkIcons.pending_actions_outlined),
-            child: const Text('Show progress'),
+            child: quarkMenuLabel(
+              leading: const Icon(QuarkIcons.pending_actions_outlined),
+              label: const Text('Show progress'),
+            ),
           ),
         if (onCancel != null)
           MenuItemButton(
             onPressed: onCancel,
-            leadingIcon: const Icon(QuarkIcons.close),
-            child: const Text('Cancel upload'),
+            child: quarkMenuLabel(
+              leading: const Icon(QuarkIcons.close),
+              label: const Text('Cancel upload'),
+            ),
           ),
       ];
       return MenuAnchor(
@@ -120,19 +124,25 @@ class FileTopBarUploadChip extends StatelessWidget {
       if (onUploadPhotos != null)
         MenuItemButton(
           onPressed: () => onUploadPhotos(chooseDevice: chooseDevice),
-          leadingIcon: const Icon(QuarkIcons.photo_library),
-          child: const Text('Photos'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.photo_library),
+            label: const Text('Photos'),
+          ),
         ),
       MenuItemButton(
         onPressed: () => onUploadPressed(chooseDevice: chooseDevice),
-        leadingIcon: const Icon(QuarkIcons.upload_rounded),
-        child: const Text('Files'),
+        child: quarkMenuLabel(
+          leading: const Icon(QuarkIcons.upload_rounded),
+          label: const Text('Files'),
+        ),
       ),
       if (onUploadFolder != null)
         MenuItemButton(
           onPressed: () => onUploadFolder(chooseDevice: chooseDevice),
-          leadingIcon: const Icon(QuarkIcons.drive_folder_upload_outlined),
-          child: const Text('Folder'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.drive_folder_upload_outlined),
+            label: const Text('Folder'),
+          ),
         ),
     ];
 

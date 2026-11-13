@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../core/quark_menu_label.dart';
 import 'quark_theme_color.dart';
 import 'quark_tokens.dart';
 
@@ -59,8 +60,8 @@ abstract final class QuarkTheme {
   /// which is what lets the widget gallery's theme panel restyle the whole app
   /// from edited values.
   static ThemeData from(QuarkTokens tokens, Brightness brightness) {
-    // Menu glyphs use the same size as every other icon. A menu that passes
-    // its own [Icon.size] still overrides this.
+    // Icons outside a menu. A menu row uses [quarkMenuIconSize], the bar
+    // glyph, so the menu that drops from a chip matches the chip.
     const iconSize = 20.0;
     // The card is about 1.1:1 from the canvas, and the hairline [QuarkTokens.border]
     // about 1.3:1, so neither separates a menu on the classic canvases. The
@@ -260,7 +261,7 @@ abstract final class QuarkTheme {
           minimumSize: const WidgetStatePropertyAll(
             Size(64, kMinInteractiveDimension),
           ),
-          iconSize: const WidgetStatePropertyAll(iconSize),
+          iconSize: const WidgetStatePropertyAll(quarkMenuIconSize),
           side: focusRing(tokens),
           overlayColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected) ||

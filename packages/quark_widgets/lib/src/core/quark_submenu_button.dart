@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import 'quark_menu_label.dart';
+
 /// A row of a menu that opens a submenu of [menuChildren] on a click, a
 /// tap or Enter, the same on every device.
 ///
@@ -79,11 +81,13 @@ class _QuarkSubmenuButtonState extends State<QuarkSubmenuButton> {
         expanded: menu.isOpen,
         child: MenuItemButton(
           focusNode: _focus,
-          leadingIcon: widget.leadingIcon,
-          trailingIcon: const Icon(QuarkIcons.chevron_right),
           closeOnActivate: false,
           onPressed: _open,
-          child: widget.child,
+          child: quarkMenuLabel(
+            leading: widget.leadingIcon,
+            trailing: const Icon(QuarkIcons.chevron_right),
+            label: widget.child,
+          ),
         ),
       ),
     ),

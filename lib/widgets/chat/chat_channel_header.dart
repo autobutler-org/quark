@@ -77,16 +77,20 @@ class ChatChannelHeader extends StatelessWidget {
       if (onEdit case final onEdit?)
         MenuItemButton(
           key: const ValueKey('chat_channel_edit'),
-          leadingIcon: const Icon(QuarkIcons.edit_outlined, size: 18),
           onPressed: onEdit,
-          child: const Text('Edit name and topic'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.edit_outlined),
+            label: const Text('Edit name and topic'),
+          ),
         ),
       if (onMembers case final onMembers?)
         MenuItemButton(
           key: const ValueKey('chat_channel_members'),
-          leadingIcon: const Icon(QuarkIcons.group_outlined, size: 18),
           onPressed: onMembers,
-          child: const Text('Members'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.group_outlined),
+            label: const Text('Members'),
+          ),
         ),
     ];
     final danger = TextStyle(color: tokens.error);
@@ -94,20 +98,20 @@ class ChatChannelHeader extends StatelessWidget {
       if (onLeave case final onLeave?)
         MenuItemButton(
           key: const ValueKey('chat_channel_leave'),
-          leadingIcon: Icon(QuarkIcons.logout, size: 18, color: tokens.error),
           onPressed: onLeave,
-          child: Text('Leave channel', style: danger),
+          child: quarkMenuLabel(
+            leading: Icon(QuarkIcons.logout, color: tokens.error),
+            label: Text('Leave channel', style: danger),
+          ),
         ),
       if (onDelete case final onDelete?)
         MenuItemButton(
           key: const ValueKey('chat_channel_delete'),
-          leadingIcon: Icon(
-            QuarkIcons.delete_outline,
-            size: 18,
-            color: tokens.error,
-          ),
           onPressed: onDelete,
-          child: Text('Delete channel for everyone', style: danger),
+          child: quarkMenuLabel(
+            leading: Icon(QuarkIcons.delete_outline, color: tokens.error),
+            label: Text('Delete channel for everyone', style: danger),
+          ),
         ),
     ];
     final items = [

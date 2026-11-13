@@ -67,9 +67,11 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
       menuChildren: [
         MenuItemButton(
           key: const ValueKey('photos_menu_duplicates'),
-          leadingIcon: const Icon(QuarkIcons.content_copy),
           onPressed: onDuplicates,
-          child: const Text('Duplicates'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.content_copy),
+            label: const Text('Duplicates'),
+          ),
         ),
       ],
     );

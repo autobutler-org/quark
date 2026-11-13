@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../../core/quark_menu_label.dart';
 import '../../models/album_sort.dart';
 import '../../theme/quark_tokens.dart';
 
@@ -38,11 +39,13 @@ class AlbumSidebarSortButton extends StatelessWidget {
         for (final option in AlbumSort.values)
           MenuItemButton(
             key: ValueKey('album_sort_option_${option.id}'),
-            trailingIcon: option == sort
-                ? Icon(QuarkIcons.check, size: 16, color: tokens.primary)
-                : null,
             onPressed: () => onChanged(option),
-            child: Text(option.label),
+            child: quarkMenuLabel(
+              trailing: option == sort
+                  ? Icon(QuarkIcons.check, color: tokens.primary)
+                  : null,
+              label: Text(option.label),
+            ),
           ),
       ],
       builder: (context, controller, _) => IconButton(

@@ -53,24 +53,28 @@ class SlidePhoneInsertMenu extends StatelessWidget {
         selected: actions.tableToolActive,
         child: MenuItemButton(
           key: const ValueKey('slide_insert_table'),
-          leadingIcon: const Icon(QuarkIcons.insert_table),
-          trailingIcon: actions.tableToolActive
-              ? const Icon(QuarkIcons.check)
-              : null,
           onPressed: onOpenTable,
-          child: const Text('Table'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.insert_table),
+            trailing: actions.tableToolActive
+                ? const Icon(QuarkIcons.check)
+                : null,
+            label: const Text('Table'),
+          ),
         ),
       ),
       Semantics(
         selected: actions.chartToolActive,
         child: MenuItemButton(
           key: const ValueKey('slide_insert_chart'),
-          leadingIcon: const Icon(QuarkIcons.insert_chart),
-          trailingIcon: actions.chartToolActive
-              ? const Icon(QuarkIcons.check)
-              : null,
           onPressed: onOpenChart,
-          child: const Text('Chart'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.insert_chart),
+            trailing: actions.chartToolActive
+                ? const Icon(QuarkIcons.check)
+                : null,
+            label: const Text('Chart'),
+          ),
         ),
       ),
       QuarkSubmenuButton(

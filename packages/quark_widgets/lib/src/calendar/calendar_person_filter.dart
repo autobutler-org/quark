@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_menu_label.dart';
 import '../layout/quark_bar_chip.dart';
 import '../theme/quark_tokens.dart';
 
@@ -90,13 +91,15 @@ class CalendarPersonFilter extends StatelessWidget {
                 for (final name in people)
                   MenuItemButton(
                     key: ValueKey('calendar_filter_person_$name'),
-                    leadingIcon: Icon(
-                      name == chosen
-                          ? QuarkIcons.check
-                          : QuarkIcons.person_outline,
-                    ),
                     onPressed: () => onPerson(name),
-                    child: Text(name),
+                    child: quarkMenuLabel(
+                      leading: Icon(
+                        name == chosen
+                            ? QuarkIcons.check
+                            : QuarkIcons.person_outline,
+                      ),
+                      label: Text(name),
+                    ),
                   ),
               ],
               builder: (context, controller, _) => QuarkBarChip(

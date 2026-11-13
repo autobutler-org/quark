@@ -16,24 +16,38 @@ class FormatChoiceItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final swatch = choice.swatch;
+    // 18px glyph and an 8px gap, the same row a Quark menu uses.
+    Widget slot(Widget icon) =>
+        SizedBox(width: 18, height: 18, child: Center(child: icon));
     return MenuItemButton(
       key: ValueKey(choice.key),
       onPressed: choice.onSelected,
-      leadingIcon: swatch != null
-          ? Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: swatch.color,
-                shape: BoxShape.circle,
-                border: Border.all(color: cs.outline),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              slot(
+                swatch != null
+                    ? Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: swatch.color,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: cs.outline),
+                        ),
+                      )
+                    : Icon(choice.icon, size: 18),
               ),
-            )
-          : Icon(choice.icon, size: 18),
-      trailingIcon: choice.checked
-          ? const Icon(QuarkIcons.check, size: 18)
-          : null,
-      child: Text(choice.label),
+              const SizedBox(width: 8),
+              Text(choice.label),
+            ],
+          ),
+          if (choice.checked) slot(const Icon(QuarkIcons.check, size: 18)),
+        ],
+      ),
     );
   }
 }

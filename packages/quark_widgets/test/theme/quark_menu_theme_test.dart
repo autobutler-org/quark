@@ -62,7 +62,8 @@ void main() {
         // A one-line list tile is 56. The row stays a 48dp target.
         expect(height, lessThan(56));
         expect(height, greaterThanOrEqualTo(kMinInteractiveDimension));
-        expect(iconSize, theme.iconTheme.size);
+        expect(iconSize, quarkMenuIconSize);
+        expect(iconSize, QuarkBarIconButton.glyphSize);
         expect(button.iconSize!.resolve({WidgetState.hovered}), iconSize);
         expect(button.iconSize!.resolve({WidgetState.selected}), iconSize);
 

@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../models/quark_menu_entry.dart';
 import '../theme/quark_tokens.dart';
 import 'quark_loader.dart';
+import 'quark_menu_label.dart';
 
 /// Opens an item's menu at [position], a global offset: where the pointer was
 /// right-clicked or the finger long-pressed, or under a menu button.
@@ -78,14 +79,23 @@ Future<void> showQuarkMenu(
             child: Row(
               children: [
                 if (entry.busy)
-                  const QuarkLoader(size: 16)
+                  const SizedBox(
+                    width: quarkMenuIconSize,
+                    height: quarkMenuIconSize,
+                    child: Center(child: QuarkLoader(size: quarkMenuIconSize)),
+                  )
                 else if (entry.icon != null)
-                  Icon(
-                    entry.icon,
-                    color: entry.destructive ? tokens.error : null,
+                  SizedBox(
+                    width: quarkMenuIconSize,
+                    height: quarkMenuIconSize,
+                    child: Icon(
+                      entry.icon,
+                      size: quarkMenuIconSize,
+                      color: entry.destructive ? tokens.error : null,
+                    ),
                   ),
                 if (entry.busy || entry.icon != null)
-                  SizedBox(width: tokens.spacingSm + tokens.spacingXs),
+                  const SizedBox(width: quarkMenuIconGap),
                 Flexible(
                   child: Text(
                     entry.label,

@@ -28,9 +28,11 @@ class FormatPhoneMenu extends StatelessWidget {
       List<FormatChoice> choices,
     ) => SubmenuButton(
       key: ValueKey(key),
-      leadingIcon: Icon(icon, size: 18),
       menuChildren: [for (final c in choices) FormatChoiceItem(choice: c)],
-      child: Text(label),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+      ),
     );
 
     return MenuAnchor(
