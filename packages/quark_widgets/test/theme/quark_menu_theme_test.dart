@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -78,10 +79,11 @@ void main() {
         expect(focused.color, tokens.focus);
         expect(focused.width, tokens.focusRingWidth);
         expect(focused.width, greaterThanOrEqualTo(2));
-        // Hover focuses the row. That must not draw the ring.
+        // Hover focuses the row. Null would fall through to the text-button
+        // ring, so the hover side has to be a border that does not paint.
         expect(
           button.side!.resolve({WidgetState.hovered, WidgetState.focused}),
-          isNull,
+          BorderSide.none,
         );
       },
     );
@@ -154,7 +156,58 @@ void main() {
       expect(popupShape.borderRadius, anchorShape.borderRadius);
       expect(popupShape.side.color, anchorShape.side.color);
     });
+
+    testWidgets('$name: hovering a menu row paints no focus ring', (
+      tester,
+    ) async {
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
+      await pumpAt(
+        tester,
+        MenuAnchor(
+          menuChildren: [
+            MenuItemButton(
+              focusNode: focus,
+              onPressed: () {},
+              child: const Text('Files'),
+            ),
+          ],
+          builder: (context, menu, _) =>
+              TextButton(onPressed: menu.open, child: const Text('Open menu')),
+        ),
+        brightness: brightness,
+      );
+      await tester.tap(find.text('Open menu'));
+      await tester.pumpAndSettle();
+
+      focus.requestFocus();
+      await tester.pumpAndSettle();
+      final row = find.widgetWithText(MenuItemButton, 'Files');
+      final keyboard = _buttonSide(tester, row);
+      expect(keyboard.color, tokens.focus);
+      expect(keyboard.width, tokens.focusRingWidth);
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(row));
+      await tester.pumpAndSettle();
+      expect(_buttonSide(tester, row).style, BorderStyle.none);
+    });
   }
+}
+
+/// The border painted on the menu row itself, not the panel behind it.
+BorderSide _buttonSide(WidgetTester tester, Finder row) {
+  final side = tester
+      .widgetList<Material>(
+        find.descendant(of: row, matching: find.byType(Material)),
+      )
+      .map((material) => material.shape)
+      .whereType<OutlinedBorder>()
+      .first
+      .side;
+  return side;
 }
 
 /// The menu panel is the nearest filled, shaped [Material] behind [item],
