@@ -4,7 +4,7 @@ go 1.27.4
 
 // Keep tailscale.com on the same version as the repo root module. The phone
 // bridge and pkg/util/remoteutil both link it.
-require tailscale.com v1.104.6
+require tailscale.com v1.104.7
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
