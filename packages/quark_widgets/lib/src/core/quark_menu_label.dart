@@ -14,8 +14,13 @@ const double quarkMenuIconGap = 8;
 ///
 /// [MenuItemButton.leadingIcon] leaves a wider gap than that chip, and a
 /// narrower glyph then sits apart from the word. Every icon is the same box,
-/// so the labels share one left edge and a trailing check shares one right
-/// edge.
+/// so the labels share one left edge. A trailing check follows the label by
+/// that same gap.
+///
+/// The row stays as wide as its contents. A flexible gap would grow to the
+/// widest constraint the menu offers, which on a phone is wider than the
+/// screen, and the row's center would sit past the edge where a tap cannot
+/// land.
 ///
 /// The row is the [MenuItemButton.child] or the [PopupMenuItem.child]. It is
 /// not a [MenuItemButton] itself.
@@ -35,16 +40,21 @@ Widget quarkMenuLabel({
     );
   }
 
-  // One row, packed from the start. A nested row under spaceBetween let the
-  // label drift toward the middle of a wide menu, away from its icon.
+  // Packed from the start, and no wider than its contents. A flexible gap
+  // grows to the menu's maximum constraint, which is the overlay, so a
+  // checked row on a phone ends past the screen.
   return Row(
+    mainAxisSize: MainAxisSize.min,
     children: [
       if (leading != null) ...[
         slot(leading),
         const SizedBox(width: quarkMenuIconGap),
       ],
-      Flexible(fit: FlexFit.loose, child: label),
-      if (trailing != null) ...[const Spacer(), slot(trailing)],
+      label,
+      if (trailing != null) ...[
+        const SizedBox(width: quarkMenuIconGap),
+        slot(trailing),
+      ],
     ],
   );
 }
