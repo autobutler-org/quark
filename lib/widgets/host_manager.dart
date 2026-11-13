@@ -170,41 +170,32 @@ class _HostManagerState extends State<HostManager> {
     final previous = AppSettings.instance.forgottenCertificateFor(address);
     final confirm = await QuarkWidget.showDialog<bool>(
       context,
-      builder: (context) => QuarkWidget.alertDialog(
-        title: const Text('Review certificate'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Trust this certificate only if its fingerprint matches the "
-                "one your Quark shows. If it doesn't, you may be on a network "
-                'that is impersonating your Quark.',
-              ),
+      builder: (context) => ConfirmDeleteDialog(
+        title: 'Review certificate',
+        keyPrefix: 'review_certificate',
+        confirmLabel: 'Trust',
+        destructive: false,
+        onConfirm: () => Navigator.of(context).pop(true),
+        onCancel: () => Navigator.of(context).pop(false),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Trust this certificate only if its fingerprint matches the "
+              "one your Quark shows. If it doesn't, you may be on a network "
+              'that is impersonating your Quark.',
+            ),
+            const SizedBox(height: 12),
+            const Text('New fingerprint (SHA-256)'),
+            SelectableText(formatCertificateFingerprint(presented)),
+            if (previous != null) ...[
               const SizedBox(height: 12),
-              const Text('New fingerprint (SHA-256)'),
-              SelectableText(formatCertificateFingerprint(presented)),
-              if (previous != null) ...[
-                const SizedBox(height: 12),
-                const Text('Previous fingerprint'),
-                SelectableText(formatCertificateFingerprint(previous)),
-              ],
+              const Text('Previous fingerprint'),
+              SelectableText(formatCertificateFingerprint(previous)),
             ],
-          ),
+          ],
         ),
-        actions: [
-          TextButton(
-            key: const ValueKey('review_certificate_cancel'),
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            key: const ValueKey('review_certificate_trust'),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Trust'),
-          ),
-        ],
       ),
     );
     if (confirm != true) return;

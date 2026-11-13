@@ -98,7 +98,7 @@ void main() {
 
       await tester.tap(revoke);
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(TextButton, 'Sign out'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Sign out'));
       await tester.pumpAndSettle();
       expect(calls, ['revoke other']);
       expect(find.byKey(const ValueKey('session_tile_other')), findsNothing);
@@ -112,7 +112,7 @@ void main() {
       await tester.tap(revokeOthers);
       await tester.pumpAndSettle();
       expect(find.text('Sign out everywhere else?'), findsOneWidget);
-      await tester.tap(find.widgetWithText(TextButton, 'Sign out'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Sign out'));
       await tester.pumpAndSettle();
 
       expect(calls, ['revoke others']);
@@ -129,7 +129,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('session_revoke_current')));
       await tester.pumpAndSettle();
       expect(find.text('Sign out?'), findsOneWidget);
-      await tester.tap(find.widgetWithText(TextButton, 'Sign out'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Sign out'));
       await tester.pumpAndSettle();
 
       expect(calls, ['logout', 'signed out']);

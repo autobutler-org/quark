@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Confirms deleting an album. Pops with true to delete.
 class DeleteAlbumDialog extends StatelessWidget {
@@ -17,22 +18,14 @@ class DeleteAlbumDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Delete album?'),
-      content: Text(
-        'Delete "$albumName"? Photos will not be deleted from disk. '
-        'Sub-albums will also be deleted.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Delete'),
-        ),
-      ],
+    return ConfirmDeleteDialog(
+      title: 'Delete album?',
+      body:
+          'Delete "$albumName"? Photos will not be deleted from disk. '
+          'Sub-albums will also be deleted.',
+      keyPrefix: 'delete_album',
+      onConfirm: () => Navigator.of(context).pop(true),
+      onCancel: () => Navigator.of(context).pop(false),
     );
   }
 }

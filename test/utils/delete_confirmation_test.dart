@@ -35,7 +35,7 @@ void main() {
     await openConfirm(tester);
 
     expect(find.text('Move to Trash?'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Move to Trash'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Move to Trash'), findsOneWidget);
     expect(find.textContaining('budget.xlsx'), findsOneWidget);
   });
 
@@ -68,6 +68,6 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.widgetWithText(TextButton, 'Move to Trash'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Move to Trash'), findsOneWidget);
   });
 }

@@ -1,5 +1,5 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:quark/utils/quark_widget.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Confirms ejecting the drive named [driveName]. Pops with `true` on Eject,
 /// or with nothing on Cancel. Warns when the drive is default storage, since
@@ -20,8 +20,13 @@ class EjectDriveDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = driveName.isNotEmpty ? driveName : 'this drive';
-    return QuarkWidget.alertDialog(
-      title: const Text('Eject drive?'),
+    return ConfirmDeleteDialog(
+      title: 'Eject drive?',
+      keyPrefix: 'eject_dialog',
+      confirmLabel: 'Eject',
+      destructive: false,
+      onConfirm: () => Navigator.pop(context, true),
+      onCancel: () => Navigator.pop(context),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,18 +46,6 @@ class EjectDriveDialog extends StatelessWidget {
           ],
         ],
       ),
-      actions: [
-        TextButton(
-          key: const ValueKey('eject_dialog_cancel'),
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          key: const ValueKey('eject_dialog_confirm'),
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Eject'),
-        ),
-      ],
     );
   }
 }

@@ -141,7 +141,7 @@ void main() {
 
     await tester.tap(removeButton(2));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, 'Remove'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
     await tester.pumpAndSettle();
     expect(removed, [2]);
   });
