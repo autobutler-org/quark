@@ -3,8 +3,9 @@ import 'package:material_ui/material_ui.dart';
 import '../../models/host_item.dart';
 import '../../theme/quark_tokens.dart';
 
-/// The top of `QuarkDrawer`: the product name as a wordmark, the mark beside
-/// it, on the canvas, and the Quark on screen. With more than one saved, the
+/// The top of `QuarkDrawer`: the product name as a wordmark in Newsreader, the
+/// mark beside it, on the canvas, and the Quark on screen. With more than one
+/// saved, the
 /// header opens a menu for switching to another (#2230, #4098).
 ///
 /// Key prefixes: `drawer_wordmark` on the product name, `drawer_host` on the
@@ -37,27 +38,37 @@ class QuarkDrawerHeader extends StatelessWidget {
     final active = activeHostIndex >= 0 && activeHostIndex < hosts.length
         ? hosts[activeHostIndex]
         : null;
+    final wordmarkStyle = theme.textTheme.titleLarge?.copyWith(
+      fontFamily: 'Newsreader',
+      package: 'quark_widgets',
+      fontWeight: FontWeight.w500,
+      color: tokens.foreground,
+    );
+    final wordmarkSize = wordmarkStyle?.fontSize ?? 22;
+    // Newsreader's cap height sits 0.1em above the em box (ascender 1470,
+    // descender 530, cap height 1340, em 2000). The row centers the em box on
+    // the mark, so the letters have to move down by that much to line up.
     final wordmark = Row(
       key: const ValueKey('drawer_wordmark'),
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Image.asset(
           'assets/mark.png',
           package: 'quark_widgets',
-          width: 24,
-          height: 24,
+          width: wordmarkSize,
+          height: wordmarkSize,
           excludeFromSemantics: true,
           filterQuality: FilterQuality.medium,
         ),
         SizedBox(width: tokens.spacingSm),
         Flexible(
-          child: Text(
-            'Quark',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontFamily: 'Newsreader',
-              package: 'quark_widgets',
-              color: tokens.foreground,
+          child: Transform.translate(
+            offset: Offset(0, wordmarkSize * 0.1),
+            child: Text(
+              'Quark',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: wordmarkStyle,
             ),
           ),
         ),

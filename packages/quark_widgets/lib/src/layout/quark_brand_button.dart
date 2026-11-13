@@ -6,8 +6,7 @@ import '../theme/quark_tokens.dart';
 /// The branded badge-and-label control that leads every main page's top bar.
 ///
 /// It is a button, not a title: tapping it is how the app opens the navigation
-/// drawer, and a screen reader announces it as one. The label is the page
-/// title, set in Newsreader at the size it already uses. It stands at least 48dp
+/// drawer, and a screen reader announces it as one. It stands at least 48dp
 /// tall, the minimum touch target (#2605). When used as [AppBar.leading], set [AppBar.leadingWidth] to at least
 /// [QuarkBrandButton.preferredWidth] or the row overflows.
 ///
@@ -95,12 +94,11 @@ class QuarkBrandButton extends StatelessWidget {
                         label,
                         overflow: TextOverflow.ellipsis,
                         softWrap: false,
-                        style: const TextStyle(
-                          fontFamily: 'Newsreader',
-                          package: 'quark_widgets',
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                        ).copyWith(color: tokens.foreground),
+                          color: tokens.foreground,
+                        ),
                       ),
                     ),
                   ],

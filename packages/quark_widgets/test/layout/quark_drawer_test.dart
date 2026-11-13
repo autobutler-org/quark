@@ -576,6 +576,13 @@ void main() {
           .text;
       expect(wordmark.style!.color, tokens.chromeForeground);
       expect(wordmark.style!.fontFamily, 'packages/quark_widgets/Newsreader');
+      final shift = tester.widget<Transform>(
+        find.descendant(
+          of: find.byKey(const ValueKey('drawer_wordmark')),
+          matching: find.byType(Transform),
+        ),
+      );
+      expect(shift.transform.getTranslation().y, closeTo(2.2, 0.01));
       expect(tester.takeException(), isNull);
     });
   }

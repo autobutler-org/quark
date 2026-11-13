@@ -6,7 +6,7 @@
     <meta charset="UTF-8" />
     <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
     <meta name="description" content="Quark — your own cloud, at home." />
-    <meta name="theme-color" content="#070D19" />
+    <meta name="theme-color" content="#161615" />
 
     <!--
       The theme picked in Settings, applied before the splash below paints, so
@@ -30,7 +30,7 @@
         document.documentElement.setAttribute("data-theme", theme);
         document
           .querySelector('meta[name="theme-color"]')
-          .setAttribute("content", theme === "light" ? "#F8FAFC" : "#070D19");
+          .setAttribute("content", theme === "light" ? "#F7F6F3" : "#161615");
       })();
     </script>
 
@@ -72,30 +72,30 @@
       */
       :root {
         color-scheme: dark;
-        --quark-background: #070d19;
-        --quark-foreground: #e2e8f0;
-        --quark-muted: #94a3b8;
-        --quark-border: #1e293b;
-        --quark-primary: #72a7c0;
+        --quark-background: #161615;
+        --quark-foreground: #f2f1ee;
+        --quark-muted: #9c9a94;
+        --quark-border: #2d2c29;
+        --quark-primary: #f2f1ee;
       }
 
       :root[data-theme="light"] {
         color-scheme: light;
-        --quark-background: #f8fafc;
-        --quark-foreground: #0f172a;
-        --quark-muted: #64748b;
-        --quark-border: #e2e8f0;
-        --quark-primary: #3a6b82;
+        --quark-background: #f7f6f3;
+        --quark-foreground: #111111;
+        --quark-muted: #6a6964;
+        --quark-border: #e6e4de;
+        --quark-primary: #111111;
       }
 
       @media (prefers-color-scheme: light) {
         :root:not([data-theme]) {
           color-scheme: light;
-          --quark-background: #f8fafc;
-          --quark-foreground: #0f172a;
-          --quark-muted: #64748b;
-          --quark-border: #e2e8f0;
-          --quark-primary: #3a6b82;
+          --quark-background: #f7f6f3;
+          --quark-foreground: #111111;
+          --quark-muted: #6a6964;
+          --quark-border: #e6e4de;
+          --quark-primary: #111111;
         }
       }
 

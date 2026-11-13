@@ -92,8 +92,7 @@ abstract final class QuarkTheme {
       brightness: brightness,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: tokens.background,
-      // Geist is the UI face, bundled with the package. Newsreader is applied
-      // only to the product name and the page titles.
+      // Geist is the UI face, bundled with the package.
       fontFamily: 'Geist',
       package: 'quark_widgets',
       useMaterial3: true,

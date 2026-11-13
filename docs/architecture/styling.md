@@ -53,8 +53,9 @@ Quark configures — `AppBarTheme`, `CardTheme`, `InputDecorationTheme`, button 
 focus ring on inputs and buttons. The ring is `tokens.focus`, two pixels (three in high contrast), and not
 `tokens.primary`: classic fills a button with ink, and a ring in that same color disappears on it.
 
-The UI face is Geist and the product name and page titles are Newsreader, both bundled in `quark_widgets`
-rather than loaded at runtime. `radiusMd` is 6 on every theme color, high contrast included; `radiusSm` stays
+The UI face is Geist, bundled in `quark_widgets` rather than loaded at runtime. The drawer wordmark is
+Newsreader, shifted down by a tenth of its size so the letters line up with the mark. `radiusMd` is 6 on every
+theme color, high contrast included; `radiusSm` stays
 4 and `radiusLg` stays 12. The spacing scale stays 4, 8, 16, 24, 32.
 
 The `ColorScheme` surface containers come from the tokens too, so a Material widget that paints with one stays
