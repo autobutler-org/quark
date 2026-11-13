@@ -81,6 +81,7 @@ class SlidesImportBarBottom extends StatelessWidget
       ),
       actions: [
         MenuAnchor(
+          alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
           menuChildren: entries,
           builder: (context, controller, _) => QuarkBarChip(
             key: const ValueKey('slides_import'),

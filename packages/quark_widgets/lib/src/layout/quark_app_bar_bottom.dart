@@ -107,6 +107,7 @@ class QuarkAppBarBottom extends StatelessWidget implements PreferredSizeWidget {
               if (!compact) ...actions,
               if (compact && menuChildren.isNotEmpty)
                 MenuAnchor(
+                  alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
                   style: const MenuStyle(
                     minimumSize: WidgetStatePropertyAll(Size(220, 0)),
                   ),

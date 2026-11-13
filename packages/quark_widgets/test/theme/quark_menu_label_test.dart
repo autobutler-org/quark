@@ -68,4 +68,56 @@ void main() {
             );
     expect(filesGlyphs.single.left, lessThan(2));
   });
+
+  testWidgets('a menu drops from the left edge of its chip', (tester) async {
+    await pumpAt(
+      tester,
+      Align(
+        alignment: Alignment.topLeft,
+        child: MenuAnchor(
+          alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
+          menuChildren: [
+            MenuItemButton(
+              onPressed: () {},
+              child: quarkMenuLabel(
+                leading: const Icon(QuarkIcons.upload_rounded),
+                label: const Text('Files'),
+              ),
+            ),
+            MenuItemButton(
+              onPressed: () {},
+              child: quarkMenuLabel(
+                leading: const Icon(QuarkIcons.drive_folder_upload_outlined),
+                label: const Text('Folder'),
+              ),
+            ),
+          ],
+          builder: (context, menu, _) => QuarkBarChip(
+            key: const ValueKey('upload'),
+            icon: QuarkIcons.upload_rounded,
+            label: 'Upload',
+            onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+          ),
+        ),
+      ),
+      brightness: Brightness.dark,
+      size: const Size(800, 600),
+    );
+    await tester.tap(find.byKey(const ValueKey('upload')));
+    await tester.pumpAndSettle();
+    final chip = tester.getRect(find.byType(OutlinedButton));
+    late Rect panel;
+    tester.element(find.text('Files')).visitAncestorElements((ancestor) {
+      final widget = ancestor.widget;
+      if (widget is Material &&
+          widget.shape is RoundedRectangleBorder &&
+          (widget.color?.a ?? 0) > 0) {
+        final box = ancestor.renderObject! as RenderBox;
+        panel = box.localToGlobal(Offset.zero) & box.size;
+        return false;
+      }
+      return true;
+    });
+    expect(panel.left, chip.left);
+  });
 }

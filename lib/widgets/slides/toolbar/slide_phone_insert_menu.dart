@@ -36,6 +36,7 @@ class SlidePhoneInsertMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MenuAnchor(
+    alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
     menuChildren: [
       SlideChoiceMenuItem(choice: actions.select),
       SlideChoiceMenuItem(choice: actions.text),

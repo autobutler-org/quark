@@ -217,6 +217,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
         if (!readOnly && group.appliesTo(a)) group,
     ];
     return MenuAnchor(
+      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
       menuChildren: [
         for (final group in groups)
           QuarkSubmenuButton(

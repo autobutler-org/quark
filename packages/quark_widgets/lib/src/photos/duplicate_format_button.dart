@@ -3,6 +3,7 @@ import 'package:quark_icons/quark_icons.dart';
 
 import '../core/quark_menu_label.dart';
 import '../layout/quark_bar_chip.dart';
+import '../layout/quark_bar_icon_button.dart';
 import '../theme/quark_tokens.dart';
 
 /// The duplicates view's "Keep" choice (#1666): a bar chip that opens a menu
@@ -49,6 +50,7 @@ class DuplicateFormatButton extends StatelessWidget {
       for (final f in formats) (id: f, label: f, value: f),
     ];
     return MenuAnchor(
+      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
       style: const MenuStyle(minimumSize: WidgetStatePropertyAll(Size(160, 0))),
       menuChildren: [
         for (final option in options)

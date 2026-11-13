@@ -98,6 +98,7 @@ class FileTopBarUploadChip extends StatelessWidget {
           ),
       ];
       return MenuAnchor(
+        alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
         menuChildren: menuItems,
         builder: (context, menu, _) => QuarkBarChip(
           key: const ValueKey('file_top_bar_upload'),
@@ -149,8 +150,10 @@ class FileTopBarUploadChip extends StatelessWidget {
     // Two menus on one chip: the plain one uploads to the default device,
     // the ▾ one asks which device once the source has been picked.
     return MenuAnchor(
+      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
       menuChildren: sources(chooseDevice: false),
       builder: (context, plain, _) => MenuAnchor(
+        alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
         menuChildren: sources(chooseDevice: true),
         builder: (context, choosing, _) => QuarkBarSplitChip(
           key: const ValueKey('file_top_bar_upload'),

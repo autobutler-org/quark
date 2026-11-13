@@ -3,6 +3,7 @@ import 'package:quark_icons/quark_icons.dart';
 
 import '../core/quark_menu_label.dart';
 import '../layout/quark_bar_chip.dart';
+import '../layout/quark_bar_icon_button.dart';
 import '../theme/quark_tokens.dart';
 
 /// Whose events the calendar shows: everyone's, the signed-in person's own,
@@ -87,6 +88,7 @@ class CalendarPersonFilter extends StatelessWidget {
           ),
           if (people.isNotEmpty && onPerson != null)
             MenuAnchor(
+              alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
               menuChildren: [
                 for (final name in people)
                   MenuItemButton(

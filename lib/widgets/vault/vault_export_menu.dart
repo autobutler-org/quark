@@ -18,6 +18,7 @@ class VaultExportMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MenuAnchor(
+      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
       menuChildren: [
         for (final format in VaultExportFormat.values)
           MenuItemButton(
