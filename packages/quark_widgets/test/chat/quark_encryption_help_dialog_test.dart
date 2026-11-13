@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
@@ -18,14 +19,17 @@ void main() {
       size: size,
     );
 
-    for (final paragraph in QuarkEncryptionHelpDialog.paragraphs) {
-      expect(find.text(paragraph.$2), findsOneWidget);
+    expect(find.byType(QuarkHelpDialog), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.lock_outline), findsOneWidget);
+    for (final topic in QuarkEncryptionHelpDialog.topics) {
+      expect(find.text(topic.body), findsOneWidget);
     }
     expect(
-      QuarkEncryptionHelpDialog.paragraphs.map((p) => p.$2).join(' '),
+      QuarkEncryptionHelpDialog.topics.map((t) => t.body).join(' '),
       contains('verified'),
     );
-    await tester.tap(find.byKey(const ValueKey('encryption_help_close')));
+    await tester.ensureVisible(find.byKey(const ValueKey('quark_help_close')));
+    await tester.tap(find.byKey(const ValueKey('quark_help_close')));
     expect(closed, 1);
     expect(tester.takeException(), isNull);
   });

@@ -1,7 +1,8 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
-/// Names the role a device has been assigned. Renders nothing for a role it
-/// does not know, `'unassigned'` included.
+/// Names the role a device has been assigned, as a [QuarkTintBadge]. Renders
+/// nothing for a role it does not know, `'unassigned'` included.
 class RoleBadge extends StatelessWidget {
   const RoleBadge({required this.role, super.key});
 
@@ -9,31 +10,13 @@ class RoleBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg;
-    final Color fg;
-    final String label;
-    switch (role) {
-      case 'default-storage':
-        bg = Colors.blue.shade100;
-        fg = Colors.blue.shade800;
-        label = 'Default Storage';
-      case 'snapshot-backup':
-        bg = Colors.orange.shade100;
-        fg = Colors.orange.shade800;
-        label = 'Backup drive';
-      default:
-        return const SizedBox.shrink();
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w500),
-      ),
-    );
+    final tokens = QuarkTokens.of(context);
+    final (label, color) = switch (role) {
+      'default-storage' => ('Default Storage', tokens.primary),
+      'snapshot-backup' => ('Backup drive', tokens.secondaryForeground),
+      _ => (null, null),
+    };
+    if (label == null) return const SizedBox.shrink();
+    return QuarkTintBadge(label: label, color: color);
   }
 }
