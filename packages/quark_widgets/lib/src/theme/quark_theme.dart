@@ -265,7 +265,19 @@ abstract final class QuarkTheme {
             Size(64, kMinInteractiveDimension),
           ),
           iconSize: const WidgetStatePropertyAll(quarkMenuIconSize),
-          side: focusRing(tokens),
+          // A menu row takes focus when the pointer rests on it, so the
+          // keyboard ring would show up as a blue outline on hover. Hover is
+          // the wash below. The ring stays for a keyboard focus alone.
+          side: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.focused) &&
+                !states.contains(WidgetState.hovered)) {
+              return BorderSide(
+                color: tokens.focus,
+                width: tokens.focusRingWidth,
+              );
+            }
+            return null;
+          }),
           overlayColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected) ||
                 states.contains(WidgetState.pressed)) {

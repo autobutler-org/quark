@@ -78,6 +78,11 @@ void main() {
         expect(focused.color, tokens.focus);
         expect(focused.width, tokens.focusRingWidth);
         expect(focused.width, greaterThanOrEqualTo(2));
+        // Hover focuses the row. That must not draw the ring.
+        expect(
+          button.side!.resolve({WidgetState.hovered, WidgetState.focused}),
+          isNull,
+        );
       },
     );
   }
