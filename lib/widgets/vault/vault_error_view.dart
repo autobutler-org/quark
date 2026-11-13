@@ -1,4 +1,6 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// What the Vault page shows when it cannot load, with a way to retry.
 class VaultErrorView extends StatelessWidget {
@@ -13,22 +15,10 @@ class VaultErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
-        ),
-      ),
+    return EmptyStateWidget(
+      icon: QuarkIcons.error_outline,
+      headline: message,
+      action: FilledButton(onPressed: onRetry, child: const Text('Retry')),
     );
   }
 }

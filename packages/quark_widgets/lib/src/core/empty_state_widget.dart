@@ -2,12 +2,14 @@ import 'package:material_ui/material_ui.dart';
 
 import '../theme/quark_tokens.dart';
 
-/// The centered "there is nothing here" state: an icon, a headline, optional
-/// supporting text, and an optional action.
+/// The centered state that takes over a panel with nothing to show: an icon,
+/// a headline, optional supporting text, and an optional action.
 ///
-/// Use it wherever a list, grid, or panel loaded successfully and came back
-/// empty. It is not a failure state — a page that could not load composes its
-/// own sentence and renders a disconnected or error widget instead.
+/// Use it wherever a list, grid, or panel came back empty, could not load, or
+/// is still waiting on something it cannot show yet. A failure passes the
+/// sentence the app composed as [headline] and a retry as [action]; the
+/// package never writes that sentence itself. Wrappers pass copy, an icon,
+/// and an action, and never rebuild this column.
 ///
 /// In a space too short for it, the block scrolls instead of overflowing.
 ///

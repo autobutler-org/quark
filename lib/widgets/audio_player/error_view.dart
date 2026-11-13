@@ -18,23 +18,15 @@ class ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(QuarkIcons.audio_file_outlined, size: 48),
-          const SizedBox(height: 16),
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: downloading ? null : onDownload,
-            icon: downloading
-                ? const QuarkLoader(size: 16)
-                : const Icon(QuarkIcons.download_outlined, size: 16),
-            label: Text(downloading ? 'Downloading…' : 'Download'),
-          ),
-        ],
+    return EmptyStateWidget(
+      icon: QuarkIcons.audio_file_outlined,
+      headline: message,
+      action: FilledButton.icon(
+        onPressed: downloading ? null : onDownload,
+        icon: downloading
+            ? const QuarkLoader(size: 16)
+            : const Icon(QuarkIcons.download_outlined, size: 16),
+        label: Text(downloading ? 'Downloading…' : 'Download'),
       ),
     );
   }

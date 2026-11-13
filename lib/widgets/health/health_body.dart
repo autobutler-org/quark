@@ -57,36 +57,14 @@ class HealthBody extends StatelessWidget {
           onManageHosts: onManageHosts,
         );
       }
-      return Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                QuarkIcons.error_outline,
-                size: 48,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                Errors.somethingWentWrong,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                Errors.message(error, 'load health info'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(QuarkIcons.refresh),
-                label: const Text('Retry'),
-              ),
-            ],
-          ),
+      return EmptyStateWidget(
+        icon: QuarkIcons.error_outline,
+        headline: Errors.somethingWentWrong,
+        subtext: Errors.message(error, 'load health info'),
+        action: FilledButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(QuarkIcons.refresh),
+          label: const Text('Retry'),
         ),
       );
     }
