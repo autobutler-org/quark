@@ -49,7 +49,7 @@ class SubAlbumCard extends StatelessWidget {
                 Icon(
                   album.children.isEmpty
                       ? QuarkIcons.photo_album_outlined
-                      : QuarkIcons.folder_outlined,
+                      : QuarkIcons.folder,
                   color: tokens.mutedForeground,
                 ),
                 SizedBox(width: tokens.spacingSm),

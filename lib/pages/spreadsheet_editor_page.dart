@@ -442,7 +442,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                 QuarkBarChip(
                   key: const ValueKey('spreadsheet_editor_save'),
                   // Filled while there is unsaved work for the autosave.
-                  icon: _dirty ? QuarkIcons.save : QuarkIcons.save_outlined,
+                  icon: _dirty ? QuarkIcons.save : QuarkIcons.save,
                   label: _saving ? 'Saving...' : 'Save',
                   onPressed: _saving ? null : _manualSave,
                 ),

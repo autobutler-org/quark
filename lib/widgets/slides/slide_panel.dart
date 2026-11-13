@@ -172,7 +172,7 @@ class _SlidePanelState extends State<SlidePanel> {
     final Widget add = readOnly || onAddWithLayout == null || layouts.isEmpty
         ? QuarkBarIconButton(
             key: const ValueKey('slide_panel_add'),
-            icon: QuarkIcons.add_rounded,
+            icon: QuarkIcons.add,
             tooltip: 'New slide',
             onPressed: readOnly ? null : onAdd,
           )

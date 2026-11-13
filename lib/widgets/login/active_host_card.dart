@@ -29,10 +29,7 @@ class ActiveHostCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: ListTile(
-        leading: Icon(
-          QuarkIcons.storage_outlined,
-          color: theme.colorScheme.primary,
-        ),
+        leading: Icon(QuarkIcons.storage, color: theme.colorScheme.primary),
         title: Text(
           managingHosts ? 'Choose a Quark' : (active?.name ?? 'Quark'),
           style: const TextStyle(fontWeight: FontWeight.w600),

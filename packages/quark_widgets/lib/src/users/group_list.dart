@@ -115,7 +115,7 @@ class GroupList extends StatelessWidget {
           )
         else if (groups.isEmpty)
           const EmptyStateWidget(
-            icon: Icons.group_outlined,
+            icon: QuarkIcons.group_outlined,
             headline: 'No groups yet',
           )
         else

@@ -74,7 +74,7 @@ class FileBreadcrumbBar extends StatelessWidget {
           IconButton(
             key: const ValueKey('breadcrumb_up'),
             onPressed: atRoot ? null : onGoUp,
-            icon: const Icon(QuarkIcons.chevron_left_rounded),
+            icon: const Icon(QuarkIcons.chevron_left),
             tooltip: 'Up one level',
           ),
           Expanded(
@@ -112,7 +112,7 @@ class FileBreadcrumbBar extends StatelessWidget {
                             widthFactor: 1,
                             heightFactor: 1,
                             child: Icon(
-                              QuarkIcons.home_rounded,
+                              QuarkIcons.home,
                               size: 20,
                               color: atRoot
                                   ? Theme.of(context).colorScheme.onSurface

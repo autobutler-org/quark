@@ -55,7 +55,7 @@ void main() {
     expect(find.text('This folder is empty'), findsNothing);
     expect(find.byType(QuarkLoader), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(find.byIcon(QuarkIcons.folder_outlined), findsNWidgets(2));
+    expect(find.byIcon(QuarkIcons.folder), findsNWidgets(2));
     expect(find.byTooltip('Up one level'), findsOneWidget);
     for (final folder in _folders) {
       expect(
@@ -255,9 +255,7 @@ void main() {
       await pumpAt(tester, _picker(), brightness: brightness);
 
       expect(tester.takeException(), isNull);
-      final icon = tester.widget<Icon>(
-        find.byIcon(QuarkIcons.folder_outlined).first,
-      );
+      final icon = tester.widget<Icon>(find.byIcon(QuarkIcons.folder).first);
       expect(icon.color, tokens.secondaryForeground);
       final title = tester.widget<Text>(find.text('My files'));
       expect(title.style?.color, tokens.foreground);

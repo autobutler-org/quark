@@ -55,7 +55,7 @@ class AdminMapCard extends StatelessWidget {
     ),
     (
       stop: AdminMapStop.disks,
-      icon: QuarkIcons.storage_rounded,
+      icon: QuarkIcons.storage,
       title: 'Disks',
       what:
           'The drives that hold everyone’s files, and which ones keep the '

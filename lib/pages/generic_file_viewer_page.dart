@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
@@ -110,7 +111,7 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
                     onPressed: _downloading ? null : _handleDownload,
                     icon: _downloading
                         ? const QuarkLoader(size: 18)
-                        : const Icon(Icons.download),
+                        : const Icon(QuarkIcons.download_outlined),
                     label: const Text('Download'),
                   ),
                   if (!kIsWeb)
@@ -118,7 +119,7 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
                       onPressed: _opening ? null : _handleOpenWith,
                       icon: _opening
                           ? const QuarkLoader(size: 18)
-                          : const Icon(Icons.open_in_new),
+                          : const Icon(QuarkIcons.open_in_new),
                       label: const Text('Open with…'),
                     ),
                 ],

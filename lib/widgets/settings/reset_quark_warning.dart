@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 
 /// A warning panel inside the reset dialog.
 ///
@@ -29,7 +30,7 @@ class ResetQuarkWarning extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            Icons.warning_amber_rounded,
+            QuarkIcons.warning_amber,
             size: 20,
             color: colorScheme.onErrorContainer,
           ),

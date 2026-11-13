@@ -128,7 +128,7 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.byIcon(QuarkIcons.check_circle_rounded), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.check_circle_outline), findsOneWidget);
     expect(find.byIcon(QuarkIcons.photo_album_outlined), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('add_to_album_1')));

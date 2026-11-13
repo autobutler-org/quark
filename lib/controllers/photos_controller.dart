@@ -561,7 +561,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
         id: PhotoCategory.favorites.name,
         label: 'Favorites',
         count: _favoriteKeys.length,
-        icon: QuarkIcons.star_rounded,
+        icon: QuarkIcons.star,
       ),
     ];
   }

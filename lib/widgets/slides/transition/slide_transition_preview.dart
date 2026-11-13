@@ -103,7 +103,7 @@ class _SlideTransitionPreviewState extends State<SlideTransitionPreview> {
           alignment: AlignmentDirectional.centerStart,
           child: QuarkBarChip(
             key: const ValueKey('slide_transition_preview'),
-            icon: QuarkIcons.play_arrow_rounded,
+            icon: QuarkIcons.play_arrow,
             label: 'Preview',
             tooltip: 'Play this transition once',
             keepLabel: true,

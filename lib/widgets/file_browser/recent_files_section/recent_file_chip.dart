@@ -97,7 +97,7 @@ class RecentFileChip extends StatelessWidget {
                   child: SizedBox(
                     width: kMinInteractiveDimension,
                     child: Icon(
-                      QuarkIcons.folder_open_rounded,
+                      QuarkIcons.folder_open,
                       size: 14,
                       color: tokens.secondaryForeground,
                     ),

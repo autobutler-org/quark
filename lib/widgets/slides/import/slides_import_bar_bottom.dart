@@ -52,7 +52,7 @@ class SlidesImportBarBottom extends StatelessWidget
     final entries = [
       MenuItemButton(
         key: const ValueKey('slides_import_from_quark'),
-        leadingIcon: const Icon(QuarkIcons.folder_open_outlined),
+        leadingIcon: const Icon(QuarkIcons.folder_open),
         onPressed: onImportFromQuark,
         child: const Text('From your Quark'),
       ),

@@ -110,12 +110,7 @@ class MetadataContent {
       if (cam.shutterSpeed != null) settings.add(cam.shutterSpeed!);
       if (cam.iso != null) settings.add('ISO ${cam.iso}');
       if (settings.isNotEmpty) {
-        rows.add(
-          InfoRow(
-            icon: QuarkIcons.tune_outlined,
-            value: settings.join('  ·  '),
-          ),
-        );
+        rows.add(InfoRow(icon: QuarkIcons.tune, value: settings.join('  ·  ')));
       }
       if (cam.focalLength != null) {
         rows.add(
@@ -145,7 +140,7 @@ class MetadataContent {
             ),
             InfoRow(icon: QuarkIcons.image_outlined, value: ext),
             InfoRow(
-              icon: QuarkIcons.storage_outlined,
+              icon: QuarkIcons.storage,
               value: StorageDevice.formatBytes(m.fileSize),
             ),
             if (m.width > 0 && m.height > 0)

@@ -115,7 +115,7 @@ void main() {
   testWidgets('gives system albums their glyph and no menu', (tester) async {
     await pumpAt(tester, bounded(sidebar()));
 
-    expect(find.byIcon(QuarkIcons.star_rounded), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.star), findsOneWidget);
     final tiles = tester.widgetList<AlbumTreeTile>(find.byType(AlbumTreeTile));
     expect(tiles.firstWhere((t) => t.album.id == 1).onMenu, isNull);
     expect(tiles.firstWhere((t) => t.album.id == 2).onMenu, isNotNull);
@@ -238,7 +238,7 @@ void main() {
         tester.getTopLeft(find.byKey(const ValueKey('album_tile_1'))).dy,
       ),
     );
-    expect(find.byIcon(QuarkIcons.photo_library_outlined), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.photo_library), findsOneWidget);
 
     expect(tester.widget<InkWell>(find.byKey(_allPhotos)).onLongPress, isNull);
 

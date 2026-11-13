@@ -145,7 +145,7 @@ void main() {
       ),
     );
 
-    expect(find.byIcon(QuarkIcons.star_rounded), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.star), findsOneWidget);
     expect(find.byType(LiveBadge), findsOneWidget);
     expect(find.byKey(const ValueKey('photo_tile_check_p1')), findsNothing);
   });
@@ -159,7 +159,7 @@ void main() {
       item: const PhotoItem(id: 'p1', name: 'beach.jpg', isFavorite: true),
     );
 
-    expect(find.byIcon(QuarkIcons.star_rounded), findsNothing);
+    expect(find.byIcon(QuarkIcons.star), findsNothing);
     expect(find.byKey(const ValueKey('photo_tile_check_p1')), findsOneWidget);
     expect(find.byIcon(QuarkIcons.check), findsNothing);
   });

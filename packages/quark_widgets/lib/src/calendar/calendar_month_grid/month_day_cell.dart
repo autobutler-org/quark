@@ -198,7 +198,7 @@ class _MonthDayCellState extends State<MonthDayCell> {
                   borderRadius: BorderRadius.circular(tokens.radiusMd),
                 ),
               ),
-              icon: const Icon(QuarkIcons.add_rounded),
+              icon: const Icon(QuarkIcons.add),
             ),
           ),
       ],

@@ -61,7 +61,7 @@ void main() {
 
       Finder checked(int id) => find.descendant(
         of: find.byKey(ValueKey('add_to_album_$id')),
-        matching: find.byIcon(QuarkIcons.check_circle_rounded),
+        matching: find.byIcon(QuarkIcons.check_circle_outline),
       );
       expect(calls, ['members(camera/1.jpg, sd1)']);
       expect(checked(1), findsOneWidget);

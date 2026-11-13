@@ -82,7 +82,7 @@ class ThemeOption extends StatelessWidget {
                 opacity: isSelected ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 150),
                 child: Icon(
-                  QuarkIcons.check_circle_rounded,
+                  QuarkIcons.check_circle_outline,
                   color: primaryColor,
                   size: 22,
                 ),

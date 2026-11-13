@@ -316,7 +316,7 @@ class _QuarkPollCardState extends State<QuarkPollCard> {
                 spacing: tokens.spacingXs,
                 children: [
                   Icon(
-                    QuarkIcons.visibility_off_outlined,
+                    QuarkIcons.visibility_off,
                     size: 14,
                     color: tokens.mutedForeground,
                   ),

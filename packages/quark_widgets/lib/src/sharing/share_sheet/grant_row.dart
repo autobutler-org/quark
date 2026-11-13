@@ -59,7 +59,7 @@ class GrantRow extends StatelessWidget {
     final leading = Icon(
       principal.kind == PrincipalKind.user
           ? QuarkIcons.person_outline
-          : Icons.group_outlined,
+          : QuarkIcons.group_outlined,
     );
     final title = Text(name, maxLines: 1, overflow: TextOverflow.ellipsis);
     final from = grant.inheritedFrom;
@@ -135,7 +135,7 @@ class GrantRow extends StatelessWidget {
                           style: setLevel == null ? muted : null,
                         ),
                         Icon(
-                          Icons.arrow_drop_down,
+                          QuarkIcons.arrow_drop_down,
                           color: setLevel == null
                               ? tokens.mutedForeground
                               : null,

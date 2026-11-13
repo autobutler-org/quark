@@ -56,10 +56,7 @@ void main() {
             child: child!,
           ),
           home: const Scaffold(
-            appBar: QuarkAppBar(
-              label: 'Files',
-              icon: QuarkIcons.folder_outlined,
-            ),
+            appBar: QuarkAppBar(label: 'Files', icon: QuarkIcons.folder),
           ),
         ),
       );

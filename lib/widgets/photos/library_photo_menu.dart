@@ -47,7 +47,7 @@ class LibraryPhotoMenu {
           QuarkMenuEntry(
             key: const ValueKey('library_photo_action_favorite'),
             label: isFavorite ? 'Unfavorite' : 'Favorite',
-            icon: isFavorite ? QuarkIcons.star_rounded : QuarkIcons.star_border,
+            icon: isFavorite ? QuarkIcons.star : QuarkIcons.star_border,
             onSelected: onToggleFavorite,
           ),
           QuarkMenuEntry(
@@ -65,7 +65,7 @@ class LibraryPhotoMenu {
           QuarkMenuEntry(
             key: const ValueKey('library_photo_action_copy'),
             label: 'Make a copy',
-            icon: QuarkIcons.copy_outlined,
+            icon: QuarkIcons.content_copy,
             onSelected: onMakeACopy,
           ),
           const QuarkMenuEntry.divider(),

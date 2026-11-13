@@ -134,7 +134,7 @@ class FileSelectionBar extends StatelessWidget implements PreferredSizeWidget {
               children: [
                 QuarkBarIconButton(
                   key: const ValueKey('file_selection_cancel'),
-                  icon: QuarkIcons.close_rounded,
+                  icon: QuarkIcons.close,
                   tooltip: 'Cancel selection',
                   onPressed: onCancel,
                 ),
@@ -159,7 +159,7 @@ class FileSelectionBar extends StatelessWidget implements PreferredSizeWidget {
                   key: const ValueKey('file_selection_toggle_all'),
                   icon: everything
                       ? QuarkIcons.circle_outlined
-                      : QuarkIcons.check_circle_rounded,
+                      : QuarkIcons.check_circle_outline,
                   label: everything ? 'Deselect all' : 'Select all',
                   keepLabel: actions.isEmpty && onRestore == null,
                   onPressed: everything ? onDeselectAll : onSelectAll,

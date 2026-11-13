@@ -586,9 +586,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
           // In-document find bar (#1046)
           QuarkBarIconButton(
             key: const ValueKey('document_editor_find'),
-            icon: _showFindBar
-                ? QuarkIcons.close_rounded
-                : QuarkIcons.search_rounded,
+            icon: _showFindBar ? QuarkIcons.close : QuarkIcons.search,
             tooltip: _showFindBar
                 ? 'Close find bar'
                 : 'Find in document (Ctrl+F)',
@@ -613,7 +611,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
           if (!_isReadOnly)
             QuarkBarChip(
               key: const ValueKey('document_editor_save'),
-              icon: QuarkIcons.save_outlined,
+              icon: QuarkIcons.save,
               label: _saving ? 'Saving...' : 'Save',
               onPressed: _dirty && !_saving ? _saveDocument : null,
             ),

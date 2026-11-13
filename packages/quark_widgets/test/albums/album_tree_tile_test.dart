@@ -76,7 +76,7 @@ void main() {
     await pumpTile(tester);
 
     expect(find.text('Iceland'), findsNothing);
-    expect(find.byIcon(QuarkIcons.chevron_right_rounded), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.chevron_right), findsOneWidget);
   });
 
   testBothViewports('renders the children of an expanded album, each level '
@@ -85,7 +85,7 @@ void main() {
 
     expect(find.text('Iceland'), findsOneWidget);
     expect(find.text('Japan'), findsOneWidget);
-    expect(find.byIcon(QuarkIcons.expand_more_rounded), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.expand_more), findsOneWidget);
     expect(
       tester.getRect(find.text('Iceland')).left,
       greaterThan(tester.getRect(find.text('Trips')).left),
@@ -226,10 +226,10 @@ void main() {
         isSystem: true,
         isFavorites: true,
       ),
-      systemIcon: QuarkIcons.star_rounded,
+      systemIcon: QuarkIcons.star,
     );
 
-    expect(find.byIcon(QuarkIcons.star_rounded), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.star), findsOneWidget);
     expect(find.byIcon(QuarkIcons.photo_album_outlined), findsNothing);
   });
 

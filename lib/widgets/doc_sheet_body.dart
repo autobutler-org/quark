@@ -188,7 +188,7 @@ class DocSheetBody extends StatelessWidget {
             FilledButton.icon(
               key: ValueKey('${kind.name}_create_cta'),
               onPressed: onCreateNew,
-              icon: const Icon(Icons.add),
+              icon: const Icon(QuarkIcons.add),
               label: Text(
                 isSearching
                     ? 'Create a new ${kind.noun} instead'
@@ -239,7 +239,7 @@ class DocSheetBody extends StatelessWidget {
       for (final node in files) nodeTile(node, () => openOwn(node)),
       if (ownContent.isNotEmpty)
         const SearchSectionHeader(
-          icon: QuarkIcons.search_rounded,
+          icon: QuarkIcons.search,
           label: 'Content matches',
         ),
       for (final result in ownContent) hitTile(result),

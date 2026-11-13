@@ -109,7 +109,7 @@ class PhotoLibrarySidebar extends StatelessWidget {
                   onPressed: selected < maxColumns
                       ? () => onColumnsChanged(selected + 1)
                       : null,
-                  icon: const Icon(QuarkIcons.grid_view_outlined),
+                  icon: const Icon(QuarkIcons.grid_view),
                   tooltip: 'Smaller photos',
                 ),
               ],

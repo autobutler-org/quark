@@ -80,7 +80,7 @@ class QuarkBarSplitChip extends StatelessWidget {
         chip,
         QuarkBarIconButton(
           key: key is ValueKey<String> ? ValueKey('${key.value}_choose') : null,
-          icon: QuarkIcons.expand_more_rounded,
+          icon: QuarkIcons.expand_more,
           tooltip: secondaryTooltip,
           onPressed: secondary,
         ),

@@ -78,11 +78,7 @@ class ModelViewerChoiceChip<T> extends StatelessWidget {
           MenuItemButton(
             key: ValueKey('${keyPrefix}_option_${option.id}'),
             trailingIcon: option.value == selected
-                ? Icon(
-                    QuarkIcons.check_rounded,
-                    size: 16,
-                    color: tokens.primary,
-                  )
+                ? Icon(QuarkIcons.check, size: 16, color: tokens.primary)
                 : null,
             onPressed: () => onChanged(option.value),
             child: Text(option.label),

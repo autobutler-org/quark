@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/controllers/repair_controller.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/settings/code_block.dart';
@@ -100,7 +101,7 @@ class _RepairInstallationSectionState extends State<RepairInstallationSection> {
                       FilledButton.icon(
                         key: const ValueKey('repair_installation_button'),
                         onPressed: _controller.isWorking ? null : _repair,
-                        icon: const Icon(Icons.build_outlined),
+                        icon: const Icon(QuarkIcons.build_outlined),
                         label: const Text('Repair installation'),
                       ),
                     ],

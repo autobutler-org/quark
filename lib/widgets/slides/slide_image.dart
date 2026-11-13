@@ -125,9 +125,7 @@ class _SlideImageState extends State<SlideImage> with WidgetsBindingObserver {
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Icon(
-                noAccess
-                    ? QuarkIcons.lock_outline
-                    : QuarkIcons.broken_image_outlined,
+                noAccess ? QuarkIcons.lock_outline : QuarkIcons.broken_image,
                 size: 96,
                 color: tokens.mutedForeground,
               ),

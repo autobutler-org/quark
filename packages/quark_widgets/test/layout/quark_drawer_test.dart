@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -411,7 +412,7 @@ void main() {
 
     expect(find.text('Home'), findsOneWidget);
     expect(find.byKey(const ValueKey('drawer_host_header')), findsNothing);
-    expect(find.byIcon(Icons.unfold_more_rounded), findsNothing);
+    expect(find.byIcon(QuarkIcons.unfold_more), findsNothing);
   });
 
   testBothViewports('lists every Quark with the active one checked', (
@@ -429,7 +430,7 @@ void main() {
       size: size,
     );
 
-    expect(find.byIcon(Icons.unfold_more_rounded), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.unfold_more), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('drawer_host_header')));
     await tester.pumpAndSettle();
 
@@ -479,7 +480,7 @@ void main() {
       size: size,
     );
 
-    final icon = tester.getRect(find.byIcon(Icons.unfold_more_rounded));
+    final icon = tester.getRect(find.byIcon(QuarkIcons.unfold_more));
     await tester.tap(find.byKey(const ValueKey('drawer_host_header')));
     await tester.pumpAndSettle();
 

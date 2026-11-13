@@ -130,7 +130,7 @@ class AlbumPickerSheet extends StatelessWidget {
               FilledButton.icon(
                 key: ValueKey('${keyPrefix}_create'),
                 onPressed: onCreateAlbum,
-                icon: const Icon(QuarkIcons.add_rounded, size: 18),
+                icon: const Icon(QuarkIcons.add, size: 18),
                 label: const Text('Create album'),
               ),
             ],
@@ -149,7 +149,7 @@ class AlbumPickerSheet extends StatelessWidget {
               start: tokens.spacingMd * depth,
             ),
             leading: memberAlbumIds.contains(album.id)
-                ? Icon(QuarkIcons.check_circle_rounded, color: tokens.primary)
+                ? Icon(QuarkIcons.check_circle_outline, color: tokens.primary)
                 : const Icon(QuarkIcons.photo_album_outlined),
             title: Text(album.name),
             subtitle: Text(album.photoCountLabel),
@@ -160,7 +160,7 @@ class AlbumPickerSheet extends StatelessWidget {
           FilledButton.icon(
             key: ValueKey('${keyPrefix}_done'),
             onPressed: onDone,
-            icon: const Icon(QuarkIcons.check_rounded, size: 18),
+            icon: const Icon(QuarkIcons.check, size: 18),
             label: const Text('Done'),
           ),
         ],

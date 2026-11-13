@@ -14,7 +14,7 @@ typedef TermsSummaryPoint = ({IconData icon, String headline, String body});
 /// is why [kTermsSummaryDisclaimer] stays with them.
 const List<TermsSummaryPoint> kTermsSummaryPoints = [
   (
-    icon: QuarkIcons.home_rounded,
+    icon: QuarkIcons.home,
     headline: 'Your files stay on your Quark',
     body:
         'You own everything you put here, and by default it lives on hardware '

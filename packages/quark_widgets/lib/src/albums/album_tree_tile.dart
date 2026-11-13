@@ -136,8 +136,8 @@ class AlbumTreeTile extends StatelessWidget {
                           : 'Expand ${album.name}',
                       icon: Icon(
                         isExpanded
-                            ? QuarkIcons.expand_more_rounded
-                            : QuarkIcons.chevron_right_rounded,
+                            ? QuarkIcons.expand_more
+                            : QuarkIcons.chevron_right,
                       ),
                       iconSize: 16,
                       padding: EdgeInsets.zero,

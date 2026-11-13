@@ -57,7 +57,7 @@ final List<GalleryEntry> registry = [
     name: 'EmptyStateWidget',
     group: 'Core',
     build: (context, log) => EmptyStateWidget(
-      icon: QuarkIcons.folder_outlined,
+      icon: QuarkIcons.folder,
       headline: 'This folder is empty',
       subtext: 'Upload a file to get started.',
       action: FilledButton(
@@ -528,7 +528,7 @@ final List<GalleryEntry> registry = [
       child: Scaffold(
         appBar: QuarkAppBar(
           label: 'Photos',
-          icon: QuarkIcons.photo_library_outlined,
+          icon: QuarkIcons.photo_library,
           // Refresh is a slot, not an action: it always lands beside the
           // brand button, and a page cannot move it.
           onRefresh: () => log('QuarkAppBar.onRefresh'),
@@ -593,7 +593,7 @@ final List<GalleryEntry> registry = [
             child: Scaffold(
               appBar: QuarkAppBar(
                 label: 'Files',
-                icon: QuarkIcons.folder_outlined,
+                icon: QuarkIcons.folder,
                 bottom: QuarkAppBarBottom(
                   lead: const Align(
                     alignment: Alignment.centerLeft,
@@ -620,7 +620,7 @@ final List<GalleryEntry> registry = [
                     ),
                     MenuItemButton(
                       onPressed: () => log('QuarkAppBarBottom menu: Grid'),
-                      leadingIcon: const Icon(QuarkIcons.grid_view_rounded),
+                      leadingIcon: const Icon(QuarkIcons.grid_view),
                       child: const Text('Grid'),
                     ),
                   ],
@@ -699,7 +699,7 @@ final List<GalleryEntry> registry = [
           onPressed: () => log('QuarkBarIconButton(Select).onPressed'),
         ),
         QuarkBarIconButton(
-          icon: QuarkIcons.search_rounded,
+          icon: QuarkIcons.search,
           tooltip: 'Search',
           onPressed: () => log('QuarkBarIconButton(Search).onPressed'),
         ),
@@ -710,7 +710,7 @@ final List<GalleryEntry> registry = [
           onPressed: () => log('QuarkBarIconButton(Delete).onPressed'),
         ),
         const QuarkBarIconButton(
-          icon: QuarkIcons.save_outlined,
+          icon: QuarkIcons.save,
           tooltip: 'Saving',
           isBusy: true,
           onPressed: null,
@@ -737,7 +737,7 @@ final List<GalleryEntry> registry = [
           ),
           QuarkBarSegment(
             id: 'grid',
-            icon: QuarkIcons.grid_view_rounded,
+            icon: QuarkIcons.grid_view,
             label: 'Grid',
           ),
         ],
@@ -895,7 +895,7 @@ final List<GalleryEntry> registry = [
       height: 420,
       child: QuarkPageScaffold(
         title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         onRefresh: () => log('QuarkPageScaffold.onRefresh'),
         drawer: QuarkDrawer(
           activeSection: QuarkDrawerSection.photos,
@@ -1599,11 +1599,7 @@ final List<GalleryEntry> registry = [
     group: 'File browser',
     build: (context, log) => FileShortcutBar(
       shortcuts: const [
-        FileShortcut(
-          id: 'my_files',
-          label: 'My files',
-          icon: QuarkIcons.home_rounded,
-        ),
+        FileShortcut(id: 'my_files', label: 'My files', icon: QuarkIcons.home),
         FileShortcut(
           id: 'groups',
           label: 'Groups',
@@ -1612,7 +1608,7 @@ final List<GalleryEntry> registry = [
         FileShortcut(
           id: 'all_files',
           label: 'All files',
-          icon: QuarkIcons.folder_rounded,
+          icon: QuarkIcons.folder,
         ),
       ],
       onSelected: (id) => log('FileShortcutBar.onSelected($id)'),
@@ -4090,7 +4086,7 @@ const List<PhotoCategoryEntry> _galleryCategories = [
     id: 'favorites',
     label: 'Favorites',
     count: 9,
-    icon: QuarkIcons.star_rounded,
+    icon: QuarkIcons.star,
   ),
 ];
 
@@ -4348,7 +4344,7 @@ const List<QuarkHelpTopic> _galleryHelpTopics = [
   QuarkHelpTopic(
     heading: 'Per-device',
     body: 'Each drive in its own section, so you can see what lives where.',
-    icon: QuarkIcons.grid_view_rounded,
+    icon: QuarkIcons.grid_view,
   ),
   QuarkHelpTopic(
     heading: 'Device tags',

@@ -95,7 +95,7 @@ class SettingsAccountTab extends StatelessWidget {
                   children: [
                     const Row(
                       children: [
-                        Icon(QuarkIcons.key_rounded),
+                        Icon(QuarkIcons.key),
                         SizedBox(width: 16),
                         Expanded(
                           child: Text(

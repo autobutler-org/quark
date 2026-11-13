@@ -56,13 +56,13 @@ class CalendarPeriodHeader extends StatelessWidget {
       children: [
         QuarkBarIconButton(
           key: const ValueKey('calendar_prev'),
-          icon: QuarkIcons.chevron_left_rounded,
+          icon: QuarkIcons.chevron_left,
           tooltip: previousTooltip,
           onPressed: onPrevious,
         ),
         QuarkBarIconButton(
           key: const ValueKey('calendar_next'),
-          icon: QuarkIcons.chevron_right_rounded,
+          icon: QuarkIcons.chevron_right,
           tooltip: nextTooltip,
           onPressed: onNext,
         ),

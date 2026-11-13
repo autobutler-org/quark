@@ -109,7 +109,7 @@ class HealthBody extends StatelessWidget {
         const SizedBox(height: 8),
         MetricCard(
           label: 'CPU',
-          icon: QuarkIcons.memory,
+          icon: QuarkIcons.cpu,
           value: status.cpuPercent,
           unit: '%',
           criticalThreshold: healthCpuCriticalPercent,
@@ -123,7 +123,7 @@ class HealthBody extends StatelessWidget {
         const SizedBox(height: 8),
         MetricCard(
           label: 'Memory',
-          icon: QuarkIcons.storage,
+          icon: QuarkIcons.memory,
           value: status.memPercent,
           unit: '%',
           criticalThreshold: healthMemoryCriticalPercent,

@@ -314,7 +314,7 @@ class _CalendarPageState extends State<CalendarPage>
                 actions: [
                   QuarkBarChip(
                     key: const ValueKey('calendar_new_event'),
-                    icon: QuarkIcons.add_rounded,
+                    icon: QuarkIcons.add,
                     label: 'New event',
                     onPressed: () => _create(_newDraft()),
                   ),

@@ -39,11 +39,7 @@ class AlbumSidebarSortButton extends StatelessWidget {
           MenuItemButton(
             key: ValueKey('album_sort_option_${option.id}'),
             trailingIcon: option == sort
-                ? Icon(
-                    QuarkIcons.check_rounded,
-                    size: 16,
-                    color: tokens.primary,
-                  )
+                ? Icon(QuarkIcons.check, size: 16, color: tokens.primary)
                 : null,
             onPressed: () => onChanged(option),
             child: Text(option.label),

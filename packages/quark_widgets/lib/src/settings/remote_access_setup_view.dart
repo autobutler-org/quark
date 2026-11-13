@@ -91,7 +91,7 @@ class RemoteAccessSetupView extends StatelessWidget {
                 "household's devices can use it, and everyone still signs in.",
           ),
           const RemoteAccessSetupPoint(
-            icon: QuarkIcons.home_rounded,
+            icon: QuarkIcons.home,
             title: 'Home stays direct',
             body:
                 'On your Wi‑Fi the app still talks to your Quark directly. '

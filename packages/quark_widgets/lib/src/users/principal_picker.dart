@@ -103,7 +103,7 @@ class _PrincipalPickerState extends State<PrincipalPicker> {
               leading: Icon(
                 option.kind == PrincipalKind.user
                     ? QuarkIcons.person_outline
-                    : Icons.group_outlined,
+                    : QuarkIcons.group_outlined,
               ),
               title: Text(
                 option.name,
@@ -117,7 +117,7 @@ class _PrincipalPickerState extends State<PrincipalPicker> {
                     )
                   : null,
               trailing: option == widget.selected
-                  ? const Icon(Icons.check)
+                  ? const Icon(QuarkIcons.check)
                   : null,
               onTap: () => widget.onSelected(option),
             ),

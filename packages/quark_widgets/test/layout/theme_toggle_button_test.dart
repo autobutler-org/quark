@@ -13,7 +13,7 @@ void main() {
       ThemeToggleButton(mode: ThemeMode.light, onChanged: chosen.add),
     );
 
-    expect(find.byIcon(QuarkIcons.dark_mode_rounded), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.dark_mode), findsOneWidget);
     expect(find.byTooltip('Switch to dark mode'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('theme_toggle')));
@@ -29,7 +29,7 @@ void main() {
       ThemeToggleButton(mode: ThemeMode.dark, onChanged: chosen.add),
     );
 
-    expect(find.byIcon(QuarkIcons.light_mode_rounded), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.light_mode), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('theme_toggle')));
     await tester.pump();

@@ -36,7 +36,7 @@ void main() {
           key: scaffold,
           appBar: QuarkAppBar(
             label: 'Files',
-            icon: QuarkIcons.folder_rounded,
+            icon: QuarkIcons.folder,
             actions: const [AppThemeToggle()],
           ),
           drawer: const AppDrawer(activeSection: QuarkDrawerSection.files),

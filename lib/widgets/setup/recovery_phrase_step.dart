@@ -34,7 +34,7 @@ class RecoveryPhraseStep extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Icon(
-          QuarkIcons.key_rounded,
+          QuarkIcons.key,
           size: 56,
           color: theme.colorScheme.primary,
           semanticLabel: 'Recovery phrase',
@@ -83,7 +83,7 @@ class RecoveryPhraseStep extends StatelessWidget {
                 const SizedBox(height: 12),
                 CopyButton(
                   text: phrase,
-                  icon: QuarkIcons.copy_outlined,
+                  icon: QuarkIcons.content_copy,
                   variant: CopyButtonVariant.outlined,
                   label: 'Copy to a password manager',
                   unavailableReason: clipboardUnavailableReason,

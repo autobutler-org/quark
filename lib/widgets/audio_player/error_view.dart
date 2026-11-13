@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The audio player's failure state: why it could not play, and a way to
@@ -22,7 +23,7 @@ class ErrorView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.audio_file_outlined, size: 48),
+          const Icon(QuarkIcons.audio_file_outlined, size: 48),
           const SizedBox(height: 16),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 16),
@@ -30,7 +31,7 @@ class ErrorView extends StatelessWidget {
             onPressed: downloading ? null : onDownload,
             icon: downloading
                 ? const QuarkLoader(size: 16)
-                : const Icon(Icons.download_rounded, size: 16),
+                : const Icon(QuarkIcons.download_outlined, size: 16),
             label: Text(downloading ? 'Downloading…' : 'Download'),
           ),
         ],

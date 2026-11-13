@@ -15,7 +15,7 @@ void main() {
   }) => Scaffold(
     appBar: QuarkAppBar(
       label: label,
-      icon: QuarkIcons.photo_library_outlined,
+      icon: QuarkIcons.photo_library,
       actions: actions,
       onRefresh: onRefresh,
       isRefreshing: isRefreshing,
@@ -342,7 +342,7 @@ void main() {
       Scaffold(
         appBar: QuarkAppBar(
           label: 'Files',
-          icon: QuarkIcons.folder_outlined,
+          icon: QuarkIcons.folder,
           onRefresh: () {},
           middle: const SizedBox(
             key: ValueKey('middle'),
@@ -381,7 +381,7 @@ void main() {
           Scaffold(
             appBar: QuarkAppBar(
               label: 'Photos',
-              icon: QuarkIcons.photo_library_outlined,
+              icon: QuarkIcons.photo_library,
               onRefresh: () {},
               actions: [
                 Builder(

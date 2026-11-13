@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 
 import '../../models/host_item.dart';
 import '../../theme/quark_tokens.dart';
@@ -110,7 +111,7 @@ class QuarkDrawerHeader extends StatelessWidget {
             ),
             if (switchable)
               Icon(
-                Icons.unfold_more_rounded,
+                QuarkIcons.unfold_more,
                 size: 20,
                 color: tokens.mutedForeground,
               ),

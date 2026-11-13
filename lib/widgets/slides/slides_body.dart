@@ -117,7 +117,7 @@ class SlidesBody extends StatelessWidget {
         action: FilledButton.icon(
           key: const ValueKey('slides_create_cta'),
           onPressed: onCreateNew,
-          icon: const Icon(QuarkIcons.add_rounded),
+          icon: const Icon(QuarkIcons.add),
           label: Text(
             isSearching
                 ? 'Create a new presentation instead'
@@ -158,7 +158,7 @@ class SlidesBody extends StatelessWidget {
         ),
       if (contentOnly.isNotEmpty)
         const SearchSectionHeader(
-          icon: QuarkIcons.search_rounded,
+          icon: QuarkIcons.search,
           label: 'Content matches',
         ),
       for (final r in contentOnly)

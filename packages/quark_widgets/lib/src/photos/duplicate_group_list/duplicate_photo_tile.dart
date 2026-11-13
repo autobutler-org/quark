@@ -104,7 +104,7 @@ class DuplicatePhotoTile extends StatelessWidget {
                                 Icon(
                                   isSelected
                                       ? QuarkIcons.delete_outline
-                                      : QuarkIcons.check_rounded,
+                                      : QuarkIcons.check,
                                   size: 12,
                                   color: isSelected
                                       ? tokens.errorForeground

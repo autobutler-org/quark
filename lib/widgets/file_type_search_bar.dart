@@ -49,13 +49,13 @@ class FileTypeSearchBar extends StatelessWidget {
           controller: controller,
           decoration: InputDecoration(
             hintText: hintText,
-            prefixIcon: const Icon(QuarkIcons.search_rounded, size: 20),
+            prefixIcon: const Icon(QuarkIcons.search, size: 20),
             suffixIcon: controller.text.isEmpty
                 ? null
                 : IconButton(
                     key: ValueKey('${keyPrefix}_search_clear'),
                     tooltip: 'Clear search',
-                    icon: const Icon(QuarkIcons.clear_rounded, size: 18),
+                    icon: const Icon(QuarkIcons.close, size: 18),
                     onPressed: controller.clear,
                   ),
             isDense: true,

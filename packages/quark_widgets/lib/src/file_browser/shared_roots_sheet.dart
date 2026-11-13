@@ -53,7 +53,7 @@ class SharedRootsSheet extends StatelessWidget {
           ListTile(
             key: ValueKey('shared_root_${item.path}'),
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(QuarkIcons.folder_outlined),
+            leading: const Icon(QuarkIcons.folder),
             title: Text(item.name, overflow: TextOverflow.ellipsis),
             subtitle: item.owner.isEmpty
                 ? null

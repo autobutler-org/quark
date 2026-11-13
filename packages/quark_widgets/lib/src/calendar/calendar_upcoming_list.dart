@@ -118,7 +118,7 @@ class CalendarUpcomingList extends StatelessWidget {
             : FilledButton.icon(
                 key: const ValueKey('calendar_upcoming_add'),
                 onPressed: onAddEvent,
-                icon: const Icon(QuarkIcons.add_rounded, size: 18),
+                icon: const Icon(QuarkIcons.add, size: 18),
                 label: const Text('Add an event'),
               ),
       );

@@ -28,7 +28,7 @@ class SlideSaveStatus extends StatelessWidget {
         'Saved',
         'All changes saved',
       ),
-      SlideSaveState.dirty => (QuarkIcons.save_outlined, 'Save', 'Save now'),
+      SlideSaveState.dirty => (QuarkIcons.save, 'Save', 'Save now'),
       SlideSaveState.saving => (
         QuarkIcons.cloud_sync_outlined,
         'Saving…',

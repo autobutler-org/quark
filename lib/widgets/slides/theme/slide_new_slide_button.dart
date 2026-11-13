@@ -65,7 +65,7 @@ class SlideNewSlideButton extends StatelessWidget {
               ).copyWith(triggerMode: TooltipTriggerMode.manual),
               child: QuarkBarIconButton(
                 key: const ValueKey('slide_panel_add'),
-                icon: QuarkIcons.add_rounded,
+                icon: QuarkIcons.add,
                 tooltip: 'New slide',
                 onPressed: onAdd,
               ),

@@ -52,7 +52,7 @@ class FileStorageFooter extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) => Row(
                 children: [
-                  Icon(QuarkIcons.storage_rounded, size: 14, color: muted),
+                  Icon(QuarkIcons.storage, size: 14, color: muted),
                   const SizedBox(width: 8),
                   // Sized to its text, capped at half the row so a phone
                   // still cuts it short with an ellipsis (#1599). Not

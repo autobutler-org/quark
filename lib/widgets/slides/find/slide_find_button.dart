@@ -23,7 +23,7 @@ class SlideFindButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => QuarkBarIconButton(
     key: const ValueKey('slide_find_open'),
-    icon: QuarkIcons.search_rounded,
+    icon: QuarkIcons.search,
     tooltip: 'Find and replace',
     selected: isOpen,
     onPressed: onPressed,

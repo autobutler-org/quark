@@ -148,7 +148,7 @@ class _PlaintextEditorPageState extends State<PlaintextEditorPage> {
               children: [
                 QuarkBarChip(
                   key: const ValueKey('plaintext_editor_save'),
-                  icon: QuarkIcons.save_outlined,
+                  icon: QuarkIcons.save,
                   label: _saving ? 'Saving...' : 'Save',
                   onPressed: _dirty && !_saving ? _saveFile : null,
                 ),

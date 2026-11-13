@@ -52,7 +52,7 @@ class AlbumItemMenu {
           QuarkMenuEntry(
             key: const ValueKey('album_item_action_unfavorite'),
             label: 'Remove from favorites',
-            icon: QuarkIcons.star_rounded,
+            icon: QuarkIcons.star,
             onSelected: onRemoveFromFavorites,
           ),
         if (onRemoveFromAlbum != null)

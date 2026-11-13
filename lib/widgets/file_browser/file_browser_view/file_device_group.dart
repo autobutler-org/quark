@@ -29,7 +29,7 @@ class FileDeviceGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     return ExpansionTile(
       initiallyExpanded: true,
-      leading: const Icon(QuarkIcons.storage_rounded),
+      leading: const Icon(QuarkIcons.storage),
       title: Align(
         alignment: AlignmentDirectional.centerStart,
         child: DeviceTag(

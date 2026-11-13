@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 
 import '../../core/quark_loader.dart';
 import '../../core/quark_menu_button.dart';
@@ -88,7 +89,7 @@ class GroupRow extends StatelessWidget {
       child: ListTile(
         key: ValueKey('group_row_$id'),
         contentPadding: EdgeInsets.zero,
-        leading: const Icon(Icons.group_outlined),
+        leading: const Icon(QuarkIcons.group_outlined),
         title: Text(group.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           details,

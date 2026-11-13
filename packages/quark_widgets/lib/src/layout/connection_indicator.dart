@@ -49,7 +49,7 @@ class ConnectionIndicator extends StatelessWidget {
     ConnectionMode mode,
     QuarkTokens tokens,
   ) => switch (mode) {
-    ConnectionMode.local => (QuarkIcons.home_rounded, tokens.success),
+    ConnectionMode.local => (QuarkIcons.home, tokens.success),
     ConnectionMode.remote => (QuarkIcons.cloud_done_outlined, tokens.primary),
     ConnectionMode.offline => (QuarkIcons.cloud_off_outlined, tokens.warning),
   };

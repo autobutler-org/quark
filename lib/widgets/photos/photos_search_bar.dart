@@ -81,11 +81,11 @@ class _PhotosSearchBarState extends State<PhotosSearchBar> {
         onChanged: widget.onChanged,
         decoration: InputDecoration(
           hintText: 'Search photos by name…',
-          prefixIcon: const Icon(QuarkIcons.search_rounded, size: 20),
+          prefixIcon: const Icon(QuarkIcons.search, size: 20),
           suffixIcon: IconButton(
             key: const ValueKey('photos_search_close'),
             tooltip: 'Close search',
-            icon: const Icon(QuarkIcons.close_rounded, size: 18),
+            icon: const Icon(QuarkIcons.close, size: 18),
             onPressed: widget.onClose,
           ),
           isDense: true,

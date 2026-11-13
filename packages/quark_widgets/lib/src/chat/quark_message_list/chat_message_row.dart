@@ -361,11 +361,7 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
     final body = switch (message.kind) {
       ChatMessageKind.waitingForKey => Row(
         children: [
-          Icon(
-            QuarkIcons.key_outlined,
-            size: 16,
-            color: tokens.mutedForeground,
-          ),
+          Icon(QuarkIcons.key, size: 16, color: tokens.mutedForeground),
           SizedBox(width: tokens.spacingXs),
           Flexible(
             child: Text(

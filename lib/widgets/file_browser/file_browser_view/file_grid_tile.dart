@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_device_tags.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_grid_layout.dart';
@@ -122,8 +123,8 @@ class FileGridTile extends StatelessWidget {
                       ),
                       child: Icon(
                         isSelected
-                            ? Icons.check_circle
-                            : Icons.radio_button_unchecked,
+                            ? QuarkIcons.check_circle_outline
+                            : QuarkIcons.circle_outlined,
                         size: 20,
                         color: isSelected
                             ? colors.primary

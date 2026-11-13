@@ -27,7 +27,7 @@ class SshKeyRow extends StatelessWidget {
     return ListTile(
       key: ValueKey('ssh_key_${item.fingerprint}'),
       contentPadding: EdgeInsets.zero,
-      leading: const Icon(QuarkIcons.key_outlined),
+      leading: const Icon(QuarkIcons.key),
       title: Text(
         item.comment.isEmpty ? item.type : item.comment,
         maxLines: 1,

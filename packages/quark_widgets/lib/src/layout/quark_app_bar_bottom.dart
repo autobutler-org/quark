@@ -28,7 +28,7 @@ import 'quark_bar_icon_button.dart';
 /// ```dart
 /// QuarkAppBar(
 ///   label: 'Files',
-///   icon: QuarkIcons.folder_outlined,
+///   icon: QuarkIcons.folder,
 ///   bottom: QuarkAppBarBottom(
 ///     lead: breadcrumb,
 ///     actions: [uploadChip, newFolderChip, viewToggle],
@@ -44,7 +44,7 @@ class QuarkAppBarBottom extends StatelessWidget implements PreferredSizeWidget {
     this.actions = const [],
     this.menuChildren = const [],
     this.menuLabel = 'Views',
-    this.menuIcon = QuarkIcons.tune_rounded,
+    this.menuIcon = QuarkIcons.tune,
     this.collapseBelow = collapseBreakpoint,
     super.key,
   });

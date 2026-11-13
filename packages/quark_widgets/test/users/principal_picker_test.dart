@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -100,10 +101,10 @@ void main() {
     );
 
     expect(
-      find.descendant(of: option(ada), matching: find.byIcon(Icons.check)),
+      find.descendant(of: option(ada), matching: find.byIcon(QuarkIcons.check)),
       findsOneWidget,
     );
-    expect(find.byIcon(Icons.check), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.check), findsOneWidget);
     // A group with the same id is not the same principal.
     expect(tester.widget<ListTile>(option(everyone)).selected, isFalse);
   });

@@ -12,7 +12,7 @@ void main() {
   }) => Scaffold(
     appBar: QuarkAppBar(
       label: 'Files',
-      icon: QuarkIcons.folder_outlined,
+      icon: QuarkIcons.folder,
       bottom: QuarkAppBarBottom(
         collapseBelow: collapseBelow,
         lead: const Text(
@@ -23,7 +23,7 @@ void main() {
         pinnedActions: [
           QuarkBarIconButton(
             key: const ValueKey('search'),
-            icon: QuarkIcons.search_rounded,
+            icon: QuarkIcons.search,
             tooltip: 'Search',
             onPressed: () => log('search'),
           ),

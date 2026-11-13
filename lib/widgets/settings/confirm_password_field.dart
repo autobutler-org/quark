@@ -64,9 +64,7 @@ class _ConfirmPasswordFieldState extends State<ConfirmPasswordField> {
       suffix: IconButton(
         key: ValueKey('${widget.keyPrefix}_password_visibility'),
         icon: Icon(
-          _obscured
-              ? QuarkIcons.visibility_outlined
-              : QuarkIcons.visibility_off_outlined,
+          _obscured ? QuarkIcons.visibility : QuarkIcons.visibility_off,
         ),
         tooltip: _obscured ? 'Show password' : 'Hide password',
         onPressed: () => setState(() => _obscured = !_obscured),

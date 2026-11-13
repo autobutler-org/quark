@@ -61,7 +61,7 @@ class RemoteAccessTurnOffDialog extends StatelessWidget {
                 'phones, loses access to this Quark.',
           ),
           RemoteAccessTurnOffConsequence(
-            icon: QuarkIcons.home_rounded,
+            icon: QuarkIcons.home,
             color: tokens.success,
             text: 'At home, everything keeps working as usual.',
           ),

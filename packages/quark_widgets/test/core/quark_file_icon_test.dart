@@ -8,14 +8,11 @@ void main() {
   testWidgets('renders a folder glyph for a folder', (tester) async {
     await pumpAt(tester, const QuarkFileIcon(kind: QuarkFileKind.folder));
 
-    expect(find.byIcon(QuarkIcons.folder_outlined), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.folder), findsOneWidget);
   });
 
   test('maps each kind to its glyph', () {
-    expect(
-      QuarkFileIcon.iconFor(QuarkFileKind.folder),
-      QuarkIcons.folder_outlined,
-    );
+    expect(QuarkFileIcon.iconFor(QuarkFileKind.folder), QuarkIcons.folder);
     expect(
       QuarkFileIcon.iconFor(QuarkFileKind.image),
       QuarkIcons.image_outlined,

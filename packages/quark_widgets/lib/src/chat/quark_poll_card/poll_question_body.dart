@@ -245,8 +245,8 @@ class PollQuestionBody extends StatelessWidget {
               onPressed: canAnswer ? () => onRate(step) : null,
               icon: Icon(
                 step <= (rating ?? 0)
-                    ? QuarkIcons.star_rounded
-                    : QuarkIcons.star_outline_rounded,
+                    ? QuarkIcons.star
+                    : QuarkIcons.star_border,
                 color: step <= (rating ?? 0)
                     ? tokens.primary
                     : tokens.mutedForeground,

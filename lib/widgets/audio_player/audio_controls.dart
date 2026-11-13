@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/utils/playback_time.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:video_player/video_player.dart';
@@ -66,7 +67,7 @@ class _AudioControlsState extends State<AudioControls> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.music_note_rounded,
+              QuarkIcons.music_note,
               size: 120,
               color: colors.primary.withValues(alpha: 0.3),
             ),
@@ -109,7 +110,7 @@ class _AudioControlsState extends State<AudioControls> {
               children: [
                 IconButton(
                   onPressed: () => _seekBy(const Duration(seconds: -10)),
-                  icon: const Icon(Icons.replay_10),
+                  icon: const Icon(QuarkIcons.replay_10),
                   iconSize: 28,
                 ),
                 const SizedBox(width: 12),
@@ -119,7 +120,9 @@ class _AudioControlsState extends State<AudioControls> {
                         ? widget.controller.pause()
                         : widget.controller.play();
                   },
-                  icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                  icon: Icon(
+                    isPlaying ? QuarkIcons.pause : QuarkIcons.play_arrow,
+                  ),
                   iconSize: 40,
                   // The theme's icon color would otherwise override the
                   // filled button's own: a slate glyph on the accent (#3257).
@@ -131,7 +134,7 @@ class _AudioControlsState extends State<AudioControls> {
                 const SizedBox(width: 12),
                 IconButton(
                   onPressed: () => _seekBy(const Duration(seconds: 10)),
-                  icon: const Icon(Icons.forward_10),
+                  icon: const Icon(QuarkIcons.forward_10),
                   iconSize: 28,
                 ),
               ],
@@ -144,7 +147,9 @@ class _AudioControlsState extends State<AudioControls> {
                   onPressed: () {
                     widget.controller.setVolume(isMuted ? 1 : 0);
                   },
-                  icon: Icon(isMuted ? Icons.volume_off : Icons.volume_up),
+                  icon: Icon(
+                    isMuted ? QuarkIcons.volume_off : QuarkIcons.volume_up,
+                  ),
                 ),
                 PopupMenuButton<double>(
                   tooltip: 'Playback speed',

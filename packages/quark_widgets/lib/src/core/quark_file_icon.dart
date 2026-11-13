@@ -37,7 +37,7 @@ class QuarkFileIcon extends StatelessWidget {
   /// Exposed for callers that need the glyph on its own: a list tile's
   /// leading slot, a menu entry, a drag feedback layer.
   static IconData iconFor(QuarkFileKind kind) => switch (kind) {
-    QuarkFileKind.folder => QuarkIcons.folder_outlined,
+    QuarkFileKind.folder => QuarkIcons.folder,
     QuarkFileKind.image => QuarkIcons.image_outlined,
     QuarkFileKind.video => QuarkIcons.video_file_outlined,
     QuarkFileKind.audio => QuarkIcons.audio_file_outlined,

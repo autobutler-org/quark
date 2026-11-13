@@ -32,7 +32,7 @@ void main() {
     );
 
     expect(find.byIcon(QuarkIcons.video_file_outlined), findsOneWidget);
-    expect(find.byIcon(QuarkIcons.visibility_off_outlined), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.visibility_off), findsOneWidget);
     expect(
       find.byKey(const ValueKey('thumbnail_unavailable_hevc-aac.mov')),
       findsOneWidget,
@@ -42,7 +42,7 @@ void main() {
   });
 
   for (final (issue, badge) in [
-    (ThumbnailIssue.unreadable, QuarkIcons.broken_image_outlined),
+    (ThumbnailIssue.unreadable, QuarkIcons.broken_image),
     (ThumbnailIssue.missing, QuarkIcons.help_outline),
     (ThumbnailIssue.loadFailed, QuarkIcons.cloud_off_outlined),
   ]) {
@@ -67,8 +67,8 @@ void main() {
       expect(find.byIcon(QuarkIcons.image_outlined), findsOneWidget);
       expect(find.byIcon(badge), findsOneWidget);
       for (final other in [
-        QuarkIcons.visibility_off_outlined,
-        QuarkIcons.broken_image_outlined,
+        QuarkIcons.visibility_off,
+        QuarkIcons.broken_image,
         QuarkIcons.help_outline,
         QuarkIcons.cloud_off_outlined,
       ].where((icon) => icon != badge)) {

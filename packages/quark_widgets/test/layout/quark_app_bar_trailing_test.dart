@@ -10,7 +10,7 @@ void main() {
   const bar = Scaffold(
     appBar: QuarkAppBar(
       label: 'Photos',
-      icon: QuarkIcons.photo_library_outlined,
+      icon: QuarkIcons.photo_library,
       actions: [Text('page action')],
     ),
     body: SizedBox.shrink(),

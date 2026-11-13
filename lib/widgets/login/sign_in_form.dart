@@ -100,7 +100,7 @@ class SignInForm extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Icon(
-            QuarkIcons.home_filled,
+            QuarkIcons.home,
             size: 56,
             color: theme.colorScheme.primary,
             semanticLabel: 'Quark',
@@ -194,8 +194,8 @@ class SignInForm extends StatelessWidget {
                     suffixIcon: IconButton(
                       icon: Icon(
                         obscurePassword
-                            ? QuarkIcons.visibility_outlined
-                            : QuarkIcons.visibility_off_outlined,
+                            ? QuarkIcons.visibility
+                            : QuarkIcons.visibility_off,
                       ),
                       tooltip: obscurePassword
                           ? 'Show password'

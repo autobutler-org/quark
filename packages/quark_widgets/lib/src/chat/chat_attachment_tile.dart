@@ -110,7 +110,7 @@ class ChatAttachmentTile extends StatelessWidget {
                   ),
                   QuarkBarIconButton(
                     key: ValueKey('chat_attachment_play_${item.id}'),
-                    icon: QuarkIcons.play_arrow_rounded,
+                    icon: QuarkIcons.play_arrow,
                     tooltip: 'Play',
                     onPressed: onPlay,
                   ),
@@ -215,7 +215,7 @@ class ChatAttachmentTile extends StatelessWidget {
                           key: ValueKey(
                             'chat_attachment_save_files_${item.id}',
                           ),
-                          icon: QuarkIcons.folder_outlined,
+                          icon: QuarkIcons.folder,
                           label: 'Save to my files',
                           tooltip: 'Save to my files',
                           keepLabel: true,

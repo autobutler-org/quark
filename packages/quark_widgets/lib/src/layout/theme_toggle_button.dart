@@ -36,12 +36,12 @@ class ThemeToggleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final (icon, tooltip, nextMode) = switch (mode) {
       ThemeMode.light => (
-        QuarkIcons.dark_mode_rounded,
+        QuarkIcons.dark_mode,
         'Switch to dark mode',
         ThemeMode.dark,
       ),
       ThemeMode.dark => (
-        QuarkIcons.light_mode_rounded,
+        QuarkIcons.light_mode,
         'Switch to light mode',
         ThemeMode.light,
       ),

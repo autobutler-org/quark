@@ -131,7 +131,7 @@ class _MarkdownViewerPageState extends State<MarkdownViewerPage> {
                   QuarkBarChip(
                     key: const ValueKey('markdown_viewer_source_toggle'),
                     icon: _controller.showSource
-                        ? QuarkIcons.visibility_outlined
+                        ? QuarkIcons.visibility
                         : QuarkIcons.text_box,
                     label: _controller.showSource ? 'Rendered' : 'Source',
                     onPressed: _toggleSource,

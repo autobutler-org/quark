@@ -104,7 +104,7 @@ class DuplicateGroupList extends StatelessWidget {
     }
     if (groups.isEmpty) {
       return const EmptyStateWidget(
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         headline: 'No duplicates found',
         subtext: 'Photos show up here once their thumbnails have loaded.',
       );

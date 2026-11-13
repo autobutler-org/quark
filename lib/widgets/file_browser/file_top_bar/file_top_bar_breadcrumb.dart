@@ -110,7 +110,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
                             child: SizedBox.square(
                               dimension: kMinInteractiveDimension,
                               child: Icon(
-                                QuarkIcons.home_rounded,
+                                QuarkIcons.home,
                                 size: 16,
                                 color: canGoHome
                                     ? tokens.secondaryForeground
@@ -221,7 +221,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
         return ListTile(
           dense: true,
           leading: Icon(
-            idx == 0 ? QuarkIcons.home_rounded : QuarkIcons.folder_rounded,
+            idx == 0 ? QuarkIcons.home : QuarkIcons.folder,
             size: 18,
             // In a menu, which is content and not under QuarkChrome.
             color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -294,7 +294,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Icon(
-            QuarkIcons.chevron_right_rounded,
+            QuarkIcons.chevron_right,
             size: 14,
             color: tokens.mutedForeground,
           ),

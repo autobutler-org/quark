@@ -123,7 +123,7 @@ void main() {
       onRefresh: () {},
       actions: [
         QuarkBarChip(
-          icon: QuarkIcons.add_rounded,
+          icon: QuarkIcons.add,
           label: 'New event',
           onPressed: () {},
         ),
@@ -145,7 +145,7 @@ void main() {
       title: const Text('notes.txt'),
       actions: [
         const QuarkBarChip(
-          icon: QuarkIcons.save_outlined,
+          icon: QuarkIcons.save,
           label: 'Save',
           onPressed: null,
         ),
