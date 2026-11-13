@@ -582,7 +582,7 @@ void main() {
           matching: find.byType(Transform),
         ),
       );
-      expect(shift.transform.getTranslation().y, closeTo(2.2, 0.01));
+      expect(shift.transform.getTranslation().y, closeTo(2.4, 0.01));
       expect(tester.takeException(), isNull);
     });
   }

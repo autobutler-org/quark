@@ -38,13 +38,13 @@ class QuarkDrawerHeader extends StatelessWidget {
     final active = activeHostIndex >= 0 && activeHostIndex < hosts.length
         ? hosts[activeHostIndex]
         : null;
-    final wordmarkStyle = theme.textTheme.titleLarge?.copyWith(
+    final wordmarkStyle = theme.textTheme.headlineSmall?.copyWith(
       fontFamily: 'Newsreader',
       package: 'quark_widgets',
       fontWeight: FontWeight.w500,
       color: tokens.foreground,
     );
-    final wordmarkSize = wordmarkStyle?.fontSize ?? 22;
+    final wordmarkSize = wordmarkStyle?.fontSize ?? 24;
     // Newsreader's cap height sits 0.1em above the em box (ascender 1470,
     // descender 530, cap height 1340, em 2000). The row centers the em box on
     // the mark, so the letters have to move down by that much to line up.
@@ -93,7 +93,7 @@ class QuarkDrawerHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         wordmark,
-        const SizedBox(height: 4),
+        SizedBox(height: tokens.spacingMd),
         Row(
           children: [
             // One line each, clipped with an ellipsis: a nickname is whatever
@@ -103,7 +103,7 @@ class QuarkDrawerHeader extends StatelessWidget {
                 active.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleLarge?.copyWith(
+                style: theme.textTheme.titleMedium?.copyWith(
                   color: tokens.foreground,
                 ),
               ),
