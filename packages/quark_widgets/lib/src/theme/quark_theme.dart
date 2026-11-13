@@ -92,6 +92,10 @@ abstract final class QuarkTheme {
       brightness: brightness,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: tokens.background,
+      // Geist is the UI face, bundled with the package. Newsreader is applied
+      // only to the product name and the page titles.
+      fontFamily: 'Geist',
+      package: 'quark_widgets',
       useMaterial3: true,
       // Material's desktop defaults (shrinkWrap targets, compact density) bring
       // a stock button down to 32px. A touchscreen laptop, a Chromebook or a
@@ -135,7 +139,7 @@ abstract final class QuarkTheme {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(tokens.radiusMd),
           borderSide: BorderSide(
-            color: tokens.primary,
+            color: tokens.focus,
             width: tokens.focusRingWidth,
           ),
         ),
@@ -239,12 +243,14 @@ abstract final class QuarkTheme {
   }
 
   /// The outline a button wears while it holds keyboard focus:
-  /// [QuarkTokens.focusRingWidth] pixels of [QuarkTokens.primary].
+  /// [QuarkTokens.focusRingWidth] pixels of [QuarkTokens.focus].
   ///
   /// Material's own focus cue for a button is a faint overlay tint, which on a
-  /// filled button sits on top of a color it barely differs from. A keyboard
-  /// user needs to see where they are before they press Enter — on a sign-in
-  /// form most of all, which is where this was reported (#2028).
+  /// filled button sits on top of a color it barely differs from. The ring is
+  /// [QuarkTokens.focus] rather than [QuarkTokens.primary], because classic
+  /// fills buttons with ink and a ring in that same color disappears (#2028).
+  /// A keyboard user needs to see where they are before they press Enter, on
+  /// a sign-in form most of all.
   ///
   /// [resting] is the border the button wears the rest of the time, or null
   /// for no border at all. A button that sets its own `side` replaces the
@@ -256,7 +262,7 @@ abstract final class QuarkTheme {
   }) {
     return WidgetStateProperty.resolveWith((states) {
       if (states.contains(WidgetState.focused)) {
-        return BorderSide(color: tokens.primary, width: tokens.focusRingWidth);
+        return BorderSide(color: tokens.focus, width: tokens.focusRingWidth);
       }
       return resting == null ? null : BorderSide(color: resting);
     });

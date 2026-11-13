@@ -69,7 +69,10 @@ class FileTopBarSearchField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(tokens.radiusLg),
-              borderSide: BorderSide(color: tokens.primary),
+              borderSide: BorderSide(
+                color: tokens.focus,
+                width: tokens.focusRingWidth,
+              ),
             ),
           ),
           onChanged: onChanged,

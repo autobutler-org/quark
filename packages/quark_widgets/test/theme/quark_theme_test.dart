@@ -27,6 +27,14 @@ void main() {
         expect(scheme.outline, tokens.outline);
         expect(scheme.outlineVariant, tokens.border);
         expect(theme.scaffoldBackgroundColor, tokens.background);
+        expect(
+          theme.textTheme.bodyMedium?.fontFamily,
+          'packages/quark_widgets/Geist',
+        );
+        expect(
+          theme.filledButtonTheme.style!.backgroundColor!.resolve({}),
+          tokens.primary,
+        );
       });
 
       test('$name: the tokens ride along as a theme extension', () {
@@ -106,8 +114,9 @@ void main() {
             theme.filledButtonTheme.style!.side!.resolve({
               WidgetState.focused,
             })!.color,
-            tokens.primary,
+            tokens.focus,
           );
+          expect(tokens.focus, isNot(tokens.primary));
           expect(
             theme.switchTheme.trackColor!.resolve({WidgetState.selected}),
             tokens.primary,
@@ -218,7 +227,8 @@ void main() {
 
         final focused = decoration.focusedBorder! as OutlineInputBorder;
         final resting = decoration.enabledBorder! as OutlineInputBorder;
-        expect(focused.borderSide.color, tokens.primary);
+        expect(focused.borderSide.color, tokens.focus);
+        expect(focused.borderSide.color, isNot(tokens.primary));
         expect(focused.borderSide.width, greaterThan(resting.borderSide.width));
       });
 
@@ -235,7 +245,7 @@ void main() {
           final side = style!.side!;
           final focused = side.resolve({WidgetState.focused});
           expect(focused, isNotNull);
-          expect(focused!.color, tokens.primary);
+          expect(focused!.color, tokens.focus);
           expect(focused.width, tokens.focusRingWidth);
           expect(focused.width, greaterThanOrEqualTo(2));
           // And nothing extra while it is merely sitting there.
@@ -288,7 +298,7 @@ void main() {
           expect(theme.colorScheme.primary, tokens.primary);
           final focused =
               theme.inputDecorationTheme.focusedBorder! as OutlineInputBorder;
-          expect(focused.borderSide.color, tokens.primary);
+          expect(focused.borderSide.color, tokens.focus);
           expect(
             theme.filledButtonTheme.style!.backgroundColor!.resolve({}),
             tokens.primary,

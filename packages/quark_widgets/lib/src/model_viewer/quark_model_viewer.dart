@@ -407,7 +407,7 @@ class _QuarkModelViewerState extends State<QuarkModelViewer> {
                                   decoration: BoxDecoration(
                                     border: _focused
                                         ? Border.all(
-                                            color: tokens.primary,
+                                            color: tokens.focus,
                                             width: tokens.focusRingWidth,
                                           )
                                         : null,

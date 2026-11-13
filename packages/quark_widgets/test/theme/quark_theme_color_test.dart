@@ -382,7 +382,8 @@ void main() {
             );
             expect(
               _chroma(surface),
-              // The classic dark input, `#131C2E`, spreads 0.106.
+              // A tint, not a second color. The warm classic surfaces are nearly
+              // gray, so this cap is what keeps a derived surface from going vivid.
               lessThanOrEqualTo(0.12),
               reason: '$id: $name is more than a tint',
             );
@@ -465,16 +466,11 @@ void main() {
       for (final (brightness, surfaces) in [
         (
           Brightness.dark,
-          const [
-            Color(0xFF070D19),
-            Color(0xFF0F172A),
-            Color(0xFF0C1220),
-            Color(0xFF131C2E),
-          ],
+          const [Color(0xFF161615), Color(0xFF1D1D1B), Color(0xFF252523)],
         ),
         (
           Brightness.light,
-          const [Color(0xFFF1F5F9), Color(0xFFF8FAFC), Color(0xFFFFFFFF)],
+          const [Color(0xFFEFEEE9), Color(0xFFF7F6F3), Color(0xFFFFFFFF)],
         ),
       ]) {
         final classic = tokens(QuarkThemeColor.classic, brightness);
@@ -645,10 +641,11 @@ void main() {
       expect(QuarkThemeColor.classic.seed, isNull);
     });
 
-    test('draws its chrome exactly as its content was drawn before', () {
+    test('draws its chrome on the canvas', () {
       for (final tokens in [QuarkTokens.light, QuarkTokens.dark]) {
         expect(tokens.onChrome, tokens);
-        expect(tokens.chrome, tokens.sidebar);
+        expect(tokens.chrome, tokens.background);
+        expect(tokens.sidebar, isNot(tokens.background));
       }
     });
   });

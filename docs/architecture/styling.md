@@ -49,9 +49,13 @@ a `QuarkTokens` set: `QuarkTheme.light()` and `QuarkTheme.dark()`. It attaches t
 `ThemeExtension`, so a widget can reach values Material's `ColorScheme` has no slot for (`sidebar`, `warning`,
 `success`, the spacing scale) through the same `QuarkTokens.of(context)` call. Every Material component theme
 Quark configures — `AppBarTheme`, `CardTheme`, `InputDecorationTheme`, button themes, `SwitchTheme`,
-`CheckboxTheme`, dialogs, snack bars — is built entirely from `tokens`, never a literal, including the two-pixel
-focus ring on inputs and buttons (`quark_theme.dart:120-127`, `:217-227`) that keyboard-only users depend on to
-see where focus is.
+`CheckboxTheme`, dialogs, snack bars — is built entirely from `tokens`, never a literal, including the
+focus ring on inputs and buttons. The ring is `tokens.focus`, two pixels (three in high contrast), and not
+`tokens.primary`: classic fills a button with ink, and a ring in that same color disappears on it.
+
+The UI face is Geist and the product name and page titles are Newsreader, both bundled in `quark_widgets`
+rather than loaded at runtime. `radiusMd` is 6 on every theme color, high contrast included; `radiusSm` stays
+4 and `radiusLg` stays 12. The spacing scale stays 4, 8, 16, 24, 32.
 
 The `ColorScheme` surface containers come from the tokens too, so a Material widget that paints with one stays
 on theme (#2786): `surfaceContainerLowest` is `background`, `surfaceContainerLow` is `sidebar`,
@@ -69,9 +73,10 @@ for dark, so the light/dark/system toggle keeps working under any color. `QuarkT
 defaulted to `classic`, which is how the docs page kept classic's palette under a picked color (#2786). It is
 saved as `storageValue` (a preset name or `#rrggbb`) and read back with `QuarkThemeColor.parse`.
 
-- **`classic` is Quark as it ships**: `QuarkTokens.light` and `QuarkTokens.dark`, untouched. Its accent is the
-  blue preset's hue at the same strength, written out as constants. It is the default,
-  the first preset, and what `parse` returns for null, empty, malformed, or unknown values.
+- **`classic` is Quark as it ships**: `QuarkTokens.light` and `QuarkTokens.dark`, untouched. Its accent is
+  ink, the product site's filled-button color, written out as constants. Keyboard focus is a separate blue
+  (`focus`), so the ring is not the button fill. It is the default, the first preset, and what `parse` returns
+  for null, empty, malformed, or unknown values.
 - **Every other preset is a fixed seed** run through the same derivation as a custom one. Only the seed's hue
   is kept, and how colorful it is up to a cap: the theme's strength is the seed's saturation over one half, held
   to 0.45 at most (`_maxStrength`, #2777). A weak seed fades the theme toward gray (that is all `graphite` is, at
@@ -87,9 +92,10 @@ saved as `storageValue` (a preset name or `#rrggbb`) and read back with `QuarkTh
 
 Chrome no longer shares a surface with content, so text on it cannot use the content's text colors.
 `QuarkTokens` carries `chrome`, `chromeBorder`, `chromeForeground`, `chromeSecondaryForeground`,
-`chromeMutedForeground` and `chromePrimary`; in the classic sets each equals its content counterpart
-(`sidebar`, `border`, `foreground`, `secondaryForeground`, `mutedForeground`, `primary`), which is why classic
-did not move.
+`chromeMutedForeground` and `chromePrimary`; in the classic sets the text and the accent equal their content
+counterparts (`foreground`, `secondaryForeground`, `mutedForeground`, `primary`) and `chromeBorder` equals
+`border`. `chrome` itself is the canvas (`background`), and `sidebar` is the sunken surface, so the app bar
+and the drawer sit on the page color.
 
 A widget does not pick between the two families itself.
 [`QuarkChrome`](../../packages/quark_widgets/lib/src/layout/quark_chrome.dart) marks a subtree as sitting on
@@ -112,9 +118,9 @@ holds and would otherwise leave pairs sitting exactly on the WCAG floor (#2785).
 
 | Token | Light | Dark |
 | --- | --- | --- |
-| `background` | 0.45 / 0.968, lighter until luminance is 0.91 | 0.50 / 0.063 |
+| `background` | 0.45 / 0.968, lighter until luminance is 0.86 | 0.50 / 0.063 |
 | `card`, `input` | 0.60 / 0.990, same floor | 0.45 / 0.112, and 0.42 / 0.127 |
-| `sidebar` | 0.40 / 0.950, same floor | 0.45 / 0.086 |
+| `sidebar` | 0.40 / 0.925, same floor | 0.45 / 0.141 |
 | `border`, `outline` | 0.25 / 0.62, darker until 3:1 on every content surface | 0.25 / 0.40, lighter until the same |
 | `foreground`, `cardForeground` | 0.45 / 0.11 | 0.30 / 0.91 |
 | `secondaryForeground` | 0.22 / 0.34, darker until 6:1 on content | 0.20 / 0.65, lighter until the same |
@@ -128,9 +134,9 @@ holds and would otherwise leave pairs sitting exactly on the WCAG floor (#2785).
 | `chromeMutedForeground` | 0.40 / 0.30, darker until 4.5:1 on chrome and on `input` | 0.25 / 0.70, lighter until the same |
 | `chromePrimary` | as `primary`, but until 4.5:1 on chrome and its tint too | same |
 
-"Content" is `background`, `card`, `input` and `sidebar`. The light-mode floor of 0.91 is the luminance of the
-classic sidebar: no tinted surface is darker than the darkest classic one, so the fixed status colors score no
-worse on it. In light mode the chrome is a mid tone with dark text, because an accent dark enough to be
+"Content" is `background`, `card`, `input` and `sidebar`. The light-mode floor of 0.86 is the luminance of the
+classic sunken sidebar: no tinted surface is darker than the darkest classic one, so the fixed status colors
+score no worse on it. In light mode the chrome is a mid tone with dark text, because an accent dark enough to be
 text on near-white content could not also stand out from a dark chrome. In dark mode the chrome is a deep tone
 with light text.
 
@@ -171,8 +177,9 @@ High contrast is a variant of the theme color, not a replacement for it (#3071).
 `QuarkTokens.highContrastLight` and recolors only the accent: `primary` and `chromePrimary` take the seed's hue at
 up to 0.9 saturation and move away from the surfaces until they are 7:1, plus the 0.1 margin, on `background`,
 `card`, `input`, `sidebar` and `chrome`, and `primaryForeground` is whichever of black and white reads better on
-the result. Filled buttons, selection, links, switches and the focus ring are drawn in the accent, so that is
-where the theme shows. Surfaces, text and outlines stay neutral, because a tint on any of them costs the contrast
+the result. Filled buttons, selection, links and switches are drawn in the accent, so that is where the theme
+shows. The focus ring stays `focus`, off the fill. Surfaces, text and outlines stay neutral, because a tint on
+any of them costs the contrast
 the mode exists for. `classic` yields the shipped high-contrast pair untouched.
 `QuarkTheme.highContrastLight(themeColor:)` and `QuarkTheme.highContrastDark(themeColor:)` build from those sets.
 `quark_theme_color_test.dart` holds every preset and custom seed to the 7:1 ratios, and `quark_tokens_test.dart`

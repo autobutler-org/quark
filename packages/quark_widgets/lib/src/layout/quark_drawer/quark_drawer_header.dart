@@ -1,12 +1,15 @@
 import 'package:material_ui/material_ui.dart';
-import '../../models/host_item.dart';
 
-/// The top of `QuarkDrawer`: the product name, or the Quark on screen and,
-/// with more than one saved, a menu for switching to another (#2230).
+import '../../models/host_item.dart';
+import '../../theme/quark_tokens.dart';
+
+/// The top of `QuarkDrawer`: the product name as a wordmark, the mark beside
+/// it, on the canvas, and the Quark on screen. With more than one saved, the
+/// header opens a menu for switching to another (#2230, #4098).
 ///
-/// Key prefixes: `drawer_host` on the header when it names a Quark,
-/// `drawer_host_header` on the button that opens the menu, and
-/// `drawer_host_<index>` on each Quark in it.
+/// Key prefixes: `drawer_wordmark` on the product name, `drawer_host` on the
+/// header when it names a Quark, `drawer_host_header` on the button that opens
+/// the menu, and `drawer_host_<index>` on each Quark in it.
 class QuarkDrawerHeader extends StatelessWidget {
   /// Creates the header for [hosts], naming the one at [activeHostIndex].
   const QuarkDrawerHeader({
@@ -30,70 +33,94 @@ class QuarkDrawerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final onPrimary = theme.colorScheme.onPrimary;
-    final muted = onPrimary.withValues(alpha: 0.8);
+    final tokens = QuarkTokens.of(context);
     final active = activeHostIndex >= 0 && activeHostIndex < hosts.length
         ? hosts[activeHostIndex]
         : null;
-
-    if (active == null || active.name.isEmpty) {
-      return Align(
-        alignment: Alignment.bottomLeft,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+    final wordmark = Row(
+      key: const ValueKey('drawer_wordmark'),
+      children: [
+        Image.asset(
+          'assets/mark.png',
+          package: 'quark_widgets',
+          width: 24,
+          height: 24,
+          excludeFromSemantics: true,
+          filterQuality: FilterQuality.medium,
+        ),
+        SizedBox(width: tokens.spacingSm),
+        Flexible(
           child: Text(
             'Quark',
-            style: theme.textTheme.titleLarge?.copyWith(color: onPrimary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontFamily: 'Newsreader',
+              package: 'quark_widgets',
+              color: tokens.foreground,
+            ),
           ),
         ),
-      );
+      ],
+    );
+
+    // The drawer list is flush to the screen edge. Keep the status-bar inset
+    // the old filled header carried, without its 160dp slab.
+    Widget padded(Widget child) => SafeArea(
+      bottom: false,
+      child: Padding(padding: const EdgeInsets.all(16), child: child),
+    );
+
+    if (active == null || active.name.isEmpty) {
+      return padded(wordmark);
     }
 
     final onSelect = onSelectHost;
     final switchable = hosts.length > 1 && onSelect != null;
-    final label = Padding(
+    final label = Column(
       key: const ValueKey('drawer_host'),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Quark',
-            style: theme.textTheme.labelMedium?.copyWith(color: muted),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              // One line each, clipped with an ellipsis: a nickname is whatever
-              // someone typed, and the drawer is 304dp wide on every phone.
-              Expanded(
-                child: Text(
-                  active.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleLarge?.copyWith(color: onPrimary),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        wordmark,
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            // One line each, clipped with an ellipsis: a nickname is whatever
+            // someone typed, and the drawer is 304dp wide on every phone.
+            Expanded(
+              child: Text(
+                active.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: tokens.foreground,
                 ),
               ),
-              if (switchable)
-                Icon(Icons.unfold_more_rounded, size: 20, color: muted),
-            ],
-          ),
-          if (active.address.isNotEmpty)
-            Text(
-              active.address,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
-        ],
-      ),
+            if (switchable)
+              Icon(
+                Icons.unfold_more_rounded,
+                size: 20,
+                color: tokens.mutedForeground,
+              ),
+          ],
+        ),
+        if (active.address.isNotEmpty)
+          Text(
+            active.address,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: tokens.mutedForeground,
+            ),
+          ),
+      ],
     );
 
-    if (!switchable) return label;
+    if (!switchable) return padded(label);
 
-    return SizedBox.expand(
-      child: InkWell(
+    return padded(
+      InkWell(
         key: const ValueKey('drawer_host_header'),
         onTap: () => _showMenu(context, onSelect),
         child: label,

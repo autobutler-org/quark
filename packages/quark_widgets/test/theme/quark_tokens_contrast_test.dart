@@ -132,8 +132,8 @@ void main() {
 
       test('control outlines and the focus ring are 3:1', () {
         expectRatio('outline', tokens.outline, content, _boundary);
-        // The focus ring is drawn in the accent wherever a control sits.
-        expectRatio('focus ring', tokens.primary, {
+        // The focus ring is [QuarkTokens.focus], not the button fill.
+        expectRatio('focus ring', tokens.focus, {
           ...content,
           'chrome': tokens.chrome,
         }, _boundary);

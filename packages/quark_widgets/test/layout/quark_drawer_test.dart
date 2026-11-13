@@ -570,14 +570,18 @@ void main() {
       // The active row is the accent as chrome draws it.
       expect(textColor('Photos'), tokens.chromePrimary);
       expect(iconColor('drawer_photos'), tokens.chromePrimary);
-      final header = tester.widget<DrawerHeader>(find.byType(DrawerHeader));
-      expect((header.decoration! as BoxDecoration).color, tokens.chromePrimary);
+      expect(find.byType(DrawerHeader), findsNothing);
+      final wordmark = tester
+          .renderObject<RenderParagraph>(find.text('Quark'))
+          .text;
+      expect(wordmark.style!.color, tokens.chromeForeground);
+      expect(wordmark.style!.fontFamily, 'packages/quark_widgets/Newsreader');
       expect(tester.takeException(), isNull);
     });
   }
 
-  // The header is filled with the accent as chrome draws it, so everything
-  // on it has to be the accent's foreground, whichever way that flipped.
+  // The header sits on the canvas, so its text has to clear the chrome
+  // surface, whichever way the theme flipped.
   for (final themeColor in [QuarkThemeColor.blue, QuarkThemeColor.lime]) {
     for (final brightness in Brightness.values) {
       testBothViewports(
@@ -601,12 +605,11 @@ void main() {
           );
 
           final tokens = themeColor.tokensFor(brightness);
-          final header = tester.widget<DrawerHeader>(find.byType(DrawerHeader));
-          final fill = (header.decoration! as BoxDecoration).color!;
-          expect(fill, tokens.chromePrimary);
+          expect(find.byType(DrawerHeader), findsNothing);
+          final fill = tokens.chrome;
 
           final inHeader = find.descendant(
-            of: find.byType(DrawerHeader),
+            of: find.byKey(const ValueKey('drawer_host')),
             matching: find.byType(RichText),
           );
           final paragraphs = tester.renderObjectList<RenderParagraph>(inHeader);

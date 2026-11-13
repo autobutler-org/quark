@@ -83,7 +83,8 @@ const _manageSections = {
 /// destination the signed-in user cannot use, such as Users for someone who
 /// is not an admin, rather than showing a row that goes nowhere.
 ///
-/// The header names the Quark on screen, [hosts] at [activeHostIndex]
+/// The header is the wordmark, the mark beside the word Quark, on the canvas
+/// (#4098). It names the Quark on screen, [hosts] at [activeHostIndex]
 /// (#2033). With more than one saved, the signed-in app otherwise said
 /// "Quark" and nothing else, so which device a page was reading — or an
 /// upload was about to land on — was invisible. With two or more [hosts] the
@@ -289,14 +290,10 @@ class QuarkDrawer extends StatelessWidget {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              DrawerHeader(
-                decoration: BoxDecoration(color: tokens.primary),
-                padding: EdgeInsets.zero,
-                child: QuarkDrawerHeader(
-                  hosts: hosts,
-                  activeHostIndex: activeHostIndex,
-                  onSelectHost: onSelectHost,
-                ),
+              QuarkDrawerHeader(
+                hosts: hosts,
+                activeHostIndex: activeHostIndex,
+                onSelectHost: onSelectHost,
               ),
               for (final (section, icon, label, onTap) in rows)
                 if (onTap != null) ...[
