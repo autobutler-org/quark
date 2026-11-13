@@ -70,6 +70,11 @@ class QuarkBarIconButton extends StatelessWidget {
   /// a bar leaves between two controls.
   static const double tapTargetMargin = (tapTargetSize - size) / 2;
 
+  /// Where a menu anchored to a bar chip should open. The chip keeps
+  /// [tapTargetMargin] outside its painted edge, and that padding is part of
+  /// the anchor, so without this the menu starts to the left of the chip.
+  static const Offset menuAnchorOffset = Offset(tapTargetMargin, 0);
+
   /// The glyph, from `QuarkIcons`.
   final IconData icon;
 

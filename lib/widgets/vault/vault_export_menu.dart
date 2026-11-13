@@ -18,13 +18,16 @@ class VaultExportMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MenuAnchor(
+      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
       menuChildren: [
         for (final format in VaultExportFormat.values)
           MenuItemButton(
             key: ValueKey('vault_export_${format.name}'),
-            leadingIcon: const Icon(QuarkIcons.download_outlined),
             onPressed: () => onExport(format),
-            child: Text('Export as ${format.name.toUpperCase()}'),
+            child: quarkMenuLabel(
+              leading: const Icon(QuarkIcons.download_outlined),
+              label: Text('Export as ${format.name.toUpperCase()}'),
+            ),
           ),
       ],
       builder: (context, controller, _) => QuarkBarChip(

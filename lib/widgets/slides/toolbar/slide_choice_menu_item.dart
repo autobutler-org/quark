@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_choice.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// A slide toolbar choice as a menu row: its glyph, its label, and a check
 /// while it is on, which a screen reader hears as selected.
@@ -20,10 +21,12 @@ class SlideChoiceMenuItem extends StatelessWidget {
       selected: choice.selected,
       child: MenuItemButton(
         key: ValueKey(choice.key),
-        leadingIcon: choice.icon == null ? null : Icon(choice.icon),
-        trailingIcon: on ? const Icon(QuarkIcons.check) : null,
         onPressed: choice.onSelected,
-        child: Text(choice.label),
+        child: quarkMenuLabel(
+          leading: choice.icon == null ? null : Icon(choice.icon),
+          trailing: on ? const Icon(QuarkIcons.check) : null,
+          label: Text(choice.label),
+        ),
       ),
     );
   }

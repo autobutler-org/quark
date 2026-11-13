@@ -239,16 +239,8 @@ class FileTopBarBreadcrumb extends StatelessWidget {
       result.add(
         MenuAnchor(
           controller: hiddenCrumbsController,
-          style: MenuStyle(
-            minimumSize: const WidgetStatePropertyAll(Size(200, 0)),
-            shape: WidgetStatePropertyAll(
-              RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(tokens.radiusLg),
-              ),
-            ),
-            padding: const WidgetStatePropertyAll(
-              EdgeInsets.symmetric(vertical: 8),
-            ),
+          style: const MenuStyle(
+            minimumSize: WidgetStatePropertyAll(Size(200, 0)),
           ),
           menuChildren: menuItems,
           child: Semantics(

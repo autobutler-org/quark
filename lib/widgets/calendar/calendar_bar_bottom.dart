@@ -151,16 +151,20 @@ class CalendarBarBottom extends StatelessWidget implements PreferredSizeWidget {
         if (view != CalendarView.upcoming)
           MenuItemButton(
             key: const ValueKey('calendar_menu_today'),
-            leadingIcon: const Icon(QuarkIcons.today_outlined),
             onPressed: onToday,
-            child: const Text('Today'),
+            child: quarkMenuLabel(
+              leading: const Icon(QuarkIcons.today_outlined),
+              label: const Text('Today'),
+            ),
           ),
         for (final v in order)
           MenuItemButton(
             key: ValueKey('calendar_menu_${v.slug}'),
-            leadingIcon: Icon(v == view ? QuarkIcons.check : _icon(v)),
             onPressed: v == view ? null : () => onViewSelected(v),
-            child: Text(label(v)),
+            child: quarkMenuLabel(
+              leading: Icon(v == view ? QuarkIcons.check : _icon(v)),
+              label: Text(label(v)),
+            ),
           ),
       ],
     );

@@ -152,14 +152,20 @@ void main() {
         findsOneWidget,
       );
     }
-    final newest = tester.widget<MenuItemButton>(
-      find.byKey(const ValueKey('album_sort_option_newest')),
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('album_sort_option_newest')),
+        matching: find.byIcon(QuarkIcons.check),
+      ),
+      findsOneWidget,
     );
-    final oldest = tester.widget<MenuItemButton>(
-      find.byKey(const ValueKey('album_sort_option_oldest')),
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('album_sort_option_oldest')),
+        matching: find.byIcon(QuarkIcons.check),
+      ),
+      findsNothing,
     );
-    expect(newest.trailingIcon, isNotNull);
-    expect(oldest.trailingIcon, isNull);
 
     await tester.tap(find.byKey(const ValueKey('album_sort_option_name_desc')));
     await tester.pumpAndSettle();

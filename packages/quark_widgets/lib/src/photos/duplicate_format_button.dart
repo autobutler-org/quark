@@ -1,7 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_menu_label.dart';
 import '../layout/quark_bar_chip.dart';
+import '../layout/quark_bar_icon_button.dart';
 import '../theme/quark_tokens.dart';
 
 /// The duplicates view's "Keep" choice (#1666): a bar chip that opens a menu
@@ -48,26 +50,19 @@ class DuplicateFormatButton extends StatelessWidget {
       for (final f in formats) (id: f, label: f, value: f),
     ];
     return MenuAnchor(
-      style: MenuStyle(
-        minimumSize: const WidgetStatePropertyAll(Size(160, 0)),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(tokens.radiusLg),
-          ),
-        ),
-        padding: WidgetStatePropertyAll(
-          EdgeInsets.symmetric(vertical: tokens.spacingSm),
-        ),
-      ),
+      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
+      style: const MenuStyle(minimumSize: WidgetStatePropertyAll(Size(160, 0))),
       menuChildren: [
         for (final option in options)
           MenuItemButton(
             key: ValueKey('duplicates_keep_format_option_${option.id}'),
-            trailingIcon: option.value == preferred
-                ? Icon(QuarkIcons.check, size: 16, color: tokens.primary)
-                : null,
             onPressed: () => onChanged(option.value),
-            child: Text(option.label),
+            child: quarkMenuLabel(
+              trailing: option.value == preferred
+                  ? Icon(QuarkIcons.check, color: tokens.primary)
+                  : null,
+              label: Text(option.label),
+            ),
           ),
       ],
       builder: (context, controller, _) => QuarkBarChip(

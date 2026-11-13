@@ -139,9 +139,11 @@ class SlidePhoneFormatMenu extends StatelessWidget {
         ),
         MenuItemButton(
           key: const ValueKey('slide_chart_title_menu'),
-          leadingIcon: const Icon(QuarkIcons.chart_title),
           onPressed: onOpenProperties,
-          child: const Text('Title…'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.chart_title),
+            label: const Text('Title…'),
+          ),
         ),
         for (final c in a.chartToggles) SlideChoiceMenuItem(choice: c),
         QuarkSubmenuButton(
@@ -215,6 +217,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
         if (!readOnly && group.appliesTo(a)) group,
     ];
     return MenuAnchor(
+      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
       menuChildren: [
         for (final group in groups)
           QuarkSubmenuButton(
@@ -225,35 +228,45 @@ class SlidePhoneFormatMenu extends StatelessWidget {
           ),
         MenuItemButton(
           key: const ValueKey('slide_format_find'),
-          leadingIcon: const Icon(QuarkIcons.search),
           onPressed: onFind,
-          child: const Text('Find and replace'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.search),
+            label: const Text('Find and replace'),
+          ),
         ),
         if (!readOnly) ...[
           MenuItemButton(
             key: const ValueKey('slide_format_theme'),
-            leadingIcon: const Icon(QuarkIcons.slide_theme),
             onPressed: onOpenTheme,
-            child: const Text('Theme'),
+            child: quarkMenuLabel(
+              leading: const Icon(QuarkIcons.slide_theme),
+              label: const Text('Theme'),
+            ),
           ),
           MenuItemButton(
             key: const ValueKey('slide_format_layout'),
-            leadingIcon: const Icon(QuarkIcons.slide_layout),
             onPressed: onOpenLayout,
-            child: const Text('Slide layout'),
+            child: quarkMenuLabel(
+              leading: const Icon(QuarkIcons.slide_layout),
+              label: const Text('Slide layout'),
+            ),
           ),
           MenuItemButton(
             key: const ValueKey('slide_format_transition'),
-            leadingIcon: const Icon(QuarkIcons.slide_transition),
             onPressed: onOpenTransition,
-            child: const Text('Transition'),
+            child: quarkMenuLabel(
+              leading: const Icon(QuarkIcons.slide_transition),
+              label: const Text('Transition'),
+            ),
           ),
         ],
         MenuItemButton(
           key: const ValueKey('slide_format_properties'),
-          leadingIcon: const Icon(QuarkIcons.properties),
           onPressed: onOpenProperties,
-          child: const Text('Properties'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.properties),
+            label: const Text('Properties'),
+          ),
         ),
         QuarkSubmenuButton(
           key: const ValueKey('slide_zoom_menu'),
@@ -266,15 +279,19 @@ class SlidePhoneFormatMenu extends StatelessWidget {
         if (onShare != null)
           MenuItemButton(
             key: const ValueKey('slide_format_share'),
-            leadingIcon: const Icon(QuarkIcons.share_outlined),
             onPressed: onShare,
-            child: const Text(SlideShareButton.label),
+            child: quarkMenuLabel(
+              leading: const Icon(QuarkIcons.share_outlined),
+              label: const Text(SlideShareButton.label),
+            ),
           ),
         MenuItemButton(
           key: const ValueKey('slide_format_shortcuts'),
-          leadingIcon: const Icon(QuarkIcons.keyboard_shortcuts),
           onPressed: onShowShortcuts,
-          child: const Text('Keyboard shortcuts'),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.keyboard_shortcuts),
+            label: const Text('Keyboard shortcuts'),
+          ),
         ),
       ],
       builder: (context, menu, _) => QuarkBarChip(

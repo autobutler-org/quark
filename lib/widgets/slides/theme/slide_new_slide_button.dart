@@ -42,9 +42,11 @@ class SlideNewSlideButton extends StatelessWidget {
       for (final layout in layouts)
         MenuItemButton(
           key: ValueKey('slide_panel_add_${layout.id}'),
-          leadingIcon: const Icon(QuarkIcons.slide_layout),
           onPressed: () => onAddWithLayout(layout.id),
-          child: Text(layout.name),
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.slide_layout),
+            label: Text(layout.name),
+          ),
         ),
     ],
     builder: (context, menu, _) {

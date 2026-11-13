@@ -74,6 +74,7 @@ class SlidePickerMenuButton extends StatelessWidget {
       ),
     };
     return MenuAnchor(
+      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
       menuChildren: [
         SizedBox(
           width: width,

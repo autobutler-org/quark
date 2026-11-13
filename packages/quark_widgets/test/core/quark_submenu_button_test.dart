@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
@@ -50,6 +51,75 @@ void main() {
     await tester.tap(key('insert'));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('a checked submenu row stays on a narrow screen', (tester) async {
+    await pumpAt(
+      tester,
+      Align(
+        alignment: Alignment.topLeft,
+        child: MenuAnchor(
+          alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
+          menuChildren: [
+            for (final label in [
+              'Clipboard',
+              'Find and replace',
+              'Keyboard shortcuts',
+              'Slide layout',
+            ])
+              MenuItemButton(
+                onPressed: () {},
+                child: quarkMenuLabel(
+                  leading: const Icon(QuarkIcons.search),
+                  trailing: const Icon(QuarkIcons.chevron_right),
+                  label: Text(label),
+                ),
+              ),
+            QuarkSubmenuButton(
+              key: const ValueKey('chart'),
+              leadingIcon: const Icon(QuarkIcons.chart_kind),
+              menuChildren: [
+                MenuItemButton(
+                  onPressed: () {},
+                  child: quarkMenuLabel(
+                    leading: const Icon(QuarkIcons.chart_kind),
+                    trailing: const Icon(QuarkIcons.chevron_right),
+                    label: const Text('Type: Horizontal bar'),
+                  ),
+                ),
+                MenuItemButton(
+                  key: const ValueKey('grid'),
+                  onPressed: () {},
+                  child: quarkMenuLabel(
+                    leading: const Icon(QuarkIcons.chart_gridlines),
+                    trailing: const Icon(QuarkIcons.check),
+                    label: const Text('Gridlines'),
+                  ),
+                ),
+              ],
+              child: const Text('Chart'),
+            ),
+          ],
+          builder: (context, menu, _) =>
+              TextButton(onPressed: menu.open, child: const Text('Format')),
+        ),
+      ),
+      size: narrowViewport,
+    );
+    await tester.tap(find.text('Format'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chart'));
+    await tester.pumpAndSettle();
+    final rect = tester.getRect(find.byKey(const ValueKey('grid')));
+    // A flexible trailing gap used to grow the row to the overlay, wider
+    // than the phone, so the center sat past the edge and the tap missed.
+    expect(rect.width, lessThan(narrowViewport.width), reason: '$rect');
+    expect(rect.left, greaterThanOrEqualTo(0), reason: '$rect');
+    expect(
+      rect.center.dx,
+      inInclusiveRange(0, narrowViewport.width),
+      reason: 'a tap hits the center: $rect',
+    );
+  });
 
   testBothViewports('a tap opens the submenu and a pick closes the menus', (
     tester,

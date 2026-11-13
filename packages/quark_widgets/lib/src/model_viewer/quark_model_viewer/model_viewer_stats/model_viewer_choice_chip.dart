@@ -1,7 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../../../core/quark_menu_label.dart';
 import '../../../layout/quark_bar_chip.dart';
+import '../../../layout/quark_bar_icon_button.dart';
 import '../../../theme/quark_tokens.dart';
 
 /// One of the choices in a `ModelViewerStats` strip (#3228): a chip reading
@@ -62,26 +64,19 @@ class ModelViewerChoiceChip<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     return MenuAnchor(
-      style: MenuStyle(
-        minimumSize: const WidgetStatePropertyAll(Size(160, 0)),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(tokens.radiusLg),
-          ),
-        ),
-        padding: WidgetStatePropertyAll(
-          EdgeInsets.symmetric(vertical: tokens.spacingSm),
-        ),
-      ),
+      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
+      style: const MenuStyle(minimumSize: WidgetStatePropertyAll(Size(160, 0))),
       menuChildren: [
         for (final option in options)
           MenuItemButton(
             key: ValueKey('${keyPrefix}_option_${option.id}'),
-            trailingIcon: option.value == selected
-                ? Icon(QuarkIcons.check, size: 16, color: tokens.primary)
-                : null,
             onPressed: () => onChanged(option.value),
-            child: Text(option.label),
+            child: quarkMenuLabel(
+              trailing: option.value == selected
+                  ? Icon(QuarkIcons.check, color: tokens.primary)
+                  : null,
+              label: Text(option.label),
+            ),
           ),
       ],
       builder: (context, controller, _) => QuarkBarChip(

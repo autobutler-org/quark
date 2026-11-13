@@ -241,6 +241,8 @@ void main() {
           theme.textButtonTheme.style,
           // #2604: a bare icon button had only Material's faint tint.
           theme.iconButtonTheme.style,
+          // #4099: a menu row uses the same ring, not Material's tint.
+          theme.menuButtonTheme.style,
         ]) {
           final side = style!.side!;
           final focused = side.resolve({WidgetState.focused});

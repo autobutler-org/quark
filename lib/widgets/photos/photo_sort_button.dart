@@ -73,27 +73,19 @@ class PhotoSortButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     return MenuAnchor(
-      style: MenuStyle(
-        minimumSize: const WidgetStatePropertyAll(Size(200, 0)),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(tokens.radiusLg),
-          ),
-        ),
-        padding: WidgetStatePropertyAll(
-          EdgeInsets.symmetric(vertical: tokens.spacingSm),
-        ),
-      ),
+      style: const MenuStyle(minimumSize: WidgetStatePropertyAll(Size(200, 0))),
       menuChildren: [
         for (final option in _options)
           MenuItemButton(
             key: ValueKey('photos_sort_option_${option.id}'),
-            leadingIcon: Icon(_iconFor(option.field), size: 18),
-            trailingIcon: option.field == sortField && option.order == sortOrder
-                ? Icon(QuarkIcons.check, size: 16, color: tokens.primary)
-                : null,
             onPressed: () => onChanged(option.field, option.order),
-            child: Text(option.label),
+            child: quarkMenuLabel(
+              leading: Icon(_iconFor(option.field)),
+              trailing: option.field == sortField && option.order == sortOrder
+                  ? Icon(QuarkIcons.check, color: tokens.primary)
+                  : null,
+              label: Text(option.label),
+            ),
           ),
       ],
       builder: (context, controller, _) => QuarkBarIconButton(
