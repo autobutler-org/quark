@@ -116,89 +116,103 @@ class SettingsGeneralTab extends StatelessWidget {
     final onThemeColorChanged = this.onThemeColorChanged;
     final onQuarkThemeColorChanged = this.onQuarkThemeColorChanged;
     final onDefaultCalendarViewChanged = this.onDefaultCalendarViewChanged;
-    const heading = TextStyle(fontSize: 16, fontWeight: FontWeight.bold);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         if (header != null) ...[header!, const SizedBox(height: 24)],
-        const Text('Backend hosts', style: heading),
-        const SizedBox(height: 8),
-        HostManager(onChanged: onHostsChanged),
+        QuarkSection(
+          title: 'Backend hosts',
+          child: HostManager(onChanged: onHostsChanged),
+        ),
         const SizedBox(height: 24),
-        const Text('Theme', style: heading),
-        RadioGroup<ThemeMode>(
-          groupValue: theme,
-          onChanged: (v) {
-            if (v != null) onThemeChanged(v);
-          },
-          child: const Column(
+        QuarkSection(
+          title: 'Theme',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              RadioListTile<ThemeMode>(
-                title: Text('System'),
-                value: ThemeMode.system,
+              RadioGroup<ThemeMode>(
+                groupValue: theme,
+                onChanged: (v) {
+                  if (v != null) onThemeChanged(v);
+                },
+                child: const Column(
+                  children: [
+                    RadioListTile<ThemeMode>(
+                      title: Text('System'),
+                      value: ThemeMode.system,
+                    ),
+                    RadioListTile<ThemeMode>(
+                      title: Text('Light'),
+                      value: ThemeMode.light,
+                    ),
+                    RadioListTile<ThemeMode>(
+                      title: Text('Dark'),
+                      value: ThemeMode.dark,
+                    ),
+                  ],
+                ),
               ),
-              RadioListTile<ThemeMode>(
-                title: Text('Light'),
-                value: ThemeMode.light,
-              ),
-              RadioListTile<ThemeMode>(
-                title: Text('Dark'),
-                value: ThemeMode.dark,
-              ),
+              if (onHighContrastChanged != null)
+                Card(
+                  child: SwitchListTile(
+                    key: const ValueKey('settings_high_contrast'),
+                    title: const Text('High contrast'),
+                    subtitle: const Text(
+                      'Stronger colors and bolder outlines, so text and '
+                      'buttons are easier to see.',
+                    ),
+                    value: highContrast,
+                    onChanged: onHighContrastChanged,
+                  ),
+                ),
+              if (onLeftHandedChanged != null)
+                Card(
+                  child: SwitchListTile(
+                    key: const ValueKey('settings_left_handed'),
+                    title: const Text('Left-handed mode'),
+                    subtitle: const Text(
+                      'Moves the menu button and the menu to the right, and '
+                      'floating buttons to the left.',
+                    ),
+                    value: leftHanded,
+                    onChanged: onLeftHandedChanged,
+                  ),
+                ),
             ],
           ),
         ),
-        if (onHighContrastChanged != null)
-          Card(
-            child: SwitchListTile(
-              key: const ValueKey('settings_high_contrast'),
-              title: const Text('High contrast'),
-              subtitle: const Text(
-                'Stronger colors and bolder outlines, so text and buttons '
-                'are easier to see.',
-              ),
-              value: highContrast,
-              onChanged: onHighContrastChanged,
-            ),
-          ),
-        if (onLeftHandedChanged != null)
-          Card(
-            child: SwitchListTile(
-              key: const ValueKey('settings_left_handed'),
-              title: const Text('Left-handed mode'),
-              subtitle: const Text(
-                'Moves the menu button and the menu to the right, and '
-                'floating buttons to the left.',
-              ),
-              value: leftHanded,
-              onChanged: onLeftHandedChanged,
-            ),
-          ),
         if (onThemeColorChanged != null) ...[
           const SizedBox(height: 24),
-          const Text('Theme color', style: heading),
-          const SizedBox(height: 8),
-          QuarkThemeColorPicker(
-            key: const ValueKey('settings_theme_color'),
-            value: themeColor,
-            usingDefault: followsQuarkThemeColor,
-            onChanged: (picked) => onThemeColorChanged(picked.storageValue),
-            onUseDefault: () => onThemeColorChanged(''),
+          QuarkSection(
+            title: 'Theme color',
+            child: QuarkThemeColorPicker(
+              key: const ValueKey('settings_theme_color'),
+              value: themeColor,
+              usingDefault: followsQuarkThemeColor,
+              onChanged: (picked) => onThemeColorChanged(picked.storageValue),
+              onUseDefault: () => onThemeColorChanged(''),
+            ),
           ),
         ],
         if (onQuarkThemeColorChanged != null) ...[
           const SizedBox(height: 24),
-          const Text("This Quark's default", style: heading),
-          const SizedBox(height: 4),
-          const Text(
-            'The theme color for everyone who has not picked their own.',
-          ),
-          const SizedBox(height: 8),
-          QuarkThemeColorPicker(
-            key: const ValueKey('settings_quark_theme_color'),
-            value: quarkThemeColor,
-            onChanged: (picked) =>
-                onQuarkThemeColorChanged(picked.storageValue),
+          QuarkSection(
+            title: "This Quark's default",
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'The theme color for everyone who has not picked their own.',
+                ),
+                const SizedBox(height: 8),
+                QuarkThemeColorPicker(
+                  key: const ValueKey('settings_quark_theme_color'),
+                  value: quarkThemeColor,
+                  onChanged: (picked) =>
+                      onQuarkThemeColorChanged(picked.storageValue),
+                ),
+              ],
+            ),
           ),
         ],
         if (onDefaultCalendarViewChanged != null) ...[
@@ -213,30 +227,31 @@ class SettingsGeneralTab extends StatelessWidget {
           notifications!,
         ],
         const SizedBox(height: 24),
-        const Text('Auto-refresh interval', style: heading),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<int>(
-          initialValue: refreshIntervalSeconds,
-          // Full width and as tall as its text, so the choice still fits at
-          // large text sizes (#2606).
-          isExpanded: true,
-          itemHeight: null,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        QuarkSection(
+          title: 'Auto-refresh interval',
+          child: DropdownButtonFormField<int>(
+            initialValue: refreshIntervalSeconds,
+            // Full width and as tall as its text, so the choice still fits at
+            // large text sizes (#2606).
+            isExpanded: true,
+            itemHeight: null,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            items: const [
+              DropdownMenuItem(value: 0, child: Text('Disabled')),
+              DropdownMenuItem(value: 10, child: Text('10 seconds')),
+              DropdownMenuItem(value: 15, child: Text('15 seconds')),
+              DropdownMenuItem(value: 30, child: Text('30 seconds')),
+              DropdownMenuItem(value: 60, child: Text('1 minute')),
+              DropdownMenuItem(value: 120, child: Text('2 minutes')),
+              DropdownMenuItem(value: 300, child: Text('5 minutes')),
+            ],
+            onChanged: (v) {
+              if (v != null) onRefreshIntervalChanged(v);
+            },
           ),
-          items: const [
-            DropdownMenuItem(value: 0, child: Text('Disabled')),
-            DropdownMenuItem(value: 10, child: Text('10 seconds')),
-            DropdownMenuItem(value: 15, child: Text('15 seconds')),
-            DropdownMenuItem(value: 30, child: Text('30 seconds')),
-            DropdownMenuItem(value: 60, child: Text('1 minute')),
-            DropdownMenuItem(value: 120, child: Text('2 minutes')),
-            DropdownMenuItem(value: 300, child: Text('5 minutes')),
-          ],
-          onChanged: (v) {
-            if (v != null) onRefreshIntervalChanged(v);
-          },
         ),
         const SizedBox(height: 24),
         Card(

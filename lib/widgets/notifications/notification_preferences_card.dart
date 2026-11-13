@@ -47,50 +47,49 @@ class _NotificationPreferencesCardState
       builder: (context, _) {
         final theme = Theme.of(context);
         final error = controller.preferencesError;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Notifications',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            if (controller.preferencesLoaded)
-              Card(
-                child: Column(
-                  children: [
-                    for (final type in NotificationType.values)
-                      SwitchListTile(
-                        key: ValueKey('notification_toggle_${type.wire}'),
-                        title: Text(type.settingTitle),
-                        subtitle: Text(type.settingDescription),
-                        value: controller.isEnabled(type),
-                        onChanged: controller.isSaving
-                            ? null
-                            : (enabled) => controller.setEnabled(type, enabled),
-                      ),
-                  ],
+        return QuarkSection(
+          title: 'Notifications',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (controller.preferencesLoaded)
+                Card(
+                  child: Column(
+                    children: [
+                      for (final type in NotificationType.values)
+                        SwitchListTile(
+                          key: ValueKey('notification_toggle_${type.wire}'),
+                          title: Text(type.settingTitle),
+                          subtitle: Text(type.settingDescription),
+                          value: controller.isEnabled(type),
+                          onChanged: controller.isSaving
+                              ? null
+                              : (enabled) =>
+                                    controller.setEnabled(type, enabled),
+                        ),
+                    ],
+                  ),
+                )
+              else if (error == null)
+                const Center(child: QuarkLoader(size: 20)),
+              if (error != null) ...[
+                const SizedBox(height: 8),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    error,
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
                 ),
-              )
-            else if (error == null)
-              const Center(child: QuarkLoader(size: 20)),
-            if (error != null) ...[
-              const SizedBox(height: 8),
-              Semantics(
-                liveRegion: true,
-                child: Text(
-                  error,
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
-              ),
-              if (!controller.preferencesLoaded)
-                TextButton(
-                  key: const ValueKey('notification_preferences_retry'),
-                  onPressed: controller.loadPreferences,
-                  child: const Text('Try again'),
-                ),
+                if (!controller.preferencesLoaded)
+                  TextButton(
+                    key: const ValueKey('notification_preferences_retry'),
+                    onPressed: controller.loadPreferences,
+                    child: const Text('Try again'),
+                  ),
+              ],
             ],
-          ],
+          ),
         );
       },
     );

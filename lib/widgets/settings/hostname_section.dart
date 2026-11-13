@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/hostname_controller.dart';
 import 'package:quark/widgets/settings/hostname_field.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The device name section of Settings and of first-boot setup (#2344): a
 /// heading over a card holding the [HostnameField].
@@ -61,22 +62,20 @@ class _HostnameSectionState extends State<HostnameSection> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              widget.title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: HostnameField(
-                  hostname: status.hostname,
-                  advertisedHostname: status.advertisedHostname,
-                  isWorking: _controller.isWorking,
-                  error: _controller.error,
-                  renamedTo: _controller.renamedTo,
-                  reopenAddress: _controller.reopenAddress,
-                  onSubmit: _controller.rename,
+            QuarkSection(
+              title: widget.title,
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: HostnameField(
+                    hostname: status.hostname,
+                    advertisedHostname: status.advertisedHostname,
+                    isWorking: _controller.isWorking,
+                    error: _controller.error,
+                    renamedTo: _controller.renamedTo,
+                    reopenAddress: _controller.reopenAddress,
+                    onSubmit: _controller.rename,
+                  ),
                 ),
               ),
             ),

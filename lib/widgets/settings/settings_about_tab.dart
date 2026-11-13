@@ -64,31 +64,31 @@ class SettingsAboutTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         if (header != null) ...[header!, const SizedBox(height: 24)],
-        const Text(
-          'Quark',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        if (appVersion != null)
+        QuarkSection(
+          title: 'Quark',
           // Tapping the version is the whole affordance here: a button under
           // a one-line header would outweigh the line it annotates (#1756).
-          Align(
-            alignment: Alignment.centerLeft,
-            child: InkWell(
-              onTap: appReleaseUrl == null
-                  ? null
-                  : () => onOpenReleaseNotes(appReleaseUrl!),
-              child: Text(
-                appVersion!,
-                style: appReleaseUrl == null
-                    ? theme.textTheme.bodySmall
-                    : theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                        decoration: TextDecoration.underline,
-                        decorationColor: theme.colorScheme.primary,
-                      ),
-              ),
-            ),
-          ),
+          child: appVersion == null
+              ? const SizedBox.shrink()
+              : Align(
+                  alignment: Alignment.centerLeft,
+                  child: InkWell(
+                    onTap: appReleaseUrl == null
+                        ? null
+                        : () => onOpenReleaseNotes(appReleaseUrl!),
+                    child: Text(
+                      appVersion!,
+                      style: appReleaseUrl == null
+                          ? theme.textTheme.bodySmall
+                          : theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                              decoration: TextDecoration.underline,
+                              decorationColor: theme.colorScheme.primary,
+                            ),
+                    ),
+                  ),
+                ),
+        ),
         const SizedBox(height: 24),
         QuarkSection(
           title: 'Help & Support',
