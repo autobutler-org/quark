@@ -59,6 +59,20 @@ abstract final class QuarkTheme {
   /// which is what lets the widget gallery's theme panel restyle the whole app
   /// from edited values.
   static ThemeData from(QuarkTokens tokens, Brightness brightness) {
+    // Menu glyphs use the same size as every other icon. A menu that passes
+    // its own [Icon.size] still overrides this.
+    const iconSize = 20.0;
+    // The card is about 1.1:1 from the canvas, and the hairline [QuarkTokens.border]
+    // about 1.3:1, so neither separates a menu on the classic canvases. The
+    // outline clears 3:1 on both. [MenuAnchor] reads [menuTheme], not
+    // [popupMenuTheme], so the two carry the same panel (#4099). No minimum
+    // width: the anchors that need one set 160, 200, or 220 themselves.
+    final menuShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(tokens.radiusLg),
+      side: BorderSide(color: tokens.outline),
+    );
+    final menuPadding = EdgeInsets.symmetric(vertical: tokens.spacingSm);
+
     final colorScheme = ColorScheme.fromSeed(
       seedColor: tokens.primary,
       brightness: brightness,
@@ -224,11 +238,41 @@ abstract final class QuarkTheme {
           borderRadius: BorderRadius.circular(tokens.radiusMd),
         ),
       ),
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(tokens.card),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          elevation: const WidgetStatePropertyAll(0),
+          shape: WidgetStatePropertyAll(menuShape),
+          padding: WidgetStatePropertyAll(menuPadding),
+        ),
+      ),
       popupMenuTheme: PopupMenuThemeData(
         color: tokens.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(tokens.radiusMd),
-          side: BorderSide(color: tokens.border),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shape: menuShape,
+        menuPadding: menuPadding,
+      ),
+      menuButtonTheme: MenuButtonThemeData(
+        style: ButtonStyle(
+          // A one-line list tile is 56. A menu row stays a 48dp target.
+          minimumSize: const WidgetStatePropertyAll(
+            Size(64, kMinInteractiveDimension),
+          ),
+          iconSize: const WidgetStatePropertyAll(iconSize),
+          side: focusRing(tokens),
+          overlayColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected) ||
+                states.contains(WidgetState.pressed)) {
+              return tokens.foreground.withValues(alpha: 0.12);
+            }
+            if (states.contains(WidgetState.hovered) ||
+                states.contains(WidgetState.focused)) {
+              return tokens.foreground.withValues(alpha: 0.08);
+            }
+            return Colors.transparent;
+          }),
         ),
       ),
       dialogTheme: DialogThemeData(
@@ -238,7 +282,10 @@ abstract final class QuarkTheme {
           side: BorderSide(color: tokens.border),
         ),
       ),
-      iconTheme: IconThemeData(color: tokens.secondaryForeground, size: 20),
+      iconTheme: IconThemeData(
+        color: tokens.secondaryForeground,
+        size: iconSize,
+      ),
     );
   }
 

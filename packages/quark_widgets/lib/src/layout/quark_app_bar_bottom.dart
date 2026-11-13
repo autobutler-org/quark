@@ -107,16 +107,8 @@ class QuarkAppBarBottom extends StatelessWidget implements PreferredSizeWidget {
               if (!compact) ...actions,
               if (compact && menuChildren.isNotEmpty)
                 MenuAnchor(
-                  style: MenuStyle(
-                    minimumSize: const WidgetStatePropertyAll(Size(220, 0)),
-                    shape: WidgetStatePropertyAll(
-                      RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(tokens.radiusLg),
-                      ),
-                    ),
-                    padding: WidgetStatePropertyAll(
-                      EdgeInsets.symmetric(vertical: tokens.spacingSm),
-                    ),
+                  style: const MenuStyle(
+                    minimumSize: WidgetStatePropertyAll(Size(220, 0)),
                   ),
                   menuChildren: menuChildren,
                   builder: (context, controller, _) => QuarkBarChip(

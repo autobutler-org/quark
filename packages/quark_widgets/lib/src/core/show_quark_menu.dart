@@ -82,7 +82,6 @@ Future<void> showQuarkMenu(
                 else if (entry.icon != null)
                   Icon(
                     entry.icon,
-                    size: 18,
                     color: entry.destructive ? tokens.error : null,
                   ),
                 if (entry.busy || entry.icon != null)

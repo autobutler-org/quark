@@ -62,17 +62,7 @@ class ModelViewerChoiceChip<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     return MenuAnchor(
-      style: MenuStyle(
-        minimumSize: const WidgetStatePropertyAll(Size(160, 0)),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(tokens.radiusLg),
-          ),
-        ),
-        padding: WidgetStatePropertyAll(
-          EdgeInsets.symmetric(vertical: tokens.spacingSm),
-        ),
-      ),
+      style: const MenuStyle(minimumSize: WidgetStatePropertyAll(Size(160, 0))),
       menuChildren: [
         for (final option in options)
           MenuItemButton(
