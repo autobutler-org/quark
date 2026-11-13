@@ -14,6 +14,9 @@ void main() {
     await pumpAt(
       tester,
       MenuAnchor(
+        style: const MenuStyle(
+          minimumSize: WidgetStatePropertyAll(Size(280, 0)),
+        ),
         menuChildren: [
           MenuItemButton(
             onPressed: () {},

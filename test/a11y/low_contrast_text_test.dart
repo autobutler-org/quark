@@ -35,8 +35,9 @@ void main() {
     'packages/quark_widgets/lib/src/settings/quark_theme_color_picker/'
             'theme_color_hue_slider.dart':
         1,
-    // The text-color wash that fills surfaceContainerHighest.
-    'packages/quark_widgets/lib/src/theme/quark_theme.dart': 1,
+    // The text-color wash on surfaceContainerHighest, and the menu row's
+    // hover and selected overlays. None of these is drawn as text.
+    'packages/quark_widgets/lib/src/theme/quark_theme.dart': 3,
     // The image viewer's drag handle, divider and key-cap fill.
     'lib/widgets/image_viewer/metadata_drawer.dart': 1,
     'lib/widgets/image_viewer/section.dart': 1,

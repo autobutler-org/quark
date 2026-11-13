@@ -35,20 +35,16 @@ Widget quarkMenuLabel({
     );
   }
 
+  // One row, packed from the start. A nested row under spaceBetween let the
+  // label drift toward the middle of a wide menu, away from its icon.
   return Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (leading != null) ...[
-            slot(leading),
-            const SizedBox(width: quarkMenuIconGap),
-          ],
-          label,
-        ],
-      ),
-      if (trailing != null) slot(trailing),
+      if (leading != null) ...[
+        slot(leading),
+        const SizedBox(width: quarkMenuIconGap),
+      ],
+      Flexible(fit: FlexFit.loose, child: label),
+      if (trailing != null) ...[const Spacer(), slot(trailing)],
     ],
   );
 }

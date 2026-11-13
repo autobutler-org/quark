@@ -257,6 +257,9 @@ abstract final class QuarkTheme {
       ),
       menuButtonTheme: MenuButtonThemeData(
         style: ButtonStyle(
+          // Start, not center: a centered row parks the label in the middle
+          // of the menu, away from its icon.
+          alignment: AlignmentDirectional.centerStart,
           // A one-line list tile is 56. A menu row stays a 48dp target.
           minimumSize: const WidgetStatePropertyAll(
             Size(64, kMinInteractiveDimension),
