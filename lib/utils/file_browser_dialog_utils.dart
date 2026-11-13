@@ -32,11 +32,12 @@ String? fileNameProblem(String name) {
 }
 
 Future<String?> promptForFolderName(BuildContext context) async {
-  final value = await _promptForText(
-    context: context,
+  final value = await _promptForName(
+    context,
     title: 'New Folder',
-    hintText: 'Folder name',
+    label: 'Folder name',
     confirmLabel: 'Create',
+    validator: fileNameProblem,
   );
 
   final normalized = value?.trim() ?? '';
@@ -551,86 +552,34 @@ Future<bool> confirmDestructive(
     ) ==
     true;
 
-Future<String?> _promptForText({
-  required BuildContext context,
+/// Asks for one name in a [QuarkNameDialog] checked by [validator]; the
+/// trimmed name, or null when canceled.
+Future<String?> _promptForName(
+  BuildContext context, {
   required String title,
-  required String hintText,
+  required String label,
   required String confirmLabel,
+  required String? Function(String name) validator,
+  String initialName = '',
 }) async {
   await Future<void>.delayed(Duration.zero);
   if (!context.mounted) {
     return null;
   }
 
-  final String? value = await QuarkWidget.showDialog(
+  return QuarkWidget.showDialog<String>(
     context,
     useRootNavigator: true,
-    builder: (dialogContext) => TextControllerScope(
-      builder: (_, textController) => ValueListenableBuilder<TextEditingValue>(
-        valueListenable: textController,
-        builder: (context, text, _) {
-          // An empty field is where every new name starts, so a blank name
-          // only disables the button; any other problem says why. A blank
-          // name used to close the dialog with nothing created (#2074).
-          final problem = fileNameProblem(text.text);
-          void submit() {
-            if (fileNameProblem(textController.text) == null) {
-              Navigator.of(dialogContext).pop(textController.text.trim());
-            }
-          }
-
-          return QuarkWidget.alertDialog(
-            title: Text(title),
-            content: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  QuarkWidget.textField(
-                    controller: textController,
-                    autofocus: true,
-                    hintText: hintText,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => submit(),
-                  ),
-                  if (problem != null && problem != Errors.nameBlank)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6.0),
-                      child: Text(
-                        problem,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                autofocus: true,
-                onPressed: problem == null ? submit : null,
-                child: Text(confirmLabel),
-              ),
-            ],
-          );
-        },
-      ),
+    builder: (dialogContext) => QuarkNameDialog(
+      title: title,
+      label: label,
+      submitLabel: confirmLabel,
+      initialName: initialName,
+      validator: validator,
+      onSubmit: (name) => Navigator.of(dialogContext).pop(name),
+      onCancel: () => Navigator.of(dialogContext).pop(),
     ),
   );
-
-  final normalized = (value ?? '').trim();
-  if (normalized.isEmpty) {
-    return null;
-  }
-
-  return normalized;
 }
 
 /// Prompts for the name of a new file (a doc, a sheet, …).
@@ -651,93 +600,12 @@ Future<String?> promptForNewFileName(
   required String hintText,
   String confirmLabel = 'Create',
   String initialName = '',
-}) async {
-  await Future<void>.delayed(Duration.zero);
-  if (!context.mounted) {
-    return null;
-  }
-
-  final String? value = await QuarkWidget.showDialog<String>(
-    context,
-    useRootNavigator: true,
-    builder: (dialogContext) => TextControllerScope(
-      initialText: initialName,
-      builder: (_, nameController) {
-        bool hasInvalidChar = false;
-        return StatefulBuilder(
-          builder: (context, setState) {
-            // As for a new folder: blank only disables Create.
-            final problem = fileNameProblem(nameController.text);
-            void submit() {
-              final name = nameController.text.trim();
-              if (fileNameProblem(name) != null || name.contains('/')) return;
-              Navigator.of(dialogContext).pop(name);
-            }
-
-            return QuarkWidget.alertDialog(
-              title: Text(title),
-              content: Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    QuarkWidget.textField(
-                      controller: nameController,
-                      autofocus: true,
-                      hintText: hintText,
-                      textInputAction: TextInputAction.done,
-                      onChanged: (v) => setState(() {
-                        hasInvalidChar = v.contains('/');
-                      }),
-                      onSubmitted: (_) => submit(),
-                    ),
-                    if (hasInvalidChar)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6.0),
-                        child: Text(
-                          'The name cannot contain "/"',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                            fontSize: 12,
-                          ),
-                        ),
-                      )
-                    else if (problem != null && problem != Errors.nameBlank)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6.0),
-                        child: Text(
-                          problem,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  autofocus: true,
-                  onPressed: hasInvalidChar || problem != null ? null : submit,
-                  child: Text(confirmLabel),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    ),
-  );
-
-  final normalized = (value ?? '').trim();
-  if (normalized.isEmpty || normalized.contains('/')) {
-    return null;
-  }
-  return normalized;
-}
+}) => _promptForName(
+  context,
+  title: title,
+  label: hintText,
+  confirmLabel: confirmLabel,
+  initialName: initialName,
+  validator: (name) =>
+      name.contains('/') ? Errors.nameHasSlash : fileNameProblem(name),
+);

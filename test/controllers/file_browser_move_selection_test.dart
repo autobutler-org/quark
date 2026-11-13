@@ -534,7 +534,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).last, 'Trip');
       await tester.pump();
-      await tester.tap(find.widgetWithText(TextButton, 'Create'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
       await tester.pumpAndSettle();
 
       expect(createdAt, '/Docs');
@@ -561,7 +561,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).last, 'Docs');
       await tester.pump();
-      await tester.tap(find.widgetWithText(TextButton, 'Create'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
       await tester.pumpAndSettle();
 
       expect(find.text(Errors.fileNameTaken), findsOneWidget);

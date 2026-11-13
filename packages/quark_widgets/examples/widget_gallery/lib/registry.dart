@@ -3425,6 +3425,8 @@ final List<GalleryEntry> registry = [
       submitLabel: 'Rename',
       initialName: 'Family',
       maxLength: 64,
+      validator: (name) =>
+          name.contains('/') ? 'Group names cannot contain a slash.' : null,
       onSubmit: (name) => log('QuarkNameDialog.onSubmit($name)'),
       onCancel: () => log('QuarkNameDialog.onCancel'),
     ),

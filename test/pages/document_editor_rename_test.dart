@@ -123,7 +123,7 @@ void main() {
       ),
       'forecast',
     );
-    await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
     await tester.pumpAndSettle();
 
     expect(location(router), AppRoutes.docFile('reports/forecast.qdoc'));
@@ -148,7 +148,7 @@ void main() {
       ),
       'forecast',
     );
-    await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
     await tester.pumpAndSettle();
 
     expect(location(router), '/docs/reports/forecast.qdoc?from=/docs');

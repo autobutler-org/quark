@@ -16,6 +16,10 @@ import 'quark_loader.dart';
 /// is out the caller passes [isSubmitting], and a refusal comes back in as
 /// [error], so the dialog stays open with what was typed.
 ///
+/// [validator] checks the name as it is typed: a sentence it returns shows
+/// under the field and holds the submit button, so a name the caller can
+/// already tell is wrong (a slash, a name taken) never leaves the dialog.
+///
 /// The typed text is [State] because it is the form's own transient input,
 /// thrown away when the dialog closes. The outcome leaves through [onSubmit].
 ///
@@ -49,6 +53,7 @@ class QuarkNameDialog extends StatefulWidget {
     this.maxLength,
     this.isSubmitting = false,
     this.error,
+    this.validator,
     super.key,
   });
 
@@ -82,6 +87,12 @@ class QuarkNameDialog extends StatefulWidget {
   /// caller. Shown under the field.
   final String? error;
 
+  /// Why the trimmed name cannot be used, or null when it can. Called on
+  /// every edit, never with an empty name. Its sentence is composed by the
+  /// caller and shown under the field in place of [error]; while it returns
+  /// one, submitting is held. Null checks nothing.
+  final String? Function(String name)? validator;
+
   @override
   State<QuarkNameDialog> createState() => _QuarkNameDialogState();
 }
@@ -99,7 +110,10 @@ class _QuarkNameDialogState extends State<QuarkNameDialog> {
 
   String get _name => _controller.text.trim();
 
-  bool get _canSubmit => !widget.isSubmitting && _name.isNotEmpty;
+  String? get _problem => _name.isEmpty ? null : widget.validator?.call(_name);
+
+  bool get _canSubmit =>
+      !widget.isSubmitting && _name.isNotEmpty && _problem == null;
 
   void _submit() {
     if (_canSubmit) widget.onSubmit(_name);
@@ -108,7 +122,7 @@ class _QuarkNameDialogState extends State<QuarkNameDialog> {
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
-    final error = widget.error;
+    final error = _problem ?? widget.error;
 
     return AlertDialog(
       // A long refusal on a small phone scrolls rather than overflowing.
