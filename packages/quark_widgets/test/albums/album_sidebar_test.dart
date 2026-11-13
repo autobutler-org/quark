@@ -155,14 +155,14 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('album_sort_option_newest')),
-        matching: find.byIcon(QuarkIcons.check_rounded),
+        matching: find.byIcon(QuarkIcons.check),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('album_sort_option_oldest')),
-        matching: find.byIcon(QuarkIcons.check_rounded),
+        matching: find.byIcon(QuarkIcons.check),
       ),
       findsNothing,
     );
