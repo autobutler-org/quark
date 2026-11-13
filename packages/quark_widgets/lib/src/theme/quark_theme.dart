@@ -92,9 +92,10 @@ abstract final class QuarkTheme {
       brightness: brightness,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: tokens.background,
-      // Geist is the UI face, bundled with the package.
-      fontFamily: 'Geist',
-      package: 'quark_widgets',
+      // Geist is the UI face, bundled with the package. The family is written
+      // out in full so a style that names another face, such as Roboto in a
+      // layout test, does not keep looking inside this package.
+      fontFamily: 'packages/quark_widgets/Geist',
       useMaterial3: true,
       // Material's desktop defaults (shrinkWrap targets, compact density) bring
       // a stock button down to 32px. A touchscreen laptop, a Chromebook or a
