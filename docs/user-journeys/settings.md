@@ -592,10 +592,11 @@ The Quark has at least one feature still in beta.
 **Expected result:**
 
 - The whole theme follows the picked color at once, in light and dark mode: the app bar and the drawer take a
-  clearly colored tone of it, page backgrounds and cards a faint tint, and buttons, selection, focus rings and
-  switches a stronger tone of the same hue. Only the hue of a custom color is kept, so every surface stays legible.
-- **Classic**, the first swatch, is Quark as it ships: neutral surfaces with the blue accent. A Quark where nobody
-  has picked a color looks that way.
+  clearly colored tone of it, page backgrounds and cards a faint tint, and buttons, selection and switches a
+  stronger tone of the same hue. The focus ring stays the site blue, off the button fill. Only the hue of a
+  custom color is kept, so every surface stays legible.
+- **Classic**, the first swatch, is Quark as it ships: bone and warm-black surfaces with ink for buttons,
+  selection and links. A Quark where nobody has picked a color looks that way.
 - After step 3 the member's color does not change: their own choice wins. After step 4 it becomes the admin's
   choice, and later changes to the Quark's default reach them without a reload.
 - The sign-in page keeps the color the member last saw on this Quark. A Quark the app has never signed in to shows
@@ -711,9 +712,10 @@ The Quark has at least one feature still in beta.
 
 - After step 1 the app switches to its high-contrast theme in light or dark mode, whichever **Theme** (JN-ST-006)
   selects: stronger colors and bolder outlines.
-- High contrast follows the theme color: buttons, selection, links, switches and the focus ring take the picked
-  color's hue, darkened or lightened until they stay at least 7:1 against every surface. Surfaces, text and
-  outlines stay neutral. After step 2 the accent changes with the color and stays high contrast.
+- High contrast follows the theme color: buttons, selection, links and switches take the picked color's hue,
+  darkened or lightened until they stay at least 7:1 against every surface. The focus ring stays off the fill.
+  Surfaces, text and outlines stay neutral. After step 2 the accent changes with the color and stays high
+  contrast.
 - With **Classic**, the shipped high-contrast colors show untouched.
 - After step 3 the everyday theme returns, in the same theme color.
 

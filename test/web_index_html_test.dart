@@ -74,28 +74,28 @@ void main() {
     test('paints the Quark background before the canvas exists', () {
       final html = flattened();
 
-      expect(html, contains('--quark-background: #070d19;'));
+      expect(html, contains('--quark-background: #161615;'));
       expect(html, contains('@media (prefers-color-scheme: light)'));
       expect(html, contains('background-color: var(--quark-background);'));
     });
 
-    /// #2740: the classic accent is a darker blue in light mode than in dark, and
-    /// the spinner copies `QuarkTokens.light.primary` and `QuarkTokens.dark.primary`.
+    /// The spinner copies `QuarkTokens.light.primary` and
+    /// `QuarkTokens.dark.primary`, which for classic are ink.
     test('spins in the classic accent of each mode', () {
       final html = flattened();
 
-      expect('--quark-primary: #72a7c0;'.allMatches(html), hasLength(1));
+      expect('--quark-primary: #f2f1ee;'.allMatches(html), hasLength(1));
       expect(
         html,
         contains(
           ':root[data-theme="light"] { color-scheme: light; '
-          '--quark-background: #f8fafc; --quark-foreground: #0f172a; '
-          '--quark-muted: #64748b; --quark-border: #e2e8f0; '
-          '--quark-primary: #3a6b82; }',
+          '--quark-background: #f7f6f3; --quark-foreground: #111111; '
+          '--quark-muted: #6a6964; --quark-border: #e6e4de; '
+          '--quark-primary: #111111; }',
         ),
       );
       // Once for the saved Light theme, once for an OS in light mode.
-      expect('--quark-primary: #3a6b82;'.allMatches(html), hasLength(2));
+      expect('--quark-primary: #111111;'.allMatches(html), hasLength(2));
     });
 
     /// #2341: the splash followed only the OS, so a user who picked Light or

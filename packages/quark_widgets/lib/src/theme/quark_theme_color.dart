@@ -6,8 +6,9 @@ import 'quark_tokens.dart';
 /// A theme color: the one color a person or an admin picks, from which a
 /// whole [QuarkTokens] set is derived for light mode and for dark mode.
 ///
-/// [classic] is the look Quark ships, neutral surfaces with a blue accent, and
-/// yields `QuarkTokens.light` and `QuarkTokens.dark` untouched. Every other
+/// [classic] is the look Quark ships, bone and warm-black surfaces with an ink
+/// accent, and yields `QuarkTokens.light` and `QuarkTokens.dark` untouched.
+/// Every other
 /// theme color, a preset or a custom one from [QuarkThemeColor.fromSeed],
 /// keeps only the hue of its seed and derives the rest in [tokensFor]:
 /// clearly colored chrome, faintly tinted content surfaces, text for each,
@@ -85,8 +86,9 @@ class QuarkThemeColor {
   /// With [highContrast] the set is the high-contrast one for [brightness],
   /// [QuarkTokens.highContrastDark] or [QuarkTokens.highContrastLight], with
   /// the accent in this theme color's hue: `primary` and `chromePrimary`,
-  /// which filled buttons, selection, links and the focus ring are drawn in,
-  /// and `primaryForeground` to suit. The accent is moved until it is 7:1 on
+  /// which filled buttons, selection and links are drawn in, and
+  /// `primaryForeground` to suit. The focus ring stays [QuarkTokens.focus],
+  /// so it is not the button fill. The accent is moved until it is 7:1 on
   /// every surface. The surfaces, the text and the outlines stay neutral,
   /// because a tint on any of them costs the contrast the mode exists for.
   /// [classic] returns the shipped high-contrast set untouched.
@@ -153,7 +155,7 @@ class QuarkThemeColor {
     final background = surface(dark ? at(0.50, 0.063) : at(0.45, 0.968));
     final card = surface(dark ? at(0.45, 0.112) : at(0.60, 0.990));
     final input = surface(dark ? at(0.42, 0.127) : at(0.60, 0.990));
-    final sidebar = surface(dark ? at(0.45, 0.086) : at(0.40, 0.950));
+    final sidebar = surface(dark ? at(0.45, 0.141) : at(0.40, 0.925));
     final content = [background, card, input, sidebar];
     bool onContent(Color color, double ratio) =>
         content.every((surface) => contrastRatio(color, surface) >= ratio);
@@ -248,7 +250,7 @@ class QuarkThemeColor {
     );
   }
 
-  /// Quark as it ships: neutral surfaces and the blue accent. What an install
+  /// Quark as it ships: neutral surfaces and the ink accent. What an install
   /// nobody has themed looks like, and what [parse] falls back to.
   static const QuarkThemeColor classic = QuarkThemeColor._(
     name: 'classic',
@@ -357,8 +359,8 @@ class QuarkThemeColor {
 /// How colorful a theme gets, as a share of the saturations [tokensFor]
 /// starts each role from. At 1 the chrome and the accent are vivid enough to
 /// tire the eye (#2777); `graphite` sits near a third and is left alone by
-/// anything above that. The classic accent in `QuarkTokens` is written out
-/// to match this value and does not follow a change to it.
+/// anything above that. Classic is ink, written out in `QuarkTokens`, and
+/// does not follow a change to it.
 const double _maxStrength = 0.45;
 
 /// How far above a WCAG ratio a derived color is moved. Bisection stops the
@@ -391,8 +393,10 @@ const double _boundary = 3 + _margin;
 const double _lightChromeLuminance = 0.45;
 
 /// The darkest a tinted content surface gets in light mode: just above the
-/// luminance of the classic sidebar, `#F1F5F9`, which is 0.908.
-const double _lightSurfaceLuminance = 0.91;
+/// luminance of the classic sunken sidebar, `#EFEEE9`, which is about 0.854.
+/// No tinted surface goes darker than that, so a fixed status color is not
+/// asked to clear a well the classic set does not.
+const double _lightSurfaceLuminance = 0.86;
 
 /// The luminance of the chrome in dark mode: deep enough for light text and
 /// a bright accent, and far enough off the page to read as a color.

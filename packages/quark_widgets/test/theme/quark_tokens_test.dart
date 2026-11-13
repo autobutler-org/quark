@@ -3,6 +3,51 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 void main() {
+  // #4098: classic takes the product site's canvas, ink, and control radius.
+  test('classic matches the product site palette', () {
+    expect(QuarkTokens.light.background, const Color(0xFFF7F6F3));
+    expect(QuarkTokens.dark.background, const Color(0xFF161615));
+    expect(QuarkTokens.light.primary, const Color(0xFF111111));
+    expect(QuarkTokens.dark.primary, const Color(0xFFF2F1EE));
+    expect(QuarkTokens.light.primaryForeground, const Color(0xFFFFFFFF));
+    expect(QuarkTokens.dark.primaryForeground, const Color(0xFF161615));
+    expect(QuarkTokens.light.focus, const Color(0xFF1F6C9F));
+    expect(QuarkTokens.dark.focus, const Color(0xFF8CC7EE));
+    expect(QuarkTokens.light.focus, isNot(QuarkTokens.light.primary));
+    expect(QuarkTokens.dark.focus, isNot(QuarkTokens.dark.primary));
+    expect(QuarkTokens.light.foreground, const Color(0xFF111111));
+    expect(QuarkTokens.light.secondaryForeground, const Color(0xFF2F3437));
+    for (final tokens in [
+      QuarkTokens.light,
+      QuarkTokens.dark,
+      QuarkTokens.highContrastLight,
+      QuarkTokens.highContrastDark,
+    ]) {
+      expect(tokens.radiusSm, 4);
+      expect(tokens.radiusMd, 6);
+      expect(tokens.radiusLg, 12);
+      expect(tokens.spacingXs, 4);
+      expect(tokens.spacingXl, 32);
+    }
+    expect(
+      QuarkTokens.highContrastLight.background,
+      QuarkTokens.light.background,
+    );
+    expect(
+      QuarkTokens.highContrastDark.background,
+      QuarkTokens.dark.background,
+    );
+    // High contrast keeps its own text. The site's muted gray is classic's.
+    expect(
+      QuarkTokens.highContrastLight.mutedForeground,
+      isNot(const Color(0xFF6A6964)),
+    );
+    expect(
+      QuarkTokens.highContrastDark.mutedForeground,
+      isNot(const Color(0xFF9C9A94)),
+    );
+  });
+
   group('QuarkTokens', () {
     test('copyWith replaces only what it is given', () {
       const base = QuarkTokens.dark;
@@ -26,7 +71,7 @@ void main() {
     test('dark and light are different token sets', () {
       expect(QuarkTokens.dark, isNot(QuarkTokens.light));
       expect(QuarkTokens.dark.background, isNot(QuarkTokens.light.background));
-      // Each mode has its own shade of the classic blue (#2523).
+      // Each mode has its own ink (#4098).
       expect(QuarkTokens.dark.primary, isNot(QuarkTokens.light.primary));
     });
 

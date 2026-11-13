@@ -145,7 +145,7 @@ void main() {
     await tabTo(tester, find.byKey(key));
 
     final side = buttonSide(tester, find.byKey(key));
-    expect(side.color, QuarkTokens.dark.primary);
+    expect(side.color, QuarkTokens.dark.focus);
     expect(side.width, 2);
   });
 

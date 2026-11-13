@@ -54,7 +54,7 @@ void main() {
 
     final ring = tester.widget<DecoratedBox>(findFocusRing(find.byKey(key)));
     final border = (ring.decoration as BoxDecoration).border! as Border;
-    expect(border.top.color, QuarkTokens.dark.primary);
+    expect(border.top.color, QuarkTokens.dark.focus);
     expect(border.top.width, 2);
   });
 

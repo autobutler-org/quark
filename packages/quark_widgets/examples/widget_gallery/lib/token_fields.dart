@@ -74,6 +74,7 @@ final List<ColorField> colorFields = [
     read: (t) => t.primaryForeground,
     write: (t, v) => t.copyWith(primaryForeground: v),
   ),
+  (name: 'focus', read: (t) => t.focus, write: (t, v) => t.copyWith(focus: v)),
   (
     name: 'chrome',
     read: (t) => t.chrome,

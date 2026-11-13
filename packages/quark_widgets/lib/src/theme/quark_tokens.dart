@@ -47,6 +47,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     required this.cardForeground,
     required this.primary,
     required this.primaryForeground,
+    required this.focus,
     required this.chrome,
     required this.chromeBorder,
     required this.chromeForeground,
@@ -106,14 +107,24 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// Primary body text on [card].
   final Color cardForeground;
 
-  /// The accent color: filled buttons, focus rings, selection, and links.
+  /// The accent: filled buttons, selection, and links.
   ///
-  /// Nobody picks it. A `QuarkThemeColor` derives it from the picked hue so
-  /// that it stands out from the content surfaces and from [chrome] alike.
+  /// Classic ships this as ink, the product site's filled-button color.
+  /// Nobody picks it. A `QuarkThemeColor` other than classic derives it from
+  /// the picked hue so that it stands out from the content surfaces and from
+  /// [chrome] alike. Keyboard focus is [focus], not this: a ring drawn in the
+  /// button's own fill disappears on an ink button.
   final Color primary;
 
   /// Text and icons drawn on top of [primary].
   final Color primaryForeground;
+
+  /// The keyboard focus ring, on fields, buttons, and other controls.
+  ///
+  /// It is not [primary]. Classic draws filled buttons in ink, and a ring in
+  /// that same color is invisible on them (#2028). The product site uses a
+  /// blue that stays off the fill.
+  final Color focus;
 
   /// The surface of the chrome: the app bar and the navigation drawer.
   ///
@@ -197,30 +208,34 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// is at least 4.5:1 on every surface it is drawn on, text on a fill is
   /// 4.5:1 on that fill, and [outline] and the accent are 3:1.
   static const QuarkTokens dark = QuarkTokens(
-    background: Color(0xFF070D19),
-    card: Color(0xFF0F172A),
-    sidebar: Color(0xFF0C1220),
-    border: Color(0xFF1E293B),
-    outline: Color(0xFF64748B),
-    input: Color(0xFF131C2E),
-    mutedForeground: Color(0xFF7587A1),
-    secondaryForeground: Color(0xFF94A3B8),
-    foreground: Color(0xFFE2E8F0),
-    cardForeground: Color(0xFFE2E8F0),
-    primary: Color(0xFF72A7C0),
-    primaryForeground: Color(0xFF0F172A),
-    chrome: Color(0xFF0C1220),
-    chromeBorder: Color(0xFF1E293B),
-    chromeForeground: Color(0xFFE2E8F0),
-    chromeSecondaryForeground: Color(0xFF94A3B8),
-    chromeMutedForeground: Color(0xFF7587A1),
-    chromePrimary: Color(0xFF72A7C0),
-    error: Color(0xFFEF4444),
-    errorForeground: Color(0xFF0F172A),
+    background: Color(0xFF161615),
+    card: Color(0xFF1D1D1B),
+    sidebar: Color(0xFF252523),
+    border: Color(0xFF2D2C29),
+    // The site's strong border is about 1.4:1 on these surfaces. A control
+    // boundary has to clear 3:1, so this is that border lightened until it does.
+    outline: Color(0xFF73726F),
+    input: Color(0xFF252523),
+    mutedForeground: Color(0xFF9C9A94),
+    secondaryForeground: Color(0xFFD6D5D0),
+    foreground: Color(0xFFF2F1EE),
+    cardForeground: Color(0xFFF2F1EE),
+    primary: Color(0xFFF2F1EE),
+    primaryForeground: Color(0xFF161615),
+    focus: Color(0xFF8CC7EE),
+    chrome: Color(0xFF161615),
+    chromeBorder: Color(0xFF2D2C29),
+    chromeForeground: Color(0xFFF2F1EE),
+    chromeSecondaryForeground: Color(0xFFD6D5D0),
+    chromeMutedForeground: Color(0xFF9C9A94),
+    chromePrimary: Color(0xFFF2F1EE),
+    // Lightened from #EF4444, which fell under 4.5:1 on the sunken surface.
+    error: Color(0xFFF15656),
+    errorForeground: Color(0xFF161615),
     warning: Color(0xFFF59E0B),
     success: Color(0xFF10B981),
     radiusSm: 4,
-    radiusMd: 8,
+    radiusMd: 6,
     radiusLg: 12,
     spacingXs: 4,
     spacingSm: 8,
@@ -240,30 +255,35 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
 
   /// The light token set, held to the same targets as [dark].
   static const QuarkTokens light = QuarkTokens(
-    background: Color(0xFFF8FAFC),
+    background: Color(0xFFF7F6F3),
     card: Color(0xFFFFFFFF),
-    sidebar: Color(0xFFF1F5F9),
-    border: Color(0xFFE2E8F0),
-    outline: Color(0xFF768599),
+    sidebar: Color(0xFFEFEEE9),
+    border: Color(0xFFE6E4DE),
+    // The site's strong border is about 1.5:1 on white. A control boundary
+    // has to clear 3:1, so this is that border darkened until it does.
+    outline: Color(0xFF86847F),
     input: Color(0xFFFFFFFF),
-    mutedForeground: Color(0xFF606F85),
-    secondaryForeground: Color(0xFF475569),
-    foreground: Color(0xFF0F172A),
-    cardForeground: Color(0xFF0F172A),
-    primary: Color(0xFF3A6B82),
+    mutedForeground: Color(0xFF6A6964),
+    secondaryForeground: Color(0xFF2F3437),
+    foreground: Color(0xFF111111),
+    cardForeground: Color(0xFF111111),
+    primary: Color(0xFF111111),
     primaryForeground: Color(0xFFFFFFFF),
-    chrome: Color(0xFFF1F5F9),
-    chromeBorder: Color(0xFFE2E8F0),
-    chromeForeground: Color(0xFF0F172A),
-    chromeSecondaryForeground: Color(0xFF475569),
-    chromeMutedForeground: Color(0xFF606F85),
-    chromePrimary: Color(0xFF3A6B82),
+    focus: Color(0xFF1F6C9F),
+    chrome: Color(0xFFF7F6F3),
+    chromeBorder: Color(0xFFE6E4DE),
+    chromeForeground: Color(0xFF111111),
+    chromeSecondaryForeground: Color(0xFF2F3437),
+    chromeMutedForeground: Color(0xFF6A6964),
+    chromePrimary: Color(0xFF111111),
     error: Color(0xFFB91C1C),
     errorForeground: Color(0xFFFFFFFF),
-    warning: Color(0xFF9A4A07),
+    // Darkened from #9A4A07, which fell under 4.5:1 on a warning-tinted sunken
+    // surface.
+    warning: Color(0xFF944707),
     success: Color(0xFF047857),
     radiusSm: 4,
-    radiusMd: 8,
+    radiusMd: 6,
     radiusLg: 12,
     spacingXs: 4,
     spacingSm: 8,
@@ -289,19 +309,20 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// held to the same 7:1, and leaves the surfaces neutral: a tinted surface
   /// costs contrast.
   static const QuarkTokens highContrastDark = QuarkTokens(
-    background: Color(0xFF000000),
-    card: Color(0xFF0A0A0A),
-    sidebar: Color(0xFF000000),
+    background: Color(0xFF161615),
+    card: Color(0xFF1D1D1B),
+    sidebar: Color(0xFF252523),
     border: Color(0xFFA3A3A3),
     outline: Color(0xFFA3A3A3),
-    input: Color(0xFF000000),
+    input: Color(0xFF252523),
     mutedForeground: Color(0xFFCCCCCC),
     secondaryForeground: Color(0xFFE5E5E5),
     foreground: Color(0xFFFFFFFF),
     cardForeground: Color(0xFFFFFFFF),
     primary: Color(0xFF7DD3FC),
     primaryForeground: Color(0xFF000000),
-    chrome: Color(0xFF000000),
+    focus: Color(0xFF8CC7EE),
+    chrome: Color(0xFF161615),
     chromeBorder: Color(0xFFA3A3A3),
     chromeForeground: Color(0xFFFFFFFF),
     chromeSecondaryForeground: Color(0xFFE5E5E5),
@@ -312,7 +333,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     warning: Color(0xFFFFD54F),
     success: Color(0xFF6EE7B7),
     radiusSm: 4,
-    radiusMd: 8,
+    radiusMd: 6,
     radiusLg: 12,
     spacingXs: 4,
     spacingSm: 8,
@@ -333,9 +354,9 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// The high-contrast light set, for someone who has asked for more
   /// contrast. Held to the same targets as [highContrastDark].
   static const QuarkTokens highContrastLight = QuarkTokens(
-    background: Color(0xFFFFFFFF),
+    background: Color(0xFFF7F6F3),
     card: Color(0xFFFFFFFF),
-    sidebar: Color(0xFFF5F5F5),
+    sidebar: Color(0xFFEFEEE9),
     border: Color(0xFF595959),
     outline: Color(0xFF595959),
     input: Color(0xFFFFFFFF),
@@ -345,7 +366,8 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     cardForeground: Color(0xFF000000),
     primary: Color(0xFF00436E),
     primaryForeground: Color(0xFFFFFFFF),
-    chrome: Color(0xFFF5F5F5),
+    focus: Color(0xFF1F6C9F),
+    chrome: Color(0xFFF7F6F3),
     chromeBorder: Color(0xFF595959),
     chromeForeground: Color(0xFF000000),
     chromeSecondaryForeground: Color(0xFF262626),
@@ -356,7 +378,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     warning: Color(0xFF7A4A00),
     success: Color(0xFF00603A),
     radiusSm: 4,
-    radiusMd: 8,
+    radiusMd: 6,
     radiusLg: 12,
     spacingXs: 4,
     spacingSm: 8,
@@ -415,6 +437,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     Color? cardForeground,
     Color? primary,
     Color? primaryForeground,
+    Color? focus,
     Color? chrome,
     Color? chromeBorder,
     Color? chromeForeground,
@@ -449,6 +472,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
       cardForeground: cardForeground ?? this.cardForeground,
       primary: primary ?? this.primary,
       primaryForeground: primaryForeground ?? this.primaryForeground,
+      focus: focus ?? this.focus,
       chrome: chrome ?? this.chrome,
       chromeBorder: chromeBorder ?? this.chromeBorder,
       chromeForeground: chromeForeground ?? this.chromeForeground,
@@ -498,6 +522,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
         other.primaryForeground,
         t,
       )!,
+      focus: Color.lerp(focus, other.focus, t)!,
       chrome: Color.lerp(chrome, other.chrome, t)!,
       chromeBorder: Color.lerp(chromeBorder, other.chromeBorder, t)!,
       chromeForeground: Color.lerp(
@@ -556,6 +581,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
         other.cardForeground == cardForeground &&
         other.primary == primary &&
         other.primaryForeground == primaryForeground &&
+        other.focus == focus &&
         other.chrome == chrome &&
         other.chromeBorder == chromeBorder &&
         other.chromeForeground == chromeForeground &&
@@ -592,6 +618,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     cardForeground,
     primary,
     primaryForeground,
+    focus,
     chrome,
     chromeBorder,
     chromeForeground,

@@ -24,3 +24,26 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/mark.png
+  fonts:
+    # Static cuts of the variable fonts. Flutter selects a family member by
+    # fontWeight and does not drive a variable font's weight axis from it.
+    - family: Geist
+      fonts:
+        - asset: fonts/Geist-Regular.ttf
+        - asset: fonts/Geist-Medium.ttf
+          weight: 500
+        - asset: fonts/Geist-SemiBold.ttf
+          weight: 600
+        - asset: fonts/Geist-Bold.ttf
+          weight: 700
+    - family: Newsreader
+      fonts:
+        - asset: fonts/Newsreader-Regular.ttf
+        - asset: fonts/Newsreader-Medium.ttf
+          weight: 500
+        - asset: fonts/Newsreader-SemiBold.ttf
+          weight: 600
+        - asset: fonts/Newsreader-Bold.ttf
+          weight: 700
