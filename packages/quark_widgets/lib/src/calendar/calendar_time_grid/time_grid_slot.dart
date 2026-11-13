@@ -124,11 +124,7 @@ class _TimeGridSlotState extends State<TimeGridSlot> {
                       child: Row(
                         spacing: 6,
                         children: [
-                          Icon(
-                            QuarkIcons.add_rounded,
-                            size: 15,
-                            color: tokens.primary,
-                          ),
+                          Icon(QuarkIcons.add, size: 15, color: tokens.primary),
                           if (widget.showHint)
                             Flexible(
                               child: Text(

@@ -49,7 +49,7 @@ class FileTopBarViewChips extends StatelessWidget {
             ),
             QuarkBarSegment(
               id: 'grid',
-              icon: QuarkIcons.grid_view_rounded,
+              icon: QuarkIcons.grid_view,
               label: 'Grid',
             ),
           ],

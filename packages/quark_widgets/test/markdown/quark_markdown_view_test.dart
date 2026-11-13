@@ -144,7 +144,7 @@ void main() {
     expect(find.byKey(const ValueKey('markdown_task_0')), findsOneWidget);
     expect(
       tester.widget<Icon>(find.byKey(const ValueKey('markdown_task_0'))).icon,
-      QuarkIcons.check_circle_rounded,
+      QuarkIcons.check_circle_outline,
     );
     expect(
       tester.widget<Icon>(find.byKey(const ValueKey('markdown_task_1'))).icon,
@@ -315,7 +315,7 @@ void main() {
   testBothViewports('renders GitHub alerts as callouts', (tester, size) async {
     const kinds = {
       'NOTE': ('Note', QuarkIcons.info_outline),
-      'TIP': ('Tip', QuarkIcons.light_mode_outlined),
+      'TIP': ('Tip', QuarkIcons.light_mode),
       'IMPORTANT': ('Important', QuarkIcons.star_border),
       'WARNING': ('Warning', QuarkIcons.warning_amber),
       'CAUTION': ('Caution', QuarkIcons.error_outline),

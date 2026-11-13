@@ -41,7 +41,7 @@ abstract final class ViewGroupingCopy {
           'them.',
     ),
     QuarkHelpTopic(
-      icon: QuarkIcons.storage_rounded,
+      icon: QuarkIcons.storage,
       heading: 'Device tags',
       body:
           'The colored tag on a file or folder names the drive it is on, and '

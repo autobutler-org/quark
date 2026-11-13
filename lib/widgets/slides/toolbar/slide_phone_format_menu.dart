@@ -225,7 +225,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
           ),
         MenuItemButton(
           key: const ValueKey('slide_format_find'),
-          leadingIcon: const Icon(QuarkIcons.search_rounded),
+          leadingIcon: const Icon(QuarkIcons.search),
           onPressed: onFind,
           child: const Text('Find and replace'),
         ),

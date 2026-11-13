@@ -144,7 +144,7 @@ List<InlineSpan> markdownInlineSpans(
               padding: EdgeInsets.only(right: quark.spacingSm),
               child: Icon(
                 checked
-                    ? QuarkIcons.check_circle_rounded
+                    ? QuarkIcons.check_circle_outline
                     : QuarkIcons.radio_button_unchecked,
                 key: ValueKey('markdown_task_$index'),
                 size: (style.fontSize ?? 16) * 1.2,

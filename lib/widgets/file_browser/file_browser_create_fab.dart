@@ -26,7 +26,7 @@ class FileBrowserCreateFab extends StatelessWidget {
           heroTag: 'create_fab',
           onPressed: onPressed,
           tooltip: 'Create',
-          child: const Icon(QuarkIcons.add_rounded),
+          child: const Icon(QuarkIcons.add),
         ),
       ),
     );

@@ -42,7 +42,7 @@ class ChatUnlockPrompt extends StatefulWidget {
   /// What the prompt explains before the field, as (glyph, sentence) pairs.
   static const List<(IconData, String)> explanation = [
     (
-      QuarkIcons.key_rounded,
+      QuarkIcons.key,
       "It's the same password you sign in to Quark with. There is no second "
           'password to remember.',
     ),

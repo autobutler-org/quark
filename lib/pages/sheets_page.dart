@@ -111,7 +111,7 @@ class _SheetsPageState extends State<SheetsPage>
       actions: [
         QuarkBarChip(
           key: const ValueKey('sheets_new'),
-          icon: QuarkIcons.add_rounded,
+          icon: QuarkIcons.add,
           label: 'New spreadsheet',
           onPressed: _create,
         ),

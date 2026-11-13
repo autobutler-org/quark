@@ -155,7 +155,7 @@ class PhotoGridTile extends StatelessWidget {
                   bottom: 4,
                   right: 4,
                   child: Icon(
-                    QuarkIcons.star_rounded,
+                    QuarkIcons.star,
                     size: 16,
                     color: Colors.white,
                     shadows: [Shadow(blurRadius: 4, color: Colors.black54)],

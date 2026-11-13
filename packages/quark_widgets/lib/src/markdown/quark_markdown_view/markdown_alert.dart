@@ -50,7 +50,7 @@ class MarkdownAlert extends StatelessWidget {
   Widget build(BuildContext context) {
     final quark = QuarkTokens.of(context);
     final (color, icon) = switch (markdownAlertKind(alert)) {
-      'tip' => (quark.success, QuarkIcons.light_mode_outlined),
+      'tip' => (quark.success, QuarkIcons.light_mode),
       'important' => (quark.primary, QuarkIcons.star_border),
       'warning' => (quark.warning, QuarkIcons.warning_amber),
       'caution' => (quark.error, QuarkIcons.error_outline),

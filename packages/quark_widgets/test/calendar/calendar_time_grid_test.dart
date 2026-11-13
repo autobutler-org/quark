@@ -622,7 +622,7 @@ void main() {
     int ghosts() => find
         .descendant(
           of: find.byType(CalendarTimeGrid),
-          matching: find.byIcon(QuarkIcons.add_rounded),
+          matching: find.byIcon(QuarkIcons.add),
         )
         .evaluate()
         .length;
@@ -679,7 +679,7 @@ void main() {
           of: find.byKey(
             ValueKey('calendar_slot_${CalendarDates.key(day)}_$hour'),
           ),
-          matching: find.byIcon(QuarkIcons.add_rounded),
+          matching: find.byIcon(QuarkIcons.add),
         )
         .evaluate()
         .length;

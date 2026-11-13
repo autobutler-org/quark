@@ -43,11 +43,7 @@ class TopBarMenuRadioItem extends StatelessWidget {
           ),
         ),
         trailing: selected
-            ? Icon(
-                QuarkIcons.check_rounded,
-                size: 16,
-                color: colorScheme.primary,
-              )
+            ? Icon(QuarkIcons.check, size: 16, color: colorScheme.primary)
             : const SizedBox(width: 16),
         onTap: onTap,
       ),

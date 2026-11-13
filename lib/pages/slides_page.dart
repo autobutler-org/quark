@@ -149,7 +149,7 @@ class _SlidesPageState extends State<SlidesPage>
         actions: [
           QuarkBarChip(
             key: const ValueKey('slides_new'),
-            icon: QuarkIcons.add_rounded,
+            icon: QuarkIcons.add,
             label: 'New presentation',
             tooltip: 'New presentation',
             onPressed: _create,

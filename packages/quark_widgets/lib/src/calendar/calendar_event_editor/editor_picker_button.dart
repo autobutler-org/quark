@@ -66,7 +66,7 @@ class EditorPickerButton extends StatelessWidget {
                     ),
                   ),
                   Icon(
-                    QuarkIcons.expand_more_rounded,
+                    QuarkIcons.expand_more,
                     size: 16,
                     color: tokens.secondaryForeground,
                   ),

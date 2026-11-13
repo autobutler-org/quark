@@ -92,7 +92,7 @@ class _AccountAndDataPageState extends State<AccountAndDataPage> {
                 Card(
                   child: ListTile(
                     key: const ValueKey('settings_reset_quark'),
-                    leading: Icon(Icons.restart_alt, color: error),
+                    leading: Icon(QuarkIcons.restart, color: error),
                     title: Text(
                       'Reset this Quark',
                       style: TextStyle(color: error),

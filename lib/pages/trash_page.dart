@@ -300,7 +300,7 @@ class _TrashPageState extends State<TrashPage>
                   onSelectionChanged: _controller.toggleSelection,
                   emptyBuilder: (_) => location != null
                       ? const EmptyStateWidget(
-                          icon: QuarkIcons.folder_rounded,
+                          icon: QuarkIcons.folder,
                           headline: 'This folder is empty',
                         )
                       : EmptyStateWidget(

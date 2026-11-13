@@ -56,7 +56,7 @@ class AlbumSidebarAllPhotosTile extends StatelessWidget {
           children: [
             const SizedBox(width: kMinInteractiveDimension),
             Icon(
-              QuarkIcons.photo_library_outlined,
+              QuarkIcons.photo_library,
               size: 16,
               color: isSelected
                   ? colorScheme.primary

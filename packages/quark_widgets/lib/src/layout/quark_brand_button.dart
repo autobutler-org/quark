@@ -23,7 +23,7 @@ class QuarkBrandButton extends StatelessWidget {
   const QuarkBrandButton({
     required this.label,
     required this.onTap,
-    this.icon = QuarkIcons.storage_rounded,
+    this.icon = QuarkIcons.storage,
     super.key,
   });
 
@@ -37,7 +37,7 @@ class QuarkBrandButton extends StatelessWidget {
   final VoidCallback onTap;
 
   /// The glyph inside the brand badge. Defaults to
-  /// [QuarkIcons.storage_rounded]; pass a page-appropriate icon elsewhere.
+  /// [QuarkIcons.storage]; pass a page-appropriate icon elsewhere.
   final IconData icon;
 
   @override

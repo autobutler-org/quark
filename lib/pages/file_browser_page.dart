@@ -192,7 +192,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           const FileShortcut(
             id: 'my_files',
             label: 'My files',
-            icon: QuarkIcons.home_rounded,
+            icon: QuarkIcons.home,
           ),
           home,
         ),
@@ -220,7 +220,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           FileShortcut(
             id: 'all_files',
             label: 'All files',
-            icon: QuarkIcons.folder_rounded,
+            icon: QuarkIcons.folder,
           ),
           '',
         ),
@@ -2094,7 +2094,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
             if (_controller.isPhotoUploadSupported)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(QuarkIcons.photo_library_outlined),
+                leading: const Icon(QuarkIcons.photo_library),
                 title: const Text('Upload photos'),
                 enabled: !_isUploading,
                 onTap: _isUploading ? null : run(_handleUploadPhotosPressed),
@@ -2121,7 +2121,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
             if (_controller.isFolderUploadSupported)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.drive_folder_upload_outlined),
+                leading: const Icon(QuarkIcons.drive_folder_upload_outlined),
                 title: const Text('Upload folder'),
                 enabled: !_isUploading,
                 onTap: _isUploading ? null : run(_handleUploadFolderPressed),

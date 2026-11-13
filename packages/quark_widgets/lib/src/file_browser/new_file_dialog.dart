@@ -52,7 +52,7 @@ const List<NewFileType> kNewFileTypes = [
   NewFileType(
     label: 'Generic File',
     extension: '',
-    icon: Icons.insert_drive_file_outlined,
+    icon: QuarkIcons.insert_drive_file_outlined,
   ),
 ];
 

@@ -307,7 +307,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
           if (widget.isSearchMode) {
             final query = widget.searchQuery?.trim() ?? '';
             return EmptyStateWidget(
-              icon: QuarkIcons.search_rounded,
+              icon: QuarkIcons.search,
               headline: 'No matches',
               subtext: query.isEmpty
                   ? 'Nothing here matches your search. Try fewer words.'
@@ -316,7 +316,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
             );
           }
           return const EmptyStateWidget(
-            icon: QuarkIcons.folder_open_outlined,
+            icon: QuarkIcons.folder_open,
             headline: 'No files yet',
             subtext:
                 'Upload files using the button above, or drag and drop here.',

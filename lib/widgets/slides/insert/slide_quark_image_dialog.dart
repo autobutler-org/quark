@@ -183,9 +183,7 @@ class _SlideQuarkImageDialogState extends State<SlideQuarkImageDialog> {
                               : '${prefix}_file_${node.name}',
                         ),
                         leading: Icon(
-                          node.isDir
-                              ? QuarkIcons.folder_outlined
-                              : widget.fileIcon,
+                          node.isDir ? QuarkIcons.folder : widget.fileIcon,
                         ),
                         title: Text(node.name),
                         onTap: () => node.isDir

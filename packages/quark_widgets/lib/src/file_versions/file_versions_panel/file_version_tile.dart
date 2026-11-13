@@ -99,7 +99,7 @@ class FileVersionTile extends StatelessWidget {
             IconButton(
               key: ValueKey('file_version_preview_${version.id}'),
               tooltip: 'Preview $name',
-              icon: const Icon(QuarkIcons.visibility_outlined),
+              icon: const Icon(QuarkIcons.visibility),
               onPressed: onPreview,
             ),
             IconButton(

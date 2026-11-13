@@ -361,7 +361,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
         onPressed: _downloading ? null : _downloadVideo,
         icon: _downloading
             ? const QuarkLoader(size: 16)
-            : const Icon(Icons.download_rounded, size: 16),
+            : const Icon(QuarkIcons.download_outlined, size: 16),
         label: Text(_downloading ? 'Downloading…' : 'Download'),
       ),
     ];

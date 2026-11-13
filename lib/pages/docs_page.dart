@@ -111,7 +111,7 @@ class _DocsPageState extends State<DocsPage>
       actions: [
         QuarkBarChip(
           key: const ValueKey('docs_new'),
-          icon: QuarkIcons.add_rounded,
+          icon: QuarkIcons.add,
           label: 'New document',
           onPressed: _create,
         ),

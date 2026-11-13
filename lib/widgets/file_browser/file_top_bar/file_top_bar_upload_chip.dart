@@ -89,7 +89,7 @@ class FileTopBarUploadChip extends StatelessWidget {
         if (onCancel != null)
           MenuItemButton(
             onPressed: onCancel,
-            leadingIcon: const Icon(QuarkIcons.close_rounded),
+            leadingIcon: const Icon(QuarkIcons.close),
             child: const Text('Cancel upload'),
           ),
       ];
@@ -120,7 +120,7 @@ class FileTopBarUploadChip extends StatelessWidget {
       if (onUploadPhotos != null)
         MenuItemButton(
           onPressed: () => onUploadPhotos(chooseDevice: chooseDevice),
-          leadingIcon: const Icon(QuarkIcons.photo_library_outlined),
+          leadingIcon: const Icon(QuarkIcons.photo_library),
           child: const Text('Photos'),
         ),
       MenuItemButton(

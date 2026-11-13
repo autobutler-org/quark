@@ -86,7 +86,7 @@ class DiscoveredQuarkList extends StatelessWidget {
             key: ValueKey('discovered_quark_${quark.name}'),
             contentPadding: EdgeInsets.zero,
             dense: true,
-            leading: const Icon(QuarkIcons.storage_outlined),
+            leading: const Icon(QuarkIcons.storage),
             title: Text(quark.name, overflow: TextOverflow.ellipsis),
             subtitle: Text(quark.address, overflow: TextOverflow.ellipsis),
             onTap: onSelect == null ? null : () => onSelect(quark),

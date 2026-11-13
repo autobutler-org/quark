@@ -144,7 +144,7 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
       pinnedActions: [
         QuarkBarIconButton(
           key: const ValueKey('file_top_bar_search'),
-          icon: QuarkIcons.search_rounded,
+          icon: QuarkIcons.search,
           tooltip: 'Search',
           onPressed: onOpenSearch,
         ),

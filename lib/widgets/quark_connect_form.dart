@@ -113,7 +113,7 @@ class _QuarkConnectFormState extends State<QuarkConnectForm> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Icon(QuarkIcons.storage_outlined, size: 56, color: Colors.grey),
+        const Icon(QuarkIcons.storage, size: 56, color: Colors.grey),
         const SizedBox(height: 16),
         Text(
           'Connect to your Quark',
@@ -149,7 +149,7 @@ class _QuarkConnectFormState extends State<QuarkConnectForm> {
             helperText: 'Usually https://quark.local or https://192.168.x.x',
             errorText: _error,
             border: const OutlineInputBorder(),
-            prefixIcon: const Icon(QuarkIcons.link_rounded),
+            prefixIcon: const Icon(QuarkIcons.link),
           ),
         ),
         EmulatorLoopbackHint(controller: _controller),

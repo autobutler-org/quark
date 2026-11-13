@@ -89,12 +89,12 @@ class _DocumentFindBarState extends State<DocumentFindBar> {
                 onPressed: hasHits ? options.moveToPrevious : null,
               ),
               IconButton(
-                icon: const Icon(QuarkIcons.expand_more_rounded),
+                icon: const Icon(QuarkIcons.expand_more),
                 tooltip: 'Next match',
                 onPressed: hasHits ? options.moveToNext : null,
               ),
               IconButton(
-                icon: const Icon(QuarkIcons.close_rounded),
+                icon: const Icon(QuarkIcons.close),
                 tooltip: 'Close find bar (Esc)',
                 onPressed: widget.onClose,
               ),

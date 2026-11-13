@@ -89,7 +89,7 @@ class SlideFindBar extends StatelessWidget {
                             controller: controller.query,
                             focusNode: controller.queryFocus,
                             label: 'Find',
-                            icon: QuarkIcons.search_rounded,
+                            icon: QuarkIcons.search,
                             onSubmitted: controller.next,
                           ),
                         ),
@@ -126,7 +126,7 @@ class SlideFindBar extends StatelessWidget {
                           ),
                         QuarkBarIconButton(
                           key: const ValueKey('slide_find_close'),
-                          icon: QuarkIcons.close_rounded,
+                          icon: QuarkIcons.close,
                           tooltip: 'Close find',
                           onPressed: controller.close,
                         ),
@@ -146,7 +146,7 @@ class SlideFindBar extends StatelessWidget {
                             ),
                           QuarkBarIconButton(
                             key: const ValueKey('slide_find_toggle_options'),
-                            icon: QuarkIcons.tune_rounded,
+                            icon: QuarkIcons.tune,
                             tooltip: 'Find options',
                             selected: controller.showOptions,
                             onPressed: controller.toggleOptions,

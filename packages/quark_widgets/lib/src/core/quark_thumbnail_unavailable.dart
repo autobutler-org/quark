@@ -113,9 +113,8 @@ class QuarkThumbnailUnavailable extends StatelessWidget {
               ),
               child: Icon(
                 switch (issue) {
-                  ThumbnailIssue.unsupportedFormat =>
-                    QuarkIcons.visibility_off_outlined,
-                  ThumbnailIssue.unreadable => QuarkIcons.broken_image_outlined,
+                  ThumbnailIssue.unsupportedFormat => QuarkIcons.visibility_off,
+                  ThumbnailIssue.unreadable => QuarkIcons.broken_image,
                   ThumbnailIssue.missing => QuarkIcons.help_outline,
                   ThumbnailIssue.loadFailed => QuarkIcons.cloud_off_outlined,
                 },

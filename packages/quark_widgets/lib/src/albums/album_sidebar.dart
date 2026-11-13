@@ -173,7 +173,7 @@ class AlbumSidebar extends StatelessWidget {
           onMenu: album.isSystem ? null : onAlbumMenu,
           systemIcon: album.isSystem
               ? (album.isFavorites
-                    ? QuarkIcons.star_rounded
+                    ? QuarkIcons.star
                     : QuarkIcons.pending_actions_outlined)
               : null,
         );
@@ -200,7 +200,7 @@ class AlbumSidebar extends StatelessWidget {
                 AlbumSidebarSortButton(sort: sort, onChanged: onSortChanged),
               IconButton(
                 key: const ValueKey('album_create'),
-                icon: const Icon(QuarkIcons.add_rounded, size: 16),
+                icon: const Icon(QuarkIcons.add, size: 16),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
                 tooltip: 'New album',

@@ -207,15 +207,10 @@ class QuarkDrawer extends StatelessWidget {
     // The drawer is chrome: its rows wear the chrome's text colors.
     final tokens = QuarkTokens.of(context).onChrome;
     final rows = [
-      (
-        QuarkDrawerSection.files,
-        QuarkIcons.storage_rounded,
-        'Files',
-        onTapFiles,
-      ),
+      (QuarkDrawerSection.files, QuarkIcons.storage, 'Files', onTapFiles),
       (
         QuarkDrawerSection.photos,
-        QuarkIcons.photo_library_outlined,
+        QuarkIcons.photo_library,
         'Photos',
         onTapPhotos,
       ),

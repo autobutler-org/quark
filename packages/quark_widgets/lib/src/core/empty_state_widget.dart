@@ -16,7 +16,7 @@ import '../theme/quark_tokens.dart';
 ///
 /// ```dart
 /// EmptyStateWidget(
-///   icon: QuarkIcons.folder_outlined,
+///   icon: QuarkIcons.folder,
 ///   headline: 'This folder is empty',
 ///   subtext: 'Upload a file to get started.',
 ///   action: FilledButton(onPressed: onUpload, child: const Text('Upload')),

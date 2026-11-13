@@ -207,7 +207,7 @@ class _FileTopBarState extends State<FileTopBar> {
     final searchOpen = _searchExpanded || widget.isSearchMode;
     return QuarkAppBar(
       label: 'Files',
-      icon: QuarkIcons.storage_rounded,
+      icon: QuarkIcons.storage,
       onRefresh: widget.onRefresh,
       isRefreshing: widget.isRefreshing,
       // The way up stays whole on a phone. Search and Select sit in the

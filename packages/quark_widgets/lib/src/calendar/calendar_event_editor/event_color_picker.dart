@@ -74,7 +74,7 @@ class EventColorPicker extends StatelessWidget {
                     ),
                     child: index == value
                         ? Icon(
-                            QuarkIcons.check_rounded,
+                            QuarkIcons.check,
                             size: 16,
                             // Dark on a light swatch, light on a dark one.
                             color:

@@ -314,7 +314,7 @@ class DeviceCard extends StatelessWidget {
                 onPressed: isMounting ? null : onMount,
                 icon: isMounting
                     ? const QuarkLoader(size: 14)
-                    : const Icon(QuarkIcons.link_outlined, size: 16),
+                    : const Icon(QuarkIcons.link, size: 16),
                 label: Text(isMounting ? 'Mounting…' : 'Mount'),
               ),
             ],

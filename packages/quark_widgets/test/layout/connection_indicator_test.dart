@@ -10,7 +10,7 @@ import '../support/pump.dart';
 /// only when the caller asks for one (#2857).
 void main() {
   const cases = [
-    (ConnectionMode.local, QuarkIcons.home_rounded, 'Home label'),
+    (ConnectionMode.local, QuarkIcons.home, 'Home label'),
     (ConnectionMode.remote, QuarkIcons.cloud_done_outlined, 'Remote label'),
     (ConnectionMode.offline, QuarkIcons.cloud_off_outlined, 'Offline label'),
   ];

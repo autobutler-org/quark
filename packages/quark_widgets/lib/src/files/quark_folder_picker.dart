@@ -153,7 +153,7 @@ class QuarkFolderPicker extends StatelessWidget {
                   horizontal: tokens.spacingMd,
                 ),
                 leading: Icon(
-                  QuarkIcons.folder_outlined,
+                  QuarkIcons.folder,
                   color: tokens.secondaryForeground,
                 ),
                 title: Text(

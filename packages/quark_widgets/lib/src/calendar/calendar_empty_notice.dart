@@ -100,7 +100,7 @@ class CalendarEmptyNotice extends StatelessWidget {
                 OutlinedButton.icon(
                   key: buttonKey,
                   onPressed: onAdd,
-                  icon: const Icon(QuarkIcons.add_rounded, size: 18),
+                  icon: const Icon(QuarkIcons.add, size: 18),
                   label: const Text('Add an event'),
                 ),
             ],

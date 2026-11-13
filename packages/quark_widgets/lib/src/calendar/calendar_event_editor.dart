@@ -233,7 +233,7 @@ class _CalendarEventEditorState extends State<CalendarEventEditor> {
                     key: const ValueKey('event_close'),
                     tooltip: 'Close',
                     onPressed: busy ? null : widget.onCancel,
-                    icon: const Icon(QuarkIcons.close_rounded),
+                    icon: const Icon(QuarkIcons.close),
                   ),
                 ],
               ),

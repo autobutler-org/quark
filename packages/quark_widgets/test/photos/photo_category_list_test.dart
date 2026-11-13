@@ -22,7 +22,7 @@ const _categories = [
     id: 'favorites',
     label: 'Favorites',
     count: 2,
-    icon: QuarkIcons.star_rounded,
+    icon: QuarkIcons.star,
   ),
 ];
 

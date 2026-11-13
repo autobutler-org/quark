@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/controllers/restart_controller.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -78,7 +79,7 @@ class _RestartQuarkSectionState extends State<RestartQuarkSection> {
                     FilledButton.icon(
                       key: const ValueKey('restart_quark_button'),
                       onPressed: busy ? null : _restart,
-                      icon: const Icon(Icons.restart_alt),
+                      icon: const Icon(QuarkIcons.restart),
                       label: const Text('Restart Quark'),
                     ),
                     if (_controller.isRestarting) ...[

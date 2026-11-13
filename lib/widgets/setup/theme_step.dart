@@ -67,7 +67,7 @@ class ThemeStep extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             ThemeOption(
-              icon: QuarkIcons.light_mode_rounded,
+              icon: QuarkIcons.light_mode,
               label: 'Light',
               description: 'Always use light theme',
               isSelected: currentMode == ThemeMode.light,
@@ -77,7 +77,7 @@ class ThemeStep extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             ThemeOption(
-              icon: QuarkIcons.dark_mode_rounded,
+              icon: QuarkIcons.dark_mode,
               label: 'Dark',
               description: 'Always use dark theme',
               isSelected: currentMode == ThemeMode.dark,

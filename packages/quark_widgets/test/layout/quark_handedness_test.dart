@@ -21,12 +21,12 @@ void main() {
     leftHanded: leftHanded,
     child: QuarkPageScaffold(
       title: 'Photos',
-      icon: QuarkIcons.photo_library_outlined,
+      icon: QuarkIcons.photo_library,
       appBar: middle == null
           ? null
           : QuarkAppBar(
               label: 'Photos',
-              icon: QuarkIcons.photo_library_outlined,
+              icon: QuarkIcons.photo_library,
               onRefresh: () {},
               middle: middle,
               actions: [

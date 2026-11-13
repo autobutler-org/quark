@@ -63,7 +63,7 @@ class SvgViewerPage extends StatelessWidget {
       ),
       body: switch ((bytes, error)) {
         (_, final String error) => EmptyStateWidget(
-          icon: QuarkIcons.broken_image_outlined,
+          icon: QuarkIcons.broken_image,
           headline: error,
         ),
         (null, _) => const Center(child: QuarkLoader()),
@@ -75,7 +75,7 @@ class SvgViewerPage extends StatelessWidget {
                 placeholderBuilder: (context) =>
                     const Center(child: QuarkLoader()),
                 errorBuilder: (context, error, stackTrace) => EmptyStateWidget(
-                  icon: QuarkIcons.broken_image_outlined,
+                  icon: QuarkIcons.broken_image,
                   headline: Errors.couldNot('show this SVG'),
                 ),
               ),

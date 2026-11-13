@@ -11,7 +11,7 @@ void main() {
     await pumpAt(tester, QuarkBrandButton(label: 'Files', onTap: () => taps++));
 
     expect(find.text('Files'), findsOneWidget);
-    expect(find.byIcon(QuarkIcons.storage_rounded), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.storage), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('brand_button')));
     await tester.pump();

@@ -62,7 +62,7 @@ class ModelViewerControls extends StatelessWidget {
         children: [
           QuarkBarIconButton(
             key: const ValueKey('model_viewer_wireframe_toggle'),
-            icon: QuarkIcons.chart_gridlines,
+            icon: QuarkIcons.wireframe,
             tooltip: 'Wireframe',
             selected: wireframe,
             onPressed: onWireframeChanged == null

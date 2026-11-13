@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
@@ -48,7 +49,7 @@ class PlaintextEditorBody extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.error_outline,
+              QuarkIcons.error_outline,
               size: 48,
               color: Theme.of(context).colorScheme.error,
             ),

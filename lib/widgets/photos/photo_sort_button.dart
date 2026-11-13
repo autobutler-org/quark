@@ -90,11 +90,7 @@ class PhotoSortButton extends StatelessWidget {
             key: ValueKey('photos_sort_option_${option.id}'),
             leadingIcon: Icon(_iconFor(option.field), size: 18),
             trailingIcon: option.field == sortField && option.order == sortOrder
-                ? Icon(
-                    QuarkIcons.check_rounded,
-                    size: 16,
-                    color: tokens.primary,
-                  )
+                ? Icon(QuarkIcons.check, size: 16, color: tokens.primary)
                 : null,
             onPressed: () => onChanged(option.field, option.order),
             child: Text(option.label),

@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 
 import '../theme/quark_tokens.dart';
 
@@ -150,7 +151,9 @@ class QuarkSplitView extends StatelessWidget {
               alignment: AlignmentDirectional.centerStart,
               child: IconButton(
                 key: const ValueKey('split_view_toggle'),
-                icon: Icon(isSidebarOpen ? Icons.menu_open : Icons.menu),
+                icon: Icon(
+                  isSidebarOpen ? QuarkIcons.menu_open : QuarkIcons.menu,
+                ),
                 tooltip: isSidebarOpen ? 'Hide sidebar' : 'Show sidebar',
                 onPressed: onToggleSidebar,
               ),

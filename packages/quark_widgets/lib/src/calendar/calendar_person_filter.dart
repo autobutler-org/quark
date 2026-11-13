@@ -92,7 +92,7 @@ class CalendarPersonFilter extends StatelessWidget {
                     key: ValueKey('calendar_filter_person_$name'),
                     leadingIcon: Icon(
                       name == chosen
-                          ? QuarkIcons.check_rounded
+                          ? QuarkIcons.check
                           : QuarkIcons.person_outline,
                     ),
                     onPressed: () => onPerson(name),
@@ -101,7 +101,7 @@ class CalendarPersonFilter extends StatelessWidget {
               ],
               builder: (context, controller, _) => QuarkBarChip(
                 key: const ValueKey('calendar_filter_people'),
-                icon: QuarkIcons.expand_more_rounded,
+                icon: QuarkIcons.expand_more,
                 label: chosen ?? 'Person',
                 tooltip: 'Show one person\'s events',
                 keepLabel: true,

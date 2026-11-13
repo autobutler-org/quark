@@ -120,7 +120,7 @@ class WelcomeCard extends StatelessWidget {
             if (onDismiss != null)
               QuarkBarIconButton(
                 key: const ValueKey('welcome_card_dismiss'),
-                icon: QuarkIcons.close_rounded,
+                icon: QuarkIcons.close,
                 tooltip: 'Dismiss',
                 onPressed: onDismiss,
               ),

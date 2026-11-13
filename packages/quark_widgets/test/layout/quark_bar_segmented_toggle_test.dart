@@ -14,11 +14,7 @@ void main() {
           icon: QuarkIcons.view_list_rounded,
           label: 'List',
         ),
-        QuarkBarSegment(
-          id: 'grid',
-          icon: QuarkIcons.grid_view_rounded,
-          label: 'Grid',
-        ),
+        QuarkBarSegment(id: 'grid', icon: QuarkIcons.grid_view, label: 'Grid'),
       ],
       selectedId: selectedId,
       onSelected: onSelected,

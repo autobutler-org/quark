@@ -44,13 +44,13 @@ class FileTopBarSearchField extends StatelessWidget {
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(vertical: 8),
             prefixIcon: Icon(
-              QuarkIcons.search_rounded,
+              QuarkIcons.search,
               size: 18,
               color: tokens.secondaryForeground,
             ),
             suffixIcon: IconButton(
               icon: Icon(
-                QuarkIcons.close_rounded,
+                QuarkIcons.close,
                 size: 16,
                 color: tokens.secondaryForeground,
               ),

@@ -20,7 +20,7 @@ void main() {
       tester,
       QuarkPageScaffold(
         title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         actions: [
           IconButton(
             key: const ValueKey('page_upload'),
@@ -50,7 +50,7 @@ void main() {
       tester,
       const QuarkPageScaffold(
         title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         body: Text('the grid'),
       ),
       size: size,
@@ -69,7 +69,7 @@ void main() {
       tester,
       QuarkPageScaffold(
         title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         appBar: AppBar(title: const Text('3 selected')),
         body: const Text('the grid'),
       ),
@@ -90,7 +90,7 @@ void main() {
       tester,
       QuarkPageScaffold(
         title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         bottomBar: const Text('3 photos selected'),
         body: const Text('the grid'),
       ),
@@ -115,7 +115,7 @@ void main() {
       tester,
       const QuarkPageScaffold(
         title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         body: Text('the grid'),
       ),
       scaffold: false,
@@ -136,7 +136,7 @@ void main() {
         tester,
         const QuarkPageScaffold(
           title: 'Photos',
-          icon: QuarkIcons.photo_library_outlined,
+          icon: QuarkIcons.photo_library,
           body: Text('the grid'),
         ),
         brightness: brightness,
@@ -162,7 +162,7 @@ void main() {
       tester,
       QuarkPageScaffold(
         title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         onRefresh: () => refreshes++,
         actions: const [Text('an action')],
         body: const Text('the grid'),
@@ -195,7 +195,7 @@ void main() {
       tester,
       QuarkPageScaffold(
         title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         onRefresh: () {},
         isRefreshing: true,
         body: const Text('the grid'),
@@ -211,7 +211,7 @@ void main() {
       tester,
       const QuarkPageScaffold(
         title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         body: Text('the grid'),
       ),
       scaffold: false,
@@ -228,7 +228,7 @@ void main() {
       tester,
       QuarkPageScaffold(
         title: 'Photos ' * 20,
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         actions: [
           for (var i = 0; i < 4; i++)
             IconButton(
@@ -251,7 +251,7 @@ void main() {
       tester,
       QuarkPageScaffold(
         title: 'Photos',
-        icon: QuarkIcons.photo_library_outlined,
+        icon: QuarkIcons.photo_library,
         onRefresh: () {},
         actions: [
           QuarkBarIconButton(

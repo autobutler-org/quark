@@ -64,11 +64,7 @@ class DuplicateFormatButton extends StatelessWidget {
           MenuItemButton(
             key: ValueKey('duplicates_keep_format_option_${option.id}'),
             trailingIcon: option.value == preferred
-                ? Icon(
-                    QuarkIcons.check_rounded,
-                    size: 16,
-                    color: tokens.primary,
-                  )
+                ? Icon(QuarkIcons.check, size: 16, color: tokens.primary)
                 : null,
             onPressed: () => onChanged(option.value),
             child: Text(option.label),

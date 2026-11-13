@@ -158,7 +158,7 @@ class CalendarBarBottom extends StatelessWidget implements PreferredSizeWidget {
         for (final v in order)
           MenuItemButton(
             key: ValueKey('calendar_menu_${v.slug}'),
-            leadingIcon: Icon(v == view ? QuarkIcons.check_rounded : _icon(v)),
+            leadingIcon: Icon(v == view ? QuarkIcons.check : _icon(v)),
             onPressed: v == view ? null : () => onViewSelected(v),
             child: Text(label(v)),
           ),

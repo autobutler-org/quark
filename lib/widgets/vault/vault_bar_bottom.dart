@@ -58,7 +58,7 @@ class VaultBarBottom extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         QuarkBarChip(
           key: const ValueKey('vault_new_entry'),
-          icon: QuarkIcons.add_rounded,
+          icon: QuarkIcons.add,
           label: 'New entry',
           onPressed: onNewEntry,
         ),
@@ -81,7 +81,7 @@ class VaultBarBottom extends StatelessWidget implements PreferredSizeWidget {
       menuChildren: [
         MenuItemButton(
           key: const ValueKey('vault_new_entry'),
-          leadingIcon: const Icon(QuarkIcons.add_rounded),
+          leadingIcon: const Icon(QuarkIcons.add),
           onPressed: onNewEntry,
           child: const Text('New entry'),
         ),

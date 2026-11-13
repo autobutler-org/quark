@@ -83,11 +83,7 @@ class ThemeColorSwatch extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: selected
-                      ? Icon(
-                          QuarkIcons.check_rounded,
-                          size: 12,
-                          color: checkColor,
-                        )
+                      ? Icon(QuarkIcons.check, size: 12, color: checkColor)
                       : null,
                 ),
               ),

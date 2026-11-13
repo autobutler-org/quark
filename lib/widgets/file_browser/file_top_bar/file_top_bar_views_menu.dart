@@ -92,7 +92,7 @@ class FileTopBarViewsMenu extends StatelessWidget {
         ),
         TopBarMenuRadioItem(
           key: const ValueKey('file_top_bar_views_grid'),
-          icon: QuarkIcons.grid_view_rounded,
+          icon: QuarkIcons.grid_view,
           label: 'Grid',
           selected: isGridView,
           onTap: () {

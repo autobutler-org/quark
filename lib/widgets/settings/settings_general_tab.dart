@@ -257,10 +257,10 @@ class SettingsGeneralTab extends StatelessWidget {
           Card(
             child: ListTile(
               key: const ValueKey('settings_open_storage'),
-              leading: const Icon(QuarkIcons.storage_rounded),
+              leading: const Icon(QuarkIcons.storage),
               title: const Text('Storage devices'),
               subtitle: const Text('View, mount and rename drives'),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: const Icon(QuarkIcons.chevron_right),
               onTap: onOpenStorage,
             ),
           ),

@@ -122,7 +122,7 @@ class SlideToolbarActions {
     SlideToolbarChoice(
       key: 'slide_image_quark',
       label: 'From your Quark',
-      icon: QuarkIcons.folder_outlined,
+      icon: QuarkIcons.folder,
       onSelected: controller.imageUpload == null ? onImageFromQuark : null,
     ),
   ];

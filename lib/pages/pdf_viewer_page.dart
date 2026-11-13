@@ -70,7 +70,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     ],
     loadingBannerBuilder: (_, _, _) => const Center(child: QuarkLoader()),
     errorBannerBuilder: (_, error, _, _) => EmptyStateWidget(
-      icon: QuarkIcons.broken_image_outlined,
+      icon: QuarkIcons.broken_image,
       headline: Errors.message(error, 'open the file'),
     ),
   );

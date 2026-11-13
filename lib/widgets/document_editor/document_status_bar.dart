@@ -44,9 +44,7 @@ class DocumentStatusBar extends StatelessWidget {
                 // Page brightness toggle (#938) — bottom-left, near the page
                 IconButton(
                   icon: Icon(
-                    darkPage
-                        ? QuarkIcons.light_mode_outlined
-                        : QuarkIcons.dark_mode_outlined,
+                    darkPage ? QuarkIcons.light_mode : QuarkIcons.dark_mode,
                     size: 14,
                   ),
                   tooltip: darkPage
@@ -84,7 +82,7 @@ class DocumentStatusBar extends StatelessWidget {
           const SizedBox(width: 16),
           if (isReadOnly)
             DocumentStatusItem(
-              icon: QuarkIcons.visibility_outlined,
+              icon: QuarkIcons.visibility,
               label: 'Read-only',
               color: muted,
             )

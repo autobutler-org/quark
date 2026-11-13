@@ -8,6 +8,8 @@ import 'package:flutter/widgets.dart';
 
 /// Every icon the app uses, by semantic name: Quark's own icons from the icon font, and aliases for the Material
 /// icons, so the rest of the app never imports Material icons directly.
+///
+/// Each action has one weight, and the comment on that alias names it.
 @staticIconProvider
 class QuarkIcons {
   QuarkIcons._();
@@ -92,6 +94,10 @@ class QuarkIcons {
   // ── Material aliases ────────────────────────────────────────────────────────────────────────────
   // Re-exports of Icons.* under semantic names.
   // To replace with a custom icon: change the alias here, nowhere else.
+  //
+  // Toolbar and field actions are rounded. Objects and status marks are
+  // outlined. Playback stays the sharp filled glyph. A second const on one
+  // stem is a different object, and its comment says which.
 
   // ── Edit actions ─────────────────────────────────────────────────────────────────────
   static const IconData undo = Icons.undo;
@@ -133,8 +139,8 @@ class QuarkIcons {
   static const IconData clear_filters = Icons.filter_alt_off_outlined;
 
   // ── View ─────────────────────────────────────────────────────────────────────────
-  /// Freeze header rows and columns — a snowflake reads as "frozen".
-  static const IconData freeze_panes = Icons.ac_unit;
+  /// Freeze header rows and columns. A split pane, not a snowflake.
+  static const IconData freeze_panes = Icons.horizontal_split;
 
   // ── Cell formatting ──────────────────────────────────────────────────────────────
   /// Bold the selected cells' text.
@@ -159,12 +165,13 @@ class QuarkIcons {
   static const IconData format_align_right = Icons.format_align_right;
 
   /// Choose how the selected cells display numbers: currency, percent, date.
-  static const IconData format_number = Icons.attach_money;
+  /// Drawn as digits, not a currency sign.
+  static const IconData format_number = Icons.numbers;
 
   /// Show one fewer decimal place.
   static const IconData decimal_decrease = Icons.remove;
 
-  /// Show one more decimal place.
+  /// Show one more decimal place. The sharp plus, not the rounded create icon [add].
   static const IconData decimal_increase = Icons.add;
 
   /// Remove every format from the selected cells, keeping their values.
@@ -207,8 +214,8 @@ class QuarkIcons {
   /// A numbered list.
   static const IconData format_list_numbered = Icons.format_list_numbered;
 
-  /// The font family of the selected text.
-  static const IconData font_family = Icons.font_download_outlined;
+  /// The font family of the selected text. A type specimen, not a download.
+  static const IconData font_family = Icons.type_specimen;
 
   /// A shape or line's outline color.
   static const IconData stroke_color = Icons.border_color_outlined;
@@ -234,7 +241,7 @@ class QuarkIcons {
   /// The menu of stacking-order moves.
   static const IconData arrange = Icons.layers_outlined;
 
-  /// Show or hide the selection's properties.
+  /// Show or hide the selection's properties. Outlined. The rounded adjust icon is [tune].
   static const IconData properties = Icons.tune_outlined;
 
   /// The menu of things to insert on a slide.
@@ -273,11 +280,11 @@ class QuarkIcons {
   /// Give the selected elements one height.
   static const IconData match_height = Icons.height;
 
-  /// Group the selected elements.
-  static const IconData group_elements = Icons.join_full;
+  /// Group the selected elements. Overlapping shapes, not a join.
+  static const IconData group_elements = Icons.group_work;
 
-  /// Break a group into its elements.
-  static const IconData ungroup_elements = Icons.join_left;
+  /// Break a group into its elements. The group glyph with a slash.
+  static const IconData ungroup_elements = Icons.group_off;
 
   /// Copy the selection in place.
   static const IconData duplicate = Icons.control_point_duplicate;
@@ -294,7 +301,7 @@ class QuarkIcons {
   /// A slide's transition: how the show moves on to it.
   static const IconData slide_transition = Icons.auto_awesome_motion_outlined;
 
-  /// Put a slide's placeholders back where its layout has them.
+  /// Put a slide's placeholders back where its layout has them. The same glyph as [restart].
   static const IconData reset_layout = Icons.restart_alt;
 
   /// The list of keyboard shortcuts.
@@ -348,8 +355,11 @@ class QuarkIcons {
   /// The value written on each bar, point or slice of a chart.
   static const IconData chart_data_labels = Icons.pin_outlined;
 
-  /// The lines across a chart's plot at each value tick.
-  static const IconData chart_gridlines = Icons.grid_4x4;
+  /// The lines across a chart's plot at each value tick. Horizontal rules, not [wireframe].
+  static const IconData chart_gridlines = Icons.border_horizontal;
+
+  /// The model viewer's wireframe toggle. A 4 by 4 lattice, not [chart_gridlines].
+  static const IconData wireframe = Icons.grid_4x4;
 
   /// The colors of a chart's series.
   static const IconData chart_colors = Icons.palette_outlined;
@@ -368,26 +378,46 @@ class QuarkIcons {
   static const IconData import_file = Icons.file_open_outlined;
 
   // ── Navigation & chrome ──────────────────────────────────────────────────────────
-  static const IconData arrow_back = Icons.arrow_back;
-  static const IconData arrow_back_rounded = Icons.arrow_back_rounded;
-  static const IconData chevron_left = Icons.chevron_left;
-  static const IconData chevron_left_rounded = Icons.chevron_left_rounded;
-  static const IconData chevron_right = Icons.chevron_right;
-  static const IconData chevron_right_rounded = Icons.chevron_right_rounded;
-  static const IconData expand_less = Icons.expand_less;
-  static const IconData expand_more = Icons.expand_more;
-  static const IconData expand_more_rounded = Icons.expand_more_rounded;
+  /// Back. Rounded.
+  static const IconData arrow_back = Icons.arrow_back_rounded;
+
+  /// The previous item. Rounded, with [arrow_back].
+  static const IconData chevron_left = Icons.chevron_left_rounded;
+
+  /// The next item, and the disclosure at the end of a row. Rounded.
+  static const IconData chevron_right = Icons.chevron_right_rounded;
+
+  /// Collapse a section. Rounded, the pair of [expand_more].
+  static const IconData expand_less = Icons.expand_less_rounded;
+
+  /// Expand a section, including the caret on a split chip. Rounded.
+  static const IconData expand_more = Icons.expand_more_rounded;
+
+  /// The previous match in a find bar, and the scroll-up hint. Rounded.
   static const IconData keyboard_arrow_up_rounded =
       Icons.keyboard_arrow_up_rounded;
-  static const IconData close = Icons.close;
-  static const IconData close_rounded = Icons.close_rounded;
-  static const IconData clear_rounded = Icons.clear_rounded;
+
+  /// Dismiss, and the button that clears a search field. Rounded.
+  static const IconData close = Icons.close_rounded;
+
+  /// Breadcrumb overflow. Rounded, with the chevrons.
   static const IconData more_horiz_rounded = Icons.more_horiz_rounded;
+
+  /// An item's menu. Sharp. This menu has no second weight.
   static const IconData more_vert = Icons.more_vert;
-  static const IconData home_filled = Icons.home_filled;
-  static const IconData home_rounded = Icons.home_rounded;
-  static const IconData search = Icons.search;
-  static const IconData search_rounded = Icons.search_rounded;
+
+  /// Home. Rounded.
+  static const IconData home = Icons.home_rounded;
+
+  /// Search. Rounded.
+  static const IconData search = Icons.search_rounded;
+
+  /// The device switcher on the drawer header. Rounded, with the chevrons.
+  static const IconData unfold_more = Icons.unfold_more_rounded;
+
+  /// The caret on a share-row menu. A dropdown triangle, not [expand_more].
+  static const IconData arrow_drop_down = Icons.arrow_drop_down;
+
   static const IconData fullscreen = Icons.fullscreen;
   static const IconData fullscreen_exit = Icons.fullscreen_exit;
   static const IconData zoom_in = Icons.zoom_in;
@@ -396,18 +426,27 @@ class QuarkIcons {
   static const IconData refresh = Icons.refresh;
 
   // ── Indicators & status ──────────────────────────────────────────────────────────
-  static const IconData check = Icons.check;
-  static const IconData check_rounded = Icons.check_rounded;
+  /// A chosen menu row, and the mark inside a circle the widget already paints. Rounded.
+  static const IconData check = Icons.check_rounded;
+
+  /// The select control, a selected file, and a success mark. Outlined.
   static const IconData check_circle_outline = Icons.check_circle_outline;
-  static const IconData check_circle_outline_rounded =
-      Icons.check_circle_outline_rounded;
-  static const IconData check_circle_rounded = Icons.check_circle_rounded;
+
+  /// A status dot. Filled. An empty selection circle is [circle_outlined].
   static const IconData circle = Icons.circle;
+
+  /// An empty selection circle. Outlined, the pair of [check_circle_outline].
   static const IconData circle_outlined = Icons.circle_outlined;
   static const IconData error_outline = Icons.error_outline;
   static const IconData help_outline = Icons.help_outline;
+
+  /// Detail is showing. Filled. The idle control is [info_outline].
   static const IconData info = Icons.info;
+
+  /// Detail is hidden. Outlined, the pair of [info].
   static const IconData info_outline = Icons.info_outline;
+
+  /// A warning. Sharp amber. The rounded warning is not used.
   static const IconData warning_amber = Icons.warning_amber;
   static const IconData remove_circle_outline = Icons.remove_circle_outline;
   static const IconData pending_actions_outlined =
@@ -418,69 +457,95 @@ class QuarkIcons {
   static const IconData monitor_heart_outlined = Icons.monitor_heart_outlined;
 
   // ── Files & folders ──────────────────────────────────────────────────────────────
-  static const IconData folder_open = Icons.folder_open;
-  static const IconData folder_open_outlined = Icons.folder_open_outlined;
-  static const IconData folder_open_rounded = Icons.folder_open_rounded;
+  /// An open folder. Outlined, the same weight as [folder].
+  static const IconData folder_open = Icons.folder_open_outlined;
   static const IconData backup_outlined = Icons.backup_outlined;
   static const IconData verified_outlined = Icons.verified_outlined;
   static const IconData label_outline = Icons.label_outline;
-  static const IconData folder_outlined = Icons.folder_outlined;
-  static const IconData folder_rounded = Icons.folder_rounded;
+
+  /// A folder. Outlined.
+  static const IconData folder = Icons.folder_outlined;
   static const IconData folder_copy_outlined = Icons.folder_copy_outlined;
   static const IconData folder_off_outlined = Icons.folder_off_outlined;
+
+  /// Make a new folder. Outlined, the same weight as [folder].
   static const IconData create_new_folder_outlined =
       Icons.create_new_folder_outlined;
   static const IconData insert_drive_file_outlined =
       Icons.insert_drive_file_outlined;
   static const IconData description_outlined = Icons.description_outlined;
   static const IconData archive_outlined = Icons.archive_outlined;
-  static const IconData save = Icons.save;
-  static const IconData save_outlined = Icons.save_outlined;
-  static const IconData copy_outlined = Icons.copy_outlined;
+
+  /// Save. Outlined.
+  static const IconData save = Icons.save_outlined;
+
+  /// Copy. Filled.
   static const IconData content_copy = Icons.content_copy;
 
   // ── Media file types ─────────────────────────────────────────────────────────────
   static const IconData image_outlined = Icons.image_outlined;
-  static const IconData broken_image = Icons.broken_image;
-  static const IconData broken_image_outlined = Icons.broken_image_outlined;
-  static const IconData photo_library = Icons.photo_library;
-  static const IconData photo_library_outlined = Icons.photo_library_outlined;
+
+  /// A picture that failed to load. Outlined.
+  static const IconData broken_image = Icons.broken_image_outlined;
+
+  /// The photo library. Outlined.
+  static const IconData photo_library = Icons.photo_library_outlined;
   static const IconData photo_album_outlined = Icons.photo_album_outlined;
   static const IconData photo_size_select_large_outlined =
       Icons.photo_size_select_large_outlined;
   static const IconData picture_as_pdf_outlined = Icons.picture_as_pdf_outlined;
   static const IconData menu_book_outlined = Icons.menu_book_outlined;
+
+  /// A Quark slide deck. Filled, so it is not [slideshow_outlined].
   static const IconData slideshow = Icons.slideshow;
+
+  /// A presentation that is not a Quark deck, and the Slides section. Outlined.
   static const IconData slideshow_outlined = Icons.slideshow_outlined;
   static const IconData video_file_outlined = Icons.video_file_outlined;
   static const IconData audio_file_outlined = Icons.audio_file_outlined;
+
+  /// A Quark spreadsheet. Filled, so it is not [table_chart_outlined].
   static const IconData table_chart = Icons.table_chart;
+
+  /// A spreadsheet that is not a Quark sheet, and the Sheets section. Outlined.
   static const IconData table_chart_outlined = Icons.table_chart_outlined;
+
+  /// A Quark document. Filled.
   static const IconData edit_document = Icons.edit_document;
   static const IconData edit_note = Icons.edit_note;
 
   // ── Actions & editing ────────────────────────────────────────────────────────────
-  static const IconData add = Icons.add;
+  /// Create. Rounded.
+  static const IconData add = Icons.add_rounded;
+
   static const IconData remove = Icons.remove;
-  static const IconData add_rounded = Icons.add_rounded;
   static const IconData edit_outlined = Icons.edit_outlined;
   static const IconData casino = Icons.casino;
   static const IconData delete_outline = Icons.delete_outline;
   static const IconData delete_forever_outlined = Icons.delete_forever_outlined;
   static const IconData restore = Icons.restore;
+
+  /// Restart Quark, or reset an installation. The same glyph as [reset_layout].
+  static const IconData restart = Icons.restart_alt;
   static const IconData drive_folder_upload_outlined =
       Icons.drive_folder_upload_outlined;
 
   /// A file moving into a folder: Move on the Files selection bar.
   static const IconData drive_file_move_outlined =
       Icons.drive_file_move_outlined;
-  static const IconData link_outlined = Icons.link_outlined;
-  static const IconData link_rounded = Icons.link_rounded;
+
+  /// A link. Outlined.
+  static const IconData link = Icons.link_outlined;
+
   static const IconData link_off = Icons.link_off;
   static const IconData eject_outlined = Icons.eject_outlined;
   static const IconData open_in_new = Icons.open_in_new;
+
+  /// Download. Outlined.
   static const IconData download_outlined = Icons.download_outlined;
   static const IconData share_outlined = Icons.share_outlined;
+
+  /// Upload. Rounded.
   static const IconData upload_rounded = Icons.upload_rounded;
   static const IconData arrow_downward_rounded = Icons.arrow_downward_rounded;
   static const IconData arrow_upward_rounded = Icons.arrow_upward_rounded;
@@ -488,28 +553,37 @@ class QuarkIcons {
       Icons.rotate_90_degrees_cw_outlined;
   static const IconData crop_square_outlined = Icons.crop_square_outlined;
   static const IconData straighten_outlined = Icons.straighten_outlined;
-  static const IconData tune_outlined = Icons.tune_outlined;
-  static const IconData tune_rounded = Icons.tune_rounded;
+
+  /// Adjust. Rounded.
+  static const IconData tune = Icons.tune_rounded;
   static const IconData print_outlined = Icons.print_outlined;
   static const IconData palette_outlined = Icons.palette_outlined;
 
   // ── Media playback ───────────────────────────────────────────────────────────────
+  /// Play. Sharp. Playback does not use the rounded play glyph.
   static const IconData play_arrow = Icons.play_arrow;
-  static const IconData play_arrow_rounded = Icons.play_arrow_rounded;
   static const IconData pause = Icons.pause;
   static const IconData forward_10 = Icons.forward_10;
   static const IconData replay_10 = Icons.replay_10;
   static const IconData volume_up = Icons.volume_up;
   static const IconData volume_off = Icons.volume_off;
 
+  /// A music note. Rounded.
+  static const IconData music_note = Icons.music_note_rounded;
+
   // ── Devices & storage ────────────────────────────────────────────────────────────
   static const IconData devices = Icons.devices;
   static const IconData smartphone = Icons.smartphone;
   static const IconData computer_outlined = Icons.computer_outlined;
-  static const IconData storage = Icons.storage;
-  static const IconData storage_outlined = Icons.storage_outlined;
-  static const IconData storage_rounded = Icons.storage_rounded;
+
+  /// A storage volume or device. Rounded.
+  static const IconData storage = Icons.storage_rounded;
+
+  /// Memory. The chip, not the storage volume.
   static const IconData memory = Icons.memory;
+
+  /// CPU. A board, not the memory chip.
+  static const IconData cpu = Icons.developer_board;
   static const IconData disc_full = Icons.disc_full;
   static const IconData usb_outlined = Icons.usb_outlined;
   static const IconData radio_button_checked = Icons.radio_button_checked;
@@ -524,8 +598,8 @@ class QuarkIcons {
   static const IconData cloud_sync_outlined = Icons.cloud_sync_outlined;
 
   // ── Security & accounts ──────────────────────────────────────────────────────────
-  static const IconData key_outlined = Icons.key_outlined;
-  static const IconData key_rounded = Icons.key_rounded;
+  /// A key. Outlined.
+  static const IconData key = Icons.key_outlined;
   static const IconData key_off_outlined = Icons.key_off_outlined;
   static const IconData lock_open = Icons.lock_open;
   static const IconData lock_outline = Icons.lock_outline;
@@ -533,14 +607,18 @@ class QuarkIcons {
   static const IconData logout = Icons.logout;
   static const IconData person_outline = Icons.person_outline;
   static const IconData group_outlined = Icons.group_outlined;
-  static const IconData visibility = Icons.visibility;
-  static const IconData visibility_off = Icons.visibility_off;
-  static const IconData visibility_outlined = Icons.visibility_outlined;
-  static const IconData visibility_off_outlined = Icons.visibility_off_outlined;
+
+  /// Show a secret. Outlined.
+  static const IconData visibility = Icons.visibility_outlined;
+
+  /// Hide a secret. Outlined, the pair of [visibility].
+  static const IconData visibility_off = Icons.visibility_off_outlined;
 
   // ── Views & layout ───────────────────────────────────────────────────────────────
-  static const IconData grid_view_outlined = Icons.grid_view_outlined;
-  static const IconData grid_view_rounded = Icons.grid_view_rounded;
+  /// The grid. Rounded, the pair of [view_list_rounded].
+  static const IconData grid_view = Icons.grid_view_rounded;
+
+  /// The list. Rounded, the pair of [grid_view].
   static const IconData view_list_rounded = Icons.view_list_rounded;
   static const IconData view_column_outlined = Icons.view_column_outlined;
   static const IconData lens_outlined = Icons.lens_outlined;
@@ -556,28 +634,47 @@ class QuarkIcons {
   static const IconData notes_rounded = Icons.notes_rounded;
 
   // ── Misc ─────────────────────────────────────────────────────────────────────────
-  static const IconData star = Icons.star;
-  static const IconData star_border = Icons.star_border;
-  static const IconData star_rounded = Icons.star_rounded;
-  static const IconData star_outline_rounded = Icons.star_outline_rounded;
+  /// A favorite that is on. Rounded.
+  static const IconData star = Icons.star_rounded;
+
+  /// A favorite that is off. Rounded, the pair of [star].
+  static const IconData star_border = Icons.star_outline_rounded;
   static const IconData settings_outlined = Icons.settings_outlined;
   static const IconData keyboard_outlined = Icons.keyboard_outlined;
   static const IconData camera_alt_outlined = Icons.camera_alt_outlined;
   static const IconData calendar_today_outlined = Icons.calendar_today_outlined;
   static const IconData location_on_outlined = Icons.location_on_outlined;
+
+  /// Follow the system theme. Rounded, with [light_mode] and [dark_mode].
   static const IconData brightness_auto_rounded = Icons.brightness_auto_rounded;
-  static const IconData light_mode_outlined = Icons.light_mode_outlined;
-  static const IconData dark_mode_outlined = Icons.dark_mode_outlined;
-  static const IconData light_mode_rounded = Icons.light_mode_rounded;
-  static const IconData dark_mode_rounded = Icons.dark_mode_rounded;
+
+  /// The light theme. Rounded.
+  static const IconData light_mode = Icons.light_mode_rounded;
+
+  /// The dark theme. Rounded.
+  static const IconData dark_mode = Icons.dark_mode_rounded;
   static const IconData bug_report_outlined = Icons.bug_report_outlined;
+
+  /// Repair an installation. Outlined.
+  static const IconData build_outlined = Icons.build_outlined;
+
+  /// Terms. Outlined.
+  static const IconData gavel_outlined = Icons.gavel_outlined;
+
+  /// The API explorer.
+  static const IconData api = Icons.api;
 
   // ── Chat ─────────────────────────────────────────────────────────────────────────
   static const IconData tag = Icons.tag;
   static const IconData attach_file = Icons.attach_file;
   static const IconData send_rounded = Icons.send_rounded;
   static const IconData forum_outlined = Icons.forum_outlined;
+
+  /// Open the sidebar. Sharp.
   static const IconData menu = Icons.menu;
+
+  /// The sidebar is open. Sharp, the pair of [menu].
+  static const IconData menu_open = Icons.menu_open;
   static const IconData person_add_outlined = Icons.person_add_outlined;
   static const IconData add_reaction_outlined = Icons.add_reaction_outlined;
 }

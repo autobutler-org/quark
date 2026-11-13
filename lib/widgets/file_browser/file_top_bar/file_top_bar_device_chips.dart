@@ -30,7 +30,7 @@ class FileTopBarDeviceChips extends StatelessWidget {
         return QuarkBarChip(
           key: ValueKey('file_top_bar_device_${device.devicePath}'),
           icon: isSelected
-              ? QuarkIcons.check_circle_outline_rounded
+              ? QuarkIcons.check_circle_outline
               : QuarkIcons.circle_outlined,
           label: device.name.isNotEmpty ? device.name : device.mountPoint,
           onPressed: onDeviceToggled != null

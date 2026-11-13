@@ -55,7 +55,7 @@ import 'refresh_icon_button.dart';
 /// Scaffold(
 ///   appBar: QuarkAppBar(
 ///     label: 'Photos',
-///     icon: QuarkIcons.photo_library_outlined,
+///     icon: QuarkIcons.photo_library,
 ///     onRefresh: manualRefresh,
 ///     isRefreshing: isRefreshing,
 ///     actions: const [AppThemeToggle()],

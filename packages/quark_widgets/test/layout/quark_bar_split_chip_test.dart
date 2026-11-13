@@ -59,7 +59,7 @@ void main() {
     await pumpAt(tester, chip(secondary: false), size: size);
 
     expect(find.byKey(choose), findsNothing);
-    expect(find.byIcon(QuarkIcons.expand_more_rounded), findsNothing);
+    expect(find.byIcon(QuarkIcons.expand_more), findsNothing);
     await tester.longPress(find.byIcon(QuarkIcons.upload_rounded));
     await tester.pumpAndSettle();
 

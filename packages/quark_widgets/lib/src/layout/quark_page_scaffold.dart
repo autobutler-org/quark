@@ -32,7 +32,7 @@ import 'quark_handedness.dart';
 /// ```dart
 /// QuarkPageScaffold(
 ///   title: 'Photos',
-///   icon: QuarkIcons.photo_library_outlined,
+///   icon: QuarkIcons.photo_library,
 ///   onRefresh: reload,
 ///   isRefreshing: false,
 ///   drawer: QuarkDrawer(activeSection: QuarkDrawerSection.photos),

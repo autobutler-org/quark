@@ -136,7 +136,7 @@ class QuarkEncryptionNotice extends StatelessWidget {
             children: [
               Icon(
                 switch (status) {
-                  ChatEncryptionStatus.waitingForKey => QuarkIcons.key_rounded,
+                  ChatEncryptionStatus.waitingForKey => QuarkIcons.key,
                   ChatEncryptionStatus.unverifiedKey =>
                     QuarkIcons.warning_amber,
                   ChatEncryptionStatus.unreadableHistory =>
@@ -189,10 +189,7 @@ class QuarkEncryptionNotice extends StatelessWidget {
                               onPressed: isRegenerating ? null : onRegenerate,
                               icon: isRegenerating
                                   ? const QuarkLoader(size: 16)
-                                  : const Icon(
-                                      QuarkIcons.key_outlined,
-                                      size: 18,
-                                    ),
+                                  : const Icon(QuarkIcons.key, size: 18),
                             ),
                           if (onLearnMore != null)
                             TextButton.icon(

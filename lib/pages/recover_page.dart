@@ -142,7 +142,7 @@ class _RecoverPageState extends State<RecoverPage> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Icon(
-                              QuarkIcons.key_rounded,
+                              QuarkIcons.key,
                               size: 48,
                               color: theme.colorScheme.primary,
                               semanticLabel: 'Recovery',
@@ -214,7 +214,7 @@ class _RecoverPageState extends State<RecoverPage> {
                                           'was set up, joined by hyphens, in the same order.',
                                       helperMaxLines: 3,
                                       border: OutlineInputBorder(),
-                                      prefixIcon: Icon(QuarkIcons.key_outlined),
+                                      prefixIcon: Icon(QuarkIcons.key),
                                     ),
                                     textInputAction: TextInputAction.next,
                                     autocorrect: false,
@@ -238,9 +238,8 @@ class _RecoverPageState extends State<RecoverPage> {
                                       suffixIcon: IconButton(
                                         icon: Icon(
                                           _obscurePassword
-                                              ? QuarkIcons.visibility_outlined
-                                              : QuarkIcons
-                                                    .visibility_off_outlined,
+                                              ? QuarkIcons.visibility
+                                              : QuarkIcons.visibility_off,
                                         ),
                                         tooltip: _obscurePassword
                                             ? 'Show password'
@@ -295,9 +294,8 @@ class _RecoverPageState extends State<RecoverPage> {
                                       suffixIcon: IconButton(
                                         icon: Icon(
                                           _obscureConfirm
-                                              ? QuarkIcons.visibility_outlined
-                                              : QuarkIcons
-                                                    .visibility_off_outlined,
+                                              ? QuarkIcons.visibility
+                                              : QuarkIcons.visibility_off,
                                         ),
                                         tooltip: _obscureConfirm
                                             ? 'Show password'

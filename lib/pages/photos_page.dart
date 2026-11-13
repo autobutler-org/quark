@@ -784,7 +784,7 @@ class PhotosPageState extends State<PhotosPage>
               ),
               QuarkBarIconButton(
                 key: const ValueKey('photos_search'),
-                icon: QuarkIcons.search_rounded,
+                icon: QuarkIcons.search,
                 tooltip: 'Search',
                 selected: _searchOpen,
                 onPressed: _toggleSearch,
@@ -805,7 +805,7 @@ class PhotosPageState extends State<PhotosPage>
               if (album != null && !album.isSystemAlbum && photos.isNotEmpty)
                 QuarkBarChip(
                   key: const ValueKey('photos_add_to_album'),
-                  icon: QuarkIcons.add_rounded,
+                  icon: QuarkIcons.add,
                   label: 'Add photos',
                   onPressed: () => _addPhotosTo(album.toAlbumItem()),
                 ),
@@ -818,7 +818,7 @@ class PhotosPageState extends State<PhotosPage>
             ];
             return QuarkPageScaffold(
               title: 'Photos',
-              icon: QuarkIcons.photo_library_outlined,
+              icon: QuarkIcons.photo_library,
               actions: actions,
               onRefresh: manualRefresh,
               isRefreshing: isRefreshing,
@@ -841,7 +841,7 @@ class PhotosPageState extends State<PhotosPage>
                         if (c.addingToAlbum != null)
                           QuarkBarChip(
                             key: const ValueKey('photos_selection_done'),
-                            icon: QuarkIcons.check_rounded,
+                            icon: QuarkIcons.check,
                             label: 'Done (${selectedIds.length})',
                             keepLabel: true,
                             onPressed: selectedIds.isNotEmpty
@@ -853,7 +853,7 @@ class PhotosPageState extends State<PhotosPage>
                   : libraryRow
                   ? QuarkAppBar(
                       label: 'Photos',
-                      icon: QuarkIcons.photo_library_outlined,
+                      icon: QuarkIcons.photo_library,
                       actions: actions,
                       onRefresh: manualRefresh,
                       isRefreshing: isRefreshing,
@@ -972,7 +972,7 @@ class PhotosPageState extends State<PhotosPage>
                                     isLoadingMore: c.isLoadingMore,
                                     emptyState: c.searchQuery.isNotEmpty
                                         ? EmptyStateWidget(
-                                            icon: QuarkIcons.search_rounded,
+                                            icon: QuarkIcons.search,
                                             headline:
                                                 'No photos match "${c.searchQuery}"',
                                             subtext:

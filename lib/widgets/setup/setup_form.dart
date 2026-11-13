@@ -109,7 +109,7 @@ class _SetupFormState extends State<SetupForm> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Icon(
-            QuarkIcons.home_filled,
+            QuarkIcons.home,
             size: 56,
             color: theme.colorScheme.primary,
             semanticLabel: 'Quark',
@@ -183,8 +183,8 @@ class _SetupFormState extends State<SetupForm> {
                     suffixIcon: IconButton(
                       icon: Icon(
                         widget.obscurePassword
-                            ? QuarkIcons.visibility_outlined
-                            : QuarkIcons.visibility_off_outlined,
+                            ? QuarkIcons.visibility
+                            : QuarkIcons.visibility_off,
                       ),
                       tooltip: widget.obscurePassword
                           ? 'Show password'
@@ -227,8 +227,8 @@ class _SetupFormState extends State<SetupForm> {
                     suffixIcon: IconButton(
                       icon: Icon(
                         widget.obscureConfirm
-                            ? QuarkIcons.visibility_outlined
-                            : QuarkIcons.visibility_off_outlined,
+                            ? QuarkIcons.visibility
+                            : QuarkIcons.visibility_off,
                       ),
                       tooltip: widget.obscureConfirm
                           ? 'Show password'

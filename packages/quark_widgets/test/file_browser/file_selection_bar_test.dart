@@ -252,7 +252,7 @@ void main() {
             actions: [
               QuarkBarChip(
                 key: const ValueKey('done'),
-                icon: QuarkIcons.check_rounded,
+                icon: QuarkIcons.check,
                 label: 'Done (2)',
                 onPressed: () => events.add('done'),
               ),

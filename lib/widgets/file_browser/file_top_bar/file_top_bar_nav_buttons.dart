@@ -42,7 +42,7 @@ class FileTopBarNavButtons extends StatelessWidget {
         : parent.substring(parent.lastIndexOf('/') + 1);
     return QuarkBarIconButton(
       key: const ValueKey('file_top_bar_up'),
-      icon: QuarkIcons.arrow_back_rounded,
+      icon: QuarkIcons.arrow_back,
       onPressed: canGoUp ? onGoUp : null,
       tooltip: canGoUp ? 'Back to $parentName' : null,
     );

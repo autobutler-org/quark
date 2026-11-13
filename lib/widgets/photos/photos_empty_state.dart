@@ -74,21 +74,21 @@ class PhotosEmptyState extends StatelessWidget {
             : FilledButton.icon(
                 key: const ValueKey('album_empty_add_photos'),
                 onPressed: onAdd,
-                icon: const Icon(QuarkIcons.add_rounded, size: 18),
+                icon: const Icon(QuarkIcons.add, size: 18),
                 label: const Text('Add photos'),
               ),
       );
     }
     if (showingFavorites) {
       return const EmptyStateWidget(
-        icon: QuarkIcons.star_outline_rounded,
+        icon: QuarkIcons.star_border,
         headline: 'No favorites yet',
         subtext: 'Tap ★ on any photo to save it here.',
       );
     }
     final onUpload = onUploadPhotos;
     return EmptyStateWidget(
-      icon: QuarkIcons.photo_library_outlined,
+      icon: QuarkIcons.photo_library,
       headline: 'No photos yet',
       subtext: 'Photos you upload to Quark will appear here.',
       // A first-time library had nothing to press: uploading lived on an
@@ -98,7 +98,7 @@ class PhotosEmptyState extends StatelessWidget {
           : FilledButton.icon(
               key: const ValueKey('photos_empty_upload'),
               onPressed: onUpload,
-              icon: const Icon(QuarkIcons.add_rounded, size: 18),
+              icon: const Icon(QuarkIcons.add, size: 18),
               label: const Text('Upload photos'),
             ),
     );

@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/widgets/settings/confirm_password_field.dart';
 
@@ -121,7 +122,7 @@ class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  Icons.warning_amber_rounded,
+                  QuarkIcons.warning_amber,
                   size: 20,
                   color: colorScheme.onErrorContainer,
                 ),

@@ -86,9 +86,7 @@ class _ChangePasswordFieldState extends State<ChangePasswordField> {
       suffix: IconButton(
         key: ValueKey('${widget.keyPrefix}_visibility'),
         icon: Icon(
-          _obscured
-              ? QuarkIcons.visibility_outlined
-              : QuarkIcons.visibility_off_outlined,
+          _obscured ? QuarkIcons.visibility : QuarkIcons.visibility_off,
         ),
         tooltip: _obscured ? 'Show $label' : 'Hide $label',
         onPressed: () => setState(() => _obscured = !_obscured),

@@ -153,7 +153,7 @@ class PollEditorQuestion extends StatelessWidget {
               onPressed: () => onChanged(
                 question.copyWith(options: [...question.options, '']),
               ),
-              icon: const Icon(QuarkIcons.add_rounded, size: 18),
+              icon: const Icon(QuarkIcons.add, size: 18),
               label: const Text('Add option'),
             ),
           ),
@@ -181,7 +181,7 @@ class PollEditorQuestion extends StatelessWidget {
                     : () => onChanged(
                         question.copyWith(scale: question.scale + 1),
                       ),
-                icon: const Icon(QuarkIcons.add_rounded),
+                icon: const Icon(QuarkIcons.add),
               ),
             ],
           ),
