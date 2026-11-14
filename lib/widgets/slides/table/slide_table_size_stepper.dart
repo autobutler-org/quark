@@ -2,7 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// One of the table picker's steppers: [label], one less, the [value],
+/// One of the table picker's [QuarkStepper]s: [label], one less, the [value],
 /// one more, kept between [min] and [max]. The value reads to a screen
 /// reader as "Rows 3".
 ///
@@ -38,43 +38,22 @@ class SlideTableSizeStepper extends StatelessWidget {
   final int max;
 
   @override
-  Widget build(BuildContext context) {
-    final tokens = QuarkTokens.of(context);
-    final text = Theme.of(context).textTheme;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: text.bodyMedium?.copyWith(color: tokens.foreground),
-          ),
-        ),
-        QuarkBarIconButton(
-          key: ValueKey('slide_table_${name}_less'),
-          icon: QuarkIcons.remove,
-          tooltip: 'Fewer ${label.toLowerCase()}',
-          onPressed: value > min ? () => onChanged(value - 1) : null,
-        ),
-        ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 36),
-          child: Semantics(
-            label: '$label $value',
-            excludeSemantics: true,
-            child: Text(
-              '$value',
-              key: ValueKey('slide_table_${name}_value'),
-              textAlign: TextAlign.center,
-              style: text.labelLarge?.copyWith(color: tokens.foreground),
-            ),
-          ),
-        ),
-        QuarkBarIconButton(
-          key: ValueKey('slide_table_${name}_more'),
-          icon: QuarkIcons.add,
-          tooltip: 'More ${label.toLowerCase()}',
-          onPressed: value < max ? () => onChanged(value + 1) : null,
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => QuarkStepper(
+    label: label,
+    value: '$value',
+    semanticsLabel: '$label $value',
+    valueKey: ValueKey('slide_table_${name}_value'),
+    decrease: QuarkBarIconButton(
+      key: ValueKey('slide_table_${name}_less'),
+      icon: QuarkIcons.remove,
+      tooltip: 'Fewer ${label.toLowerCase()}',
+      onPressed: value > min ? () => onChanged(value - 1) : null,
+    ),
+    increase: QuarkBarIconButton(
+      key: ValueKey('slide_table_${name}_more'),
+      icon: QuarkIcons.add,
+      tooltip: 'More ${label.toLowerCase()}',
+      onPressed: value < max ? () => onChanged(value + 1) : null,
+    ),
+  );
 }

@@ -705,6 +705,52 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkStepper',
+    group: 'Layout',
+    build: (context, log) => Column(
+      spacing: 12,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        QuarkStepper(
+          label: 'Rows',
+          value: '3',
+          semanticsLabel: 'Rows 3',
+          valueKey: const ValueKey('slide_table_rows_value'),
+          decrease: QuarkBarIconButton(
+            key: const ValueKey('slide_table_rows_less'),
+            icon: QuarkIcons.remove,
+            tooltip: 'Fewer rows',
+            onPressed: () => log('QuarkStepper(Rows).decrease'),
+          ),
+          increase: QuarkBarIconButton(
+            key: const ValueKey('slide_table_rows_more'),
+            icon: QuarkIcons.add,
+            tooltip: 'More rows',
+            onPressed: () => log('QuarkStepper(Rows).increase'),
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: QuarkStepper(
+            value: '24',
+            semanticsLabel: 'Font size 24',
+            valueKey: const ValueKey('slide_format_font_size'),
+            decrease: QuarkBarIconButton(
+              icon: QuarkIcons.remove,
+              tooltip: 'Smaller text',
+              onPressed: () => log('QuarkStepper(Font size).decrease'),
+            ),
+            increase: const QuarkBarIconButton(
+              icon: QuarkIcons.add,
+              tooltip: 'Larger text',
+              onPressed: null,
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkBarSplitChip',
     group: 'Layout',
     build: (context, log) => Wrap(
