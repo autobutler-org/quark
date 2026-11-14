@@ -54,6 +54,7 @@ export 'src/core/password_strength_bar.dart';
 export 'src/core/quark_avatar.dart';
 export 'src/core/quark_tint_badge.dart';
 export 'src/core/quark_disconnected_state.dart';
+export 'src/core/quark_dropdown_field.dart';
 export 'src/core/quark_file_icon.dart';
 export 'src/core/quark_loader.dart';
 export 'src/core/quark_menu_button.dart';

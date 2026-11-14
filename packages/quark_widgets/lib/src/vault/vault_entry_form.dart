@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_dropdown_field.dart';
 import '../core/quark_loader.dart';
 import '../core/quark_password_field.dart';
 import '../models/vault_entry_item.dart';
@@ -197,14 +198,10 @@ class _VaultEntryFormState extends State<VaultEntryForm> {
           ),
           if (widget.folders.isNotEmpty) ...[
             gap,
-            DropdownButtonFormField<int?>(
+            QuarkDropdownField<int?>(
               key: const ValueKey('vault_entry_folder'),
               initialValue: _folderId,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Folder',
-                border: OutlineInputBorder(),
-              ),
+              labelText: 'Folder',
               items: [
                 const DropdownMenuItem(child: Text('None')),
                 for (final folder in widget.folders)

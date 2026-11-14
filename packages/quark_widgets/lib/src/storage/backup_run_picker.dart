@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../core/quark_dropdown_field.dart';
 import '../models/backup_run_item.dart';
 import '../theme/quark_tokens.dart';
 
@@ -56,14 +57,10 @@ class BackupRunPicker extends StatelessWidget {
         ),
         if (runs.length > 1) ...[
           SizedBox(height: tokens.spacingSm),
-          DropdownButtonFormField<String>(
+          QuarkDropdownField<String>(
             key: const ValueKey('backup_run_picker'),
             initialValue: run.id,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Backup',
-              border: OutlineInputBorder(),
-            ),
+            labelText: 'Backup',
             items: [
               for (var i = 0; i < runs.length; i++)
                 DropdownMenuItem(
