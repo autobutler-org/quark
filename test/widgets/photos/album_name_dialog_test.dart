@@ -11,8 +11,8 @@ void main() {
   const narrowViewport = Size(360, 640);
   const wideViewport = Size(1280, 800);
 
-  final field = find.byKey(const ValueKey('album_name_field'));
-  final save = find.byKey(const ValueKey('album_name_save'));
+  final field = find.byKey(const ValueKey('name_dialog_field'));
+  final save = find.byKey(const ValueKey('name_dialog_submit'));
 
   bool canSave(WidgetTester tester) =>
       tester.widget<FilledButton>(save).onPressed != null;

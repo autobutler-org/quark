@@ -1,14 +1,16 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
-/// Asks for an album name, for creating or renaming one.
+/// Asks for an album name, for creating or renaming one, in a
+/// [QuarkNameDialog].
 ///
 /// Pops with the trimmed name on save or submit, or null on cancel. A name
 /// that is empty, contains `/`, or that [isNameTaken] says a sibling already
 /// has cannot be saved; the last two say why under the field.
 ///
-/// Keys: `album_name_field`, `album_name_save`.
-class AlbumNameDialog extends StatefulWidget {
+/// Keys: the [QuarkNameDialog]'s `name_dialog_field` and `name_dialog_submit`.
+class AlbumNameDialog extends StatelessWidget {
   /// Creates the dialog titled [title], starting from [initial].
   const AlbumNameDialog({
     required this.title,
@@ -44,63 +46,23 @@ class AlbumNameDialog extends StatefulWidget {
   /// Null checks nothing, leaving the Quark's 409 to catch a clash.
   final bool Function(String name)? isNameTaken;
 
-  @override
-  State<AlbumNameDialog> createState() => _AlbumNameDialogState();
-}
-
-class _AlbumNameDialogState extends State<AlbumNameDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initial,
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  String get _name => _controller.text.trim();
-
-  /// Why [_name] cannot be saved, or null when it can (or is just empty).
-  String? get _problem {
-    if (_name.contains('/')) return Errors.albumNameHasSlash;
-    if (widget.isNameTaken?.call(_name) ?? false) return Errors.albumNameTaken;
+  /// Why [name] cannot be an album's name, or null when it can.
+  String? _problem(String name) {
+    if (name.contains('/')) return Errors.albumNameHasSlash;
+    if (isNameTaken?.call(name) ?? false) return Errors.albumNameTaken;
     return null;
-  }
-
-  bool get _canSave => _name.isNotEmpty && _problem == null;
-
-  void _save() {
-    if (_canSave) Navigator.of(context).pop(_name);
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
-        key: const ValueKey('album_name_field'),
-        controller: _controller,
-        autofocus: true,
-        decoration: InputDecoration(
-          hintText: 'Album name',
-          errorText: _problem,
-        ),
-        textInputAction: TextInputAction.done,
-        onChanged: (_) => setState(() {}),
-        onSubmitted: (_) => _save(),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          key: const ValueKey('album_name_save'),
-          onPressed: _canSave ? _save : null,
-          child: const Text('Save'),
-        ),
-      ],
+    return QuarkNameDialog(
+      title: title,
+      label: 'Album name',
+      submitLabel: 'Save',
+      initialName: initial,
+      validator: _problem,
+      onSubmit: (name) => Navigator.of(context).pop(name),
+      onCancel: () => Navigator.of(context).pop(),
     );
   }
 }

@@ -16,6 +16,7 @@ void main() {
     int? maxLength,
     bool isSubmitting = false,
     String? error,
+    String? Function(String name)? validator,
     String title = 'New group',
     Brightness brightness = Brightness.dark,
   }) async {
@@ -30,6 +31,7 @@ void main() {
         maxLength: maxLength,
         isSubmitting: isSubmitting,
         error: error,
+        validator: validator,
         onSubmit: submitted.add,
         onCancel: () => events?.add('cancel'),
       ),
@@ -101,6 +103,39 @@ void main() {
 
     expect(submitted.single, hasLength(64));
     expect(find.text('64/64'), findsOneWidget);
+  });
+
+  testWidgets('a refused name says why and cannot be submitted', (
+    tester,
+  ) async {
+    final checked = <String>[];
+    final submitted = await pumpDialog(
+      tester,
+      error: 'Earlier refusal.',
+      validator: (name) {
+        checked.add(name);
+        return name == 'Family' ? 'Taken.' : null;
+      },
+    );
+
+    expect(checked, isEmpty, reason: 'an empty name is not validated');
+
+    await tester.enterText(field(), ' Family ');
+    await tester.pump();
+    expect(checked.last, 'Family');
+    expect(find.text('Taken.'), findsOneWidget);
+    expect(find.text('Earlier refusal.'), findsNothing);
+    expect(submitButton(tester).onPressed, isNull);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(submitted, isEmpty);
+
+    await tester.enterText(field(), 'Friends');
+    await tester.pump();
+    expect(find.text('Taken.'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('name_dialog_submit')));
+    await tester.pump();
+    expect(submitted, ['Friends']);
   });
 
   testWidgets('cancels through its key', (tester) async {
