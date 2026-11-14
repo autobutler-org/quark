@@ -80,18 +80,13 @@ class SlidesImportBarBottom extends StatelessWidget
         ),
       ),
       actions: [
-        MenuAnchor(
-          alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
+        QuarkBarMenuButton(
+          buttonKey: const ValueKey('slides_import'),
+          icon: QuarkIcons.import_file,
+          label: 'Import PowerPoint',
+          tooltip: _tooltip,
+          keepLabel: true,
           menuChildren: entries,
-          builder: (context, controller, _) => QuarkBarChip(
-            key: const ValueKey('slides_import'),
-            icon: QuarkIcons.import_file,
-            label: 'Import PowerPoint',
-            tooltip: _tooltip,
-            keepLabel: true,
-            onPressed: () =>
-                controller.isOpen ? controller.close() : controller.open(),
-          ),
         ),
       ],
       menuLabel: 'Import',

@@ -16,15 +16,11 @@ class SlideColorMenuButton extends StatelessWidget {
   final SlideColorChoice choice;
 
   @override
-  Widget build(BuildContext context) => MenuAnchor(
+  Widget build(BuildContext context) => QuarkBarMenuButton(
+    buttonKey: ValueKey(choice.key),
+    icon: choice.icon,
+    tooltip: choice.label,
+    enabled: choice.onChanged != null,
     menuChildren: [SlideColorPalette(choice: choice)],
-    builder: (context, menu, _) => QuarkBarIconButton(
-      key: ValueKey(choice.key),
-      icon: choice.icon,
-      tooltip: choice.label,
-      onPressed: choice.onChanged == null
-          ? null
-          : () => menu.isOpen ? menu.close() : menu.open(),
-    ),
   );
 }

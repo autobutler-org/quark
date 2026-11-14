@@ -20,7 +20,11 @@ class SlideTableMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = actions.tableToolSize;
-    return MenuAnchor(
+    return QuarkBarMenuButton(
+      buttonKey: const ValueKey('slide_tool_table'),
+      icon: QuarkIcons.insert_table,
+      tooltip: 'Insert table',
+      selected: actions.tableToolActive,
       menuChildren: [
         SlideTablePicker(
           rows: size.rows,
@@ -29,13 +33,6 @@ class SlideTableMenuButton extends StatelessWidget {
           onInsert: actions.insertTable,
         ),
       ],
-      builder: (context, menu, _) => QuarkBarIconButton(
-        key: const ValueKey('slide_tool_table'),
-        icon: QuarkIcons.insert_table,
-        tooltip: 'Insert table',
-        selected: actions.tableToolActive,
-        onPressed: () => menu.isOpen ? menu.close() : menu.open(),
-      ),
     );
   }
 }

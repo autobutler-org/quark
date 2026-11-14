@@ -556,7 +556,12 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
                   child: const Text('Cancel'),
                 ),
               ] else
-                MenuAnchor(
+                QuarkBarMenuButton(
+                  buttonKey: const ValueKey('video_viewer_more'),
+                  icon: QuarkIcons.more_vert,
+                  tooltip: 'More options',
+                  // Saving a frame spins here until the frame lands.
+                  isBusy: _savingFrame,
                   menuChildren: [
                     MenuItemButton(
                       key: const ValueKey('video_viewer_save_frame'),
@@ -596,16 +601,6 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
                         ),
                       ),
                   ],
-                  builder: (context, controller, _) => QuarkBarIconButton(
-                    key: const ValueKey('video_viewer_more'),
-                    icon: QuarkIcons.more_vert,
-                    tooltip: 'More options',
-                    // Saving a frame spins here until the frame lands.
-                    isBusy: _savingFrame,
-                    onPressed: () => controller.isOpen
-                        ? controller.close()
-                        : controller.open(),
-                  ),
                 ),
               const AppThemeToggle(),
             ],

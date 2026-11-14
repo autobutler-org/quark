@@ -216,8 +216,12 @@ class SlidePhoneFormatMenu extends StatelessWidget {
       for (final group in SlideToolbarGroup.values)
         if (!readOnly && group.appliesTo(a)) group,
     ];
-    return MenuAnchor(
-      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
+    return QuarkBarMenuButton(
+      buttonKey: const ValueKey('slide_format_menu'),
+      icon: QuarkIcons.format_menu,
+      label: 'Format',
+      tooltip: 'Format the selection, its properties and the zoom',
+      keepLabel: true,
       menuChildren: [
         for (final group in groups)
           QuarkSubmenuButton(
@@ -294,14 +298,6 @@ class SlidePhoneFormatMenu extends StatelessWidget {
           ),
         ),
       ],
-      builder: (context, menu, _) => QuarkBarChip(
-        key: const ValueKey('slide_format_menu'),
-        icon: QuarkIcons.format_menu,
-        label: 'Format',
-        tooltip: 'Format the selection, its properties and the zoom',
-        keepLabel: true,
-        onPressed: () => menu.isOpen ? menu.close() : menu.open(),
-      ),
     );
   }
 }

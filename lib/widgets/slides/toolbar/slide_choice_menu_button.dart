@@ -45,33 +45,14 @@ class SlideChoiceMenuButton extends StatelessWidget {
   final bool? selected;
 
   @override
-  Widget build(BuildContext context) {
-    final enabled = choices.any((c) => c.onSelected != null);
-    return MenuAnchor(
-      menuChildren: [for (final c in choices) SlideChoiceMenuItem(choice: c)],
-      builder: (context, menu, _) {
-        final onPressed = enabled
-            ? () => menu.isOpen ? menu.close() : menu.open()
-            : null;
-        final text = label;
-        return text == null
-            ? QuarkBarIconButton(
-                key: ValueKey(buttonKey),
-                icon: icon,
-                tooltip: tooltip,
-                selected: selected,
-                onPressed: onPressed,
-              )
-            : QuarkBarChip(
-                key: ValueKey(buttonKey),
-                icon: icon,
-                label: text,
-                tooltip: tooltip,
-                active: selected ?? false,
-                keepLabel: true,
-                onPressed: onPressed,
-              );
-      },
-    );
-  }
+  Widget build(BuildContext context) => QuarkBarMenuButton(
+    buttonKey: ValueKey(buttonKey),
+    icon: icon,
+    tooltip: tooltip,
+    label: label,
+    selected: selected,
+    keepLabel: true,
+    enabled: choices.any((c) => c.onSelected != null),
+    menuChildren: [for (final c in choices) SlideChoiceMenuItem(choice: c)],
+  );
 }

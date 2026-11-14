@@ -18,7 +18,11 @@ class SlideChartMenuButton extends StatelessWidget {
   final SlideToolbarActions actions;
 
   @override
-  Widget build(BuildContext context) => MenuAnchor(
+  Widget build(BuildContext context) => QuarkBarMenuButton(
+    buttonKey: const ValueKey('slide_tool_chart'),
+    icon: QuarkIcons.insert_chart,
+    tooltip: 'Insert chart',
+    selected: actions.chartToolActive,
     menuChildren: [
       SlideChartPicker(
         kind: actions.chartToolKind,
@@ -27,12 +31,5 @@ class SlideChartMenuButton extends StatelessWidget {
         onInsert: actions.insertChart,
       ),
     ],
-    builder: (context, menu, _) => QuarkBarIconButton(
-      key: const ValueKey('slide_tool_chart'),
-      icon: QuarkIcons.insert_chart,
-      tooltip: 'Insert chart',
-      selected: actions.chartToolActive,
-      onPressed: () => menu.isOpen ? menu.close() : menu.open(),
-    ),
   );
 }

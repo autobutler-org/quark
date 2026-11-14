@@ -813,6 +813,69 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkBarMenuButton',
+    group: 'Layout',
+    build: (context, log) => Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        QuarkBarMenuButton(
+          buttonKey: const ValueKey('vault_export'),
+          icon: QuarkIcons.download_outlined,
+          label: 'Export',
+          menuChildren: [
+            for (final format in ['json', 'csv'])
+              MenuItemButton(
+                key: ValueKey('vault_export_$format'),
+                onPressed: () => log('QuarkBarMenuButton(Export).$format'),
+                child: quarkMenuLabel(
+                  leading: const Icon(QuarkIcons.download_outlined),
+                  label: Text('Export as ${format.toUpperCase()}'),
+                ),
+              ),
+          ],
+        ),
+        QuarkBarMenuButton(
+          buttonKey: const ValueKey('chat_channel_settings'),
+          icon: QuarkIcons.settings_outlined,
+          tooltip: 'Channel settings',
+          menuChildren: [
+            MenuItemButton(
+              onPressed: () => log('QuarkBarMenuButton(Settings).edit'),
+              child: quarkMenuLabel(
+                leading: const Icon(QuarkIcons.edit_outlined),
+                label: const Text('Edit name and topic'),
+              ),
+            ),
+          ],
+        ),
+        QuarkBarMenuButton(
+          icon: QuarkIcons.insert_table,
+          tooltip: 'Insert table (tool armed)',
+          selected: true,
+          menuChildren: [
+            MenuItemButton(
+              onPressed: () => log('QuarkBarMenuButton(Table).insert'),
+              child: const Text('Insert 3 by 3'),
+            ),
+          ],
+        ),
+        const QuarkBarMenuButton(
+          icon: QuarkIcons.more_vert,
+          tooltip: 'More options (saving)',
+          isBusy: true,
+          menuChildren: [],
+        ),
+        const QuarkBarMenuButton(
+          icon: QuarkIcons.view_column_outlined,
+          tooltip: 'Columns (disabled)',
+          enabled: false,
+          menuChildren: [],
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkBarSegmentedToggle',
     group: 'Layout',
     build: (context, log) => Align(

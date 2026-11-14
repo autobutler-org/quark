@@ -3,7 +3,7 @@ import 'package:quark_icons/quark_icons.dart';
 
 import '../core/quark_menu_label.dart';
 import '../layout/quark_bar_chip.dart';
-import '../layout/quark_bar_icon_button.dart';
+import '../layout/quark_bar_menu_button.dart';
 import '../theme/quark_tokens.dart';
 
 /// Whose events the calendar shows: everyone's, the signed-in person's own,
@@ -87,8 +87,13 @@ class CalendarPersonFilter extends StatelessWidget {
             onPressed: onMine,
           ),
           if (people.isNotEmpty && onPerson != null)
-            MenuAnchor(
-              alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
+            QuarkBarMenuButton(
+              buttonKey: const ValueKey('calendar_filter_people'),
+              icon: QuarkIcons.expand_more,
+              label: chosen ?? 'Person',
+              tooltip: 'Show one person\'s events',
+              keepLabel: true,
+              selected: chosen != null,
               menuChildren: [
                 for (final name in people)
                   MenuItemButton(
@@ -104,16 +109,6 @@ class CalendarPersonFilter extends StatelessWidget {
                     ),
                   ),
               ],
-              builder: (context, controller, _) => QuarkBarChip(
-                key: const ValueKey('calendar_filter_people'),
-                icon: QuarkIcons.expand_more,
-                label: chosen ?? 'Person',
-                tooltip: 'Show one person\'s events',
-                keepLabel: true,
-                active: chosen != null,
-                onPressed: () =>
-                    controller.isOpen ? controller.close() : controller.open(),
-              ),
             ),
         ],
       ),

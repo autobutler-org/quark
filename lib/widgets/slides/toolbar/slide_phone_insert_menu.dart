@@ -35,8 +35,12 @@ class SlidePhoneInsertMenu extends StatelessWidget {
   final SlideToolbarActions actions;
 
   @override
-  Widget build(BuildContext context) => MenuAnchor(
-    alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
+  Widget build(BuildContext context) => QuarkBarMenuButton(
+    buttonKey: const ValueKey('slide_insert_menu'),
+    icon: QuarkIcons.insert_menu,
+    label: 'Insert',
+    tooltip: 'Insert text, shapes, lines, tables, charts and pictures',
+    keepLabel: true,
     menuChildren: [
       SlideChoiceMenuItem(choice: actions.select),
       SlideChoiceMenuItem(choice: actions.text),
@@ -96,13 +100,5 @@ class SlidePhoneInsertMenu extends StatelessWidget {
         child: const Text('New slide'),
       ),
     ],
-    builder: (context, menu, _) => QuarkBarChip(
-      key: const ValueKey('slide_insert_menu'),
-      icon: QuarkIcons.insert_menu,
-      label: 'Insert',
-      tooltip: 'Insert text, shapes, lines, tables, charts and pictures',
-      keepLabel: true,
-      onPressed: () => menu.isOpen ? menu.close() : menu.open(),
-    ),
   );
 }

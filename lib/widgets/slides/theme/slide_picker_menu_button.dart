@@ -73,8 +73,13 @@ class SlidePickerMenuButton extends StatelessWidget {
         controller.selectedSlide != null,
       ),
     };
-    return MenuAnchor(
-      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
+    return QuarkBarMenuButton(
+      buttonKey: ValueKey(key),
+      icon: icon,
+      label: label,
+      tooltip: tooltip,
+      keepLabel: true,
+      enabled: enabled,
       menuChildren: [
         SizedBox(
           width: width,
@@ -97,16 +102,6 @@ class SlidePickerMenuButton extends StatelessWidget {
           ),
         ),
       ],
-      builder: (context, menu, _) => QuarkBarChip(
-        key: ValueKey(key),
-        icon: icon,
-        label: label,
-        tooltip: tooltip,
-        keepLabel: true,
-        onPressed: enabled
-            ? () => menu.isOpen ? menu.close() : menu.open()
-            : null,
-      ),
     );
   }
 }
