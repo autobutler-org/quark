@@ -799,7 +799,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(QuarkEncryptionHelpDialog), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('encryption_help_close')));
+      await tester.tap(find.byKey(const ValueKey('quark_help_close')));
       await tester.pumpAndSettle();
       expect(find.byType(QuarkEncryptionHelpDialog), findsNothing);
       expect(tester.takeException(), isNull);

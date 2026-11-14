@@ -94,4 +94,26 @@ void main() {
     expect(find.byType(QuarkHelpDialog), findsNothing);
     expect(find.byKey(key), findsOneWidget);
   });
+
+  testWidgets('draws its icon and hands Close to onClose', (tester) async {
+    var closed = 0;
+    await pumpAt(
+      tester,
+      QuarkHelpDialog(
+        title: 'Views',
+        topics: topics,
+        icon: QuarkIcons.lock_outline,
+        onClose: () => closed++,
+      ),
+      size: narrowViewport,
+    );
+
+    expect(find.byIcon(QuarkIcons.lock_outline), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('quark_help_close')));
+    await tester.tap(find.byKey(const ValueKey('quark_help_close')));
+    await tester.pumpAndSettle();
+
+    expect(closed, 1);
+    expect(find.byType(QuarkHelpDialog), findsOneWidget);
+  });
 }

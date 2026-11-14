@@ -156,23 +156,9 @@ class DeviceCard extends StatelessWidget {
                       if (device.role != 'unassigned')
                         RoleBadge(role: device.role),
                       if (device.role == 'unassigned' && device.isEnabled)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            'Enabled',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.green.shade800,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                        QuarkTintBadge(
+                          label: 'Enabled',
+                          color: QuarkTokens.of(context).success,
                         ),
                     ],
                   ),

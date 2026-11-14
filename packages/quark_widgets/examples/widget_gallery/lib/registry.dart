@@ -928,9 +928,11 @@ final List<GalleryEntry> registry = [
   GalleryEntry(
     name: 'QuarkHelpDialog',
     group: 'Layout',
-    build: (context, log) => const QuarkHelpDialog(
+    build: (context, log) => QuarkHelpDialog(
       title: 'Unified and per-device views',
+      icon: QuarkIcons.info_outline,
       topics: _galleryHelpTopics,
+      onClose: () => log('QuarkHelpDialog.onClose'),
     ),
   ),
   GalleryEntry(
