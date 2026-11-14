@@ -189,6 +189,45 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkMenuRow',
+    group: 'Core',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        QuarkMenuRow(
+          key: const ValueKey('group_row_2'),
+          menuKey: const ValueKey('group_menu_2'),
+          leading: const Icon(QuarkIcons.group_outlined),
+          title: 'Family',
+          subtitle: '3 members',
+          menuTooltip: 'Actions for Family',
+          entries: [
+            QuarkMenuEntry(
+              label: 'Rename',
+              onSelected: () => log('QuarkMenuEntry(Rename).onSelected'),
+            ),
+            QuarkMenuEntry(
+              label: 'Delete',
+              destructive: true,
+              onSelected: () => log('QuarkMenuEntry(Delete).onSelected'),
+            ),
+          ],
+        ),
+        const QuarkMenuRow(
+          leading: Icon(QuarkIcons.person_outline),
+          title: 'grace',
+          subtitle: 'Disabled',
+          busy: true,
+        ),
+        const QuarkMenuRow(
+          leading: Icon(QuarkIcons.group_outlined),
+          title: 'Everyone',
+          subtitle: 'Every account',
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkSubmenuButton',
     group: 'Core',
     build: (context, log) => Align(

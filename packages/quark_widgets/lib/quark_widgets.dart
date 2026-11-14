@@ -58,6 +58,7 @@ export 'src/core/quark_dropdown_field.dart';
 export 'src/core/quark_file_icon.dart';
 export 'src/core/quark_loader.dart';
 export 'src/core/quark_menu_button.dart';
+export 'src/core/quark_menu_row.dart';
 export 'src/core/quark_name_dialog.dart';
 export 'src/core/quark_password_field.dart';
 export 'src/core/quark_search_field.dart';
