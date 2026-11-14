@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The expanded inline search field, as tall as a bar button so it lines up
@@ -21,7 +20,6 @@ class FileTopBarSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = QuarkTokens.of(context);
     return SizedBox(
       height: QuarkBarIconButton.size,
       child: Focus(
@@ -35,47 +33,13 @@ class FileTopBarSearchField extends StatelessWidget {
           }
           return KeyEventResult.ignored;
         },
-        child: TextField(
+        child: QuarkSearchField(
           controller: controller,
           focusNode: focusNode,
-          autofocus: false,
-          decoration: InputDecoration(
-            hintText: 'Search files…',
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(vertical: 8),
-            prefixIcon: Icon(
-              QuarkIcons.search,
-              size: 18,
-              color: tokens.secondaryForeground,
-            ),
-            suffixIcon: IconButton(
-              icon: Icon(
-                QuarkIcons.close,
-                size: 16,
-                color: tokens.secondaryForeground,
-              ),
-              tooltip: 'Close search',
-              onPressed: onClose,
-            ),
-            filled: true,
-            fillColor: tokens.input,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(tokens.radiusLg),
-              borderSide: BorderSide(color: tokens.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(tokens.radiusLg),
-              borderSide: BorderSide(color: tokens.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(tokens.radiusLg),
-              borderSide: BorderSide(
-                color: tokens.focus,
-                width: tokens.focusRingWidth,
-              ),
-            ),
-          ),
+          hintText: 'Search files…',
           onChanged: onChanged,
+          onDismiss: onClose,
+          dismissTooltip: 'Close search',
         ),
       ),
     );

@@ -1,5 +1,4 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The strip under the Photos bar that takes a search by file name (#2059).
@@ -59,11 +58,6 @@ class _PhotosSearchBarState extends State<PhotosSearchBar> {
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(tokens.radiusMd),
-      borderSide: BorderSide(color: tokens.border),
-    );
-
     return Container(
       decoration: BoxDecoration(
         color: tokens.chrome,
@@ -73,27 +67,15 @@ class _PhotosSearchBarState extends State<PhotosSearchBar> {
         horizontal: tokens.spacingLg,
         vertical: tokens.spacingSm,
       ),
-      child: TextField(
+      child: QuarkSearchField(
         key: const ValueKey('photos_search_field'),
         focusNode: _focusNode,
         autofocus: true,
-        textInputAction: TextInputAction.search,
+        hintText: 'Search photos by name…',
         onChanged: widget.onChanged,
-        decoration: InputDecoration(
-          hintText: 'Search photos by name…',
-          prefixIcon: const Icon(QuarkIcons.search, size: 20),
-          suffixIcon: IconButton(
-            key: const ValueKey('photos_search_close'),
-            tooltip: 'Close search',
-            icon: const Icon(QuarkIcons.close, size: 18),
-            onPressed: widget.onClose,
-          ),
-          isDense: true,
-          filled: true,
-          fillColor: tokens.input,
-          border: border,
-          enabledBorder: border,
-        ),
+        onDismiss: widget.onClose,
+        dismissTooltip: 'Close search',
+        dismissKey: const ValueKey('photos_search_close'),
       ),
     );
   }

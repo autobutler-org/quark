@@ -3435,6 +3435,32 @@ final List<GalleryEntry> registry = [
   ),
 
   GalleryEntry(
+    name: 'QuarkSearchField',
+    group: 'Core',
+    build: (context, log) => Column(
+      spacing: 12,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        QuarkSearchField(
+          key: const ValueKey('docs_search'),
+          hintText: 'Search docs…',
+          onChanged: (text) => log('QuarkSearchField.onChanged($text)'),
+          onDismiss: () => log('QuarkSearchField.onDismiss (clear)'),
+          dismissKey: const ValueKey('docs_search_clear'),
+        ),
+        QuarkSearchField(
+          key: const ValueKey('photos_search_field'),
+          hintText: 'Search photos by name…',
+          onChanged: (text) => log('QuarkSearchField.onChanged($text)'),
+          onDismiss: () => log('QuarkSearchField.onDismiss (close)'),
+          dismissTooltip: 'Close search',
+          dismissKey: const ValueKey('photos_search_close'),
+        ),
+      ],
+    ),
+  ),
+
+  GalleryEntry(
     name: 'ShareSheet',
     group: 'Sharing',
     build: (context, log) => Wrap(
