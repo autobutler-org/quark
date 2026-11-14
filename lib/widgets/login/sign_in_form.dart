@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/error_banner.dart';
-import 'package:quark/widgets/notice_banner.dart';
 import 'package:quark/widgets/login/host_switcher.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -143,7 +142,11 @@ class SignInForm extends StatelessWidget {
             ErrorBanner(message: error!),
             const SizedBox(height: 16),
           ] else if (notice != null) ...[
-            NoticeBanner(message: notice!),
+            ErrorBanner(
+              key: const ValueKey('notice_banner'),
+              message: notice!,
+              tone: ErrorBannerTone.notice,
+            ),
             const SizedBox(height: 16),
           ],
 
