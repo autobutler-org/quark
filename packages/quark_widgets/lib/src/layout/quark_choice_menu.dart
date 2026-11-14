@@ -1,19 +1,25 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-import '../../../core/quark_menu_label.dart';
-import '../../../layout/quark_bar_chip.dart';
-import '../../../layout/quark_bar_icon_button.dart';
-import '../../../theme/quark_tokens.dart';
+import '../core/quark_menu_label.dart';
+import '../theme/quark_tokens.dart';
+import 'quark_bar_chip.dart';
+import 'quark_bar_icon_button.dart';
 
-/// One of the choices in a `ModelViewerStats` strip (#3228): a chip reading
-/// [label] that opens a menu of [options], with a check beside [selected].
+/// A bar chip reading [label] that opens a menu of [options], with a check
+/// beside [selected]: the one pick-one-of-these menu (#4103), used by the
+/// 3D model viewer's units and print bed and the duplicates view's "Keep"
+/// format.
+///
+/// The chip keeps its label on a phone, because the label is the current
+/// choice. [active] tints it with the primary token, for a choice that narrows
+/// what the page shows.
 ///
 /// Key prefixes: [keyPrefix] on the chip, `<keyPrefix>_option_<id>` on each
 /// menu row.
 ///
 /// ```dart
-/// ModelViewerChoiceChip<QuarkModelUnit>(
+/// QuarkChoiceMenu<QuarkModelUnit>(
 ///   keyPrefix: 'model_viewer_unit',
 ///   icon: QuarkIcons.straighten_outlined,
 ///   label: 'Units: mm',
@@ -26,9 +32,9 @@ import '../../../theme/quark_tokens.dart';
 ///   onChanged: setUnit,
 /// );
 /// ```
-class ModelViewerChoiceChip<T> extends StatelessWidget {
+class QuarkChoiceMenu<T> extends StatelessWidget {
   /// Creates the chip over [options].
-  const ModelViewerChoiceChip({
+  const QuarkChoiceMenu({
     required this.keyPrefix,
     required this.icon,
     required this.label,
@@ -36,6 +42,7 @@ class ModelViewerChoiceChip<T> extends StatelessWidget {
     required this.options,
     required this.selected,
     required this.onChanged,
+    this.active = false,
     super.key,
   });
 
@@ -59,6 +66,10 @@ class ModelViewerChoiceChip<T> extends StatelessWidget {
 
   /// Called with the value of the row the user picks.
   final ValueChanged<T> onChanged;
+
+  /// Whether the chip is tinted with the primary token, as
+  /// `QuarkBarChip.active` is. False by default.
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +95,7 @@ class ModelViewerChoiceChip<T> extends StatelessWidget {
         icon: icon,
         label: label,
         tooltip: tooltip,
+        active: active,
         // The label is the current choice, so a phone keeps it too.
         keepLabel: true,
         onPressed: () =>

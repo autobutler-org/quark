@@ -1,12 +1,12 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../../layout/quark_choice_menu.dart';
 import '../../models/quark_model_unit.dart';
 import '../../models/quark_print_bed.dart';
 import '../../theme/quark_tokens.dart';
 import '../quark_model_measurements.dart';
 import '../quark_model_mesh.dart';
-import 'model_viewer_stats/model_viewer_choice_chip.dart';
 
 /// The strip under a `QuarkModelViewer`'s canvas: the model's bounding-box
 /// size along each axis, its surface area and volume, its triangle and
@@ -145,7 +145,7 @@ class ModelViewerStats extends StatelessWidget {
               style: strong,
             ),
             if (onUnitChanged != null)
-              ModelViewerChoiceChip<QuarkModelUnit>(
+              QuarkChoiceMenu<QuarkModelUnit>(
                 keyPrefix: 'model_viewer_unit',
                 icon: QuarkIcons.straighten_outlined,
                 label: 'Units: ${unit.symbol.isEmpty ? 'file' : unit.symbol}',
@@ -158,7 +158,7 @@ class ModelViewerStats extends StatelessWidget {
                 onChanged: onUnitChanged,
               ),
             if (onPrintBedChanged != null)
-              ModelViewerChoiceChip<QuarkPrintBed?>(
+              QuarkChoiceMenu<QuarkPrintBed?>(
                 keyPrefix: 'model_viewer_bed',
                 icon: QuarkIcons.print_outlined,
                 label: 'Bed: ${bed?.name ?? 'none'}',

@@ -1,17 +1,14 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-import '../core/quark_menu_label.dart';
-import '../layout/quark_bar_chip.dart';
-import '../layout/quark_bar_icon_button.dart';
-import '../theme/quark_tokens.dart';
+import '../layout/quark_choice_menu.dart';
 
-/// The duplicates view's "Keep" choice (#1666): a bar chip that opens a menu
-/// of "Any" and each file format in [formats], for picking which copy of the
+/// The duplicates view's "Keep" choice (#1666): a `QuarkChoiceMenu` offering
+/// "Any" and each file format in [formats], for picking which copy of the
 /// same picture saved in two formats (a HEIC and its JPEG) to keep.
 ///
-/// The chip reads "Keep: Any" or "Keep: HEIC", and so on. The caller decides
-/// what a choice does.
+/// The chip reads "Keep: Any" or "Keep: HEIC", and so on, and shows active
+/// while a format is chosen. The caller decides what a choice does.
 ///
 /// Key prefixes: `duplicates_keep_format` on the chip,
 /// `duplicates_keep_format_option_<format>` on each menu row, with `any` for
@@ -43,39 +40,17 @@ class DuplicateFormatButton extends StatelessWidget {
   final ValueChanged<String?> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    final tokens = QuarkTokens.of(context);
-    final options = <({String id, String label, String? value})>[
+  Widget build(BuildContext context) => QuarkChoiceMenu<String?>(
+    keyPrefix: 'duplicates_keep_format',
+    icon: QuarkIcons.image_outlined,
+    label: 'Keep: ${preferred ?? 'Any'}',
+    tooltip: 'Keep format',
+    options: [
       (id: 'any', label: 'Any', value: null),
       for (final f in formats) (id: f, label: f, value: f),
-    ];
-    return MenuAnchor(
-      alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
-      style: const MenuStyle(minimumSize: WidgetStatePropertyAll(Size(160, 0))),
-      menuChildren: [
-        for (final option in options)
-          MenuItemButton(
-            key: ValueKey('duplicates_keep_format_option_${option.id}'),
-            onPressed: () => onChanged(option.value),
-            child: quarkMenuLabel(
-              trailing: option.value == preferred
-                  ? Icon(QuarkIcons.check, color: tokens.primary)
-                  : null,
-              label: Text(option.label),
-            ),
-          ),
-      ],
-      builder: (context, controller, _) => QuarkBarChip(
-        key: const ValueKey('duplicates_keep_format'),
-        icon: QuarkIcons.image_outlined,
-        label: 'Keep: ${preferred ?? 'Any'}',
-        tooltip: 'Keep format',
-        active: preferred != null,
-        // The label is the current choice, so a phone keeps it too.
-        keepLabel: true,
-        onPressed: () =>
-            controller.isOpen ? controller.close() : controller.open(),
-      ),
-    );
-  }
+    ],
+    selected: preferred,
+    onChanged: onChanged,
+    active: preferred != null,
+  );
 }
