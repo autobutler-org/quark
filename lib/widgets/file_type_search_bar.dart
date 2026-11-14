@@ -1,5 +1,4 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The filter strip above the Docs, Sheets and Slides lists.
@@ -28,11 +27,6 @@ class FileTypeSearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(tokens.radiusMd),
-      borderSide: BorderSide(color: tokens.border),
-    );
-
     return Container(
       decoration: BoxDecoration(
         color: tokens.sidebar,
@@ -44,26 +38,12 @@ class FileTypeSearchBar extends StatelessWidget {
       ),
       child: ListenableBuilder(
         listenable: controller,
-        builder: (context, _) => TextField(
+        builder: (context, _) => QuarkSearchField(
           key: ValueKey('${keyPrefix}_search'),
           controller: controller,
-          decoration: InputDecoration(
-            hintText: hintText,
-            prefixIcon: const Icon(QuarkIcons.search, size: 20),
-            suffixIcon: controller.text.isEmpty
-                ? null
-                : IconButton(
-                    key: ValueKey('${keyPrefix}_search_clear'),
-                    tooltip: 'Clear search',
-                    icon: const Icon(QuarkIcons.close, size: 18),
-                    onPressed: controller.clear,
-                  ),
-            isDense: true,
-            filled: true,
-            fillColor: tokens.input,
-            border: border,
-            enabledBorder: border,
-          ),
+          hintText: hintText,
+          onDismiss: controller.text.isEmpty ? null : controller.clear,
+          dismissKey: ValueKey('${keyPrefix}_search_clear'),
         ),
       ),
     );

@@ -40,7 +40,7 @@ void main() {
       // Opening the strip is asking to type, so the field takes the focus.
       expect(
         tester
-            .widget<TextField>(
+            .widget<QuarkSearchField>(
               find.byKey(const ValueKey('photos_search_field')),
             )
             .autofocus,
