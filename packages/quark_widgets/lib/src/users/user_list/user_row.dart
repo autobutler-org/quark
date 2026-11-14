@@ -1,12 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-import '../../core/quark_loader.dart';
-import '../../core/quark_menu_button.dart';
-import '../../core/show_quark_menu.dart';
+import '../../core/quark_menu_row.dart';
 import '../../models/user_account_item.dart';
 import '../../models/quark_menu_entry.dart';
-import '../../theme/quark_tokens.dart';
 
 /// One account in a [UserList]: its name, what it is (including a recovery
 /// phrase too short to keep), and a menu of the actions on offer.
@@ -57,7 +54,6 @@ class UserRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = QuarkTokens.of(context);
     final name = user.username;
     final isActive = user.status == UserAccountStatus.active;
     final isDisabled = user.status == UserAccountStatus.disabled;
@@ -92,42 +88,17 @@ class UserRow extends StatelessWidget {
           onSelected: action,
         ),
     ];
-    final hasMenu = !isBusy && entries.isNotEmpty;
-
-    // A right-click on the row opens the same menu as its button (#2276).
-    return GestureDetector(
-      onSecondaryTapUp: hasMenu
-          ? (details) => showQuarkMenu(
-              context,
-              position: details.globalPosition,
-              entries: entries,
-            )
-          : null,
-      child: ListTile(
-        key: ValueKey('user_row_$name'),
-        contentPadding: EdgeInsets.zero,
-        leading: Icon(
-          user.isAdmin ? QuarkIcons.shield_outlined : QuarkIcons.person_outline,
-        ),
-        title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: details.isEmpty
-            ? null
-            : Text(
-                details.join(' · '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: tokens.mutedForeground),
-              ),
-        trailing: isBusy
-            ? const QuarkLoader(size: 24)
-            : actions.isEmpty
-            ? null
-            : QuarkMenuButton(
-                key: ValueKey('user_menu_$name'),
-                tooltip: 'Actions for $name',
-                entries: entries,
-              ),
+    return QuarkMenuRow(
+      key: ValueKey('user_row_$name'),
+      menuKey: ValueKey('user_menu_$name'),
+      leading: Icon(
+        user.isAdmin ? QuarkIcons.shield_outlined : QuarkIcons.person_outline,
       ),
+      title: name,
+      subtitle: details.isEmpty ? null : details.join(' · '),
+      busy: isBusy,
+      menuTooltip: 'Actions for $name',
+      entries: entries,
     );
   }
 }

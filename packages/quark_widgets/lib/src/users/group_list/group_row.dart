@@ -1,12 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-import '../../core/quark_loader.dart';
-import '../../core/quark_menu_button.dart';
-import '../../core/show_quark_menu.dart';
+import '../../core/quark_menu_row.dart';
 import '../../models/group_item.dart';
 import '../../models/quark_menu_entry.dart';
-import '../../theme/quark_tokens.dart';
 
 /// One group in a [GroupList]: its name, who is in it, and a menu of the
 /// actions on offer.
@@ -46,7 +43,6 @@ class GroupRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = QuarkTokens.of(context);
     final id = group.id;
     final count = group.members.length;
 
@@ -75,38 +71,15 @@ class GroupRow extends StatelessWidget {
           onSelected: callback,
         ),
     ];
-    final hasMenu = !isBusy && entries.isNotEmpty;
-
-    // A right-click on the row opens the same menu as its button (#2276).
-    return GestureDetector(
-      onSecondaryTapUp: hasMenu
-          ? (details) => showQuarkMenu(
-              context,
-              position: details.globalPosition,
-              entries: entries,
-            )
-          : null,
-      child: ListTile(
-        key: ValueKey('group_row_$id'),
-        contentPadding: EdgeInsets.zero,
-        leading: const Icon(QuarkIcons.group_outlined),
-        title: Text(group.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(
-          details,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: tokens.mutedForeground),
-        ),
-        trailing: isBusy
-            ? const QuarkLoader(size: 24)
-            : actions.isEmpty
-            ? null
-            : QuarkMenuButton(
-                key: ValueKey('group_menu_$id'),
-                tooltip: 'Actions for ${group.name}',
-                entries: entries,
-              ),
-      ),
+    return QuarkMenuRow(
+      key: ValueKey('group_row_$id'),
+      menuKey: ValueKey('group_menu_$id'),
+      leading: const Icon(QuarkIcons.group_outlined),
+      title: group.name,
+      subtitle: details,
+      busy: isBusy,
+      menuTooltip: 'Actions for ${group.name}',
+      entries: entries,
     );
   }
 }
