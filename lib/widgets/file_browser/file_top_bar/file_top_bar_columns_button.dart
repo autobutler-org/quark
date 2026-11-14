@@ -33,7 +33,11 @@ class FileTopBarColumnsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final onToggled = onColumnToggled;
-    return MenuAnchor(
+    return QuarkBarMenuButton(
+      buttonKey: const ValueKey('file_top_bar_columns'),
+      icon: QuarkIcons.view_column_outlined,
+      tooltip: 'Columns',
+      enabled: onToggled != null,
       menuChildren: [
         for (final column in FileListColumn.values)
           CheckboxMenuButton(
@@ -46,14 +50,6 @@ class FileTopBarColumnsButton extends StatelessWidget {
             child: Text(column.label),
           ),
       ],
-      builder: (context, controller, _) => QuarkBarIconButton(
-        key: const ValueKey('file_top_bar_columns'),
-        icon: QuarkIcons.view_column_outlined,
-        tooltip: 'Columns',
-        onPressed: onToggled == null
-            ? null
-            : () => controller.isOpen ? controller.close() : controller.open(),
-      ),
     );
   }
 }

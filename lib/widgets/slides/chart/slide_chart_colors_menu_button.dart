@@ -28,18 +28,14 @@ class SlideChartColorsMenuButton extends StatelessWidget {
   final SlideToolbarChoice reset;
 
   @override
-  Widget build(BuildContext context) => MenuAnchor(
+  Widget build(BuildContext context) => QuarkBarMenuButton(
+    buttonKey: const ValueKey('slide_chart_colors'),
+    icon: QuarkIcons.chart_colors,
+    tooltip: 'Series colors',
+    enabled: reset.onSelected != null,
     menuChildren: [
       for (final choice in colors) SlideColorSubmenu(choice: choice),
       SlideChoiceMenuItem(choice: reset),
     ],
-    builder: (context, menu, _) => QuarkBarIconButton(
-      key: const ValueKey('slide_chart_colors'),
-      icon: QuarkIcons.chart_colors,
-      tooltip: 'Series colors',
-      onPressed: reset.onSelected == null
-          ? null
-          : () => menu.isOpen ? menu.close() : menu.open(),
-    ),
   );
 }

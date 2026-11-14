@@ -169,14 +169,11 @@ class ChatChannelHeader extends StatelessWidget {
             onPressed: onSearch,
           ),
         if (items.isNotEmpty)
-          MenuAnchor(
+          QuarkBarMenuButton(
+            buttonKey: const ValueKey('chat_channel_settings'),
+            icon: QuarkIcons.settings_outlined,
+            tooltip: 'Channel settings',
             menuChildren: items,
-            builder: (context, menu, _) => QuarkBarIconButton(
-              key: const ValueKey('chat_channel_settings'),
-              icon: QuarkIcons.settings_outlined,
-              tooltip: 'Channel settings',
-              onPressed: () => menu.isOpen ? menu.close() : menu.open(),
-            ),
           ),
       ],
     );
