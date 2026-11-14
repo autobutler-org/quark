@@ -4,6 +4,7 @@ import 'package:quark/widgets/layout/admin_map_card.dart';
 import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
 import 'package:quark/widgets/settings/hostname_section.dart';
 import 'package:quark/widgets/settings/ssh_access_section.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:tailnet_flutter/tailnet_flutter.dart';
 
 /// The Network tab of Settings (#2350): remote access, the connected
@@ -50,7 +51,6 @@ class SettingsNetworkTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const heading = TextStyle(fontSize: 16, fontWeight: FontWeight.bold);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -62,29 +62,28 @@ class SettingsNetworkTab extends StatelessWidget {
           const SizedBox(height: 24),
         ],
         if (hasHost) ...[
-          const Text('Remote access', style: heading),
-          const SizedBox(height: 8),
-          remoteAccess,
+          QuarkSection(title: 'Remote access', child: remoteAccess),
           const SizedBox(height: 24),
           if (EmbeddedTunnel.runsOnDeviceNode && thisPhone != null) ...[
-            Text(thisDeviceRemoteAccessHeading(), style: heading),
-            const SizedBox(height: 8),
-            thisPhone!,
+            QuarkSection(
+              title: thisDeviceRemoteAccessHeading(),
+              child: thisPhone!,
+            ),
             const SizedBox(height: 24),
           ] else if (!kIsWeb && !EmbeddedTunnel.isSupported) ...[
             const Text(desktopRemoteAccessUnavailable),
             const SizedBox(height: 24),
           ],
         ],
-        const Text('Connected devices', style: heading),
-        const SizedBox(height: 8),
-        if (hasHost)
-          connectedDevices
-        else
-          const Text(
-            'Not connected — add your Quark address under Backend hosts, '
-            'on the General tab',
-          ),
+        QuarkSection(
+          title: 'Connected devices',
+          child: hasHost
+              ? connectedDevices
+              : const Text(
+                  'Not connected — add your Quark address under Backend '
+                  'hosts, on the General tab',
+                ),
+        ),
         // Admin-only: what the device is called on the network (#2344), and
         // a shell login on it (#2131).
         if (hasHost && isAdmin) ...[
@@ -92,9 +91,7 @@ class SettingsNetworkTab extends StatelessWidget {
           // Brings its own heading and the gap under it, and takes no space
           // on a Quark that can't be renamed.
           const HostnameSection(),
-          const Text('SSH access', style: heading),
-          const SizedBox(height: 8),
-          const SshAccessSection(),
+          const QuarkSection(title: 'SSH access', child: SshAccessSection()),
         ],
       ],
     );

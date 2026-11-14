@@ -80,57 +80,60 @@ class HealthBody extends StatelessWidget {
           alerts: status.alerts,
         ),
         const SizedBox(height: 16),
-        const Text(
-          'System',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        MetricCard(
-          label: 'CPU',
-          icon: QuarkIcons.cpu,
-          value: status.cpuPercent,
-          unit: '%',
-          criticalThreshold: healthCpuCriticalPercent,
-          detail: status.cpuCorePercents.isNotEmpty
-              ? '${(status.cpuPercent / 100 * status.cpuCorePercents.length).toStringAsFixed(1)} of ${status.cpuCorePercents.length} cores'
-              : null,
-          corePercents: status.cpuCorePercents.isNotEmpty
-              ? status.cpuCorePercents
-              : null,
-        ),
-        const SizedBox(height: 8),
-        MetricCard(
-          label: 'Memory',
-          icon: QuarkIcons.memory,
-          value: status.memPercent,
-          unit: '%',
-          criticalThreshold: healthMemoryCriticalPercent,
-          detail:
-              '${StorageDevice.formatBytes(status.memUsedBytes)} used of ${StorageDevice.formatBytes(status.memTotalBytes)}',
-        ),
-        const SizedBox(height: 8),
-        MetricCard(
-          label: 'Disk',
-          icon: QuarkIcons.disc_full,
-          value: status.diskPercent,
-          unit: '%',
-          criticalThreshold: healthDiskCriticalPercent,
-          // Same whole-disk scope the Files footer states (#2024). Without it
-          // this line and Devices read as two different disks (#2011).
-          detail:
-              '${StorageDevice.formatBytes(status.diskUsedBytes)} used of ${StorageDevice.formatBytes(status.diskTotalBytes)} · whole disk, including system software',
-        ),
-        if (status.temperatureCelsius > 0) ...[
-          const SizedBox(height: 8),
-          MetricCard(
-            label: 'Temperature',
-            icon: QuarkIcons.thermostat,
-            value: status.temperatureCelsius,
-            unit: '°C',
-            criticalThreshold: healthTemperatureCriticalCelsius,
-            maxValue: 100,
+        QuarkSection(
+          title: 'System',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              MetricCard(
+                label: 'CPU',
+                icon: QuarkIcons.cpu,
+                value: status.cpuPercent,
+                unit: '%',
+                criticalThreshold: healthCpuCriticalPercent,
+                detail: status.cpuCorePercents.isNotEmpty
+                    ? '${(status.cpuPercent / 100 * status.cpuCorePercents.length).toStringAsFixed(1)} of ${status.cpuCorePercents.length} cores'
+                    : null,
+                corePercents: status.cpuCorePercents.isNotEmpty
+                    ? status.cpuCorePercents
+                    : null,
+              ),
+              const SizedBox(height: 8),
+              MetricCard(
+                label: 'Memory',
+                icon: QuarkIcons.memory,
+                value: status.memPercent,
+                unit: '%',
+                criticalThreshold: healthMemoryCriticalPercent,
+                detail:
+                    '${StorageDevice.formatBytes(status.memUsedBytes)} used of ${StorageDevice.formatBytes(status.memTotalBytes)}',
+              ),
+              const SizedBox(height: 8),
+              MetricCard(
+                label: 'Disk',
+                icon: QuarkIcons.disc_full,
+                value: status.diskPercent,
+                unit: '%',
+                criticalThreshold: healthDiskCriticalPercent,
+                // Same whole-disk scope the Files footer states (#2024). Without it
+                // this line and Devices read as two different disks (#2011).
+                detail:
+                    '${StorageDevice.formatBytes(status.diskUsedBytes)} used of ${StorageDevice.formatBytes(status.diskTotalBytes)} · whole disk, including system software',
+              ),
+              if (status.temperatureCelsius > 0) ...[
+                const SizedBox(height: 8),
+                MetricCard(
+                  label: 'Temperature',
+                  icon: QuarkIcons.thermostat,
+                  value: status.temperatureCelsius,
+                  unit: '°C',
+                  criticalThreshold: healthTemperatureCriticalCelsius,
+                  maxValue: 100,
+                ),
+              ],
+            ],
           ),
-        ],
+        ),
       ],
     );
   }

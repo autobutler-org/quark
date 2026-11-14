@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/models/calendar_view.dart';
 import 'package:quark/widgets/calendar/calendar_bar_bottom.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The Settings control choosing the view Calendar opens on (#2521): a
 /// heading over a dropdown of Day, Week, Month and Upcoming, in the order the
@@ -32,37 +33,30 @@ class CalendarViewSetting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Calendar opens on',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+    return QuarkSection(
+      title: 'Calendar opens on',
+      child: DropdownButtonFormField<CalendarView>(
+        key: const ValueKey('settings_calendar_view'),
+        initialValue: value,
+        // Full width and as tall as its text, so the choice still fits at
+        // large text sizes (#2606).
+        isExpanded: true,
+        itemHeight: null,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<CalendarView>(
-          key: const ValueKey('settings_calendar_view'),
-          initialValue: value,
-          // Full width and as tall as its text, so the choice still fits at
-          // large text sizes (#2606).
-          isExpanded: true,
-          itemHeight: null,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-          items: [
-            for (final view in CalendarBarBottom.order)
-              DropdownMenuItem(
-                value: view,
-                child: Text(CalendarBarBottom.label(view)),
-              ),
-          ],
-          onChanged: (view) {
-            if (view != null) onChanged(view);
-          },
-        ),
-      ],
+        items: [
+          for (final view in CalendarBarBottom.order)
+            DropdownMenuItem(
+              value: view,
+              child: Text(CalendarBarBottom.label(view)),
+            ),
+        ],
+        onChanged: (view) {
+          if (view != null) onChanged(view);
+        },
+      ),
     );
   }
 }
