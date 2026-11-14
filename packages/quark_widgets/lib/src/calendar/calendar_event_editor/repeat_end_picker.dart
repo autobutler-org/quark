@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/quark_segmented_choice.dart';
 import '../../theme/quark_tokens.dart';
 import '../calendar_labels.dart';
 import 'editor_picker_button.dart';
@@ -46,7 +47,7 @@ class RepeatEndPicker extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 6,
       children: [
-        SegmentedButton<bool>(
+        QuarkSegmentedChoice<bool>(
           segments: const [
             ButtonSegment(
               value: false,
@@ -65,26 +66,8 @@ class RepeatEndPicker extends StatelessWidget {
               ),
             ),
           ],
-          selected: {until != null},
-          showSelectedIcon: false,
-          onSelectionChanged: (selection) => onEndsChanged(selection.single),
-          style: SegmentedButton.styleFrom(
-            foregroundColor: tokens.secondaryForeground,
-            backgroundColor: tokens.input,
-            selectedForegroundColor: tokens.primary,
-            selectedBackgroundColor: tokens.primary.withValues(alpha: 0.12),
-            side: BorderSide(color: tokens.border),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(tokens.radiusLg),
-            ),
-            textStyle: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            // Standard density keeps the 48dp touch target (#2605).
-            visualDensity: VisualDensity.standard,
-          ),
+          selected: until != null,
+          onChanged: onEndsChanged,
         ),
         if (until != null)
           EditorPickerButton(

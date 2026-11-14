@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/quark_segmented_choice.dart';
 import '../../models/calendar_repeat.dart';
 import '../../theme/quark_tokens.dart';
 import '../calendar_labels.dart';
@@ -51,7 +52,7 @@ class RepeatPresetPicker extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 6,
       children: [
-        SegmentedButton<CalendarRepeat>(
+        QuarkSegmentedChoice<CalendarRepeat>(
           segments: [
             for (final preset in CalendarRepeat.values)
               ButtonSegment(
@@ -63,27 +64,8 @@ class RepeatPresetPicker extends StatelessWidget {
                 ),
               ),
           ],
-          selected: {value},
-          showSelectedIcon: false,
-          onSelectionChanged: (selection) => onChanged(selection.single),
-          style: SegmentedButton.styleFrom(
-            foregroundColor: tokens.secondaryForeground,
-            backgroundColor: tokens.input,
-            selectedForegroundColor: tokens.primary,
-            selectedBackgroundColor: tokens.primary.withValues(alpha: 0.12),
-            side: BorderSide(color: tokens.border),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(tokens.radiusLg),
-            ),
-            textStyle: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            // Standard density: any less and Material shrinks the 48dp touch
-            // target with it (#2605).
-            visualDensity: VisualDensity.standard,
-          ),
+          selected: value,
+          onChanged: onChanged,
         ),
         if (help.isNotEmpty)
           Text(
