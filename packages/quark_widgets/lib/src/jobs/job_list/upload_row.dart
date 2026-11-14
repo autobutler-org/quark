@@ -1,11 +1,13 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/quark_progress_row.dart';
 import '../../models/upload_item.dart';
 import '../../theme/quark_tokens.dart';
 
-/// One upload in a `JobList`: the file's name and destination, how much has
-/// arrived, the rate and time left while it moves, a progress bar while it is
-/// in flight, and a Cancel action when [UploadItem] offers one.
+/// One upload in a `JobList`, drawn as a `QuarkProgressRow`: the file's name
+/// and destination, how much has arrived, the rate and time left while it
+/// moves, a progress bar while it is in flight, and a Cancel action when
+/// [UploadItem] offers one.
 ///
 /// Key prefixes: `upload_row_<id>` on the row, `upload_cancel_<id>` on Cancel.
 class UploadRow extends StatelessWidget {
@@ -20,7 +22,6 @@ class UploadRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final tokens = QuarkTokens.of(context);
     final inFlight = switch (item.status) {
       UploadItemStatus.uploading ||
@@ -49,66 +50,23 @@ class UploadRow extends StatelessWidget {
     ].join(' · ');
     final fraction = item.totalBytes <= 0
         ? 0.0
-        : (item.sentBytes / item.totalBytes).clamp(0, 1).toDouble();
-    final destination = item.destination;
+        : item.sentBytes / item.totalBytes;
 
-    return Padding(
+    return QuarkProgressRow(
       key: ValueKey('upload_row_${item.id}'),
-      padding: EdgeInsets.symmetric(
-        horizontal: tokens.spacingMd,
-        vertical: tokens.spacingSm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.fileName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-              ),
-              if (item.canCancel)
-                TextButton(
-                  key: ValueKey('upload_cancel_${item.id}'),
-                  onPressed: onCancel == null ? null : () => onCancel!(item.id),
-                  child: const Text('Cancel'),
-                ),
-            ],
+      title: item.fileName,
+      subtitle: item.destination,
+      status: details,
+      statusColor: statusColor,
+      progress: inFlight ? fraction : null,
+      actions: [
+        if (item.canCancel)
+          TextButton(
+            key: ValueKey('upload_cancel_${item.id}'),
+            onPressed: onCancel == null ? null : () => onCancel!(item.id),
+            child: const Text('Cancel'),
           ),
-          if (destination != null)
-            Text(
-              destination,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: tokens.mutedForeground,
-              ),
-            ),
-          Text(
-            details,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: statusColor,
-              // The byte count and the rate change every few seconds;
-              // equal-width digits keep the line from jittering.
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-          if (inFlight)
-            Padding(
-              padding: EdgeInsets.only(top: tokens.spacingXs),
-              child: LinearProgressIndicator(
-                value: fraction,
-                color: tokens.primary,
-                backgroundColor: tokens.border,
-              ),
-            ),
-        ],
-      ),
+      ],
     );
   }
 }

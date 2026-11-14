@@ -1,10 +1,12 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/quark_progress_row.dart';
 import '../../models/job_item.dart';
 import '../../theme/quark_tokens.dart';
 
-/// One job in a `JobList`: its name, a status line, a progress bar while it
-/// runs, and a Cancel or Retry action when [JobItem] offers one.
+/// One job in a `JobList`, drawn as a `QuarkProgressRow`: its name, a status
+/// line, a progress bar while it runs, and a Cancel or Retry action when
+/// [JobItem] offers one.
 ///
 /// Key prefixes: `job_row_<id>` on the row, `job_cancel_<id>` and
 /// `job_retry_<id>` on the actions.
@@ -23,7 +25,6 @@ class JobRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final tokens = QuarkTokens.of(context);
     final statusColor = switch (item.status) {
       JobItemStatus.failed => tokens.error,
@@ -40,60 +41,26 @@ class JobRow extends StatelessWidget {
       if (item.isQuickCopy) 'Quick copy',
     ].join(' · ');
 
-    return Padding(
+    return QuarkProgressRow(
       key: ValueKey('job_row_${item.id}'),
-      padding: EdgeInsets.symmetric(
-        horizontal: tokens.spacingMd,
-        vertical: tokens.spacingSm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-              ),
-              if (item.canCancel)
-                TextButton(
-                  key: ValueKey('job_cancel_${item.id}'),
-                  onPressed: onCancel == null ? null : () => onCancel!(item.id),
-                  child: const Text('Cancel'),
-                ),
-              if (item.canRetry)
-                TextButton(
-                  key: ValueKey('job_retry_${item.id}'),
-                  onPressed: onRetry == null ? null : () => onRetry!(item.id),
-                  child: const Text('Retry'),
-                ),
-            ],
+      title: item.name,
+      status: details,
+      statusColor: statusColor,
+      progress: item.status == JobItemStatus.running ? item.progress : null,
+      actions: [
+        if (item.canCancel)
+          TextButton(
+            key: ValueKey('job_cancel_${item.id}'),
+            onPressed: onCancel == null ? null : () => onCancel!(item.id),
+            child: const Text('Cancel'),
           ),
-          Text(
-            details,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: statusColor,
-              // The percentage and the elapsed clock tick while a job runs;
-              // equal-width digits keep the line from jittering each second.
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+        if (item.canRetry)
+          TextButton(
+            key: ValueKey('job_retry_${item.id}'),
+            onPressed: onRetry == null ? null : () => onRetry!(item.id),
+            child: const Text('Retry'),
           ),
-          if (item.status == JobItemStatus.running)
-            Padding(
-              padding: EdgeInsets.only(top: tokens.spacingXs),
-              child: LinearProgressIndicator(
-                value: item.progress.clamp(0, 1).toDouble(),
-                color: tokens.primary,
-                backgroundColor: tokens.border,
-              ),
-            ),
-        ],
-      ),
+      ],
     );
   }
 }
