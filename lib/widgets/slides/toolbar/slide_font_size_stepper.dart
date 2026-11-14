@@ -3,7 +3,7 @@ import 'package:quark/widgets/slides/toolbar/slide_choice_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_choice.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The text size stepper: smaller, the size the selection shares, larger.
+/// The text size [QuarkStepper]: smaller, the size the selection shares, larger.
 /// The size reads to a screen reader as "Font size 36", or "Font size
 /// mixed" when the selection has more than one.
 ///
@@ -28,29 +28,11 @@ class SlideFontSizeStepper extends StatelessWidget {
   final SlideToolbarChoice larger;
 
   @override
-  Widget build(BuildContext context) {
-    final tokens = QuarkTokens.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SlideChoiceButton(choice: smaller),
-        ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 36),
-          child: Semantics(
-            label: 'Font size ${size.isEmpty ? 'mixed' : size}',
-            excludeSemantics: true,
-            child: Text(
-              size,
-              key: const ValueKey('slide_format_font_size'),
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.labelLarge?.copyWith(color: tokens.foreground),
-            ),
-          ),
-        ),
-        SlideChoiceButton(choice: larger),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => QuarkStepper(
+    value: size,
+    semanticsLabel: 'Font size ${size.isEmpty ? 'mixed' : size}',
+    valueKey: const ValueKey('slide_format_font_size'),
+    decrease: SlideChoiceButton(choice: smaller),
+    increase: SlideChoiceButton(choice: larger),
+  );
 }
