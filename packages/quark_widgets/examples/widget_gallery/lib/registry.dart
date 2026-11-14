@@ -3627,6 +3627,38 @@ final List<GalleryEntry> registry = [
   ),
 
   GalleryEntry(
+    name: 'QuarkSegmentedChoice',
+    group: 'Core',
+    build: (context, log) => Column(
+      spacing: 12,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        QuarkSegmentedChoice<String>(
+          segments: const [
+            ButtonSegment(value: 'none', label: Text('Never', maxLines: 1)),
+            ButtonSegment(value: 'daily', label: Text('Daily', maxLines: 1)),
+            ButtonSegment(value: 'weekly', label: Text('Weekly', maxLines: 1)),
+            ButtonSegment(
+              value: 'monthly',
+              label: Text('Monthly', maxLines: 1),
+            ),
+          ],
+          selected: 'weekly',
+          onChanged: (v) => log('QuarkSegmentedChoice.onChanged($v)'),
+        ),
+        QuarkSegmentedChoice<bool>(
+          segments: const [
+            ButtonSegment(value: false, label: Text('Never', maxLines: 1)),
+            ButtonSegment(value: true, label: Text('On a date', maxLines: 1)),
+          ],
+          selected: false,
+          onChanged: (v) => log('QuarkSegmentedChoice.onChanged($v)'),
+        ),
+      ],
+    ),
+  ),
+
+  GalleryEntry(
     name: 'QuarkPasswordField',
     group: 'Core',
     build: (context, log) => Column(

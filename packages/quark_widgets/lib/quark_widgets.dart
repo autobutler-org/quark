@@ -63,6 +63,7 @@ export 'src/core/quark_name_dialog.dart';
 export 'src/core/quark_password_field.dart';
 export 'src/core/quark_progress_row.dart';
 export 'src/core/quark_search_field.dart';
+export 'src/core/quark_segmented_choice.dart';
 export 'src/core/quark_step_indicator.dart';
 export 'src/core/quark_storage_bar.dart';
 export 'src/core/quark_submenu_button.dart';
