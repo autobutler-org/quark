@@ -1806,6 +1806,41 @@ final List<GalleryEntry> registry = [
   ),
 
   GalleryEntry(
+    name: 'QuarkProgressRow',
+    group: 'Core',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        QuarkProgressRow(
+          key: const ValueKey('upload_row_gallery'),
+          title: 'vacation.mov',
+          subtitle: '/Videos/2026',
+          status: 'Uploading · 412 MB of 1.2 GB · 8.4 MB/s',
+          progress: 0.34,
+          actions: [
+            TextButton(
+              onPressed: () => log('QuarkProgressRow.Cancel'),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+        QuarkProgressRow(
+          title: 'Convert holiday.heic',
+          status: 'Failed · 0:42 · Attempt 2',
+          statusColor: QuarkTokens.of(context).error,
+          actions: [
+            TextButton(
+              onPressed: () => log('QuarkProgressRow.Retry'),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+        const QuarkProgressRow(title: 'notes.txt', status: 'Uploaded · 4 KB'),
+      ],
+    ),
+  ),
+
+  GalleryEntry(
     name: 'PhotoSelectionBar',
     group: 'Photos',
     build: (context, log) => Column(
