@@ -205,16 +205,9 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (showDevicePicker) ...[
-                      DropdownButtonFormField<StorageDevice>(
+                      QuarkDropdownField<StorageDevice>(
                         initialValue: selectedDevice,
-                        // A device name is arbitrary length and the dialog is
-                        // narrow on a phone; without isExpanded the button sizes
-                        // to the label and overflows its own row.
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Destination device',
-                          isDense: true,
-                        ),
+                        labelText: 'Destination device',
                         items: devices
                             .map(
                               (d) => DropdownMenuItem<StorageDevice>(

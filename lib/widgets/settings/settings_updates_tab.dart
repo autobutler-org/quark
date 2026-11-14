@@ -158,10 +158,9 @@ class SettingsUpdatesTab extends StatelessWidget {
                     hasHost)
                   const Text('No updates available')
                 else if (availableVersions.isNotEmpty && isAdmin) ...[
-                  DropdownButtonFormField<String>(
+                  QuarkDropdownField<String>(
                     initialValue: selectedVersion,
-                    isExpanded: true,
-                    itemHeight: null,
+                    labelText: 'Update Quark to version',
                     items: [
                       for (final v in availableVersions)
                         DropdownMenuItem<String>(value: v, child: Text(v)),
@@ -169,10 +168,6 @@ class SettingsUpdatesTab extends StatelessWidget {
                     onChanged: (isLoadingVersion || busy)
                         ? null
                         : onSelectVersion,
-                    decoration: const InputDecoration(
-                      labelText: 'Update Quark to version',
-                      border: OutlineInputBorder(),
-                    ),
                   ),
                   const SizedBox(height: 12),
                   Align(

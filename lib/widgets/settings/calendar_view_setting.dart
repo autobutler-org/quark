@@ -35,17 +35,9 @@ class CalendarViewSetting extends StatelessWidget {
   Widget build(BuildContext context) {
     return QuarkSection(
       title: 'Calendar opens on',
-      child: DropdownButtonFormField<CalendarView>(
+      child: QuarkDropdownField<CalendarView>(
         key: const ValueKey('settings_calendar_view'),
         initialValue: value,
-        // Full width and as tall as its text, so the choice still fits at
-        // large text sizes (#2606).
-        isExpanded: true,
-        itemHeight: null,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        ),
         items: [
           for (final view in CalendarBarBottom.order)
             DropdownMenuItem(

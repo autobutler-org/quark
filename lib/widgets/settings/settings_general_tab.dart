@@ -229,16 +229,8 @@ class SettingsGeneralTab extends StatelessWidget {
         const SizedBox(height: 24),
         QuarkSection(
           title: 'Auto-refresh interval',
-          child: DropdownButtonFormField<int>(
+          child: QuarkDropdownField<int>(
             initialValue: refreshIntervalSeconds,
-            // Full width and as tall as its text, so the choice still fits at
-            // large text sizes (#2606).
-            isExpanded: true,
-            itemHeight: null,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            ),
             items: const [
               DropdownMenuItem(value: 0, child: Text('Disabled')),
               DropdownMenuItem(value: 10, child: Text('10 seconds')),

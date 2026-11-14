@@ -3435,6 +3435,43 @@ final List<GalleryEntry> registry = [
   ),
 
   GalleryEntry(
+    name: 'QuarkDropdownField',
+    group: 'Core',
+    build: (context, log) => Column(
+      spacing: 12,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        QuarkDropdownField<int>(
+          key: const ValueKey('settings_refresh_interval'),
+          initialValue: 15,
+          items: const [
+            DropdownMenuItem(value: 0, child: Text('Disabled')),
+            DropdownMenuItem(value: 15, child: Text('15 seconds')),
+            DropdownMenuItem(value: 60, child: Text('1 minute')),
+          ],
+          onChanged: (v) => log('QuarkDropdownField.onChanged($v)'),
+        ),
+        QuarkDropdownField<String>(
+          key: const ValueKey('backup_run_picker'),
+          labelText: 'Backup',
+          initialValue: 'a',
+          items: const [
+            DropdownMenuItem(value: 'a', child: Text('Today 09:00 · 2 GB')),
+            DropdownMenuItem(value: 'b', child: Text('Yesterday · 1.9 GB')),
+          ],
+          onChanged: (v) => log('QuarkDropdownField.onChanged($v)'),
+        ),
+        const QuarkDropdownField<String>(
+          labelText: 'Update Quark to version (disabled)',
+          initialValue: '1.0.0',
+          items: [DropdownMenuItem(value: '1.0.0', child: Text('1.0.0'))],
+          onChanged: null,
+        ),
+      ],
+    ),
+  ),
+
+  GalleryEntry(
     name: 'QuarkPasswordField',
     group: 'Core',
     build: (context, log) => Column(
