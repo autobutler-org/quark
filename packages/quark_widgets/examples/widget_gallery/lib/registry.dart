@@ -3659,6 +3659,24 @@ final List<GalleryEntry> registry = [
   ),
 
   GalleryEntry(
+    name: 'QuarkPlaybackSpeedMenu',
+    group: 'Core',
+    build: (context, log) => Row(
+      spacing: 12,
+      children: [
+        QuarkPlaybackSpeedMenu(
+          speed: 1.0,
+          onSelected: (s) => log('QuarkPlaybackSpeedMenu.onSelected($s)'),
+        ),
+        QuarkPlaybackSpeedMenu(
+          speed: 1.5,
+          onSelected: (s) => log('QuarkPlaybackSpeedMenu.onSelected($s)'),
+        ),
+      ],
+    ),
+  ),
+
+  GalleryEntry(
     name: 'QuarkPasswordField',
     group: 'Core',
     build: (context, log) => Column(

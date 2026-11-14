@@ -151,30 +151,9 @@ class _AudioControlsState extends State<AudioControls> {
                     isMuted ? QuarkIcons.volume_off : QuarkIcons.volume_up,
                   ),
                 ),
-                PopupMenuButton<double>(
-                  tooltip: 'Playback speed',
-                  initialValue: value.playbackSpeed,
-                  onSelected: (speed) {
-                    widget.controller.setPlaybackSpeed(speed);
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 0.5, child: Text('0.5x')),
-                    PopupMenuItem(value: 0.75, child: Text('0.75x')),
-                    PopupMenuItem(value: 1.0, child: Text('1.0x')),
-                    PopupMenuItem(value: 1.25, child: Text('1.25x')),
-                    PopupMenuItem(value: 1.5, child: Text('1.5x')),
-                    PopupMenuItem(value: 2.0, child: Text('2.0x')),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    child: Text(
-                      '${value.playbackSpeed.toStringAsFixed(2)}x',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ),
+                QuarkPlaybackSpeedMenu(
+                  speed: value.playbackSpeed,
+                  onSelected: widget.controller.setPlaybackSpeed,
                 ),
               ],
             ),
