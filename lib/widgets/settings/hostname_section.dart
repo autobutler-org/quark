@@ -57,30 +57,18 @@ class _HostnameSectionState extends State<HostnameSection> {
         if (status == null || !status.available) {
           return const SizedBox.shrink();
         }
-        return Column(
+        return SettingsCallout(
           key: const ValueKey('hostname_section'),
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            QuarkSection(
-              title: widget.title,
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: HostnameField(
-                    hostname: status.hostname,
-                    advertisedHostname: status.advertisedHostname,
-                    isWorking: _controller.isWorking,
-                    error: _controller.error,
-                    renamedTo: _controller.renamedTo,
-                    reopenAddress: _controller.reopenAddress,
-                    onSubmit: _controller.rename,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
+          title: widget.title,
+          child: HostnameField(
+            hostname: status.hostname,
+            advertisedHostname: status.advertisedHostname,
+            isWorking: _controller.isWorking,
+            error: _controller.error,
+            renamedTo: _controller.renamedTo,
+            reopenAddress: _controller.reopenAddress,
+            onSubmit: _controller.rename,
+          ),
         );
       },
     );

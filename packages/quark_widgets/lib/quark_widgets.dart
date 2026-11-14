@@ -205,6 +205,7 @@ export 'src/settings/quark_theme_color_picker.dart';
 export 'src/settings/remote_access_panel.dart';
 export 'src/settings/remote_access_setup_view.dart';
 export 'src/settings/remote_access_turn_off_dialog.dart';
+export 'src/settings/settings_callout.dart';
 export 'src/settings/settings_row.dart';
 export 'src/settings/ssh_access_panel.dart';
 export 'src/sharing/share_sheet.dart';

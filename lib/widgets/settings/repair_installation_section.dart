@@ -71,53 +71,41 @@ class _RepairInstallationSectionState extends State<RepairInstallationSection> {
         if (_controller.isHidden) return const SizedBox.shrink();
         final status = _controller.status;
         final error = _controller.error;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 24),
-          child: QuarkSection(
-            title: 'Repair installation',
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_controller.isLoading && status == null)
-                      const Center(child: QuarkLoader())
-                    else if (_controller.needsInstall) ...[
-                      const Text(
-                        'This Quark was installed before it could repair '
-                        'itself. Run this once on the device to repair it:',
-                      ),
-                      const SizedBox(height: 8),
-                      const CodeBlock(
-                        text: RepairInstallationSection.installCommand,
-                      ),
-                    ] else if (status != null && status.available) ...[
-                      const Text(
-                        "Restart Quark and reapply its system setup, if "
-                        "something on the device has drifted.",
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton.icon(
-                        key: const ValueKey('repair_installation_button'),
-                        onPressed: _controller.isWorking ? null : _repair,
-                        icon: const Icon(QuarkIcons.build_outlined),
-                        label: const Text('Repair installation'),
-                      ),
-                    ],
-                    if (error != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        error,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                  ],
+        return SettingsCallout(
+          title: 'Repair installation',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_controller.isLoading && status == null)
+                const Center(child: QuarkLoader())
+              else if (_controller.needsInstall) ...[
+                const Text(
+                  'This Quark was installed before it could repair '
+                  'itself. Run this once on the device to repair it:',
                 ),
-              ),
-            ),
+                const SizedBox(height: 8),
+                const CodeBlock(text: RepairInstallationSection.installCommand),
+              ] else if (status != null && status.available) ...[
+                const Text(
+                  "Restart Quark and reapply its system setup, if "
+                  "something on the device has drifted.",
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  key: const ValueKey('repair_installation_button'),
+                  onPressed: _controller.isWorking ? null : _repair,
+                  icon: const Icon(QuarkIcons.build_outlined),
+                  label: const Text('Repair installation'),
+                ),
+              ],
+              if (error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  error,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
           ),
         );
       },
