@@ -52,88 +52,54 @@ class ConnectedDevicesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ExpansionTile(
-        title: const Text(
-          'Client connections',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          isLoading
-              ? 'Loading...'
-              : error != null
-              ? Errors.loadFailedShort
-              : devices.isEmpty
-              ? 'No devices recorded yet'
-              : '${devices.length} device${devices.length == 1 ? '' : 's'}',
-        ),
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: RefreshIconButton(
-                isRefreshing: isLoading,
-                onPressed: onRefresh,
-                tooltip: 'Refresh devices',
-              ),
+    return RecordListCard(
+      title: 'Client connections',
+      subtitle: isLoading
+          ? 'Loading...'
+          : error != null
+          ? Errors.loadFailedShort
+          : devices.isEmpty
+          ? 'No devices recorded yet'
+          : '${devices.length} device${devices.length == 1 ? '' : 's'}',
+      collapsible: true,
+      onRefresh: onRefresh,
+      isLoading: isLoading,
+      error: error != null && disconnected ? quarkDisconnectedShort : error,
+      emptyText: 'No devices recorded yet',
+      keyPrefix: 'connected_device',
+      actionKey: 'remove',
+      actionIcon: QuarkIcons.delete_outline,
+      actionTooltip: 'Remove from this list',
+      records: [
+        if (!isLoading && error == null)
+          for (final device in devices)
+            RecordListItem(
+              id: '${device.id}',
+              title: device.current
+                  ? currentDeviceLabel(device.userAgent)
+                  : deviceLabel(device.userAgent),
+              subtitle: device.current
+                  ? '${deviceLabel(device.userAgent)} · last active '
+                        '${formatRelative(device.lastSeenAt)}'
+                  : 'Last active ${formatRelative(device.lastSeenAt)}',
+              // Not on the user's own row: the request that removes it
+              // records the caller again.
+              hasAction: isAdmin && !device.current,
             ),
-          ),
-          if (isLoading)
-            const Padding(
-              padding: EdgeInsets.all(8),
-              child: Center(child: QuarkLoader(size: 20)),
-            )
-          else if (error != null)
-            ListTile(
-              leading: Icon(
-                QuarkIcons.error_outline,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              title: Text(disconnected ? quarkDisconnectedShort : error!),
-            )
-          else if (devices.isEmpty)
-            const ListTile(title: Text('No devices recorded yet'))
-          else
-            for (final device in devices)
-              ListTile(
-                key: ValueKey('connected_device_tile_${device.id}'),
-                leading: const Icon(QuarkIcons.devices),
-                title: Text(
-                  device.current
-                      ? currentDeviceLabel(device.userAgent)
-                      : deviceLabel(device.userAgent),
-                ),
-                subtitle: Text(
-                  device.current
-                      ? '${deviceLabel(device.userAgent)} · last active '
-                            '${formatRelative(device.lastSeenAt)}'
-                      : 'Last active ${formatRelative(device.lastSeenAt)}',
-                ),
-                // Not on the user's own row: the request that removes it
-                // records the caller again.
-                trailing: isAdmin && !device.current
-                    ? IconButton(
-                        key: ValueKey('connected_device_remove_${device.id}'),
-                        icon: const Icon(QuarkIcons.delete_outline),
-                        tooltip: 'Remove from this list',
-                        onPressed: () async {
-                          final confirmed = await confirmAction(
-                            context,
-                            title: 'Remove ${deviceLabel(device.userAgent)}?',
-                            message:
-                                'It leaves this list, and comes back the next '
-                                'time it talks to your Quark. To sign a '
-                                'device out, use Sessions on the Account tab.',
-                            confirmLabel: 'Remove',
-                          );
-                          if (confirmed == true) onRemove(device.id);
-                        },
-                      )
-                    : null,
-              ),
-        ],
-      ),
+      ],
+      onAction: (id) async {
+        final device = devices.firstWhere((d) => '${d.id}' == id);
+        final confirmed = await confirmAction(
+          context,
+          title: 'Remove ${deviceLabel(device.userAgent)}?',
+          message:
+              'It leaves this list, and comes back the next '
+              'time it talks to your Quark. To sign a '
+              'device out, use Sessions on the Account tab.',
+          confirmLabel: 'Remove',
+        );
+        if (confirmed == true) onRemove(device.id);
+      },
     );
   }
 }
