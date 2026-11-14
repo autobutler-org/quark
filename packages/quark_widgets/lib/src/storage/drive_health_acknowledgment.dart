@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../core/confirm_delete_dialog.dart';
 import '../core/quark_tint_badge.dart';
 import '../theme/quark_tokens.dart';
 import 'drive_health_verdict.dart';
@@ -81,11 +82,10 @@ class DriveHealthAcknowledgment extends StatelessWidget {
   /// Called when Cancel is tapped.
   final VoidCallback onCancel;
 
-  String _key(String suffix) {
-    final id = this.id;
-    if (id == null || id.isEmpty) return 'drive_health_ack_$suffix';
-    return 'drive_health_ack_${id}_$suffix';
-  }
+  String get _keyPrefix =>
+      id?.isNotEmpty == true ? 'drive_health_ack_$id' : 'drive_health_ack';
+
+  String _key(String suffix) => '${_keyPrefix}_$suffix';
 
   @override
   Widget build(BuildContext context) {
@@ -97,15 +97,19 @@ class DriveHealthAcknowledgment extends StatelessWidget {
         ? 'Files already on this drive stay.'
         : null;
 
-    return AlertDialog(
-      scrollable: true,
-      title: Text(
-        strongerWarning
-            ? 'This drive is in worse shape'
-            : requiresAcknowledgment
-            ? 'Replace this drive soon?'
-            : 'Look at this drive first',
-      ),
+    return ConfirmDeleteDialog(
+      title: strongerWarning
+          ? 'This drive is in worse shape'
+          : requiresAcknowledgment
+          ? 'Replace this drive soon?'
+          : 'Look at this drive first',
+      keyPrefix: _keyPrefix,
+      confirmLabel: requiresAcknowledgment
+          ? 'Use this drive anyway'
+          : 'Continue',
+      destructive: requiresAcknowledgment,
+      onConfirm: onConfirm,
+      onCancel: onCancel,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,26 +147,6 @@ class DriveHealthAcknowledgment extends StatelessWidget {
           ],
         ],
       ),
-      actions: [
-        TextButton(
-          key: ValueKey(_key('cancel')),
-          onPressed: onCancel,
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          key: ValueKey(_key('confirm')),
-          style: requiresAcknowledgment
-              ? FilledButton.styleFrom(
-                  backgroundColor: tokens.error,
-                  foregroundColor: tokens.errorForeground,
-                )
-              : null,
-          onPressed: onConfirm,
-          child: Text(
-            requiresAcknowledgment ? 'Use this drive anyway' : 'Continue',
-          ),
-        ),
-      ],
     );
   }
 }

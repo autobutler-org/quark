@@ -136,7 +136,9 @@ void main() {
       await openMenu(tester, 0);
       await tester.tap(find.byKey(review));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('review_certificate_trust')));
+      await tester.tap(
+        find.byKey(const ValueKey('review_certificate_confirm')),
+      );
       await tester.pumpAndSettle();
 
       expect(find.byKey(unconfirmed), findsNothing);

@@ -97,7 +97,7 @@ void main() {
       find.byKey(ValueKey('doc_sheet_delete_$path'));
 
   Future<void> confirmTrash(WidgetTester tester) async {
-    await tester.tap(find.widgetWithText(TextButton, 'Move to Trash'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Move to Trash'));
     await tester.pumpAndSettle();
   }
 

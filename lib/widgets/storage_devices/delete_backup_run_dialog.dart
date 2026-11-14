@@ -1,5 +1,5 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:quark/utils/quark_widget.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Asks an admin to delete one backup from a backup drive (#4044).
 ///
@@ -15,9 +15,11 @@ class DeleteBackupRunDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return QuarkWidget.alertDialog(
-      title: const Text('Delete this backup?'),
-      scrollable: true,
+    return ConfirmDeleteDialog(
+      title: 'Delete this backup?',
+      keyPrefix: 'delete_backup_run',
+      onConfirm: () => Navigator.pop(context, true),
+      onCancel: () => Navigator.pop(context),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -33,18 +35,6 @@ class DeleteBackupRunDialog extends StatelessWidget {
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          key: const ValueKey('delete_backup_run_cancel'),
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          key: const ValueKey('delete_backup_run_confirm'),
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Delete'),
-        ),
-      ],
     );
   }
 }

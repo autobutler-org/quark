@@ -499,14 +499,17 @@ Future<bool?> confirmDelete(
   );
 }
 
-/// Asks the user to confirm [confirmLabel]; true when they did. [keyPrefix]
-/// keys the buttons `<keyPrefix>_cancel` and `<keyPrefix>_confirm`.
+/// Asks the user to confirm [confirmLabel] in a [ConfirmDeleteDialog]; true
+/// when they did. [keyPrefix] keys the buttons `<keyPrefix>_cancel` and
+/// `<keyPrefix>_confirm`, `confirm_action` when null. [destructive] draws the
+/// confirm button in the error color.
 Future<bool?> confirmAction(
   BuildContext context, {
   required String title,
   required String message,
   required String confirmLabel,
   String? keyPrefix,
+  bool destructive = false,
 }) async {
   await Future<void>.delayed(Duration.zero);
   if (!context.mounted) {
@@ -516,29 +519,20 @@ Future<bool?> confirmAction(
   return QuarkWidget.showDialog<bool>(
     context,
     useRootNavigator: true,
-    builder: (dialogContext) {
-      return QuarkWidget.alertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            key: keyPrefix == null ? null : ValueKey('${keyPrefix}_cancel'),
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            key: keyPrefix == null ? null : ValueKey('${keyPrefix}_confirm'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(confirmLabel),
-          ),
-        ],
-      );
-    },
+    builder: (dialogContext) => ConfirmDeleteDialog(
+      title: title,
+      body: message,
+      keyPrefix: keyPrefix ?? 'confirm_action',
+      confirmLabel: confirmLabel,
+      destructive: destructive,
+      onConfirm: () => Navigator.of(dialogContext).pop(true),
+      onCancel: () => Navigator.of(dialogContext).pop(false),
+    ),
   );
 }
 
-/// Shows a [ConfirmDeleteDialog] and answers true when the user confirmed.
-/// The arguments are the dialog's own.
+/// [confirmAction] with a required [keyPrefix], destructive unless told
+/// otherwise; true only when the user confirmed.
 Future<bool> confirmDestructive(
   BuildContext context, {
   required String title,
@@ -546,21 +540,16 @@ Future<bool> confirmDestructive(
   required String keyPrefix,
   String confirmLabel = 'Delete',
   bool destructive = true,
-}) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => ConfirmDeleteDialog(
+}) async =>
+    await confirmAction(
+      context,
       title: title,
-      body: body,
+      message: body,
       keyPrefix: keyPrefix,
       confirmLabel: confirmLabel,
       destructive: destructive,
-      onConfirm: () => Navigator.of(dialogContext).pop(true),
-      onCancel: () => Navigator.of(dialogContext).pop(false),
-    ),
-  );
-  return confirmed == true;
-}
+    ) ==
+    true;
 
 Future<String?> _promptForText({
   required BuildContext context,
