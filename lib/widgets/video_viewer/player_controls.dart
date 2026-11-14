@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/playback_time.dart';
 import 'package:quark/widgets/video_viewer/trim_bar.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:video_player/video_player.dart';
 
 /// The control strip overlaid on the video: progress (or the trim bar),
@@ -172,28 +173,13 @@ class PlayerControls extends StatelessWidget {
                         color: Colors.white,
                       ),
                     ),
-                    PopupMenuButton<double>(
-                      tooltip: 'Playback speed',
-                      initialValue: value.playbackSpeed,
+                    QuarkPlaybackSpeedMenu(
+                      speed: value.playbackSpeed,
                       onSelected: (speed) {
                         onInteraction();
                         controller.setPlaybackSpeed(speed);
                       },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 0.5, child: Text('0.5x')),
-                        PopupMenuItem(value: 0.75, child: Text('0.75x')),
-                        PopupMenuItem(value: 1.0, child: Text('1.0x')),
-                        PopupMenuItem(value: 1.25, child: Text('1.25x')),
-                        PopupMenuItem(value: 1.5, child: Text('1.5x')),
-                        PopupMenuItem(value: 2.0, child: Text('2.0x')),
-                      ],
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Text(
-                          '${value.playbackSpeed.toStringAsFixed(2)}x',
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ),
+                      textStyle: const TextStyle(color: Colors.white),
                     ),
                     IconButton(
                       tooltip: isFullscreen
