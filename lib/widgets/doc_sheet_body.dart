@@ -93,8 +93,6 @@ class DocSheetBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     if (loading) {
       return const Center(child: QuarkLoader());
     }
@@ -108,20 +106,10 @@ class DocSheetBody extends StatelessWidget {
               context.go(AppRoutes.settingsTab(SettingsTab.general)),
         );
       }
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(QuarkIcons.error_outline, size: 40, color: colorScheme.error),
-            const SizedBox(height: 12),
-            Text(
-              Errors.message(error, kind.loadAction),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
-        ),
+      return EmptyStateWidget(
+        icon: QuarkIcons.error_outline,
+        headline: Errors.message(error, kind.loadAction),
+        action: FilledButton(onPressed: onRetry, child: const Text('Retry')),
       );
     }
     // Content matches are rendered by the list, so the empty state must
@@ -157,30 +145,18 @@ class DocSheetBody extends StatelessWidget {
     final hasOther = otherFiles.isNotEmpty || otherContent.isNotEmpty;
 
     if (files.isEmpty && ownContent.isEmpty && !hasOther) {
-      return Center(
-        child: Column(
+      return EmptyStateWidget(
+        icon: kind.icon,
+        headline: isSearching
+            ? 'No ${kind.noun}s match your search.'
+            : 'No ${kind.noun}s yet.',
+        action: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              kind.icon,
-              size: 48,
-              color: colorScheme.onSurface.withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              isSearching
-                  ? 'No ${kind.noun}s match your search.'
-                  : 'No ${kind.noun}s yet.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: colorScheme.onSurface.withValues(alpha: 0.5),
-              ),
-            ),
             if (contentSearching) ...const [
-              SizedBox(height: 16),
               QuarkLoader(size: 20),
+              SizedBox(height: 16),
             ],
-            const SizedBox(height: 16),
             // Offered while searching too (#2044). A search that found
             // nothing is the moment someone knows exactly what they wanted
             // and does not have it — sending them back to a toolbar icon to

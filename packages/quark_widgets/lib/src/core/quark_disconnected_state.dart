@@ -22,6 +22,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../theme/quark_tokens.dart';
+import 'empty_state_widget.dart';
 import 'quark_disconnected_state/troubleshooting_list.dart';
 
 /// Headline for both shapes. A plain statement of fact, no error vocabulary.
@@ -236,44 +237,19 @@ class QuarkDisconnectedView extends StatelessWidget {
           steps: steps,
         );
 
-        return SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: tokens.spacingXl,
-            vertical: tokens.spacingLg,
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
+        // The icon and the two lines are the shared empty state. The address,
+        // the checklist and the buttons ride in its action slot.
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: EmptyStateWidget(
+              icon: QuarkIcons.cloud_off_outlined,
+              headline: copy.headline,
+              subtext: copy.body,
+              action: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    QuarkIcons.cloud_off_outlined,
-                    size: 56,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
-                  SizedBox(height: tokens.spacingMd),
-                  Text(
-                    copy.headline,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
-                  SizedBox(height: tokens.spacingSm),
-                  Text(
-                    copy.body,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.5,
-                      color: colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
-                  ),
                   if (address != null && address.isNotEmpty) ...[
-                    SizedBox(height: tokens.spacingXs),
                     Text(
                       address,
                       textAlign: TextAlign.center,
@@ -282,12 +258,12 @@ class QuarkDisconnectedView extends StatelessWidget {
                         color: colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                     ),
+                    SizedBox(height: tokens.spacingLg),
                   ],
                   if (copy.steps case final checklist?) ...[
-                    SizedBox(height: tokens.spacingLg),
                     TroubleshootingList(steps: checklist),
+                    SizedBox(height: tokens.spacingLg),
                   ],
-                  SizedBox(height: tokens.spacingLg),
                   Wrap(
                     spacing: tokens.spacingSm + tokens.spacingXs,
                     runSpacing: tokens.spacingSm + tokens.spacingXs,

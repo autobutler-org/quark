@@ -62,8 +62,6 @@ class DocumentEditorBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     if (loading) {
       return const Center(child: QuarkLoader());
     }
@@ -76,20 +74,10 @@ class DocumentEditorBody extends StatelessWidget {
           onRetry: onRetry,
         );
       }
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(QuarkIcons.error_outline, size: 48, color: cs.error),
-            const SizedBox(height: 12),
-            Text(
-              Errors.message(error, 'load the document'),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
-        ),
+      return EmptyStateWidget(
+        icon: QuarkIcons.error_outline,
+        headline: Errors.message(error, 'load the document'),
+        action: FilledButton(onPressed: onRetry, child: const Text('Retry')),
       );
     }
 

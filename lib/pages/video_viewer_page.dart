@@ -354,19 +354,6 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
     }
   }
 
-  List<Widget> _buildDownloadSection() {
-    return [
-      const SizedBox(height: 16),
-      FilledButton.icon(
-        onPressed: _downloading ? null : _downloadVideo,
-        icon: _downloading
-            ? const QuarkLoader(size: 16)
-            : const Icon(QuarkIcons.download_outlined, size: 16),
-        label: Text(_downloading ? 'Downloading…' : 'Download'),
-      ),
-    ];
-  }
-
   Future<void> _downloadVideo() async {
     setState(() => _downloading = true);
     // The media URL carries the file's path and serial as query parameters;
@@ -629,22 +616,23 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
         child: _loading
             ? const QuarkLoader()
             : _errorMessage != null
-            ? Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _isUnsupportedFormat
-                          ? QuarkIcons.video_file_outlined
-                          : QuarkIcons.error_outline,
-                      size: 36,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(_errorMessage!, textAlign: TextAlign.center),
-                    if (_isUnsupportedFormat) ..._buildDownloadSection(),
-                  ],
-                ),
+            ? EmptyStateWidget(
+                icon: _isUnsupportedFormat
+                    ? QuarkIcons.video_file_outlined
+                    : QuarkIcons.error_outline,
+                headline: _errorMessage!,
+                action: _isUnsupportedFormat
+                    ? FilledButton.icon(
+                        onPressed: _downloading ? null : _downloadVideo,
+                        icon: _downloading
+                            ? const QuarkLoader(size: 16)
+                            : const Icon(
+                                QuarkIcons.download_outlined,
+                                size: 16,
+                              ),
+                        label: Text(_downloading ? 'Downloading…' : 'Download'),
+                      )
+                    : null,
               )
             : controller != null
             ? InlineVideoPlayer(

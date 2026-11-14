@@ -15,34 +15,11 @@ class RouteResolutionLoadingShell extends StatelessWidget {
     final routeLabel = filesRouteDisplayPath(path);
     final isFileRoute = isLikelyFilePath(path);
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        // Scrolls rather than overflows when the space it is given is short.
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(QuarkIcons.folder_open, size: 48),
-              const SizedBox(height: 16),
-              Text(
-                isFileRoute ? 'Opening file' : 'Opening folder',
-                style: Theme.of(context).textTheme.titleMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                routeLabel,
-                style: Theme.of(context).textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              const QuarkLoader(),
-            ],
-          ),
-        ),
-      ),
+    return EmptyStateWidget(
+      icon: QuarkIcons.folder_open,
+      headline: isFileRoute ? 'Opening file' : 'Opening folder',
+      subtext: routeLabel,
+      action: const QuarkLoader(),
     );
   }
 }

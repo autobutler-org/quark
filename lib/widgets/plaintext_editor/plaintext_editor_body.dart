@@ -44,24 +44,10 @@ class PlaintextEditorBody extends StatelessWidget {
           onRetry: onRetry,
         );
       }
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              QuarkIcons.error_outline,
-              size: 48,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              Errors.message(error, 'load the file'),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
-        ),
+      return EmptyStateWidget(
+        icon: QuarkIcons.error_outline,
+        headline: Errors.message(error, 'load the file'),
+        action: FilledButton(onPressed: onRetry, child: const Text('Retry')),
       );
     }
 
