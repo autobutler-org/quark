@@ -3435,6 +3435,39 @@ final List<GalleryEntry> registry = [
   ),
 
   GalleryEntry(
+    name: 'QuarkPasswordField',
+    group: 'Core',
+    build: (context, log) => Column(
+      spacing: 12,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        QuarkPasswordField(
+          key: const ValueKey('sign_in_password'),
+          labelText: 'Password',
+          helperText: 'At least 8 characters',
+          showLockIcon: true,
+          onChanged: (_) => log('QuarkPasswordField.onChanged'),
+          onSubmitted: (_) => log('QuarkPasswordField.onSubmitted'),
+        ),
+        QuarkPasswordField(
+          key: const ValueKey('vault_entry_password'),
+          labelText: 'Password',
+          visibilityKey: const ValueKey('vault_entry_reveal'),
+          trailingBuilder: (context, reveal) => IconButton(
+            key: const ValueKey('vault_entry_generate'),
+            icon: const Icon(QuarkIcons.casino),
+            tooltip: 'Generate password',
+            onPressed: () {
+              log('QuarkPasswordField.trailingBuilder (generate)');
+              reveal();
+            },
+          ),
+        ),
+      ],
+    ),
+  ),
+
+  GalleryEntry(
     name: 'QuarkSearchField',
     group: 'Core',
     build: (context, log) => Column(

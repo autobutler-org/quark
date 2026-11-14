@@ -50,8 +50,6 @@ class _SetupPageState extends State<SetupPage> {
   final _confirmFocus = FocusNode();
 
   bool _loading = false;
-  bool _obscurePassword = true;
-  bool _obscureConfirm = true;
   String? _error;
 
   /// Set when the status check or the account creation could not reach the
@@ -216,15 +214,8 @@ class _SetupPageState extends State<SetupPage> {
                         usernameFocus: _usernameFocus,
                         passwordFocus: _passwordFocus,
                         confirmFocus: _confirmFocus,
-                        obscurePassword: _obscurePassword,
-                        obscureConfirm: _obscureConfirm,
                         loading: _loading,
                         error: _error,
-                        onTogglePassword: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
-                        onToggleConfirm: () =>
-                            setState(() => _obscureConfirm = !_obscureConfirm),
                         onSubmit: _submit,
                         // The same switcher and banner as the login page, in
                         // the same place: under the heading, above the fields.
