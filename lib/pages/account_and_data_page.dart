@@ -43,7 +43,6 @@ class _AccountAndDataPageState extends State<AccountAndDataPage> {
 
   @override
   Widget build(BuildContext context) {
-    final error = Theme.of(context).colorScheme.error;
     return Scaffold(
       key: const ValueKey('account_and_data_page'),
       appBar: ChromeAppBar(title: const Text('Account and data')),
@@ -58,25 +57,18 @@ class _AccountAndDataPageState extends State<AccountAndDataPage> {
             children: [
               QuarkSection(
                 title: 'Account',
-                child: Card(
-                  child: ListTile(
-                    key: const ValueKey('settings_delete_account'),
-                    leading: Icon(
-                      QuarkIcons.delete_forever_outlined,
-                      color: error,
-                    ),
-                    title: Text(
-                      'Delete account',
-                      style: TextStyle(color: error),
-                    ),
-                    // Names what it leaves alone, so it cannot be read as the
-                    // wider action a section below (#2479).
-                    subtitle: const Text(
-                      'Removes only your account, permanently. Your files and '
-                      'other accounts stay on this Quark',
-                    ),
-                    onTap: _accountActions.isWorking ? null : _deleteAccount,
+                child: SettingsRow(
+                  key: const ValueKey('settings_delete_account'),
+                  destructive: true,
+                  leading: const Icon(QuarkIcons.delete_forever_outlined),
+                  title: const Text('Delete account'),
+                  // Names what it leaves alone, so it cannot be read as the
+                  // wider action a section below (#2479).
+                  subtitle: const Text(
+                    'Removes only your account, permanently. Your files and '
+                    'other accounts stay on this Quark',
                   ),
+                  onTap: _accountActions.isWorking ? null : _deleteAccount,
                 ),
               ),
               // The other intent, kept a section away from the first.
@@ -88,27 +80,23 @@ class _AccountAndDataPageState extends State<AccountAndDataPage> {
                 const SizedBox(height: 24),
                 QuarkSection(
                   title: 'Reset',
-                  child: Card(
-                    child: ListTile(
-                      key: const ValueKey('settings_reset_quark'),
-                      leading: Icon(QuarkIcons.restart, color: error),
-                      title: Text(
-                        'Reset this Quark',
-                        style: TextStyle(color: error),
-                      ),
-                      // Says what the dialog will ask rather than promising
-                      // the widest possible wipe: attached drives are left
-                      // alone unless the user asks for them (#2052), and the
-                      // box that asks is named so they know where to look
-                      // (#2479).
-                      subtitle: const Text(
-                        'Erases every account, not just yours, and returns '
-                        'this Quark to first-boot setup. The next step lists '
-                        'what it erases; attached drives are left alone '
-                        'unless you check “$kResetQuarkDevicesLabel” there',
-                      ),
-                      onTap: _accountActions.isWorking ? null : _resetQuark,
+                  child: SettingsRow(
+                    key: const ValueKey('settings_reset_quark'),
+                    destructive: true,
+                    leading: const Icon(QuarkIcons.restart),
+                    title: const Text('Reset this Quark'),
+                    // Says what the dialog will ask rather than promising
+                    // the widest possible wipe: attached drives are left
+                    // alone unless the user asks for them (#2052), and the
+                    // box that asks is named so they know where to look
+                    // (#2479).
+                    subtitle: const Text(
+                      'Erases every account, not just yours, and returns '
+                      'this Quark to first-boot setup. The next step lists '
+                      'what it erases; attached drives are left alone '
+                      'unless you check “$kResetQuarkDevicesLabel” there',
                     ),
+                    onTap: _accountActions.isWorking ? null : _resetQuark,
                   ),
                 ),
               ],

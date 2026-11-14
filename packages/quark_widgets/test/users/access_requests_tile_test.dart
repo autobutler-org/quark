@@ -18,7 +18,7 @@ void main() {
     );
 
     expect(find.text('Allow account requests'), findsOneWidget);
-    final tile = tester.widget<SwitchListTile>(
+    final tile = tester.widget<SettingsRow>(
       find.byKey(const ValueKey('access_requests_toggle')),
     );
     expect(tile.value, isTrue);
@@ -110,7 +110,7 @@ void main() {
   testWidgets('no callback disables the switch', (tester) async {
     await pumpAt(tester, const AccessRequestsTile(enabled: true));
 
-    final tile = tester.widget<SwitchListTile>(
+    final tile = tester.widget<SettingsRow>(
       find.byKey(const ValueKey('access_requests_toggle')),
     );
     expect(tile.onChanged, isNull);

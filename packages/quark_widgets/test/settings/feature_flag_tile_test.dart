@@ -37,7 +37,7 @@ void main() {
         find.text('Hides the feature; stored data is kept.'),
         findsOneWidget,
       );
-      expect(tester.widget<SwitchListTile>(find.byKey(_key)).value, enabled);
+      expect(tester.widget<SettingsRow>(find.byKey(_key)).value, enabled);
 
       await tester.tap(find.byKey(_key));
       await tester.pump();
@@ -55,7 +55,7 @@ void main() {
     await tester.pump();
 
     expect(changes, isEmpty);
-    expect(tester.widget<SwitchListTile>(find.byKey(_key)).onChanged, isNull);
+    expect(tester.widget<SettingsRow>(find.byKey(_key)).onChanged, isNull);
   });
 
   testWidgets('shows the beta badge next to the label', (tester) async {
@@ -77,7 +77,7 @@ void main() {
 
   testWidgets('no callback disables the switch', (tester) async {
     await pumpAt(tester, _tile());
-    expect(tester.widget<SwitchListTile>(find.byKey(_key)).onChanged, isNull);
+    expect(tester.widget<SettingsRow>(find.byKey(_key)).onChanged, isNull);
   });
 
   for (final (label, brightness, tokens) in [

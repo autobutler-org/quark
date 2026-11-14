@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/quark_tint_badge.dart';
 import '../theme/quark_tokens.dart';
+import 'settings_row.dart';
 
 /// The switch for one beta feature flag: its label with a [QuarkTintBadge.beta],
 /// what turning it off does, and whether it is on.
@@ -58,9 +59,9 @@ class FeatureFlagTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
 
-    return SwitchListTile(
+    return SettingsRow.toggle(
       key: ValueKey('feature_flag_tile_$flagKey'),
-      contentPadding: EdgeInsets.zero,
+      flush: true,
       title: Row(
         spacing: tokens.spacingSm,
         children: [

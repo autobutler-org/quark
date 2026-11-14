@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The Account tab of Settings (#2350): the [profile] card (#2419), a
 /// prompt to make a new recovery phrase while the account's is short (#3183), a
@@ -123,68 +124,61 @@ class SettingsAccountTab extends StatelessWidget {
             ),
             const SizedBox(height: 16),
           ],
-          Card(
-            child: Tooltip(
-              message: 'Change the password you sign in with',
-              child: ListTile(
-                key: const ValueKey('settings_account_change_password'),
-                leading: const Icon(QuarkIcons.lock_outline),
-                title: const Text('Change password'),
-                trailing: const Icon(QuarkIcons.chevron_right),
-                onTap: onChangePassword,
-              ),
+          Tooltip(
+            message: 'Change the password you sign in with',
+            child: SettingsRow(
+              key: const ValueKey('settings_account_change_password'),
+              leading: const Icon(QuarkIcons.lock_outline),
+              title: const Text('Change password'),
+              chevron: true,
+              onTap: onChangePassword,
             ),
           ),
           const SizedBox(height: 16),
-          Card(
-            child: ListTile(
-              leading: const Icon(QuarkIcons.logout),
-              title: const Text('Sign out'),
-              onTap: onSignOut,
-            ),
+          SettingsRow(
+            leading: const Icon(QuarkIcons.logout),
+            title: const Text('Sign out'),
+            onTap: onSignOut,
           ),
           if (sessions != null) ...[const SizedBox(height: 16), sessions!],
           const SizedBox(height: 16),
-          Card(
-            child: isAdmin
-                ? ListTile(
-                    key: const ValueKey('settings_account_users'),
-                    leading: const Icon(QuarkIcons.group_outlined),
-                    title: const Text('Users and groups'),
-                    subtitle: const Text(
-                      'Add accounts, approve requests and manage groups',
-                    ),
-                    trailing: const Icon(QuarkIcons.chevron_right),
-                    onTap: onOpenUsers,
-                  )
-                : const ListTile(
-                    key: ValueKey('settings_account_admin_note'),
-                    leading: Icon(QuarkIcons.info_outline),
-                    title: Text('Accounts are managed by an admin'),
-                    subtitle: Text(
-                      'An admin of this Quark adds accounts and groups and '
-                      'decides who else is an admin. Ask one for a new '
-                      'account or a change to yours.',
-                    ),
-                  ),
-          ),
+          if (isAdmin)
+            SettingsRow(
+              key: const ValueKey('settings_account_users'),
+              leading: const Icon(QuarkIcons.group_outlined),
+              title: const Text('Users and groups'),
+              subtitle: const Text(
+                'Add accounts, approve requests and manage groups',
+              ),
+              chevron: true,
+              onTap: onOpenUsers,
+            )
+          else
+            const SettingsRow(
+              key: ValueKey('settings_account_admin_note'),
+              leading: Icon(QuarkIcons.info_outline),
+              title: Text('Accounts are managed by an admin'),
+              subtitle: Text(
+                'An admin of this Quark adds accounts and groups and '
+                'decides who else is an admin. Ask one for a new '
+                'account or a change to yours.',
+              ),
+            ),
           // Kept well clear of Sign out, so a mis-tap cannot reach it.
           const SizedBox(height: 32),
           const Divider(),
           const SizedBox(height: 16),
-          Card(
-            child: ListTile(
-              key: const ValueKey('settings_account_and_data'),
-              leading: const Icon(QuarkIcons.person_outline),
-              title: const Text('Account and data'),
-              subtitle: Text(
-                isAdmin
-                    ? 'Delete your account or reset this Quark'
-                    : 'Delete your account',
-              ),
-              trailing: const Icon(QuarkIcons.chevron_right),
-              onTap: onOpenAccountAndData,
+          SettingsRow(
+            key: const ValueKey('settings_account_and_data'),
+            leading: const Icon(QuarkIcons.person_outline),
+            title: const Text('Account and data'),
+            subtitle: Text(
+              isAdmin
+                  ? 'Delete your account or reset this Quark'
+                  : 'Delete your account',
             ),
+            chevron: true,
+            onTap: onOpenAccountAndData,
           ),
         ],
       ],

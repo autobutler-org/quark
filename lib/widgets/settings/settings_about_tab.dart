@@ -98,26 +98,22 @@ class SettingsAboutTab extends StatelessWidget {
             children: [
               const HelpSupportCard(),
               const SizedBox(height: 16),
-              Card(
-                child: ListTile(
-                  leading: const Icon(QuarkIcons.gavel_outlined),
-                  title: const Text('Terms of Service'),
-                  trailing: const Icon(QuarkIcons.chevron_right),
-                  onTap: onOpenTerms,
-                ),
+              SettingsRow(
+                leading: const Icon(QuarkIcons.gavel_outlined),
+                title: const Text('Terms of Service'),
+                chevron: true,
+                onTap: onOpenTerms,
               ),
               const SizedBox(height: 8),
-              Card(
-                child: ListTile(
-                  key: const ValueKey('settings_api_explorer'),
-                  leading: const Icon(QuarkIcons.api),
-                  title: const Text('API Explorer'),
-                  subtitle: const Text(
-                    "Browse and call this Quark's API as yourself",
-                  ),
-                  trailing: const Icon(QuarkIcons.chevron_right),
-                  onTap: onOpenApiExplorer,
+              SettingsRow(
+                key: const ValueKey('settings_api_explorer'),
+                leading: const Icon(QuarkIcons.api),
+                title: const Text('API Explorer'),
+                subtitle: const Text(
+                  "Browse and call this Quark's API as yourself",
                 ),
+                chevron: true,
+                onTap: onOpenApiExplorer,
               ),
             ],
           ),

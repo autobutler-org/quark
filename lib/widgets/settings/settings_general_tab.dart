@@ -153,30 +153,26 @@ class SettingsGeneralTab extends StatelessWidget {
                 ),
               ),
               if (onHighContrastChanged != null)
-                Card(
-                  child: SwitchListTile(
-                    key: const ValueKey('settings_high_contrast'),
-                    title: const Text('High contrast'),
-                    subtitle: const Text(
-                      'Stronger colors and bolder outlines, so text and '
-                      'buttons are easier to see.',
-                    ),
-                    value: highContrast,
-                    onChanged: onHighContrastChanged,
+                SettingsRow.toggle(
+                  key: const ValueKey('settings_high_contrast'),
+                  title: const Text('High contrast'),
+                  subtitle: const Text(
+                    'Stronger colors and bolder outlines, so text and '
+                    'buttons are easier to see.',
                   ),
+                  value: highContrast,
+                  onChanged: onHighContrastChanged,
                 ),
               if (onLeftHandedChanged != null)
-                Card(
-                  child: SwitchListTile(
-                    key: const ValueKey('settings_left_handed'),
-                    title: const Text('Left-handed mode'),
-                    subtitle: const Text(
-                      'Moves the menu button and the menu to the right, and '
-                      'floating buttons to the left.',
-                    ),
-                    value: leftHanded,
-                    onChanged: onLeftHandedChanged,
+                SettingsRow.toggle(
+                  key: const ValueKey('settings_left_handed'),
+                  title: const Text('Left-handed mode'),
+                  subtitle: const Text(
+                    'Moves the menu button and the menu to the right, and '
+                    'floating buttons to the left.',
                   ),
+                  value: leftHanded,
+                  onChanged: onLeftHandedChanged,
                 ),
             ],
           ),
@@ -246,30 +242,26 @@ class SettingsGeneralTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        Card(
-          child: SwitchListTile(
-            title: const Text('Demo mode'),
-            subtitle: const Text(
-              'Shows bundled sample photos and albums instead of your '
-              'library. Your real files are not affected.',
-            ),
-            value: demoMode,
-            onChanged: onDemoModeChanged,
+        SettingsRow.toggle(
+          title: const Text('Demo mode'),
+          subtitle: const Text(
+            'Shows bundled sample photos and albums instead of your '
+            'library. Your real files are not affected.',
           ),
+          value: demoMode,
+          onChanged: onDemoModeChanged,
         ),
         // Drives are viewed, mounted and renamed on their own page; Settings
         // kept a second copy of that list until #2350.
         if (onOpenStorage != null) ...[
           const SizedBox(height: 16),
-          Card(
-            child: ListTile(
-              key: const ValueKey('settings_open_storage'),
-              leading: const Icon(QuarkIcons.storage),
-              title: const Text('Storage devices'),
-              subtitle: const Text('View, mount and rename drives'),
-              trailing: const Icon(QuarkIcons.chevron_right),
-              onTap: onOpenStorage,
-            ),
+          SettingsRow(
+            key: const ValueKey('settings_open_storage'),
+            leading: const Icon(QuarkIcons.storage),
+            title: const Text('Storage devices'),
+            subtitle: const Text('View, mount and rename drives'),
+            chevron: true,
+            onTap: onOpenStorage,
           ),
         ],
       ],
