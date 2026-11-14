@@ -801,6 +801,41 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkChoiceMenu',
+    group: 'Layout',
+    build: (context, log) => Wrap(
+      spacing: 8,
+      children: [
+        QuarkChoiceMenu<String>(
+          keyPrefix: 'gallery_choice_unit',
+          icon: QuarkIcons.straighten_outlined,
+          label: 'Units: mm',
+          tooltip: 'Units the file is in',
+          options: const [
+            (id: 'mm', label: 'Millimeters', value: 'mm'),
+            (id: 'in', label: 'Inches', value: 'in'),
+          ],
+          selected: 'mm',
+          onChanged: (v) => log('QuarkChoiceMenu(Units).onChanged($v)'),
+        ),
+        QuarkChoiceMenu<String?>(
+          keyPrefix: 'gallery_choice_keep',
+          icon: QuarkIcons.image_outlined,
+          label: 'Keep: HEIC',
+          tooltip: 'Keep format (active)',
+          options: const [
+            (id: 'any', label: 'Any', value: null),
+            (id: 'HEIC', label: 'HEIC', value: 'HEIC'),
+            (id: 'JPEG', label: 'JPEG', value: 'JPEG'),
+          ],
+          selected: 'HEIC',
+          active: true,
+          onChanged: (v) => log('QuarkChoiceMenu(Keep).onChanged($v)'),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkChrome',
     group: 'Layout',
     build: (context, log) {

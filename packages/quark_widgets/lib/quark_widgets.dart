@@ -98,6 +98,7 @@ export 'src/layout/quark_bar_icon_button.dart';
 export 'src/layout/quark_bar_segmented_toggle.dart';
 export 'src/layout/quark_bar_split_chip.dart';
 export 'src/layout/quark_brand_button.dart';
+export 'src/layout/quark_choice_menu.dart';
 export 'src/layout/quark_chrome.dart';
 export 'src/layout/quark_checkerboard.dart';
 export 'src/layout/quark_drawer.dart';
