@@ -19,12 +19,8 @@ class SetupForm extends StatefulWidget {
   final FocusNode usernameFocus;
   final FocusNode passwordFocus;
   final FocusNode confirmFocus;
-  final bool obscurePassword;
-  final bool obscureConfirm;
   final bool loading;
   final String? error;
-  final VoidCallback onTogglePassword;
-  final VoidCallback onToggleConfirm;
   final VoidCallback onSubmit;
 
   /// The heading.
@@ -49,12 +45,8 @@ class SetupForm extends StatefulWidget {
     required this.usernameFocus,
     required this.passwordFocus,
     required this.confirmFocus,
-    required this.obscurePassword,
-    required this.obscureConfirm,
     required this.loading,
     required this.error,
-    required this.onTogglePassword,
-    required this.onToggleConfirm,
     required this.onSubmit,
     this.title = 'Set up your quark',
     this.subtitle =
@@ -171,30 +163,15 @@ class _SetupFormState extends State<SetupForm> {
                 ),
                 const SizedBox(height: 16),
 
-                TextFormField(
+                QuarkPasswordField(
                   controller: widget.passwordController,
                   focusNode: widget.passwordFocus,
-                  obscureText: widget.obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    helperText: 'At least 8 characters',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(QuarkIcons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        widget.obscurePassword
-                            ? QuarkIcons.visibility
-                            : QuarkIcons.visibility_off,
-                      ),
-                      tooltip: widget.obscurePassword
-                          ? 'Show password'
-                          : 'Hide password',
-                      onPressed: widget.onTogglePassword,
-                    ),
-                  ),
+                  labelText: 'Password',
+                  helperText: 'At least 8 characters',
+                  showLockIcon: true,
                   textInputAction: TextInputAction.next,
                   autofillHints: const [AutofillHints.newPassword],
-                  onFieldSubmitted: (_) {
+                  onSubmitted: (_) {
                     FocusScope.of(context).requestFocus(widget.confirmFocus);
                   },
                   autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -215,31 +192,15 @@ class _SetupFormState extends State<SetupForm> {
                 ),
                 const SizedBox(height: 8),
 
-                TextFormField(
-                  key: _confirmFieldKey,
+                QuarkPasswordField(
+                  formFieldKey: _confirmFieldKey,
                   controller: widget.confirmController,
                   focusNode: widget.confirmFocus,
-                  obscureText: widget.obscureConfirm,
-                  decoration: InputDecoration(
-                    labelText: 'Confirm password',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(QuarkIcons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        widget.obscureConfirm
-                            ? QuarkIcons.visibility
-                            : QuarkIcons.visibility_off,
-                      ),
-                      tooltip: widget.obscureConfirm
-                          ? 'Show password'
-                          : 'Hide password',
-                      onPressed: widget.onToggleConfirm,
-                    ),
-                  ),
+                  labelText: 'Confirm password',
+                  showLockIcon: true,
                   textInputAction: TextInputAction.done,
                   autofillHints: const [AutofillHints.newPassword],
-                  onFieldSubmitted: (_) =>
-                      widget.loading ? null : widget.onSubmit(),
+                  onSubmitted: (_) => widget.loading ? null : widget.onSubmit(),
                   autovalidateMode: AutovalidateMode.onUserInteraction,
                   validator: (v) {
                     if (v == null || v.isEmpty) {

@@ -68,12 +68,8 @@ void main() {
               usernameFocus: focus[0],
               passwordFocus: focus[1],
               confirmFocus: focus[2],
-              obscurePassword: true,
-              obscureConfirm: true,
               loading: false,
               error: null,
-              onTogglePassword: () {},
-              onToggleConfirm: () {},
               onSubmit: () {
                 if (formKey.currentState!.validate()) {
                   submitted.add(username.text.trim());
@@ -91,12 +87,8 @@ void main() {
               usernameFocus: focus[0],
               passwordFocus: focus[1],
               confirmFocus: focus[2],
-              obscurePassword: true,
-              obscureConfirm: true,
               loading: false,
               error: null,
-              onTogglePassword: () {},
-              onToggleConfirm: () {},
               onSubmit: () {},
             );
 

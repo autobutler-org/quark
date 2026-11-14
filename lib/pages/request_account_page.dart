@@ -31,8 +31,6 @@ class _RequestAccountPageState extends State<RequestAccountPage> {
   final _usernameFocus = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmFocus = FocusNode();
-  bool _obscurePassword = true;
-  bool _obscureConfirm = true;
 
   @override
   void dispose() {
@@ -94,18 +92,10 @@ class _RequestAccountPageState extends State<RequestAccountPage> {
                             usernameFocus: _usernameFocus,
                             passwordFocus: _passwordFocus,
                             confirmFocus: _confirmFocus,
-                            obscurePassword: _obscurePassword,
-                            obscureConfirm: _obscureConfirm,
                             loading: c.isSubmitting,
                             error: error == null
                                 ? null
                                 : Errors.message(error, 'send the request'),
-                            onTogglePassword: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            ),
-                            onToggleConfirm: () => setState(
-                              () => _obscureConfirm = !_obscureConfirm,
-                            ),
                             onSubmit: _submit,
                           ),
                           const SizedBox(height: 12),

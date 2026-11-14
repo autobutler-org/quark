@@ -37,8 +37,6 @@ class _RecoverPageState extends State<RecoverPage> {
   final _confirmController = TextEditingController();
 
   bool _loading = false;
-  bool _obscurePassword = true;
-  bool _obscureConfirm = true;
   String? _error;
 
   /// The new phrase a recovery gave the account, shown until acknowledged.
@@ -225,33 +223,11 @@ class _RecoverPageState extends State<RecoverPage> {
                                   ),
                                   const SizedBox(height: 16),
 
-                                  TextFormField(
+                                  QuarkPasswordField(
                                     controller: _passwordController,
-                                    obscureText: _obscurePassword,
-                                    decoration: InputDecoration(
-                                      labelText: 'New password',
-                                      helperText: 'At least 8 characters',
-                                      border: const OutlineInputBorder(),
-                                      prefixIcon: const Icon(
-                                        QuarkIcons.lock_outline,
-                                      ),
-                                      suffixIcon: IconButton(
-                                        icon: Icon(
-                                          _obscurePassword
-                                              ? QuarkIcons.visibility
-                                              : QuarkIcons.visibility_off,
-                                        ),
-                                        tooltip: _obscurePassword
-                                            ? 'Show password'
-                                            : 'Hide password',
-                                        onPressed: () {
-                                          setState(
-                                            () => _obscurePassword =
-                                                !_obscurePassword,
-                                          );
-                                        },
-                                      ),
-                                    ),
+                                    labelText: 'New password',
+                                    helperText: 'At least 8 characters',
+                                    showLockIcon: true,
                                     textInputAction: TextInputAction.next,
                                     autofillHints: const [
                                       AutofillHints.newPassword,
@@ -282,37 +258,15 @@ class _RecoverPageState extends State<RecoverPage> {
                                   ),
                                   const SizedBox(height: 8),
 
-                                  TextFormField(
+                                  QuarkPasswordField(
                                     controller: _confirmController,
-                                    obscureText: _obscureConfirm,
-                                    decoration: InputDecoration(
-                                      labelText: 'Confirm new password',
-                                      border: const OutlineInputBorder(),
-                                      prefixIcon: const Icon(
-                                        QuarkIcons.lock_outline,
-                                      ),
-                                      suffixIcon: IconButton(
-                                        icon: Icon(
-                                          _obscureConfirm
-                                              ? QuarkIcons.visibility
-                                              : QuarkIcons.visibility_off,
-                                        ),
-                                        tooltip: _obscureConfirm
-                                            ? 'Show password'
-                                            : 'Hide password',
-                                        onPressed: () {
-                                          setState(
-                                            () => _obscureConfirm =
-                                                !_obscureConfirm,
-                                          );
-                                        },
-                                      ),
-                                    ),
+                                    labelText: 'Confirm new password',
+                                    showLockIcon: true,
                                     textInputAction: TextInputAction.done,
                                     autofillHints: const [
                                       AutofillHints.newPassword,
                                     ],
-                                    onFieldSubmitted: (_) =>
+                                    onSubmitted: (_) =>
                                         _loading ? null : _submit(),
                                     validator: (v) {
                                       if (v == null || v.isEmpty) {

@@ -56,7 +56,6 @@ class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
   final _actionsKey = GlobalKey();
 
   bool _loading = false;
-  bool _obscurePassword = true;
   String? _error;
 
   /// Set when the status check or the last sign-in attempt never reached the
@@ -344,7 +343,6 @@ class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
                         passwordController: _passwordController,
                         usernameFocus: _usernameFocus,
                         passwordFocus: _passwordFocus,
-                        obscurePassword: _obscurePassword,
                         loading: _loading,
                         disconnected: _retry != null,
                         onRetry: _retry,
@@ -355,9 +353,6 @@ class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
                             setState(() => _managingHosts = !_managingHosts),
                         onHostsChanged: () {
                           if (mounted) setState(() {});
-                        },
-                        onTogglePassword: () {
-                          setState(() => _obscurePassword = !_obscurePassword);
                         },
                         onSubmit: _submit,
                         onForgotPassword: _goToRecover,

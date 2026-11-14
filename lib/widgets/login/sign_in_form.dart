@@ -12,7 +12,6 @@ class SignInForm extends StatelessWidget {
   final TextEditingController passwordController;
   final FocusNode usernameFocus;
   final FocusNode passwordFocus;
-  final bool obscurePassword;
   final bool loading;
   final bool disconnected;
   final String? error;
@@ -25,7 +24,6 @@ class SignInForm extends StatelessWidget {
   final bool managingHosts;
   final VoidCallback onToggleManagingHosts;
   final VoidCallback onHostsChanged;
-  final VoidCallback onTogglePassword;
   final VoidCallback onSubmit;
 
   /// Repeats whatever found the Quark unreachable — the status check or the
@@ -70,7 +68,6 @@ class SignInForm extends StatelessWidget {
     required this.passwordController,
     required this.usernameFocus,
     required this.passwordFocus,
-    required this.obscurePassword,
     required this.loading,
     required this.disconnected,
     required this.error,
@@ -78,7 +75,6 @@ class SignInForm extends StatelessWidget {
     required this.managingHosts,
     required this.onToggleManagingHosts,
     required this.onHostsChanged,
-    required this.onTogglePassword,
     required this.onSubmit,
     this.onRetry,
     required this.onForgotPassword,
@@ -186,30 +182,14 @@ class SignInForm extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-                TextFormField(
+                QuarkPasswordField(
                   controller: passwordController,
                   focusNode: passwordFocus,
-                  obscureText: obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(QuarkIcons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        obscurePassword
-                            ? QuarkIcons.visibility
-                            : QuarkIcons.visibility_off,
-                      ),
-                      tooltip: obscurePassword
-                          ? 'Show password'
-                          : 'Hide password',
-                      onPressed: onTogglePassword,
-                    ),
-                  ),
+                  labelText: 'Password',
+                  showLockIcon: true,
                   onTap: onFieldTap,
                   textInputAction: TextInputAction.done,
-                  autofillHints: const [AutofillHints.password],
-                  onFieldSubmitted: (_) => loading ? null : onSubmit(),
+                  onSubmitted: (_) => loading ? null : onSubmit(),
                   autovalidateMode: AutovalidateMode.onUserInteraction,
                   validator: (v) =>
                       (v == null || v.isEmpty) ? 'Password is required' : null,

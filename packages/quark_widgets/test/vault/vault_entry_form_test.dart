@@ -107,7 +107,12 @@ void main() {
     expect(find.text('Generated#1'), findsOneWidget);
     expect(
       tester
-          .widget<TextField>(find.byKey(const ValueKey('vault_entry_password')))
+          .widget<TextField>(
+            find.descendant(
+              of: find.byKey(const ValueKey('vault_entry_password')),
+              matching: find.byType(TextField),
+            ),
+          )
           .obscureText,
       isFalse,
     );

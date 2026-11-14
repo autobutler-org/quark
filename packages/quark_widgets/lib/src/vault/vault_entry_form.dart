@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../core/quark_loader.dart';
+import '../core/quark_password_field.dart';
 import '../models/vault_entry_item.dart';
 import '../theme/quark_tokens.dart';
 
@@ -83,7 +84,6 @@ class _VaultEntryFormState extends State<VaultEntryForm> {
       widget.folders.any((f) => f.id == widget.initial.folderId)
       ? widget.initial.folderId
       : null;
-  bool _showPassword = false;
 
   @override
   void dispose() {
@@ -158,39 +158,20 @@ class _VaultEntryFormState extends State<VaultEntryForm> {
             ),
           ),
           gap,
-          TextField(
+          QuarkPasswordField(
             key: const ValueKey('vault_entry_password'),
             controller: _password,
-            obscureText: !_showPassword,
-            autocorrect: false,
-            decoration: InputDecoration(
-              labelText: 'Password',
-              border: const OutlineInputBorder(),
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    key: const ValueKey('vault_entry_reveal'),
-                    icon: Icon(
-                      _showPassword
-                          ? QuarkIcons.visibility_off
-                          : QuarkIcons.visibility,
-                    ),
-                    tooltip: _showPassword ? 'Hide password' : 'Show password',
-                    onPressed: () =>
-                        setState(() => _showPassword = !_showPassword),
-                  ),
-                  IconButton(
-                    key: const ValueKey('vault_entry_generate'),
-                    icon: const Icon(QuarkIcons.casino),
-                    tooltip: 'Generate password',
-                    onPressed: () => setState(() {
-                      _password.text = widget.onGeneratePassword();
-                      _showPassword = true;
-                    }),
-                  ),
-                ],
-              ),
+            labelText: 'Password',
+            autofillHints: const [],
+            visibilityKey: const ValueKey('vault_entry_reveal'),
+            trailingBuilder: (context, reveal) => IconButton(
+              key: const ValueKey('vault_entry_generate'),
+              icon: const Icon(QuarkIcons.casino),
+              tooltip: 'Generate password',
+              onPressed: () {
+                _password.text = widget.onGeneratePassword();
+                reveal();
+              },
             ),
           ),
           gap,

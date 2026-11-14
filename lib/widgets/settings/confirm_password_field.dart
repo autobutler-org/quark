@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:quark/utils/quark_widget.dart';
-import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The password a destructive account action asks for before it runs (#2346).
 ///
@@ -19,7 +18,7 @@ import 'package:quark_icons/quark_icons.dart';
 ///   onSubmitted: (_) => submit(),
 /// )
 /// ```
-class ConfirmPasswordField extends StatefulWidget {
+class ConfirmPasswordField extends StatelessWidget {
   /// Creates a password field whose keys start with [keyPrefix].
   const ConfirmPasswordField({
     required this.keyPrefix,
@@ -42,33 +41,15 @@ class ConfirmPasswordField extends StatefulWidget {
   final ValueChanged<String> onSubmitted;
 
   @override
-  State<ConfirmPasswordField> createState() => _ConfirmPasswordFieldState();
-}
-
-class _ConfirmPasswordFieldState extends State<ConfirmPasswordField> {
-  bool _obscured = true;
-
-  @override
   Widget build(BuildContext context) {
-    return QuarkWidget.textField(
-      key: ValueKey('${widget.keyPrefix}_password_field'),
-      controller: widget.controller,
+    return QuarkPasswordField(
+      key: ValueKey('${keyPrefix}_password_field'),
+      controller: controller,
       autofocus: true,
-      obscureText: _obscured,
-      autocorrect: false,
-      enableSuggestions: false,
-      autofillHints: const [AutofillHints.password],
       hintText: 'Password',
-      onChanged: widget.onChanged,
-      onSubmitted: widget.onSubmitted,
-      suffix: IconButton(
-        key: ValueKey('${widget.keyPrefix}_password_visibility'),
-        icon: Icon(
-          _obscured ? QuarkIcons.visibility : QuarkIcons.visibility_off,
-        ),
-        tooltip: _obscured ? 'Show password' : 'Hide password',
-        onPressed: () => setState(() => _obscured = !_obscured),
-      ),
+      visibilityKey: ValueKey('${keyPrefix}_password_visibility'),
+      onChanged: onChanged,
+      onSubmitted: onSubmitted,
     );
   }
 }

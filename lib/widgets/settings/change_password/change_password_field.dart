@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:quark/utils/quark_widget.dart';
-import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// One of the change-password dialog's three password fields (#3022), and
 /// the new-recovery-phrase dialog's one (#3183).
@@ -23,7 +22,7 @@ import 'package:quark_icons/quark_icons.dart';
 ///   onSubmitted: (_) => submit(),
 /// )
 /// ```
-class ChangePasswordField extends StatefulWidget {
+class ChangePasswordField extends StatelessWidget {
   /// Creates a password field whose keys start with [keyPrefix].
   const ChangePasswordField({
     required this.keyPrefix,
@@ -62,35 +61,18 @@ class ChangePasswordField extends StatefulWidget {
   final bool autofocus;
 
   @override
-  State<ChangePasswordField> createState() => _ChangePasswordFieldState();
-}
-
-class _ChangePasswordFieldState extends State<ChangePasswordField> {
-  bool _obscured = true;
-
-  @override
   Widget build(BuildContext context) {
-    final label = widget.label.toLowerCase();
-    return QuarkWidget.textField(
-      key: ValueKey('${widget.keyPrefix}_field'),
-      controller: widget.controller,
-      autofocus: widget.autofocus,
-      enabled: widget.enabled,
-      obscureText: _obscured,
-      autocorrect: false,
-      enableSuggestions: false,
-      autofillHints: widget.autofillHints,
-      hintText: widget.label,
-      onChanged: widget.onChanged,
-      onSubmitted: widget.onSubmitted,
-      suffix: IconButton(
-        key: ValueKey('${widget.keyPrefix}_visibility'),
-        icon: Icon(
-          _obscured ? QuarkIcons.visibility : QuarkIcons.visibility_off,
-        ),
-        tooltip: _obscured ? 'Show $label' : 'Hide $label',
-        onPressed: () => setState(() => _obscured = !_obscured),
-      ),
+    return QuarkPasswordField(
+      key: ValueKey('${keyPrefix}_field'),
+      controller: controller,
+      autofocus: autofocus,
+      enabled: enabled,
+      autofillHints: autofillHints,
+      hintText: label,
+      visibilityLabel: label.toLowerCase(),
+      visibilityKey: ValueKey('${keyPrefix}_visibility'),
+      onChanged: onChanged,
+      onSubmitted: onSubmitted,
     );
   }
 }
