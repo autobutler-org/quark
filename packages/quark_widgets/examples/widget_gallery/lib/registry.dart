@@ -3158,6 +3158,76 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'RecordListCard',
+    group: 'Settings',
+    build: (context, log) => Column(
+      children: [
+        RecordListCard(
+          title: 'Sessions',
+          subtitle: 'Where your account is signed in',
+          keyPrefix: 'session',
+          actionKey: 'revoke',
+          actionIcon: QuarkIcons.logout,
+          actionTooltip: 'Sign out',
+          records: const [
+            RecordListItem(
+              id: 'current',
+              title: 'This session',
+              subtitle: 'Signed in 3 days ago · last used just now',
+            ),
+            RecordListItem(
+              id: 'phone',
+              title: 'Session',
+              subtitle: 'Signed in last week · last used yesterday',
+            ),
+          ],
+          onAction: (id) => log('RecordListCard.onAction($id)'),
+          footer: TextButton(
+            onPressed: () => log('RecordListCard footer onPressed'),
+            child: const Text('Sign out everywhere else'),
+          ),
+        ),
+        RecordListCard(
+          title: 'Client connections',
+          subtitle: '2 devices',
+          collapsible: true,
+          onRefresh: () => log('RecordListCard.onRefresh()'),
+          emptyText: 'No devices recorded yet',
+          keyPrefix: 'connected_device',
+          actionKey: 'remove',
+          actionIcon: QuarkIcons.delete_outline,
+          actionTooltip: 'Remove from this list',
+          records: const [
+            RecordListItem(
+              id: '1',
+              title: 'This browser',
+              subtitle: 'Chrome on macOS · last active just now',
+              hasAction: false,
+            ),
+            RecordListItem(
+              id: '2',
+              title: 'Safari on iPhone',
+              subtitle: 'Last active 2 hours ago',
+            ),
+          ],
+          onAction: (id) => log('RecordListCard.onAction($id)'),
+        ),
+        RecordListCard(
+          title: 'Sessions',
+          subtitle: 'Where your account is signed in',
+          isLoading: true,
+          error: "Couldn't load your sessions.",
+          keyPrefix: 'loading_session',
+          actionKey: 'revoke',
+          actionIcon: QuarkIcons.logout,
+          actionTooltip: 'Sign out',
+          records: const [],
+          onAction: null,
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'RemoteAccessPanel',
     group: 'Settings',
     build: (context, log) => Column(

@@ -81,63 +81,34 @@ class _SessionsSectionState extends State<SessionsSection> {
       listenable: _controller,
       builder: (context, _) {
         final sessions = _controller.sessions;
-        final error = _controller.error;
-        return Card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const ListTile(
-                title: Text(
-                  'Sessions',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text('Where your account is signed in'),
-              ),
-              if (_controller.isLoading && sessions.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Center(child: QuarkLoader(size: 20)),
-                ),
-              if (error != null)
-                ListTile(
-                  leading: Icon(
-                    QuarkIcons.error_outline,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                  title: Text(error),
-                ),
-              for (final session in sessions)
-                ListTile(
-                  key: ValueKey('session_tile_${session.id}'),
-                  leading: const Icon(QuarkIcons.devices),
-                  title: Text(session.current ? 'This session' : 'Session'),
-                  subtitle: Text(
+        return RecordListCard(
+          title: 'Sessions',
+          subtitle: 'Where your account is signed in',
+          isLoading: _controller.isLoading && sessions.isEmpty,
+          error: _controller.error,
+          keyPrefix: 'session',
+          actionKey: 'revoke',
+          actionIcon: QuarkIcons.logout,
+          actionTooltip: 'Sign out',
+          records: [
+            for (final session in sessions)
+              RecordListItem(
+                id: session.id,
+                title: session.current ? 'This session' : 'Session',
+                subtitle:
                     'Signed in ${formatRelative(session.createdAt)} · '
                     'last used ${formatRelative(session.lastUsedAt)}',
-                  ),
-                  trailing: IconButton(
-                    key: ValueKey('session_revoke_${session.id}'),
-                    icon: const Icon(QuarkIcons.logout),
-                    tooltip: 'Sign out',
-                    onPressed: _controller.isWorking
-                        ? null
-                        : () => _revoke(session),
-                  ),
-                ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: TextButton(
-                    key: const ValueKey('sessions_revoke_others'),
-                    onPressed: _controller.hasOthers && !_controller.isWorking
-                        ? _revokeOthers
-                        : null,
-                    child: const Text('Sign out everywhere else'),
-                  ),
-                ),
               ),
-            ],
+          ],
+          onAction: _controller.isWorking
+              ? null
+              : (id) => _revoke(sessions.firstWhere((s) => s.id == id)),
+          footer: TextButton(
+            key: const ValueKey('sessions_revoke_others'),
+            onPressed: _controller.hasOthers && !_controller.isWorking
+                ? _revokeOthers
+                : null,
+            child: const Text('Sign out everywhere else'),
           ),
         );
       },
