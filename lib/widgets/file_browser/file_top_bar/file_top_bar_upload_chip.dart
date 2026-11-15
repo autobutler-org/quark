@@ -27,13 +27,16 @@ typedef DeviceWriteCallback = void Function({bool chooseDevice});
 /// While an upload runs its menu also offers Show progress, which opens the
 /// Jobs tab with each file's bytes, rate and time left (#3972).
 ///
-/// With [canChooseDevice] the chip is a [QuarkBarSplitChip]: the chip uploads
-/// to the default storage device and its ▾ segment to a device the user
-/// picks (#3194). Where the chip opens the source chooser, the ▾ segment
-/// opens the same chooser, and the source picked there asks for the device.
+/// [canChooseDevice] lets the user pick the storage device instead of the
+/// default (#3194, #4105). With one source the chip is a [QuarkBarSplitChip]:
+/// the chip uploads to the default device and its ▾ segment to a device the
+/// user picks. With a source chooser it is a plain chip with one menu: the
+/// sources upload to the default device, and below a divider a Choose device
+/// submenu holds the same sources, each asking for the device first.
 ///
-/// Probe keys: `file_top_bar_upload`, `file_top_bar_upload_choose`,
-/// `file_top_bar_upload_progress`.
+/// Probe keys: `file_top_bar_upload` (the chip),
+/// `file_top_bar_upload_choose` (the ▾ segment, or the Choose device
+/// submenu), `file_top_bar_upload_progress`.
 class FileTopBarUploadChip extends StatelessWidget {
   const FileTopBarUploadChip({
     required this.isUploading,
@@ -60,7 +63,7 @@ class FileTopBarUploadChip extends StatelessWidget {
   final VoidCallback? onShowUploadProgressPressed;
 
   /// Whether there is more than one device to upload to, which adds the ▾
-  /// segment.
+  /// segment or the Choose device submenu.
   final bool canChooseDevice;
 
   @override
@@ -147,21 +150,25 @@ class FileTopBarUploadChip extends StatelessWidget {
         ),
     ];
 
-    // Two menus on one chip: the plain one uploads to the default device,
-    // the ▾ one asks which device once the source has been picked.
     return MenuAnchor(
       alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
-      menuChildren: sources(chooseDevice: false),
-      builder: (context, plain, _) => MenuAnchor(
-        alignmentOffset: QuarkBarIconButton.menuAnchorOffset,
-        menuChildren: sources(chooseDevice: true),
-        builder: (context, choosing, _) => QuarkBarSplitChip(
-          key: const ValueKey('file_top_bar_upload'),
-          icon: QuarkIcons.upload_rounded,
-          label: label,
-          onPressed: () => toggle(plain),
-          onSecondaryPressed: canChooseDevice ? () => toggle(choosing) : null,
-        ),
+      menuChildren: [
+        ...sources(chooseDevice: false),
+        if (canChooseDevice) ...[
+          const Divider(),
+          QuarkSubmenuButton(
+            key: const ValueKey('file_top_bar_upload_choose'),
+            leadingIcon: const Icon(QuarkIcons.storage),
+            menuChildren: sources(chooseDevice: true),
+            child: const Text('Choose device'),
+          ),
+        ],
+      ],
+      builder: (context, menu, _) => QuarkBarChip(
+        key: const ValueKey('file_top_bar_upload'),
+        icon: QuarkIcons.upload_rounded,
+        label: label,
+        onPressed: () => toggle(menu),
       ),
     );
   }

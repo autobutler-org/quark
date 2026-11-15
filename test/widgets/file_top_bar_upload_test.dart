@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_upload_chip.dart';
 
@@ -268,8 +269,10 @@ void main() {
     expect(files, 0);
   });
 
-  // #3194: the chip uploads to the default device, and its ▾ segment to one
-  // the user picks, from every source.
+  // #3194, #4105: with several sources the chip opens one menu. Its sources
+  // upload to the default device, and its Choose device submenu holds the same
+  // sources, each asking for the device. With one source the chip uploads and
+  // its ▾ segment asks for the device.
   group('choosing a device', () {
     const choose = ValueKey('file_top_bar_upload_choose');
     late List<String> calls;
@@ -304,20 +307,32 @@ void main() {
       );
     }
 
-    Future<void> pick(WidgetTester tester, Finder opener, String item) async {
-      await tester.tap(opener);
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(MenuItemButton, item));
+    Future<void> tapAndSettle(WidgetTester tester, Finder target) async {
+      await tester.tap(target);
       await tester.pumpAndSettle();
     }
 
-    testWidgets('the chip and the ▾ segment open the same sources, and only '
-        'the ▾ one asks for the device', (tester) async {
+    testWidgets('one menu: its sources upload to the default device, and the '
+        'Choose device submenu holds the same sources asking for the '
+        'device', (tester) async {
       await pumpChip(tester);
 
+      // One control, one menu: no ▾ segment beside the chip.
+      expect(find.byType(QuarkBarSplitChip), findsNothing);
+
       for (final item in ['Photos', 'Files', 'Folder']) {
-        await pick(tester, find.text('Upload'), item);
-        await pick(tester, find.byKey(choose), item);
+        await tapAndSettle(tester, find.text('Upload'));
+        expect(find.byKey(choose), findsOneWidget);
+        await tapAndSettle(tester, find.widgetWithText(MenuItemButton, item));
+
+        await tapAndSettle(tester, find.text('Upload'));
+        await tapAndSettle(tester, find.byKey(choose));
+        // The submenu repeats the sources below the top-level ones.
+        expect(find.widgetWithText(MenuItemButton, item), findsNWidgets(2));
+        await tapAndSettle(
+          tester,
+          find.widgetWithText(MenuItemButton, item).last,
+        );
       }
 
       expect(calls, [
@@ -330,6 +345,17 @@ void main() {
       ]);
     });
 
+    testWidgets('with one device the menu has no Choose device submenu', (
+      tester,
+    ) async {
+      await pumpChip(tester, canChooseDevice: false);
+
+      await tapAndSettle(tester, find.text('Upload'));
+
+      expect(find.widgetWithText(MenuItemButton, 'Files'), findsOneWidget);
+      expect(find.byKey(choose), findsNothing);
+    });
+
     testWidgets('with one source the ▾ segment uploads, asking for the '
         'device', (tester) async {
       await pumpChip(tester, sources: false);
@@ -340,8 +366,10 @@ void main() {
       expect(calls, ['files choosing']);
     });
 
-    testWidgets('with one device there is no ▾ segment', (tester) async {
-      await pumpChip(tester, canChooseDevice: false);
+    testWidgets('with one source and one device there is no ▾ segment', (
+      tester,
+    ) async {
+      await pumpChip(tester, sources: false, canChooseDevice: false);
 
       expect(find.byKey(choose), findsNothing);
     });
