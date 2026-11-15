@@ -26,6 +26,20 @@ void main() {
 
   Finder refreshButton() => find.byKey(const ValueKey('refresh_button'));
 
+  // A phone's bar is compact (#4150): no refresh slot and two actions at
+  // most. What a wide bar does with a crowd of actions is checked on a
+  // tablet, the narrowest wide bar, and on a desktop window.
+  const tabletViewport = Size(640, 800);
+  void testWideBars(
+    String description,
+    Future<void> Function(WidgetTester tester, Size size) body,
+  ) {
+    for (final size in const [tabletViewport, wideViewport]) {
+      final label = size == tabletViewport ? 'tablet' : 'wide';
+      testWidgets('$description ($label)', (tester) => body(tester, size));
+    }
+  }
+
   testBothViewports('leads with the brand button and no title', (
     tester,
     size,
@@ -115,7 +129,7 @@ void main() {
     ),
   );
 
-  testBothViewports('never paints an action over the brand or refresh', (
+  testWideBars('never paints an action over the brand or refresh', (
     tester,
     size,
   ) async {
@@ -141,7 +155,7 @@ void main() {
 
   // A page name longer than the brand's slot ends in an ellipsis inside it: the slot,
   // not the name, decides where the actions start.
-  testBothViewports('cuts a long page name short inside its slot', (
+  testWideBars('cuts a long page name short inside its slot', (
     tester,
     size,
   ) async {
@@ -169,7 +183,7 @@ void main() {
   testWidgets('keeps the app-wide controls in view when actions scroll', (
     tester,
   ) async {
-    await pumpAt(tester, crowded(), size: narrowViewport, scaffold: false);
+    await pumpAt(tester, crowded(), size: tabletViewport, scaffold: false);
 
     final bar = tester.getRect(find.byType(AppBar));
     for (final key in const ['app_a', 'app_b']) {
@@ -211,7 +225,7 @@ void main() {
     expect(refreshButton(), findsNothing);
   });
 
-  testBothViewports('sits between the brand button and the actions', (
+  testWideBars('sits between the brand button and the actions', (
     tester,
     size,
   ) async {
@@ -269,10 +283,7 @@ void main() {
     expect(refreshes, 0);
   });
 
-  testBothViewports('renders every action at one glyph size', (
-    tester,
-    size,
-  ) async {
+  testWideBars('renders every action at one glyph size', (tester, size) async {
     await pumpAt(
       tester,
       QuarkAppBarTrailing(
@@ -333,10 +344,7 @@ void main() {
     expect(shape.bottom.color, QuarkTokens.dark.border);
   });
 
-  testBothViewports('fills the space between with its middle', (
-    tester,
-    size,
-  ) async {
+  testWideBars('fills the space between with its middle', (tester, size) async {
     await pumpAt(
       tester,
       Scaffold(
@@ -372,80 +380,151 @@ void main() {
   // #2740: the bar is colored chrome under a derived theme color, so it and
   // everything placed in it draw from the chrome tokens.
   for (final brightness in Brightness.values) {
-    testBothViewports(
-      '${brightness.name}: the bar and its contents are chrome',
-      (tester, size) async {
-        late QuarkTokens seenByAction;
-        await pumpAt(
-          tester,
-          Scaffold(
-            appBar: QuarkAppBar(
-              label: 'Photos',
-              icon: QuarkIcons.photo_library,
-              onRefresh: () {},
-              actions: [
-                Builder(
-                  builder: (context) {
-                    seenByAction = QuarkTokens.of(context);
-                    return const SizedBox.shrink();
-                  },
-                ),
-              ],
-            ),
-            body: const SizedBox.shrink(),
-          ),
-          size: size,
-          brightness: brightness,
-          themeColor: QuarkThemeColor.indigo,
-          scaffold: false,
-        );
-
-        final tokens = QuarkThemeColor.indigo.tokensFor(brightness);
-        final bar = tester.widget<AppBar>(find.byType(AppBar));
-        final material = tester.widget<Material>(
-          find
-              .descendant(
-                of: find.byType(AppBar),
-                matching: find.byType(Material),
-              )
-              .first,
-        );
-        expect(material.color, tokens.chrome);
-        expect((bar.shape! as Border).bottom.color, tokens.chromeBorder);
-        expect(seenByAction, tokens.onChrome);
-
-        // The page name, the brand badge, and the refresh button.
-        expect(
-          tester.widget<Text>(find.text('Photos')).style!.color,
-          tokens.chromeForeground,
-        );
-        final badge = tester.widget<Container>(
-          find
-              .descendant(
-                of: find.byType(QuarkBrandButton),
-                matching: find.byType(Container),
-              )
-              .first,
-        );
-        expect(
-          (badge.decoration! as BoxDecoration).color,
-          tokens.chromePrimary,
-        );
-        final refresh = tester
-            .widget<IconButton>(
-              find.descendant(
-                of: find.byType(RefreshIconButton),
-                matching: find.byType(IconButton),
+    testWideBars('${brightness.name}: the bar and its contents are chrome', (
+      tester,
+      size,
+    ) async {
+      late QuarkTokens seenByAction;
+      await pumpAt(
+        tester,
+        Scaffold(
+          appBar: QuarkAppBar(
+            label: 'Photos',
+            icon: QuarkIcons.photo_library,
+            onRefresh: () {},
+            actions: [
+              Builder(
+                builder: (context) {
+                  seenByAction = QuarkTokens.of(context);
+                  return const SizedBox.shrink();
+                },
               ),
+            ],
+          ),
+          body: const SizedBox.shrink(),
+        ),
+        size: size,
+        brightness: brightness,
+        themeColor: QuarkThemeColor.indigo,
+        scaffold: false,
+      );
+
+      final tokens = QuarkThemeColor.indigo.tokensFor(brightness);
+      final bar = tester.widget<AppBar>(find.byType(AppBar));
+      final material = tester.widget<Material>(
+        find
+            .descendant(
+              of: find.byType(AppBar),
+              matching: find.byType(Material),
             )
-            .style!;
-        expect(
-          refresh.foregroundColor!.resolve({}),
-          tokens.chromeSecondaryForeground,
-        );
-        expect(refresh.side!.resolve({})!.color, tokens.chromeBorder);
-        expect(tester.takeException(), isNull);
-      },
-    );
+            .first,
+      );
+      expect(material.color, tokens.chrome);
+      expect((bar.shape! as Border).bottom.color, tokens.chromeBorder);
+      expect(seenByAction, tokens.onChrome);
+
+      // The page name, the brand badge, and the refresh button.
+      expect(
+        tester.widget<Text>(find.text('Photos')).style!.color,
+        tokens.chromeForeground,
+      );
+      final badge = tester.widget<Container>(
+        find
+            .descendant(
+              of: find.byType(QuarkBrandButton),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      expect((badge.decoration! as BoxDecoration).color, tokens.chromePrimary);
+      final refresh = tester
+          .widget<IconButton>(
+            find.descendant(
+              of: find.byType(RefreshIconButton),
+              matching: find.byType(IconButton),
+            ),
+          )
+          .style!;
+      expect(
+        refresh.foregroundColor!.resolve({}),
+        tokens.chromeSecondaryForeground,
+      );
+      expect(refresh.side!.resolve({})!.color, tokens.chromeBorder);
+      expect(tester.takeException(), isNull);
+    });
   }
+
+  group('compact bar (#4150)', () {
+    testBothViewports('leaves the refresh slot out on a phone', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(tester, page(onRefresh: () {}), size: size, scaffold: false);
+      expect(tester.takeException(), isNull);
+      expect(
+        refreshButton(),
+        size.width < QuarkAppBar.compactBreakpoint
+            ? findsNothing
+            : findsOneWidget,
+      );
+    });
+
+    testWidgets('does not scroll its actions sideways', (tester) async {
+      await pumpAt(
+        tester,
+        page(actions: const [Text('one'), Text('two')]),
+        size: narrowViewport,
+        scaffold: false,
+      );
+      expect(find.byType(QuarkToolbarScroller), findsNothing);
+      expect(find.text('two'), findsOneWidget);
+    });
+
+    testWidgets('refuses more than two actions on a phone', (tester) async {
+      await pumpAt(
+        tester,
+        page(actions: const [Text('one'), Text('two'), Text('three')]),
+        size: narrowViewport,
+        scaffold: false,
+      );
+      expect(tester.takeException(), isAssertionError);
+    });
+
+    testWidgets('takes any number of actions on a wide bar', (tester) async {
+      await pumpAt(
+        tester,
+        page(actions: const [Text('one'), Text('two'), Text('three')]),
+        size: wideViewport,
+        scaffold: false,
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('three'), findsOneWidget);
+    });
+
+    testWidgets('isCompact follows the breakpoint', (tester) async {
+      late bool compact;
+      await pumpAt(
+        tester,
+        Builder(
+          builder: (context) {
+            compact = QuarkAppBar.isCompact(context);
+            return const SizedBox.shrink();
+          },
+        ),
+        size: narrowViewport,
+      );
+      expect(compact, isTrue);
+      await pumpAt(
+        tester,
+        Builder(
+          builder: (context) {
+            compact = QuarkAppBar.isCompact(context);
+            return const SizedBox.shrink();
+          },
+        ),
+        size: wideViewport,
+      );
+      expect(compact, isFalse);
+    });
+  });
 }

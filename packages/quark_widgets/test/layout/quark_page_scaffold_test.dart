@@ -153,10 +153,10 @@ void main() {
     });
   }
 
-  testBothViewports('passes the refresh slot to the default app bar', (
-    tester,
-    size,
-  ) async {
+  // A phone's compact bar leaves the slot out (#4150), so this is the wide
+  // bar's.
+  testWidgets('passes the refresh slot to the default app bar', (tester) async {
+    const size = wideViewport;
     var refreshes = 0;
     await pumpAt(
       tester,
@@ -230,7 +230,15 @@ void main() {
         title: 'Photos ' * 20,
         icon: QuarkIcons.photo_library,
         actions: [
-          for (var i = 0; i < 4; i++)
+          // A phone's bar takes two at most (#4150).
+          for (
+            var i = 0;
+            i <
+                (size.width < QuarkAppBar.compactBreakpoint
+                    ? QuarkAppBar.compactMaxActions
+                    : 4);
+            i++
+          )
             IconButton(
               icon: const Icon(Icons.add),
               tooltip: 'Action $i',

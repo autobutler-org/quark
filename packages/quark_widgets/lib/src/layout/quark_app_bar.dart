@@ -31,6 +31,14 @@ import 'refresh_icon_button.dart';
 /// App-wide controls, such as a running-jobs badge, come from a
 /// [QuarkAppBarTrailing] scope and follow [actions].
 ///
+/// Below [compactBreakpoint], on a phone, the bar is compact (#4150): the
+/// brand button, at most [compactMaxActions] of [actions], and the scope's
+/// single [QuarkAppBarTrailing.compact] control, such as an account button.
+/// The refresh slot is left out, since a phone pulls to refresh, and nothing
+/// scrolls sideways: a page passing more actions than that fails an assert,
+/// so its others belong in a labeled menu. A page that picks its phone
+/// actions asks [isCompact].
+///
 /// Under a left-handed [QuarkHandedness] scope the bar is mirrored (#1812):
 /// the brand button sits against the right edge with the refresh inside it,
 /// and the actions run in from the left. Only the order of the slots flips.
@@ -41,7 +49,7 @@ import 'refresh_icon_button.dart';
 /// page whose bar holds more than buttons (Files' navigation and inline
 /// search). [bottom] adds a second row, usually a [QuarkAppBarBottom].
 ///
-/// On a bar too narrow for every action, the brand button keeps its page
+/// On a wide bar too narrow for every action, the brand button keeps its page
 /// name ([middle] gives way first, when there is one), the
 /// [QuarkAppBarTrailing] controls stay in view, and the page's [actions] that
 /// do not fit scroll sideways in a [QuarkToolbarScroller]. Nothing paints
@@ -58,7 +66,7 @@ import 'refresh_icon_button.dart';
 ///     icon: QuarkIcons.photo_library,
 ///     onRefresh: manualRefresh,
 ///     isRefreshing: isRefreshing,
-///     actions: const [AppThemeToggle()],
+///     actions: [searchButton, selectButton],
 ///   ),
 /// );
 /// ```
@@ -76,6 +84,16 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
   });
 
+  /// The viewport width below which the bar is compact: a phone.
+  static const double compactBreakpoint = 600;
+
+  /// The most page [actions] a compact bar shows.
+  static const int compactMaxActions = 2;
+
+  /// Whether a bar in [context] is compact, below [compactBreakpoint].
+  static bool isCompact(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < compactBreakpoint;
+
   /// The page name shown in the brand button.
   final String label;
 
@@ -83,14 +101,16 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
   final IconData icon;
 
   /// Trailing controls, rendered in order at the end of the bar. Any
-  /// [QuarkAppBarTrailing] scope above adds its controls after these.
+  /// [QuarkAppBarTrailing] scope above adds its controls after these. A
+  /// compact bar takes at most [compactMaxActions] of them.
   ///
   /// Never a refresh button — that is [onRefresh].
   final List<Widget> actions;
 
   /// Reloads the page. Non-null renders the shared [RefreshIconButton] right
   /// after the brand button; null leaves the slot out entirely, which is what
-  /// a page with nothing to reload yet passes.
+  /// a page with nothing to reload yet passes. A compact bar leaves it out
+  /// too.
   final VoidCallback? onRefresh;
 
   /// Whether that reload is already running. Shows the spinner and blocks
@@ -118,7 +138,13 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     // The bar is chrome: its own hairline, and everything placed in it.
     final tokens = QuarkTokens.of(context).onChrome;
-    final refresh = onRefresh;
+    final compact = isCompact(context);
+    assert(
+      !compact || actions.length <= compactMaxActions,
+      'A phone app bar shows at most $compactMaxActions actions; "$label" '
+      'passed ${actions.length}. Put the rest in a labeled menu (#4150).',
+    );
+    final refresh = compact ? null : onRefresh;
     // Left-handed, the bar's rows run the other way, which is the whole
     // mirror. Each slot then puts back the direction the page is read in, so
     // nothing inside a button or a page's middle is laid out backwards.
@@ -130,9 +156,15 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
     Widget slot(Widget child) => leftHanded
         ? Directionality(textDirection: reading, child: child)
         : child;
-    final pageActions = [for (final action in actions) slot(action)];
+    final pageActions = [
+      for (final action in compact ? actions.take(compactMaxActions) : actions)
+        slot(action),
+    ];
+    final compactControl = QuarkAppBarTrailing.compactOf(context);
     final appActions = [
-      for (final action in QuarkAppBarTrailing.of(context)) slot(action),
+      for (final action
+          in compact ? [?compactControl] : QuarkAppBarTrailing.of(context))
+        slot(action),
     ];
     final middle = this.middle;
     final bottom = this.bottom;
@@ -174,14 +206,17 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
     // The app-wide controls come first, since a notification count is no use
     // scrolled away. The page's own actions take what is left. Either scrolls
     // sideways when it gets too little, rather than spill over the brand.
-    Widget actionsRow(List<Widget> children) => DefaultTextStyle(
-      style:
-          AppBarTheme.of(context).toolbarTextStyle ??
-          Theme.of(context).textTheme.bodyMedium!,
-      child: QuarkToolbarScroller(
-        child: Row(mainAxisSize: MainAxisSize.min, children: children),
-      ),
-    );
+    // A compact bar holds few enough to never scroll.
+    Widget actionsRow(List<Widget> children) {
+      final row = Row(mainAxisSize: MainAxisSize.min, children: children);
+      return DefaultTextStyle(
+        style:
+            AppBarTheme.of(context).toolbarTextStyle ??
+            Theme.of(context).textTheme.bodyMedium!,
+        child: compact ? row : QuarkToolbarScroller(child: row),
+      );
+    }
+
     return QuarkChrome(
       child: Directionality(
         textDirection: leftHanded ? mirrored : reading,

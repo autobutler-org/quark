@@ -26,14 +26,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('a scope appends its actions after the page actions', (
+  // A phone's bar shows the compact control instead (below).
+  testWidgets('a wide scope appends its actions after the page actions', (
     tester,
-    size,
   ) async {
     await pumpAt(
       tester,
       const QuarkAppBarTrailing(actions: [Text('app action')], child: bar),
-      size: size,
       scaffold: false,
     );
     expect(tester.takeException(), isNull);
@@ -55,4 +54,25 @@ void main() {
     expect(find.text('one'), findsNothing);
     expect(find.text('two'), findsOneWidget);
   });
+
+  testBothViewports(
+    'a phone bar shows the compact control in place of the actions',
+    (tester, size) async {
+      await pumpAt(
+        tester,
+        const QuarkAppBarTrailing(
+          actions: [Text('app action')],
+          compact: Text('me'),
+          child: bar,
+        ),
+        size: size,
+        scaffold: false,
+      );
+      expect(tester.takeException(), isNull);
+      final phone = size.width < QuarkAppBar.compactBreakpoint;
+      expect(find.text('me'), phone ? findsOneWidget : findsNothing);
+      expect(find.text('app action'), phone ? findsNothing : findsOneWidget);
+      expect(find.text('page action'), findsOneWidget);
+    },
+  );
 }
