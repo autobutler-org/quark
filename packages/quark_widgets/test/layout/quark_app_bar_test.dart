@@ -118,7 +118,7 @@ void main() {
       label: label,
       onRefresh: () {},
       actions: [
-        for (var i = 0; i < 8; i++)
+        for (var i = 0; i < 12; i++)
           QuarkBarIconButton(
             key: ValueKey('action_$i'),
             icon: QuarkIcons.check_circle_outline,
@@ -190,7 +190,7 @@ void main() {
       final rect = tester.getRect(find.byKey(ValueKey(key)));
       expect(rect.right, lessThanOrEqualTo(bar.right), reason: key);
     }
-    final last = find.byKey(const ValueKey('action_7'));
+    final last = find.byKey(const ValueKey('action_11'));
     expect(
       tester.getRect(last).left,
       greaterThanOrEqualTo(
