@@ -121,6 +121,12 @@ void main() {
       var count = 0;
       var pending = false;
       for (var i = 1; i < list.length - 1; i++) {
+        // A comment's commas are not entries.
+        if (list.startsWith('//', i)) {
+          final end = list.indexOf('\n', i);
+          i = end < 0 ? list.length : end;
+          continue;
+        }
         final c = list[i];
         if (c == '(' || c == '[' || c == '{') depth++;
         if (c == ')' || c == ']' || c == '}') depth--;
