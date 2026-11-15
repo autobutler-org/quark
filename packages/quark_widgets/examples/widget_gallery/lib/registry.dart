@@ -3075,6 +3075,27 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'SettingsCallout',
+    group: 'Settings',
+    build: (context, log) => SettingsCallout(
+      title: 'Restart Quark',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 12,
+        children: [
+          const Text(
+            'Turn Quark off and back on, if something is not working the '
+            'way it should.',
+          ),
+          FilledButton(
+            onPressed: () => log('SettingsCallout child onPressed(restart)'),
+            child: const Text('Restart Quark'),
+          ),
+        ],
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'SettingsRow',
     group: 'Settings',
     build: (context, log) => Column(

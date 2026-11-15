@@ -61,54 +61,44 @@ class _RestartQuarkSectionState extends State<RestartQuarkSection> {
         if (!_controller.isAvailable) return const SizedBox.shrink();
         final error = _controller.error;
         final busy = _controller.isWorking || _controller.isRestarting;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 24),
-          child: QuarkSection(
-            title: 'Restart Quark',
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        return SettingsCallout(
+          title: 'Restart Quark',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Turn Quark off and back on, if something is not '
+                'working the way it should.',
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                key: const ValueKey('restart_quark_button'),
+                onPressed: busy ? null : _restart,
+                icon: const Icon(QuarkIcons.restart),
+                label: const Text('Restart Quark'),
+              ),
+              if (_controller.isRestarting) ...[
+                const SizedBox(height: 12),
+                const Row(
                   children: [
-                    const Text(
-                      'Turn Quark off and back on, if something is not '
-                      'working the way it should.',
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      key: const ValueKey('restart_quark_button'),
-                      onPressed: busy ? null : _restart,
-                      icon: const Icon(QuarkIcons.restart),
-                      label: const Text('Restart Quark'),
-                    ),
-                    if (_controller.isRestarting) ...[
-                      const SizedBox(height: 12),
-                      const Row(
-                        children: [
-                          QuarkLoader(size: 20),
-                          SizedBox(width: 12),
-                          Flexible(child: Text('Restarting…')),
-                        ],
-                      ),
-                    ],
-                    if (_controller.isBack) ...[
-                      const SizedBox(height: 12),
-                      const Text('Quark is back.'),
-                    ],
-                    if (error != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        error,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
+                    QuarkLoader(size: 20),
+                    SizedBox(width: 12),
+                    Flexible(child: Text('Restarting…')),
                   ],
                 ),
-              ),
-            ),
+              ],
+              if (_controller.isBack) ...[
+                const SizedBox(height: 12),
+                const Text('Quark is back.'),
+              ],
+              if (error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  error,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
           ),
         );
       },
