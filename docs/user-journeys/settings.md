@@ -477,13 +477,14 @@ The password travels in the request body, never the URL, and attempts share the 
 
 **Steps:**
 
-1. Navigate to `/settings/account` and tap **Account and data**.
-2. Under **Reset**, tap **Reset this Quark**.
+1. Navigate to `/settings/updates`.
+2. Under **Maintenance**, tap **Reset this Quark**, the last entry, in its own red-tinted box.
 3. Choose what to erase, type your password and tap **Reset this Quark**.
 
 **Expected result:**
 
-- The **Reset** section sits below **Delete account**, under its own heading. Other accounts don't see it.
+- The entry sits after **Repair installation** and **Restart Quark**, not beside **Delete account** under Account
+  and data: it wipes the household's whole device, not one account (#4151). Other accounts don't see it.
 - Each entry says how far it reaches before it is tapped: **Delete account** removes only your account and leaves
   your files and other accounts; **Reset this Quark** erases every account, and names the **Quark data on attached
   drives** box as where attached drives are included.

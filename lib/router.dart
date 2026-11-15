@@ -986,7 +986,17 @@ Future<AuthStatus> Function() authStatusProbe = AuthService.checkStatus;
 /// Pages only an admin can use, with everything under them, such as a tab's
 /// URL. [authRedirect] sends anyone else to [AppRoutes.files]; the Quark
 /// refuses their requests either way.
-const adminRoutes = {AppRoutes.users, '${AppRoutes.settings}/features'};
+///
+/// System's Health and Storage tabs describe the device and offer a member
+/// nothing to do (#4151). Its Jobs tab stays open: the jobs badge sends every
+/// account there to watch its own uploads and jobs. The bare `/system`
+/// redirects to Health, so it is gated through that.
+final adminRoutes = {
+  AppRoutes.users,
+  '${AppRoutes.settings}/features',
+  AppRoutes.systemTab(SystemTab.health),
+  AppRoutes.systemTab(SystemTab.storage),
+};
 
 /// Whether [location] is one of [routes] or a path under one: `/users/groups`
 /// is under `/users`, `/users-old` is not. An exact match let a page's tab URLs

@@ -11,8 +11,7 @@ Cancel and Retry.
 
 **Steps:**
 
-1. Open the navigation drawer and tap **System**.
-2. Tap the **Jobs** tab.
+1. Tap the jobs badge in the app bar. An admin can also open the drawer, tap **System**, then the **Jobs** tab.
 
 **Expected result:**
 
@@ -23,6 +22,7 @@ Cancel and Retry.
 **Notes:**
 
 - The old `/jobs` address redirects here, with the query kept.
+- Open to every account. System's other tabs are admin-only (#4151), so a member gets here from the badge.
 - Video conversions, snapshot backups (JN-SD-008) and file restores from a snapshot are listed. A backup also
   shows its progress on the Storage tab.
 - A backup the Quark starts on a drive's schedule (JN-SD-019) is a system job: admins see it here, and other accounts
