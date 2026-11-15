@@ -113,6 +113,9 @@ lib/widgets/
                                 keyboard on a tap outside the focused field;
                                 wraps the app's navigator once, so it stays
                                 with `main`
+    file_library_page.dart      FileLibraryPage, the Docs, Sheets and Slides
+                                page: bar, create chip, FileTypeSearchBar and
+                                listing; holds AppDrawer and AppThemeToggle
     leave_pop_scope.dart        LeavePopScope, a system back on a page opened
                                 at its own URL leaves instead of closing the
                                 app; tied to the router's history

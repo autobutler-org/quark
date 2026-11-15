@@ -11,9 +11,7 @@ import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/widgets/doc_sheet_body.dart';
 import 'package:quark/widgets/doc_sheet_kind.dart';
-import 'package:quark/widgets/file_type_search_bar.dart';
-import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/layout/file_library_page.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -103,50 +101,35 @@ class _SheetsPageState extends State<SheetsPage>
 
   @override
   Widget build(BuildContext context) {
-    return QuarkPageScaffold(
+    return FileLibraryPage(
       title: 'Sheets',
       icon: QuarkIcons.table_chart_outlined,
+      drawerSection: QuarkDrawerSection.sheets,
+      keyPrefix: 'sheets',
+      createLabel: 'New spreadsheet',
+      onCreate: _create,
+      searchController: _search,
+      searchHint: 'Search sheets…',
       onRefresh: manualRefresh,
       isRefreshing: isRefreshing,
-      actions: [
-        QuarkBarChip(
-          key: const ValueKey('sheets_new'),
-          icon: QuarkIcons.add,
-          label: 'New spreadsheet',
-          onPressed: _create,
+      child: ListenableBuilder(
+        listenable: _listing,
+        builder: (context, _) => DocSheetBody(
+          kind: DocSheetKind.sheets,
+          loading: isInitialLoad && !_controller.hasListing,
+          error: _controller.error,
+          files: _controller.filtered,
+          otherFiles: _controller.otherFiltered,
+          contentResults: _controller.contentResults,
+          contentSearching: _controller.contentSearching,
+          searchQuery: _controller.query,
+          onRetry: manualRefresh,
+          onCreateNew: _create,
+          onOpenDoc: _openDoc,
+          onOpenSheet: _openSheet,
+          onRename: _rename,
+          onDelete: _delete,
         ),
-        const AppThemeToggle(),
-      ],
-      drawer: const AppDrawer(activeSection: QuarkDrawerSection.sheets),
-      body: Column(
-        children: [
-          FileTypeSearchBar(
-            controller: _search,
-            hintText: 'Search sheets…',
-            keyPrefix: 'sheets',
-          ),
-          Expanded(
-            child: ListenableBuilder(
-              listenable: _listing,
-              builder: (context, _) => DocSheetBody(
-                kind: DocSheetKind.sheets,
-                loading: isInitialLoad && !_controller.hasListing,
-                error: _controller.error,
-                files: _controller.filtered,
-                otherFiles: _controller.otherFiltered,
-                contentResults: _controller.contentResults,
-                contentSearching: _controller.contentSearching,
-                searchQuery: _controller.query,
-                onRetry: manualRefresh,
-                onCreateNew: _create,
-                onOpenDoc: _openDoc,
-                onOpenSheet: _openSheet,
-                onRename: _rename,
-                onDelete: _delete,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
