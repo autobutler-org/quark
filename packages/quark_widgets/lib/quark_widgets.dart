@@ -194,6 +194,7 @@ export 'src/photos/duplicate_format_button.dart';
 export 'src/photos/duplicate_group_list.dart';
 export 'src/photos/live_badge.dart';
 export 'src/photos/photo_category_list.dart';
+export 'src/photos/photo_columns_slider.dart';
 export 'src/photos/photo_grid.dart';
 export 'src/photos/photo_grid_scroll_label.dart';
 export 'src/photos/photo_grid_tile.dart';

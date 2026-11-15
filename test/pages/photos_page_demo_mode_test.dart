@@ -250,41 +250,26 @@ void main() {
       expect(router.state.uri.toString(), AppRoutes.photos);
     });
 
-    testWidgets('on a narrow screen, picking an album scrolls to the grid', (
+    testWidgets('on a narrow screen, the Library picker opens an album', (
       tester,
     ) async {
       await settings.setDemoMode(true);
-      // Short enough that the sidebar and the sample grid overflow it.
+      // A phone keeps the albums in the Library picker, not above the grid
+      // (#4149).
       await pumpPhotosRoute(tester, size: const Size(390, 400));
-      final scroll = tester.state<ScrollableState>(
-        find
-            .descendant(
-              of: find.byType(CustomScrollView),
-              matching: find.byType(Scrollable),
-            )
-            .first,
-      );
-      // Scrolled up to the sidebar, a tap on a row must bring the grid back.
-      scroll.position.jumpTo(0);
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('album_sidebar_all_photos')));
-      await settle(tester);
-      expect(scroll.position.pixels, greaterThan(0));
+      expect(find.byType(AlbumSidebar), findsNothing);
 
-      // A short album may not scroll that far, but its photos are on screen.
+      await tester.tap(find.byKey(const ValueKey('photos_library_picker')));
+      await settle(tester);
       final home = DemoPhotosService.homeAlbumId;
-      // Scrolled fully out of view now, so the finder has to look offstage
-      // for ensureVisible to bring it back.
-      final homeRow = find.byKey(
-        ValueKey('album_tile_$home'),
-        skipOffstage: false,
-      );
+      final homeRow = find.byKey(ValueKey('album_tile_$home'));
       await tester.ensureVisible(homeRow);
       await tester.pump();
       await tester.tap(homeRow);
       await settle(tester);
 
       expect(tester.takeException(), isNull);
+      expect(find.byType(AlbumSidebar), findsNothing);
       expect(assetImages(), findsNWidgets(count(home)));
       expect(
         tester.getRect(assetImages().first).top,

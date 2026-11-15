@@ -28,6 +28,8 @@ import 'package:quark/widgets/photos/album_item_menu.dart';
 import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark/widgets/photos/album_picker_sheet.dart';
 import 'package:quark/widgets/photos/delete_album_dialog.dart';
+import 'package:quark/widgets/photos/photo_library_nav.dart';
+import 'package:quark/widgets/photos/photo_library_sheet.dart';
 import 'package:quark/widgets/photos/photo_sort_button.dart';
 import 'package:quark/widgets/photos/photo_thumbnail.dart';
 import 'package:quark/widgets/photos/photos_bar_bottom.dart';
@@ -68,21 +70,6 @@ class PhotosPageState extends State<PhotosPage>
       widget.controller ??
       (_demo ? PhotosController.demo() : PhotosController());
 
-  // Above-viewport nav: the hidden nav panel is measured once on first layout,
-  // then the scroll controller's initial offset is set so the photo grid is
-  // flush with the top of the viewport. Scroll up to reveal the nav.
-  //
-  // We can't know the nav height before layout, so we use a two-pass approach:
-  //  1. First render: nav is visible briefly at offset 0
-  //  2. After layout: measure nav height, recreate the scroll controller with
-  //     that initialScrollOffset, setState to rebuild — nav is now above viewport
-  //
-  // This is the only reliable way: initialScrollOffset is set before the first
-  // frame the user sees (WidgetsBinding post-frame), so there's no visible flash.
-  final GlobalKey _navPanelKey = GlobalKey();
-  bool _navScrollInitialized = false;
-  bool _showScrollHint = true;
-
   /// Guards [_openPhoto], so a second tap while the bytes are still
   /// downloading cannot push a second viewer.
   bool _isOpeningPhoto = false;
@@ -90,7 +77,7 @@ class PhotosPageState extends State<PhotosPage>
   /// Whether the search strip is showing (#2059). Closing it ends the search.
   bool _searchOpen = false;
 
-  ScrollController _scrollController = ScrollController();
+  final ScrollController _scrollController = ScrollController();
   StreamSubscription<FileEvent>? _eventSub;
 
   @override
@@ -105,9 +92,7 @@ class PhotosPageState extends State<PhotosPage>
       if (evt.changesListing && !_controller.isUploading) manualRefresh();
     });
     _scrollController.addListener(_onScroll);
-    _scheduleNavMeasure();
     _controller.addListener(_scheduleAlbumUrlSync);
-    _controller.addListener(_scheduleReveal);
     _controller.showAlbumLink(widget.album);
   }
 
@@ -143,88 +128,12 @@ class PhotosPageState extends State<PhotosPage>
     });
   }
 
-  /// Frames to wait for the nav panel to report a size before giving up.
-  ///
-  /// Every failure path here used to re-post itself unconditionally, so the
-  /// three retries below were an unbounded frame loop. It ran forever on
-  /// desktop, where the nav panel is never built at all, and forever in compact
-  /// mode too while the sidebar's layout error stopped it ever getting a size —
-  /// a permanent frame loop behind an already-blank screen. Nothing checked
-  /// `mounted` either, so the chain outlived the State it belonged to (#1599).
-  static const int _navMeasureMaxFrames = 20;
-
-  /// Whether the most recent build used the compact layout. Only that layout
-  /// builds a nav panel, so it is the only one with anything to measure.
-  bool _compactLayout = false;
-  int _navMeasureAttempts = 0;
-  bool _navMeasureScheduled = false;
-
-  /// True once the nav measurement has finished — either it jumped the scroll
-  /// view past the nav panel, or it gave up. Either way nothing is still
-  /// scheduling frames.
-  @visibleForTesting
-  bool get navScrollSettled => _navScrollInitialized;
-
-  /// Frames spent waiting for the nav panel to report a size.
-  @visibleForTesting
-  int get navMeasureAttempts => _navMeasureAttempts;
-
-  /// Schedules a measurement attempt, at most one outstanding at a time.
-  void _scheduleNavMeasure() {
-    if (_navScrollInitialized || _navMeasureScheduled) return;
-    _navMeasureScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _navMeasureScheduled = false;
-      _measureAndJumpNav();
-    });
-  }
-
-  void _measureAndJumpNav() {
-    if (_navScrollInitialized || !mounted) return;
-    // Desktop lays the sidebar out in a bounded Row with no nav panel, so
-    // there is nothing to measure and nothing to wait for.
-    if (!_compactLayout) return;
-
-    void retry() {
-      _navMeasureAttempts++;
-      if (_navMeasureAttempts >= _navMeasureMaxFrames) {
-        // Give up rather than spin. The page simply stays scrolled to the top
-        // with the nav panel visible — cosmetic, and the user can scroll.
-        _navScrollInitialized = true;
-        return;
-      }
-      _scheduleNavMeasure();
-    }
-
-    final box = _navPanelKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize || box.size.height <= 0) {
-      // Nav not yet in tree or not yet laid out — retry next frame.
-      retry();
-      return;
-    }
-    // Recreate the scroll controller with the nav height as initial offset.
-    // This ensures the scroll position starts at the right place even before
-    // content has loaded (no dependency on maxScrollExtent).
-    final oldController = _scrollController;
-    final newController = ScrollController(
-      initialScrollOffset: box.size.height,
-    );
-    newController.addListener(_onScroll);
-    setState(() {
-      _scrollController = newController;
-      _navScrollInitialized = true;
-    });
-    oldController.removeListener(_onScroll);
-    oldController.dispose();
-  }
-
   @override
   void dispose() {
     _eventSub?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _controller.removeListener(_scheduleAlbumUrlSync);
-    _controller.removeListener(_scheduleReveal);
     _controller.dispose();
     super.dispose();
   }
@@ -234,15 +143,6 @@ class PhotosPageState extends State<PhotosPage>
 
     final currentScroll = _scrollController.position.pixels;
     final maxScroll = _scrollController.position.maxScrollExtent;
-
-    // Try to initialize the nav scroll if it hasn't happened yet (photos may
-    // have loaded after the first frame callback fired).
-    if (!_navScrollInitialized) _measureAndJumpNav();
-
-    // Hide the scroll hint once the user starts scrolling down.
-    if (_showScrollHint && currentScroll > 0) {
-      setState(() => _showScrollHint = false);
-    }
 
     // Trigger fetch when scrolled past 80%
     if (currentScroll >= maxScroll * 0.8) {
@@ -513,72 +413,45 @@ class PhotosPageState extends State<PhotosPage>
     context.go(
       AppRoutes.photosAlbum(id == null ? null : _controller.albumLinkFor(id)),
     );
-    _revealGridFor(id);
   }
 
-  /// The pick whose grid the collapsed layout has yet to scroll to, or null
-  /// with none waiting.
-  ({int? albumId})? _pendingReveal;
-  bool _revealScheduled = false;
-
-  /// The collapsed layout stacks the sidebar above the grid, so a tap on a
-  /// sidebar row would change a grid scrolled out of sight. Bring it back
-  /// once [albumId] is what the grid shows.
-  ///
-  /// Not from here: the tap comes before the route, the hidden categories and
-  /// the album's own photos have changed the layout, and a target measured
-  /// now can lie past the end of a short album, where the scroll overshoots
-  /// and springs back (#3111).
-  void _revealGridFor(int? albumId) {
-    if (!_compactLayout || !_scrollController.hasClients) return;
-    // An earlier pick's scroll is aimed at a layout this one replaces.
-    final position = _scrollController.position;
-    position.jumpTo(position.pixels);
-    _pendingReveal = (albumId: albumId);
-    _scheduleReveal();
-  }
-
-  /// Tries the waiting reveal after the next frame, so it reads the layout
-  /// that frame produced. Also the controller's listener: a pick that is
-  /// still loading is tried again when its photos arrive.
-  void _scheduleReveal() {
-    if (_pendingReveal == null || _revealScheduled) return;
-    _revealScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _revealScheduled = false;
-      _revealGrid();
-    });
-    WidgetsBinding.instance.ensureVisualUpdate();
-  }
-
-  /// Scrolls the grid to the top of the viewport, or as near as the content
-  /// allows, with a jump under reduced motion (#2607). Waits while the pick
-  /// has yet to reach the controller or is loading; a newer pick replaces it.
-  void _revealGrid() {
-    final pending = _pendingReveal;
-    if (pending == null || !mounted) return;
-    if (_controller.selectedAlbumId != pending.albumId ||
-        _controller.albumLoading) {
-      return;
-    }
-    _pendingReveal = null;
-    if (!_compactLayout || !_scrollController.hasClients) return;
-    final box = _navPanelKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return;
-    final position = _scrollController.position;
-    final target = box.size.height.clamp(
-      position.minScrollExtent,
-      position.maxScrollExtent,
+  /// The library picker a phone shows in place of the sidebar (#4149). A
+  /// pick starts the grid from its top, since the grid now shows another
+  /// album or category.
+  void _openLibraryPicker() {
+    PhotoLibrarySheet.show(
+      context,
+      controller: _controller,
+      onShowAlbum: (id) {
+        _showAlbum(id);
+        if (_scrollController.hasClients) _scrollController.jumpTo(0);
+      },
+      onCreateAlbum: _createAlbum,
+      onAlbumMenu: _showAlbumActions,
     );
-    if (reduceMotionOf(context)) {
-      _scrollController.jumpTo(target);
-    } else {
-      _scrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    }
+  }
+
+  /// The grid-size slider a phone shows in a sheet from the Tools menu,
+  /// rather than above the grid (#4149).
+  void _openGridSize() {
+    showQuarkSheet<void>(
+      context,
+      title: 'Grid size',
+      builder: (sheetContext) => ListenableBuilder(
+        listenable: _controller,
+        builder: (sheetContext, _) {
+          final bounds = PhotoGridConfig.columnBounds(
+            QuarkSplitView.contentWidthOf(sheetContext),
+          );
+          return PhotoColumnsSlider(
+            columns: _controller.columns,
+            minColumns: bounds.min,
+            maxColumns: bounds.max,
+            onColumnsChanged: _controller.setColumns,
+          );
+        },
+      ),
+    );
   }
 
   /// Switches to All photos to pick photos for [album], and back to the album
@@ -737,12 +610,10 @@ class PhotosPageState extends State<PhotosPage>
 
   @override
   Widget build(BuildContext context) {
-    // The split view owns the breakpoint. The page only asks which layout it
-    // is in because the nav panel exists solely in the collapsed one, so that
-    // is the only layout with anything to measure or to hint about.
+    // The split view owns the breakpoint. The page asks which layout it is
+    // in because a phone shows the library picker and Grid size in the bar
+    // instead of a sidebar above the grid (#4149).
     final compact = QuarkSplitView.isCollapsed(context);
-    _compactLayout = compact;
-    if (compact && !_navScrollInitialized) _scheduleNavMeasure();
     final contentWidth = QuarkSplitView.contentWidthOf(context);
     final columnBounds = PhotoGridConfig.columnBounds(contentWidth);
 
@@ -768,10 +639,12 @@ class PhotosPageState extends State<PhotosPage>
             final albumError = c.albumError;
             final searchError = c.searchError;
 
-            // Upload and Search live in the library's second row, beside
-            // Tools, so a phone's top bar keeps room for the page name. Pages
-            // without that row carry them in the top bar.
-            final libraryRow = album == null && !_demo;
+            // Upload and Search live in the second row, beside Tools, so a
+            // phone's top bar keeps room for the page name. Pages without
+            // that row carry them in the top bar. The library has the row at
+            // every width; a phone has it everywhere, since its title is the
+            // way to the albums (#4149).
+            final secondRow = (album == null && !_demo) || compact;
             final primaryActions = [
               QuarkBarSplitChip(
                 key: const ValueKey('photos_upload'),
@@ -791,7 +664,7 @@ class PhotosPageState extends State<PhotosPage>
               ),
             ];
             final actions = [
-              if (!libraryRow) ...primaryActions,
+              if (!secondRow) ...primaryActions,
               if (album == null)
                 QuarkBarIconButton(
                   key: const ValueKey('photos_select'),
@@ -850,7 +723,7 @@ class PhotosPageState extends State<PhotosPage>
                           ),
                       ],
                     )
-                  : libraryRow
+                  : secondRow
                   ? QuarkAppBar(
                       label: 'Photos',
                       icon: QuarkIcons.photo_library,
@@ -858,10 +731,13 @@ class PhotosPageState extends State<PhotosPage>
                       onRefresh: manualRefresh,
                       isRefreshing: isRefreshing,
                       bottom: PhotosBarBottom(
-                        title: 'Library',
+                        title: album?.name ?? 'Library',
                         pinnedActions: primaryActions,
-                        onDuplicates: () =>
-                            context.go(AppRoutes.photoDuplicates),
+                        onDuplicates: _demo
+                            ? null
+                            : () => context.go(AppRoutes.photoDuplicates),
+                        onPickLibrary: compact ? _openLibraryPicker : null,
+                        onGridSize: compact ? _openGridSize : null,
                       ),
                     )
                   : null,
@@ -883,176 +759,133 @@ class PhotosPageState extends State<PhotosPage>
                     child: UploadDropZone(
                       enabled: !c.isUploading,
                       onDrop: _uploadDroppedFiles,
-                      child: Stack(
-                        children: [
-                          RefreshIndicator(
-                            onRefresh: manualRefresh,
-                            child: PhotoGridScrollLabel(
-                              child: QuarkSplitView(
-                                controller: _scrollController,
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                // The collapsed layout stacks the sidebar above the
-                                // grid in the same scroll view, and the page measures
-                                // it so the grid starts flush with the top.
-                                collapsedSidebarKey: _navPanelKey,
-                                sidebar: PhotoLibrarySidebar(
-                                  columns: c.columns,
-                                  minColumns: columnBounds.min,
-                                  maxColumns: columnBounds.max,
-                                  onColumnsChanged: c.setColumns,
-                                  categories: c.showsCategories
-                                      ? PhotoCategoryList(
-                                          categories: c.categories,
-                                          selectedId: c.selectedCategory.name,
-                                          expanded: c.categoriesExpanded,
-                                          onToggleExpanded:
-                                              c.toggleCategoriesExpanded,
-                                          onSelected: (id) => c.selectCategory(
-                                            PhotoCategory.values.byName(id),
-                                          ),
-                                        )
-                                      : null,
-                                  albums: AlbumSidebar(
-                                    albums: c.albums,
-                                    isLoading: c.albumsLoading,
-                                    expandedIds: c.expandedAlbumIds,
-                                    shrinkWrap: compact,
-                                    selectedAlbumId: c.selectedAlbumId,
-                                    onAllPhotosSelected: () => _showAlbum(null),
-                                    onAlbumSelected: (item) =>
-                                        _showAlbum(item.id),
-                                    onToggleExpanded: c.toggleAlbumExpanded,
-                                    onCreateAlbum: _createAlbum,
-                                    onAlbumMenu: _showAlbumActions,
-                                    sort: c.albumSort,
-                                    onSortChanged: c.setAlbumSort,
-                                    isSectionExpanded: c.albumsSectionExpanded,
-                                    onToggleSection:
-                                        c.toggleAlbumsSectionExpanded,
-                                  ),
-                                ),
-                                slivers: [
-                                  SubAlbumStrip(
-                                    albums: c.subAlbums,
-                                    onSelected: (item) => _showAlbum(item.id),
-                                  ),
-                                  PhotoGrid(
-                                    photos: photos,
-                                    sections: c.photoSections,
-                                    crossAxisCount: PhotoGridConfig.columnsFor(
-                                      contentWidth,
-                                      c.columns,
-                                    ),
-                                    // The album being added to's own photos
-                                    // show checked, and cannot be picked
-                                    // (#3361).
-                                    selectedIds: {
-                                      ...selectedIds,
-                                      ...c.albumMemberIds,
-                                    },
-                                    selectionMode: c.selectionMode,
-                                    isLoading:
-                                        isInitialLoad ||
-                                        c.albumLoading ||
-                                        c.isSearching,
-                                    // Unreachable has its own view in the empty state.
-                                    error: searchError != null
-                                        ? Errors.message(
-                                            searchError,
-                                            'search your photos',
-                                          )
-                                        : albumError == null ||
-                                              c.quarkUnreachable
-                                        ? null
-                                        : Errors.message(
-                                            albumError,
-                                            'load the album',
-                                          ),
-                                    hasMore: c.hasMore,
-                                    isLoadingMore: c.isLoadingMore,
-                                    emptyState: c.searchQuery.isNotEmpty
-                                        ? EmptyStateWidget(
-                                            icon: QuarkIcons.search,
-                                            headline:
-                                                'No photos match "${c.searchQuery}"',
-                                            subtext:
-                                                'Search looks at file names.',
-                                          )
-                                        : PhotosEmptyState(
-                                            unreachable: c.quarkUnreachable,
-                                            showingFavorites: album == null
-                                                ? c.selectedCategory ==
-                                                      PhotoCategory.favorites
-                                                : album.isFavorites,
-                                            albumName: album?.name,
-                                            hostAddress: c.activeHost,
-                                            onRetry: manualRefresh,
-                                            onManageHosts: () => context.go(
-                                              AppRoutes.settingsTab(
-                                                SettingsTab.general,
-                                              ),
-                                            ),
-                                            onUploadPhotos: c.isUploading
-                                                ? null
-                                                : _uploadPhotos,
-                                            // Same action as the app bar's Add Photos, and
-                                            // absent for the same albums (#992).
-                                            onAddPhotosToAlbum:
-                                                album != null &&
-                                                    !album.isSystemAlbum
-                                                ? () => _addPhotosTo(
-                                                    album.toAlbumItem(),
-                                                  )
-                                                : null,
-                                          ),
-                                    thumbnailBuilder: (context, photo) =>
-                                        PhotoThumbnail(
-                                          url: c.thumbnailUrl(photo.id),
-                                          asset: c.assetFor(photo.id),
-                                          path: c
-                                              .thumbnailSource(photo.id)
-                                              ?.path,
-                                          serial: c
-                                              .thumbnailSource(photo.id)
-                                              ?.serial,
-                                        ),
-                                    onTap: (i) => _onPhotoTap(photos, i),
-                                    // In an album the menu takes the long press; in
-                                    // the library it stays selection (#2276).
-                                    onLongPress: (i) =>
-                                        c.selectFromLongPress(photos[i].id),
-                                    longPressOpensMenu: album != null,
-                                    onMenu: _demo
-                                        ? null
-                                        : album == null
-                                        ? (i, position) =>
-                                              _showLibraryPhotoActions(
-                                                photos[i],
-                                                position,
-                                              )
-                                        : (i, position) =>
-                                              _showAlbumItemActions(
-                                                album,
-                                                photos[i].id,
-                                                position,
-                                              ),
-                                    onDoubleTap: (i) =>
-                                        _toggleFavorite(photos[i].id),
-                                  ),
-                                ],
+                      child: RefreshIndicator(
+                        onRefresh: manualRefresh,
+                        child: PhotoGridScrollLabel(
+                          child: QuarkSplitView(
+                            controller: _scrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            // A phone gets the library from the bar's
+                            // picker chip, so the grid is the first thing
+                            // under the bar there (#4149).
+                            isSidebarOpen: false,
+                            sidebar: PhotoLibraryNav(
+                              controller: c,
+                              onShowAlbum: _showAlbum,
+                              onCreateAlbum: _createAlbum,
+                              onAlbumMenu: _showAlbumActions,
+                              sizeControl: PhotoColumnsSlider(
+                                columns: c.columns,
+                                minColumns: columnBounds.min,
+                                maxColumns: columnBounds.max,
+                                onColumnsChanged: c.setColumns,
                               ),
                             ),
+                            slivers: [
+                              SubAlbumStrip(
+                                albums: c.subAlbums,
+                                onSelected: (item) => _showAlbum(item.id),
+                              ),
+                              PhotoGrid(
+                                photos: photos,
+                                sections: c.photoSections,
+                                crossAxisCount: PhotoGridConfig.columnsFor(
+                                  contentWidth,
+                                  c.columns,
+                                ),
+                                // The album being added to's own photos
+                                // show checked, and cannot be picked
+                                // (#3361).
+                                selectedIds: {
+                                  ...selectedIds,
+                                  ...c.albumMemberIds,
+                                },
+                                selectionMode: c.selectionMode,
+                                isLoading:
+                                    isInitialLoad ||
+                                    c.albumLoading ||
+                                    c.isSearching,
+                                // Unreachable has its own view in the empty state.
+                                error: searchError != null
+                                    ? Errors.message(
+                                        searchError,
+                                        'search your photos',
+                                      )
+                                    : albumError == null || c.quarkUnreachable
+                                    ? null
+                                    : Errors.message(
+                                        albumError,
+                                        'load the album',
+                                      ),
+                                hasMore: c.hasMore,
+                                isLoadingMore: c.isLoadingMore,
+                                emptyState: c.searchQuery.isNotEmpty
+                                    ? EmptyStateWidget(
+                                        icon: QuarkIcons.search,
+                                        headline:
+                                            'No photos match "${c.searchQuery}"',
+                                        subtext: 'Search looks at file names.',
+                                      )
+                                    : PhotosEmptyState(
+                                        unreachable: c.quarkUnreachable,
+                                        showingFavorites: album == null
+                                            ? c.selectedCategory ==
+                                                  PhotoCategory.favorites
+                                            : album.isFavorites,
+                                        albumName: album?.name,
+                                        hostAddress: c.activeHost,
+                                        onRetry: manualRefresh,
+                                        onManageHosts: () => context.go(
+                                          AppRoutes.settingsTab(
+                                            SettingsTab.general,
+                                          ),
+                                        ),
+                                        onUploadPhotos: c.isUploading
+                                            ? null
+                                            : _uploadPhotos,
+                                        // Same action as the app bar's Add Photos, and
+                                        // absent for the same albums (#992).
+                                        onAddPhotosToAlbum:
+                                            album != null &&
+                                                !album.isSystemAlbum
+                                            ? () => _addPhotosTo(
+                                                album.toAlbumItem(),
+                                              )
+                                            : null,
+                                      ),
+                                thumbnailBuilder: (context, photo) =>
+                                    PhotoThumbnail(
+                                      url: c.thumbnailUrl(photo.id),
+                                      asset: c.assetFor(photo.id),
+                                      path: c.thumbnailSource(photo.id)?.path,
+                                      serial: c
+                                          .thumbnailSource(photo.id)
+                                          ?.serial,
+                                    ),
+                                onTap: (i) => _onPhotoTap(photos, i),
+                                // In an album the menu takes the long press; in
+                                // the library it stays selection (#2276).
+                                onLongPress: (i) =>
+                                    c.selectFromLongPress(photos[i].id),
+                                longPressOpensMenu: album != null,
+                                onMenu: _demo
+                                    ? null
+                                    : album == null
+                                    ? (i, position) => _showLibraryPhotoActions(
+                                        photos[i],
+                                        position,
+                                      )
+                                    : (i, position) => _showAlbumItemActions(
+                                        album,
+                                        photos[i].id,
+                                        position,
+                                      ),
+                                onDoubleTap: (i) =>
+                                    _toggleFavorite(photos[i].id),
+                              ),
+                            ],
                           ),
-                          // The collapsed layout starts scrolled past its nav panel,
-                          // so the chevron is the only sign the panel is up there.
-                          if (compact && _showScrollHint)
-                            const Positioned(
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              child: ScrollUpHint(),
-                            ),
-                        ],
+                        ),
                       ),
                     ),
                   ),

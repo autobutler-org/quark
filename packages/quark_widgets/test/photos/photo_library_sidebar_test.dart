@@ -5,23 +5,16 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  Widget sidebar({
-    int columns = 4,
-    int minColumns = 1,
-    int maxColumns = 8,
-    List<int>? changes,
-    Widget? categories,
-  }) => PhotoLibrarySidebar(
-    columns: columns,
-    minColumns: minColumns,
-    maxColumns: maxColumns,
-    onColumnsChanged: (c) => changes?.add(c),
-    categories: categories,
-    albums: const Text('the albums'),
-  );
+  Widget sidebar({Widget? sizeControl, Widget? categories}) =>
+      PhotoLibrarySidebar(
+        sizeControl: sizeControl,
+        categories: categories,
+        albums: const Text('the albums'),
+      );
 
-  // Rendered the way the app renders it: inside a QuarkSplitView, which is
-  // what hands it unbounded height below the breakpoint (#1599).
+  // Rendered the way the app renders it on a wide window: as a split view's
+  // pane. Narrow, the split view stacks it above the grid in a sliver, which
+  // hands it unbounded height (#1599).
   Widget inSplitView(Widget child) => QuarkSplitView(
     sidebar: child,
     slivers: const [SliverToBoxAdapter(child: Text('grid'))],
@@ -30,41 +23,31 @@ void main() {
   testBothViewports('lays out inside a split view', (tester, size) async {
     await pumpAt(
       tester,
-      inSplitView(sidebar(categories: const Text('the categories'))),
+      inSplitView(
+        sidebar(
+          sizeControl: const Text('the size control'),
+          categories: const Text('the categories'),
+        ),
+      ),
       size: size,
     );
 
     expect(tester.takeException(), isNull);
     expect(find.text('the albums'), findsOneWidget);
     expect(find.text('the categories'), findsOneWidget);
-    expect(find.byKey(const ValueKey('photo_columns_slider')), findsOneWidget);
+    expect(find.text('the size control'), findsOneWidget);
   });
 
-  testWidgets('steps the column count within its bounds', (tester) async {
-    final changes = <int>[];
-    await pumpAt(tester, inSplitView(sidebar(changes: changes)));
-
-    await tester.tap(find.byKey(const ValueKey('photo_columns_less')));
-    await tester.tap(find.byKey(const ValueKey('photo_columns_more')));
-
-    expect(changes, [3, 5]);
-  });
-
-  testWidgets('disables the step past either bound', (tester) async {
+  // A phone shows the sidebar in a picker sheet, without the size control,
+  // so only the narrow viewport applies.
+  testWidgets('shrink-wraps with only the albums in a sheet', (tester) async {
     await pumpAt(
       tester,
-      inSplitView(sidebar(columns: 12, minColumns: 3, maxColumns: 3)),
+      SingleChildScrollView(child: sidebar()),
+      size: narrowViewport,
     );
 
-    IconButton button(String key) =>
-        tester.widget<IconButton>(find.byKey(ValueKey(key)));
-    expect(button('photo_columns_less').onPressed, isNull);
-    expect(button('photo_columns_more').onPressed, isNull);
-  });
-
-  testBothViewports('meets the tap target guidelines', (tester, size) async {
-    await pumpAt(tester, inSplitView(sidebar()), size: size);
-
-    await expectTapTargetGuidelines(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.text('the albums'), findsOneWidget);
   });
 }
