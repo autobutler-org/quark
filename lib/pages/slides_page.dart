@@ -10,9 +10,7 @@ import 'package:quark/utils/delete_doc_sheet.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
-import 'package:quark/widgets/file_type_search_bar.dart';
-import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/layout/file_library_page.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/slides/import/import_power_point.dart';
 import 'package:quark/widgets/slides/import/slides_import_bar_bottom.dart';
@@ -137,58 +135,38 @@ class _SlidesPageState extends State<SlidesPage>
 
   @override
   Widget build(BuildContext context) {
-    return QuarkPageScaffold(
+    return FileLibraryPage(
       title: 'Slides',
       icon: QuarkIcons.slideshow_outlined,
-      // Its own bar, for the import row under it.
-      appBar: QuarkAppBar(
-        label: 'Slides',
-        icon: QuarkIcons.slideshow_outlined,
-        onRefresh: manualRefresh,
-        isRefreshing: isRefreshing,
-        actions: [
-          QuarkBarChip(
-            key: const ValueKey('slides_new'),
-            icon: QuarkIcons.add,
-            label: 'New presentation',
-            tooltip: 'New presentation',
-            onPressed: _create,
-          ),
-          const AppThemeToggle(),
-        ],
-        bottom: SlidesImportBarBottom(
-          onImportFromQuark: _importFromQuark,
-          onImportFromDevice: _importFromDevice,
-        ),
+      drawerSection: QuarkDrawerSection.slides,
+      keyPrefix: 'slides',
+      createLabel: 'New presentation',
+      createTooltip: 'New presentation',
+      onCreate: _create,
+      searchController: _search,
+      searchHint: 'Search presentations…',
+      onRefresh: manualRefresh,
+      isRefreshing: isRefreshing,
+      bottom: SlidesImportBarBottom(
+        onImportFromQuark: _importFromQuark,
+        onImportFromDevice: _importFromDevice,
       ),
-      drawer: const AppDrawer(activeSection: QuarkDrawerSection.slides),
-      body: Column(
-        children: [
-          FileTypeSearchBar(
-            controller: _search,
-            hintText: 'Search presentations…',
-            keyPrefix: 'slides',
-          ),
-          Expanded(
-            child: ListenableBuilder(
-              listenable: _listing,
-              builder: (context, _) => SlidesBody(
-                loading: isInitialLoad && _controller.files.isEmpty,
-                error: _controller.error,
-                files: _controller.filtered,
-                contentResults: _controller.contentResults,
-                contentSearching: _controller.contentSearching,
-                searchQuery: _controller.query,
-                onRetry: manualRefresh,
-                onCreateNew: _create,
-                onOpen: _open,
-                onRename: _rename,
-                onShare: _share,
-                onDelete: _delete,
-              ),
-            ),
-          ),
-        ],
+      child: ListenableBuilder(
+        listenable: _listing,
+        builder: (context, _) => SlidesBody(
+          loading: isInitialLoad && _controller.files.isEmpty,
+          error: _controller.error,
+          files: _controller.filtered,
+          contentResults: _controller.contentResults,
+          contentSearching: _controller.contentSearching,
+          searchQuery: _controller.query,
+          onRetry: manualRefresh,
+          onCreateNew: _create,
+          onOpen: _open,
+          onRename: _rename,
+          onShare: _share,
+          onDelete: _delete,
+        ),
       ),
     );
   }
