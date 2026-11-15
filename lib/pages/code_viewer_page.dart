@@ -4,9 +4,7 @@ import 'package:quark/controllers/code_viewer_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/widgets/code_viewer/code_viewer_body.dart';
-import 'package:quark/widgets/layout/chrome_app_bar.dart';
-import 'package:quark/widgets/layout/leave_pop_scope.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/layout/file_route_chrome.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -59,55 +57,34 @@ class _CodeViewerPageState extends State<CodeViewerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canPop = context.canPop();
-    void leave() => context.go(
-      AppRoutes.leaveFile(
-        context,
-        widget.filePath,
-        serial: widget.deviceSerial,
-      ),
-    );
-
-    return LeavePopScope(
-      onLeave: leave,
-      child: ListenableBuilder(
-        listenable: _controller,
-        builder: (context, _) => Scaffold(
-          appBar: ChromeAppBar(
-            title: Text(widget.filePath.split('/').last),
-            leading: BackButton(onPressed: canPop ? context.pop : leave),
-            actions: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: QuarkTokens.of(context).spacingSm,
-                children: [
-                  QuarkBarChip(
-                    key: const ValueKey('code_viewer_edit'),
-                    icon: QuarkIcons.edit_outlined,
-                    label: 'Edit',
-                    // The editor loads the whole file, so it is only offered
-                    // one that has already been read to its end.
-                    onPressed:
-                        _controller.isLoading ||
-                            _controller.error != null ||
-                            _controller.hasMore
-                        ? null
-                        : () => context.go(
-                            AppRoutes.plaintextEditorPath(
-                              widget.filePath,
-                              serial: widget.deviceSerial,
-                              // Back from the editor returns here (#3186).
-                              from: GoRouterState.of(context).uri.toString(),
-                            ),
-                          ),
+    return ListenableBuilder(
+      listenable: _controller,
+      builder: (context, _) => FileRouteChrome(
+        filePath: widget.filePath,
+        deviceSerial: widget.deviceSerial,
+        actions: [
+          QuarkBarChip(
+            key: const ValueKey('code_viewer_edit'),
+            icon: QuarkIcons.edit_outlined,
+            label: 'Edit',
+            // The editor loads the whole file, so it is only offered one that
+            // has already been read to its end.
+            onPressed:
+                _controller.isLoading ||
+                    _controller.error != null ||
+                    _controller.hasMore
+                ? null
+                : () => context.go(
+                    AppRoutes.plaintextEditorPath(
+                      widget.filePath,
+                      serial: widget.deviceSerial,
+                      // Back from the editor returns here (#3186).
+                      from: GoRouterState.of(context).uri.toString(),
+                    ),
                   ),
-                  const AppThemeToggle(),
-                ],
-              ),
-            ],
           ),
-          body: CodeViewerBody(controller: _controller),
-        ),
+        ],
+        body: CodeViewerBody(controller: _controller),
       ),
     );
   }

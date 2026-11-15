@@ -4,7 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/file_viewer_actions.dart';
-import 'package:quark/widgets/layout/chrome_app_bar.dart';
+import 'package:quark/widgets/layout/file_viewer_chrome.dart';
 import 'package:quark/controllers/video_playback_controller.dart';
 import 'package:quark/services/playback_position_service.dart';
 import 'package:quark/services/files_service.dart';
@@ -13,7 +13,6 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/media_autoplay.dart';
 import 'package:quark/utils/video_frame_capture.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/video_viewer/fullscreen_video_page.dart';
 import 'package:quark/widgets/video_viewer/inline_video_player.dart';
 import 'package:quark/widgets/video_viewer/convert_video.dart';
@@ -524,89 +523,76 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
       foregroundColor: QuarkTokens.of(context).onChrome.foreground,
     );
 
-    return Scaffold(
-      appBar: ChromeAppBar(
-        leading: widget.onClose == null
-            ? null
-            : BackButton(onPressed: widget.onClose),
-        title: Text(widget.name),
-        actions: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            spacing: QuarkTokens.of(context).spacingSm,
-            children: [
-              if (_exportingTrim)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: QuarkLoader(size: 20),
-                )
-              else if (_trimMode) ...[
-                TextButton(
-                  style: onChrome,
-                  onPressed: _exportTrim,
-                  child: const Text('Save Clip'),
+    return FileViewerChrome(
+      name: widget.name,
+      onClose: widget.onClose,
+      actions: [
+        if (_exportingTrim)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: QuarkLoader(size: 20),
+          )
+        else if (_trimMode) ...[
+          TextButton(
+            style: onChrome,
+            onPressed: _exportTrim,
+            child: const Text('Save Clip'),
+          ),
+          TextButton(
+            style: onChrome,
+            onPressed: () => setState(() {
+              _trimMode = false;
+              _trimStart = 0.0;
+              _trimEnd = 1.0;
+            }),
+            child: const Text('Cancel'),
+          ),
+        ] else
+          QuarkBarMenuButton(
+            buttonKey: const ValueKey('video_viewer_more'),
+            icon: QuarkIcons.more_vert,
+            tooltip: 'More options',
+            // Saving a frame spins here until the frame lands.
+            isBusy: _savingFrame,
+            menuChildren: [
+              MenuItemButton(
+                key: const ValueKey('video_viewer_save_frame'),
+                onPressed: _saveFrame,
+                child: const Text('Save Frame'),
+              ),
+              MenuItemButton(
+                key: const ValueKey('video_viewer_trim'),
+                onPressed: _enterTrimMode,
+                child: const Text('Trim Clip'),
+              ),
+              // Converting is most useful for a format the player cannot
+              // open, so it is offered whether or not playback started.
+              if ((widget.url.queryParameters['filePath'] ?? '').isNotEmpty)
+                MenuItemButton(
+                  key: const ValueKey('video_viewer_convert'),
+                  onPressed: _convert,
+                  child: const Text('Convert…'),
                 ),
-                TextButton(
-                  style: onChrome,
-                  onPressed: () => setState(() {
-                    _trimMode = false;
-                    _trimStart = 0.0;
-                    _trimEnd = 1.0;
-                  }),
-                  child: const Text('Cancel'),
-                ),
-              ] else
-                QuarkBarMenuButton(
-                  buttonKey: const ValueKey('video_viewer_more'),
-                  icon: QuarkIcons.more_vert,
-                  tooltip: 'More options',
-                  // Saving a frame spins here until the frame lands.
-                  isBusy: _savingFrame,
-                  menuChildren: [
-                    MenuItemButton(
-                      key: const ValueKey('video_viewer_save_frame'),
-                      onPressed: _saveFrame,
-                      child: const Text('Save Frame'),
+              if (playback != null)
+                ListenableBuilder(
+                  listenable: playback,
+                  builder: (context, _) => MenuItemButton(
+                    key: ValueKey(
+                      playback.watched
+                          ? 'video_viewer_mark_unwatched'
+                          : 'video_viewer_mark_watched',
                     ),
-                    MenuItemButton(
-                      key: const ValueKey('video_viewer_trim'),
-                      onPressed: _enterTrimMode,
-                      child: const Text('Trim Clip'),
+                    onPressed: _toggleWatched,
+                    child: Text(
+                      playback.watched
+                          ? 'Mark as unwatched'
+                          : 'Mark as watched',
                     ),
-                    // Converting is most useful for a format the player
-                    // cannot open, so it is offered whether or not playback
-                    // started.
-                    if ((widget.url.queryParameters['filePath'] ?? '')
-                        .isNotEmpty)
-                      MenuItemButton(
-                        key: const ValueKey('video_viewer_convert'),
-                        onPressed: _convert,
-                        child: const Text('Convert…'),
-                      ),
-                    if (playback != null)
-                      ListenableBuilder(
-                        listenable: playback,
-                        builder: (context, _) => MenuItemButton(
-                          key: ValueKey(
-                            playback.watched
-                                ? 'video_viewer_mark_unwatched'
-                                : 'video_viewer_mark_watched',
-                          ),
-                          onPressed: _toggleWatched,
-                          child: Text(
-                            playback.watched
-                                ? 'Mark as unwatched'
-                                : 'Mark as watched',
-                          ),
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
-              const AppThemeToggle(),
             ],
           ),
-        ],
-      ),
+      ],
       body: Center(
         child: _loading
             ? const QuarkLoader()

@@ -2,15 +2,11 @@ import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
-import 'package:quark/widgets/layout/chrome_app_bar.dart';
-import 'package:go_router/go_router.dart';
-import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/file_kind.dart';
-import 'package:quark/widgets/layout/leave_pop_scope.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/layout/file_route_chrome.dart';
 import 'package:quark/widgets/plaintext_editor/plaintext_editor_body.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -124,46 +120,24 @@ class _PlaintextEditorPageState extends State<PlaintextEditorPage> {
 
   @override
   Widget build(BuildContext context) {
-    final title = _dirty ? '$_displayName •' : _displayName;
-    // A viewer's Edit says where it was opened from (#3186).
-    final canPop = context.canPop();
-    void leave() => context.go(
-      AppRoutes.leaveFile(
-        context,
-        widget.filePath,
-        serial: widget.deviceSerial,
-      ),
-    );
-
-    return LeavePopScope(
-      onLeave: leave,
-      child: Scaffold(
-        appBar: ChromeAppBar(
-          title: Text(title),
-          leading: BackButton(onPressed: canPop ? context.pop : leave),
-          actions: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              spacing: QuarkTokens.of(context).spacingSm,
-              children: [
-                QuarkBarChip(
-                  key: const ValueKey('plaintext_editor_save'),
-                  icon: QuarkIcons.save,
-                  label: _saving ? 'Saving...' : 'Save',
-                  onPressed: _dirty && !_saving ? _saveFile : null,
-                ),
-                const AppThemeToggle(),
-              ],
-            ),
-          ],
+    return FileRouteChrome(
+      filePath: widget.filePath,
+      deviceSerial: widget.deviceSerial,
+      dirty: _dirty,
+      actions: [
+        QuarkBarChip(
+          key: const ValueKey('plaintext_editor_save'),
+          icon: QuarkIcons.save,
+          label: _saving ? 'Saving...' : 'Save',
+          onPressed: _dirty && !_saving ? _saveFile : null,
         ),
-        body: PlaintextEditorBody(
-          loading: _loading,
-          error: _error,
-          onRetry: _loadFile,
-          controller: _textController,
-          spellCheck: isProseFile(widget.filePath),
-        ),
+      ],
+      body: PlaintextEditorBody(
+        loading: _loading,
+        error: _error,
+        onRetry: _loadFile,
+        controller: _textController,
+        spellCheck: isProseFile(widget.filePath),
       ),
     );
   }

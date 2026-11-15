@@ -10,7 +10,8 @@ void main() {
   /// The bars whose `actions:` this test reads: the drawer pages' and every
   /// detail, editor and viewer page's.
   final bar = RegExp(
-    r'\b(QuarkAppBar|QuarkPageScaffold|ChromeAppBar|AppBar)\(',
+    r'\b(QuarkAppBar|QuarkPageScaffold|ChromeAppBar|AppBar'
+    r'|FileRouteChrome|FileViewerChrome)\(',
   );
 
   /// Bars allowed an exception, each with the reason.

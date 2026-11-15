@@ -6,9 +6,7 @@ import 'package:quark/router.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/markdown_viewer_files.dart';
 import 'package:quark/widgets/code_viewer/code_viewer_body.dart';
-import 'package:quark/widgets/layout/chrome_app_bar.dart';
-import 'package:quark/widgets/layout/leave_pop_scope.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/layout/file_route_chrome.dart';
 import 'package:quark/widgets/markdown_viewer/markdown_viewer_body.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -106,71 +104,47 @@ class _MarkdownViewerPageState extends State<MarkdownViewerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canPop = context.canPop();
-    void leave() => context.go(
-      AppRoutes.leaveFile(
-        context,
-        widget.filePath,
-        serial: widget.deviceSerial,
-      ),
-    );
-
-    return LeavePopScope(
-      onLeave: leave,
-      child: ListenableBuilder(
-        listenable: _controller,
-        builder: (context, _) => Scaffold(
-          appBar: ChromeAppBar(
-            title: Text(widget.filePath.split('/').last),
-            leading: BackButton(onPressed: canPop ? context.pop : leave),
-            actions: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: QuarkTokens.of(context).spacingSm,
-                children: [
-                  QuarkBarChip(
-                    key: const ValueKey('markdown_viewer_source_toggle'),
-                    icon: _controller.showSource
-                        ? QuarkIcons.visibility
-                        : QuarkIcons.text_box,
-                    label: _controller.showSource ? 'Rendered' : 'Source',
-                    onPressed: _toggleSource,
-                  ),
-                  QuarkBarChip(
-                    key: const ValueKey('markdown_viewer_edit'),
-                    icon: QuarkIcons.edit_outlined,
-                    label: 'Edit',
-                    // The editor loads the whole file, so it is only offered
-                    // one the viewer could read whole.
-                    onPressed:
-                        _controller.isLoading ||
-                            _controller.error != null ||
-                            _controller.isTruncated
-                        ? null
-                        : () => context.go(
-                            AppRoutes.plaintextEditorPath(
-                              widget.filePath,
-                              serial: widget.deviceSerial,
-                              // Back from the editor returns here (#3186).
-                              from: GoRouterState.of(context).uri.toString(),
-                            ),
-                          ),
-                  ),
-                  const AppThemeToggle(),
-                ],
-              ),
-            ],
+    return ListenableBuilder(
+      listenable: _controller,
+      builder: (context, _) => FileRouteChrome(
+        filePath: widget.filePath,
+        deviceSerial: widget.deviceSerial,
+        actions: [
+          QuarkBarChip(
+            key: const ValueKey('markdown_viewer_source_toggle'),
+            icon: _controller.showSource
+                ? QuarkIcons.visibility
+                : QuarkIcons.text_box,
+            label: _controller.showSource ? 'Rendered' : 'Source',
+            onPressed: _toggleSource,
           ),
-          body: _controller.showSource
-              ? ListenableBuilder(
-                  listenable: _source,
-                  builder: (context, _) => CodeViewerBody(controller: _source),
-                )
-              : MarkdownViewerBody(
-                  controller: _controller,
-                  onLinkTap: _openLink,
-                ),
-        ),
+          QuarkBarChip(
+            key: const ValueKey('markdown_viewer_edit'),
+            icon: QuarkIcons.edit_outlined,
+            label: 'Edit',
+            // The editor loads the whole file, so it is only offered one the
+            // viewer could read whole.
+            onPressed:
+                _controller.isLoading ||
+                    _controller.error != null ||
+                    _controller.isTruncated
+                ? null
+                : () => context.go(
+                    AppRoutes.plaintextEditorPath(
+                      widget.filePath,
+                      serial: widget.deviceSerial,
+                      // Back from the editor returns here (#3186).
+                      from: GoRouterState.of(context).uri.toString(),
+                    ),
+                  ),
+          ),
+        ],
+        body: _controller.showSource
+            ? ListenableBuilder(
+                listenable: _source,
+                builder: (context, _) => CodeViewerBody(controller: _source),
+              )
+            : MarkdownViewerBody(controller: _controller, onLinkTap: _openLink),
       ),
     );
   }
