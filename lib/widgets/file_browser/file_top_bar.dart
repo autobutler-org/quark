@@ -7,7 +7,6 @@ import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_path_row.da
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_search_area.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_upload_chip.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -222,7 +221,7 @@ class _FileTopBarState extends State<FileTopBar> {
           onGoUp: widget.onGoUp,
         ),
       ),
-      actions: const [AppThemeToggle()],
+
       bottom: searchOpen
           ? FileTopBarSearchArea(
               controller: _searchController,

@@ -3,12 +3,12 @@ import 'package:material_ui/material_ui.dart';
 import 'package:quark/router.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/widgets/layout/leave_pop_scope.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The scaffold of a viewer or editor opened at its own file URL (the code,
 /// Markdown, plaintext and 3D model pages): the file name as the title, a
-/// back button, the page's [actions] and the theme toggle.
+/// back button and the page's [actions]. The theme lives in Settings and,
+/// on a phone, the account sheet (#4150).
 ///
 /// Back pops when there is a page underneath and otherwise leaves the file
 /// route through `AppRoutes.leaveFile`; a system back does the same through
@@ -34,7 +34,7 @@ class FileRouteChrome extends StatelessWidget {
   /// Marks the title with a dot for unsaved changes.
   final bool dirty;
 
-  /// The page's own bar buttons, placed before the theme toggle.
+  /// The page's own bar buttons.
   final List<Widget> actions;
 
   /// The page's content.
@@ -58,7 +58,7 @@ class FileRouteChrome extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               spacing: QuarkTokens.of(context).spacingSm,
-              children: [...actions, const AppThemeToggle()],
+              children: actions,
             ),
           ],
         ),

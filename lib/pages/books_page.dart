@@ -8,7 +8,6 @@ import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/widgets/books/books_body.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -75,16 +74,20 @@ class _BooksPageState extends State<BooksPage>
       icon: QuarkIcons.menu_book_outlined,
       onRefresh: manualRefresh,
       isRefreshing: isRefreshing,
-      actions: const [AppThemeToggle()],
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.books),
-      body: ListenableBuilder(
-        listenable: _controller,
-        builder: (context, _) => BooksBody(
-          loading: isInitialLoad && _controller.books.isEmpty,
-          error: _controller.error,
-          books: _controller.books,
-          onRetry: manualRefresh,
-          onOpen: _open,
+      // A phone's bar has no refresh button, so the list pulls to refresh
+      // (#4150).
+      body: RefreshIndicator(
+        onRefresh: manualRefresh,
+        child: ListenableBuilder(
+          listenable: _controller,
+          builder: (context, _) => BooksBody(
+            loading: isInitialLoad && _controller.books.isEmpty,
+            error: _controller.error,
+            books: _controller.books,
+            onRetry: manualRefresh,
+            onOpen: _open,
+          ),
         ),
       ),
     );

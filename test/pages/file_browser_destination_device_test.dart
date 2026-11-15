@@ -10,7 +10,7 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/upload_destination.dart';
-import 'package:quark/widgets/file_browser/file_browser_create_fab.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/secure_storage.dart';
@@ -185,7 +185,7 @@ void main() {
     setViewport(tester, const Size(400, 800));
     await tester.pumpWidget(const MaterialApp(home: FileBrowserPage()));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(FileBrowserCreateFab));
+    await tester.tap(find.byType(QuarkCreateFab));
     await tester.pumpAndSettle();
     await tester.longPress(find.widgetWithText(ListTile, 'New folder'));
     await tester.pumpAndSettle();

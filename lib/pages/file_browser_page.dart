@@ -41,7 +41,6 @@ import 'package:quark/utils/upload_destination.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark/widgets/device_upload_picker.dart';
 import 'package:quark/widgets/file_browser/archive_text_preview.dart';
-import 'package:quark/widgets/file_browser/file_browser_create_fab.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/upload_conflict_prompt.dart';
 import 'package:quark/widgets/file_versions/file_versions_sheet.dart';
@@ -2056,18 +2055,12 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     final current = _fileBrowserScrollController.offset;
     final delta = current - _lastScrollOffset;
     _lastScrollOffset = current;
-
-    // Always restore FAB when the user is at the very top.
-    if (current <= 0) {
-      if (!_fabVisible) setState(() => _fabVisible = true);
-      return;
-    }
-
-    if (delta > 4 && _fabVisible) {
-      setState(() => _fabVisible = false);
-    } else if (delta < -4 && !_fabVisible) {
-      setState(() => _fabVisible = true);
-    }
+    final visible = QuarkCreateFab.visibleAfterScroll(
+      offset: current,
+      delta: delta,
+      visible: _fabVisible,
+    );
+    if (visible != _fabVisible) setState(() => _fabVisible = visible);
   }
 
   void _showCreateBottomSheet() {
@@ -2415,54 +2408,62 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        ListenableBuilder(
-                          listenable: AppSettings.instance.isAdmin,
-                          builder: (context, _) => FileBrowserView(
-                            isAdmin: AppSettings.instance.isAdmin.value,
-                            filesFuture: _isSearchMode
-                                ? (_searchFuture ??
-                                      Future.value(const <FileNode>[]))
-                                : _filesFuture,
-                            initialData: _isSearchMode ? null : _cachedFiles,
-                            isInitialLoad: isInitialLoad,
-                            onFileMenuAction: _handleFileMenuAction,
-                            onOpenDirectory: _handleOpenNode,
-                            isGridView: _isGridView,
-                            isUnifiedView: _isUnifiedView,
-                            columns: AppSettings.instance.fileListColumns.value,
-                            isSearchMode: _isSearchMode,
-                            searchQuery: _searchQuery,
-                            onNavigateToFolder: _navigateToFolder,
-                            onVersionHistory: (node) => showFileVersionsSheet(
-                              context,
-                              relPath: node.apiPath,
-                              name: node.name,
-                            ),
-                            currentPath: _currentPath,
-                            errorBuilder: (context, error) =>
-                                FolderRouteErrorState(
-                                  error: error,
-                                  currentPath: _currentPath,
-                                  onRetry: _refreshFileState,
-                                  onManageHosts: () => context.go(
-                                    AppRoutes.settingsTab(SettingsTab.general),
+                        // A phone's bar has no refresh button, so the
+                        // listing pulls to refresh (#4150).
+                        RefreshIndicator(
+                          onRefresh: manualRefresh,
+                          child: ListenableBuilder(
+                            listenable: AppSettings.instance.isAdmin,
+                            builder: (context, _) => FileBrowserView(
+                              isAdmin: AppSettings.instance.isAdmin.value,
+                              filesFuture: _isSearchMode
+                                  ? (_searchFuture ??
+                                        Future.value(const <FileNode>[]))
+                                  : _filesFuture,
+                              initialData: _isSearchMode ? null : _cachedFiles,
+                              isInitialLoad: isInitialLoad,
+                              onFileMenuAction: _handleFileMenuAction,
+                              onOpenDirectory: _handleOpenNode,
+                              isGridView: _isGridView,
+                              isUnifiedView: _isUnifiedView,
+                              columns:
+                                  AppSettings.instance.fileListColumns.value,
+                              isSearchMode: _isSearchMode,
+                              searchQuery: _searchQuery,
+                              onNavigateToFolder: _navigateToFolder,
+                              onVersionHistory: (node) => showFileVersionsSheet(
+                                context,
+                                relPath: node.apiPath,
+                                name: node.name,
+                              ),
+                              currentPath: _currentPath,
+                              errorBuilder: (context, error) =>
+                                  FolderRouteErrorState(
+                                    error: error,
+                                    currentPath: _currentPath,
+                                    onRetry: _refreshFileState,
+                                    onManageHosts: () => context.go(
+                                      AppRoutes.settingsTab(
+                                        SettingsTab.general,
+                                      ),
+                                    ),
+                                    onOpenPath: _setPath,
+                                    onGoHome: _goHome,
                                   ),
-                                  onOpenPath: _setPath,
-                                  onGoHome: _goHome,
-                                ),
-                            loadingBuilder: _currentPath.isNotEmpty
-                                ? (context) => RouteResolutionLoadingShell(
-                                    path: _currentPath,
-                                  )
-                                : null,
-                            onDropToFolder: _handleDropToFolder,
-                            onFolderDragEnter: _handleFolderDragEnter,
-                            onFolderDragExit: _handleFolderDragExit,
-                            scrollController: _fileBrowserScrollController,
-                            inArchive: _archiveContext != null,
-                            selectionMode: _selectionMode,
-                            selectedPaths: _selectedPaths,
-                            onSelectionChanged: _onSelectionChanged,
+                              loadingBuilder: _currentPath.isNotEmpty
+                                  ? (context) => RouteResolutionLoadingShell(
+                                      path: _currentPath,
+                                    )
+                                  : null,
+                              onDropToFolder: _handleDropToFolder,
+                              onFolderDragEnter: _handleFolderDragEnter,
+                              onFolderDragExit: _handleFolderDragExit,
+                              scrollController: _fileBrowserScrollController,
+                              inArchive: _archiveContext != null,
+                              selectionMode: _selectionMode,
+                              selectedPaths: _selectedPaths,
+                              onSelectionChanged: _onSelectionChanged,
+                            ),
                           ),
                         ),
                         if (_isWebDragging && !_isHoveringFolderDropTarget)
@@ -2492,7 +2493,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                             left: leftHanded ? 16 : null,
                             right: leftHanded ? null : 16,
                             bottom: 16,
-                            child: FileBrowserCreateFab(
+                            child: QuarkCreateFab(
+                              key: const ValueKey('files_create_fab'),
+                              tooltip: 'Create',
                               visible: _fabVisible,
                               onPressed: _showCreateBottomSheet,
                             ),

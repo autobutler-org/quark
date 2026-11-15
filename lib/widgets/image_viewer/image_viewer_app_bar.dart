@@ -1,7 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/widgets/image_viewer/image_viewer_more_menu.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -142,8 +141,7 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
                       moreMenu.showAt(context, quarkMenuAnchor(context)),
                 ),
               ),
-            // Keyboard shortcuts and the theme toggle need a keyboard and a
-            // wider bar; on a phone they stay on the pages that have room.
+            // Keyboard shortcuts need a keyboard and a wider bar.
             if (isDesktop) ...[
               QuarkBarIconButton(
                 key: const ValueKey('image_viewer_shortcuts'),
@@ -151,7 +149,6 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
                 tooltip: 'Keyboard shortcuts (?)',
                 onPressed: onShowShortcuts,
               ),
-              const AppThemeToggle(),
             ],
           ],
         ),

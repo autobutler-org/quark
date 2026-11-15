@@ -20,7 +20,6 @@ import 'package:quark/utils/web_download_stub.dart'
     if (dart.library.html) 'package:quark/utils/web_download_web.dart'
     as web_download;
 import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/vault/vault_bar_bottom.dart';
 import 'package:quark/widgets/vault/vault_entry_page.dart';
 import 'package:quark/widgets/vault/vault_error_view.dart';
@@ -205,7 +204,6 @@ class _VaultPageState extends State<VaultPage>
                   tooltip: 'Lock vault',
                   onPressed: _vault.lock,
                 ),
-              const AppThemeToggle(),
             ],
             bottom: unlocked
                 ? VaultBarBottom(

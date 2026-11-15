@@ -27,7 +27,6 @@ import 'package:quark/widgets/chat/show_chat_poll_editor.dart';
 import 'package:quark/widgets/chat/show_chat_poll_export.dart';
 import 'package:quark/widgets/chat/show_chat_save_folder.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/users/user_avatar.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -622,7 +621,6 @@ class _ChatPageState extends State<ChatPage>
               tooltip: 'Create a channel, private or for everyone',
               onPressed: c.isLocked ? null : _createChannel,
             ),
-            const AppThemeToggle(),
           ],
           onRefresh: manualRefresh,
           isRefreshing: isRefreshing,

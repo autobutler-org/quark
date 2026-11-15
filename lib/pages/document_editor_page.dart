@@ -20,7 +20,6 @@ import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/widgets/document_editor/document_editor_body.dart';
 import 'package:quark/widgets/document_editor/highlight_picker_dialog.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/settings_service.dart';
@@ -644,7 +643,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
                     onPressed: _exitEditMode,
                   ),
           ),
-          const AppThemeToggle(),
         ],
       ),
     ];

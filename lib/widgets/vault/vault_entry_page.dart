@@ -4,7 +4,6 @@ import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -145,7 +144,6 @@ class _VaultEntryPageState extends State<VaultEntryPage> {
                   onPressed: () => _delete(id),
                 ),
               ],
-              const AppThemeToggle(),
             ],
           ),
         ],

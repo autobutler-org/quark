@@ -4,6 +4,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 import '../../support/tap_target_guidelines.dart' show setViewport;
 import '../../support/unreachable_quark.dart';
@@ -41,7 +43,16 @@ void main() {
       priorOnError?.call(details);
     };
 
-    await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
+    // The toggle is the app's, from the bar's trailing scope (#4150).
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => QuarkAppBarTrailing(
+          actions: const [AppThemeToggle()],
+          child: child!,
+        ),
+        home: const SettingsPage(),
+      ),
+    );
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
@@ -51,8 +62,10 @@ void main() {
       .widget<RadioGroup<ThemeMode>>(find.byType(RadioGroup<ThemeMode>))
       .groupValue;
 
+  // A phone has the theme in its account sheet instead, covered by
+  // app_bar_trailing_host_test.dart.
   for (final (name, size) in [
-    ('narrow', const Size(360, 640)),
+    ('tablet', const Size(700, 900)),
     ('wide', const Size(1280, 800)),
   ]) {
     testWidgets('$name: the app bar toggle moves the Theme radios', (

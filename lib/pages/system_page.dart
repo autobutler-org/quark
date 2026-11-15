@@ -2,7 +2,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:quark/router.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/system/health_tab.dart';
 import 'package:quark/widgets/system/jobs_tab.dart';
 import 'package:quark/widgets/system/storage_tab.dart';
@@ -56,7 +55,7 @@ class _SystemPageState extends State<SystemPage> {
       icon: QuarkIcons.memory,
       onRefresh: () => _tabs[widget.tab]!.currentState?.manualRefresh(),
       isRefreshing: _refreshing[widget.tab] ?? false,
-      actions: const [AppThemeToggle()],
+
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.system),
       body: QuarkTabView(
         selectedIndex: widget.tab.index,

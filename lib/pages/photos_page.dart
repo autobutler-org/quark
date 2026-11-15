@@ -18,7 +18,6 @@ import 'package:quark/utils/photo_grid_config.dart';
 import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/widgets/device_upload_picker.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/photos/add_to_album_sheet.dart';
 import 'package:quark/widgets/photos/album_actions_menu.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
@@ -78,6 +77,11 @@ class PhotosPageState extends State<PhotosPage>
   bool _searchOpen = false;
 
   final ScrollController _scrollController = ScrollController();
+
+  /// Whether a phone's upload button shows: it fades while the grid scrolls
+  /// down and comes back on the way up (#4150).
+  bool _fabVisible = true;
+  double _lastScrollOffset = 0;
   StreamSubscription<FileEvent>? _eventSub;
 
   @override
@@ -143,6 +147,14 @@ class PhotosPageState extends State<PhotosPage>
 
     final currentScroll = _scrollController.position.pixels;
     final maxScroll = _scrollController.position.maxScrollExtent;
+
+    final fabVisible = QuarkCreateFab.visibleAfterScroll(
+      offset: currentScroll,
+      delta: currentScroll - _lastScrollOffset,
+      visible: _fabVisible,
+    );
+    _lastScrollOffset = currentScroll;
+    if (fabVisible != _fabVisible) setState(() => _fabVisible = fabVisible);
 
     // Trigger fetch when scrolled past 80%
     if (currentScroll >= maxScroll * 0.8) {
@@ -235,6 +247,9 @@ class PhotosPageState extends State<PhotosPage>
     final (bytes, name, _, _) = photo;
     return _demo ? (bytes, name, null, null) : photo;
   }
+
+  /// Uploads after asking which device to write to (#3194).
+  Future<void> _uploadToDevice() => _uploadPhotos(chooseDevice: true);
 
   Future<void> _uploadPhotos({bool chooseDevice = false}) async {
     if (_controller.isUploading) return;
@@ -614,6 +629,9 @@ class PhotosPageState extends State<PhotosPage>
     // in because a phone shows the library picker and Grid size in the bar
     // instead of a sidebar above the grid (#4149).
     final compact = QuarkSplitView.isCollapsed(context);
+    // Narrower still, a phone's bar is compact: two actions, and Upload
+    // moves to a + button in the corner (#4150).
+    final phone = QuarkAppBar.isCompact(context);
     final contentWidth = QuarkSplitView.contentWidthOf(context);
     final columnBounds = PhotoGridConfig.columnBounds(contentWidth);
 
@@ -640,55 +658,60 @@ class PhotosPageState extends State<PhotosPage>
             final searchError = c.searchError;
 
             // Upload and Search live in the second row, beside Tools, so a
-            // phone's top bar keeps room for the page name. Pages without
+            // tablet's top bar keeps room for the page name. Pages without
             // that row carry them in the top bar. The library has the row at
             // every width; a phone has it everywhere, since its title is the
             // way to the albums (#4149).
             final secondRow = (album == null && !_demo) || compact;
-            final primaryActions = [
-              QuarkBarSplitChip(
-                key: const ValueKey('photos_upload'),
-                icon: QuarkIcons.upload_rounded,
-                label: c.isUploading ? 'Uploading...' : 'Upload',
-                onPressed: c.isUploading ? null : _uploadPhotos,
-                onSecondaryPressed: c.canChooseUploadDevice
-                    ? () => _uploadPhotos(chooseDevice: true)
-                    : null,
-              ),
-              QuarkBarIconButton(
-                key: const ValueKey('photos_search'),
-                icon: QuarkIcons.search,
-                tooltip: 'Search',
-                selected: _searchOpen,
-                onPressed: _toggleSearch,
-              ),
-            ];
-            final actions = [
-              if (!secondRow) ...primaryActions,
-              if (album == null)
-                QuarkBarIconButton(
-                  key: const ValueKey('photos_select'),
-                  icon: QuarkIcons.check_circle_outline,
-                  tooltip: 'Select',
-                  onPressed: c.enterSelectionMode,
-                ),
-              // The Quark fills system albums itself and refuses edits (#992).
-              // An empty album carries this button in its empty state
-              // instead, so the page never shows two.
-              if (album != null && !album.isSystemAlbum && photos.isNotEmpty)
-                QuarkBarChip(
-                  key: const ValueKey('photos_add_to_album'),
-                  icon: QuarkIcons.add,
-                  label: 'Add photos',
-                  onPressed: () => _addPhotosTo(album.toAlbumItem()),
-                ),
-              PhotoSortButton(
-                sortField: c.sortField,
-                sortOrder: c.sortOrder,
-                onChanged: c.setSort,
-              ),
-              const AppThemeToggle(),
-            ];
+            final upload = QuarkBarSplitChip(
+              key: const ValueKey('photos_upload'),
+              icon: QuarkIcons.upload_rounded,
+              label: c.isUploading ? 'Uploading...' : 'Upload',
+              onPressed: c.isUploading ? null : _uploadPhotos,
+              onSecondaryPressed: c.canChooseUploadDevice
+                  ? _uploadToDevice
+                  : null,
+            );
+            final search = QuarkBarIconButton(
+              key: const ValueKey('photos_search'),
+              icon: QuarkIcons.search,
+              tooltip: 'Search',
+              selected: _searchOpen,
+              onPressed: _toggleSearch,
+            );
+            // The library selects; an album adds photos instead. The Quark
+            // fills system albums itself and refuses edits (#992), and an
+            // empty album carries the button in its empty state, so the
+            // page never shows two.
+            final selectOrAdd = album == null
+                ? QuarkBarIconButton(
+                    key: const ValueKey('photos_select'),
+                    icon: QuarkIcons.check_circle_outline,
+                    tooltip: 'Select',
+                    onPressed: c.enterSelectionMode,
+                  )
+                : !album.isSystemAlbum && photos.isNotEmpty
+                ? QuarkBarChip(
+                    key: const ValueKey('photos_add_to_album'),
+                    icon: QuarkIcons.add,
+                    label: 'Add photos',
+                    onPressed: () => _addPhotosTo(album.toAlbumItem()),
+                  )
+                : null;
+            final sort = PhotoSortButton(
+              sortField: c.sortField,
+              sortOrder: c.sortOrder,
+              onChanged: c.setSort,
+            );
+            // A phone's bar holds two: Search and Select. Upload is the
+            // + button and Sort joins the second row (#4150).
+            final actions = phone
+                ? [search, ?selectOrAdd]
+                : [
+                    if (!secondRow) ...[upload, search],
+                    ?selectOrAdd,
+                    sort,
+                  ];
             return QuarkPageScaffold(
               title: 'Photos',
               icon: QuarkIcons.photo_library,
@@ -732,7 +755,10 @@ class PhotosPageState extends State<PhotosPage>
                       isRefreshing: isRefreshing,
                       bottom: PhotosBarBottom(
                         title: album?.name ?? 'Library',
-                        pinnedActions: primaryActions,
+                        pinnedActions: phone ? [sort] : [upload, search],
+                        onUploadToDevice: phone && c.canChooseUploadDevice
+                            ? _uploadToDevice
+                            : null,
                         onDuplicates: _demo
                             ? null
                             : () => context.go(AppRoutes.photoDuplicates),
@@ -742,6 +768,16 @@ class PhotosPageState extends State<PhotosPage>
                     )
                   : null,
               drawer: const AppDrawer(activeSection: QuarkDrawerSection.photos),
+              // A phone uploads from the same corner button as Files'
+              // Create, into the album showing when there is one (#4150).
+              floatingActionButton: phone && !c.selectionMode
+                  ? QuarkCreateFab(
+                      key: const ValueKey('photos_upload_fab'),
+                      tooltip: 'Upload',
+                      visible: _fabVisible,
+                      onPressed: _uploadPhotos,
+                    )
+                  : null,
               bottomBar: c.selectionMode && c.addingToAlbum == null
                   ? PhotoSelectionBar(
                       selectedCount: selectedIds.length,
