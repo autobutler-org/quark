@@ -89,7 +89,7 @@ void main() {
         onHighContrastChanged: (_) {},
       );
 
-      final tile = tester.widget<SwitchListTile>(find.byKey(toggle));
+      final tile = tester.widget<SettingsRow>(find.byKey(toggle));
       expect(tile.value, isTrue);
     });
   }

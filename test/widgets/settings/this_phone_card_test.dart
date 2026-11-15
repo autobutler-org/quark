@@ -76,10 +76,10 @@ void main() {
       );
 
   bool switchValue(WidgetTester tester) => tester
-      .widget<SwitchListTile>(
+      .widget<SettingsRow>(
         find.byKey(const ValueKey('remote_access_on_this_phone')),
       )
-      .value;
+      .value!;
 
   testWidgets('reads off away from home before the phone paired', (
     tester,

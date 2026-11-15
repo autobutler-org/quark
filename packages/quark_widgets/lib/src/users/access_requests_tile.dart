@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../settings/settings_row.dart';
 import '../theme/quark_tokens.dart';
 
 /// The switch that decides whether people can ask for an account from the
@@ -50,9 +51,9 @@ class AccessRequestsTile extends StatelessWidget {
         : "The sign-in page doesn't offer to request an account. Only an "
               'admin can add one.';
 
-    return SwitchListTile(
+    return SettingsRow.toggle(
       key: const ValueKey('access_requests_toggle'),
-      contentPadding: EdgeInsets.zero,
+      flush: true,
       title: const Text('Allow account requests'),
       subtitle: Text.rich(
         TextSpan(

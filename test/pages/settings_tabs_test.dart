@@ -8,6 +8,7 @@ import 'package:quark/models/feature_flag.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark_widgets/quark_widgets.dart' show SettingsRow;
 
 import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/unreachable_quark.dart';
@@ -189,7 +190,7 @@ void main() {
     await tester.tap(tile);
     await tester.pump();
     expect(calls, [('notes', false)]);
-    expect(tester.widget<SwitchListTile>(tile).onChanged, isNull);
+    expect(tester.widget<SettingsRow>(tile).onChanged, isNull);
 
     saving.complete(
       const FeatureFlag(
@@ -201,7 +202,7 @@ void main() {
     );
     await tester.pump();
     expect(calls, hasLength(1));
-    expect(tester.widget<SwitchListTile>(tile).value, isFalse);
+    expect(tester.widget<SettingsRow>(tile).value, isFalse);
     expect(settings.isFeatureEnabled('notes'), isFalse);
   });
 

@@ -3075,6 +3075,40 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'SettingsRow',
+    group: 'Settings',
+    build: (context, log) => Column(
+      children: [
+        SettingsRow(
+          leading: const Icon(QuarkIcons.storage),
+          title: const Text('Storage devices'),
+          subtitle: const Text('View, mount and rename drives'),
+          chevron: true,
+          onTap: () => log('SettingsRow.onTap(storage)'),
+        ),
+        SettingsRow(
+          leading: const Icon(QuarkIcons.restart),
+          title: const Text('Reset this Quark'),
+          subtitle: const Text('Erases every account, not just yours'),
+          destructive: true,
+          onTap: () => log('SettingsRow.onTap(reset)'),
+        ),
+        SettingsRow.toggle(
+          title: const Text('Demo mode'),
+          subtitle: const Text('Shows bundled sample photos and albums'),
+          value: true,
+          onChanged: (on) => log('SettingsRow.onChanged(demo, $on)'),
+        ),
+        SettingsRow.toggle(
+          title: const Text('Flush, inside a section'),
+          value: false,
+          flush: true,
+          onChanged: (on) => log('SettingsRow.onChanged(flush, $on)'),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkThemeColorPicker',
     group: 'Settings',
     build: (context, log) => Column(

@@ -32,27 +32,24 @@ class ThisPhoneCard extends StatelessWidget {
         final error = connection.pairingError;
         final status = connection.phoneRemoteAccessDetail;
         final tokens = QuarkTokens.of(context);
-        return Card(
-          margin: EdgeInsets.zero,
-          child: SwitchListTile(
-            key: const ValueKey('remote_access_on_this_phone'),
-            title: Text(remoteAccessOnThisDevice()),
-            subtitle: error != null
-                ? Text(error, style: TextStyle(color: tokens.error))
-                : status != null
-                ? Text(status)
-                : null,
-            value: connection.remoteAccessOnThisPhone,
-            onChanged: (on) async {
-              if (on) {
-                await connection.resumeRemoteAccess();
-                return;
-              }
-              final choice = await showDevicePauseChoice(context);
-              if (!context.mounted || choice == null) return;
-              await connection.pause(choice);
-            },
-          ),
+        return SettingsRow.toggle(
+          key: const ValueKey('remote_access_on_this_phone'),
+          title: Text(remoteAccessOnThisDevice()),
+          subtitle: error != null
+              ? Text(error, style: TextStyle(color: tokens.error))
+              : status != null
+              ? Text(status)
+              : null,
+          value: connection.remoteAccessOnThisPhone,
+          onChanged: (on) async {
+            if (on) {
+              await connection.resumeRemoteAccess();
+              return;
+            }
+            final choice = await showDevicePauseChoice(context);
+            if (!context.mounted || choice == null) return;
+            await connection.pause(choice);
+          },
         );
       },
     );
