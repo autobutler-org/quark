@@ -2,12 +2,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:quark/widgets/layout/chrome_app_bar.dart';
+import 'package:quark/widgets/layout/file_viewer_chrome.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/svg_viewport.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// A full-screen viewer for a single SVG.
@@ -55,12 +54,9 @@ class SvgViewerPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final bytes = this.bytes;
     final error = this.error;
-    return Scaffold(
-      appBar: ChromeAppBar(
-        leading: onClose == null ? null : BackButton(onPressed: onClose),
-        title: Text(name),
-        actions: const [AppThemeToggle()],
-      ),
+    return FileViewerChrome(
+      name: name,
+      onClose: onClose,
       body: switch ((bytes, error)) {
         (_, final String error) => EmptyStateWidget(
           icon: QuarkIcons.broken_image,

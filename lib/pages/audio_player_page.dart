@@ -2,13 +2,12 @@ import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/file_viewer_actions.dart';
-import 'package:quark/widgets/layout/chrome_app_bar.dart';
+import 'package:quark/widgets/layout/file_viewer_chrome.dart';
 import 'package:quark/services/local_media_proxy.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/media_autoplay.dart';
 import 'package:quark/widgets/audio_player/audio_controls.dart';
 import 'package:quark/widgets/audio_player/error_view.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:video_player/video_player.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -134,29 +133,18 @@ class _AudioPlayerPageState extends State<AudioPlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: ChromeAppBar(
-        leading: widget.onClose == null
-            ? null
-            : BackButton(onPressed: widget.onClose),
-        title: Text(widget.name),
-        actions: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            spacing: QuarkTokens.of(context).spacingSm,
-            children: [
-              QuarkBarIconButton(
-                key: const ValueKey('audio_player_download'),
-                icon: QuarkIcons.download_outlined,
-                tooltip: 'Download',
-                isBusy: _downloading,
-                onPressed: _download,
-              ),
-              const AppThemeToggle(),
-            ],
-          ),
-        ],
-      ),
+    return FileViewerChrome(
+      name: widget.name,
+      onClose: widget.onClose,
+      actions: [
+        QuarkBarIconButton(
+          key: const ValueKey('audio_player_download'),
+          icon: QuarkIcons.download_outlined,
+          tooltip: 'Download',
+          isBusy: _downloading,
+          onPressed: _download,
+        ),
+      ],
       body: Center(
         child: _loading
             ? const QuarkLoader()

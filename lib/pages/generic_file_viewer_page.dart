@@ -3,10 +3,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/file_kind.dart';
-import 'package:quark/widgets/layout/chrome_app_bar.dart';
+import 'package:quark/widgets/layout/file_viewer_chrome.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/utils/file_viewer_actions.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The fallback viewer for a file Quark has no dedicated viewer for: its details, with download and
@@ -64,14 +63,9 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: ChromeAppBar(
-        leading: widget.onClose == null
-            ? null
-            : BackButton(onPressed: widget.onClose),
-        title: Text(widget.node.name),
-        actions: const [AppThemeToggle()],
-      ),
+    return FileViewerChrome(
+      name: widget.node.name,
+      onClose: widget.onClose,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),

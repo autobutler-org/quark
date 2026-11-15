@@ -7,9 +7,8 @@ import 'package:quark/router.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
-import 'package:quark/widgets/layout/chrome_app_bar.dart';
+import 'package:quark/widgets/layout/file_route_chrome.dart';
 import 'package:quark/widgets/layout/leave_pop_scope.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/model_viewer/model_viewer_body.dart';
 
 /// The 3D model viewer at `/model/<path>` (#2988): an STL, OBJ, PLY, glTF or
@@ -80,16 +79,15 @@ class _ModelViewerPageState extends State<ModelViewerPage> {
         serial: widget.deviceSerial,
       ),
     );
-    final name = widget.filePath.split('/').last;
 
-    return LeavePopScope(
-      onLeave: leave,
-      child: ListenableBuilder(
-        listenable: _controller,
-        builder: (context, _) => _controller.fallback != null
-            ? GenericFileViewerPage(
+    return ListenableBuilder(
+      listenable: _controller,
+      builder: (context, _) => _controller.fallback != null
+          ? LeavePopScope(
+              onLeave: leave,
+              child: GenericFileViewerPage(
                 node: FileNode(
-                  name: name,
+                  name: widget.filePath.split('/').last,
                   size: _controller.fileSize ?? 0,
                   isDir: false,
                   deviceName: '',
@@ -98,19 +96,16 @@ class _ModelViewerPageState extends State<ModelViewerPage> {
                   dirPath: widget.filePath,
                 ),
                 onClose: canPop ? context.pop : leave,
-              )
-            : Scaffold(
-                appBar: ChromeAppBar(
-                  title: Text(name),
-                  leading: BackButton(onPressed: canPop ? context.pop : leave),
-                  actions: const [AppThemeToggle()],
-                ),
-                body: SafeArea(
-                  top: false,
-                  child: ModelViewerBody(controller: _controller),
-                ),
               ),
-      ),
+            )
+          : FileRouteChrome(
+              filePath: widget.filePath,
+              deviceSerial: widget.deviceSerial,
+              body: SafeArea(
+                top: false,
+                child: ModelViewerBody(controller: _controller),
+              ),
+            ),
     );
   }
 }

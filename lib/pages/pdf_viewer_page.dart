@@ -4,8 +4,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_viewer_actions.dart';
-import 'package:quark/widgets/layout/chrome_app_bar.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/layout/file_viewer_chrome.dart';
 import 'package:quark/widgets/pdf_viewer/browser_pdf_view.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -99,31 +98,26 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: ChromeAppBar(
-        leading: widget.onClose == null
-            ? null
-            : BackButton(onPressed: widget.onClose),
-        title: Text(widget.name),
-        actions: [
+    return FileViewerChrome(
+      name: widget.name,
+      onClose: widget.onClose,
+      actions: [
+        QuarkBarIconButton(
+          key: const ValueKey('pdf_viewer_download'),
+          icon: QuarkIcons.download_outlined,
+          tooltip: 'Download',
+          isBusy: _downloading,
+          onPressed: _download,
+        ),
+        if (!kIsWeb)
           QuarkBarIconButton(
-            key: const ValueKey('pdf_viewer_download'),
-            icon: QuarkIcons.download_outlined,
-            tooltip: 'Download',
-            isBusy: _downloading,
-            onPressed: _download,
+            key: const ValueKey('pdf_viewer_open_with'),
+            icon: QuarkIcons.open_in_new,
+            tooltip: 'Open with…',
+            isBusy: _opening,
+            onPressed: _openWith,
           ),
-          if (!kIsWeb)
-            QuarkBarIconButton(
-              key: const ValueKey('pdf_viewer_open_with'),
-              icon: QuarkIcons.open_in_new,
-              tooltip: 'Open with…',
-              isBusy: _opening,
-              onPressed: _openWith,
-            ),
-          const AppThemeToggle(),
-        ],
-      ),
+      ],
       body: browserHasPdfViewer
           ? BrowserPdfView(
               url: FilesService.constructMediaUrl(

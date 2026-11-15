@@ -116,6 +116,13 @@ lib/widgets/
     file_library_page.dart      FileLibraryPage, the Docs, Sheets and Slides
                                 page: bar, create chip, FileTypeSearchBar and
                                 listing; holds AppDrawer and AppThemeToggle
+    file_route_chrome.dart      FileRouteChrome, the scaffold of a viewer or
+                                editor opened at its file URL: file name,
+                                Back that leaves the file route, LeavePopScope
+                                and the theme toggle around the page's actions
+    file_viewer_chrome.dart     FileViewerChrome, the scaffold of a pushed
+                                viewer: file name, an optional closer in place
+                                of Back, and the theme toggle
     leave_pop_scope.dart        LeavePopScope, a system back on a page opened
                                 at its own URL leaves instead of closing the
                                 app; tied to the router's history
