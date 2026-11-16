@@ -13,6 +13,7 @@ void main() {
     WidgetTester tester,
     Size size, {
     double textScale = 1,
+    bool phoneTools = false,
   }) async {
     final taps = <String>[];
     setViewport(tester, size);
@@ -31,6 +32,8 @@ void main() {
               bottom: PhotosBarBottom(
                 title: 'Library',
                 onDuplicates: () => taps.add('duplicates'),
+                onPickLibrary: phoneTools ? () => taps.add('picker') : null,
+                onGridSize: phoneTools ? () => taps.add('grid size') : null,
               ),
             ),
           ),
@@ -93,4 +96,41 @@ void main() {
       );
     });
   }
+
+  // #4149: a phone has no sidebar, so the title opens the library picker and
+  // the grid size joins the tools.
+  testWidgets('a phone title is a picker chip, and Tools holds Grid size', (
+    tester,
+  ) async {
+    final taps = await pump(tester, narrowViewport, phoneTools: true);
+
+    final picker = find.byKey(const ValueKey('photos_library_picker'));
+    expect(
+      find.descendant(of: picker, matching: find.text('Library')),
+      findsOneWidget,
+    );
+    await expectTapTargetGuidelines(tester);
+    await tester.tap(picker);
+
+    await tester.tap(find.byKey(const ValueKey('app_bar_bottom_menu')));
+    await tester.pumpAndSettle();
+    final item = find.byKey(const ValueKey('photos_menu_grid_size'));
+    expect(
+      find.descendant(of: item, matching: find.text('Grid size')),
+      findsOneWidget,
+    );
+    await tester.tap(item);
+    await tester.pumpAndSettle();
+
+    expect(taps, ['picker', 'grid size']);
+  });
+
+  testWidgets('without the phone tools the title is plain text', (
+    tester,
+  ) async {
+    await pump(tester, narrowViewport);
+
+    expect(find.byKey(const ValueKey('photos_library_picker')), findsNothing);
+    expect(find.text('Library'), findsOneWidget);
+  });
 }

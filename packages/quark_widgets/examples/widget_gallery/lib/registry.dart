@@ -2294,17 +2294,32 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'PhotoColumnsSlider',
+    group: 'Photos',
+    build: (context, log) => SizedBox(
+      width: 280,
+      child: PhotoColumnsSlider(
+        columns: 4,
+        minColumns: 1,
+        maxColumns: 8,
+        onColumnsChanged: (c) => log('PhotoColumnsSlider.onColumnsChanged($c)'),
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'PhotoLibrarySidebar',
     group: 'Photos',
     build: (context, log) => SizedBox(
       width: 280,
       height: 520,
       child: PhotoLibrarySidebar(
-        columns: 4,
-        minColumns: 1,
-        maxColumns: 8,
-        onColumnsChanged: (c) =>
-            log('PhotoLibrarySidebar.onColumnsChanged($c)'),
+        sizeControl: PhotoColumnsSlider(
+          columns: 4,
+          minColumns: 1,
+          maxColumns: 8,
+          onColumnsChanged: (c) =>
+              log('PhotoColumnsSlider.onColumnsChanged($c)'),
+        ),
         categories: PhotoCategoryList(
           categories: _galleryCategories,
           selectedId: 'quark',

@@ -167,6 +167,10 @@ lib/widgets/
                                 PhotoIndexStatusPanel host above duplicates:
                                 reads AppSettings.isAdmin, words errors with
                                 Errors, owns PhotoIndexController
+    photo_library_nav.dart      PhotoLibrarySidebar fed from PhotosController:
+                                the wide pane and the phone picker's body
+    photo_library_sheet.dart    the phone's Library picker sheet (#4149);
+                                listens to PhotosController
   settings/
     change_password/
       change_password_dialog.dart
@@ -372,7 +376,9 @@ confirmation for a photo in an album view (`album_item_menu.dart`,
 `remove_from_album_dialog.dart`), the menu for a photo in the library
 (`library_photo_menu.dart`), and
 `album_picker_sheet.dart`, which hosts the package `AlbumPickerSheet` around an
-injected loader. `device_upload_picker.dart` likewise only holds the choice for
+injected loader. `photos_bar_bottom.dart` is the second bar row; on a phone its
+title is the chip that opens the Library picker, and its Tools menu holds
+Grid size, since the sidebar is not stacked above the grid there (#4149). `device_upload_picker.dart` likewise only holds the choice for
 the package `UploadTargetPicker`. Selecting wears the package
 `FileSelectionBar`, the same bar Files and the trash use.
 

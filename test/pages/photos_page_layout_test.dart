@@ -13,16 +13,17 @@ import '../support/tap_target_guidelines.dart' show setViewport;
 // screen in release, where assertions are stripped (#1599).
 //
 // These pump the real page. No backend, no photos, no device — it is pure
-// layout, which is what makes it embarrassing that it shipped.
+// layout, which is what makes it embarrassing that it shipped. A phone no
+// longer stacks the sidebar at all (#4149), but the page still crosses the
+// breakpoint.
 void main() {
   const compactSize = Size(390, 844); // iPhone-ish
   const desktopSize = Size(1400, 900);
 
-  Future<PhotosPageState> pumpPhotos(WidgetTester tester, Size size) async {
+  Future<void> pumpPhotos(WidgetTester tester, Size size) async {
     setViewport(tester, size);
     await tester.pumpWidget(const MaterialApp(home: PhotosPage()));
     await tester.pump();
-    return tester.state<PhotosPageState>(find.byType(PhotosPage));
   }
 
   group('layout', () {
@@ -37,8 +38,12 @@ void main() {
         reason: 'the compact branch must not throw during performLayout',
       );
       // Not just "no exception" — the content has to actually be on screen.
+      // The albums are in the Library picker on a phone (#4149).
       expect(find.byType(CustomScrollView), findsOneWidget);
-      expect(find.byType(AlbumSidebar), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('photos_library_picker')),
+        findsOneWidget,
+      );
     });
 
     // The window can cross the breakpoint at runtime; both directions have to
@@ -93,75 +98,4 @@ void main() {
   // sidebar. It is a package widget now, and its narrow and wide layouts,
   // shrink-wrapped under a sliver and filling a bounded pane, are covered in
   // packages/quark_widgets/test/albums/album_sidebar_test.dart.
-
-  // _measureAndJumpNav re-posted itself every frame until the nav panel
-  // reported a size. Every failure path re-posted unconditionally, so it was an
-  // unbounded frame loop: forever on desktop, where no nav panel is ever built,
-  // and forever in compact mode while the layout error stopped it getting a
-  // size. Nothing checked `mounted`, so the chain outlived the State.
-  group('nav measurement terminates', () {
-    testWidgets('compact settles after the layout succeeds', (tester) async {
-      final state = await pumpPhotos(tester, compactSize);
-
-      for (var i = 0; i < 30 && !state.navScrollSettled; i++) {
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-
-      expect(
-        state.navScrollSettled,
-        isTrue,
-        reason: 'the nav measurement must stop scheduling frames',
-      );
-      expect(
-        state.navMeasureAttempts,
-        lessThan(20),
-        reason: 'it should measure promptly, not exhaust its retry budget',
-      );
-    });
-
-    testWidgets('desktop never starts measuring — there is no nav panel', (
-      tester,
-    ) async {
-      final state = await pumpPhotos(tester, desktopSize);
-
-      for (var i = 0; i < 10; i++) {
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-
-      expect(
-        state.navMeasureAttempts,
-        0,
-        reason: 'desktop builds no nav panel, so it must not retry at all',
-      );
-    });
-
-    // The bound is the backstop: even if the panel never reports a size, the
-    // retries have to stop rather than burn frames for the life of the process.
-    testWidgets('gives up rather than looping when a size never arrives', (
-      tester,
-    ) async {
-      final state = await pumpPhotos(tester, compactSize);
-
-      for (var i = 0; i < 40 && !state.navScrollSettled; i++) {
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-
-      expect(state.navScrollSettled, isTrue);
-      expect(state.navMeasureAttempts, lessThanOrEqualTo(20));
-    });
-
-    testWidgets('disposing the page stops the retry chain', (tester) async {
-      await pumpPhotos(tester, compactSize);
-
-      // Replace the page; any outstanding callback must not touch a dead State.
-      await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: SizedBox())),
-      );
-      for (var i = 0; i < 10; i++) {
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-
-      expect(tester.takeException(), isNull);
-    });
-  });
 }
