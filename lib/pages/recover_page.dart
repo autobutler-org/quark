@@ -6,7 +6,6 @@ import 'package:quark/widgets/login/back_to_sign_in.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/error_banner.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/setup/recovery_phrase_step.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -114,10 +113,7 @@ class _RecoverPageState extends State<RecoverPage> {
     return BackToSignIn(
       enabled: _newPhrase == null,
       child: Scaffold(
-        appBar: ChromeAppBar(
-          title: const Text('Recover account'),
-          actions: const [AppThemeToggle()],
-        ),
+        appBar: ChromeAppBar(title: const Text('Recover account')),
         body: SafeArea(
           child: Center(
             child: SingleChildScrollView(

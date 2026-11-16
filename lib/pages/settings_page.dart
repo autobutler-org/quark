@@ -24,7 +24,6 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:tailnet_flutter/tailnet_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/notifications/notification_preferences_card.dart';
 import 'package:quark/widgets/settings/change_password/change_password_dialog.dart';
 import 'package:quark/widgets/settings/connected_devices_card.dart';
@@ -621,7 +620,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return QuarkPageScaffold(
       title: 'Settings',
       icon: QuarkIcons.settings_outlined,
-      actions: const [AppThemeToggle()],
+
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.settings),
       body: QuarkTabView(
         // Features is the last tab, so while it is hidden a link to it shows

@@ -18,10 +18,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// the title is plain text, as on a wide window, where the sidebar carries
 /// both.
 ///
+/// A phone uploads from a + button rather than the Upload chip (#4150), so
+/// the page passes [onUploadToDevice] there and "Upload to a device" joins
+/// the tools: the chip's second half, which picks the drive.
+///
 /// Key prefixes: `photos_library_picker` on the title chip,
 /// `photos_duplicates` and `photos_grid_size` on the tool chips,
 /// `app_bar_bottom_menu` on the menu, and `photos_menu_duplicates` and
-/// `photos_menu_grid_size` on its items.
+/// `photos_menu_grid_size` and `photos_menu_upload_to_device` on its items.
 class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
   /// Creates the row reading [title].
   const PhotosBarBottom({
@@ -29,6 +33,7 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
     this.onDuplicates,
     this.onPickLibrary,
     this.onGridSize,
+    this.onUploadToDevice,
     this.pinnedActions = const [],
     super.key,
   });
@@ -47,6 +52,10 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
   /// Opens the grid-size control. Null leaves "Grid size" out.
   final VoidCallback? onGridSize;
 
+  /// Uploads after asking which device to write to. Null leaves "Upload to
+  /// a device" out.
+  final VoidCallback? onUploadToDevice;
+
   /// Bar buttons shown beside the tools, or beside their menu, at every
   /// width.
   final List<Widget> pinnedActions;
@@ -62,6 +71,7 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
     final onDuplicates = this.onDuplicates;
     final onPickLibrary = this.onPickLibrary;
     final onGridSize = this.onGridSize;
+    final onUploadToDevice = this.onUploadToDevice;
     return QuarkAppBarBottom(
       lead: Align(
         alignment: Alignment.centerLeft,
@@ -104,6 +114,15 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
       ],
       menuLabel: 'Tools',
       menuChildren: [
+        if (onUploadToDevice != null)
+          MenuItemButton(
+            key: const ValueKey('photos_menu_upload_to_device'),
+            onPressed: onUploadToDevice,
+            child: quarkMenuLabel(
+              leading: const Icon(QuarkIcons.upload_rounded),
+              label: const Text('Upload to a device'),
+            ),
+          ),
         if (onGridSize != null)
           MenuItemButton(
             key: const ValueKey('photos_menu_grid_size'),

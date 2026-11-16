@@ -108,22 +108,34 @@ class SlidesBody extends StatelessWidget {
     ];
 
     if (files.isEmpty && contentOnly.isEmpty) {
-      return EmptyStateWidget(
-        icon: QuarkIcons.slideshow_outlined,
-        headline: isSearching
-            ? 'No presentations match your search'
-            : 'No presentations yet',
-        subtext: contentSearching ? 'Searching inside presentations…' : null,
-        action: FilledButton.icon(
-          key: const ValueKey('slides_create_cta'),
-          onPressed: onCreateNew,
-          icon: const Icon(QuarkIcons.add),
-          label: Text(
-            isSearching
-                ? 'Create a new presentation instead'
-                : 'Create a presentation',
+      return CustomScrollView(
+        // Scrollable, so a phone, whose bar has no refresh button, can still
+        // pull an empty list to refresh it (#4150).
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: EmptyStateWidget(
+              icon: QuarkIcons.slideshow_outlined,
+              headline: isSearching
+                  ? 'No presentations match your search'
+                  : 'No presentations yet',
+              subtext: contentSearching
+                  ? 'Searching inside presentations…'
+                  : null,
+              action: FilledButton.icon(
+                key: const ValueKey('slides_create_cta'),
+                onPressed: onCreateNew,
+                icon: const Icon(QuarkIcons.add),
+                label: Text(
+                  isSearching
+                      ? 'Create a new presentation instead'
+                      : 'Create a presentation',
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       );
     }
 

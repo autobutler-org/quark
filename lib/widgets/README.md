@@ -94,11 +94,18 @@ lib/widgets/
     admin_map_card.dart         AdminMapCard, an admin's legend of where
                                 people, folder access, clients, disks and
                                 passwords are managed; navigates to each
-    app_bar_trailing_host.dart  provides the QuarkAppBarTrailing scope with a
-                                ConnectionSheetButton fed by
+    account_sheet/
+      account_dot.dart          accountDotShown, when the phone's account
+                                button wears its dot
+      app_account_button.dart   AppAccountButton, QuarkAccountButton and
+                                QuarkAccountSheet wired to the controllers,
+                                AppSettings and the router
+    app_bar_trailing_host.dart  provides the QuarkAppBarTrailing scope with
+                                AppThemeToggle, a ConnectionSheetButton fed by
                                 ConnectionController, a JobsBadge fed by
                                 JobsController and a NotificationsBell fed by
-                                NotificationsController
+                                NotificationsController, and an
+                                AppAccountButton for a phone's bar
     app_drawer.dart             AppDrawer, QuarkDrawer wired to the router
     chrome_app_bar.dart         ChromeAppBar, a drill-down page's AppBar under
                                 QuarkChrome; not coupled, a candidate for the
@@ -115,7 +122,7 @@ lib/widgets/
                                 with `main`
     file_library_page.dart      FileLibraryPage, the Docs, Sheets and Slides
                                 page: bar, create chip, FileTypeSearchBar and
-                                listing; holds AppDrawer and AppThemeToggle
+                                listing; holds AppDrawer
     file_route_chrome.dart      FileRouteChrome, the scaffold of a viewer or
                                 editor opened at its file URL: file name,
                                 Back that leaves the file route, LeavePopScope

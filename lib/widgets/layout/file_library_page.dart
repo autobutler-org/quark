@@ -1,12 +1,11 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/file_type_search_bar.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The page Docs, Sheets and Slides share (#4105): a drawer page whose bar
-/// holds the refresh slot, one create chip and the theme toggle, with a
+/// holds the refresh slot and one create chip, with a
 /// [FileTypeSearchBar] over [child], the listing.
 ///
 /// Data in, callbacks out: the page that uses it owns the controller, the
@@ -77,8 +76,9 @@ class FileLibraryPage extends StatelessWidget {
   /// The search placeholder, such as "Search docs…".
   final String searchHint;
 
-  /// The bar's refresh slot.
-  final VoidCallback onRefresh;
+  /// Reloads the listing: the bar's refresh slot, and a pull on the
+  /// listing, which is a phone's only way to it (#4150).
+  final Future<void> Function() onRefresh;
 
   /// Whether a refresh is running, which spins the refresh button.
   final bool isRefreshing;
@@ -107,7 +107,6 @@ class FileLibraryPage extends StatelessWidget {
             tooltip: createTooltip,
             onPressed: onCreate,
           ),
-          const AppThemeToggle(),
         ],
         bottom: bottom,
       ),
@@ -119,7 +118,9 @@ class FileLibraryPage extends StatelessWidget {
             hintText: searchHint,
             keyPrefix: keyPrefix,
           ),
-          Expanded(child: child),
+          Expanded(
+            child: RefreshIndicator(onRefresh: onRefresh, child: child),
+          ),
         ],
       ),
     );

@@ -6,14 +6,17 @@ import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/controllers/upload_sessions_controller.dart';
 import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/router.dart';
+import 'package:quark/widgets/layout/account_sheet/app_account_button.dart';
 import 'package:quark/widgets/layout/connection_sheet_button.dart';
 import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
+import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/notifications/notifications_bell.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:tailnet_flutter/tailnet_flutter.dart';
 
 /// Gives every main page's top bar the app-wide controls, through one
-/// [QuarkAppBarTrailing] scope at the app root: a [ConnectionSheetButton] fed
+/// [QuarkAppBarTrailing] scope at the app root: the [AppThemeToggle] each
+/// page used to append itself (#4150), a [ConnectionSheetButton] fed
 /// by [connection] (#1880), which opens the connection sheet (#2857), a
 /// [JobsBadge] counting [jobs]' running jobs and [uploads]' uploads in
 /// flight, and a [NotificationsBell]
@@ -25,6 +28,10 @@ import 'package:tailnet_flutter/tailnet_flutter.dart';
 /// under the app bar, and an unreachable page offers to turn it back on
 /// (#2876). Desktop has no node, so that switch, banner, and chip stay
 /// hidden (#3779). The bell renders nothing while nobody is signed in.
+///
+/// A phone's bar has no room for the three, so the scope's compact control
+/// is one [AppAccountButton] whose sheet holds them all, with the theme and
+/// the switch to another Quark (#4150).
 class AppBarTrailingHost extends StatefulWidget {
   /// Creates the scope around [child].
   const AppBarTrailingHost({
@@ -90,10 +97,8 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
           paused: connection.remoteAccessPaused,
           phone: connection.phoneRemoteAccess,
         );
-        return QuarkAppBarTrailing(
-          actions: [
-            if (mode != null || paused)
-              ConnectionSheetButton(
+        final connectionButton = mode != null || paused
+            ? ConnectionSheetButton(
                 mode: mode ?? ConnectionMode.offline,
                 paused: paused,
                 thisPhoneOn: connection.remoteAccessOnThisPhone,
@@ -105,7 +110,13 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
                 onPause: onDevice ? connection.pause : null,
                 onResume: onDevice ? connection.resumeRemoteAccess : null,
                 onNavigate: widget.onNavigate,
-              ),
+              )
+            : null;
+        return QuarkAppBarTrailing(
+          actions: [
+            // Where every page's own theme toggle used to end its actions.
+            const AppThemeToggle(),
+            ?connectionButton,
             ListenableBuilder(
               listenable: Listenable.merge([widget.jobs, ?widget.uploads]),
               builder: (context, _) => JobsBadge(
@@ -121,6 +132,14 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
               onNavigate: widget.onNavigate,
             ),
           ],
+          compact: AppAccountButton(
+            jobs: widget.jobs,
+            uploads: widget.uploads,
+            notifications: widget.notifications,
+            connection: connectionButton,
+            paused: paused,
+            onNavigate: widget.onNavigate,
+          ),
           child: widget.child,
         );
       },

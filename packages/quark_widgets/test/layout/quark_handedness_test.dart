@@ -61,6 +61,11 @@ void main() {
   double centerX(WidgetTester tester, Key key) =>
       tester.getCenter(find.byKey(key)).dx;
 
+  // A phone's compact bar has no refresh slot (#4150), so there the brand
+  // button is what leads.
+  bool phone(Size size) => size.width < QuarkAppBar.compactBreakpoint;
+  Key lead(Size size) => phone(size) ? brand : refresh;
+
   testWidgets('without a scope nothing is left-handed', (tester) async {
     late bool leftHanded;
     await pumpAt(
@@ -82,8 +87,10 @@ void main() {
   ) async {
     await pumpAt(tester, page(leftHanded: false), size: size, scaffold: false);
 
-    expect(centerX(tester, brand), lessThan(centerX(tester, refresh)));
-    expect(centerX(tester, refresh), lessThan(centerX(tester, action)));
+    if (!phone(size)) {
+      expect(centerX(tester, brand), lessThan(centerX(tester, refresh)));
+    }
+    expect(centerX(tester, lead(size)), lessThan(centerX(tester, action)));
     expect(centerX(tester, fab), greaterThan(size.width / 2));
     expect(tester.widget<Scaffold>(find.byType(Scaffold)).endDrawer, isNull);
   });
@@ -100,8 +107,10 @@ void main() {
       tester.getTopRight(find.byKey(brand)).dx,
       greaterThan(size.width - 24),
     );
-    expect(centerX(tester, refresh), lessThan(centerX(tester, brand)));
-    expect(centerX(tester, action), lessThan(centerX(tester, refresh)));
+    if (!phone(size)) {
+      expect(centerX(tester, refresh), lessThan(centerX(tester, brand)));
+    }
+    expect(centerX(tester, action), lessThan(centerX(tester, lead(size))));
     expect(centerX(tester, action), lessThan(size.width / 2));
     expect(centerX(tester, fab), lessThan(size.width / 2));
     expect(tester.takeException(), isNull);
@@ -162,8 +171,10 @@ void main() {
 
     final middle = tester.getCenter(find.text('breadcrumbs')).dx;
     expect(centerX(tester, action), lessThan(middle));
-    expect(middle, lessThan(centerX(tester, refresh)));
-    expect(centerX(tester, refresh), lessThan(centerX(tester, brand)));
+    expect(middle, lessThan(centerX(tester, lead(size))));
+    if (!phone(size)) {
+      expect(centerX(tester, refresh), lessThan(centerX(tester, brand)));
+    }
     expect(tester.takeException(), isNull);
   });
 

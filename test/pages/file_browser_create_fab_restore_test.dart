@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
-import 'package:quark/widgets/file_browser/file_browser_create_fab.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -62,9 +61,8 @@ void main() {
   // one test's HttpOverrides zone would answer the next test's requests too.
   tearDown(resetSharedHttpClient);
 
-  bool fabVisible(WidgetTester tester) => tester
-      .widget<FileBrowserCreateFab>(find.byType(FileBrowserCreateFab))
-      .visible;
+  bool fabVisible(WidgetTester tester) =>
+      tester.widget<QuarkCreateFab>(find.byType(QuarkCreateFab)).visible;
 
   testWidgets('the create FAB comes back after a pushed viewer pops', (
     tester,
@@ -119,7 +117,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        final fab = tester.getCenter(find.byType(FileBrowserCreateFab)).dx;
+        final fab = tester.getCenter(find.byType(QuarkCreateFab)).dx;
         final brand = tester
             .getCenter(find.byKey(const ValueKey('brand_button')))
             .dx;

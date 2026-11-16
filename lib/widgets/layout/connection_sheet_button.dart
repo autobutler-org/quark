@@ -68,36 +68,42 @@ class ConnectionSheetButton extends StatelessWidget {
   /// Turns remote access back on for this phone.
   final Future<void> Function()? onResume;
 
-  @override
-  Widget build(BuildContext context) {
+  /// The connection panel this button opens, for [sheetContext]'s sheet.
+  /// The phone's account sheet shows the same panel (#4150).
+  ConnectionSheet sheet(BuildContext context, BuildContext sheetContext) {
     final onPause = this.onPause;
     final onResume = this.onResume;
+    return ConnectionSheet(
+      mode: mode,
+      readRemoteAccess: readRemoteAccess,
+      remoteAccessOnThisPhone: thisPhoneOn && !paused,
+      pairingError: pairingError,
+      phoneStatus: phoneStatus,
+      offlineReason: offlineReason,
+      onRemoteAccessChanged: onPause == null
+          ? null
+          : (on) async {
+              if (on) {
+                await onResume?.call();
+                return;
+              }
+              final choice = await showDevicePauseChoice(context);
+              if (!context.mounted || choice == null) return;
+              await onPause(choice);
+            },
+      onOpenSettings: () {
+        Navigator.of(sheetContext).pop();
+        onNavigate(AppRoutes.settingsTab(SettingsTab.network));
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     void open() => showQuarkSheet<void>(
       context,
       title: 'Connection',
-      builder: (sheetContext) => ConnectionSheet(
-        mode: mode,
-        readRemoteAccess: readRemoteAccess,
-        remoteAccessOnThisPhone: thisPhoneOn && !paused,
-        pairingError: pairingError,
-        phoneStatus: phoneStatus,
-        offlineReason: offlineReason,
-        onRemoteAccessChanged: onPause == null
-            ? null
-            : (on) async {
-                if (on) {
-                  await onResume?.call();
-                  return;
-                }
-                final choice = await showDevicePauseChoice(context);
-                if (!context.mounted || choice == null) return;
-                await onPause(choice);
-              },
-        onOpenSettings: () {
-          Navigator.of(sheetContext).pop();
-          onNavigate(AppRoutes.settingsTab(SettingsTab.network));
-        },
-      ),
+      builder: (sheetContext) => sheet(context, sheetContext),
     );
 
     if (paused) {

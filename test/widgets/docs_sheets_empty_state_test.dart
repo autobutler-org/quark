@@ -95,4 +95,42 @@ void main() {
     await tester.pump();
     expect(creates, 1);
   });
+  // #4150: a phone's bar has no refresh button, so an empty library has to
+  // pull down to refresh, or nothing is left to reload it with.
+  testWidgets('an empty library pulls down to refresh', (tester) async {
+    var refreshes = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RefreshIndicator(
+            onRefresh: () async => refreshes++,
+            child: DocSheetBody(
+              kind: DocSheetKind.docs,
+              loading: false,
+              error: null,
+              files: const [],
+              otherFiles: const [],
+              contentResults: const [],
+              contentSearching: false,
+              searchQuery: '',
+              onRetry: () {},
+              onCreateNew: () {},
+              onOpenDoc: (_) {},
+              onOpenSheet: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.fling(
+      find.byType(RefreshIndicator),
+      const Offset(0, 300),
+      1000,
+    );
+    await tester.pumpAndSettle();
+
+    expect(refreshes, 1);
+  });
 }

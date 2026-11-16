@@ -41,7 +41,7 @@ void main() {
           onCreate: () => created++,
           searchController: search,
           searchHint: 'Search docs…',
-          onRefresh: () => refreshed++,
+          onRefresh: () async => refreshed++,
           isRefreshing: false,
           bottom: bottom,
           child: const Center(child: Text('the listing')),

@@ -8,7 +8,7 @@ import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
-import 'package:quark/widgets/file_browser/file_browser_create_fab.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_io_http.dart';
@@ -60,9 +60,8 @@ void main() {
 
   tearDown(resetSharedHttpClient);
 
-  bool fabVisible(WidgetTester tester) => tester
-      .widget<FileBrowserCreateFab>(find.byType(FileBrowserCreateFab))
-      .visible;
+  bool fabVisible(WidgetTester tester) =>
+      tester.widget<QuarkCreateFab>(find.byType(QuarkCreateFab)).visible;
 
   /// Both /files routes render FileBrowserPage, exactly as lib/router.dart
   /// does. The editor routes stand in for the real editors, which would

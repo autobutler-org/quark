@@ -9,7 +9,6 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/widgets/layout/leave_pop_scope.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/slides/find/slide_find_controller.dart';
 import 'package:quark/widgets/slides/find/slide_find_layout.dart';
@@ -349,7 +348,6 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                         ? null
                         : () => _present(_controller.slides.first.id),
                   ),
-                  const AppThemeToggle(),
                 ],
               ),
             ],

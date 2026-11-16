@@ -74,11 +74,11 @@ void main() {
   });
 
   // Upload and Search sit beside Tools in the library's second row, which
-  // leaves the top bar room for the page name on a phone.
-  testWidgets('compact: upload and search sit in the library row', (
+  // leaves a tablet's top bar room for the page name.
+  testWidgets('tablet: upload and search sit in the library row', (
     tester,
   ) async {
-    await pumpPhotos(tester, compactSize);
+    await pumpPhotos(tester, const Size(700, 1000));
 
     for (final key in const ['photos_upload', 'photos_search']) {
       expect(
@@ -90,9 +90,42 @@ void main() {
         reason: key,
       );
     }
+    expect(find.byKey(const ValueKey('photos_upload_fab')), findsNothing);
     expect(find.text('Photos'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  // A phone's bar holds Search and Select, and the account button; Upload is
+  // the + button in the corner, the same one Files creates from (#4150).
+  for (final size in const [Size(360, 640), compactSize]) {
+    testWidgets('phone: search and select in the bar, upload in the corner '
+        '(${size.width})', (tester) async {
+      await pumpPhotos(tester, size);
+
+      final bar = find.byType(AppBar);
+      for (final key in const ['photos_search', 'photos_select']) {
+        expect(
+          find.descendant(of: bar, matching: find.byKey(ValueKey(key))),
+          findsOneWidget,
+          reason: key,
+        );
+      }
+      expect(find.byKey(const ValueKey('photos_upload')), findsNothing);
+      expect(find.byKey(const ValueKey('refresh_button')), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(PhotosBarBottom),
+          matching: find.byKey(const ValueKey('photos_sort')),
+        ),
+        findsOneWidget,
+      );
+      final fab = find.byKey(const ValueKey('photos_upload_fab'));
+      expect(fab, findsOneWidget);
+      expect(find.byTooltip('Upload'), findsOneWidget);
+      expect(tester.getCenter(fab).dx, greaterThan(size.width / 2));
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   // The same Expanded-in-a-Column bug lived one level down in the album
   // sidebar. It is a package widget now, and its narrow and wide layouts,

@@ -38,14 +38,13 @@ void main() {
     return router;
   }
 
-  testWidgets('shows the file name, the actions, the toggle and the body', (
-    tester,
-  ) async {
+  testWidgets('shows the file name, the actions and the body', (tester) async {
     await pumpChrome(tester);
 
     expect(find.text('server.log'), findsOneWidget);
     expect(find.byKey(const ValueKey('action')), findsOneWidget);
-    expect(find.byType(AppThemeToggle), findsOneWidget);
+    // The theme is in Settings and the account sheet now (#4150).
+    expect(find.byType(AppThemeToggle), findsNothing);
     expect(find.text('body'), findsOneWidget);
   });
 

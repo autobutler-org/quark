@@ -741,6 +741,12 @@ violation. Decouple it with the `page-decoupler` agent instead of patching aroun
   `test/widgets/app_bar_refresh_placement_test.dart`. A page that only offers refresh in some state passes
   `onRefresh: condition ? manualRefresh : null`. This is the app bar only — a retry or refresh button inside a
   page body is unaffected.
+- **Phones have no refresh slot (#4150).** Below 600 dp `QuarkAppBar` is compact: the brand button, at most two
+  page actions, and the account button. It leaves the slot out even when `onRefresh` is set, so a list page also
+  wraps its list in a `RefreshIndicator(onRefresh: manualRefresh, ...)` to pull to refresh. A page that passes more
+  than two `actions:` on a phone fails an assert; it picks its two with `QuarkAppBar.isCompact` and puts the rest in
+  its labeled menu. The theme toggle, connection pill, jobs badge and bell are the app's, never a page's action:
+  `AppBarTrailingHost` shows them on a wide bar and gathers them into the account sheet on a phone.
 - **All refresh buttons must use `RefreshIconButton`**
   (`packages/quark_widgets/lib/src/layout/refresh_icon_button.dart`).
   - Pass `isRefreshing: isRefreshing` (from the mixin) and `onPressed: manualRefresh`.

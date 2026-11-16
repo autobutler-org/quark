@@ -5,7 +5,6 @@ import 'package:quark/widgets/terms/agree_button.dart';
 import 'package:quark/widgets/terms/terms_host_intro.dart';
 import 'package:quark/widgets/terms/terms_summary.dart';
 import 'package:quark/widgets/terms/terms_section.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 
 /// Terms and Conditions acceptance gate.
 ///
@@ -30,10 +29,7 @@ class TermsPage extends StatelessWidget {
     return PopScope(
       canPop: Navigator.of(context).canPop(),
       child: Scaffold(
-        appBar: ChromeAppBar(
-          title: const Text('Terms & Conditions'),
-          actions: const [AppThemeToggle()],
-        ),
+        appBar: ChromeAppBar(title: const Text('Terms & Conditions')),
         body: Column(
           children: [
             Expanded(

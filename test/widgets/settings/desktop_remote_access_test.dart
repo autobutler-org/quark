@@ -13,6 +13,7 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/device_pairing_store.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/widgets/layout/app_bar_trailing_host.dart';
+import 'package:quark/widgets/layout/account_sheet/app_account_button.dart';
 import 'package:quark/widgets/layout/connection_sheet_button.dart';
 import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
 import 'package:quark/widgets/settings/settings_network_tab.dart';
@@ -145,7 +146,13 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.byType(SettingsNetworkTab), findsOneWidget);
-      expect(find.byType(ConnectionSheetButton), findsOneWidget);
+      // A phone's bar folds the connection pill into the account button,
+      // whose sheet shows the same panel (#4150).
+      final phone = size.width < QuarkAppBar.compactBreakpoint;
+      expect(
+        find.byType(phone ? AppAccountButton : ConnectionSheetButton),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey('remote_access_on_this_phone')),
         findsNothing,
@@ -158,7 +165,9 @@ void main() {
       expect(find.text('This phone'), findsNothing);
       expect(find.text(desktopRemoteAccessUnavailable), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('connection_indicator')));
+      await tester.tap(
+        find.byKey(ValueKey(phone ? 'account_button' : 'connection_indicator')),
+      );
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);

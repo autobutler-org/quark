@@ -14,7 +14,6 @@ import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_device_chips.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -235,7 +234,6 @@ class _TrashPageState extends State<TrashPage>
                           ? _controller.enterSelection
                           : null,
                     ),
-                    const AppThemeToggle(),
                   ],
                   onRefresh: manualRefresh,
                   isRefreshing: isRefreshing,
@@ -282,39 +280,44 @@ class _TrashPageState extends State<TrashPage>
                   ),
                 ),
               Expanded(
-                child: FileBrowserView(
-                  // A fresh view per folder, so opening one shows a spinner
-                  // rather than the last folder's rows until it loads.
-                  key: ValueKey(location),
-                  filesFuture: _controller.listing,
-                  initialData: _controller.nodes,
-                  isInitialLoad: isInitialLoad,
-                  onFileMenuAction: _onMenuAction,
-                  onOpenDirectory: _openFolder,
-                  isGridView: false,
-                  currentPath: '',
-                  menuActions: _trashActions,
-                  subtitleFor: _controller.subtitleFor,
-                  selectionMode: _controller.selectionMode,
-                  selectedPaths: _controller.selectedPaths,
-                  onSelectionChanged: _controller.toggleSelection,
-                  emptyBuilder: (_) => location != null
-                      ? const EmptyStateWidget(
-                          icon: QuarkIcons.folder,
-                          headline: 'This folder is empty',
-                        )
-                      : EmptyStateWidget(
-                          icon: QuarkIcons.delete_outline,
-                          headline: 'Trash is empty',
-                          subtext: retentionDays == null || retentionDays <= 0
-                              ? 'Files you delete wait here until you restore them.'
-                              : 'Files you delete wait here for $retentionDays '
-                                    'days, then they are removed for good.',
-                        ),
-                  errorBuilder: (_, error) => EmptyStateWidget(
-                    icon: QuarkIcons.delete_outline,
-                    headline: Errors.somethingWentWrong,
-                    subtext: Errors.message(error, 'load the trash'),
+                // A phone's bar has no refresh button, so the list pulls to
+                // refresh (#4150).
+                child: RefreshIndicator(
+                  onRefresh: manualRefresh,
+                  child: FileBrowserView(
+                    // A fresh view per folder, so opening one shows a spinner
+                    // rather than the last folder's rows until it loads.
+                    key: ValueKey(location),
+                    filesFuture: _controller.listing,
+                    initialData: _controller.nodes,
+                    isInitialLoad: isInitialLoad,
+                    onFileMenuAction: _onMenuAction,
+                    onOpenDirectory: _openFolder,
+                    isGridView: false,
+                    currentPath: '',
+                    menuActions: _trashActions,
+                    subtitleFor: _controller.subtitleFor,
+                    selectionMode: _controller.selectionMode,
+                    selectedPaths: _controller.selectedPaths,
+                    onSelectionChanged: _controller.toggleSelection,
+                    emptyBuilder: (_) => location != null
+                        ? const EmptyStateWidget(
+                            icon: QuarkIcons.folder,
+                            headline: 'This folder is empty',
+                          )
+                        : EmptyStateWidget(
+                            icon: QuarkIcons.delete_outline,
+                            headline: 'Trash is empty',
+                            subtext: retentionDays == null || retentionDays <= 0
+                                ? 'Files you delete wait here until you restore them.'
+                                : 'Files you delete wait here for $retentionDays '
+                                      'days, then they are removed for good.',
+                          ),
+                    errorBuilder: (_, error) => EmptyStateWidget(
+                      icon: QuarkIcons.delete_outline,
+                      headline: Errors.somethingWentWrong,
+                      subtext: Errors.message(error, 'load the trash'),
+                    ),
                   ),
                 ),
               ),

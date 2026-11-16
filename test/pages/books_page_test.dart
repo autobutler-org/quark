@@ -168,8 +168,10 @@ void main() {
     expect(find.text('Manual.pdf'), findsOneWidget);
   });
 
+  // A phone's bar has no refresh slot (#4150), so the bar's refresh is a
+  // wide-viewport control and a phone pulls the list down instead.
   testWidgets('the app bar refresh fetches the list again', (tester) async {
-    tap.setViewport(tester, tap.narrowViewport);
+    tap.setViewport(tester, tap.wideViewport);
     await visit(tester);
     expect(find.text('No books yet'), findsOneWidget);
 
@@ -178,6 +180,25 @@ void main() {
       () => Future<void>.delayed(const Duration(milliseconds: 1100)),
     );
     await tester.tap(find.byType(RefreshIconButton));
+    await tester.pumpAndSettle();
+    expect(find.text('Manual.pdf'), findsOneWidget);
+  });
+
+  testWidgets('a phone pulls the list down to fetch it again', (tester) async {
+    tap.setViewport(tester, tap.narrowViewport);
+    await visit(tester);
+    expect(find.text('No books yet'), findsOneWidget);
+    expect(find.byType(RefreshIconButton), findsNothing);
+
+    listing = [_node('Manual.pdf')];
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1100)),
+    );
+    await tester.fling(
+      find.byType(RefreshIndicator),
+      const Offset(0, 300),
+      1000,
+    );
     await tester.pumpAndSettle();
     expect(find.text('Manual.pdf'), findsOneWidget);
   });

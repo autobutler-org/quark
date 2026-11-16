@@ -1,11 +1,11 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The scaffold of a viewer pushed over another page (the audio, video, PDF,
 /// SVG and fallback viewers): the file [name] as the title, the page's
-/// [actions] and the theme toggle.
+/// [actions]. The theme lives in Settings and, on a phone, the account
+/// sheet (#4150).
 ///
 /// With [onClose] the back button calls it; without, the app bar's own back
 /// button pops the route the viewer was pushed on.
@@ -25,7 +25,7 @@ class FileViewerChrome extends StatelessWidget {
   /// Closes the viewer from its back button. Null leaves the app bar's own.
   final VoidCallback? onClose;
 
-  /// The page's own bar buttons, placed before the theme toggle.
+  /// The page's own bar buttons.
   final List<Widget> actions;
 
   /// The page's content.
@@ -42,7 +42,7 @@ class FileViewerChrome extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             spacing: QuarkTokens.of(context).spacingSm,
-            children: [...actions, const AppThemeToggle()],
+            children: actions,
           ),
         ],
       ),

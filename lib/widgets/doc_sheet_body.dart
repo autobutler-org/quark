@@ -145,34 +145,44 @@ class DocSheetBody extends StatelessWidget {
     final hasOther = otherFiles.isNotEmpty || otherContent.isNotEmpty;
 
     if (files.isEmpty && ownContent.isEmpty && !hasOther) {
-      return EmptyStateWidget(
-        icon: kind.icon,
-        headline: isSearching
-            ? 'No ${kind.noun}s match your search.'
-            : 'No ${kind.noun}s yet.',
-        action: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (contentSearching) ...const [
-              QuarkLoader(size: 20),
-              SizedBox(height: 16),
-            ],
-            // Offered while searching too (#2044). A search that found
-            // nothing is the moment someone knows exactly what they wanted
-            // and does not have it — sending them back to a toolbar icon to
-            // start it is the long way round.
-            FilledButton.icon(
-              key: ValueKey('${kind.name}_create_cta'),
-              onPressed: onCreateNew,
-              icon: const Icon(QuarkIcons.add),
-              label: Text(
-                isSearching
-                    ? 'Create a new ${kind.noun} instead'
-                    : 'Create new ${kind.noun}',
+      return CustomScrollView(
+        // Scrollable, so a phone, whose bar has no refresh button, can still
+        // pull an empty list to refresh it (#4150).
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: EmptyStateWidget(
+              icon: kind.icon,
+              headline: isSearching
+                  ? 'No ${kind.noun}s match your search.'
+                  : 'No ${kind.noun}s yet.',
+              action: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (contentSearching) ...const [
+                    QuarkLoader(size: 20),
+                    SizedBox(height: 16),
+                  ],
+                  // Offered while searching too (#2044). A search that found
+                  // nothing is the moment someone knows exactly what they wanted
+                  // and does not have it — sending them back to a toolbar icon to
+                  // start it is the long way round.
+                  FilledButton.icon(
+                    key: ValueKey('${kind.name}_create_cta'),
+                    onPressed: onCreateNew,
+                    icon: const Icon(QuarkIcons.add),
+                    label: Text(
+                      isSearching
+                          ? 'Create a new ${kind.noun} instead'
+                          : 'Create new ${kind.noun}',
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 

@@ -12,7 +12,6 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/layout/admin_map_card.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/users/recent_decisions/recent_decisions_list.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -283,7 +282,7 @@ class _UsersPageState extends State<UsersPage>
           icon: QuarkIcons.person_outline,
           onRefresh: manualRefresh,
           isRefreshing: isRefreshing,
-          actions: const [AppThemeToggle()],
+
           drawer: const AppDrawer(activeSection: QuarkDrawerSection.users),
           body: QuarkTabView(
             selectedIndex: widget.tab.index,

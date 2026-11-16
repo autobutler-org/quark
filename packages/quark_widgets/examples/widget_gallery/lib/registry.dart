@@ -560,6 +560,61 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkAccountButton',
+    group: 'Layout',
+    build: (context, log) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final dot in const [false, true])
+          QuarkAccountButton(
+            showDot: dot,
+            onPressed: () => log('QuarkAccountButton(showDot: $dot).onPressed'),
+          ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkAccountSheet',
+    group: 'Layout',
+    build: (context, log) => SizedBox(
+      width: 390,
+      child: QuarkAccountSheet(
+        notifications: const Text(
+          'Back up your Quark: the last was 9 days ago',
+        ),
+        runningJobs: 2,
+        onOpenJobs: () => log('QuarkAccountSheet.onOpenJobs'),
+        connection: const ConnectionIndicator(
+          mode: ConnectionMode.remote,
+          label: 'Remote',
+        ),
+        themeMode: ThemeMode.system,
+        onThemeModeChanged: (mode) =>
+            log('QuarkAccountSheet.onThemeModeChanged($mode)'),
+        quarkName: 'Home',
+        onSwitchQuark: () => log('QuarkAccountSheet.onSwitchQuark'),
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkCreateFab',
+    group: 'Layout',
+    build: (context, log) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final tooltip in const ['Create', 'Upload'])
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: QuarkCreateFab(
+              tooltip: tooltip,
+              visible: true,
+              onPressed: () => log('QuarkCreateFab($tooltip).onPressed'),
+            ),
+          ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkAppBar',
     group: 'Layout',
     build: (context, log) => SizedBox(

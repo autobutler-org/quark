@@ -18,7 +18,6 @@ import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/utils/sheet_config.dart';
 import 'package:quark/utils/sheet_tab_names.dart';
 import 'package:quark/widgets/layout/leave_pop_scope.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/spreadsheet_editor/sheet_tab_view.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -400,20 +399,12 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
 
     if (_loading) {
       page = Scaffold(
-        appBar: ChromeAppBar(
-          leading: _backButton(),
-          title: Text(title),
-          actions: const [AppThemeToggle()],
-        ),
+        appBar: ChromeAppBar(leading: _backButton(), title: Text(title)),
         body: const Center(child: QuarkLoader()),
       );
     } else if (error != null) {
       page = Scaffold(
-        appBar: ChromeAppBar(
-          leading: _backButton(),
-          title: Text(title),
-          actions: const [AppThemeToggle()],
-        ),
+        appBar: ChromeAppBar(leading: _backButton(), title: Text(title)),
         body: isQuarkUnreachableError(error)
             ? QuarkDisconnectedView(
                 hostAddress: AppSettings.instance.activeHost,
@@ -446,7 +437,6 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                   label: _saving ? 'Saving...' : 'Save',
                   onPressed: _saving ? null : _manualSave,
                 ),
-                const AppThemeToggle(),
               ],
             ),
           ],
