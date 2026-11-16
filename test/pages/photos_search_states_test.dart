@@ -146,7 +146,17 @@ void main() {
 
       library.searchError = null;
       await outwaitRefreshDebounce(tester);
-      await tester.tap(find.byKey(const ValueKey('refresh_button')));
+      // A phone's bar has no refresh slot (#4150); it pulls the grid down.
+      if (size == narrowViewport) {
+        expect(find.byKey(const ValueKey('refresh_button')), findsNothing);
+        await tester.fling(
+          find.byType(RefreshIndicator),
+          const Offset(0, 300),
+          1000,
+        );
+      } else {
+        await tester.tap(find.byKey(const ValueKey('refresh_button')));
+      }
       await settle(tester);
 
       expect(tester.takeException(), isNull);

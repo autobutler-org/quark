@@ -43,12 +43,13 @@ void main() {
       await pumpBar(tester, size);
 
       expect(find.byType(QuarkAppBar), findsOneWidget);
-      for (final key in const [
-        'refresh_button',
+      // The theme toggle is app-wide now, from AppBarTrailingHost, and a
+      // phone's bar has no refresh slot: it pulls to refresh (#4150).
+      for (final key in [
+        if (size == wide) 'refresh_button',
         'file_top_bar_up',
         'file_top_bar_search',
         'file_top_bar_select',
-        'theme_toggle',
       ]) {
         expect(
           find.descendant(
@@ -77,6 +78,10 @@ void main() {
           reason: key,
         );
       }
+      expect(
+        find.byKey(const ValueKey('refresh_button')),
+        size == wide ? findsOneWidget : findsNothing,
+      );
       expect(find.byKey(const ValueKey('file_top_bar_home')), findsOneWidget);
       // Back and up did the same thing; only up is left (#2314).
       expect(find.byKey(const ValueKey('file_top_bar_back')), findsNothing);

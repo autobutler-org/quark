@@ -53,10 +53,20 @@ class BooksBody extends StatelessWidget {
       );
     }
     if (books.isEmpty) {
-      return const EmptyStateWidget(
-        icon: QuarkIcons.menu_book_outlined,
-        headline: 'No books yet',
-        subtext: 'PDF and EPUB files you add to Files show up here.',
+      // Scrollable, so a phone, whose bar has no refresh button, can still
+      // pull an empty list to refresh it (#4150).
+      return const CustomScrollView(
+        physics: AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: EmptyStateWidget(
+              icon: QuarkIcons.menu_book_outlined,
+              headline: 'No books yet',
+              subtext: 'PDF and EPUB files you add to Files show up here.',
+            ),
+          ),
+        ],
       );
     }
     return ListView.builder(

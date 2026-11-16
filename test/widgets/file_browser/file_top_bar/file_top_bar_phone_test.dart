@@ -7,6 +7,7 @@ import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/models/app_notification.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/widgets/layout/connection_sheet_button.dart';
+import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/notifications/notifications_bell.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -60,8 +61,12 @@ void main() {
         theme: theme.copyWith(
           textTheme: theme.textTheme.apply(fontFamily: 'Roboto'),
         ),
+        // As AppBarTrailingHost does: the theme toggle and the app-wide
+        // controls on a wide bar, one account button on a phone (#4150).
         home: QuarkAppBarTrailing(
+          compact: QuarkAccountButton(onPressed: () {}),
           actions: [
+            const AppThemeToggle(),
             ConnectionSheetButton(
               mode: ConnectionMode.local,
               onNavigate: (_) {},
@@ -151,13 +156,18 @@ void main() {
       final rowBottom = bar.top + kToolbarHeight;
       final brand = tester.getRect(find.byType(QuarkBrandButton));
       final rects = <String, Rect>{};
-      for (final value in const [
-        'refresh_button',
-        'file_top_bar_up',
-        'theme_toggle',
-        'connection_indicator',
-        'notifications_bell',
-      ]) {
+      // A phone's bar has no refresh slot and folds the app-wide controls
+      // into one account button (#4150).
+      for (final value
+          in size == narrow
+              ? const ['file_top_bar_up', 'account_button']
+              : const [
+                  'refresh_button',
+                  'file_top_bar_up',
+                  'theme_toggle',
+                  'connection_indicator',
+                  'notifications_bell',
+                ]) {
         final rect = tester.getRect(key(value));
         rects[value] = rect;
         expect(rect.left, greaterThanOrEqualTo(brand.right), reason: value);
