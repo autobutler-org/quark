@@ -7,7 +7,6 @@ import 'package:quark/pages/account_and_data_page.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
-import 'package:quark/widgets/settings/reset_quark_dialog.dart';
 
 import '../support/tap_target_guidelines.dart' show setViewport;
 import '../support/unreachable_quark.dart';
@@ -155,39 +154,28 @@ void main() {
     expect(find.byType(BackButton), findsOneWidget);
   });
 
+  // #4151: resetting wipes the household's device, so it no longer sits
+  // under one account. It lives in Settings › Updates' Maintenance group.
   for (final (label, size) in [
     ('narrow', const Size(360, 640)),
     ('wide', const Size(1280, 800)),
   ]) {
-    testWidgets('keeps the reset in its own section, below ($label)', (
+    testWidgets('offers an admin deletion and no reset ($label)', (
       tester,
     ) async {
       await signIn();
 
       await pumpAccountAndData(tester, size: size);
 
-      // Two intents, two entries, under two headings. Nothing here reads as a
-      // way to reset the appliance by deleting an account.
       expect(entry, findsOneWidget);
-      expect(resetEntry, findsOneWidget);
-      expect(find.text('Reset'), findsOneWidget);
-      expect(
-        tester.getTopLeft(resetEntry).dy,
-        greaterThan(tester.getTopLeft(find.text('Reset')).dy),
-      );
-      expect(
-        tester.getTopLeft(resetEntry).dy,
-        greaterThan(tester.getTopLeft(entry).dy),
-      );
+      expect(resetEntry, findsNothing);
+      expect(find.text('Reset this Quark'), findsNothing);
+      expect(tester.takeException(), isNull);
     });
   }
 
-  // #2479: each entry says how far it reaches before it is tapped, and the
-  // reset names the control that decides about attached drives rather than
-  // leaving it at "unless you say otherwise".
-  testWidgets('each entry names its scope, and the reset its drives control', (
-    tester,
-  ) async {
+  // #2479: the deletion says how far it reaches before it is tapped.
+  testWidgets('the deletion names its scope', (tester) async {
     await signIn();
 
     await pumpAccountAndData(tester);
@@ -199,31 +187,9 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(
-      find.descendant(
-        of: resetEntry,
-        matching: find.textContaining('“$kResetQuarkDevicesLabel”'),
-      ),
-      findsOneWidget,
-    );
-    expect(find.textContaining('say otherwise'), findsNothing);
-
-    // The name the page points at is the name on the box in the dialog.
-    await tester.tap(resetEntry);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('reset_quark_devices')),
-        matching: find.text(kResetQuarkDevicesLabel),
-      ),
-      findsOneWidget,
-    );
   });
 
-  // #1899: resetting the appliance is admin-only on the Quark, so a member
-  // keeps their own account deletion and never sees the reset.
-  testWidgets('offers a non-admin deletion but no reset', (tester) async {
+  testWidgets('offers a non-admin deletion', (tester) async {
     await signIn();
     settings.isAdmin.value = false;
 
@@ -231,7 +197,6 @@ void main() {
 
     expect(entry, findsOneWidget);
     expect(resetEntry, findsNothing);
-    expect(find.text('Reset'), findsNothing);
   });
 
   testWidgets('asks for the password before anything is deleted', (
@@ -253,28 +218,6 @@ void main() {
       tester
           .widget<FilledButton>(
             find.byKey(const ValueKey('delete_account_submit')),
-          )
-          .onPressed,
-      isNull,
-    );
-  });
-
-  testWidgets('asks for the password before anything is reset', (tester) async {
-    await signIn();
-    await pumpAccountAndData(tester);
-
-    await tester.tap(resetEntry);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(
-      find.byKey(const ValueKey('reset_quark_password_field')),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey('reset_quark_submit')),
           )
           .onPressed,
       isNull,

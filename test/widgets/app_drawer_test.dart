@@ -182,18 +182,20 @@ void main() {
     }
   });
 
-  testWidgets('a non-admin keeps the Manage group without Users', (
+  testWidgets('a non-admin keeps the Manage group without System and Users', (
     tester,
   ) async {
     await pumpDrawer(tester);
 
     expect(find.text('Manage'), findsOneWidget);
     expect(find.byKey(const ValueKey('drawer_users')), findsNothing);
+    // #4151: System (Health and Storage) is admin-only.
+    expect(find.byKey(const ValueKey('drawer_system')), findsNothing);
     expect(
       top(tester, 'drawer_group_manage'),
       greaterThan(top(tester, 'drawer_books')),
     );
-    for (final key in ['drawer_trash', 'drawer_system', 'drawer_settings']) {
+    for (final key in ['drawer_trash', 'drawer_settings']) {
       expect(
         top(tester, key),
         greaterThan(top(tester, 'drawer_group_manage')),

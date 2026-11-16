@@ -189,6 +189,10 @@ lib/widgets/
     restart_quark_section.dart  hosts RestartController: the restart button,
                                 its confirmation, and the wait until the
                                 Quark answers again
+    reset_quark_section.dart    hosts AccountActionsController: the admin's
+                                Reset this Quark entry at the end of the
+                                Updates tab's Maintenance group, its dialog,
+                                and the trip to setup or login
     remote_access/              remote access diagnostics (#3613): app-side
                                 hosting for phone and Quark diagnostic
                                 sections that read
@@ -383,8 +387,8 @@ maps the Quark's status onto the package `RemoteAccessPanel`),
 along by `RemoteAccessController`) and `connected_devices_card.dart`. The page still loads everything and hands each
 tab its values and callbacks; the tabs stay app-side because they take the
 app's service models and host `HostManager`, `SessionsSection`,
-`HostnameSection`, `SshAccessSection`, `RepairInstallationSection` and
-`RestartQuarkSection`.
+`HostnameSection`, `SshAccessSection`, `RepairInstallationSection`,
+`RestartQuarkSection` and `ResetQuarkSection`.
 
 ## Adding a widget
 

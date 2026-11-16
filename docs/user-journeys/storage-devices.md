@@ -21,6 +21,8 @@ Covers the System page's Storage tab (`/system/storage`) — listing, mounting, 
 
 - The **Storage** tab of the System page, which **System** in the drawer opens. The old `/devices` address
   redirects here.
+- Admins only (#4151). Other accounts get no **System** row in the drawer, and a link here lands them in Files
+  with the note "Only an admin can open that page." shown.
 
 ---
 

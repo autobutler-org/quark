@@ -103,7 +103,11 @@ class _AppDrawerState extends State<AppDrawer> {
         onTapBooks: goTo(QuarkDrawerSection.books, AppRoutes.books),
         onTapChat: goTo(QuarkDrawerSection.chat, AppRoutes.chat),
         hasUnreadChat: _unread.hasUnread,
-        onTapSystem: goTo(QuarkDrawerSection.system, AppRoutes.system),
+        // Health and Storage are admin-only (#4151); a member reaches Jobs
+        // from the jobs badge instead.
+        onTapSystem: settings.isAdmin.value
+            ? goTo(QuarkDrawerSection.system, AppRoutes.system)
+            : null,
         onTapVault: goTo(QuarkDrawerSection.vault, AppRoutes.vault),
         onTapUsers: settings.isAdmin.value
             ? goTo(QuarkDrawerSection.users, AppRoutes.users)

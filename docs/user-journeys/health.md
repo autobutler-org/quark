@@ -20,6 +20,8 @@ Covers the System page's Health tab (`/system/health`) — system metrics and st
 **Notes:**
 
 - **System** in the drawer opens `/system`, which lands on this tab. The old `/health` address redirects here.
+- Admins only (#4151). Other accounts get no **System** row in the drawer, and a link here lands them in Files
+  with the note "Only an admin can open that page." shown.
 
 ---
 

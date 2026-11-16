@@ -90,6 +90,11 @@ void main() {
           tabs: UsersTab.values,
           builder: (_, _) => const Scaffold(body: Text('users')),
         ),
+        ...tabbedRoutes(
+          path: AppRoutes.system,
+          tabs: SystemTab.values,
+          builder: (tab, _) => Scaffold(body: Text('system ${tab.slug}')),
+        ),
         GoRoute(
           path: '${AppRoutes.chat}/:channelId',
           builder: (_, state) =>
@@ -516,6 +521,75 @@ void main() {
         router.routerDelegate.currentConfiguration.uri.path,
         '/users/groups',
       );
+    });
+  });
+
+  // #4151: Health and Storage describe the device and offer a member nothing
+  // to do, so they are admin-only. Jobs is not: the jobs badge sends every
+  // account there to watch its own uploads and jobs.
+  group('the System page', () {
+    setUp(() async {
+      await addUnacceptedHost();
+      await settings.acceptTerms();
+      await settings.setSessionToken('a-token');
+    });
+
+    tearDown(() => settings.setSessionToken(null));
+
+    for (final tab in [SystemTab.health, SystemTab.storage]) {
+      testWidgets('sends a member on ${tab.slug} to files, saying why', (
+        tester,
+      ) async {
+        authStatusProbe = () async =>
+            const AuthStatus(setupComplete: true, username: 'bob');
+
+        await pumpGatedRouter(
+          tester,
+          initialLocation: AppRoutes.systemTab(tab),
+        );
+
+        expect(find.text('files'), findsOneWidget);
+        expect(find.text('system ${tab.slug}'), findsNothing);
+        expect(find.text(Errors.adminOnly), findsOneWidget);
+      });
+
+      testWidgets('opens ${tab.slug} for an admin', (tester) async {
+        authStatusProbe = () async => const AuthStatus(
+          setupComplete: true,
+          username: 'ada',
+          isAdmin: true,
+        );
+
+        await pumpGatedRouter(
+          tester,
+          initialLocation: AppRoutes.systemTab(tab),
+        );
+
+        expect(find.text('system ${tab.slug}'), findsOneWidget);
+      });
+    }
+
+    testWidgets('opens jobs for a member', (tester) async {
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, username: 'bob');
+
+      await pumpGatedRouter(
+        tester,
+        initialLocation: AppRoutes.systemTab(SystemTab.jobs),
+      );
+
+      expect(find.text('system jobs'), findsOneWidget);
+      expect(find.text(Errors.adminOnly), findsNothing);
+    });
+
+    testWidgets('sends a member on the bare path to files', (tester) async {
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, username: 'bob');
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.system);
+
+      expect(find.text('files'), findsOneWidget);
+      expect(find.text(Errors.adminOnly), findsOneWidget);
     });
   });
 
