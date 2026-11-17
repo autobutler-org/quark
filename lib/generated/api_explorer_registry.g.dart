@@ -7381,7 +7381,15 @@ const List<ApiEndpoint> apiEndpoints = [
     inSwagger: true,
     tags: ['settings'],
     summary: 'Get remote access paths',
-    description: 'Admin-only debugging aid (#3883): for each device on remote access, whether its traffic to the Quark goes direct or through a relay, the relay region, the last handshake and byte counts, plus the Quark\'s last network check (UDP, NAT mapping behavior, router port mapping, preferred relay and its latency). Holds no keys, names or addresses.',
+    description: 'Admin-only debugging aid (#3883): for each device on remote access, whether its traffic to the Quark goes direct or through a relay, the relay region, the last handshake and byte counts, plus the Quark\'s network check (UDP, NAT mapping behavior, router port mapping, preferred relay and its latency). The check is the last one the Quark ran unless refresh is true, which runs a new one and waits up to 10 seconds for it. Holds no keys, names or addresses.',
+    parameters: [
+      ApiParameter(
+        name: 'refresh',
+        location: ApiParameterLocation.query,
+        type: 'boolean',
+        description: 'Run a new network check before answering',
+      ),
+    ],
     responses: [
       ApiResponse(
         status: '200',

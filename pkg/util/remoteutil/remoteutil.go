@@ -431,14 +431,31 @@ type PathReportResult struct {
 	Peers []PeerPath `json:"peers"`
 }
 
-// PathReport reads the running node's peers and its last network check. A
-// stopped node reports not connected and no peers, with no error.
-func PathReport() (PathReportResult, error) {
+// PathReportParams selects what PathReport does before it reads.
+type PathReportParams struct {
+	// RefreshNetwork runs a new network check and waits for it, up to
+	// NetworkRefreshTimeout, instead of reporting the last one. The node runs
+	// one when it starts and on its own schedule after that.
+	RefreshNetwork bool
+}
+
+// NetworkRefreshTimeout bounds how long PathReport waits for a network check
+// it asked for. A check usually finishes in a few seconds; past this the
+// report carries the last one, whose At tells the caller it is not new.
+const NetworkRefreshTimeout = 10 * time.Second
+
+// PathReport reads the running node's peers and its network check, a fresh
+// one when params.RefreshNetwork is set. A stopped node reports not connected
+// and no peers, with no error.
+func PathReport(params PathReportParams) (PathReportResult, error) {
 	s := currentServer()
 	if s == nil {
 		return PathReportResult{Peers: []PeerPath{}}, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if params.RefreshNetwork {
+		refreshNetcheck(s, NetworkRefreshTimeout)
+	}
 	return pathReport(ctx, s)
 }

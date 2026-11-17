@@ -253,4 +253,8 @@ func TestGetRemoteAccessPaths_AdminOnly(t *testing.T) {
 	if peers, ok := got["peers"].([]any); !ok || len(peers) != 0 {
 		t.Errorf("peers = %v; want an empty list", got["peers"])
 	}
+
+	if w := doSettingsReq(newAdminEngine(t), http.MethodGet, "/api/v0/settings/remote-access/paths?refresh=true", nil); w.Code != http.StatusOK {
+		t.Errorf("GET /settings/remote-access/paths?refresh=true returned %d: %s; want 200 with no node", w.Code, w.Body.String())
+	}
 }
