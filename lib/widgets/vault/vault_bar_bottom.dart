@@ -7,9 +7,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The unlocked vault's second bar row (#3589): "Passwords" on the left, and
 /// New entry, New folder, Import and Export on the right.
 ///
-/// Six actions did not fit a phone's top bar, which scrolled Lock off the
-/// edge. Here, below `QuarkAppBarBottom.collapseBreakpoint`, the four give way
-/// to a menu labeled "Manage", so the top bar keeps room for Lock.
+/// Only a bar wider than a phone's shows it: on a phone the page puts the
+/// first three behind a `+` button and Export in the bar's More menu, so the
+/// search field is the first thing under the bar (#4234). Between that and
+/// `QuarkAppBarBottom.collapseBreakpoint` the four give way to a menu labeled
+/// "Manage", so the top bar keeps room for Lock.
 ///
 /// Only the chips or the menu are ever on screen, so the menu's entries carry
 /// the chips' keys: `vault_new_entry`, `vault_new_folder`, `vault_import`, and

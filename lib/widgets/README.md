@@ -324,15 +324,20 @@ lib/widgets/
   vault/
     vault_bar_bottom.dart       the unlocked vault's second bar row (#3589):
                                 New entry, New folder, Import and Export,
-                                collapsing into a "Manage" menu on a phone
+                                collapsing into a "Manage" menu on a narrow
+                                bar; wider than a phone only (#4234)
+    vault_create_sheet.dart     the rows of the sheet a phone's + opens
+                                (#4234): New entry, New folder and Import;
+                                app-side for its showQuarkSheet route
     vault_entry_page.dart       one entry over the vault page (#3461): the
                                 package VaultEntryDetails or VaultEntryForm,
                                 saving and deleting through VaultController,
                                 copying through the clipboard and confirming
                                 a delete; pops itself when the vault locks
     vault_error_view.dart       the vault page's load failure, with Retry
-    vault_export_menu.dart      the Export chip and its format menu; takes
-                                the app's VaultExportFormat
+    vault_export_menu.dart      the Export chip and its format menu, or a
+                                phone bar's More chip; takes the app's
+                                VaultExportFormat
     vault_start_over_dialog.dart
                                 asks for the login password before the vault
                                 is deleted (#3615); app-side for the app's

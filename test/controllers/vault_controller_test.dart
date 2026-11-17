@@ -439,7 +439,8 @@ void main() {
 
       c.search('GIT');
       expect(c.visibleRows.map((r) => r.name), ['GitHub']);
-      expect(c.visibleRows.single.subtitle, 'github.com');
+      // The muted line is the site and the username (#4234).
+      expect(c.visibleRows.single.subtitle, 'github.com · grace');
       c.search('grace@');
       expect(c.visibleRows.map((r) => r.name), ['Mail']);
       c.search('');

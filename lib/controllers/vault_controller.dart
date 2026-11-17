@@ -196,15 +196,17 @@ class VaultController extends ChangeNotifier {
     ];
   }
 
-  /// [visibleEntries] as the list's rows, subtitled by host, else username.
+  /// [visibleEntries] as the list's rows, subtitled by the site's host and
+  /// the username, whichever the entry has, joined by a dot (#4234).
   List<VaultEntryItem> get visibleRows => [
     for (final item in visibleEntries)
       VaultEntryItem(
         id: item.id,
         name: item.data.name,
-        subtitle: item.data.urlHost.isEmpty
-            ? item.data.username
-            : item.data.urlHost,
+        subtitle: [
+          item.data.urlHost,
+          item.data.username,
+        ].where((part) => part.isNotEmpty).join(' · '),
       ),
   ];
 
