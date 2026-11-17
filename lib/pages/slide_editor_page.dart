@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/controllers/sidebar_controller.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/slides_service.dart';
@@ -16,6 +17,7 @@ import 'package:quark/widgets/slides/chart/slide_chart_picker.dart';
 import 'package:quark/widgets/slides/export/slide_export_button.dart';
 import 'package:quark/widgets/slides/insert/slide_quark_image_dialog.dart';
 import 'package:quark/widgets/slides/properties/slide_properties_panel.dart';
+import 'package:quark/widgets/slides/slide_panel.dart';
 import 'package:quark/widgets/slides/shortcuts/slide_shortcuts_dialog.dart';
 import 'package:quark/widgets/slides/shortcuts/slide_shortcuts_help.dart';
 import 'package:quark/widgets/slides/slide_editor_bar_bottom.dart';
@@ -137,6 +139,17 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
         startIndex: widget.startIndex,
       );
 
+  /// The wide layout's slide panel and properties panel widths, kept per
+  /// device (#4294).
+  final _slidePane = SidebarController(
+    'slides_list',
+    defaultWidth: SlidePanel.sideWidth,
+  );
+  final _propertiesPane = SidebarController(
+    'slides_properties',
+    defaultWidth: SlidePropertiesPanel.sideWidth,
+  );
+
   late final SlideFindController _find = SlideFindController.forEditor(
     _controller,
   );
@@ -153,6 +166,8 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
 
   @override
   void dispose() {
+    _slidePane.dispose();
+    _propertiesPane.dispose();
     _controller.onSaveFailed = null;
     _controller.onImageInsertFailed = null;
     _controller.onExportFailed = null;
@@ -295,7 +310,11 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
     return LeavePopScope(
       onLeave: _leave,
       child: ListenableBuilder(
-        listenable: _controller,
+        listenable: Listenable.merge([
+          _controller,
+          _slidePane,
+          _propertiesPane,
+        ]),
         builder: (context, _) => Scaffold(
           appBar: AppBar(
             leading: canPop ? null : BackButton(onPressed: _leave),
@@ -392,6 +411,8 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                   onImageFromQuark: _insertImageFromQuark,
                   onShowShortcuts: _showShortcuts,
                   onDeleteSlide: _deleteSlide,
+                  slidePane: _slidePane,
+                  propertiesPane: _propertiesPane,
                 ),
               ),
             ),

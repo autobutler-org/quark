@@ -834,3 +834,29 @@ same drive as the presentation (`photos/cover.jpg`).
 - A pie chart draws its first series only and has no gridlines to turn on.
 - In view-only mode the chart can still be selected and read by a screen reader, but the **Chart** group is gone,
   Enter does nothing, and the properties panel's title takes no input.
+
+---
+
+### JN-SL-040: Resize the slide list and the properties panel
+
+**Preconditions:** JN-SL-004, on a window at least 900 pixels wide.
+
+**Steps:**
+
+1. Drag the edge between the slide list and the canvas to the right.
+2. Drag the edge between the canvas and the properties panel toward the canvas.
+3. Reload the page.
+4. Drag the properties panel's edge back toward the window edge, past 100 pixels wide.
+
+**Expected result:**
+
+- In steps 1 and 2 each pane widens with the pointer, up to 480 pixels or half the window, whichever is smaller,
+  and the canvas shrinks to fit.
+- After step 3 both panes keep the widths from steps 1 and 2.
+- After step 4 the properties panel is hidden, and the toolbar's **Show properties** brings it back.
+
+**Notes:**
+
+- A double-click on an edge resets that pane's default width. Arrow keys resize from the keyboard.
+- The slide list resizes but does not hide: nothing on screen would bring it back.
+- On a phone the slide list is a strip across the top and nothing changes.
