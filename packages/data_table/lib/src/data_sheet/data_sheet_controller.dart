@@ -189,10 +189,14 @@ class DataSheetController extends ChangeNotifier {
   /// Returns the display value for a cell.
   ///
   /// For formula cells (raw value starts with `=`) this is the computed result
-  /// from [_computedValues]. For literal cells this is the raw string.
-  String displayValueAt(int row, int col) {
+  /// from [_computedValues], a fractional number rounded to 10 significant
+  /// digits (`137.6`, not `137.60000000000002`). With [precise], that number
+  /// keeps every digit. For literal cells this is the raw string.
+  String displayValueAt(int row, int col, {bool precise = false}) {
     final computed = _computedValues[(row, col)];
-    if (computed != null) return _formatFormulaValue(computed);
+    if (computed != null) {
+      return _formatFormulaValue(computed, precise: precise);
+    }
     return cellAt(row, col).value.toString();
   }
 
@@ -243,15 +247,31 @@ class DataSheetController extends ChangeNotifier {
     super.notifyListeners();
   }
 
-  static String _formatFormulaValue(FormulaValue v) => switch (v) {
-    NumberValue(:final value) =>
-      value == value.truncateToDouble()
-          ? value.toInt().toString()
-          : value.toString(),
-    StringValue(:final value) => value,
-    BoolValue(:final value) => value ? 'TRUE' : 'FALSE',
-    ErrorValue(:final code) => code,
-  };
+  /// The text a formula result shows. A number that is not whole is rounded
+  /// to [_displayPrecision] significant digits, so binary rounding error
+  /// (`650 - 512.40` = `137.60000000000002`) shows as `137.6`; with
+  /// [precise], it keeps every digit for a number format to round instead.
+  /// Either way the computed value itself is untouched.
+  static String _formatFormulaValue(FormulaValue v, {bool precise = false}) =>
+      switch (v) {
+        NumberValue(:final value) when value == value.truncateToDouble() =>
+          value.toInt().toString(),
+        NumberValue(:final value) when precise || !value.isFinite =>
+          value.toString(),
+        NumberValue(:final value) => _formatFormulaValue(
+          NumberValue(
+            double.parse(value.toStringAsPrecision(_displayPrecision)),
+          ),
+          precise: true,
+        ),
+        StringValue(:final value) => value,
+        BoolValue(:final value) => value ? 'TRUE' : 'FALSE',
+        ErrorValue(:final code) => code,
+      };
+
+  /// How many significant digits a formula result that is not a whole number
+  /// shows under the general format.
+  static const int _displayPrecision = 10;
 
   /// A controller over [table].
   ///
@@ -1191,9 +1211,13 @@ class DataSheetController extends ChangeNotifier {
       _formats[(row, col)] ?? CellFormat.plain;
 
   /// The text the cell at [row], [col] shows: [displayValueAt] in the cell's
-  /// number format.
-  String formattedValueAt(int row, int col) =>
-      formatCellValue(displayValueAt(row, col), formatAt(row, col));
+  /// number format. An explicit number format rounds the full computed value
+  /// itself, at whatever decimals it asks for.
+  String formattedValueAt(int row, int col) {
+    final format = formatAt(row, col);
+    final precise = format.numberFormat != CellNumberFormat.general;
+    return formatCellValue(displayValueAt(row, col, precise: precise), format);
+  }
 
   /// Replaces the format of every visible cell in [range] with [change]
   /// applied to it, as one undo step. Hidden rows are skipped, as every range
