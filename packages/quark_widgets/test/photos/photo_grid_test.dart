@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -409,5 +410,227 @@ void main() {
       );
       expect(built, contains(photo.id), reason: '${photo.id} was not rebuilt');
     }
+  });
+
+  group('range and drag select (#4171)', () {
+    List<PhotoItem> many(int n) => [
+      for (var i = 0; i < n; i++) PhotoItem(id: 'p$i', name: 'p$i.jpg'),
+    ];
+
+    Future<void> pumpSelectable(
+      WidgetTester tester,
+      Size size,
+      List<String> events, {
+      int count = 30,
+      int columns = 3,
+      List<PhotoGridSection>? sections,
+      ScrollController? controller,
+    }) => pumpAt(
+      tester,
+      CustomScrollView(
+        controller: controller,
+        slivers: [
+          PhotoGrid(
+            photos: many(count),
+            sections: sections,
+            crossAxisCount: columns,
+            selectionMode: true,
+            emptyState: const SizedBox(),
+            thumbnailBuilder: (context, photo) =>
+                ColoredBox(color: Colors.teal, child: Text(photo.name)),
+            onTap: (i) => events.add('tap:$i'),
+            onLongPress: (i) => events.add('long:$i'),
+            onRangeSelect: (i) => events.add('range:$i'),
+            onDragSelectStart: () => events.add('start'),
+            onDragSelectUpdate: (indices) =>
+                events.add('drag:${indices.join(',')}'),
+            onDragSelectEnd: () => events.add('end'),
+          ),
+        ],
+      ),
+      size: size,
+    );
+
+    Offset at(WidgetTester tester, int i) =>
+        tester.getCenter(find.byKey(ValueKey('photo_tile_p$i')));
+
+    testBothViewports('a shift-click reports a range, a click a tap', (
+      tester,
+      size,
+    ) async {
+      final events = <String>[];
+      await pumpSelectable(tester, size, events);
+
+      await tester.tap(find.byKey(const ValueKey('photo_tile_p0')));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.tap(find.byKey(const ValueKey('photo_tile_p4')));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+
+      expect(events, ['tap:0', 'range:4']);
+    });
+
+    testBothViewports('a mouse drag across two rows selects the tiles it '
+        'crossed', (tester, size) async {
+      final events = <String>[];
+      await pumpSelectable(tester, size, events);
+
+      final drag = await tester.startGesture(
+        at(tester, 0),
+        kind: PointerDeviceKind.mouse,
+      );
+      await drag.moveTo(at(tester, 1));
+      await tester.pump();
+      await drag.moveTo(at(tester, 4));
+      await tester.pump();
+      await drag.up();
+      await tester.pump();
+
+      // A rubber band from the first row's first tile to the second row's
+      // second: two rows of two, not the whole run between them.
+      expect(events, ['start', 'drag:0,1', 'drag:0,1,3,4', 'end']);
+    });
+
+    testBothViewports('a long press then a swipe across a row selects it, '
+        'and swiping back gives it back', (tester, size) async {
+      final events = <String>[];
+      await pumpSelectable(tester, size, events);
+
+      final drag = await tester.startGesture(at(tester, 0));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      await drag.moveTo(at(tester, 1));
+      await tester.pump();
+      await drag.moveTo(at(tester, 2));
+      await tester.pump();
+      await drag.moveTo(at(tester, 1));
+      await tester.pump();
+      await drag.moveTo(at(tester, 0));
+      await tester.pump();
+      await drag.up();
+      await tester.pump();
+
+      expect(events, [
+        'long:0',
+        'start',
+        'drag:0,1',
+        'drag:0,1,2',
+        'drag:0,1',
+        'drag:0',
+        'end',
+      ]);
+    });
+
+    testBothViewports('a swipe down after a long press takes the run in grid '
+        'order', (tester, size) async {
+      final events = <String>[];
+      await pumpSelectable(tester, size, events);
+
+      final drag = await tester.startGesture(at(tester, 1));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      await drag.moveTo(at(tester, 3));
+      await tester.pump();
+      await drag.up();
+
+      expect(events, ['long:1', 'start', 'drag:1,2,3', 'end']);
+    });
+
+    testBothViewports('a plain swipe scrolls and selects nothing', (
+      tester,
+      size,
+    ) async {
+      final events = <String>[];
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+      await pumpSelectable(tester, size, events, controller: controller);
+
+      await tester.dragFrom(at(tester, 3), const Offset(0, -200));
+      await tester.pumpAndSettle();
+
+      expect(controller.offset, greaterThan(0));
+      expect(events, isEmpty);
+    });
+
+    testBothViewports('a drag held at the bottom edge scrolls the grid and '
+        'keeps selecting', (tester, size) async {
+      final events = <String>[];
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+      await pumpSelectable(
+        tester,
+        size,
+        events,
+        count: 90,
+        controller: controller,
+      );
+
+      final drag = await tester.startGesture(
+        at(tester, 0),
+        kind: PointerDeviceKind.mouse,
+      );
+      await drag.moveTo(at(tester, 1));
+      await tester.pump();
+      await drag.moveTo(Offset(at(tester, 1).dx, size.height - 4));
+      for (var i = 0; i < 120; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await drag.up();
+      await tester.pump();
+
+      expect(controller.offset, greaterThan(0));
+      final last = events.lastWhere((e) => e.startsWith('drag:'));
+      final indices = last.substring(5).split(',').map(int.parse);
+      expect(indices.reduce((a, b) => a > b ? a : b), greaterThan(15));
+      expect(indices.every((i) => i % 3 != 2), isTrue, reason: 'two columns');
+      expect(events.last, 'end');
+    });
+
+    testBothViewports('a rubber band counts columns within each section', (
+      tester,
+      size,
+    ) async {
+      final events = <String>[];
+      await pumpSelectable(
+        tester,
+        size,
+        events,
+        count: 20,
+        columns: 8,
+        sections: const [
+          PhotoGridSection(id: 'a', label: 'March 2025', count: 4),
+          PhotoGridSection(id: 'b', label: 'February 2025', count: 16),
+        ],
+      );
+
+      final drag = await tester.startGesture(
+        at(tester, 2),
+        kind: PointerDeviceKind.mouse,
+      );
+      await drag.moveTo(at(tester, 1));
+      await tester.pump();
+      await drag.moveTo(at(tester, 13));
+      await tester.pump();
+      await drag.up();
+
+      expect(events, ['start', 'drag:1,2', 'drag:1,2,5,6,13,14', 'end']);
+    });
+
+    testWidgets('without drag callbacks a mouse drag selects nothing', (
+      tester,
+    ) async {
+      final events = <String>[];
+      await pumpGrid(tester, events: events, selectionMode: true);
+
+      final drag = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('photo_tile_a'))),
+        kind: PointerDeviceKind.mouse,
+      );
+      await drag.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('photo_tile_c'))),
+      );
+      await drag.up();
+      await tester.pump(kDoubleTapTimeout);
+
+      expect(events, isEmpty);
+    });
   });
 }

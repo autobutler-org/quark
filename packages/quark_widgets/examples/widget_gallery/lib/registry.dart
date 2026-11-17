@@ -2258,6 +2258,11 @@ final List<GalleryEntry> registry = [
             onLongPress: (i) => log('PhotoGrid.onLongPress($i)'),
             onDoubleTap: (i) => log('PhotoGrid.onDoubleTap($i)'),
             onMenu: (i, position) => log('PhotoGrid.onMenu($i)'),
+            onRangeSelect: (i) => log('PhotoGrid.onRangeSelect($i)'),
+            onDragSelectStart: () => log('PhotoGrid.onDragSelectStart()'),
+            onDragSelectUpdate: (indices) =>
+                log('PhotoGrid.onDragSelectUpdate($indices)'),
+            onDragSelectEnd: () => log('PhotoGrid.onDragSelectEnd()'),
           ),
         ],
       ),

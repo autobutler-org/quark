@@ -1,9 +1,12 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/quark_loader.dart';
 import '../models/photo_grid_section.dart';
 import '../models/photo_item.dart';
 import '../theme/quark_tokens.dart';
+import 'photo_grid/photo_grid_drag_selection.dart';
+import 'photo_grid/photo_grid_drag_target.dart';
 import 'photo_grid/photo_grid_section_header.dart';
 import 'photo_grid_tile.dart';
 
@@ -40,6 +43,22 @@ import 'photo_grid_tile.dart';
 /// tiles are built however many sections there are. Indices in callbacks
 /// still count across the whole of [photos].
 ///
+/// Many photos take one gesture (#4171), and the grid only reports it; the
+/// caller decides what ends up selected:
+///
+/// - A shift-click calls [onRangeSelect] instead of [onTap], for the caller
+///   to select from the photo picked last to this one.
+/// - A mouse drag that starts on a tile is a rubber band: the tiles in the
+///   rows and columns between where it started and the pointer.
+/// - A long press that keeps going, on a phone, covers every tile between
+///   the pressed one and the finger, in grid order. A swipe that does not
+///   follow a long press still scrolls.
+///
+/// A drag calls [onDragSelectStart], then [onDragSelectUpdate] with every
+/// index it covers each time that changes, then [onDragSelectEnd]. Held near
+/// the top or bottom of the scroll view, it scrolls. It only covers loaded
+/// tiles. Without [onDragSelectUpdate] a drag selects nothing.
+///
 /// Key prefixes: `photo_grid` on the grid, `photo_grid_section_<id>` on each
 /// section header, `photo_grid_loading_more` on the trailing spinner cell,
 /// and every tile's own `photo_tile_<id>`,
@@ -57,11 +76,15 @@ import 'photo_grid_tile.dart';
 ///       thumbnailBuilder: (context, photo) => Image.network(urlFor(photo)),
 ///       onTap: open,
 ///       onLongPress: (index) => controller.select(index),
+///       onRangeSelect: (index) => controller.selectRangeTo(index),
+///       onDragSelectStart: controller.beginDragSelection,
+///       onDragSelectUpdate: controller.updateDragSelection,
+///       onDragSelectEnd: controller.endDragSelection,
 ///     ),
 ///   ],
 /// );
 /// ```
-class PhotoGrid extends StatelessWidget {
+class PhotoGrid extends StatefulWidget {
   /// Creates a grid of [photos].
   const PhotoGrid({
     required this.photos,
@@ -72,6 +95,10 @@ class PhotoGrid extends StatelessWidget {
     required this.onLongPress,
     this.onDoubleTap,
     this.onMenu,
+    this.onRangeSelect,
+    this.onDragSelectStart,
+    this.onDragSelectUpdate,
+    this.onDragSelectEnd,
     this.sections,
     this.longPressOpensMenu = true,
     this.selectedIds = const {},
@@ -111,6 +138,23 @@ class PhotoGrid extends StatelessWidget {
   /// tiles no menu.
   final void Function(int index, Offset globalPosition)? onMenu;
 
+  /// Called with the index of a tile clicked or tapped with Shift held,
+  /// instead of [onTap]. Null leaves a shift-click a plain [onTap].
+  final ValueChanged<int>? onRangeSelect;
+
+  /// Called when a drag starts selecting, before its first
+  /// [onDragSelectUpdate].
+  final VoidCallback? onDragSelectStart;
+
+  /// Called with every index the running drag covers, in order, whenever
+  /// that changes. It holds the whole of what the drag covers, so a drag
+  /// that turns back leaves tiles out it reported before. Null turns drag
+  /// selection off.
+  final ValueChanged<List<int>>? onDragSelectUpdate;
+
+  /// Called when the pointer of a selecting drag lifts.
+  final VoidCallback? onDragSelectEnd;
+
   /// Whether a long press opens a tile's menu rather than calling
   /// [onLongPress]. See [PhotoGridTile.longPressOpensMenu].
   final bool longPressOpensMenu;
@@ -141,8 +185,41 @@ class PhotoGrid extends StatelessWidget {
   final bool isLoadingMore;
 
   @override
+  State<PhotoGrid> createState() => PhotoGridState();
+}
+
+/// The state of a [PhotoGrid]: the drag selection that follows a pointer
+/// across its tiles, which outlives a rebuild mid-drag.
+class PhotoGridState extends State<PhotoGrid> {
+  final PhotoGridDragSelection _drag = PhotoGridDragSelection();
+
+  @override
+  void dispose() {
+    _drag.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final error = this.error;
+    final PhotoGrid(
+      :photos,
+      :crossAxisCount,
+      :emptyState,
+      :thumbnailBuilder,
+      :onTap,
+      :onLongPress,
+      :longPressOpensMenu,
+      :selectedIds,
+      :selectionMode,
+      :isLoading,
+      :error,
+      :hasMore,
+      :isLoadingMore,
+      :onDoubleTap,
+      :onMenu,
+      :onRangeSelect,
+      :sections,
+    ) = widget;
     final gap = QuarkTokens.of(context).spacingXs / 2;
 
     if (isLoading && photos.isEmpty) {
@@ -161,9 +238,22 @@ class PhotoGrid extends StatelessWidget {
       return SliverFillRemaining(hasScrollBody: false, child: emptyState);
     }
 
-    final onDoubleTap = this.onDoubleTap;
-    final onMenu = this.onMenu;
-    final sections = this.sections;
+    final sectionStarts = <int>[];
+    var counted = 0;
+    for (final section in sections ?? const <PhotoGridSection>[]) {
+      sectionStarts.add(counted);
+      counted += section.count;
+    }
+    _drag.configure(
+      crossAxisCount: crossAxisCount,
+      photoCount: photos.length,
+      sectionStarts: sectionStarts,
+      scrollable: Scrollable.maybeOf(context),
+      viewId: View.of(context).viewId,
+      onStart: widget.onDragSelectStart,
+      onUpdate: widget.onDragSelectUpdate,
+      onEnd: widget.onDragSelectEnd,
+    );
     final gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
       crossAxisCount: crossAxisCount,
       crossAxisSpacing: gap,
@@ -176,21 +266,31 @@ class PhotoGrid extends StatelessWidget {
 
     Widget tile(int index) {
       final photo = photos[index];
-      return PhotoGridTile(
+      return PhotoGridDragTarget(
         key: ValueKey(photo.id),
-        item: photo,
-        isSelected: selectedIds.contains(photo.id),
-        selectionMode: selectionMode,
-        thumbnailBuilder: thumbnailBuilder,
-        onTap: () => onTap(index),
-        onLongPress: () => onLongPress(index),
-        onDoubleTap: onDoubleTap != null && photo.isRemote && !selectionMode
-            ? () => onDoubleTap(index)
-            : null,
-        onMenu: onMenu != null && photo.isRemote && !selectionMode
-            ? (position) => onMenu(index, position)
-            : null,
-        longPressOpensMenu: longPressOpensMenu,
+        selection: _drag,
+        index: index,
+        child: PhotoGridTile(
+          item: photo,
+          isSelected: selectedIds.contains(photo.id),
+          selectionMode: selectionMode,
+          thumbnailBuilder: thumbnailBuilder,
+          onTap: () =>
+              onRangeSelect != null && HardwareKeyboard.instance.isShiftPressed
+              ? onRangeSelect(index)
+              : onTap(index),
+          onLongPress: () {
+            onLongPress(index);
+            _drag.longPressed(index);
+          },
+          onDoubleTap: onDoubleTap != null && photo.isRemote && !selectionMode
+              ? () => onDoubleTap(index)
+              : null,
+          onMenu: onMenu != null && photo.isRemote && !selectionMode
+              ? (position) => onMenu(index, position)
+              : null,
+          longPressOpensMenu: longPressOpensMenu,
+        ),
       );
     }
 
