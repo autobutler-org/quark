@@ -1,18 +1,26 @@
+import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/models/photo_metadata.dart';
+import 'package:quark/router.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/photo_location.dart';
 import 'package:quark/widgets/image_viewer/info_row.dart';
 import 'package:quark/widgets/image_viewer/section.dart';
+import 'package:quark/widgets/photo_locations/photo_map_preview.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// The metadata sections shown in the photo viewer, shared by the desktop
 /// sidebar and the mobile drawer.
 ///
-/// A photo with a GPS position gets an "Open in Maps" row
-/// (`photo_info_open_in_maps`) under its coordinates.
+/// A photo with a GPS position gets a small map preview
+/// (`photo_map_preview`) above its coordinates while the photo map is on in
+/// Settings, which opens the Locations view centered there (#3557), and an
+/// "Open in Maps" row (`photo_info_open_in_maps`) under them, which hands the
+/// position to a maps site only when tapped.
 class MetadataContent {
   static List<Widget> sections({
     required BuildContext context,
@@ -67,6 +75,21 @@ class MetadataContent {
         Section(
           title: 'Location',
           children: [
+            if (AppSettings.instance.photoMapEnabled.value)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: PhotoMapPreview(
+                  latitude: exif!.latitude!,
+                  longitude: exif.longitude!,
+                  tiles: AppSettings.instance.photoMapTiles.value,
+                  customTileUrl:
+                      AppSettings.instance.photoMapCustomTileUrl.value,
+                  onOpen: () => context.push(
+                    AppRoutes.photoLocations,
+                    extra: LatLng(exif.latitude!, exif.longitude!),
+                  ),
+                ),
+              ),
             InfoRow(
               icon: QuarkIcons.location_on_outlined,
               value:

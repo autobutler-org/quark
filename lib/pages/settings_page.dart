@@ -34,6 +34,7 @@ import 'package:quark/widgets/settings/settings_about_tab.dart';
 import 'package:quark/widgets/settings/sessions_section.dart';
 import 'package:quark/widgets/settings/settings_account_tab.dart';
 import 'package:quark/widgets/settings/settings_features_tab.dart';
+import 'package:quark/widgets/photo_locations/photo_map_settings.dart';
 import 'package:quark/widgets/settings/settings_general_tab.dart';
 import 'package:quark/widgets/settings/settings_network_tab.dart';
 import 'package:quark/widgets/settings/this_phone_card.dart';
@@ -654,6 +655,7 @@ class _SettingsPageState extends State<SettingsPage> {
               onQuarkThemeColorChanged: hasHost && isAdmin
                   ? _setQuarkThemeColor
                   : null,
+              photoMap: const PhotoMapSettings(),
               defaultCalendarView: settings.defaultCalendarView.value,
               onDefaultCalendarViewChanged: settings.setDefaultCalendarView,
               // Every type today is a backup reminder, which only an admin

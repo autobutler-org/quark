@@ -936,6 +936,10 @@ class PhotosPageState extends State<PhotosPage>
                         onDuplicates: _demo
                             ? null
                             : () => context.go(AppRoutes.photoDuplicates),
+                        onLocations:
+                            _demo || !AppSettings.instance.photoMapEnabled.value
+                            ? null
+                            : () => context.go(AppRoutes.photoLocations),
                         onPickLibrary: compact ? _openLibraryPicker : null,
                         onGridSize: compact ? _openGridSize : null,
                       ),

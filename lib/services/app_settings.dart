@@ -12,6 +12,7 @@ import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/models/calendar_view.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/file_list_column.dart';
+import 'package:quark/models/photo_map_tiles.dart';
 import 'package:quark/models/photo_sort.dart';
 import 'package:quark/services/local_trust.dart';
 import 'package:quark/utils/emulator_loopback.dart';
@@ -187,6 +188,20 @@ class AppSettings {
   /// left.
   final ValueNotifier<bool> leftHanded = ValueNotifier(false);
 
+  /// Whether Photos shows its Locations view and the viewer's map preview
+  /// (#3557). Off hides both, and no map tile is fetched at all.
+  final ValueNotifier<bool> photoMapEnabled = ValueNotifier(true);
+
+  /// Where the photo map draws its tiles from (#3557): the Quark's own pack
+  /// unless the user chose otherwise.
+  final ValueNotifier<PhotoMapTiles> photoMapTiles = ValueNotifier(
+    PhotoMapTiles.quark,
+  );
+
+  /// The `{z}/{x}/{y}` URL template of the household's own tile server, used
+  /// when [photoMapTiles] is [PhotoMapTiles.custom].
+  final ValueNotifier<String> photoMapCustomTileUrl = ValueNotifier('');
+
   /// The view a bare `/calendar` opens on, on this device (#2521). Week until
   /// the user picks another in Settings; a link naming a view still wins.
   final ValueNotifier<CalendarView> defaultCalendarView = ValueNotifier(
@@ -358,6 +373,9 @@ class AppSettings {
   static const _documentDarkPageKey = 'document_editor_dark_page';
   static const _highContrastKey = 'highContrast';
   static const _leftHandedKey = 'leftHanded';
+  static const _photoMapEnabledKey = 'photoMapEnabled';
+  static const _photoMapTilesKey = 'photoMapTiles';
+  static const _photoMapCustomTileUrlKey = 'photoMapCustomTileUrl';
 
   /// Holds the chosen view's slug.
   static const _defaultCalendarViewKey = 'defaultCalendarView';
@@ -435,6 +453,12 @@ class AppSettings {
     _prefs = await SharedPreferences.getInstance();
     highContrast.value = _prefs!.getBool(_highContrastKey) ?? false;
     leftHanded.value = _prefs!.getBool(_leftHandedKey) ?? false;
+    photoMapEnabled.value = _prefs!.getBool(_photoMapEnabledKey) ?? true;
+    photoMapTiles.value = PhotoMapTiles.parse(
+      _prefs!.getString(_photoMapTilesKey),
+    );
+    photoMapCustomTileUrl.value =
+        _prefs!.getString(_photoMapCustomTileUrlKey) ?? '';
     final calendarViewRaw = _prefs!.getString(_defaultCalendarViewKey);
     defaultCalendarView.value = CalendarView.values.firstWhere(
       (view) => view.slug == calendarViewRaw,
@@ -1311,6 +1335,25 @@ class AppSettings {
   Future<void> setHighContrast(bool enabled) async {
     highContrast.value = enabled;
     await _prefs?.setBool(_highContrastKey, enabled);
+  }
+
+  /// Turns the photo map on or off (#3557).
+  Future<void> setPhotoMapEnabled(bool enabled) async {
+    photoMapEnabled.value = enabled;
+    await _prefs?.setBool(_photoMapEnabledKey, enabled);
+  }
+
+  /// Chooses where the photo map's tiles come from, and the household tile
+  /// server's URL template for [PhotoMapTiles.custom].
+  Future<void> setPhotoMapTiles(
+    PhotoMapTiles tiles, {
+    String? customUrl,
+  }) async {
+    photoMapTiles.value = tiles;
+    await _prefs?.setString(_photoMapTilesKey, tiles.storageValue);
+    if (customUrl == null) return;
+    photoMapCustomTileUrl.value = customUrl;
+    await _prefs?.setString(_photoMapCustomTileUrlKey, customUrl);
   }
 
   Future<void> setLeftHanded(bool enabled) async {

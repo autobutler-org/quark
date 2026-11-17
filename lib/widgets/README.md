@@ -174,6 +174,25 @@ lib/widgets/
                                 NotificationsList in a sheet
     notifications_list.dart     the sheet's rows, each opening its
                                 notification's route; reads the controller
+  photo_locations/              the Locations view (#3557); each draws a flutter_map
+                                map, whose tile layer the package does not
+                                depend on, or reads AppSettings
+    location_cluster_list.dart  the List alternative to the map, one row per
+                                cluster
+    location_cluster_marker.dart
+                                a cluster's thumbnail marker and count badge
+    location_photos_pane.dart   the chosen cluster's PhotoGrid, with Add to
+                                album
+    locations_summary.dart      "N of M photos have a location" under the view
+    photo_locations_layout.dart split pane on a wide screen, bottom sheet on a
+                                phone
+    photo_locations_map.dart    the map: tiles, markers, keyboard zoom and pan
+    photo_map_attribution.dart  the OpenStreetMap attribution every map shows
+    photo_map_preview.dart      the viewer info panel's still map
+    photo_map_settings.dart     the Settings section; reads and writes
+                                AppSettings
+    photo_map_tile_layer.dart   the tile source the user chose, with the
+                                Quark's session sent only to the Quark
   photos/
     add_to_album_sheet.dart     AlbumPickerSheet host for a photo in an album
                                 view: calls AlbumService, shows snack bars

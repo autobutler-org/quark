@@ -648,6 +648,14 @@ class QuarkIcons {
   static const IconData calendar_today_outlined = Icons.calendar_today_outlined;
   static const IconData location_on_outlined = Icons.location_on_outlined;
 
+  /// A photo's position on a map (#3557), the filled pair of
+  /// [location_on_outlined].
+  static const IconData location_on = Icons.location_on;
+
+  /// The Locations view's map (#3557). Rounded, the pair of
+  /// [view_list_rounded] in its Map | List toggle.
+  static const IconData map = Icons.map_rounded;
+
   /// Follow the system theme. Rounded, with [light_mode] and [dark_mode].
   static const IconData brightness_auto_rounded = Icons.brightness_auto_rounded;
 
