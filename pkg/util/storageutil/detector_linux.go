@@ -73,6 +73,7 @@ func detectDevices(categorize bool) ([]Device, error) {
 					IsInternal:     false,
 					Model:          usb.GetProduct(),
 					UsbInfo:        usb,
+					NeedsRestart:   DeviceNeedsRestart(usb),
 				}
 				devices = append(devices, dev)
 				continue

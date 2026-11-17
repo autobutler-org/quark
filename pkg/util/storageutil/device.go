@@ -18,6 +18,10 @@ type Device struct {
 	Model          string            `json:"model"`             // Device model name
 	Categories     map[string]uint64 `json:"categories"`        // Simple heuristic breakdown in bytes
 	UsbInfo        UsbDevice         `json:"usbInfo,omitempty"` // USB-specific info, if available
+	// NeedsRestart marks a plugged-in drive Quark sees but cannot mount until
+	// it restarts: its /dev node is missing, as for a drive plugged into a
+	// container after it started (#4018). See [ErrNeedsRestart].
+	NeedsRestart bool `json:"needsRestart,omitempty"`
 }
 
 // ApplySimpleCategorization applies a simple heuristic categorization for UI display

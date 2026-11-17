@@ -4,12 +4,33 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 )
+
+// sysBlockDir is where sysfs lists block devices, and devDir where their
+// nodes live. They are vars so tests can stand a fake tree in for both.
+var (
+	sysBlockDir = "/sys/block"
+	devDir      = "/dev"
+)
+
+// ErrNeedsRestart is the answer for a drive sysfs shows but /dev has no node
+// for. A container copies /dev when it starts, so a drive plugged in after
+// that is detected and cannot be mounted until Quark restarts (#4018). It is
+// also what a container run without --privileged sees for every drive.
+var ErrNeedsRestart = errors.New("this drive cannot be reached until Quark restarts")
+
+// DeviceNeedsRestart reports whether device's partitions have no node in /dev,
+// so mounting it has to wait for a restart. See [ErrNeedsRestart].
+func DeviceNeedsRestart(device UsbDevice) bool {
+	_, err := device.Partitions()
+	return errors.Is(err, ErrNeedsRestart)
+}
 
 type UsbDevice interface {
 	// Member variable access
@@ -76,7 +97,7 @@ func (u *usbDevice) UpdateStatus() error {
 
 func (u *usbDevice) BlockDevicePath() (string, bool) {
 	usbDirName := filepath.Base(u.Path)
-	blockDevs, _ := filepath.Glob("/sys/block/*/device")
+	blockDevs, _ := filepath.Glob(filepath.Join(sysBlockDir, "*", "device"))
 	for _, dev := range blockDevs {
 		resolved, err := filepath.EvalSymlinks(dev)
 		if err != nil {
@@ -84,7 +105,7 @@ func (u *usbDevice) BlockDevicePath() (string, bool) {
 		}
 		if ownsBlockDevice(usbDirName, resolved) {
 			blockDevName := filepath.Base(filepath.Dir(dev))
-			return filepath.Join("/dev", blockDevName), true
+			return filepath.Join(devDir, blockDevName), true
 		}
 	}
 	return "", false
@@ -115,13 +136,23 @@ func (u *usbDevice) IsStorageDevice() bool {
 // Partitions returns the device's partitions in partition-number order, so
 // /dev/sda10 follows /dev/sda2. If it has none (a whole-disk filesystem), the
 // block device itself is returned as the one partition, so mount detection and
-// mounting still work.
+// mounting still work. A partition with no node in /dev is [ErrNeedsRestart],
+// so no mount command is ever given a device path that does not exist.
 func (u *usbDevice) Partitions() ([]Partition, error) {
 	blockDev, exists := u.BlockDevicePath()
 	if !exists {
 		return nil, errors.New("block device not found")
 	}
-	return sysfsPartitions("/sys/block", filepath.Base(blockDev))
+	partitions, err := sysfsPartitions(sysBlockDir, filepath.Base(blockDev))
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range partitions {
+		if _, err := os.Stat(p.Path()); errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("%s has no device node: %w", p.Path(), ErrNeedsRestart)
+		}
+	}
+	return partitions, nil
 }
 
 // sysfsPartitions lists block device name's partitions from sysfs: each child
@@ -153,11 +184,11 @@ func sysfsPartitions(sysBlock, name string) ([]Partition, error) {
 	// No partitions: the drive may carry a whole-disk filesystem (mkfs.ext4
 	// /dev/sda without a partition table), so offer the disk itself.
 	if len(found) == 0 {
-		return []Partition{&partition{path: filepath.Join("/dev", name)}}, nil
+		return []Partition{&partition{path: filepath.Join(devDir, name)}}, nil
 	}
 	partitions := make([]Partition, 0, len(found))
 	for _, f := range found {
-		partitions = append(partitions, &partition{path: filepath.Join("/dev", f.name)})
+		partitions = append(partitions, &partition{path: filepath.Join(devDir, f.name)})
 	}
 	return partitions, nil
 }
