@@ -4865,6 +4865,102 @@ const List<ApiEndpoint> apiEndpoints = [
   ),
   ApiEndpoint(
     method: 'POST',
+    path: '/api/v0/files/download-selection',
+    inSwagger: true,
+    tags: ['files'],
+    summary: 'Download a selection of files as one zip',
+    description: 'Zips the selected files, from any folders on any devices, into one archive streamed back as selection.zip (#4195). Each entry is named after its file, and a name taken twice gets " (1)", " (2)", ... before its extension. A path the caller cannot read, that does not exist, that is a folder, or that is on a device not attached is left out and named in a skipped.txt at the end of the zip; it never fails the download. The archive is built on the fly and cannot be resumed. It is a POST form so a browser can submit it and save the response to disk; a browser authenticates with a token from POST /files/download-selection-token, passing its selection as filePath, and must send the same paths.',
+    parameters: [
+      ApiParameter(
+        name: 'paths',
+        location: ApiParameterLocation.formData,
+        required: true,
+        type: 'string',
+        description: 'JSON array of the selected files, each {\\',
+      ),
+      ApiParameter(
+        name: 'filePath',
+        location: ApiParameterLocation.query,
+        type: 'string',
+        description: 'With downloadToken: the selection the token was issued for',
+      ),
+      ApiParameter(
+        name: 'downloadToken',
+        location: ApiParameterLocation.query,
+        type: 'string',
+        description: 'Token from POST /files/download-selection-token, for a browser form that cannot send an Authorization header',
+      ),
+    ],
+    responses: [
+      ApiResponse(
+        status: '200',
+        description: 'OK',
+        schema: '{"type":"file"}',
+      ),
+      ApiResponse(
+        status: '400',
+        description: 'No paths, more than 2000, or not a JSON array',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '401',
+        description: 'Unauthorized, or the paths are not the ones the token was issued for',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '500',
+        description: 'Internal Server Error',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '503',
+        description: 'Every zip slot is busy; retry after the Retry-After header',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+    ],
+  ),
+  ApiEndpoint(
+    method: 'POST',
+    path: '/api/v0/files/download-selection-token',
+    inSwagger: true,
+    tags: ['files'],
+    summary: 'Issue a download token for a selection',
+    description: 'Issues a token that authenticates one POST /files/download-selection of the same paths, passed as the downloadToken query parameter with the returned selection as filePath. It is the selection counterpart of POST /files/download-token, for a browser form that cannot send an Authorization header. The paths may be on any devices; each is checked for read access when the zip is built, not here. A selection names 1 to 2000 paths.',
+    parameters: [
+      ApiParameter(
+        name: 'request',
+        location: ApiParameterLocation.body,
+        required: true,
+        type: 'object',
+        description: 'The selected files',
+      ),
+    ],
+    requestSchema: '{"type":"object","properties":{"paths":{"type":"array","items":{"type":"object","properties":{"filePath":{"type":"string"},"serial":{"type":"string"}}}}}}',
+    responses: [
+      ApiResponse(
+        status: '200',
+        description: 'OK',
+        schema: '{"type":"object","properties":{"expiresAt":{"type":"string"},"selection":{"type":"string"},"token":{"type":"string"}}}',
+      ),
+      ApiResponse(
+        status: '400',
+        description: 'No paths, or more than 2000',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '401',
+        description: 'Unauthorized',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '500',
+        description: 'Internal Server Error',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+    ],
+  ),
+  ApiEndpoint(
+    method: 'POST',
     path: '/api/v0/files/download-token',
     inSwagger: true,
     tags: ['files'],

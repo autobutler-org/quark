@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/zipselectionutil"
 )
 
 type router struct{}
@@ -13,9 +14,11 @@ func (r *router) Routes() []*serverutil.Route {
 		convertDocumentRoute,
 		convertXlsxRoute,
 		createDownloadTokenRoute,
+		createSelectionDownloadTokenRoute,
 		deleteFilesRoute,
 		downloadArchiveFileRoute,
 		downloadFileRoute,
+		downloadSelectionRoute,
 		exportXlsxRoute,
 		extractFileRoute,
 		listArchiveRoute,
@@ -61,6 +64,19 @@ type ConvertDocumentJSON struct {
 type createDownloadTokenResponse struct {
 	Token     string    `json:"token"`
 	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// selectionRequest names the files a selection download zips.
+type selectionRequest struct {
+	Paths []zipselectionutil.Path `json:"paths"`
+}
+
+// createSelectionDownloadTokenResponse is a token for one selection download,
+// and the selection it is bound to, which the download passes as filePath.
+type createSelectionDownloadTokenResponse struct {
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	Selection string    `json:"selection"`
 }
 
 type createUploadSessionRequest struct {

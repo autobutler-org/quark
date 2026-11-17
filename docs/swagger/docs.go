@@ -6297,6 +6297,142 @@ const docTemplate = `{
                 }
             }
         },
+        "/files/download-selection": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Zips the selected files, from any folders on any devices, into one archive streamed back as selection.zip (#4195). Each entry is named after its file, and a name taken twice gets \" (1)\", \" (2)\", ... before its extension. A path the caller cannot read, that does not exist, that is a folder, or that is on a device not attached is left out and named in a skipped.txt at the end of the zip; it never fails the download. The archive is built on the fly and cannot be resumed. It is a POST form so a browser can submit it and save the response to disk; a browser authenticates with a token from POST /files/download-selection-token, passing its selection as filePath, and must send the same paths.",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/zip"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Download a selection of files as one zip",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "JSON array of the selected files, each {\\",
+                        "name": "paths",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "With downloadToken: the selection the token was issued for",
+                        "name": "filePath",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Token from POST /files/download-selection-token, for a browser form that cannot send an Authorization header",
+                        "name": "downloadToken",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "No paths, more than 2000, or not a JSON array",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, or the paths are not the ones the token was issued for",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "503": {
+                        "description": "Every zip slot is busy; retry after the Retry-After header",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "seconds to wait before retrying"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/files/download-selection-token": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Issues a token that authenticates one POST /files/download-selection of the same paths, passed as the downloadToken query parameter with the returned selection as filePath. It is the selection counterpart of POST /files/download-token, for a browser form that cannot send an Authorization header. The paths may be on any devices; each is checked for read access when the zip is built, not here. A selection names 1 to 2000 paths.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Issue a download token for a selection",
+                "parameters": [
+                    {
+                        "description": "The selected files",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_files.selectionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_files.createSelectionDownloadTokenResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "No paths, or more than 2000",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/files/download-token": {
             "post": {
                 "security": [
@@ -15982,6 +16118,20 @@ const docTemplate = `{
                 }
             }
         },
+        "v0_files.createSelectionDownloadTokenResponse": {
+            "type": "object",
+            "properties": {
+                "expiresAt": {
+                    "type": "string"
+                },
+                "selection": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
         "v0_files.createUploadSessionRequest": {
             "type": "object",
             "properties": {
@@ -16050,6 +16200,17 @@ const docTemplate = `{
                 },
                 "oldFilePath": {
                     "type": "string"
+                }
+            }
+        },
+        "v0_files.selectionRequest": {
+            "type": "object",
+            "properties": {
+                "paths": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/zipselectionutil.Path"
+                    }
                 }
             }
         },
@@ -17505,6 +17666,17 @@ const docTemplate = `{
                 "ReasonFragmented",
                 "ReasonCannotTrim"
             ]
+        },
+        "zipselectionutil.Path": {
+            "type": "object",
+            "properties": {
+                "filePath": {
+                    "type": "string"
+                },
+                "serial": {
+                    "type": "string"
+                }
+            }
         }
     },
     "securityDefinitions": {

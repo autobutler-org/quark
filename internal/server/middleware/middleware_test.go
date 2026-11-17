@@ -612,6 +612,57 @@ func TestRequireAuth_DownloadTokenGrantsOneDownload(t *testing.T) {
 	}
 }
 
+// TestRequireAuth_DownloadTokenAuthenticatesASelectionForm verifies the
+// selection zip, a POSTed form, takes a download token bound to its selection
+// key, once (#4195).
+func TestRequireAuth_DownloadTokenAuthenticatesASelectionForm(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	ctx := context.Background()
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, Files: vfs.NewMemVFS("files"),
+		Username: "admin",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
+	}); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	user, err := queries.GetUserByUsername(ctx, "admin")
+	if err != nil {
+		t.Fatalf("GetUserByUsername: %v", err)
+	}
+	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: queries})
+	engine := newMiddlewareEngine(t, deps)
+	var gotViaToken bool
+	engine.POST("/api/v0/files/download-selection", func(c *gin.Context) {
+		gotViaToken, _ = ctxutil.Get[bool](c, "downloadToken")
+		c.Status(http.StatusOK)
+	})
+	issued, err := deps.DownloadTokens().IssueToken(downloadutil.IssueTokenParams{
+		Username: "admin", UserID: user.ID, FilePath: "selection:abc",
+	})
+	if err != nil {
+		t.Fatalf("IssueToken: %v", err)
+	}
+	post := func(query string) int {
+		req := httptest.NewRequest(http.MethodPost, "/api/v0/files/download-selection?"+query, strings.NewReader(`paths=[]`))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		return doMiddlewareReq(engine, req).Code
+	}
+	if code := post("filePath=selection:other&downloadToken=" + issued.Token); code != http.StatusUnauthorized {
+		t.Errorf("another selection: got %d, want 401", code)
+	}
+	issued, err = deps.DownloadTokens().IssueToken(downloadutil.IssueTokenParams{
+		Username: "admin", UserID: user.ID, FilePath: "selection:abc",
+	})
+	if err != nil {
+		t.Fatalf("IssueToken: %v", err)
+	}
+	if code := post("filePath=selection:abc&downloadToken=" + issued.Token); code != http.StatusOK || !gotViaToken {
+		t.Errorf("selection download: got %d, downloadToken = %v; want 200, true", code, gotViaToken)
+	}
+	if code := post("filePath=selection:abc&downloadToken=" + issued.Token); code != http.StatusUnauthorized {
+		t.Errorf("reused token: got %d, want 401", code)
+	}
+}
+
 // TestRequireAuth_DownloadTokenResumesAnInterruptedDownload is #2270: the
 // browser loses its connection partway through a file and retries with a
 // Range header and the same token. The retry used to get a 401 because the

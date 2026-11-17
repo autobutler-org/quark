@@ -38,6 +38,9 @@ func contentDisposition(c *gin.Context, name, fallback string) string {
 	return fallback
 }
 
+// maxSelectionBody bounds a selection request: 2,000 paths of up to 4 KiB.
+const maxSelectionBody = 8 << 20
+
 // errReadOnly is what a caller hears when they may see a path but not change
 // it.
 var errReadOnly = errors.New("you do not have permission to change this")
