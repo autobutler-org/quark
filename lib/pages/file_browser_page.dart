@@ -1598,7 +1598,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
 
-    // When inside an archive, preview files inline where possible.
+    // An entry inside an archive has no stable URL, so it stays a push over
+    // the browser. Giving it one needs a route shape of its own (#2328).
     if (_archiveContext != null) {
       await _openArchiveFile(node);
       return;
@@ -1883,15 +1884,24 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
   /// Every file opens at its own `/docs`, `/sheets`, `/edit` or `/view` URL
   /// rather than over this page, so a reload reopens the file instead of the
-  /// folder (#2078, #2328). Arriving from the file's own `/files` URL replaces that history
-  /// entry: left in place, browser back would land on it and bounce straight
-  /// into the editor again.
-  void _goToEditor(String filePath, String route, {Object? extra}) {
+  /// folder (#2078, #2328). Arriving from the file's own `/files` URL replaces
+  /// that history entry: left in place, browser back would land on it and
+  /// bounce straight into the viewer again. The drive's serial is part of
+  /// that URL; comparing without it left the file entry under the viewer.
+  void _goToEditor(
+    String filePath,
+    String route, {
+    Object? extra,
+    String serial = '',
+  }) {
     final current = AppRoutes.canonicalRoute(
       GoRouter.of(context).routeInformationProvider.value.uri.toString(),
     );
     void go() => context.go(route, extra: extra);
-    if (current == AppRoutes.canonicalRoute(AppRoutes.filesPath(filePath))) {
+    if (current ==
+        AppRoutes.canonicalRoute(
+          AppRoutes.filesPath(filePath, serial: serial),
+        )) {
       Router.neglect(context, go);
     } else {
       go();
@@ -2014,10 +2024,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
     // The slide editor leaves for the Slides list unless told where it was
     // opened from (#2403).
+    final drive = serial ?? '';
     final route = viewerRouteFor(
       filePath,
       serial: serial,
-      from: AppRoutes.containingFolder(filePath, serial: serial ?? ''),
+      from: AppRoutes.containingFolder(filePath, serial: drive),
     );
     if (route != null) {
       // `extra: true` opens a doc just created editable (#1568).
@@ -2025,6 +2036,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         filePath,
         route,
         extra: kind == FileKind.qdoc ? justCreated : null,
+        serial: drive,
       );
       return;
     }
@@ -2040,7 +2052,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           FileKind.audio ||
           FileKind.pdf:
       case _ when usesGenericFileViewer(kind):
-        _goToEditor(filePath, AppRoutes.viewFilePath(filePath, serial: serial));
+        _goToEditor(
+          filePath,
+          AppRoutes.viewFilePath(filePath, serial: serial),
+          serial: drive,
+        );
         return;
 
       default:

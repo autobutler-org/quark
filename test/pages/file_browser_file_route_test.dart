@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/pages/file_browser_page.dart';
+import 'package:quark/pages/generic_file_viewer_page.dart';
 import 'package:quark/pages/pdf_viewer_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
@@ -32,6 +34,10 @@ FakeIoQuark _recordingQuark() => FakeIoQuark((method, url) async {
   return (status: _statusFor(url), body: _bodyFor(url));
 });
 
+/// Extensions the fake stat reports as files. Every other path is a folder.
+bool _statNamesAFile(String path) =>
+    const ['.pdf', '.qslide', '.jpg', '.docx'].any(path.endsWith);
+
 /// A path under `missing` does not exist: stat and listing both 404, as the
 /// Quark answers for a deep link to a folder that is not there.
 int _statusFor(Uri url) {
@@ -45,7 +51,7 @@ int _statusFor(Uri url) {
 String _bodyFor(Uri url) {
   if (url.path.endsWith('/api/v0/files/stat')) {
     final path = url.queryParameters['filePath'] ?? '';
-    final isFile = path.endsWith('.pdf') || path.endsWith('.qslide');
+    final isFile = _statNamesAFile(path);
     return jsonEncode({
       'isDir': !isFile,
       'fileType': isFile ? path.split('.').last : 'folder',
@@ -81,6 +87,13 @@ String _bodyFor(Uri url) {
         'isDir': false,
         'dirPath': '${url.queryParameters['rootDir'] ?? ''}/report.pdf',
         'fileType': 'pdf',
+      },
+      {
+        'name': 'notes.docx',
+        'size': 12,
+        'isDir': false,
+        'dirPath': '${url.queryParameters['rootDir'] ?? ''}/notes.docx',
+        'fileType': 'docx',
       },
       {
         'name': 'clip.mp4',
@@ -147,8 +160,10 @@ void main() {
           routes: [
             GoRoute(
               path: ':path(.*)',
-              builder: (_, state) =>
-                  FileBrowserPage(initialPath: state.pathParameters['path']),
+              builder: (_, state) => FileBrowserPage(
+                initialPath: state.pathParameters['path'],
+                deviceSerial: state.uri.queryParameters['serial'] ?? '',
+              ),
             ),
           ],
         ),
@@ -205,6 +220,60 @@ void main() {
         router.state.uri.toString(),
         '/slides/talks/deck.qslide?from=/files/talks',
       );
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  testWidgets('a drive link to a file does not reopen it on back', (
+    tester,
+  ) async {
+    // #2328: `/files/<file>?serial=` was compared to the file URL without
+    // the serial, so opening the viewer pushed a second history entry.
+    // Closing replaced only that one, and browser back landed on the file
+    // URL, which opened the viewer again.
+    const link = '/files/papers/report.pdf?serial=STICK';
+    final history = <String>[link];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.navigation, (call) async {
+          if (call.method != 'routeInformationUpdated') return null;
+          final args = call.arguments as Map;
+          final uri = (args['uri'] ?? args['location']).toString();
+          if (args['replace'] == true && history.isNotEmpty) {
+            history.last = uri;
+          } else {
+            history.add(uri);
+          }
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.navigation, null),
+    );
+
+    await HttpOverrides.runZoned(() async {
+      final router = await pumpRouted(tester, link);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.byType(PdfViewerPage), findsOneWidget);
+      expect(
+        router.state.uri.toString(),
+        '/view/papers/report.pdf?serial=STICK',
+      );
+
+      await tester.tap(find.byType(BackButton));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(router.state.uri.toString(), '/files/papers?serial=STICK');
+      expect(find.byType(PdfViewerPage), findsNothing);
+      // The file URL was replaced on the way to the viewer, so it is not
+      // still sitting under the folder for back to land on.
+      expect(history, ['/files/papers?serial=STICK']);
+      // The folder listing's delay is still in flight; let it finish, then
+      // unmount so nothing schedules another one.
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
     }, createHttpClient: overrides.createHttpClient);
   });
 
@@ -336,6 +405,8 @@ void main() {
     await HttpOverrides.runZoned(() async {
       final router = await clickPhoto(tester, '/files/photos');
       expect(router.state.uri.path, '/view/photos/beach.jpg');
+      // The viewer is the route. A second browser used to stack over it.
+      expect(find.byType(FileBrowserPage), findsNothing);
     }, createHttpClient: overrides.createHttpClient);
   });
 
@@ -347,6 +418,7 @@ void main() {
     await HttpOverrides.runZoned(() async {
       final router = await clickPhoto(tester, '/files');
       expect(router.state.uri.path, '/view/beach.jpg');
+      expect(find.byType(FileBrowserPage), findsNothing);
     }, createHttpClient: overrides.createHttpClient);
   });
 
@@ -426,6 +498,147 @@ void main() {
           expect(router.state.uri.path, folder);
           expect(find.byType(VideoViewerPage), findsNothing);
           expect(find.byType(FileBrowserPage), findsOneWidget);
+          await unmount(tester);
+        }, createHttpClient: overrides.createHttpClient);
+      });
+    }
+  });
+
+  // #2328: a photo and a generic file (no viewer of its own) each get a
+  // history entry at `/view`, browser back and the close button return to
+  // the folder, and pasting either URL opens that viewer.
+  group('images and the generic viewer', () {
+    final cases = <(String folder, String name, Type viewer)>[
+      ('/files', 'beach.jpg', ImageViewerPage),
+      ('/files/photos', 'beach.jpg', ImageViewerPage),
+      ('/files', 'notes.docx', GenericFileViewerPage),
+      ('/files/papers', 'notes.docx', GenericFileViewerPage),
+    ];
+
+    String viewPath(String folder, String name) => folder == '/files'
+        ? '/view/$name'
+        : '/view/${folder.substring('/files/'.length)}/$name';
+
+    Future<void> unmount(WidgetTester tester) async {
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpWidget(const SizedBox());
+    }
+
+    /// What the router reports to the engine. [history] starts as the page
+    /// already on screen; a `replace` overwrites the last entry.
+    void watchHistory(List<String> history) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.navigation, (call) async {
+            if (call.method != 'routeInformationUpdated') return null;
+            final args = call.arguments as Map;
+            final uri = (args['uri'] ?? args['location']).toString();
+            if (args['replace'] == true && history.isNotEmpty) {
+              history.last = uri;
+            } else {
+              history.add(uri);
+            }
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.navigation, null),
+      );
+    }
+
+    for (final (folder, name, viewer) in cases) {
+      final opened = viewPath(folder, name);
+
+      testWidgets('tapping $name from $folder opens $opened', (tester) async {
+        // The folder stays under the viewer, so browser back can return to it.
+        final history = <String>[folder];
+        watchHistory(history);
+
+        await HttpOverrides.runZoned(() async {
+          final router = await clickFile(tester, folder, name);
+          await tester.pump(const Duration(seconds: 1));
+
+          expect(router.state.uri.path, opened);
+          expect(find.byType(viewer), findsOneWidget);
+          expect(find.byType(FileBrowserPage), findsNothing);
+          expect(history, [folder, opened]);
+          await unmount(tester);
+        }, createHttpClient: overrides.createHttpClient);
+      });
+
+      testWidgets('browser back from $name in $folder returns there', (
+        tester,
+      ) async {
+        await HttpOverrides.runZoned(() async {
+          final router = await clickFile(tester, folder, name);
+          await tester.pump(const Duration(seconds: 1));
+          await router.routeInformationProvider.didPushRouteInformation(
+            RouteInformation(uri: Uri.parse(folder)),
+          );
+          await tester.pump();
+          await tester.pump(const Duration(seconds: 1));
+
+          expect(router.state.uri.path, folder);
+          expect(find.byType(viewer), findsNothing);
+          expect(find.byType(FileBrowserPage), findsOneWidget);
+          await unmount(tester);
+        }, createHttpClient: overrides.createHttpClient);
+      });
+
+      testWidgets('closing $name in $folder returns there', (tester) async {
+        // Seeded with the folder the tap pushes off of. Closing replaces the
+        // viewer entry, so back from the folder does not reopen it.
+        final history = <String>[folder];
+        watchHistory(history);
+
+        await HttpOverrides.runZoned(() async {
+          final router = await clickFile(tester, folder, name);
+          await tester.pump(const Duration(seconds: 1));
+          expect(history, [folder, opened]);
+          // Photos close from their own button. Every other viewer uses the
+          // chrome back button.
+          final close = viewer == ImageViewerPage
+              ? find.byKey(const ValueKey('image_viewer_close'))
+              : find.byType(BackButton);
+          await tester.tap(close);
+          await tester.pump();
+          await tester.pump(const Duration(seconds: 1));
+
+          expect(router.state.uri.path, folder);
+          expect(find.byType(viewer), findsNothing);
+          expect(find.byType(FileBrowserPage), findsOneWidget);
+          expect(history, [folder, folder]);
+          await unmount(tester);
+        }, createHttpClient: overrides.createHttpClient);
+      });
+    }
+
+    final links = <(String link, String opened, Type viewer)>[
+      ('/files/beach.jpg', '/view/beach.jpg', ImageViewerPage),
+      ('/files/photos/beach.jpg', '/view/photos/beach.jpg', ImageViewerPage),
+      ('/files/notes.docx', '/view/notes.docx', GenericFileViewerPage),
+      (
+        '/files/papers/notes.docx',
+        '/view/papers/notes.docx',
+        GenericFileViewerPage,
+      ),
+      ('/view/photos/beach.jpg', '/view/photos/beach.jpg', ImageViewerPage),
+      (
+        '/view/papers/notes.docx',
+        '/view/papers/notes.docx',
+        GenericFileViewerPage,
+      ),
+    ];
+
+    for (final (link, opened, viewer) in links) {
+      testWidgets('opening $link shows $opened', (tester) async {
+        await HttpOverrides.runZoned(() async {
+          final router = await pumpRouted(tester, link);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 500));
+
+          expect(router.state.uri.path, opened);
+          expect(find.byType(viewer), findsOneWidget);
+          expect(find.byType(FileBrowserPage), findsNothing);
           await unmount(tester);
         }, createHttpClient: overrides.createHttpClient);
       });
