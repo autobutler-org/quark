@@ -1,7 +1,8 @@
 /// Tuning for how the app follows the Quark's event socket: how long the Files
-/// page waits out a burst of events, and how reconnects back off (#2763).
+/// page and `EventsService.listingChanges` wait out a burst of events (#2763,
+/// #3448), and how reconnects back off.
 abstract final class EventsConfig {
-  /// How long the Files page waits after the last event in its folder before
+  /// How long a listing waits after the last event that can change it before
   /// it refreshes, so a burst (500 files landing) costs one refresh.
   static const Duration refreshQuiet = Duration(seconds: 2);
 
