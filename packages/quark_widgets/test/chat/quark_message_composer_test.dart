@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
@@ -519,16 +520,29 @@ void main() {
   const attach = ValueKey('message_composer_attach');
 
   testWidgets('the attach button fires onAttach', (tester) async {
+    final semantics = tester.ensureSemantics();
     var taps = 0;
     await pumpAt(
       tester,
       QuarkMessageComposer(onSend: (_) {}, onAttach: () => taps++),
     );
 
-    expect(find.byTooltip('Attach a file'), findsOneWidget);
+    expect(find.byTooltip('Attach'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.byKey(attach)),
+      isSemantics(tooltip: 'Attach', isButton: true),
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(attach),
+        matching: find.byIcon(QuarkIcons.attach_file),
+      ),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(attach));
     await tester.pump();
     expect(taps, 1);
+    semantics.dispose();
   });
 
   testBothViewports('the attach button fits beside the field', (
