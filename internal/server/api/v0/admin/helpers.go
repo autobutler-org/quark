@@ -26,7 +26,8 @@ func accountErrorResponse(err error) *serverutil.Response {
 		return serverutil.NotFound(err)
 	case errors.Is(err, authutil.ErrLastAdmin), errors.Is(err, authutil.ErrUsernameTaken):
 		return serverutil.Conflict(err)
-	case errors.Is(err, authutil.ErrInvalidUsername), errors.Is(err, authutil.ErrSelfAction),
+	case errors.Is(err, authutil.ErrInvalidUsername), errors.Is(err, authutil.ErrReservedUsername),
+		errors.Is(err, authutil.ErrSelfAction),
 		errors.Is(err, authutil.ErrInvalidAuthKey):
 		return serverutil.BadRequest(err)
 	default:

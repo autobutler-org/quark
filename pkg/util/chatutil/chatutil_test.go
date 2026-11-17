@@ -140,7 +140,7 @@ func TestPermsParseAndString(t *testing.T) {
 		}
 	}
 	all := chatutil.PermsAll.String()
-	if want := "read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions,attach_files"; all != want {
+	if want := "read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions,attach_files,mention_everyone"; all != want {
 		t.Errorf("PermsAll.String() = %q, want %q", all, want)
 	}
 	if got := chatutil.Perms(0).Names(); got == nil || len(got) != 0 {
@@ -175,6 +175,7 @@ func TestPermsValidate(t *testing.T) {
 		{chatutil.PermDeleteMessages | chatutil.PermManageMembers, "delete_messages needs read_messages"},
 		{chatutil.PermManageReactions, "manage_reactions needs read_messages"},
 		{chatutil.PermAttachFiles, "attach_files needs read_messages"},
+		{chatutil.PermMentionEveryone, "mention_everyone needs read_messages"},
 		{1 << 40, "unknown permission bits"},
 	} {
 		err := tc.perms.Validate()
@@ -200,7 +201,7 @@ func TestPermsValidate(t *testing.T) {
 func TestPresets(t *testing.T) {
 	read, send, react := chatutil.PermReadMessages, chatutil.PermSendMessages, chatutil.PermAddReactions
 	del, channel, members := chatutil.PermDeleteMessages, chatutil.PermManageChannel, chatutil.PermManageMembers
-	reactions, attach := chatutil.PermManageReactions, chatutil.PermAttachFiles
+	reactions, attach, everyone := chatutil.PermManageReactions, chatutil.PermAttachFiles, chatutil.PermMentionEveryone
 	for _, tc := range []struct {
 		name string
 		got  chatutil.Perms
@@ -208,8 +209,8 @@ func TestPresets(t *testing.T) {
 	}{
 		{"viewer", chatutil.PresetViewer, read},
 		{"member", chatutil.PresetMember, read | send | react | attach},
-		{"moderator", chatutil.PresetModerator, read | send | react | attach | del | reactions | members},
-		{"owner", chatutil.PresetOwner, read | send | react | attach | del | reactions | channel | members},
+		{"moderator", chatutil.PresetModerator, read | send | react | attach | del | reactions | members | everyone},
+		{"owner", chatutil.PresetOwner, read | send | react | attach | del | reactions | channel | members | everyone},
 		{"all", chatutil.PermsAll, chatutil.PresetOwner},
 	} {
 		if tc.got != tc.want {
@@ -237,6 +238,24 @@ func TestPermAttachFiles(t *testing.T) {
 	}
 	if err := (chatutil.PermReadMessages | chatutil.PermAttachFiles).Validate(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestPermMentionEveryone pins mention_everyone (#4293) to bit 256, held by
+// Moderator and Owner but not Member, and needing read_messages.
+func TestPermMentionEveryone(t *testing.T) {
+	if chatutil.PermMentionEveryone != 256 {
+		t.Fatalf("PermMentionEveryone = %d, want 256", chatutil.PermMentionEveryone)
+	}
+	if chatutil.PresetMember.Has(chatutil.PermMentionEveryone) {
+		t.Fatal("Member must not include mention_everyone")
+	}
+	if !chatutil.PresetModerator.Has(chatutil.PermMentionEveryone) || !chatutil.PresetOwner.Has(chatutil.PermMentionEveryone) {
+		t.Fatal("Moderator and Owner must include mention_everyone")
+	}
+	got, err := chatutil.ParsePerms([]string{"mention_everyone"})
+	if err != nil || got != chatutil.PermMentionEveryone {
+		t.Fatalf("ParsePerms(mention_everyone) = %v, %v", got, err)
 	}
 }
 
@@ -580,7 +599,7 @@ func TestListMembersExpandsGroupsWithAvatars(t *testing.T) {
 		}
 	}
 	body, err := json.Marshal(result.Members[1])
-	if err != nil || !strings.Contains(string(body), `"permissions":["read_messages","send_messages","add_reactions","delete_messages","manage_channel","manage_members","manage_reactions","attach_files"]`) {
+	if err != nil || !strings.Contains(string(body), `"permissions":["read_messages","send_messages","add_reactions","delete_messages","manage_channel","manage_members","manage_reactions","attach_files","mention_everyone"]`) {
 		t.Errorf("a member as JSON = %s, %v", body, err)
 	}
 }

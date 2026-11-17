@@ -515,6 +515,10 @@ nothing of mentions shows the text as it was typed.
   from being drawn as mentions; the text stays.
 - A mention is not authenticated beyond the message it sits in, so the limits on authorship above apply to it
   too.
+- `@everyone` (#4293) mentions every member, but only from an author holding `mention_everyone` on the channel,
+  which the Moderator and Owner presets carry. The Quark stores the permission and never enforces it, since it
+  cannot see the text: each reading device checks the author's set in the member list it already loads and
+  otherwise shows `@everyone` as plain text. No new account may be named `everyone`.
 
 A mention badge on a channel that isn't open isn't built. It needs either a plaintext list of mentioned accounts
 sent beside each message, which tells the Quark who was mentioned, or counting on the app alone, which shows

@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -78,6 +79,22 @@ var usernamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,31}$`)
 func validateUsername(username string) error {
 	if !usernamePattern.MatchString(username) {
 		return ErrInvalidUsername
+	}
+	return nil
+}
+
+// reservedUsernames are words chat gives a meaning that a username would
+// shadow: @everyone mentions every member of a channel (#4293).
+var reservedUsernames = []string{"everyone"}
+
+// validateNewUsername is validateUsername plus ErrReservedUsername, for an
+// account being made. An account that already holds a reserved name keeps it.
+func validateNewUsername(username string) error {
+	if err := validateUsername(username); err != nil {
+		return err
+	}
+	if slices.Contains(reservedUsernames, username) {
+		return ErrReservedUsername
 	}
 	return nil
 }

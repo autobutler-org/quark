@@ -151,8 +151,7 @@ var (
 // manage-only set is a delegated manager, who runs a channel without being in
 // the conversation or holding its key.
 //
-// Reserved for later phases, with no bit yet: mention_everyone and
-// pin_messages.
+// Reserved for a later phase, with no bit yet: pin_messages.
 type Perms uint64
 
 // The permissions, in bit order.
@@ -177,6 +176,11 @@ const (
 	PermManageReactions
 	// PermAttachFiles uploads a file into the channel (#2425).
 	PermAttachFiles
+	// PermMentionEveryone makes @everyone mention every member (#4293).
+	// Messages are end-to-end encrypted, so the Quark never sees the
+	// mention: each reader's device honors it only when the author holds
+	// this bit on the channel.
+	PermMentionEveryone
 )
 
 // The presets the app offers (#2415). The Quark stores and serves only
@@ -185,7 +189,7 @@ const (
 const (
 	PresetViewer    = PermReadMessages
 	PresetMember    = PresetViewer | PermSendMessages | PermAddReactions | PermAttachFiles
-	PresetModerator = PresetMember | PermDeleteMessages | PermManageReactions | PermManageMembers
+	PresetModerator = PresetMember | PermDeleteMessages | PermManageReactions | PermManageMembers | PermMentionEveryone
 	PresetOwner     = PresetModerator | PermManageChannel
 	// PermsAll is every permission.
 	PermsAll = PresetOwner
@@ -202,6 +206,7 @@ var permNames = []string{
 	"manage_members",
 	"manage_reactions",
 	"attach_files",
+	"mention_everyone",
 }
 
 // ParsePerms reads a list of permission names. An unknown name is
@@ -248,7 +253,7 @@ func (p Perms) Validate() error {
 	if p.Has(PermReadMessages) {
 		return nil
 	}
-	for _, needsRead := range []Perms{PermSendMessages, PermAddReactions, PermDeleteMessages, PermManageReactions, PermAttachFiles} {
+	for _, needsRead := range []Perms{PermSendMessages, PermAddReactions, PermDeleteMessages, PermManageReactions, PermAttachFiles, PermMentionEveryone} {
 		if p.Has(needsRead) {
 			return fmt.Errorf("%w: %s needs read_messages", ErrInvalidPerms, needsRead)
 		}
@@ -287,7 +292,7 @@ type Channel struct {
 	IsPrivate bool `json:"isPrivate"`
 	// Permissions is the caller's effective set: the union of every row that
 	// reaches them. Empty for an admin managing a channel they are not in.
-	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions,attach_files"`
+	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions,attach_files,mention_everyone"`
 	// CreatedBy is the account that created the channel; absent for general
 	// and for a channel whose creator was deleted.
 	CreatedBy int64     `json:"createdBy,omitempty"`
@@ -314,7 +319,7 @@ type Member struct {
 	// Builtin marks the everyone group.
 	Builtin bool `json:"builtin"`
 	// Permissions is this row's set, not anyone's effective one.
-	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions,attach_files"`
+	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions,attach_files,mention_everyone"`
 	// AvatarUpdatedAt is an account's profile picture version in Unix
 	// milliseconds, absent when it has none.
 	AvatarUpdatedAt int64 `json:"avatarUpdatedAt,omitempty"`

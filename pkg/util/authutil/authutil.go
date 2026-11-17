@@ -72,6 +72,9 @@ var (
 	ErrAccountDisabled = errors.New("this account is turned off")
 	// ErrInvalidUsername refuses a username a new account cannot have.
 	ErrInvalidUsername = errors.New("a username has up to 32 lowercase letters, numbers, dots, dashes or underscores, and starts with a letter or number")
+	// ErrReservedUsername refuses a username chat gives another meaning,
+	// such as everyone (#4293).
+	ErrReservedUsername = errors.New("that username is reserved: @everyone mentions everyone in a chat channel")
 	// ErrLastAdmin refuses a change that would leave no active admin.
 	ErrLastAdmin = errors.New("this Quark needs at least one active admin")
 	// ErrUserNotFound reports a username that names no account the action
@@ -695,7 +698,7 @@ func GetAuthStatus(ctx context.Context, queries db.Querier, params GetAuthStatus
 // they still have to write to afterwards. A home that cannot be made fails
 // setup rather than leaving an account without one.
 func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
-	if err := validateUsername(params.Username); err != nil {
+	if err := validateNewUsername(params.Username); err != nil {
 		return nil, err
 	}
 	if params.Database == nil {
@@ -768,7 +771,7 @@ func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 
 // RequestAccount creates a pending account that can sign in once an admin
 // approves it. It returns ErrAccessRequestsOff while requests are off or
-// before setup, and ErrInvalidUsername, ErrInvalidAuthKey,
+// before setup, and ErrInvalidUsername, ErrReservedUsername, ErrInvalidAuthKey,
 // ErrInvalidRecoveryKey or ErrUsernameTaken for a request that cannot be
 // taken. A pending request holds its username until it is denied.
 func RequestAccount(ctx context.Context, queries db.Querier, params RequestAccountParams) (RequestAccountResult, error) {
@@ -782,7 +785,7 @@ func RequestAccount(ctx context.Context, queries db.Querier, params RequestAccou
 	if !complete {
 		return RequestAccountResult{}, ErrAccessRequestsOff
 	}
-	if err := validateUsername(params.Username); err != nil {
+	if err := validateNewUsername(params.Username); err != nil {
 		return RequestAccountResult{}, err
 	}
 	authKeyHash, authSalt, err := newCredentials(params.Username, params.AuthKey, params.SaltSecret)
@@ -949,12 +952,12 @@ func Login(ctx context.Context, queries db.Querier, params LoginParams) (*LoginR
 // credential until its first sign-in, when its client gives it a recovery key
 // (#2430), and a home at users/<username> that it owns (#2016). Homes live under users/ so that a username and a top-level folder
 // name are different namespaces: a Quark with a family/ folder can still have
-// an account named family. It returns ErrInvalidUsername, ErrInvalidAuthKey
-// or ErrUsernameTaken; a folder already at users/<username> becomes the
+// an account named family. It returns ErrInvalidUsername, ErrReservedUsername,
+// ErrInvalidAuthKey or ErrUsernameTaken; a folder already at users/<username> becomes the
 // account's home. A refused account leaves no row behind, and no folder
 // except the shared users parent.
 func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult, error) {
-	if err := validateUsername(params.Username); err != nil {
+	if err := validateNewUsername(params.Username); err != nil {
 		return CreateUserResult{}, err
 	}
 	if params.Database == nil {
