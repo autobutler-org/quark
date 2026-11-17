@@ -20,7 +20,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Deleted files, listed in the Files viewer with only Restore and Delete
 /// permanently on offer. Folders open, so a trashed folder can be browsed and
 /// picked through; files do not: a trashed file is a thing to put back or let
-/// go, not to read.
+/// go, not to read. On a phone the rows drop their columns, a note above the
+/// list says when items expire and where Restore puts them, and Empty trash
+/// is a labeled button under the list rather than a bar icon (#4233).
 class TrashPage extends StatefulWidget {
   const TrashPage({super.key, this.location});
 
@@ -97,6 +99,9 @@ class _TrashPageState extends State<TrashPage>
 
   @override
   Future<void> refresh() => _controller.load();
+
+  static const _restoreNote =
+      'Restore puts each one back in the folder it came from.';
 
   static String _items(int count) => count == 1 ? '1 item' : '$count items';
 
@@ -203,6 +208,11 @@ class _TrashPageState extends State<TrashPage>
         // Not a QuarkPageScaffold: selecting drops the bar altogether, so the
         // page picks the drawer's edge itself (#1812).
         final leftHanded = QuarkHandedness.isLeftHanded(context);
+        final phone = QuarkAppBar.isCompact(context);
+        final hasItems = _controller.nodes?.isNotEmpty ?? false;
+        // A phone has no room for the Device and Size columns, so its rows
+        // are name over the subtitle, with the menu for the actions (#4233).
+        final phoneRoot = phone && location == null && hasItems;
         const drawer = AppDrawer(activeSection: QuarkDrawerSection.trash);
         return Scaffold(
           appBar: _controller.selectionMode
@@ -212,15 +222,15 @@ class _TrashPageState extends State<TrashPage>
                   icon: QuarkIcons.delete_outline,
                   actions: [
                     // The whole trash, so only at its root: inside a folder
-                    // it would read as emptying that folder.
-                    if (location == null)
+                    // it would read as emptying that folder. A phone's bar
+                    // leaves it out: there it is a labeled button under the
+                    // list, away from Select (#4233).
+                    if (location == null && !phone)
                       QuarkBarIconButton(
                         key: const ValueKey('trash_empty'),
                         tooltip: 'Empty trash',
                         icon: QuarkIcons.delete_forever_outlined,
-                        onPressed: (_controller.nodes?.isNotEmpty ?? false)
-                            ? _emptyTrash
-                            : null,
+                        onPressed: hasItems ? _emptyTrash : null,
                       ),
                     // The trash used to be selected into by long-pressing a
                     // row; that gesture opens the row's menu now (#2245), so
@@ -230,9 +240,7 @@ class _TrashPageState extends State<TrashPage>
                       key: const ValueKey('trash_select'),
                       tooltip: 'Select',
                       icon: QuarkIcons.check_circle_outline,
-                      onPressed: (_controller.nodes?.isNotEmpty ?? false)
-                          ? _controller.enterSelection
-                          : null,
+                      onPressed: hasItems ? _controller.enterSelection : null,
                     ),
                   ],
                   onRefresh: manualRefresh,
@@ -279,6 +287,13 @@ class _TrashPageState extends State<TrashPage>
                     onDeviceToggled: _controller.toggleDevice,
                   ),
                 ),
+              if (phoneRoot)
+                QuarkInfoNote(
+                  text: retentionDays == null || retentionDays <= 0
+                      ? _restoreNote
+                      : 'Items here are deleted for good after $retentionDays '
+                            'days. $_restoreNote',
+                ),
               Expanded(
                 // A phone's bar has no refresh button, so the list pulls to
                 // refresh (#4150).
@@ -294,6 +309,7 @@ class _TrashPageState extends State<TrashPage>
                     onFileMenuAction: _onMenuAction,
                     onOpenDirectory: _openFolder,
                     isGridView: false,
+                    columns: phone ? const {} : FileBrowserView.defaultColumns,
                     currentPath: '',
                     menuActions: _trashActions,
                     subtitleFor: _controller.subtitleFor,
@@ -321,6 +337,13 @@ class _TrashPageState extends State<TrashPage>
                   ),
                 ),
               ),
+              if (phoneRoot && !_controller.selectionMode)
+                QuarkDangerButton(
+                  key: const ValueKey('trash_empty'),
+                  label: 'Empty trash',
+                  icon: QuarkIcons.delete_forever_outlined,
+                  onPressed: _emptyTrash,
+                ),
             ],
           ),
         );
