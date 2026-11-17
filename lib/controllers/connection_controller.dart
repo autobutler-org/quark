@@ -45,7 +45,9 @@ import 'package:tailnet_flutter/tailnet_flutter.dart';
 ///
 /// Setting up heals itself (#3776). A stored pairing whose node does not run,
 /// or whose key the Quark no longer accepts, is dropped on the next check at
-/// home and the phone pairs again in that same check. [phoneRemoteAccess] and
+/// home and the phone pairs again in that same check. So is one made before
+/// the Quark re-enrolled (remote access switched off and on), which the
+/// Quark's new address gives away (#3612). [phoneRemoteAccess] and
 /// [phoneRemoteAccessDetail] say where that stands in words a user reads,
 /// including the Quark's own refusals, and [setupLog] keeps each step for
 /// diagnostics.
@@ -514,8 +516,26 @@ class ConnectionController extends ChangeNotifier {
       await _warmEmbeddedTunnel(remote);
       return;
     }
-    final stored = await _readPairing(host.hostAddress);
+    var stored = await _readPairing(host.hostAddress);
     if (!isCurrent()) return;
+    // A Quark switched off and on enrolls afresh and comes back on a new
+    // address, while this phone's node stays on the old one and still says
+    // Running (#3612). The pairing is from before that, so pair again now.
+    final quarkUrl = status.remoteUrl;
+    if (stored != null &&
+        status.connected &&
+        quarkUrl != null &&
+        quarkUrl.isNotEmpty &&
+        stored.quarkAddress != quarkUrl) {
+      _log(
+        'the Quark re-enrolled at $quarkUrl since this phone paired with '
+        '${stored.quarkAddress}; dropping the pairing',
+      );
+      await _clearPairing(host.hostAddress);
+      await _warmEmbeddedTunnel('');
+      if (!isCurrent()) return;
+      stored = null;
+    }
     if (stored != null) {
       await _warmEmbeddedTunnel(remote);
       if (!isCurrent()) return;
