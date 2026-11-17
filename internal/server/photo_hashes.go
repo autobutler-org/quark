@@ -7,6 +7,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
+	"github.com/autobutler-org/quark/pkg/util/thumbnailutil"
 )
 
 // backfillPhotoHashes hashes the library photos that duplicate detection has
@@ -15,19 +16,25 @@ import (
 // render it, so without this pass a photo whose thumbnail was cached before
 // this build is never compared. Best-effort; everything is logged, and its
 // progress is GET /photos/index-status, which an admin can pause (#3556).
-func backfillPhotoHashes(deps deputil.Dependencies) {
+// Once it is done every library photo is queued on warmer, which generates
+// the grid thumbnails that are not yet cached (#4219).
+func backfillPhotoHashes(deps deputil.Dependencies, warmer *thumbnailutil.Warmer) {
+	ctx := context.Background()
 	dbConn := deps.Database()
 	if dbConn == nil || dbConn.Queries == nil {
 		return
 	}
 	res, err := photoutil.BackfillHashes(photoutil.BackfillHashesParams{
-		Ctx:         context.Background(),
+		Ctx:         ctx,
 		Queries:     dbConn.Queries,
 		Registry:    deps.VFSRegistry(),
 		IOSemaphore: deps.IOSemaphore().For(iosemutil.Decode),
 		Control:     deps.PhotoIndex(),
 		EventBus:    deps.EventBus(),
 		Index:       deps.FileIndex(),
+		Warm: func(photo photoutil.DuplicatePhoto) {
+			warmer.Enqueue(ctx, thumbnailutil.WarmItem{Serial: photo.DeviceSerial, RelPath: photo.RelPath})
+		},
 	})
 	if err != nil {
 		log.Printf("[photo-hashes] backfill: %v", err)

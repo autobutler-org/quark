@@ -38,6 +38,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/thumbnailutil"
 	"github.com/autobutler-org/quark/pkg/util/tlsutil"
 	"github.com/autobutler-org/quark/pkg/util/transcodeutil"
 	"github.com/autobutler-org/quark/pkg/util/trashutil"
@@ -163,9 +164,17 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	// existing documents are never searchable.
 	go backfillContentIndex(deps)
 
+	// Generate each new photo's grid thumbnail before a client asks for it,
+	// one at a time and yielding the decode slots to requests (#4219).
+	warmer := thumbnailutil.NewWarmer(thumbnailutil.WarmerParams{
+		Queries: deps.Database().Queries, Registry: deps.VFSRegistry(), IOSemaphore: deps.IOSemaphore(),
+	})
+	go warmer.Run(context.Background())
+	warmer.Watch(context.Background(), deps.EventBus())
+
 	// Hash the library photos duplicate detection has no hashes for, one at a
-	// time under the IO semaphore.
-	go backfillPhotoHashes(deps)
+	// time under the IO semaphore, and then queue every photo's thumbnail.
+	go backfillPhotoHashes(deps, warmer)
 
 	go usbDeviceMonitor(deps)
 

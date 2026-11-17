@@ -34,6 +34,10 @@ type BackfillHashesParams struct {
 	EventBus *eventbus.Bus
 	// Index, when set, lists the library from memory instead of walking it.
 	Index *indexutil.FileIndex
+	// Warm, when set, hears every library photo outside the trash once the
+	// pass is done, hashed by it or not, so its grid thumbnail can be
+	// generated ahead of the first request (#4219). It may block.
+	Warm func(DuplicatePhoto)
 }
 
 // BackfillHashesResult counts what the backfill did.
@@ -90,7 +94,7 @@ func BackfillHashes(params BackfillHashesParams) (BackfillHashesResult, error) {
 		knownDHash[key] = row.Dhash.String
 	}
 
-	var todo []DuplicatePhoto
+	var todo, listed []DuplicatePhoto
 	total, hashed, datesRead := 0, 0, 0
 	for _, photo := range library.Photos {
 		key := DuplicatePhoto{DeviceSerial: photo.Serial, RelPath: accessutil.Canonical(photo.RelPath)}
@@ -98,6 +102,7 @@ func BackfillHashes(params BackfillHashesParams) (BackfillHashesResult, error) {
 			continue
 		}
 		total++
+		listed = append(listed, key)
 		if complete[key] {
 			hashed++
 		}
@@ -114,6 +119,11 @@ func BackfillHashes(params BackfillHashesParams) (BackfillHashesResult, error) {
 	err = backfillPhotos(params, todo, complete, dated, knownDHash, &result)
 	params.Control.finish(err == nil)
 	publishIndexChanged(params.EventBus)
+	if err == nil && params.Warm != nil {
+		for _, photo := range listed {
+			params.Warm(photo)
+		}
+	}
 	return result, err
 }
 
