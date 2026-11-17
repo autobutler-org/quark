@@ -30,4 +30,10 @@ abstract final class ConnectionConfig {
   /// thumbnails fails together, and each check restarts the last one, so
   /// without a gap a dead path would be probed over and over and never settle.
   static const Duration unavailableRecheckGap = Duration(seconds: 10);
+
+  /// The longest a page's refresh on a return to the app waits for the
+  /// connection check that follows it (#3882). A node that has to restart
+  /// can take far longer to rejoin; past this the page refreshes anyway and
+  /// shows "Reconnecting…" if the Quark is not there yet.
+  static const Duration resumeSettleTimeout = Duration(seconds: 15);
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/services/app_settings.dart';
 
 /// Adds auto-refresh and non-disruptive loading state to a [State].
@@ -60,6 +61,13 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
   /// connection pool reaches that easily, which a large upload creates.
   Duration get refreshTimeout => const Duration(seconds: 30);
 
+  /// Completes once the connection check that follows a return to the app
+  /// has settled, so the resume refresh does not race a remote-access node
+  /// that is being checked or restarted (#3882). Bounded by the controller.
+  /// Tests override it.
+  Future<void> whenConnectionSettled() =>
+      ConnectionController.instance.whenResumed();
+
   /// Called right after [isRefreshing] changes, for a parent that shows it
   /// where this State does not build, such as the app bar of the page a tab
   /// sits in. It can run from [initState], mid-build, so an override that
@@ -88,7 +96,7 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _startTimer();
-      _triggerRefresh();
+      unawaited(_refreshAfterResume());
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       _refreshTimer?.cancel();
@@ -101,6 +109,15 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
   /// however many calls were turned away in the meantime. A refresh already in
   /// flight may have fetched before the mutation landed (#2445).
   Future<void> manualRefresh() => _triggerRefresh(owe: true);
+
+  Future<void> _refreshAfterResume() async {
+    // Every observer hears the resume in the same synchronous pass. Yielding
+    // once lets the connection controller's own observer start its check
+    // first, whichever was registered first.
+    await Future<void>.value();
+    await whenConnectionSettled();
+    if (mounted) unawaited(_triggerRefresh());
+  }
 
   void _startTimer() {
     _refreshTimer?.cancel();

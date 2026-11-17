@@ -11,7 +11,8 @@
 /// iOS and Android call into the bridge. Every other `dart:io` host, including
 /// the Linux desktop build and the test runner, reports the tunnel
 /// unavailable and never looks the symbols up. The node runs in the foreground
-/// only. Coming back to the app restarts it. There is no background mode.
+/// only. Coming back from the background keeps a node that still works and
+/// restarts one that does not (#3882). There is no background mode.
 library;
 
 import 'dart:convert';
@@ -24,6 +25,9 @@ import 'dart:math';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:tailnet_flutter/services/embedded_tunnel.dart'
+    show tunnelHealthProbe;
+import 'package:tailnet_flutter/services/tunnel_resume.dart';
 import 'package:tailnet_flutter/services/tunnel_token_client.dart';
 
 @Native<
@@ -94,9 +98,16 @@ Future<void> _tail = Future<void>.value();
 var _running = false;
 var _port = 0;
 _TunnelConfig? _config;
-void Function()? _onReconnected;
 var _watching = false;
-final _lifecycle = _TunnelLifecycle();
+final _lifecycle = TunnelLifecycleObserver()..log = _log;
+
+/// A debug-only timeline of the node's lifecycle (#3882).
+void _log(String message) {
+  assert(() {
+    developer.log(message, name: 'quark.tunnel');
+    return true;
+  }());
+}
 
 /// Runs [action] after whatever start, stop, or warm is already in flight.
 Future<T> _serialized<T>(Future<T> Function() action) {
@@ -218,33 +229,36 @@ Future<void> tunnelForget() {
   });
 }
 
-void tunnelWatch(void Function() onReconnected) {
+void tunnelWatch(void Function(Future<void> reconnected) onResume) {
   if (!_mobile) return;
-  _onReconnected = onReconnected;
-  _lifecycle.onResume = () {
-    _resume();
-  };
+  _lifecycle.onReturn = () => onResume(_resume());
   if (_watching) return;
   _watching = true;
   WidgetsBinding.instance.addObserver(_lifecycle);
 }
 
-Future<void> _resume() async {
-  await _serialized(() async {
-    final cfg = _config;
-    if (!_running || cfg == null) return;
-    final root = await _rootDir();
-    await _stopNative();
-    await _startNative(
-      stateDir: _statePath(root),
-      controlUrl: cfg.controlUrl,
-      authKey: '',
-      hostname: cfg.hostname,
-      upstream: cfg.upstream,
-    );
-  });
-  _onReconnected?.call();
-}
+/// Keeps the running node if it still answers, and restarts it otherwise.
+Future<void> _resume() => _serialized(() async {
+  final cfg = _config;
+  if (!_running || cfg == null) return;
+  await resumeTunnelNode(
+    port: _port,
+    status: _statusNative,
+    probe: tunnelHealthProbe,
+    log: _log,
+    restart: () async {
+      final root = await _rootDir();
+      await _stopNative();
+      await _startNative(
+        stateDir: _statePath(root),
+        controlUrl: cfg.controlUrl,
+        authKey: '',
+        hostname: cfg.hostname,
+        upstream: cfg.upstream,
+      );
+    },
+  );
+});
 
 Future<(int, String)> _startNative({
   required String stateDir,
@@ -253,6 +267,7 @@ Future<(int, String)> _startNative({
   required String hostname,
   required String upstream,
 }) async {
+  _log('start');
   final (port, error, token) = await Isolate.run(
     () => _startBlocking(
       stateDir: stateDir,
@@ -272,14 +287,17 @@ Future<(int, String)> _startNative({
       upstream: upstream,
     );
   }
+  _log(port > 0 ? 'started on $port' : 'start failed: $error');
   return (port, error);
 }
 
 Future<void> _stopNative() async {
+  _log('stop');
   await Isolate.run(_stopBlocking);
   _running = false;
   _port = 0;
   tunnelProxyCredentials = null;
+  _log('stopped');
 }
 
 Future<Map<String, dynamic>> _statusNative() => Isolate.run(_statusBlocking);
@@ -386,15 +404,4 @@ String _hostname() {
     (_) => rand.nextInt(256).toRadixString(16).padLeft(2, '0'),
   ).join();
   return 'phone-$hex';
-}
-
-/// Restarts the node when the app is foregrounded again.
-class _TunnelLifecycle with WidgetsBindingObserver {
-  /// Called on resume, after the binding has delivered the state change.
-  void Function()? onResume;
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) onResume?.call();
-  }
 }

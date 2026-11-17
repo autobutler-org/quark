@@ -9,7 +9,7 @@ void main() {
     expect(await tunnelProxyUrl('http://100.64.0.1'), isNull);
     await tunnelWarm('http://100.64.0.1');
     await tunnelWarm('');
-    tunnelWatch(() => fail('the stub does not watch the app lifecycle'));
+    tunnelWatch((_) => fail('the stub does not watch the app lifecycle'));
     expect(await tunnelStatusJson(), {
       'state': 'Stopped',
       'tailnetIPs': <String>[],
