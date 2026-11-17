@@ -158,6 +158,7 @@ class SlidesBody extends StatelessWidget {
         DocSheetTile(
           relPath: node.apiPath,
           deviceName: node.deviceName,
+          modifiedAt: node.modifiedAt,
           showDevice: showDevice,
           snippet:
               snippets[DocSheetTile.fileKey(node.deviceSerial, node.apiPath)],

@@ -16,12 +16,14 @@ import 'package:quark/widgets/slides/import/import_power_point.dart';
 import 'package:quark/widgets/slides/import/slides_import_bar_bottom.dart';
 import 'package:quark/widgets/slides/insert/slide_quark_image_dialog.dart';
 import 'package:quark/widgets/slides/slides_body.dart';
+import 'package:quark/widgets/slides/slides_create_sheet.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The Slides page: the user's `.qslide` presentations, a search over their
 /// names and contents, a way to start a new one (#1161), and a way to import
-/// one from a PowerPoint file on the Quark or on this device (#1171).
+/// one from a PowerPoint file on the Quark or on this device (#1171). On a
+/// phone both sit behind the + button's sheet (#4227).
 class SlidesPage extends StatefulWidget {
   /// Creates the page; [controller] is for tests, which pass one with fake
   /// services.
@@ -143,6 +145,12 @@ class _SlidesPageState extends State<SlidesPage>
       createLabel: 'New presentation',
       createTooltip: 'New presentation',
       onCreate: _create,
+      onPhoneCreate: () => showSlidesCreateSheet(
+        context,
+        onNew: _create,
+        onImportFromQuark: _importFromQuark,
+        onImportFromDevice: _importFromDevice,
+      ),
       searchController: _search,
       searchHint: 'Search presentations…',
       onRefresh: manualRefresh,

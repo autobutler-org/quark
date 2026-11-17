@@ -119,7 +119,14 @@ void main() {
       await visit(tester);
       expect(find.text('No presentations yet'), findsOneWidget);
       expect(find.byKey(const ValueKey('slides_create_cta')), findsOneWidget);
-      expect(find.byKey(const ValueKey('slides_new')), findsOneWidget);
+      expect(
+        find.byKey(
+          ValueKey(
+            size == tap.narrowViewport ? 'slides_create_fab' : 'slides_new',
+          ),
+        ),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
       await tap.expectTapTargetGuidelines(tester);
     });
@@ -209,14 +216,14 @@ void main() {
       await tap.expectTapTargetGuidelines(tester);
     });
 
-    testWidgets('a phone collapses it into a labeled Import menu', (
-      tester,
-    ) async {
+    testWidgets('a phone puts it in the + sheet', (tester) async {
       tap.setViewport(tester, tap.narrowViewport);
       await visit(tester);
       expect(find.byKey(const ValueKey('slides_import')), findsNothing);
-      expect(find.text('Import'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('app_bar_bottom_menu')));
+      expect(find.byKey(const ValueKey('app_bar_bottom_menu')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('slides_create_fab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('slides_create_import')));
       await tester.pumpAndSettle();
       expect(find.text('From your Quark'), findsOneWidget);
       expect(find.text('From this device'), findsOneWidget);
@@ -228,7 +235,9 @@ void main() {
         'place and opens the presentation', (tester) async {
       tap.setViewport(tester, tap.narrowViewport);
       final router = await visit(tester);
-      await tester.tap(find.byKey(const ValueKey('app_bar_bottom_menu')));
+      await tester.tap(find.byKey(const ValueKey('slides_create_fab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('slides_create_import')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('slides_import_from_quark')));
       await tester.pumpAndSettle();
@@ -384,12 +393,16 @@ void main() {
       );
       await visit(tester);
       final phone = find
-          .byKey(const ValueKey('app_bar_bottom_menu'))
+          .byKey(const ValueKey('slides_create_fab'))
           .evaluate()
           .isNotEmpty;
-      await tester.tap(
-        find.byKey(ValueKey(phone ? 'app_bar_bottom_menu' : 'slides_import')),
-      );
+      if (phone) {
+        await tester.tap(find.byKey(const ValueKey('slides_create_fab')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('slides_create_import')));
+      } else {
+        await tester.tap(find.byKey(const ValueKey('slides_import')));
+      }
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('slides_import_from_device')));
       await tester.pumpAndSettle();
@@ -399,6 +412,56 @@ void main() {
       );
       expect(tester.takeException(), isNull);
       expectNoClippedText(tester);
+    });
+  });
+
+  group('a phone list (#4227)', () {
+    testWidgets('the bar has no create chip and no Presentations row', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      await visit(tester);
+      expect(find.byKey(const ValueKey('slides_new')), findsNothing);
+      expect(find.text('Presentations'), findsNothing);
+      expect(find.byType(QuarkCreateFab), findsOneWidget);
+    });
+
+    testWidgets('the + sheet starts a new presentation', (tester) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final router = await visit(tester);
+      await tester.tap(find.byKey(const ValueKey('slides_create_fab')));
+      await tester.pumpAndSettle();
+      expect(find.text('Import a PowerPoint file'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('slides_create_new')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, 'Pitch');
+      await tester.pump();
+      await tester.tap(find.text('Create'));
+      await tester.pumpAndSettle();
+      expect(created, ['Pitch']);
+      expect(
+        router.routerDelegate.currentConfiguration.uri.toString(),
+        '/slides/home/ann/Pitch.qslide',
+      );
+    });
+
+    testWidgets('a row shows its folder and when it changed', (tester) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      listing = [
+        FileNode(
+          name: 'Pitch.qslide',
+          size: 1,
+          isDir: false,
+          deviceName: '',
+          devicePath: '',
+          deviceSerial: '',
+          dirPath: 'Work/Pitch.qslide',
+          modifiedAt: DateTime.now().subtract(const Duration(days: 1)),
+        ),
+      ];
+      await visit(tester);
+      expect(find.text('Work · Yesterday'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }
