@@ -37,11 +37,13 @@ void main() {
       'answers', (tester) async {
     final router = routerWith((_, _) => Completer<String?>().future);
     addTearDown(router.dispose);
+    var maxHolds = 0;
 
     deferFirstFrameUntilRouted(
       tester.binding,
       router.routerDelegate,
       maxHold: const Duration(seconds: 2),
+      onMaxHold: () => maxHolds++,
     );
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
 
@@ -50,6 +52,8 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
 
     expect(tester.binding.sendFramesToEngine, isTrue);
+    // The launch's startup trace records the hold ran out (#2066).
+    expect(maxHolds, 1);
   });
 
   testWidgets('lets the first frame through once a sync redirect routes', (
@@ -58,10 +62,18 @@ void main() {
     final router = routerWith((_, _) => null);
     addTearDown(router.dispose);
 
-    deferFirstFrameUntilRouted(tester.binding, router.routerDelegate);
+    var maxHolds = 0;
+
+    deferFirstFrameUntilRouted(
+      tester.binding,
+      router.routerDelegate,
+      onMaxHold: () => maxHolds++,
+    );
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
 
     expect(tester.binding.sendFramesToEngine, isTrue);
     expect(find.text('page'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 30));
+    expect(maxHolds, 0);
   });
 }

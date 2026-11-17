@@ -15,12 +15,14 @@ import 'package:quark/utils/startup_config.dart';
 /// same way.
 ///
 /// [maxHold] bounds that wait: a redirect that never answers must not keep
-/// the launch screen up for good (#2066). After it the frames go out, and the
-/// page appears whenever the router does route.
+/// the launch screen up for good (#2066). After it the frames go out, the
+/// page appears whenever the router does route, and [onMaxHold] is called so
+/// the launch can record that it waited the whole hold.
 void deferFirstFrameUntilRouted(
   WidgetsBinding binding,
   Listenable routerDelegate, {
   Duration maxHold = StartupConfig.firstFrameMaxHold,
+  VoidCallback? onMaxHold,
 }) {
   binding.deferFirstFrame();
   late final Timer timer;
@@ -31,6 +33,9 @@ void deferFirstFrameUntilRouted(
     binding.allowFirstFrame();
   }
 
-  timer = Timer(maxHold, release);
+  timer = Timer(maxHold, () {
+    release();
+    onMaxHold?.call();
+  });
   routerDelegate.addListener(release);
 }

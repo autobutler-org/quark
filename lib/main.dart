@@ -27,6 +27,7 @@ import 'package:quark/utils/app_log.dart';
 import 'package:quark/utils/first_frame_gate.dart';
 import 'package:quark/utils/startup.dart';
 import 'package:quark/utils/startup_config.dart';
+import 'package:quark/utils/startup_trace.dart';
 import 'package:quark/widgets/jobs/job_finish_announcer.dart';
 import 'package:quark/widgets/layout/app_bar_trailing_host.dart';
 import 'package:quark/widgets/layout/dismiss_keyboard_on_tap_outside.dart';
@@ -41,25 +42,47 @@ void main() => AppLog.instance.guard(_run);
 /// watchers, and runs the app, holding its first frame until the router has a page to show.
 ///
 /// Neither wait is open-ended (#2066): settings slower than [StartupConfig.settingsGrace] get a [StartupLoader]
-/// painted meanwhile, and the first frame is held for at most [StartupConfig.firstFrameMaxHold].
+/// painted meanwhile, and the first frame is held for at most [StartupConfig.firstFrameMaxHold]. A [StartupTrace]
+/// times each step and logs where the time before the first frame went.
 Future<void> _run() async {
+  final trace = StartupTrace();
   AppLog.instance.info('App started');
   usePathUrlStrategy();
   final binding = WidgetsFlutterBinding.ensureInitialized();
+  // One app-log line per launch says where the time before the first frame
+  // went, and each step is a Timeline task in a profile trace (#2066).
+  unawaited(trace.finish(binding.waitUntilFirstFrameRasterized));
   if (kIsWeb && const bool.fromEnvironment('FLIGHTHOUSE_SEMANTICS')) {
     SemanticsBinding.instance.ensureSemantics();
   }
   // Linux has no video_player backend of its own (#3151).
   installVideoPlaybackBackend();
-  await maybeStartProbeAgent();
+  await trace.step('probe agent', maybeStartProbeAgent);
   // The native launch screen is blank, and nothing is painted until the
   // settings are in. A load that stalls, say on the secure-storage read, now
   // shows a loader instead of that blank screen (#2066).
-  await awaitWithSlowNotice(
-    AppSettings.instance.load(),
-    grace: StartupConfig.settingsGrace,
-    onSlow: () => runApp(const StartupLoader()),
+  await trace.step(
+    'settings',
+    () => awaitWithSlowNotice(
+      AppSettings.instance.load(),
+      grace: StartupConfig.settingsGrace,
+      onSlow: () {
+        trace.note('loader shown');
+        runApp(const StartupLoader());
+      },
+    ),
   );
+  await trace.step('services', _startServices);
+  deferFirstFrameUntilRouted(
+    binding,
+    router.routerDelegate,
+    onMaxHold: () => trace.note('first frame released before routing'),
+  );
+  runApp(const QuarkApp());
+}
+
+/// Starts what outlives every page, once the settings are in.
+Future<void> _startServices() async {
   // What the last launch left on disk shows while the first listing loads
   // (#1781). Not awaited: a snapshot is not worth holding the first frame.
   unawaited(FileBrowserCache.instance.hydrate());
@@ -91,8 +114,6 @@ Future<void> _run() async {
       SnackBar(content: Text(message)),
     ),
   );
-  deferFirstFrameUntilRouted(binding, router.routerDelegate);
-  runApp(const QuarkApp());
 }
 
 /// The app's root messenger, so a snack bar raised outside any page — a job
