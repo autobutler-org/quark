@@ -30,4 +30,4 @@ Future<void> tunnelEnroll({
 Future<void> tunnelForget() async {}
 
 /// Does nothing.
-void tunnelWatch(void Function() onReconnected) {}
+void tunnelWatch(void Function(Future<void> reconnected) onResume) {}

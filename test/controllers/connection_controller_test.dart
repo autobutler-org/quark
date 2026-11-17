@@ -52,6 +52,8 @@ void main() {
     Future<String?> Function(String upstream)? embeddedProxy,
     bool? hasOnDeviceNode,
     Future<void> Function(String upstream)? warmEmbeddedTunnel,
+    void Function(void Function(Future<void> reconnected) onResume)?
+    watchEmbeddedTunnel,
   }) {
     final c = ConnectionController(
       activeHostChanges: hostChanges ?? ChangeNotifier(),
@@ -85,7 +87,7 @@ void main() {
       warmEmbeddedTunnel:
           warmEmbeddedTunnel ?? (upstream) async => warmed.add(upstream),
       forgetEmbeddedTunnel: () async => forgotten++,
-      watchEmbeddedTunnel: (_) {},
+      watchEmbeddedTunnel: watchEmbeddedTunnel ?? (_) {},
       pairDevice: () async {
         pairCalls++;
         await pairGate?.future;
@@ -483,6 +485,70 @@ void main() {
       c.reportRemoteAccessUnavailable();
       await tester.pump();
       expect(probed.length, before);
+      c.dispose();
+    });
+  });
+
+  group('return to the app (#3882)', () {
+    testWidgets('a page waits for the node, then for the check after it', (
+      tester,
+    ) async {
+      answering = {_remote};
+      void Function(Future<void> reconnected)? onResume;
+      final c = build(
+        autoDispose: false,
+        watchEmbeddedTunnel: (callback) => onResume = callback,
+      )..start();
+      await tester.pump();
+      await tester.pump();
+      expect(c.mode, ConnectionMode.remote);
+      expect(tunnelHealthProbe, isNotNull, reason: 'the node probes with it');
+
+      var settled = false;
+      unawaited(c.whenResumed().then((_) => settled = true));
+      await tester.pump();
+      expect(settled, isTrue, reason: 'nothing to wait for');
+
+      final node = Completer<void>();
+      final before = probed.length;
+      onResume!(node.future);
+      settled = false;
+      unawaited(c.whenResumed().then((_) => settled = true));
+      await tester.pump();
+      expect(settled, isFalse, reason: 'the node is still being checked');
+      expect(probed.length, before, reason: 'no check before the node is back');
+
+      node.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(settled, isTrue);
+      expect(probed.length, before + 2, reason: 'home, then remote');
+      expect(c.mode, ConnectionMode.remote);
+
+      c.dispose();
+      expect(tunnelHealthProbe, isNull);
+    });
+
+    testWidgets('a node that never comes back holds a page only so long', (
+      tester,
+    ) async {
+      void Function(Future<void> reconnected)? onResume;
+      final c = build(
+        autoDispose: false,
+        watchEmbeddedTunnel: (callback) => onResume = callback,
+      )..start();
+      await tester.pump();
+      await tester.pump();
+
+      onResume!(Completer<void>().future);
+      var settled = false;
+      unawaited(c.whenResumed().then((_) => settled = true));
+      await tester.pump(
+        ConnectionConfig.resumeSettleTimeout - const Duration(seconds: 1),
+      );
+      expect(settled, isFalse);
+      await tester.pump(const Duration(seconds: 1));
+      expect(settled, isTrue);
       c.dispose();
     });
   });

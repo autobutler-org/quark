@@ -34,6 +34,12 @@ const tunnelUnavailableHeader = 'x-quark-tunnel-unavailable';
 /// connection check; `tunnel_token_client.dart` calls it. Null does nothing.
 void Function()? onTunnelUnavailable;
 
+/// Asks the Quark something cheap through the proxy at the URL it is given,
+/// and says whether it answered. A return to the foreground keeps a `Running`
+/// node this answers through and restarts any other (#3882). The app points
+/// it at its own reachability probe. Null keeps any `Running` node.
+Future<bool> Function(String proxyUrl)? tunnelHealthProbe;
+
 /// What the bridge reports about its node.
 ///
 /// Parsed from the JSON `quark_tsnet_status` returns:
@@ -75,7 +81,7 @@ class TunnelStatus {
 /// The app's embedded tailnet node and its local proxy.
 ///
 /// One per process. On iOS the node runs in the foreground only: [watchLifecycle]
-/// restarts it when the app comes back. There is no background transfer.
+/// checks it when the app comes back. There is no background transfer.
 abstract final class EmbeddedTunnel {
   /// Whether this platform loads the native bridge.
   static bool get isSupported => impl.tunnelIsSupported;
@@ -129,8 +135,16 @@ abstract final class EmbeddedTunnel {
   /// not inherit the last one's node.
   static Future<void> forget() => impl.tunnelForget();
 
-  /// Restarts the node when the app returns to the foreground, then calls
-  /// [onReconnected] so the address check runs again. The port can change.
-  static void watchLifecycle(void Function() onReconnected) =>
-      impl.tunnelWatch(onReconnected);
+  /// Checks the node when the app comes back from the background (#3882).
+  ///
+  /// [onResume] is called as the check starts, with a future that completes
+  /// once the node is known good or has been restarted, so the caller can
+  /// hold its own work until then and run its address check after. A node
+  /// that is `Running` and answers [tunnelHealthProbe] through its proxy
+  /// keeps its port and token. Any other is restarted, and the port can
+  /// change. An overlay or system prompt (Control Center, Face ID, the share
+  /// sheet) is not a return and does nothing.
+  static void watchLifecycle(
+    void Function(Future<void> reconnected) onResume,
+  ) => impl.tunnelWatch(onResume);
 }

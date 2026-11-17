@@ -143,6 +143,42 @@ void main() {
     });
     expect(state.starts, 2, reason: 'ran once the debounce lapsed');
   });
+
+  // #3882: a return to the app refreshed every page at once, while the
+  // remote-access node was still being checked or restarted, so each one
+  // failed with "You're not connected". The resume refresh now waits for the
+  // connection check that follows the return.
+  testWidgets('a resume refresh waits for the connection to settle', (
+    tester,
+  ) async {
+    final settled = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _RefreshProbe(
+          completeImmediately: true,
+          connectionSettled: () => settled.future,
+        ),
+      ),
+    );
+    final state = tester.state<_RefreshProbeState>(find.byType(_RefreshProbe));
+    expect(state.starts, 1);
+    // Past the debounce, so only the wait can hold the resume refresh back.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1100)),
+    );
+
+    await tester.runAsync(() async {
+      state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+    expect(state.starts, 1, reason: 'the connection is still settling');
+
+    await tester.runAsync(() async {
+      settled.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+    expect(state.starts, 2, reason: 'refreshed once it settled');
+  });
 }
 
 class _RefreshProbe extends StatefulWidget {
@@ -150,6 +186,7 @@ class _RefreshProbe extends StatefulWidget {
     this.throwOnRefresh = false,
     this.completeImmediately = false,
     this.followSettings = false,
+    this.connectionSettled,
   });
 
   final bool throwOnRefresh;
@@ -157,6 +194,9 @@ class _RefreshProbe extends StatefulWidget {
 
   /// Uses the interval from settings rather than none.
   final bool followSettings;
+
+  /// Stands in for the app's connection check after a resume.
+  final Future<void> Function()? connectionSettled;
 
   @override
   State<_RefreshProbe> createState() => _RefreshProbeState();
@@ -175,6 +215,10 @@ class _RefreshProbeState extends State<_RefreshProbe>
 
   @override
   Duration get refreshTimeout => const Duration(seconds: 2);
+
+  @override
+  Future<void> whenConnectionSettled() =>
+      widget.connectionSettled?.call() ?? Future<void>.value();
 
   @override
   Future<void> refresh() {

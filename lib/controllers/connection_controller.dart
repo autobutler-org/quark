@@ -38,8 +38,10 @@ import 'package:tailnet_flutter/tailnet_flutter.dart';
 /// says it can reach the Quark. While a home check succeeds and this phone
 /// has no saved pairing, it asks the Quark for a key, [enroll] starts the
 /// node, and only then is the pairing stored, so the proxy is up before the
-/// phone leaves home (#2876). Coming back to the foreground restarts the
-/// node and checks again; the proxy port can change.
+/// phone leaves home (#2876). Coming back from the background keeps a node
+/// that still answers through its proxy, restarts one that does not, and then
+/// checks again (#3882). [whenResumed] lets a page hold its refresh until that
+/// check settles. An overlay or system prompt is not a return.
 ///
 /// Setting up heals itself (#3776). A stored pairing whose node does not run,
 /// or whose key the Quark no longer accepts, is dropped on the next check at
@@ -72,7 +74,8 @@ class ConnectionController extends ChangeNotifier {
     Future<void> Function(String upstream) warmEmbeddedTunnel =
         EmbeddedTunnel.warm,
     Future<void> Function() forgetEmbeddedTunnel = EmbeddedTunnel.forget,
-    void Function(void Function() onReconnected) watchEmbeddedTunnel =
+    void Function(void Function(Future<void> reconnected) onResume)
+        watchEmbeddedTunnel =
         EmbeddedTunnel.watchLifecycle,
     Future<PairedDevice> Function() pairDevice = RemoteAccessService.pairDevice,
     Future<StoredPairing?> Function(String host) readPairing =
@@ -141,8 +144,10 @@ class ConnectionController extends ChangeNotifier {
   /// Stops the on-device node and deletes its state.
   final Future<void> Function() _forgetEmbeddedTunnel;
 
-  /// Registers the foreground restart. Called once from [start].
-  final void Function(void Function() onReconnected) _watchEmbeddedTunnel;
+  /// Registers the check on a return to the foreground. Called once from
+  /// [start].
+  final void Function(void Function(Future<void> reconnected) onResume)
+  _watchEmbeddedTunnel;
 
   final Future<PairedDevice> Function() _pairDevice;
   final Future<StoredPairing?> Function(String host) _readPairing;
@@ -187,6 +192,13 @@ class ConnectionController extends ChangeNotifier {
 
   /// When [reportRemoteAccessUnavailable] last started a check.
   DateTime? _lastUnavailableCheck;
+
+  /// Completes once the check after a return to the app has settled [mode].
+  /// Null while no return is being checked.
+  Completer<void>? _resuming;
+
+  /// Set once the node is back after a return; the next [_set] completes it.
+  Completer<void>? _resumeCheck;
 
   /// What the app was doing when automatic pairing failed, for [Errors].
   static const _pairAction = 'set up remote access on this phone';
@@ -261,12 +273,48 @@ class ConnectionController extends ChangeNotifier {
   void start() {
     if (kIsWeb || _started) return;
     _started = true;
-    _watchEmbeddedTunnel(() {
-      unawaited(check());
-    });
+    _watchEmbeddedTunnel(_onResume);
     onTunnelUnavailable = reportRemoteAccessUnavailable;
+    tunnelHealthProbe = _probe;
     _activeHostChanges.addListener(_onHostChanged);
     unawaited(_restore().then((_) => check()));
+  }
+
+  /// Holds [whenResumed] until the node is back and a check has settled
+  /// [mode]. Not [check]'s whole future: at home that goes on to read the
+  /// Quark's remote-access settings, which a page need not wait for.
+  void _onResume(Future<void> reconnected) {
+    final done = _resuming ?? Completer<void>();
+    _resuming = done;
+    unawaited(
+      done.future.then((_) {
+        if (identical(_resuming, done)) _resuming = null;
+      }),
+    );
+    unawaited(() async {
+      try {
+        await reconnected;
+      } catch (_) {
+        // A restart that failed leaves the check to say offline.
+      }
+      _resumeCheck = done;
+      await check();
+      if (!done.isCompleted) done.complete();
+    }());
+  }
+
+  /// Completes once the connection check after a return to the app has
+  /// settled, at once when none is running, and in any case within
+  /// [ConnectionConfig.resumeSettleTimeout]. [AutoRefreshMixin] waits on it so
+  /// a page does not refresh against a proxy that is still being checked or
+  /// restarted (#3882).
+  Future<void> whenResumed() {
+    final resuming = _resuming;
+    if (resuming == null) return Future<void>.value();
+    return resuming.future.timeout(
+      ConnectionConfig.resumeSettleTimeout,
+      onTimeout: () {},
+    );
   }
 
   void _onHostChanged() {
@@ -685,6 +733,16 @@ class ConnectionController extends ChangeNotifier {
   }
 
   void _set(ConnectionMode? mode, {String? host, String? url}) {
+    final resumed = _resumeCheck;
+    _resumeCheck = null;
+    if (resumed != null && !resumed.isCompleted) resumed.complete();
+    assert(() {
+      developer.log(
+        'check settled: ${mode?.name ?? 'none'}',
+        name: 'quark.remote_access',
+      );
+      return true;
+    }());
     if (mode == _mode && host == _remoteHost && url == _remoteUrl) return;
     _mode = mode;
     _remoteHost = host;
@@ -703,6 +761,10 @@ class ConnectionController extends ChangeNotifier {
     if (onTunnelUnavailable == reportRemoteAccessUnavailable) {
       onTunnelUnavailable = null;
     }
+    if (tunnelHealthProbe == _probe) tunnelHealthProbe = null;
+    _resumeCheck = null;
+    final resuming = _resuming;
+    if (resuming != null && !resuming.isCompleted) resuming.complete();
     super.dispose();
   }
 
