@@ -678,3 +678,30 @@ results (JN-PH-023).
 - A range or drag stops at the last loaded photo; it never selects photos the grid has not fetched yet.
 - A swipe that does not follow a long press scrolls the grid and selects nothing.
 - The selection bar's count and actions (JN-PH-027) apply to everything selected this way.
+
+---
+
+### JN-PH-029: Resize and hide the library sidebar
+
+**Preconditions:** JN-PH-001, on a window at least 900 pixels wide.
+
+**Steps:**
+
+1. Drag the edge between the library sidebar and the grid to the right.
+2. Tap **Hide sidebar** at the top of the grid.
+3. Reload the page, then tap **Show sidebar**.
+
+**Expected result:**
+
+- During step 1 the sidebar widens with the pointer, up to 480 pixels or half the window, whichever is smaller,
+  and the grid drops columns to fit what is left.
+- After step 2 the sidebar is gone and the grid gains columns.
+- After step 3 the sidebar was still hidden after the reload, and comes back at the width from step 1.
+
+**Notes:**
+
+- Dragging the edge below 100 pixels hides the sidebar; dragging it back out shows it. A double-click on the edge
+  resets the default width.
+- The edge takes the keyboard: arrow keys resize, Enter or Space hides and shows.
+- The width and the hidden sidebar are remembered per device.
+- On a phone the library stays in the bar's picker (JN-PH-001 is unchanged there).

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/widgets/photos/photos_bar_bottom.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/tap_target_guidelines.dart' show setViewport;
 
@@ -71,6 +72,30 @@ void main() {
         reason: 'compact -> desktop must not throw',
       );
     });
+  });
+
+  // The library sidebar resizes and hides on a wide window, its state is kept
+  // per device, and the grid's columns follow it (#4294).
+  testWidgets('desktop: hiding the library sidebar widens the grid', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await pumpPhotos(tester, desktopSize);
+    // A loader spins with no backend, so the page never settles.
+    await tester.pump(const Duration(milliseconds: 300));
+    final before = tester.getSize(find.byType(CustomScrollView)).width;
+
+    await tester.tap(find.byKey(const ValueKey('split_view_toggle')));
+    await tester.pump();
+    await tester.pump(QuarkResizablePane.collapseDuration);
+
+    expect(find.byType(AlbumSidebar), findsNothing);
+    expect(
+      tester.getSize(find.byType(CustomScrollView)).width,
+      greaterThan(before),
+    );
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('sidebar_photos_library_collapsed'), isTrue);
   });
 
   // Upload and Search sit beside Tools in the library's second row, which
