@@ -16,6 +16,7 @@ import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/overlay_history.dart';
 import 'package:quark/utils/photo_grid_config.dart';
+import 'package:quark/utils/trash_config.dart';
 import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/widgets/device_upload_picker.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
@@ -94,7 +95,13 @@ class PhotosPageState extends State<PhotosPage>
     // upload reloads once it finishes. A reconnect arrives here as a resync,
     // so it needs no listener of its own.
     _eventSub = EventsService.instance.events.listen((evt) {
-      if (evt.changesListing && !_controller.isUploading) manualRefresh();
+      // An upload and an action on the selection each reload once when they
+      // finish, rather than once per photo they changed (#4154).
+      if (evt.changesListing &&
+          !_controller.isUploading &&
+          !_controller.isActingOnSelection) {
+        manualRefresh();
+      }
     });
     _scrollController.addListener(_onScroll);
     _controller.addListener(_scheduleAlbumUrlSync);
@@ -423,6 +430,109 @@ class PhotosPageState extends State<PhotosPage>
     }
   }
 
+  /// Says how an action on the selection went when any of it failed; the
+  /// photos that failed stay selected for another try (#4154).
+  void _reportSelection(
+    SelectionOutcome outcome,
+    String Function(String photos) action,
+  ) {
+    if (!mounted || outcome.failed == 0) return;
+    showMessage(
+      context,
+      Errors.selection(
+        outcome.error,
+        action,
+        failed: outcome.failed,
+        total: outcome.total,
+      ),
+    );
+  }
+
+  /// Favorites the selection, or takes it out of Favorites when every photo already is
+  /// one; [favorite] false always takes it out, for Remove from favorites.
+  Future<void> _favoriteSelection({bool? favorite}) async {
+    final want = favorite ?? !_controller.selectionAllFavorites;
+    final outcome = await _controller.favoriteSelected(favorite: want);
+    _reportSelection(
+      outcome,
+      (photos) => want ? 'favorite $photos' : 'unfavorite $photos',
+    );
+  }
+
+  Future<void> _downloadSelection() async => _reportSelection(
+    await _controller.downloadSelected(),
+    (photos) => 'download $photos',
+  );
+
+  Future<void> _copySelection() async {
+    final outcome = await _controller.copySelected();
+    if (!mounted) return;
+    if (outcome.failed == 0 && outcome.done > 0) {
+      showMessage(
+        context,
+        outcome.done == 1 ? 'Made 1 copy' : 'Made ${outcome.done} copies',
+      );
+    }
+    _reportSelection(outcome, (photos) => 'copy $photos');
+  }
+
+  Future<void> _deleteSelection() async {
+    final count = _controller.selectedIds.length;
+    final one = count == 1;
+    final confirmed = await confirmAction(
+      context,
+      title: one
+          ? 'Move 1 photo to the trash?'
+          : 'Move $count photos to the trash?',
+      message:
+          'You can restore ${one ? 'it' : 'them'} from the trash for '
+          '${TrashConfig.retentionDays} days.',
+      confirmLabel: 'Move to Trash',
+      keyPrefix: 'photo_selection_delete',
+      destructive: true,
+    );
+    if (confirmed != true || !mounted) return;
+    _reportSelection(
+      await _controller.deleteSelected(),
+      (photos) => 'move $photos to the trash',
+    );
+  }
+
+  Future<void> _removeSelectionFromAlbum() async {
+    final count = _controller.selectedIds.length;
+    final one = count == 1;
+    final confirmed = await confirmAction(
+      context,
+      title: one
+          ? 'Remove 1 photo from the album?'
+          : 'Remove $count photos from the album?',
+      message:
+          'This removes ${one ? 'the photo' : 'them'} from this album. The '
+          'files on disk are not affected.',
+      confirmLabel: 'Remove',
+      keyPrefix: 'photo_selection_remove',
+      destructive: true,
+    );
+    if (confirmed != true || !mounted) return;
+    _reportSelection(
+      await _controller.removeSelectedFromAlbum(),
+      (photos) => 'remove $photos from the album',
+    );
+  }
+
+  /// The share sheet for the one photo selected; the sheet shares one path.
+  void _shareSelection() {
+    final id = _controller.selectedIds.single;
+    final path = _controller.quarkPathOf(id);
+    if (path == null) return;
+    showShareSheet(
+      context,
+      deviceSerial: path.serial,
+      relPath: path.relPath,
+      name: path.relPath.split('/').last,
+    );
+  }
+
   /// Shows the album [id] in place, or All photos for null, at its canonical
   /// link. [didUpdateWidget] hands the new URL to the controller.
   void _showAlbum(int? id) {
@@ -676,6 +786,9 @@ class PhotosPageState extends State<PhotosPage>
             final album = c.selectedAlbum;
             final albumError = c.albumError;
             final searchError = c.searchError;
+            final showingFavorites = album == null
+                ? c.selectedCategory == PhotoCategory.favorites
+                : album.isFavorites;
 
             // Upload and Search live in the second row, beside Tools, so a
             // tablet's top bar keeps room for the page name. Pages without
@@ -699,17 +812,23 @@ class PhotosPageState extends State<PhotosPage>
               selected: _searchOpen,
               onPressed: _toggleSearch,
             );
-            // The library selects; an album adds photos instead. The Quark
+            final select = QuarkBarIconButton(
+              key: const ValueKey('photos_select'),
+              icon: QuarkIcons.check_circle_outline,
+              tooltip: 'Select',
+              onPressed: c.enterSelectionMode,
+            );
+            // An album selects too, to act on its photos (#4154), but Demo
+            // mode's sample albums refuse edits.
+            final albumSelect = album != null && !_demo && photos.isNotEmpty
+                ? select
+                : null;
+            // The library selects; an album adds photos as well. The Quark
             // fills system albums itself and refuses edits (#992), and an
             // empty album carries the button in its empty state, so the
             // page never shows two.
             final selectOrAdd = album == null
-                ? QuarkBarIconButton(
-                    key: const ValueKey('photos_select'),
-                    icon: QuarkIcons.check_circle_outline,
-                    tooltip: 'Select',
-                    onPressed: c.enterSelectionMode,
-                  )
+                ? select
                 : !album.isSystemAlbum && photos.isNotEmpty
                 ? QuarkBarChip(
                     key: const ValueKey('photos_add_to_album'),
@@ -724,11 +843,13 @@ class PhotosPageState extends State<PhotosPage>
               onChanged: c.setSort,
             );
             // A phone's bar holds two: Search and Select. Upload is the
-            // + button and Sort joins the second row (#4150).
+            // + button and Sort joins the second row (#4150), with an album's
+            // Select beside it.
             final actions = phone
                 ? [search, ?selectOrAdd]
                 : [
                     if (!secondRow) ...[upload, search],
+                    ?albumSelect,
                     ?selectOrAdd,
                     sort,
                   ];
@@ -775,7 +896,9 @@ class PhotosPageState extends State<PhotosPage>
                       isRefreshing: isRefreshing,
                       bottom: PhotosBarBottom(
                         title: album?.name ?? 'Library',
-                        pinnedActions: phone ? [sort] : [upload, search],
+                        pinnedActions: phone
+                            ? [sort, ?albumSelect]
+                            : [upload, search],
                         onUploadToDevice: phone && c.canChooseUploadDevice
                             ? _uploadToDevice
                             : null,
@@ -798,10 +921,33 @@ class PhotosPageState extends State<PhotosPage>
                       onPressed: _uploadPhotos,
                     )
                   : null,
+              // Every action a single photo has, on the whole selection
+              // (#4154). Demo mode's samples only favorite; the rest would
+              // ask a Quark.
               bottomBar: c.selectionMode && c.addingToAlbum == null
                   ? PhotoSelectionBar(
                       selectedCount: selectedIds.length,
                       onAddToAlbum: _pickAlbumForSelection,
+                      allFavorites: c.selectionAllFavorites,
+                      onFavorite: showingFavorites ? null : _favoriteSelection,
+                      onDownload: _demo ? null : _downloadSelection,
+                      // The share sheet takes one path.
+                      onShare: _demo || selectedIds.length != 1
+                          ? null
+                          : _shareSelection,
+                      onCopy: _demo ? null : _copySelection,
+                      onRemoveFromAlbum: showingFavorites
+                          ? () => _favoriteSelection(favorite: false)
+                          : album != null && !album.isSystemAlbum
+                          ? _removeSelectionFromAlbum
+                          : null,
+                      removeFromAlbumLabel: showingFavorites
+                          ? 'Remove from favorites'
+                          : 'Remove from album',
+                      onDelete: _demo ? null : _deleteSelection,
+                      quarkOnlyDisabledReason: c.selectionHasDevicePhoto
+                          ? Errors.selectionHasPhonePhotos
+                          : null,
                     )
                   : null,
               body: Column(
@@ -884,10 +1030,7 @@ class PhotosPageState extends State<PhotosPage>
                                       )
                                     : PhotosEmptyState(
                                         unreachable: c.quarkUnreachable,
-                                        showingFavorites: album == null
-                                            ? c.selectedCategory ==
-                                                  PhotoCategory.favorites
-                                            : album.isFavorites,
+                                        showingFavorites: showingFavorites,
                                         albumName: album?.name,
                                         hostAddress: c.activeHost,
                                         onRetry: manualRefresh,
@@ -923,7 +1066,8 @@ class PhotosPageState extends State<PhotosPage>
                                 // the library it stays selection (#2276).
                                 onLongPress: (i) =>
                                     c.selectFromLongPress(photos[i].id),
-                                longPressOpensMenu: album != null,
+                                longPressOpensMenu:
+                                    album != null && !c.selectionMode,
                                 onMenu: _demo
                                     ? null
                                     : album == null

@@ -153,6 +153,42 @@ void main() {
     });
   });
 
+  group('Errors.selection (#4154)', () {
+    String download(String photos) => 'download $photos';
+
+    test('names how many of the selection failed', () {
+      expect(
+        Errors.selection(
+          const ApiException(500),
+          download,
+          failed: 3,
+          total: 50,
+        ),
+        "Couldn't download 3 of 50 photos. Your Quark ran into a problem. "
+        'Try again.',
+      );
+    });
+
+    test('a reason that already names the action is not repeated', () {
+      expect(
+        Errors.selection(
+          const ApiException(403),
+          download,
+          failed: 2,
+          total: 2,
+        ),
+        "You don't have permission to download the 2 photos.",
+      );
+    });
+
+    test('one photo reads "the photo"', () {
+      expect(
+        Errors.selection(Exception('x'), download, failed: 1, total: 1),
+        "Couldn't download the photo.",
+      );
+    });
+  });
+
   group('Errors.album', () {
     test('a 409 says a sibling already has the name', () {
       expect(

@@ -29,6 +29,7 @@ import 'package:quark/utils/photo_grid_config.dart';
 import 'package:quark/utils/photo_month_sections.dart';
 import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
+import 'package:quark/utils/task_pool.dart';
 import 'package:quark/utils/upload_destination.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -70,6 +71,27 @@ class AddToAlbumOutcome {
   /// What the last failed photo threw, for the page to word; null when
   /// nothing failed.
   final Object? error;
+}
+
+/// How an action on the whole selection went (#4154), so the page can say
+/// how many failed. The photos that failed stay selected.
+@immutable
+class SelectionOutcome {
+  /// Creates an outcome.
+  const SelectionOutcome({this.done = 0, this.failed = 0, this.error});
+
+  /// Photos the action worked on.
+  final int done;
+
+  /// Photos the Quark refused or never answered for.
+  final int failed;
+
+  /// What the last failure threw, for the page to word; null when nothing
+  /// failed.
+  final Object? error;
+
+  /// How many photos the action was run on.
+  int get total => done + failed;
 }
 
 /// Everything the photos page shows and does, kept out of its [State]
@@ -186,6 +208,13 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
         })
         deleteFile =
         FilesService.deleteFile,
+    Future<void> Function(
+          List<String> filePaths, {
+          String? rootDir,
+          String? deviceSerial,
+        })
+        deleteFiles =
+        FilesService.deleteFiles,
     Future<List<FileNode>> Function(String query, {List<String>? serials})?
         searchFiles =
         FilesService.searchFiles,
@@ -219,6 +248,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
        _saveFile = saveFile,
        _copyPhoto = copyPhoto,
        _deleteFile = deleteFile,
+       _deleteFiles = deleteFiles,
        _searchDelay = searchDelay,
        _pendingDatesDelay = pendingDatesDelay,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
@@ -365,6 +395,12 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     String? deviceSerial,
   })
   _deleteFile;
+  final Future<void> Function(
+    List<String> filePaths, {
+    String? rootDir,
+    String? deviceSerial,
+  })
+  _deleteFiles;
 
   final Duration _searchDelay;
   final Duration _pendingDatesDelay;
@@ -415,6 +451,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
 
   bool _selectionMode = false;
   final Set<String> _selectedIds = {};
+  bool _actingOnSelection = false;
   AlbumItem? _addingToAlbum;
 
   /// The photos [_addingToAlbum] already holds, which cannot be picked.
@@ -640,6 +677,23 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
 
   /// The [PhotoItem.id]s in the selection.
   Set<String> get selectedIds => Set.unmodifiable(_selectedIds);
+
+  /// Whether the selection holds a photo only the phone has, which the
+  /// actions that need a Quark cannot take (#4154).
+  bool get selectionHasDevicePhoto =>
+      _selectedPhotos().any((photo) => photo.relPath == null);
+
+  /// Whether every selected photo is a favorite, so the selection's favorite
+  /// action takes them out of Favorites instead. False with nothing selected.
+  bool get selectionAllFavorites {
+    final photos = _selectedPhotos();
+    return photos.isNotEmpty && photos.every((p) => _isFavorite(p.id));
+  }
+
+  /// Whether an action on the whole selection is running. Its own changes
+  /// arrive as events too, which the page leaves to the one reload the
+  /// action ends with.
+  bool get isActingOnSelection => _actingOnSelection;
 
   /// The album the selection is being added to, or null in plain selection.
   AlbumItem? get addingToAlbum => _addingToAlbum;
@@ -1126,24 +1180,11 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
       relPath: relPath,
       serial: serial.isNotEmpty ? serial : null,
     );
-    _listCache.setFavorite(id, isFavorite: isFavorite);
     // The Favorites album is the starred photos, so its kept items are stale.
     for (final album in _albums) {
       if (album.isFavorites) _albumsCache.dropItems(album.id);
     }
-    if (isFavorite) {
-      _favoriteKeys.add(id);
-    } else {
-      _favoriteKeys.remove(id);
-      // The Favorites album is the starred photos, so un-starring leaves it.
-      final items = _albumItems;
-      if (items != null && (selectedAlbum?.isFavorites ?? false)) {
-        _albumItems = [
-          for (final item in items)
-            if (item.id != id) item,
-        ];
-      }
-    }
+    _setFavorite(id, isFavorite);
     notifyListeners();
     await loadAlbums();
   }
@@ -1249,8 +1290,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     var skipped = 0;
     var failed = 0;
     Object? error;
-    for (final photo in [..._quark, ..._mobile]) {
-      if (!_selectedIds.contains(photo.id)) continue;
+    for (final photo in _selectedPhotos()) {
       final relPath = photo.relPath;
       if (relPath == null) {
         skipped++;
@@ -1484,6 +1524,241 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     // Any album may have held it.
     _albumsCache.dropItems();
     await refresh();
+  }
+
+  /// How many photos of a selection are worked on at once (#4154).
+  static const int selectionConcurrency = 4;
+
+  /// The most paths one trash request may carry, the Quark's
+  /// `fileutil.MaxDeleteFiles`.
+  static const int maxDeletePaths = 1000;
+
+  /// Favorites every selected photo that is not one yet, or, when
+  /// [selectionAllFavorites] (or [favorite] is false), takes them all out
+  /// (#4154). A photo already in the wanted state is left alone, so a mixed
+  /// selection is never toggled blindly. Reloads the album tree once at the
+  /// end, so the Favorites count follows.
+  Future<SelectionOutcome> favoriteSelected({bool? favorite}) {
+    final want = favorite ?? !selectionAllFavorites;
+    return _actOnSelection(
+      (photos) => _eachOf(
+        [
+          for (final photo in photos)
+            if (_isFavorite(photo.id) != want) photo,
+        ],
+        (photo) async {
+          final serial = photo.serial ?? '';
+          Future<bool> toggle() => _toggleFavorite(
+            relPath: photo.relPath!,
+            serial: serial.isNotEmpty ? serial : null,
+          );
+          // The star this page showed can be stale; a second toggle lands it
+          // where the user asked.
+          if (await toggle() != want && await toggle() != want) {
+            throw StateError('favorite did not settle');
+          }
+          _setFavorite(photo.id, want);
+        },
+      ),
+      reload: () async {
+        for (final album in _albums) {
+          if (album.isFavorites) _albumsCache.dropItems(album.id);
+        }
+        notifyListeners();
+        await loadAlbums();
+      },
+    );
+  }
+
+  /// Downloads every selected photo as its own file, the way [downloadPhoto]
+  /// does, [selectionConcurrency] at a time (#4154).
+  Future<SelectionOutcome> downloadSelected() => _actOnSelection(
+    (photos) => _eachOf(photos, (photo) async {
+      await _saveFile(
+        photo.relPath!,
+        serial: (photo.serial ?? '').isEmpty ? null : photo.serial,
+        fileName: photo.name,
+      );
+    }),
+  );
+
+  /// Copies every selected photo beside itself, [selectionConcurrency] at a
+  /// time, then reloads the library once (#4154).
+  Future<SelectionOutcome> copySelected() => _actOnSelection(
+    (photos) => _eachOf(photos, (photo) async {
+      await _copyPhoto(
+        photo.relPath!,
+        serial: (photo.serial ?? '').isEmpty ? null : photo.serial,
+      );
+    }),
+    reload: refresh,
+  );
+
+  /// Moves every selected photo to the trash in one request per storage
+  /// device, then reloads the library once (#4154).
+  Future<SelectionOutcome> deleteSelected() => _actOnSelection(
+    (photos) async {
+      final bySerial = <String, List<_Photo>>{};
+      for (final photo in photos) {
+        (bySerial[photo.serial ?? ''] ??= []).add(photo);
+      }
+      final failed = <String>{};
+      Object? error;
+      for (final MapEntry(key: serial, value: group) in bySerial.entries) {
+        for (var i = 0; i < group.length; i += maxDeletePaths) {
+          final batch = group.sublist(
+            i,
+            (i + maxDeletePaths).clamp(0, group.length),
+          );
+          try {
+            await _deleteFiles([
+              for (final photo in batch) photo.relPath!,
+            ], deviceSerial: serial.isEmpty ? null : serial);
+          } catch (e) {
+            failed.addAll(batch.map((photo) => photo.id));
+            error = e;
+          }
+        }
+      }
+      return (failed: failed, error: error);
+    },
+    reload: () async {
+      // Any album may have held them.
+      _albumsCache.dropItems();
+      await refresh();
+    },
+  );
+
+  /// Takes every selected photo out of the album showing,
+  /// [selectionConcurrency] at a time, then reloads the tree once so the
+  /// album's count follows (#4154). The files stay where they are.
+  Future<SelectionOutcome> removeSelectedFromAlbum() async {
+    final albumId = selectedAlbumId;
+    if (albumId == null) return const SelectionOutcome();
+    final removed = <String>{};
+    return _actOnSelection(
+      (photos) => _eachOf(photos, (photo) async {
+        await _removePhotoFromAlbum(
+          albumId,
+          deviceSerial: photo.serial ?? '',
+          relPath: photo.relPath!,
+        );
+        removed.add(photo.id);
+      }),
+      reload: () async {
+        final items = _albumItems;
+        if (albumId == _albumId && items != null) {
+          _albumItems = [
+            for (final item in items)
+              if (!removed.contains(item.id)) item,
+          ];
+        }
+        _albumsCache.dropItems(albumId);
+        notifyListeners();
+        await loadAlbums();
+      },
+    );
+  }
+
+  /// Runs [act] on the selected photos, then [reload] once, and leaves only
+  /// the photos that failed selected; selection ends when none did. A
+  /// selection holding a device photo, or one already being acted on, runs
+  /// nothing.
+  Future<SelectionOutcome> _actOnSelection(
+    Future<({Set<String> failed, Object? error})> Function(List<_Photo> photos)
+    act, {
+    Future<void> Function()? reload,
+  }) async {
+    final photos = _selectedPhotos();
+    if (_actingOnSelection ||
+        photos.isEmpty ||
+        photos.any((photo) => photo.relPath == null)) {
+      return const SelectionOutcome();
+    }
+    _actingOnSelection = true;
+    notifyListeners();
+    try {
+      final (:failed, :error) = await act(photos);
+      if (failed.length < photos.length) await reload?.call();
+      if (failed.isEmpty) {
+        exitSelectionMode();
+      } else {
+        _selectedIds.retainAll(failed);
+      }
+      return SelectionOutcome(
+        done: photos.length - failed.length,
+        failed: failed.length,
+        error: error,
+      );
+    } finally {
+      _actingOnSelection = false;
+      notifyListeners();
+    }
+  }
+
+  /// Runs [each] on every one of [photos], [selectionConcurrency] at a time,
+  /// and answers which photos failed and what the last failure threw.
+  Future<({Set<String> failed, Object? error})> _eachOf(
+    List<_Photo> photos,
+    Future<void> Function(_Photo photo) each,
+  ) async {
+    final failed = <String>{};
+    Object? error;
+    final pool = TaskPool<_Photo>(
+      concurrency: selectionConcurrency,
+      worker: (photo) async {
+        try {
+          await each(photo);
+        } catch (e) {
+          failed.add(photo.id);
+          error = e;
+        }
+      },
+    );
+    photos.forEach(pool.add);
+    await pool.drain();
+    return (failed: failed, error: error);
+  }
+
+  /// The selected photos, each once, wherever the grid found them.
+  List<_Photo> _selectedPhotos() {
+    if (_selectedIds.isEmpty) return const [];
+    final found = <String, _Photo>{};
+    for (final photo in [
+      ..._quark,
+      ..._mobile,
+      ...?_albumItems,
+      ...?_searchResults?.photos,
+    ]) {
+      if (_selectedIds.contains(photo.id)) {
+        found.putIfAbsent(photo.id, () => photo);
+      }
+    }
+    return found.values.toList(growable: false);
+  }
+
+  /// Whether the photo [id] is a favorite: starred, or in the Favorites
+  /// album showing, which holds nothing else.
+  bool _isFavorite(String id) =>
+      _favoriteKeys.contains(id) || (selectedAlbum?.isFavorites ?? false);
+
+  /// Records that the photo [id] is now a favorite or not, as [toggleFavorite]
+  /// does, without telling listeners.
+  void _setFavorite(String id, bool isFavorite) {
+    _listCache.setFavorite(id, isFavorite: isFavorite);
+    if (isFavorite) {
+      _favoriteKeys.add(id);
+      return;
+    }
+    _favoriteKeys.remove(id);
+    // The Favorites album is the starred photos, so un-starring leaves it.
+    final items = _albumItems;
+    if (items != null && (selectedAlbum?.isFavorites ?? false)) {
+      _albumItems = [
+        for (final item in items)
+          if (item.id != id) item,
+      ];
+    }
   }
 
   /// Loads the items of the album being shown, if any, and keeps them for
