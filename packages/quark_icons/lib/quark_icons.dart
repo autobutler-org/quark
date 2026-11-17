@@ -244,6 +244,9 @@ class QuarkIcons {
   /// Show or hide the selection's properties. Outlined. The rounded adjust icon is [tune].
   static const IconData properties = Icons.tune_outlined;
 
+  /// Show or hide the slide editor's slide list. Outlined.
+  static const IconData slide_list = Icons.view_agenda_outlined;
+
   /// The menu of things to insert on a slide.
   static const IconData insert_menu = Icons.add_box_outlined;
 

@@ -837,7 +837,7 @@ same drive as the presentation (`photos/cover.jpg`).
 
 ---
 
-### JN-SL-040: Resize the slide list and the properties panel
+### JN-SL-040: Resize and hide the slide list and the properties panel
 
 **Preconditions:** JN-SL-004, on a window at least 900 pixels wide.
 
@@ -847,6 +847,8 @@ same drive as the presentation (`photos/cover.jpg`).
 2. Drag the edge between the canvas and the properties panel toward the canvas.
 3. Reload the page.
 4. Drag the properties panel's edge back toward the window edge, past 100 pixels wide.
+5. Choose **Hide slides** in the toolbar, then reload the page.
+6. Choose **Show slides**, then drag the slide list's edge toward the window edge, past 100 pixels wide.
 
 **Expected result:**
 
@@ -854,9 +856,12 @@ same drive as the presentation (`photos/cover.jpg`).
   and the canvas shrinks to fit.
 - After step 3 both panes keep the widths from steps 1 and 2.
 - After step 4 the properties panel is hidden, and the toolbar's **Show properties** brings it back.
+- After step 5 the slide list is hidden, still hidden after the reload, and the canvas takes its room.
+- In step 6 **Show slides** brings the list back at its width, and the drag hides it again.
 
 **Notes:**
 
 - A double-click on an edge resets that pane's default width. Arrow keys resize from the keyboard.
-- The slide list resizes but does not hide: nothing on screen would bring it back.
-- On a phone the slide list is a strip across the top and nothing changes.
+- The slide list's hidden state is kept per device; the properties panel opens again on every visit.
+- On a phone the slide list is a strip across the top and nothing changes. Between 860 and 900 pixels the toolbar
+  shows but the slides are still a strip, so there is no **Hide slides** there.

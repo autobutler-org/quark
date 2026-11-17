@@ -17,8 +17,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// second row, never an anonymous overflow.
 ///
 /// A view-only presentation ([SlideEditorController.isReadOnly]) keeps only
-/// the find, shortcuts and properties buttons: the tools and the formatting
-/// row are gone.
+/// the find and shortcuts buttons and the pane toggles: the tools and the
+/// formatting row are gone.
 ///
 /// It listens to [controller], its tools and its text editing session, so
 /// the toggles follow the selection and the caret. The chart group's
@@ -35,8 +35,17 @@ class SlideToolbar extends StatelessWidget {
     required this.onShowShortcuts,
     required this.findOpen,
     required this.onToggleFind,
+    this.slidesOpen = true,
+    this.onToggleSlides,
     super.key,
   });
+
+  /// Whether the slide list is showing.
+  final bool slidesOpen;
+
+  /// Shows or hides the slide list; null, where the slides are a strip
+  /// that never hides, leaves the toggle out.
+  final VoidCallback? onToggleSlides;
 
   /// The open presentation.
   final SlideEditorController controller;
@@ -97,6 +106,8 @@ class SlideToolbar extends StatelessWidget {
                   constraints: const BoxConstraints(minHeight: rowHeight),
                   child: SlideToolRow(
                     actions: actions,
+                    slidesOpen: slidesOpen,
+                    onToggleSlides: onToggleSlides,
                     propertiesOpen: controller.propertiesOpen,
                     onToggleProperties: controller.toggleProperties,
                     onShowShortcuts: onShowShortcuts,

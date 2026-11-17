@@ -43,10 +43,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// On a wide window the panel and the properties panel are
 /// [QuarkResizablePane]s (#4294): their widths come from [slidePane] and
-/// [propertiesPane], which the page owns and keeps per device. Dragging the
-/// properties panel below its min width hides it through the toolbar's
-/// toggle; the slide list resizes but does not collapse, since nothing on
-/// screen would bring it back.
+/// [propertiesPane], which the page owns and keeps per device. Each hides
+/// from its toggle in the [SlideToolbar] or by dragging it below its min
+/// width. The slide list's hidden state is kept per device in [slidePane];
+/// the properties panel's is [SlideEditorController.propertiesOpen]. The
+/// slide strip on a phone never hides.
 ///
 /// It reads [controller] and calls its commands; the page owns the
 /// controller.
@@ -68,7 +69,7 @@ class SlideEditorBody extends StatelessWidget {
     super.key,
   });
 
-  /// The wide layout's slide panel width.
+  /// The wide layout's slide panel width, and whether it is hidden.
   final SidebarController slidePane;
 
   /// The wide layout's properties panel width. Whether it shows is
@@ -186,7 +187,9 @@ class SlideEditorBody extends StatelessWidget {
                 semanticLabel: 'Resize slides',
                 width: slidePane.width,
                 defaultWidth: SlidePanel.sideWidth,
+                isCollapsed: slidePane.isCollapsed,
                 onWidthChanged: slidePane.setWidth,
+                onCollapsedChanged: slidePane.setCollapsed,
                 child: panel,
               ),
               Expanded(child: stage),
@@ -206,6 +209,10 @@ class SlideEditorBody extends StatelessWidget {
             onShowShortcuts: onShowShortcuts,
             findOpen: find?.isOpen ?? false,
             onToggleFind: find?.toggle ?? () {},
+            slidesOpen: !slidePane.isCollapsed,
+            onToggleSlides: collapsed
+                ? null
+                : () => slidePane.setCollapsed(!slidePane.isCollapsed),
           ),
           Expanded(
             // The canvas stays the first child whether or not the panel
