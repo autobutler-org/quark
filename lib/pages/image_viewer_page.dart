@@ -37,6 +37,7 @@ import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/utils/thumbnail_version.dart';
 
 const _kSidebarOpenKey = 'photo_viewer_sidebar_open';
+const _kSidebarWidthKey = 'sidebar_photo_viewer_width';
 
 // How long the page settles when the keyboard or a chevron turns it.
 const _kPageAnimDuration = Duration(milliseconds: 250);
@@ -158,6 +159,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   late int _targetIndex;
 
   bool _sidebarOpen = true;
+  double _sidebarWidth = DesktopBody.defaultSidebarWidth;
   bool _isFavorite = false;
   int _rotationQuarters = 0; // 0/1/2/3 × 90°
 
@@ -311,11 +313,16 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     if (!mounted) return;
     _prefs = prefs;
     final sidebarOpen = prefs.getBool(_kSidebarOpenKey) ?? true;
+    final sidebarWidth =
+        prefs.getDouble(_kSidebarWidthKey) ?? DesktopBody.defaultSidebarWidth;
 
     // Rotation and favorite state come from the server metadata response for
     // Quark photos; leave them at defaults here and let
     // _loadMetadataForCurrent apply the server values.
-    setState(() => _sidebarOpen = sidebarOpen);
+    setState(() {
+      _sidebarOpen = sidebarOpen;
+      _sidebarWidth = sidebarWidth;
+    });
     _loadMetadata();
   }
 
@@ -594,9 +601,16 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     if (mounted) setState(() => _liveVideoPlaying = false);
   }
 
-  void _toggleSidebar() {
-    setState(() => _sidebarOpen = !_sidebarOpen);
-    _prefs?.setBool(_kSidebarOpenKey, _sidebarOpen);
+  void _toggleSidebar() => _setSidebarOpen(!_sidebarOpen);
+
+  void _setSidebarOpen(bool open) {
+    setState(() => _sidebarOpen = open);
+    _prefs?.setBool(_kSidebarOpenKey, open);
+  }
+
+  void _setSidebarWidth(double width) {
+    setState(() => _sidebarWidth = width);
+    _prefs?.setDouble(_kSidebarWidthKey, width);
   }
 
   Future<void> _toggleFavorite() async {
@@ -1026,6 +1040,9 @@ class _ImageViewerPageState extends State<ImageViewerPage>
               ? DesktopBody(
                   photoArea: clickablePhoto,
                   sidebarOpen: _sidebarOpen,
+                  sidebarWidth: _sidebarWidth,
+                  onSidebarWidthChanged: _setSidebarWidth,
+                  onSidebarOpenChanged: _setSidebarOpen,
                   name: _currentName,
                   metadata: _metadata,
                   loading: _metadataLoading,
