@@ -15,6 +15,12 @@
 // [PrepareCover] keys the cache entry by the picture's hash, so the tracks of
 // an album share one entry per size, and [GenerateCover] renders it.
 //
+// A library photo's grid tier ([SizeLg]) is generated ahead of the first
+// request (#4219): a [Warmer] queues the photos an upload, a move or the
+// startup backfill names and renders them one at a time, off the request
+// path, yielding the decode semaphore to requests. [Warms] says which files
+// it takes.
+//
 // HTTP concerns — ETag negotiation, status codes, the IO semaphore — stay with
 // the caller, which asks [SemaphoreClass] which semaphore to hold; [ETagFromModTime] and [ContentTypeForExt] are here only because
 // they are derived from the cache entry the service produced.
@@ -26,6 +32,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"sync"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -291,6 +298,38 @@ type StoreClientThumbnailsParams struct {
 
 // StoreClientThumbnailsResult reports the stored thumbnail.
 type StoreClientThumbnailsResult struct{}
+
+// WarmerParams configures a [Warmer].
+type WarmerParams struct {
+	// Queries reads each photo's rotation and stores its hashes.
+	Queries db.Querier
+	// Registry holds one files namespace per device; a photo is read
+	// through its device's.
+	Registry vfs.Registry
+	// IOSemaphore, when set, is the semaphore set requests hold; each
+	// generation holds the class [SemaphoreClass] names, and only while a
+	// request could still take another slot of it.
+	IOSemaphore *iosemutil.Semaphore
+}
+
+// WarmItem names a file whose grid tier a [Warmer] generates.
+type WarmItem struct {
+	// Serial is the device, empty for the internal drive.
+	Serial string
+	// RelPath is the file's path in the device's namespace.
+	RelPath string
+}
+
+// Warmer generates the grid tier of library photos in the background, one at
+// a time, so the first grid view of a fresh upload is served from the cache
+// (#4219). [NewWarmer] makes one, [Warmer.Run] works its queue, and
+// [Warmer.Enqueue] and [Warmer.Watch] fill it.
+type Warmer struct {
+	params  WarmerParams
+	queue   chan WarmItem
+	mu      sync.Mutex
+	pending map[WarmItem]bool
+}
 
 // ParseSize parses the ?size= query parameter, defaulting to lg.
 func ParseSize(raw string) Size {

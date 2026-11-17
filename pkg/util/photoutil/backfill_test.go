@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -225,5 +226,31 @@ func TestBackfillHashes_PublishesIndexEvents(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Fatalf("got %d events, want 4", i)
 		}
+	}
+}
+
+// TestBackfillHashes_HandsEveryLibraryPhotoToWarm: the backfill is where an
+// existing library's grid thumbnails are queued (#4219). Every photo it
+// lists, hashed already or not, reaches Warm once the pass is done; nothing
+// in the trash does.
+func TestBackfillHashes_HandsEveryLibraryPhotoToWarm(t *testing.T) {
+	params := backfillLibrary(t, map[string][]byte{
+		"a.jpg": photoJPEG(t, 1), "Camera/b.jpg": photoJPEG(t, 2), ".trash/1-c/c.jpg": photoJPEG(t, 3),
+	})
+	if _, err := photoutil.BackfillHashes(params); err != nil {
+		t.Fatal(err)
+	}
+	var warmed []string
+	params.Warm = func(photo photoutil.DuplicatePhoto) {
+		warmed = append(warmed, photo.DeviceSerial+":"+photo.RelPath)
+	}
+	// The second pass hashes nothing, and still hands every photo over.
+	if _, err := photoutil.BackfillHashes(params); err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(warmed)
+	want := []string{"USB-PHOTOS:Camera/b.jpg", "USB-PHOTOS:a.jpg"}
+	if !slices.Equal(warmed, want) {
+		t.Errorf("Warm heard %v, want %v", warmed, want)
 	}
 }
