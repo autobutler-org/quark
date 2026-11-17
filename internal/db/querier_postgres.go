@@ -332,6 +332,10 @@ func (a *postgresQueries) DeletePhotoRotation(ctx context.Context, arg DeletePho
 	return a.q.DeletePhotoRotation(ctx, pgdb.DeletePhotoRotationParams(arg))
 }
 
+func (a *postgresQueries) DeletePhotoRotationsUnder(ctx context.Context, arg DeletePhotoRotationsUnderParams) error {
+	return a.q.DeletePhotoRotationsUnder(ctx, pgdb.DeletePhotoRotationsUnderParams(arg))
+}
+
 func (a *postgresQueries) DeleteSession(ctx context.Context, token string) error {
 	return a.q.DeleteSession(ctx, token)
 }
@@ -1350,6 +1354,10 @@ func (a *postgresQueries) MoveMusicTracks(ctx context.Context, arg MoveMusicTrac
 
 func (a *postgresQueries) MovePathAccessTree(ctx context.Context, arg MovePathAccessTreeParams) (int64, error) {
 	return a.q.MovePathAccessTree(ctx, pgdb.MovePathAccessTreeParams(arg))
+}
+
+func (a *postgresQueries) MovePhotoRotations(ctx context.Context, arg MovePhotoRotationsParams) error {
+	return a.q.MovePhotoRotations(ctx, pgdb.MovePhotoRotationsParams(arg))
 }
 
 func (a *postgresQueries) PromoteToAdmin(ctx context.Context, username string) (PromoteToAdminRow, error) {

@@ -137,7 +137,7 @@ func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 			}
 			ctx := context.Background()
 			key := dbRelPath(p)
-			// Both match the path and everything under it, so a deleted
+			// Each matches the path and everything under it, so a deleted
 			// folder takes its contents' rows with it.
 			if err := database.Queries.DeletePhotoFromAllAlbums(ctx, db.DeletePhotoFromAllAlbumsParams{
 				DeviceSerial: serial,
@@ -151,7 +151,7 @@ func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 			}); err != nil {
 				log.Printf("quark: delete cleanup: remove favorites for %q (serial=%q): %v", p, serial, err)
 			}
-			if err := database.Queries.DeletePhotoRotation(ctx, db.DeletePhotoRotationParams{
+			if err := database.Queries.DeletePhotoRotationsUnder(ctx, db.DeletePhotoRotationsUnderParams{
 				DeviceSerial: serial,
 				RelPath:      key,
 			}); err != nil {
