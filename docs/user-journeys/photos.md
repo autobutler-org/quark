@@ -705,3 +705,5 @@ results (JN-PH-023).
 - The edge takes the keyboard: arrow keys resize, Enter or Space hides and shows.
 - The width and the hidden sidebar are remembered per device.
 - On a phone the library stays in the bar's picker (JN-PH-001 is unchanged there).
+- The photo viewer's details sidebar, at 600 pixels and wider, resizes from its inner edge the same way, and dragging
+  it below 100 pixels hides it as the info button does. Its width is remembered per device too.
