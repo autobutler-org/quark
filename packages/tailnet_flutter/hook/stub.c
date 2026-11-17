@@ -29,4 +29,17 @@ char *quark_tsnet_status(void) {
 
 char *quark_tsnet_token(void) { return strdup(""); }
 
+char *quark_tsnet_peer_status(void) {
+  const char *s = "{\"state\":\"Stopped\",\"quark\":null,\"network\":null,"
+                  "\"pathChanges\":[],\"requests\":[]}";
+  return strdup(s);
+}
+
+char *quark_tsnet_ping(int count) {
+  (void)count;
+  const char *s = "{\"tunnel\":null,\"tcp\":{\"sent\":0,\"received\":0,"
+                  "\"minMs\":0,\"avgMs\":0,\"error\":\"no node\"}}";
+  return strdup(s);
+}
+
 void quark_tsnet_free(void *p) { free(p); }

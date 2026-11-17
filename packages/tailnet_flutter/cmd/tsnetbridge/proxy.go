@@ -128,9 +128,13 @@ func (p *forwarder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	copyHeader(req.Header, r.Header, upgrade)
 	req.Header.Del(TokenHeader)
 	req.ContentLength = r.ContentLength
+	start := time.Now()
+	timing := RequestTiming{At: start, Route: routeOf(r.URL.Path)}
 	resp, err := p.transport.RoundTrip(req)
+	timing.HeadersMs = ms(time.Since(start))
 	if err != nil {
-		unavailable(w, err)
+		timing.Status = unavailable(w, err)
+		recordRequest(timing)
 		return
 	}
 	if resp.StatusCode == http.StatusSwitchingProtocols {
@@ -140,13 +144,15 @@ func (p *forwarder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	copyHeader(w.Header(), resp.Header, false)
 	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(flushOnWrite{ResponseWriter: w}, resp.Body)
+	timing.Bytes, _ = io.Copy(flushOnWrite{ResponseWriter: w}, resp.Body)
+	timing.Status, timing.BodyMs = resp.StatusCode, ms(time.Since(start))
+	recordRequest(timing)
 }
 
 // unavailable answers a request the tunnel could not carry: 504 with reason
 // "timeout" when the dial or the header wait ran out, 502 with "unreachable"
-// for any other failure to reach the Quark.
-func unavailable(w http.ResponseWriter, err error) {
+// for any other failure to reach the Quark. It returns the status it wrote.
+func unavailable(w http.ResponseWriter, err error) int {
 	status, reason := http.StatusBadGateway, "unreachable"
 	var ne net.Error
 	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()) {
@@ -154,6 +160,7 @@ func unavailable(w http.ResponseWriter, err error) {
 	}
 	w.Header().Set(UnavailableHeader, reason)
 	w.WriteHeader(status)
+	return status
 }
 
 // flushOnWrite flushes after each chunk so an event stream and a media

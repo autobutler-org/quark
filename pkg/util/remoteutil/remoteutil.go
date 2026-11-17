@@ -1,3 +1,5 @@
+// cspell:words natpmp upnp
+
 // Package remoteutil runs an embedded Tailscale node and reverse-proxies
 // tailnet traffic to the local quark server.
 package remoteutil
@@ -345,4 +347,98 @@ func EnsureStarted(localPort int, localTLS bool, provisionFn func() (string, err
 // ignores the key and reconnects from its state.
 func Enable(localPort int, localTLS bool, provisionFn func() (string, error)) error {
 	return ensureStarted(true, localPort, localTLS, provisionFn)
+}
+
+// PeerPath is how traffic between the Quark and one peer, such as a phone,
+// travels right now (#3883). It holds no keys, names or full addresses, so it
+// can go into a log or a support report as it is (#3613).
+type PeerPath struct {
+	// OS is what the peer reports itself as: "iOS", "android", "linux".
+	OS string `json:"os"`
+	// Online is whether the coordination server sees the peer.
+	Online bool `json:"online"`
+	// Path is PathDirect, PathRelay, PathPeerRelay or PathIdle.
+	Path string `json:"path"`
+	// Network says where a direct path goes: NetworkLAN for a private
+	// address, NetworkInternet for a public one. Empty unless Path is direct.
+	Network string `json:"network,omitempty"`
+	// RelayRegion is the relay's region code. Set when Path is PathRelay,
+	// and on an idle peer it is the region the peer homes on.
+	RelayRegion string `json:"relayRegion,omitempty"`
+	// LastHandshake is the last encrypted-session handshake with the peer,
+	// zero when there has been none.
+	LastHandshake time.Time `json:"lastHandshake,omitzero"`
+	// RxBytes and TxBytes count what this node received from and sent to the
+	// peer since the node started.
+	RxBytes int64 `json:"rxBytes"`
+	TxBytes int64 `json:"txBytes"`
+}
+
+// The values of PeerPath.Path.
+const (
+	// PathDirect is a peer-to-peer UDP path.
+	PathDirect = "direct"
+	// PathRelay goes through a public relay server.
+	PathRelay = "relay"
+	// PathPeerRelay goes through another node acting as a relay.
+	PathPeerRelay = "peer-relay"
+	// PathIdle has carried no traffic recently, so no path is chosen.
+	PathIdle = "idle"
+)
+
+// The values of PeerPath.Network.
+const (
+	// NetworkLAN is a private, link-local or carrier-grade NAT address.
+	NetworkLAN = "lan"
+	// NetworkInternet is a public address.
+	NetworkInternet = "internet"
+)
+
+// NetworkCheck is what the node last learned about the network it sits on
+// (#3883): whether UDP gets out, whether the NAT keeps one mapping for every
+// destination (hole punching needs that), and whether the router offers port
+// mapping. It holds no addresses.
+type NetworkCheck struct {
+	// At is when the check ran.
+	At time.Time `json:"at"`
+	// UDP is whether a UDP round trip to a STUN server completed.
+	UDP bool `json:"udp"`
+	// IPv4 and IPv6 are whether a round trip completed on each family.
+	IPv4 bool `json:"ipv4"`
+	IPv6 bool `json:"ipv6"`
+	// MappingVariesByDestination is "yes" for a NAT that picks a new public
+	// port per destination (symmetric, hard to punch through), "no" for one
+	// that keeps one mapping, or "unknown".
+	MappingVariesByDestination string `json:"mappingVariesByDestination"`
+	// UPnP, NATPMP and PCP are whether the router answered each port-mapping
+	// protocol: "yes", "no" or "unknown".
+	UPnP   string `json:"upnp"`
+	NATPMP string `json:"natpmp"`
+	PCP    string `json:"pcp"`
+	// PreferredRelay is the region code of the relay this node homes on.
+	PreferredRelay string `json:"preferredRelay,omitempty"`
+	// PreferredRelayLatencyMs is the measured latency to it.
+	PreferredRelayLatencyMs float64 `json:"preferredRelayLatencyMs,omitempty"`
+}
+
+// PathReportResult is the Quark's view of how its peers reach it.
+type PathReportResult struct {
+	// Connected is whether the node is on the tailnet.
+	Connected bool `json:"connected"`
+	// Network is the last network check, nil before the first one finishes.
+	Network *NetworkCheck `json:"network,omitempty"`
+	// Peers is every peer the node knows, online first.
+	Peers []PeerPath `json:"peers"`
+}
+
+// PathReport reads the running node's peers and its last network check. A
+// stopped node reports not connected and no peers, with no error.
+func PathReport() (PathReportResult, error) {
+	s := currentServer()
+	if s == nil {
+		return PathReportResult{Peers: []PeerPath{}}, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return pathReport(ctx, s)
 }

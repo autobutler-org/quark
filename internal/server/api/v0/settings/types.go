@@ -71,6 +71,7 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 	return []*serverutil.Route{
 		enableRemoteAccessRoute,
 		disableRemoteAccessRoute,
+		getRemoteAccessPathsRoute,
 		updateAccessRequestsRoute,
 		updateFeatureRoute,
 		updateThemeColorRoute,

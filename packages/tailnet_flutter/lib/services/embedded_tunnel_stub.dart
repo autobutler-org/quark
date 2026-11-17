@@ -13,6 +13,21 @@ Future<Map<String, dynamic>> tunnelStatusJson() async => const {
   'error': '',
 };
 
+/// No node, so no path to report.
+Future<Map<String, dynamic>> tunnelPeerStatusJson() async => const {
+  'state': 'Stopped',
+  'quark': null,
+  'network': null,
+  'pathChanges': <Object>[],
+  'requests': <Object>[],
+};
+
+/// No node to ping.
+Future<Map<String, dynamic>> tunnelPingJson(int count) async => const {
+  'tunnel': null,
+  'tcp': {'sent': 0, 'received': 0, 'minMs': 0, 'avgMs': 0, 'error': 'no node'},
+};
+
 /// No proxy on this platform.
 Future<String?> tunnelProxyUrl(String upstream) async => null;
 

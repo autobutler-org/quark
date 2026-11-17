@@ -230,3 +230,27 @@ func TestEnableRemoteAccess_ProvisioningRefused(t *testing.T) {
 		t.Errorf("Status().Error = %q; want the provisioning failure recorded", got.Error)
 	}
 }
+
+// TestGetRemoteAccessPaths_AdminOnly serves the path report on the admin
+// router only, and answers a stopped node with an empty report rather than an
+// error (#3883).
+func TestGetRemoteAccessPaths_AdminOnly(t *testing.T) {
+	if w := doSettingsReq(newSettingsEngine(t), http.MethodGet, "/api/v0/settings/remote-access/paths", nil); w.Code != http.StatusNotFound {
+		t.Errorf("GET /settings/remote-access/paths on the public router returned %d; want 404", w.Code)
+	}
+
+	w := doSettingsReq(newAdminEngine(t), http.MethodGet, "/api/v0/settings/remote-access/paths", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /settings/remote-access/paths returned %d: %s", w.Code, w.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got["connected"] != false {
+		t.Errorf("connected = %v; want false with no node", got["connected"])
+	}
+	if peers, ok := got["peers"].([]any); !ok || len(peers) != 0 {
+		t.Errorf("peers = %v; want an empty list", got["peers"])
+	}
+}

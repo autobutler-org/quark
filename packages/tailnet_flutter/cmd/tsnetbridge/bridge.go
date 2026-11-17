@@ -68,6 +68,10 @@ var (
 	token    string
 	starting bool
 	lastErr  string
+	// upstream and proxyDial are the running proxy's target and dial, for
+	// the path diagnostics in diag.go.
+	upstream  string
+	proxyDial DialFunc
 	// epoch bumps on Stop so a start that loses the race closes what it opened.
 	epoch uint64
 )
@@ -83,6 +87,7 @@ func Start(cfg Config) (int, string, error) {
 	}
 	starting = true
 	lastErr = ""
+	resetDiag()
 	epoch++
 	myEpoch := epoch
 	mu.Unlock()
@@ -114,6 +119,12 @@ func Start(cfg Config) (int, string, error) {
 		return 0, "", err
 	}
 	node, proxy, port, token = n, srv, p, tok
+	upstream, proxyDial = cfg.Upstream, dial
+	if n != nil {
+		if ip, err := upstreamIP(cfg.Upstream); err == nil {
+			go watchPath(n, ip)
+		}
+	}
 	return p, tok, nil
 }
 
@@ -129,6 +140,7 @@ func Stop() error {
 	mu.Lock()
 	n, srv := node, proxy
 	node, proxy, port, token = nil, nil, 0, ""
+	upstream, proxyDial = "", nil
 	epoch++
 	mu.Unlock()
 	closePair(n, srv)
