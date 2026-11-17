@@ -666,6 +666,8 @@ class QuarkIcons {
 
   // ── Chat ─────────────────────────────────────────────────────────────────────────
   static const IconData tag = Icons.tag;
+
+  /// Attach a file to a message. A paperclip.
   static const IconData attach_file = Icons.attach_file;
   static const IconData send_rounded = Icons.send_rounded;
   static const IconData forum_outlined = Icons.forum_outlined;

@@ -420,7 +420,7 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
                       QuarkBarIconButton(
                         key: const ValueKey('message_composer_attach'),
                         icon: QuarkIcons.attach_file,
-                        tooltip: 'Attach a file',
+                        tooltip: 'Attach',
                         onPressed: widget.onAttach,
                       ),
                       SizedBox(width: tokens.spacingSm),
