@@ -606,3 +606,41 @@ photo frame or a tablet, on the same network as the Quark.
 - The page is plain HTML, CSS and JavaScript with no framework, about 22 KB, so it runs on a screen too weak for the
   app's web client. It uses the signed-in account, so what it can show is what that account can read.
 - Under reduced motion the photos change without fading.
+
+---
+
+### JN-PH-027: Act on a selection of photos
+
+**Preconditions:** Quark photos are visible under All photos (JN-PH-001), or an album is open (JN-PH-012), and Demo
+mode is off.
+
+**Steps:**
+
+1. Long-press a photo, or tap **Select**, then tap more photos to add them to the selection.
+2. In the bar at the bottom, choose **Add to album**, **Favorite** (or **Unfavorite**), **Download**, **Share…**,
+   **Make copies**, or **Delete**. In a user album, **Remove from album** is there too; in Favorites,
+   **Remove from favorites** takes the place of **Favorite**.
+
+**Expected result:**
+
+- **Favorite** stars every selected photo that is not yet a favorite. When every selected photo already is one, the
+  action reads **Unfavorite** and takes them all out of Favorites.
+- **Download** saves each photo as its own file, as a single photo's Download does, four at a time. On iOS and
+  Android they land in the phone's gallery.
+- **Share…** shows only while exactly one photo is selected, since the share sheet shares one item.
+- **Make copies** copies each photo beside itself, four at a time.
+- **Delete** asks once ("Move 37 photos to the trash?"), then moves them all to the trash, where they can be
+  restored (JN-TR-003); they leave the grid.
+- **Remove from album** asks once, then takes the photos out of that album only; the files stay where they are.
+- The grid reloads once when the action finishes, not once per photo. When the action worked for every photo,
+  selection ends.
+- When some photos fail, one message says how many ("Couldn't download 3 of 50 photos."), the failed photos stay
+  selected to try again, and the rest are deselected.
+- When the selection holds a photo only on this phone (the Mobile category), every action but **Add to album** is
+  off, and its tooltip says why.
+
+**Notes:**
+
+- On a phone the bar keeps the count and **Add to album** in the row, and the other actions move into a menu labeled
+  **More**.
+- Downloading many photos as one zip is not offered yet.

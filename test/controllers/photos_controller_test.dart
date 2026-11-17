@@ -135,6 +135,20 @@ class _FakeQuark {
   /// How many photos the Quark says it has still to date (#3356).
   int pendingDates = 0;
 
+  /// The storage device the Quark reports photo i on.
+  String Function(int i) serialOf = (_) => 'sd1';
+
+  /// Paths whose favorite, download, copy or album removal the Quark
+  /// refuses (#4154).
+  final Set<String> failing = {};
+
+  /// Devices whose trash request the Quark refuses.
+  final Set<String> failingDeletes = {};
+
+  /// How many downloads are running now, and the most that ever ran at once.
+  int savesInFlight = 0;
+  int maxSavesInFlight = 0;
+
   /// The capture date the Quark reports for an album item's path.
   DateTime? Function(String relPath) albumTakenOf = (_) => null;
 
@@ -223,7 +237,12 @@ class _FakeQuark {
           return wire.PaginatedPhotosResponse(
             photos: [
               for (final i in ids.sublist(start, end))
-                _wirePhoto(i, mtime: mtimeOf(i), takenAt: takenOf(i)),
+                _wirePhoto(
+                  i,
+                  serial: serialOf(i),
+                  mtime: mtimeOf(i),
+                  takenAt: takenOf(i),
+                ),
             ],
             total: ids.length,
             offset: start,
@@ -239,6 +258,7 @@ class _FakeQuark {
       calls.add('toggle($relPath)');
       final error = favoriteError;
       if (error != null) throw error;
+      if (failing.contains(relPath)) throw const ApiException(500);
       final key = '$serial:$relPath';
       if (!favorites.remove(key)) favorites.add(key);
       return favorites.contains(key);
@@ -287,6 +307,7 @@ class _FakeQuark {
     removePhotoFromAlbum:
         (albumId, {required deviceSerial, required relPath}) async {
           calls.add('remove($albumId, $relPath)');
+          if (failing.contains(relPath)) throw const ApiException(500);
           albumFiles[albumId]?.remove(relPath);
         },
     listAlbumItems:
@@ -330,14 +351,26 @@ class _FakeQuark {
         },
     saveFile: (filePath, {serial, fileName}) async {
       calls.add('save($filePath, $serial, $fileName)');
+      savesInFlight++;
+      if (savesInFlight > maxSavesInFlight) maxSavesInFlight = savesInFlight;
+      await Future<void>.delayed(Duration.zero);
+      savesInFlight--;
+      if (failing.contains(filePath)) throw const ApiException(500);
       return null;
     },
     copyPhoto: (relPath, {serial}) async {
       calls.add('copy($relPath, $serial)');
+      if (failing.contains(relPath)) throw const ApiException(500);
       return 'camera/1 (copy).jpg';
     },
     deleteFile: (rootDir, fileName, {deviceSerial}) async {
       calls.add('delete($rootDir, $fileName, $deviceSerial)');
+    },
+    deleteFiles: (paths, {rootDir, deviceSerial}) async {
+      calls.add('deleteFiles(${paths.join(',')}, $deviceSerial)');
+      if (failingDeletes.contains(deviceSerial)) {
+        throw const ApiException(500);
+      }
     },
     bytesCache: PhotoBytesCache.instance,
   );
@@ -925,6 +958,227 @@ void main() {
       await controller.deletePhoto('asset:dev1');
 
       expect(quark.calls, isEmpty);
+    });
+  });
+
+  group('acting on a selection (#4154)', () {
+    Future<(_FakeQuark, PhotosController)> selecting({
+      int total = 3,
+      Set<String> favorites = const {},
+    }) async {
+      final quark = _FakeQuark(total: total)..favorites = {...favorites};
+      final controller = quark.controller();
+      await controller.refresh();
+      controller.enterSelectionMode();
+      quark.calls.clear();
+      return (quark, controller);
+    }
+
+    void selectQuarkPhotos(PhotosController controller) {
+      for (final photo in controller.photos) {
+        if (photo.isRemote) controller.toggleSelection(photo.id);
+      }
+    }
+
+    int count(_FakeQuark quark, String prefix) =>
+        quark.calls.where((call) => call.startsWith(prefix)).length;
+
+    test('favorites all 50 and reloads once', () async {
+      final (quark, controller) = await selecting(total: 50);
+      selectQuarkPhotos(controller);
+      quark.calls.clear();
+      expect(controller.selectedIds, hasLength(50));
+      expect(controller.selectionAllFavorites, isFalse);
+
+      final outcome = await controller.favoriteSelected();
+
+      expect((outcome.done, outcome.failed), (50, 0));
+      expect(count(quark, 'toggle('), 50);
+      expect(count(quark, 'listAlbums'), 1);
+      expect(count(quark, 'getPhotos'), 0);
+      expect(
+        controller.photos.where((p) => p.isRemote).every((p) => p.isFavorite),
+        isTrue,
+      );
+      expect(controller.selectionMode, isFalse);
+    });
+
+    test('favorites only the photos that are not yet favorites', () async {
+      final (quark, controller) = await selecting(
+        favorites: {'sd1:camera/1.jpg'},
+      );
+      selectQuarkPhotos(controller);
+
+      await controller.favoriteSelected();
+
+      expect(
+        quark.calls.where((call) => call.startsWith('toggle(')),
+        unorderedEquals(['toggle(camera/0.jpg)', 'toggle(camera/2.jpg)']),
+      );
+      expect(
+        controller.photos.where((p) => p.isRemote && p.isFavorite),
+        hasLength(3),
+      );
+    });
+
+    test(
+      'a selection of favorites reads Unfavorite and takes them all out',
+      () async {
+        final (quark, controller) = await selecting(
+          favorites: {
+            'sd1:camera/0.jpg',
+            'sd1:camera/1.jpg',
+            'sd1:camera/2.jpg',
+          },
+        );
+        selectQuarkPhotos(controller);
+        expect(controller.selectionAllFavorites, isTrue);
+
+        await controller.favoriteSelected();
+
+        expect(count(quark, 'toggle('), 3);
+        expect(quark.favorites, isEmpty);
+        expect(controller.photos.any((p) => p.isFavorite), isFalse);
+      },
+    );
+
+    test('a partial failure keeps only the failed photos selected', () async {
+      final (quark, controller) = await selecting();
+      quark.failing.add('camera/1.jpg');
+      selectQuarkPhotos(controller);
+
+      final outcome = await controller.favoriteSelected();
+
+      expect((outcome.done, outcome.failed), (2, 1));
+      expect(outcome.error, isA<ApiException>());
+      expect(controller.selectionMode, isTrue);
+      expect(controller.selectedIds, {'sd1:camera/1.jpg'});
+      expect(count(quark, 'listAlbums'), 1);
+    });
+
+    test('downloads each photo, at most four at a time', () async {
+      final (quark, controller) = await selecting(total: 10);
+      selectQuarkPhotos(controller);
+
+      final outcome = await controller.downloadSelected();
+
+      expect(outcome.done, 10);
+      expect(count(quark, 'save('), 10);
+      expect(quark.calls, contains('save(camera/3.jpg, sd1, 3.jpg)'));
+      expect(quark.maxSavesInFlight, PhotosController.selectionConcurrency);
+      expect(controller.selectionMode, isFalse);
+    });
+
+    test('a failed download stays selected', () async {
+      final (quark, controller) = await selecting();
+      quark.failing.add('camera/2.jpg');
+      selectQuarkPhotos(controller);
+
+      final outcome = await controller.downloadSelected();
+
+      expect((outcome.done, outcome.failed), (2, 1));
+      expect(controller.selectedIds, {'sd1:camera/2.jpg'});
+    });
+
+    test('copies each photo and reloads the library once', () async {
+      final (quark, controller) = await selecting();
+      selectQuarkPhotos(controller);
+
+      final outcome = await controller.copySelected();
+
+      expect(outcome.done, 3);
+      expect(count(quark, 'copy('), 3);
+      expect(count(quark, 'getPhotos(0)'), 1);
+    });
+
+    test('trashes the selection in one request per device, then reloads '
+        'once', () async {
+      final quark = _FakeQuark(total: 4)
+        ..serialOf = (i) => i.isEven ? 'sd1' : 'usb2';
+      final controller = quark.controller();
+      await controller.refresh();
+      controller.enterSelectionMode();
+      selectQuarkPhotos(controller);
+      quark.calls.clear();
+
+      final outcome = await controller.deleteSelected();
+
+      expect(outcome.done, 4);
+      expect(
+        quark.calls.where((call) => call.startsWith('deleteFiles(')),
+        unorderedEquals([
+          'deleteFiles(camera/0.jpg,camera/2.jpg, sd1)',
+          'deleteFiles(camera/1.jpg,camera/3.jpg, usb2)',
+        ]),
+      );
+      expect(count(quark, 'getPhotos(0)'), 1);
+      expect(controller.selectionMode, isFalse);
+    });
+
+    test('a device the Quark refused keeps its photos selected', () async {
+      final quark = _FakeQuark(total: 4)
+        ..serialOf = ((i) => i.isEven ? 'sd1' : 'usb2')
+        ..failingDeletes.add('usb2');
+      final controller = quark.controller();
+      await controller.refresh();
+      controller.enterSelectionMode();
+      selectQuarkPhotos(controller);
+
+      final outcome = await controller.deleteSelected();
+
+      expect((outcome.done, outcome.failed), (2, 2));
+      expect(controller.selectedIds, {
+        'usb2:camera/1.jpg',
+        'usb2:camera/3.jpg',
+      });
+    });
+
+    test('removes the selection from the album showing only', () async {
+      final quark = _FakeQuark()
+        ..albumFiles = {
+          1: ['camera/0.jpg', 'camera/1.jpg', 'camera/2.jpg'],
+          4: ['camera/0.jpg'],
+        };
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+      controller.enterSelectionMode();
+      controller
+        ..toggleSelection('sd1:camera/0.jpg')
+        ..toggleSelection('sd1:camera/1.jpg');
+      quark.calls.clear();
+
+      final outcome = await controller.removeSelectedFromAlbum();
+
+      expect(outcome.done, 2);
+      expect(
+        quark.calls.where((call) => call.startsWith('remove(')),
+        unorderedEquals(['remove(1, camera/0.jpg)', 'remove(1, camera/1.jpg)']),
+      );
+      expect(quark.albumFiles[4], ['camera/0.jpg']);
+      expect(controller.photos.map((p) => p.id), ['sd1:camera/2.jpg']);
+      expect(count(quark, 'listAlbums'), 1);
+      expect(controller.selectionMode, isFalse);
+    });
+
+    test('a device photo in the selection starts no Quark action', () async {
+      final (quark, controller) = await selecting();
+      controller
+        ..toggleSelection('sd1:camera/0.jpg')
+        ..toggleSelection('asset:dev1');
+      expect(controller.selectionHasDevicePhoto, isTrue);
+
+      for (final act in [
+        controller.favoriteSelected,
+        controller.downloadSelected,
+        controller.copySelected,
+        controller.deleteSelected,
+      ]) {
+        expect((await act()).total, 0);
+      }
+
+      expect(quark.calls, isEmpty);
+      expect(controller.selectedIds, hasLength(2));
     });
   });
 

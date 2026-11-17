@@ -298,6 +298,34 @@ abstract final class Errors {
         PhotoIndexFailureReason.unknown => "Couldn't be checked",
       };
 
+  /// An action on a selection of photos that failed for [failed] of the
+  /// [total] it ran on (#4154). Names how many, and adds why when the reason
+  /// says more than that it failed. [action] words the action for the photos
+  /// it is handed, a bare verb phrase as in [message]:
+  /// `(photos) => 'download $photos'`.
+  static String selection(
+    Object? error,
+    String Function(String photos) action, {
+    required int failed,
+    required int total,
+  }) {
+    final photos = failed < total
+        ? '$failed of $total photos'
+        : total == 1
+        ? 'the photo'
+        : 'the $total photos';
+    final act = action(photos);
+    final reason = message(error, act);
+    return reason.contains(act) ? reason : '${couldNot(act)} $reason';
+  }
+
+  /// Why a selection holding a photo only the phone has can't be favorited,
+  /// downloaded, shared, copied or deleted (#4154). The tooltip on those
+  /// actions, so it names the way out.
+  static const String selectionHasPhonePhotos =
+      'Only works on photos stored on your Quark. Deselect the photos from '
+      'this phone to use it.';
+
   /// An album name a sibling already has, ignoring case — what the Quark's
   /// 409 means for creating, renaming or moving an album.
   static const String albumNameTaken =
