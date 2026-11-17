@@ -118,6 +118,7 @@ export 'src/layout/quark_handedness.dart';
 export 'src/layout/quark_help_button.dart';
 export 'src/layout/quark_help_button/quark_help_dialog.dart';
 export 'src/layout/quark_page_scaffold.dart';
+export 'src/layout/quark_resizable_pane.dart';
 export 'src/layout/quark_section.dart';
 export 'src/layout/quark_sheet.dart';
 export 'src/layout/quark_split_view.dart';
