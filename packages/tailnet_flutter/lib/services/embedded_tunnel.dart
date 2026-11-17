@@ -106,6 +106,9 @@ abstract final class EmbeddedTunnel {
   /// (`path` is `direct`, `relay`, `peer-relay`, `idle` or `unknown`, with
   /// `network` `lan` or `internet` when direct, `relayRegion` when relayed,
   /// `lastHandshake`, `rxBytes`, `txBytes`), or null without a node;
+  /// `network`, the phone's last network check (`udp`,
+  /// `mappingVariesByDestination`, `upnp`, `natpmp`, `pcp`, each `yes`, `no`
+  /// or `unknown`, and `preferredRelayLatencyMs`), or null before the first;
   /// `pathChanges`, the latest moves between direct and relayed with their
   /// times; and `requests`, the latest requests the proxy carried with their
   /// route, status, time to headers and to the end of the body, and size. It

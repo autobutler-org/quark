@@ -30,7 +30,7 @@ char *quark_tsnet_status(void) {
 char *quark_tsnet_token(void) { return strdup(""); }
 
 char *quark_tsnet_peer_status(void) {
-  const char *s = "{\"state\":\"Stopped\",\"quark\":null,"
+  const char *s = "{\"state\":\"Stopped\",\"quark\":null,\"network\":null,"
                   "\"pathChanges\":[],\"requests\":[]}";
   return strdup(s);
 }

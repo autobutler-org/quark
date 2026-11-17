@@ -157,6 +157,7 @@ Future<Map<String, dynamic>> tunnelPeerStatusJson() async {
     return const {
       'state': 'Stopped',
       'quark': null,
+      'network': null,
       'pathChanges': <Object>[],
       'requests': <Object>[],
     };

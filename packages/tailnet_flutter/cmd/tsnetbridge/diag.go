@@ -1,4 +1,4 @@
-// cspell:words tsnetbridge tailcfg rtts
+// cspell:words tsnetbridge tailcfg rtts netcheck natpmp upnp
 
 package main
 
@@ -23,8 +23,10 @@ import (
 	"time"
 
 	"tailscale.com/ipn/ipnstate"
+	"tailscale.com/net/netcheck"
 	"tailscale.com/tailcfg"
 	"tailscale.com/tsnet"
+	"tailscale.com/types/opt"
 )
 
 // The values of PeerPath.Path, the same words the Quark's report uses.
@@ -97,10 +99,75 @@ type PeerStatusReport struct {
 	State string `json:"state"`
 	// Quark is the Quark peer's path, nil when there is no node.
 	Quark *PeerPath `json:"quark"`
+	// Network is the phone's last network check, nil before the first one
+	// or without a node.
+	Network *NetworkCheck `json:"network"`
 	// PathChanges lists the latest path changes, oldest first.
 	PathChanges []PathChange `json:"pathChanges"`
 	// Requests lists the latest requests, oldest first.
 	Requests []RequestTiming `json:"requests"`
+}
+
+// NetworkCheck is what the phone's node last learned about the network it
+// is on: whether UDP gets out, whether its NAT keeps one mapping for every
+// destination (hole punching needs that), whether the router offers port
+// mapping, and its preferred relay. It holds no addresses.
+type NetworkCheck struct {
+	At  time.Time `json:"at"`
+	UDP bool      `json:"udp"`
+	// MappingVariesByDestination is "yes" for a symmetric NAT, "no", or
+	// "unknown". UPnP, NATPMP and PCP are "yes", "no" or "unknown".
+	MappingVariesByDestination string `json:"mappingVariesByDestination"`
+	UPnP                       string `json:"upnp"`
+	NATPMP                     string `json:"natpmp"`
+	PCP                        string `json:"pcp"`
+	// PreferredRelayLatencyMs is the latency to the relay this node homes on.
+	PreferredRelayLatencyMs float64 `json:"preferredRelayLatencyMs,omitempty"`
+}
+
+// networkCheckFrom summarizes r without its addresses.
+func networkCheckFrom(r *netcheck.Report) *NetworkCheck {
+	if r == nil {
+		return nil
+	}
+	nc := &NetworkCheck{
+		At:                         r.Now,
+		UDP:                        r.UDP,
+		MappingVariesByDestination: optString(r.MappingVariesByDestIP),
+		UPnP:                       optString(r.UPnP),
+		NATPMP:                     optString(r.PMP),
+		PCP:                        optString(r.PCP),
+	}
+	if d, ok := r.RegionLatency[r.PreferredDERP]; ok && r.PreferredDERP != 0 {
+		nc.PreferredRelayLatencyMs = ms(d)
+	}
+	return nc
+}
+
+// optString is "yes", "no" or "unknown".
+func optString(b opt.Bool) string {
+	v, ok := b.Get()
+	switch {
+	case !ok:
+		return "unknown"
+	case v:
+		return "yes"
+	default:
+		return "no"
+	}
+}
+
+// lastNetcheck is n's most recent network check, nil before the first.
+func lastNetcheck(ctx context.Context, n *tsnet.Server) *netcheck.Report {
+	sys := n.Sys()
+	if sys == nil {
+		return nil
+	}
+	conn, ok := sys.MagicSock.GetOK()
+	if !ok || conn == nil {
+		return nil
+	}
+	return conn.GetLastNetcheckReport(ctx)
 }
 
 // PingStats summarizes one kind of ping.
@@ -320,6 +387,7 @@ func PeerStatus() PeerStatusReport {
 		if ip, err := upstreamIP(up); err == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			p, err := readQuarkPath(ctx, n, ip)
+			report.Network = networkCheckFrom(lastNetcheck(ctx, n))
 			cancel()
 			if err == nil {
 				recordPath(time.Now(), p)
@@ -440,7 +508,7 @@ func ms(d time.Duration) float64 {
 func peerStatusJSON() string {
 	b, err := json.Marshal(PeerStatus())
 	if err != nil {
-		return `{"state":"Stopped","quark":null,"pathChanges":[],"requests":[]}`
+		return `{"state":"Stopped","quark":null,"network":null,"pathChanges":[],"requests":[]}`
 	}
 	return string(b)
 }

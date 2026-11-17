@@ -17,6 +17,7 @@ Future<Map<String, dynamic>> tunnelStatusJson() async => const {
 Future<Map<String, dynamic>> tunnelPeerStatusJson() async => const {
   'state': 'Stopped',
   'quark': null,
+  'network': null,
   'pathChanges': <Object>[],
   'requests': <Object>[],
 };

@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"tailscale.com/ipn/ipnstate"
+	"tailscale.com/net/netcheck"
 	"tailscale.com/types/key"
+	"tailscale.com/types/opt"
 )
 
 // TestPeerPathFrom pins how the Quark peer's status maps to a path (#3883).
@@ -242,5 +244,33 @@ func TestPing_Stopped(t *testing.T) {
 	var decoded PingReport
 	if err := json.Unmarshal([]byte(pingJSON(2)), &decoded); err != nil {
 		t.Errorf("pingJSON is not JSON: %v", err)
+	}
+}
+
+// TestNetworkCheckFrom summarizes the phone's network check without the
+// public address it found.
+func TestNetworkCheckFrom(t *testing.T) {
+	if networkCheckFrom(nil) != nil {
+		t.Error("networkCheckFrom(nil) is not nil")
+	}
+	r := &netcheck.Report{
+		UDP:                   true,
+		MappingVariesByDestIP: opt.NewBool(true),
+		PMP:                   opt.NewBool(false),
+		PreferredDERP:         1,
+		RegionLatency:         netcheck.RegionLatency{1: 40 * time.Millisecond},
+		GlobalV4:              netip.MustParseAddrPort("203.0.113.8:1234"),
+	}
+	got := networkCheckFrom(r)
+	want := NetworkCheck{UDP: true, MappingVariesByDestination: "yes", UPnP: "unknown", NATPMP: "no", PCP: "unknown", PreferredRelayLatencyMs: 40}
+	if got == nil || *got != want {
+		t.Fatalf("networkCheckFrom = %+v; want %+v", got, want)
+	}
+	b, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "203.0.113.8") {
+		t.Errorf("network check %s holds the public address", b)
 	}
 }
