@@ -9,6 +9,7 @@ import 'package:quark/pages/books_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark/services/storage_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -48,6 +49,31 @@ void main() {
         if (f != null) throw f;
         return listing;
       },
+      listDrives: () async => const [
+        StorageDevice(
+          name: 'Quark',
+          devicePath: '',
+          mountPoint: '/',
+          fileSystem: '',
+          totalBytes: 0,
+          usedBytes: 0,
+          availableBytes: 0,
+          isInternal: true,
+          isEnabled: true,
+        ),
+        StorageDevice(
+          name: 'Holiday stick',
+          devicePath: '',
+          mountPoint: '/media/stick',
+          fileSystem: '',
+          totalBytes: 0,
+          usedBytes: 0,
+          availableBytes: 0,
+          isInternal: false,
+          isEnabled: true,
+          serial: 'LAB-USB-STICK',
+        ),
+      ],
     );
     addTearDown(controller.dispose);
     final router = GoRouter(
@@ -113,6 +139,23 @@ void main() {
         '/view/library/sci%20fi/Dune.epub?from=/books',
       );
       expect(find.text('viewer library/sci fi/Dune.epub'), findsOneWidget);
+    });
+
+    // Two drives can hold a book at the same path; each row names its drive
+    // so they tell apart (#3980).
+    testWidgets('names the drive each book is on ($name)', (tester) async {
+      tap.setViewport(tester, size);
+      listing = [
+        _node('shelf.pdf', size: 571),
+        _node('shelf.pdf', size: 571, serial: 'LAB-USB-STICK'),
+        _node('library/Odd.pdf', size: 571, serial: 'GONE'),
+      ];
+      await visit(tester);
+      expect(find.text('Built-in storage · 571 B'), findsOneWidget);
+      expect(find.text('Holiday stick · 571 B'), findsOneWidget);
+      expect(find.text('USB drive · library · 571 B'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tap.expectTapTargetGuidelines(tester);
     });
   }
 
