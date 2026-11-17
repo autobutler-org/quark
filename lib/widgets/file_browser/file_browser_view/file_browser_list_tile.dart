@@ -34,6 +34,7 @@ class FileBrowserListTile extends StatelessWidget {
     this.onVersionHistory,
     this.onSelectionChanged,
     this.compact = false,
+    this.deviceColors = const {},
     super.key,
   });
 
@@ -43,6 +44,9 @@ class FileBrowserListTile extends StatelessWidget {
   /// Whether this is the phone's one-line row rather than the columned one.
   /// [columns] is ignored when true.
   final bool compact;
+
+  /// Each attached device's color by serial, for the device column's tags.
+  final Map<String, Color> deviceColors;
 
   final FileNode item;
   final bool isSelected;
@@ -140,7 +144,10 @@ class FileBrowserListTile extends StatelessWidget {
                         child: column == FileListColumn.device
                             ? Align(
                                 alignment: AlignmentDirectional.centerStart,
-                                child: FileDeviceTags(item: item),
+                                child: FileDeviceTags(
+                                  item: item,
+                                  deviceColors: deviceColors,
+                                ),
                               )
                             : Text(
                                 fileListCellText(column, item),

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_device.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_device_tags.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../../../support/tap_target_guidelines.dart' show setViewport;
@@ -74,10 +75,25 @@ void main() {
       ) async {
         await pump(tester, size, isGridView: isGridView);
 
-        // The merged folder carries both drives; the file only its own.
-        expect(find.byKey(const ValueKey('device_tag_')), findsOneWidget);
-        expect(find.byKey(const ValueKey('device_tag_A1')), findsNWidgets(2));
         expect(tester.takeException(), isNull);
+        // The file carries only its own drive.
+        expect(find.byKey(const ValueKey('device_tag_A1')), findsWidgets);
+        // The merged folder carries both: as two tags, or a summary tag
+        // naming both when two do not fit (#3936).
+        String said(Finder tag) {
+          final widget = tester.widget<DeviceTag>(tag);
+          return widget.semanticLabel ?? widget.label;
+        }
+
+        final folderTags = find.descendant(
+          of: find.byType(FileDeviceTags).first,
+          matching: find.byType(DeviceTag),
+        );
+        final names = [
+          for (var i = 0; i < folderTags.evaluate().length; i++)
+            said(folderTags.at(i)),
+        ].join(', ');
+        expect(names, allOf(contains('Internal'), contains('Backup')));
       });
     }
   }

@@ -82,8 +82,15 @@ class FileBrowserView extends StatefulWidget {
     this.sortColumn,
     this.sortDirection,
     this.onSortChanged,
+    this.deviceSerials = const [],
     super.key,
   });
+
+  /// The serials of the drives attached to the Quark, in its order (`''` is
+  /// the internal drive). They pick each drive's tag color, so a drive keeps
+  /// its color in every folder and no two drives share one (#3936). Drives
+  /// the listing names but this lacks are colored after them.
+  final List<String> deviceSerials;
 
   /// Whether the listing is laid out for a phone: one line of name over one
   /// muted line per row, and no column header (#4226). The caller sorts
@@ -356,6 +363,16 @@ class _FileBrowserViewState extends State<FileBrowserView> {
         }
 
         final files = _sorted(raw);
+        // One color per drive across the whole listing (#3936): the Quark's
+        // drives in their order, then any the listing names that it lacks.
+        final listed = {
+          for (final f in files)
+            for (final d in f.onDevices) d.serial,
+        }.toList()..sort();
+        final deviceColors = DeviceTag.colorsFor(context, [
+          ...widget.deviceSerials,
+          ...listed,
+        ]);
         final columns = [
           for (final column in FileListColumn.values)
             if (widget.columns.contains(column) &&
@@ -388,6 +405,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
             onVersionHistory: widget.onVersionHistory,
             onSelectionChanged: widget.onSelectionChanged,
             compact: widget.compact,
+            deviceColors: deviceColors,
           ),
         );
 
@@ -414,6 +432,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
             isSelected: widget.selectedPaths.contains(item.apiPath),
             selectionMode: widget.selectionMode,
             showFileSizeAndMenu: widget.showFileSizeAndMenu,
+            deviceColors: deviceColors,
             onTap: widget.selectionMode
                 ? () => widget.onSelectionChanged?.call(item)
                 : widget.onOpenDirectory == null
@@ -443,6 +462,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
               for (final MapEntry(key: device, value: items) in groups.entries)
                 FileDeviceGroup(
                   device: device,
+                  color: deviceColors[device.serial],
                   itemCount: items.length,
                   children: widget.isGridView
                       ? [

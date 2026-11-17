@@ -2481,6 +2481,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                               onOpenDirectory: _handleOpenNode,
                               isGridView: _isGridView,
                               isUnifiedView: _isUnifiedView,
+                              deviceSerials: [
+                                for (final device in _allDevices) device.serial,
+                              ],
                               compact: compact,
                               sortColumn: _sortColumn,
                               sortDirection: _sortDirection,

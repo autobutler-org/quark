@@ -104,6 +104,119 @@ void main() {
     );
   });
 
+  // #3936: a hash modulo six gave two drives one color about 1 time in 6.
+  testWidgets('colorsFor gives the drives on one Quark distinct colors', (
+    tester,
+  ) async {
+    late BuildContext context;
+    await pumpAt(
+      tester,
+      Builder(
+        builder: (c) {
+          context = c;
+          return const SizedBox();
+        },
+      ),
+    );
+
+    // Both hash to the same slot: alone, each gets the same color.
+    expect(
+      DeviceTag.colorFor(context, ''),
+      DeviceTag.colorFor(context, 'LAB-MEDIA-01'),
+    );
+    final palette = QuarkTokens.of(context).eventColors;
+    final serials = [
+      '',
+      'LAB-MEDIA-01',
+      'LAB-ARCH-02',
+      'A',
+      'A1B2',
+      'Z9',
+      'LAB-EXTRA-07',
+    ];
+    for (var n = 1; n <= palette.length; n++) {
+      final colors = DeviceTag.colorsFor(context, serials.take(n));
+      expect(colors, hasLength(n));
+      expect(colors.values.toSet(), hasLength(n), reason: '$n devices');
+    }
+    // The first device keeps the color it has alone, and a device keeps its
+    // color when another is attached after it.
+    final two = DeviceTag.colorsFor(context, serials.take(2));
+    final three = DeviceTag.colorsFor(context, serials.take(3));
+    expect(two[''], DeviceTag.colorFor(context, ''));
+    expect(three['LAB-MEDIA-01'], two['LAB-MEDIA-01']);
+    // Past the palette's size a device still gets a palette color.
+    final all = DeviceTag.colorsFor(context, serials);
+    expect(palette, contains(all['LAB-EXTRA-07']));
+  });
+
+  testBothViewports('widthFor is the width of a tag with room to spare', (
+    tester,
+    size,
+  ) async {
+    late double measured;
+    await pumpAt(
+      tester,
+      Center(
+        child: Builder(
+          builder: (context) {
+            measured = DeviceTag.widthFor(context, 'Media drive');
+            return DeviceTag(
+              key: const ValueKey('device_tag_A1'),
+              label: 'Media drive',
+              color: QuarkTokens.of(context).eventColors.first,
+            );
+          },
+        ),
+      ),
+      size: size,
+    );
+
+    final actual = tester.getSize(find.byKey(const ValueKey('device_tag_A1')));
+    expect(measured, greaterThanOrEqualTo(actual.width));
+    expect(measured, lessThan(actual.width + 1));
+  });
+
+  // #3936: on a phone the tag is the only way to read the name, and a tap on
+  // it opened the file under it.
+  for (final (gesture, label) in [
+    ('tap', 'a tap'),
+    ('longPress', 'a long-press'),
+  ]) {
+    testWidgets('$label shows the name and opens nothing', (tester) async {
+      var opened = 0;
+      await pumpAt(
+        tester,
+        Center(
+          child: InkWell(
+            onTap: () => opened++,
+            onLongPress: () => opened++,
+            child: const Padding(
+              padding: EdgeInsets.all(24),
+              child: DeviceTag(
+                key: ValueKey('device_tag_A1'),
+                label: 'Media',
+                tooltip: 'Media drive',
+                color: Color(0xFF10B981),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final tag = find.byKey(const ValueKey('device_tag_A1'));
+      if (gesture == 'tap') {
+        await tester.tap(tag);
+      } else {
+        await tester.longPress(tag);
+      }
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Media drive'), findsOneWidget);
+      expect(opened, 0);
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+    });
+  }
+
   // #3937 extends the #3645 guard: a tooltip on the tag must not become the
   // name of a larger ancestor. The tag already paints its name.
   testBothViewports('never lets its tooltip name a larger ancestor', (
