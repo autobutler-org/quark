@@ -63,6 +63,141 @@ void main() {
     expect(find.byKey(messages), findsOneWidget);
   });
 
+  /// A wide layout whose pane widths and collapsed flags live in a
+  /// StatefulBuilder, the way the chat page holds them, with every change
+  /// recorded in [events].
+  Widget resizable(List<String> events, {bool channelsCollapsed = false}) {
+    var channelWidth = QuarkChatLayout.channelListWidth;
+    var memberWidth = QuarkChatLayout.memberListWidth;
+    var channelsGone = channelsCollapsed;
+    var membersGone = false;
+    return StatefulBuilder(
+      builder: (context, setState) => QuarkChatLayout(
+        header: const Text('# general'),
+        channelList: const SizedBox.expand(key: channels),
+        messages: const SizedBox.expand(key: messages),
+        memberList: const SizedBox.expand(key: members),
+        channelPaneWidth: channelWidth,
+        isChannelPaneCollapsed: channelsGone,
+        onChannelPaneWidthChanged: (w) => setState(() {
+          events.add('channels width ${w.round()}');
+          channelWidth = w;
+        }),
+        onChannelPaneCollapsedChanged: (c) => setState(() {
+          events.add('channels collapsed $c');
+          channelsGone = c;
+        }),
+        memberPaneWidth: memberWidth,
+        isMemberPaneCollapsed: membersGone,
+        onMemberPaneWidthChanged: (w) => setState(() {
+          events.add('members width ${w.round()}');
+          memberWidth = w;
+        }),
+        onMemberPaneCollapsedChanged: (c) => setState(() {
+          events.add('members collapsed $c');
+          membersGone = c;
+        }),
+      ),
+    );
+  }
+
+  testWidgets('wide: dragging a handle resizes its pane (#4294)', (
+    tester,
+  ) async {
+    final events = <String>[];
+    await pumpAt(tester, resizable(events), size: wideViewport);
+
+    await tester.drag(
+      find.byKey(const ValueKey('resizable_pane_handle_chat_channels')),
+      const Offset(20, 0),
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('resizable_pane_handle_chat_members')),
+      const Offset(-20, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('chat_layout_channels'))).width,
+      QuarkChatLayout.channelListWidth + 20,
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('chat_layout_members'))).width,
+      QuarkChatLayout.memberListWidth + 20,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wide: both panes together leave the messages half the window', (
+    tester,
+  ) async {
+    final events = <String>[];
+    await pumpAt(tester, resizable(events), size: wideViewport);
+
+    await tester.drag(
+      find.byKey(const ValueKey('resizable_pane_handle_chat_channels')),
+      const Offset(400, 0),
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('resizable_pane_handle_chat_members')),
+      const Offset(-400, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byKey(messages)).width,
+      greaterThanOrEqualTo(
+        wideViewport.width / 2 - 2 * QuarkResizablePane.handleWidth,
+      ),
+    );
+  });
+
+  testWidgets('wide: the header buttons collapse and reopen the panes', (
+    tester,
+  ) async {
+    final events = <String>[];
+    await pumpAt(tester, resizable(events), size: wideViewport);
+
+    expect(find.byTooltip('Hide channels'), findsOneWidget);
+    expect(find.byTooltip('Hide members'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('chat_layout_channels_toggle')));
+    await tester.tap(find.byKey(const ValueKey('chat_layout_members_toggle')));
+    await tester.pumpAndSettle();
+
+    expect(events, ['channels collapsed true', 'members collapsed true']);
+    expect(find.byKey(channels), findsNothing);
+    expect(find.byKey(members), findsNothing);
+    expect(find.byTooltip('Show channels'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('chat_layout_channels_toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(channels), findsOneWidget);
+  });
+
+  testWidgets('wide: a collapsed channel list leaves no rail', (tester) async {
+    await pumpAt(
+      tester,
+      resizable([], channelsCollapsed: true),
+      size: wideViewport,
+    );
+
+    expect(find.byKey(channels), findsNothing);
+    expect(
+      tester.getTopLeft(find.byKey(messages)).dx,
+      QuarkResizablePane.handleWidth,
+    );
+  });
+
+  testWidgets('narrow: resizable panes keep the drawer and sheet', (
+    tester,
+  ) async {
+    await pumpAt(tester, resizable([]), size: narrowViewport);
+
+    expect(find.byType(QuarkResizablePane), findsNothing);
+    expect(find.byTooltip('Channels'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('narrow: shows messages alone with both buttons', (tester) async {
     await pumpAt(tester, layout(), size: narrowViewport);
 
