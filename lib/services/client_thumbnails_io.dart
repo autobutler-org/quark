@@ -18,6 +18,18 @@ Future<Uint8List?> renderThumbnailFromBytesPlatform(
   return renderMobileThumbnail(name: name, bytes: bytes);
 }
 
+/// A full-size JPEG of an image in memory, on iOS and Android only.
+Future<Uint8List?> convertImageToJpegPlatform(
+  String name,
+  Uint8List bytes,
+) async {
+  if (!_hasRenderer) return null;
+  return renderMobileFullJpeg(name: name, bytes: bytes);
+}
+
+/// iOS and Android convert; desktop has no decoder for HEIC.
+bool get canConvertImageToJpegPlatform => _hasRenderer;
+
 /// The thumbnail of the file on disk at [path].
 Future<Uint8List?> renderThumbnailFromPathPlatform(
   String name,

@@ -179,6 +179,12 @@ abstract final class Errors {
       "This video won't play here. It may be damaged, or in a format this "
       "browser can't play.";
 
+  /// "Download as JPEG" saved the original [name] because this device has
+  /// no decoder for it (#4188): desktop, or a browser without HEIC.
+  static String jpegConversionUnavailable(String name) =>
+      "This device can't convert $name to JPEG, so the original was "
+      'downloaded.';
+
   static String unsupportedVideoFormat(String extension) =>
       "This video format ($extension) isn't supported for in-browser "
       'playback. Download the file to watch it locally.';

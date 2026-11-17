@@ -49,6 +49,27 @@ Future<Uint8List?> renderVideoThumbnailFromUrlPlatform(
   }
 }
 
+/// A full-size JPEG of [bytes] through `createImageBitmap`, which applies
+/// the EXIF rotation. Null where the browser cannot decode the format.
+Future<Uint8List?> convertImageToJpegPlatform(
+  String name,
+  Uint8List bytes,
+) async {
+  try {
+    return await _renderImage(
+      web.Blob([bytes.toJS].toJS),
+      longEdge: null,
+      quality: ClientThumbnailConfig.downloadJpegQuality,
+    ).timeout(ClientThumbnailConfig.downloadConvertTimeout);
+  } catch (e) {
+    debugPrint('[client_thumbnails_web.dart] Cannot convert $name: $e');
+    return null;
+  }
+}
+
+/// A browser converts whatever it can decode, so it always tries.
+const canConvertImageToJpegPlatform = true;
+
 /// The web has no file paths.
 Future<Uint8List?> renderThumbnailFromPathPlatform(
   String name,
@@ -71,10 +92,22 @@ Future<Uint8List?> renderDroppedFileThumbnailPlatform(DropItemFile file) async {
   }
 }
 
-Future<Uint8List> _renderImage(web.Blob blob) async {
+/// Encodes [blob] as JPEG, scaled to [longEdge] (the thumbnail's by default)
+/// or at full size when it is null.
+Future<Uint8List> _renderImage(
+  web.Blob blob, {
+  int? longEdge = ClientThumbnailConfig.longEdge,
+  double quality = ClientThumbnailConfig.jpegQuality,
+}) async {
   final bitmap = await web.window.createImageBitmap(blob).toDart;
   try {
-    return await _encodeJpeg(bitmap, bitmap.width, bitmap.height);
+    return await _encodeJpeg(
+      bitmap,
+      bitmap.width,
+      bitmap.height,
+      longEdge: longEdge,
+      quality: quality,
+    );
   } finally {
     bitmap.close();
   }
@@ -148,14 +181,18 @@ Future<void> _next(web.HTMLVideoElement video, String event) {
   return completer.future;
 }
 
-/// Draws [source], [width] x [height], scaled to the thumbnail's long edge
-/// and encoded as JPEG by the browser.
+/// Draws [source], [width] x [height], scaled to [longEdge] (unscaled when
+/// null) and encoded as JPEG at [quality] by the browser.
 Future<Uint8List> _encodeJpeg(
   web.CanvasImageSource source,
   int width,
-  int height,
-) async {
-  final size = scaledToLongEdge(width, height, ClientThumbnailConfig.longEdge);
+  int height, {
+  int? longEdge = ClientThumbnailConfig.longEdge,
+  double quality = ClientThumbnailConfig.jpegQuality,
+}) async {
+  final size = longEdge == null
+      ? (width: width, height: height)
+      : scaledToLongEdge(width, height, longEdge);
   final canvas = web.HTMLCanvasElement()
     ..width = size.width
     ..height = size.height;
@@ -166,7 +203,7 @@ Future<Uint8List> _encodeJpeg(
   canvas.toBlob(
     ((web.Blob? blob) => encoded.complete(blob)).toJS,
     'image/jpeg',
-    ClientThumbnailConfig.jpegQuality.toJS,
+    quality.toJS,
   );
   final jpeg = await encoded.future;
   if (jpeg == null) {

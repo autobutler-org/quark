@@ -7,7 +7,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// With [includeBarActions] it also offers favorite, rotate, download and
 /// info, which a narrow bar has no room for (#1709). The server actions only
-/// exist for a photo on the Quark, which is when [relPath] is set.
+/// exist for a photo on the Quark, which is when [relPath] is set. A HEIC
+/// photo there also offers "Download as JPEG" (#4188).
 ///
 /// Key prefix: `image_viewer_more_<action>` on each entry.
 @immutable
@@ -30,6 +31,7 @@ class ImageViewerMoreMenu {
     required this.onDuplicate,
     required this.onShare,
     required this.onDelete,
+    this.onDownloadAsJpeg,
   });
 
   /// Whether to offer the actions a wide bar shows as buttons.
@@ -62,6 +64,10 @@ class ImageViewerMoreMenu {
   final VoidCallback onShare;
   final VoidCallback onDelete;
 
+  /// Saves a JPEG copy of a HEIC photo (#4188), or null to leave the entry
+  /// out, as for every other format.
+  final VoidCallback? onDownloadAsJpeg;
+
   /// Whether the menu has anything to offer.
   bool get isEmpty => !includeBarActions && relPath == null;
 
@@ -93,6 +99,8 @@ class ImageViewerMoreMenu {
       ],
       if (relPath != null) ...[
         if (includeBarActions) const QuarkMenuEntry.divider(),
+        if (onDownloadAsJpeg != null)
+          entry('download_jpeg', 'Download as JPEG', onDownloadAsJpeg),
         if (sourceAlbum != null)
           entry(
             'remove_from_album',

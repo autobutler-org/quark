@@ -167,6 +167,36 @@ Future<Uint8List?> _renderImage(
   );
 }
 
+/// The image [name] in [bytes] as a full-size JPEG, rotation applied and
+/// no EXIF kept (#4188), or null when the platform cannot decode it.
+///
+/// The plugin never enlarges, so asking for the source's own short side, or
+/// a bound past any camera's when the size cannot be read, keeps every
+/// pixel.
+Future<Uint8List?> renderMobileFullJpeg({
+  required String name,
+  required Uint8List bytes,
+}) async {
+  try {
+    final source = await _sizeOfBytes(bytes);
+    final shortEdge = source == null ? 1 << 15 : _shortSide(source);
+    return await _compressor
+        .compressWithList(
+          bytes,
+          minWidth: shortEdge,
+          minHeight: shortEdge,
+          quality: (ClientThumbnailConfig.downloadJpegQuality * 100).round(),
+          autoCorrectionAngle: true,
+          keepExif: false,
+          format: CompressFormat.jpeg,
+        )
+        .timeout(ClientThumbnailConfig.downloadConvertTimeout);
+  } catch (e) {
+    debugPrint('[mobile_thumbnail_renderer.dart] Cannot convert $name: $e');
+    return null;
+  }
+}
+
 int _shortSide(({int width, int height}) size) =>
     math.min(size.width, size.height);
 

@@ -24,6 +24,14 @@ abstract final class ClientThumbnailConfig {
   /// still uploads; it goes without a thumbnail, as from an older client.
   static const Duration renderTimeout = Duration(seconds: 20);
 
+  /// JPEG quality of a full-size "Download as JPEG" conversion (#4188), the
+  /// 0.92 the Quark's own conversions use.
+  static const double downloadJpegQuality = 0.92;
+
+  /// How long converting one photo for download may take before the original
+  /// is saved instead. A full-size photo takes longer than a thumbnail.
+  static const Duration downloadConvertTimeout = Duration(seconds: 60);
+
   /// The color a 3D model's thumbnail is shaded in (#3227). One picture is
   /// stored for every client and theme, so it uses the dark theme's, which
   /// the grid's dark placeholder matches.
