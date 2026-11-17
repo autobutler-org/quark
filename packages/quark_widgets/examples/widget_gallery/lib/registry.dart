@@ -3020,6 +3020,14 @@ final List<GalleryEntry> registry = [
         ),
         const SizedBox(height: 16),
         QuarkMessageComposer(
+          hintText: 'On a phone, attach offers File or Photo or video',
+          permissions: ChatPermissionPreset.member.permissions,
+          onSend: (text) => log('QuarkMessageComposer.onSend($text)'),
+          onAttach: () => log('QuarkMessageComposer.onAttach'),
+          onAttachMedia: () => log('QuarkMessageComposer.onAttachMedia'),
+        ),
+        const SizedBox(height: 16),
+        QuarkMessageComposer(
           permissions: ChatPermissionPreset.viewer.permissions,
           onSend: (text) => log('QuarkMessageComposer.onSend($text)'),
         ),

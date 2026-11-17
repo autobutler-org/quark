@@ -545,6 +545,79 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('with only onAttach, the attach button opens no menu', (
+    tester,
+  ) async {
+    var taps = 0;
+    await pumpAt(
+      tester,
+      QuarkMessageComposer(onSend: (_) {}, onAttach: () => taps++),
+    );
+
+    await tester.tap(find.byKey(attach));
+    await tester.pumpAndSettle();
+    expect(taps, 1);
+    expect(
+      find.byKey(const ValueKey('message_composer_attach_file')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('message_composer_attach_media')),
+      findsNothing,
+    );
+  });
+
+  group('with onAttachMedia', () {
+    const file = ValueKey('message_composer_attach_file');
+    const media = ValueKey('message_composer_attach_media');
+
+    testBothViewports('the attach button offers File and Photo or video', (
+      tester,
+      size,
+    ) async {
+      final calls = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageComposer(
+          onSend: (_) {},
+          onAttach: () => calls.add('file'),
+          onAttachMedia: () => calls.add('media'),
+        ),
+        size: size,
+      );
+
+      expect(find.byKey(file), findsNothing);
+      await tester.tap(find.byKey(attach));
+      await tester.pumpAndSettle();
+      expect(calls, isEmpty);
+      expect(find.byKey(file), findsOneWidget);
+      expect(find.byKey(media), findsOneWidget);
+      expect(find.text('File'), findsOneWidget);
+      expect(find.text('Photo or video'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(media));
+      await tester.pumpAndSettle();
+      expect(calls, ['media']);
+      expect(find.byKey(media), findsNothing);
+
+      await tester.tap(find.byKey(attach));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(file));
+      await tester.pumpAndSettle();
+      expect(calls, ['media', 'file']);
+    });
+
+    testWidgets('without onAttach there is no attach button', (tester) async {
+      await pumpAt(
+        tester,
+        QuarkMessageComposer(onSend: (_) {}, onAttachMedia: () {}),
+      );
+
+      expect(find.byKey(attach), findsNothing);
+    });
+  });
+
   testBothViewports('the attach button fits beside the field', (
     tester,
     size,

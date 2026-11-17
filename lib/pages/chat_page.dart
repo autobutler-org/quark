@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/chat_channel_share_target.dart';
@@ -17,6 +18,7 @@ import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_kind.dart';
+import 'package:quark/utils/folder_picker.dart';
 import 'package:quark/widgets/chat/chat_attachment_preview.dart';
 import 'package:quark/widgets/chat/chat_channel_header.dart';
 import 'package:quark/widgets/chat/chat_channel_not_found.dart';
@@ -223,13 +225,23 @@ class _ChatPageState extends State<ChatPage>
     ),
   );
 
-  Future<void> _attachFile() async {
+  /// Whether attach offers Photo or video beside File (#4296): native
+  /// Android, and wherever the file picker cannot see the photo library
+  /// (iOS, its Safari, and the installed PWA).
+  static bool get _offersMediaPicker =>
+      isPhotoLibraryPickerNeeded ||
+      (!kIsWeb && defaultTargetPlatform == TargetPlatform.android);
+
+  /// Picks one file of [type] and sends it to the selected channel, with the
+  /// draft as its caption. [FileType.media] is the phone's photo picker.
+  /// Canceling sends nothing and keeps the draft.
+  Future<void> _attachFile({FileType type = FileType.any}) async {
     if (_attaching) return;
     final channel = _controller.selectedChannel;
     if (channel == null) return;
     _attaching = true;
     try {
-      final file = await FilePicker.pickFile();
+      final file = await FilePicker.pickFile(type: type);
       if (!mounted || file == null) return;
       final bytes = await file.readAsBytes();
       final name = file.name.trim().isEmpty ? 'file' : file.name.trim();
@@ -840,6 +852,12 @@ class _ChatPageState extends State<ChatPage>
                                 onAttach: channel == null
                                     ? null
                                     : () => unawaited(_attachFile()),
+                                onAttachMedia:
+                                    channel == null || !_offersMediaPicker
+                                    ? null
+                                    : () => unawaited(
+                                        _attachFile(type: FileType.media),
+                                      ),
                               ),
                             ),
                           ],
