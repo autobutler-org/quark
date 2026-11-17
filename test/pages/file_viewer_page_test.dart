@@ -143,6 +143,21 @@ void main() {
     expect(find.text('my report.docx'), findsWidgets);
   });
 
+  testWidgets('closing a generic file replaces it with its folder', (
+    tester,
+  ) async {
+    final r = await openFromFolder(tester, 'papers', 'papers/notes.docx');
+    expect(history, ['/files/papers', '/view/papers/notes.docx']);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    expect(at(r), '/files/papers');
+    expect(find.byType(GenericFileViewerPage), findsNothing);
+    // Back from here must not bounce into the viewer again.
+    expect(history, ['/files/papers', '/files/papers']);
+  });
+
   testWidgets('closing replaces the viewer with its folder', (tester) async {
     final r = await openFromFolder(tester, 'papers', 'papers/report.pdf');
     expect(history, ['/files/papers', '/view/papers/report.pdf']);
