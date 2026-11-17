@@ -175,6 +175,51 @@ func (q *Queries) ListPhotoHashStates(ctx context.Context) ([]ListPhotoHashState
 	return items, nil
 }
 
+const listPhotoLocations = `-- name: ListPhotoLocations :many
+SELECT device_serial, rel_path, latitude, longitude, taken_at
+FROM photo_hashes
+WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+`
+
+type ListPhotoLocationsRow struct {
+	DeviceSerial string
+	RelPath      string
+	Latitude     sql.NullFloat64
+	Longitude    sql.NullFloat64
+	TakenAt      sql.NullTime
+}
+
+// ListPhotoLocations returns every GPS position known, for the Locations
+// view (#3557). Callers drop the photos the account cannot read.
+func (q *Queries) ListPhotoLocations(ctx context.Context) ([]ListPhotoLocationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPhotoLocations)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPhotoLocationsRow
+	for rows.Next() {
+		var i ListPhotoLocationsRow
+		if err := rows.Scan(
+			&i.DeviceSerial,
+			&i.RelPath,
+			&i.Latitude,
+			&i.Longitude,
+			&i.TakenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPhotoTakenAt = `-- name: ListPhotoTakenAt :many
 SELECT device_serial, rel_path, taken_at
 FROM photo_hashes
@@ -213,31 +258,41 @@ func (q *Queries) ListPhotoTakenAt(ctx context.Context) ([]ListPhotoTakenAtRow, 
 
 const setPhotoTakenAt = `-- name: SetPhotoTakenAt :exec
 UPDATE photo_hashes
-SET taken_at = $1, taken_checked = TRUE
-WHERE device_serial = $2 AND rel_path = $3
+SET taken_at = $1, latitude = $2, longitude = $3, taken_checked = TRUE
+WHERE device_serial = $4 AND rel_path = $5
 `
 
 type SetPhotoTakenAtParams struct {
 	TakenAt      sql.NullTime
+	Latitude     sql.NullFloat64
+	Longitude    sql.NullFloat64
 	DeviceSerial string
 	RelPath      string
 }
 
-// SetPhotoTakenAt records the capture date of a photo whose hashes are
-// already stored (#2592).
+// SetPhotoTakenAt records the capture date (#2592) and GPS position (#3557)
+// of a photo whose hashes are already stored.
 func (q *Queries) SetPhotoTakenAt(ctx context.Context, arg SetPhotoTakenAtParams) error {
-	_, err := q.db.ExecContext(ctx, setPhotoTakenAt, arg.TakenAt, arg.DeviceSerial, arg.RelPath)
+	_, err := q.db.ExecContext(ctx, setPhotoTakenAt,
+		arg.TakenAt,
+		arg.Latitude,
+		arg.Longitude,
+		arg.DeviceSerial,
+		arg.RelPath,
+	)
 	return err
 }
 
 const upsertPhotoHash = `-- name: UpsertPhotoHash :exec
-INSERT INTO photo_hashes (device_serial, rel_path, dhash, content_hash, taken_at, taken_checked)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO photo_hashes (device_serial, rel_path, dhash, content_hash, taken_at, latitude, longitude, taken_checked)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (device_serial, rel_path)
 DO UPDATE SET
     dhash         = excluded.dhash,
     content_hash  = excluded.content_hash,
     taken_at      = CASE WHEN excluded.taken_checked THEN excluded.taken_at ELSE photo_hashes.taken_at END,
+    latitude      = CASE WHEN excluded.taken_checked THEN excluded.latitude ELSE photo_hashes.latitude END,
+    longitude     = CASE WHEN excluded.taken_checked THEN excluded.longitude ELSE photo_hashes.longitude END,
     taken_checked = photo_hashes.taken_checked OR excluded.taken_checked,
     computed_at   = strftime('%Y-%m-%d %H:%M:%f', 'now')
 `
@@ -248,12 +303,14 @@ type UpsertPhotoHashParams struct {
 	Dhash        sql.NullString
 	ContentHash  sql.NullString
 	TakenAt      sql.NullTime
+	Latitude     sql.NullFloat64
+	Longitude    sql.NullFloat64
 	TakenChecked bool
 }
 
-// UpsertPhotoHash stores a photo's hashes, and its capture date when
-// taken_checked says the EXIF was read. A write that did not read it keeps
-// the date already stored.
+// UpsertPhotoHash stores a photo's hashes, and its capture date and GPS
+// position when taken_checked says the EXIF was read. A write that did not
+// read it keeps the date and position already stored.
 func (q *Queries) UpsertPhotoHash(ctx context.Context, arg UpsertPhotoHashParams) error {
 	_, err := q.db.ExecContext(ctx, upsertPhotoHash,
 		arg.DeviceSerial,
@@ -261,6 +318,8 @@ func (q *Queries) UpsertPhotoHash(ctx context.Context, arg UpsertPhotoHashParams
 		arg.Dhash,
 		arg.ContentHash,
 		arg.TakenAt,
+		arg.Latitude,
+		arg.Longitude,
 		arg.TakenChecked,
 	)
 	return err

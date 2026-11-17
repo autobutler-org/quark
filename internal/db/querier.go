@@ -469,6 +469,9 @@ type Querier interface {
 	// ListPhotoHashStates reports what is stored for every photo, for the
 	// backfill to find what is missing.
 	ListPhotoHashStates(ctx context.Context) ([]ListPhotoHashStatesRow, error)
+	// ListPhotoLocations returns every GPS position known, for the Locations
+	// view (#3557). Callers drop the photos the account cannot read.
+	ListPhotoLocations(ctx context.Context) ([]ListPhotoLocationsRow, error)
 	// ListPhotoTakenAt returns every capture date known, for the date-taken sort.
 	ListPhotoTakenAt(ctx context.Context) ([]ListPhotoTakenAtRow, error)
 	ListRootAlbums(ctx context.Context, userID int64) ([]PhotoAlbum, error)
@@ -616,8 +619,8 @@ type Querier interface {
 	// earlier grant to that group on that path carried.
 	SetGroupPathAccess(ctx context.Context, arg SetGroupPathAccessParams) error
 	SetMusicTrackAlbumKey(ctx context.Context, arg SetMusicTrackAlbumKeyParams) error
-	// SetPhotoTakenAt records the capture date of a photo whose hashes are
-	// already stored (#2592).
+	// SetPhotoTakenAt records the capture date (#2592) and GPS position (#3557)
+	// of a photo whose hashes are already stored.
 	SetPhotoTakenAt(ctx context.Context, arg SetPhotoTakenAtParams) error
 	// SetRecoveryKey gives an account the recovery key its client derived from a
 	// phrase it generated (#2430), and clears the phrase hash so the old phrase,
@@ -691,9 +694,9 @@ type Querier interface {
 	// UpsertMusicTrack inserts a track or replaces the row already stored for
 	// that file. The id is stable across a replacement.
 	UpsertMusicTrack(ctx context.Context, arg UpsertMusicTrackParams) (MusicTrack, error)
-	// UpsertPhotoHash stores a photo's hashes, and its capture date when
-	// taken_checked says the EXIF was read. A write that did not read it keeps
-	// the date already stored.
+	// UpsertPhotoHash stores a photo's hashes, and its capture date and GPS
+	// position when taken_checked says the EXIF was read. A write that did not
+	// read it keeps the date and position already stored.
 	UpsertPhotoHash(ctx context.Context, arg UpsertPhotoHashParams) error
 	UpsertPhotoRotation(ctx context.Context, arg UpsertPhotoRotationParams) error
 	// UpsertUserChatKeys creates or replaces an account's chat identity row.

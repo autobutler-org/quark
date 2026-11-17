@@ -489,9 +489,9 @@ func fillTakenDates(params ListPhotosParams, photos []PhotoSummary) (int, error)
 	return 0, nil
 }
 
-// recordTakenAt reads one photo's capture date through its device's namespace
-// and stores it, on the photo's row when it has one and on a new row of its
-// own otherwise. A new row holds no hashes; BackfillHashes fills them in, as
+// recordTakenAt reads one photo's capture date and GPS position through its
+// device's namespace and stores them, on the photo's row when it has one and
+// on a new row of its own otherwise. A new row holds no hashes; BackfillHashes fills them in, as
 // it does for any photo missing them, and so too when a thumbnail stored this
 // photo's hashes between the listing's read of the rows and this write.
 func recordTakenAt(params ListPhotosParams, photo DuplicatePhoto, stored bool) (sql.NullTime, error) {
@@ -504,24 +504,23 @@ func recordTakenAt(params ListPhotosParams, photo DuplicatePhoto, stored bool) (
 		return sql.NullTime{}, err
 	}
 	defer f.Close()
-	takenAt, err := readTakenAt(f, photo.RelPath)
+	facts, err := readExifFacts(f, photo.RelPath)
 	if err != nil {
 		return sql.NullTime{}, err
 	}
 	if stored {
-		err = params.Queries.SetPhotoTakenAt(params.Ctx, db.SetPhotoTakenAtParams{
-			TakenAt: takenAt, DeviceSerial: photo.DeviceSerial, RelPath: photo.RelPath,
-		})
+		err = params.Queries.SetPhotoTakenAt(params.Ctx, facts.setParams(photo))
 	} else {
 		err = params.Queries.UpsertPhotoHash(params.Ctx, db.UpsertPhotoHashParams{
 			DeviceSerial: photo.DeviceSerial, RelPath: photo.RelPath,
-			TakenAt: takenAt, TakenChecked: true,
+			TakenAt: facts.takenAt, Latitude: facts.latitude, Longitude: facts.longitude,
+			TakenChecked: true,
 		})
 	}
 	if err != nil {
 		return sql.NullTime{}, fmt.Errorf("store capture date: %w", err)
 	}
-	return takenAt, nil
+	return facts.takenAt, nil
 }
 
 // fillDurations sets DurationMs on every video in page, read from its headers

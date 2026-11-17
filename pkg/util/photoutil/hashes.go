@@ -53,10 +53,10 @@ func StorePhotoHashes(params StorePhotoHashesParams) (StorePhotoHashesResult, er
 		return StorePhotoHashesResult{}, nil
 	}
 	content := ""
-	var takenAt sql.NullTime
+	var facts exifFacts
 	if params.Source != nil {
 		var err error
-		if takenAt, err = readTakenAt(params.Source, relPath); err != nil {
+		if facts, err = readExifFacts(params.Source, relPath); err != nil {
 			return StorePhotoHashesResult{}, err
 		}
 		if _, err := params.Source.Seek(0, io.SeekStart); err != nil {
@@ -73,7 +73,9 @@ func StorePhotoHashes(params StorePhotoHashesParams) (StorePhotoHashesResult, er
 		RelPath:      relPath,
 		Dhash:        sql.NullString{String: params.DHash, Valid: params.DHash != ""},
 		ContentHash:  sql.NullString{String: content, Valid: content != ""},
-		TakenAt:      takenAt,
+		TakenAt:      facts.takenAt,
+		Latitude:     facts.latitude,
+		Longitude:    facts.longitude,
 		TakenChecked: params.Source != nil,
 	}); err != nil {
 		return StorePhotoHashesResult{}, fmt.Errorf("store photo hashes: %w", err)
@@ -81,19 +83,28 @@ func StorePhotoHashes(params StorePhotoHashesParams) (StorePhotoHashesResult, er
 	return StorePhotoHashesResult{ContentHash: content}, nil
 }
 
-// readTakenAt reads a photo's EXIF capture date from source, spelled as
-// relPath for its format. A photo with no date, or EXIF that will not decode,
-// has none: it sorts by its other date rather than being read again. Only a
-// failure to rewind the file is an error.
-func readTakenAt(source io.ReadSeeker, relPath string) (sql.NullTime, error) {
+// readExifFacts reads a photo's EXIF capture date and GPS position from
+// source, spelled as relPath for its format. A photo with no date or no
+// position, or EXIF that will not decode, has none: it sorts by its other
+// date, stays off the map, and is not read again. Only a failure to rewind
+// the file is an error.
+func readExifFacts(source io.ReadSeeker, relPath string) (exifFacts, error) {
 	if _, err := source.Seek(0, io.SeekStart); err != nil {
-		return sql.NullTime{}, fmt.Errorf("rewind photo: %w", err)
+		return exifFacts{}, fmt.Errorf("rewind photo: %w", err)
 	}
 	exif, err := DecodeExif(source, ImageFormatFromPath(relPath))
-	if err != nil || exif == nil || exif.DateTaken == nil {
-		return sql.NullTime{}, nil
+	if err != nil || exif == nil {
+		return exifFacts{}, nil
 	}
-	return sql.NullTime{Time: *exif.DateTaken, Valid: true}, nil
+	var facts exifFacts
+	if exif.DateTaken != nil {
+		facts.takenAt = sql.NullTime{Time: *exif.DateTaken, Valid: true}
+	}
+	if lat, lon, ok := ValidPosition(exif); ok {
+		facts.latitude = sql.NullFloat64{Float64: lat, Valid: true}
+		facts.longitude = sql.NullFloat64{Float64: lon, Valid: true}
+	}
+	return facts, nil
 }
 
 // DHashFile decodes an image file, RAW included, turns it upright, and returns

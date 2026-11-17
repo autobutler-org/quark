@@ -44,6 +44,8 @@
   "ignoreRandomStrings": true,
   "gitignoreRoot": ".gitignore",
   "words": [
+    "latlong",
+    "antimeridian",
     "aaabcd",
     "AARRGGBB",
     "abema",

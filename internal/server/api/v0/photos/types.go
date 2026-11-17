@@ -13,6 +13,8 @@ func (r *router) Routes() []*serverutil.Route {
 		rotatePhotoRoute,
 		copyPhotoRoute,
 		listDuplicatesRoute,
+		listLocationsRoute,
+		getMapTileRoute,
 	}
 }
 
