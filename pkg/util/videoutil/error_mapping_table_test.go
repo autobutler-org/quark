@@ -42,6 +42,7 @@ var errorKinds = []error{
 	vfs.ErrPermissionDenied,
 	ErrNotAVideo,
 	ErrCannotTrim,
+	ErrCannotConvert,
 	ErrNoDecoder,
 	sprocket.ErrUnsupportedContainer,
 	sprocket.ErrCorrupt,
@@ -183,19 +184,19 @@ func TestErrorMappingTargetsOfAProResMOV(t *testing.T) {
 	}
 }
 
-// TestErrorMappingTargetsOfAFragmentedMP4 is the fragmented-convert row: a
-// format offered for a fragmented MP4 is a job that fails, since Remux
-// refuses every one.
+// TestErrorMappingTargetsOfAFragmentedMP4 is the fragmented-convert row:
+// Remux refuses every format for a fragmented MP4, naming why, so Targets
+// offers none of them (#3419).
 func TestErrorMappingTargetsOfAFragmentedMP4(t *testing.T) {
 	for _, f := range Formats() {
 		err := Remux(context.Background(), RemuxParams{Source: openFixture(t, fragmentedFixture), Output: io.Discard, Format: f})
-		if !errors.Is(err, sprocket.ErrUnsupportedContainer) || !strings.Contains(err.Error(), "fragmented") {
-			t.Errorf("Remux to %s = %v, want ErrUnsupportedContainer naming the fragmented source", f, err)
+		if !errors.Is(err, ErrCannotConvert) || !errors.Is(err, sprocket.ErrUnsupportedContainer) ||
+			!strings.Contains(err.Error(), "fragmented") || !strings.Contains(err.Error(), f.Label()) {
+			t.Errorf("Remux to %s = %v, want ErrCannotConvert naming %s and the fragmented source", f, err, f.Label())
 		}
 	}
-	// sprocket.Info does not say a file is fragmented, so CanRemux, and with
-	// it Targets, offers the formats Remux then refuses.
-	t.Skip("Targets offers formats Remux refuses for a fragmented MP4: #3519, waiting on autobutler-org/sprocket#64")
+	// sprocket.Info does not say a file is fragmented, so CanRemux alone
+	// would offer the formats Remux then refuses. Targets asks Remux itself.
 	if targets, err := Targets(openFixture(t, fragmentedFixture)); err != nil || len(targets) != 0 {
 		t.Fatalf("Targets = %v, %v, want none", targets, err)
 	}

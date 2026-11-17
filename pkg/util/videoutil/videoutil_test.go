@@ -312,7 +312,7 @@ func TestRemuxFailures(t *testing.T) {
 		format Format
 		want   error
 	}{
-		{"codecs WebM cannot hold", context.Background(), "webm", nil},
+		{"codecs WebM cannot hold", context.Background(), "webm", ErrCannotConvert},
 		{"canceled", canceled, "mkv", context.Canceled},
 	}
 	for _, c := range cases {

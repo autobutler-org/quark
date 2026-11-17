@@ -70,6 +70,19 @@ func (p *progressWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
+// errDryRunDone is what dryRunWriter answers the first write with: sprocket
+// got as far as writing, so it accepts the source for that format.
+var errDryRunDone = errors.New("dry run reached the first write")
+
+// dryRunWriter is the output of writable's Remux. It refuses the first write,
+// which stops the remux once sprocket has checked the source and before it
+// copies any payload.
+type dryRunWriter struct{}
+
+func (dryRunWriter) Write([]byte) (int, error) {
+	return 0, errDryRunDone
+}
+
 // readRecorder is a source file that remembers the first read of it that
 // failed, other than at the end. sprocket reports a read that failed while it
 // sniffed the container as ErrUnsupportedContainer, which would tell the user

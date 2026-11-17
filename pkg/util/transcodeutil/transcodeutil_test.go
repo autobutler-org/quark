@@ -607,10 +607,17 @@ func TestJobName(t *testing.T) {
 	}
 }
 
-// fixture copies one of videoutil's test clips into the files dir as name.
+// fixture copies videoutil's H.264 and AAC test clip into the files dir as
+// name.
 func (h harness) fixture(t *testing.T, name string) {
 	t.Helper()
-	src, err := os.Open("../videoutil/testdata/h264-gop12.mp4")
+	h.fixtureFrom(t, "h264-gop12.mp4", name)
+}
+
+// fixtureFrom copies the videoutil test clip clip into the files dir as name.
+func (h harness) fixtureFrom(t *testing.T, clip, name string) {
+	t.Helper()
+	src, err := os.Open(filepath.Join("../videoutil/testdata", clip))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -662,6 +669,7 @@ func TestEnqueueRejectsBadRequests(t *testing.T) {
 	queue := h.queue(t)
 	h.write(t, "notes.txt")
 	h.fixture(t, "clip.mp4")
+	h.fixtureFrom(t, "fragmented.mp4", "fragmented.mp4")
 
 	cases := []struct {
 		name    string
@@ -672,6 +680,9 @@ func TestEnqueueRejectsBadRequests(t *testing.T) {
 		{"small quality", Params{RelPath: "clip.mp4", Serial: testSerial, Format: "mkv", Quality: "small"}, ErrInvalidQuality},
 		{"same format", Params{RelPath: "clip.MP4", Serial: testSerial, Format: "mp4"}, ErrInvalidFormat},
 		{"codecs the format cannot hold", Params{RelPath: "clip.mp4", Serial: testSerial, Format: "webm"}, ErrInvalidFormat},
+		// Its codecs fit MKV, but the device cannot write from a fragmented
+		// MP4, so the job would only fail (#3419).
+		{"a fragmented MP4", Params{RelPath: "fragmented.mp4", Serial: testSerial, Format: "mkv"}, ErrInvalidFormat},
 		{"missing relPath", Params{Serial: testSerial, Format: "mp4"}, ErrInvalidPath},
 		{"path traversal", Params{RelPath: "../../../etc/passwd", Serial: testSerial, Format: "mp4"}, ErrInvalidPath},
 		{"missing source", Params{RelPath: "gone.mov", Serial: testSerial, Format: "mp4"}, ErrSourceNotFound},
