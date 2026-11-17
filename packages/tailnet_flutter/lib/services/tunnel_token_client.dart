@@ -13,7 +13,10 @@
 /// Imported by `dart:io` code only.
 library;
 
+import 'dart:async';
 import 'dart:io';
+
+import 'package:tailnet_flutter/services/embedded_tunnel.dart';
 
 /// The header the proxy reads. `cmd/tsnetbridge/proxy.go` names the same one.
 const tunnelTokenHeader = 'X-Quark-Tunnel-Token';
@@ -25,16 +28,25 @@ const tunnelTokenHeader = 'X-Quark-Tunnel-Token';
 
 /// An [HttpClient] that adds [tunnelTokenHeader] to each request bound for
 /// the proxy, `http://127.0.0.1:<port>`, and to no other host.
+///
+/// It also watches each of those requests' responses: one carrying
+/// [tunnelUnavailableHeader] calls [onTunnelUnavailable], so every client in
+/// the app (API calls, image loads, listings) reports a dead remote-access
+/// path the same way.
 class TunnelTokenHttpClient implements HttpClient {
   /// Wraps [inner]. [credentials] is read on every request, because the proxy
-  /// restarts on a new port with a new token.
+  /// restarts on a new port with a new token. [onUnavailable] defaults to
+  /// reading [onTunnelUnavailable] when a response needs it.
   TunnelTokenHttpClient(
     this._inner, {
     ({int port, String token})? Function()? credentials,
-  }) : _credentials = credentials ?? (() => tunnelProxyCredentials);
+    void Function()? onUnavailable,
+  }) : _credentials = credentials ?? (() => tunnelProxyCredentials),
+       _onUnavailable = onUnavailable ?? (() => onTunnelUnavailable?.call());
 
   final HttpClient _inner;
   final ({int port, String token})? Function() _credentials;
+  final void Function() _onUnavailable;
 
   Future<HttpClientRequest> _tag(Future<HttpClientRequest> pending) async {
     final request = await pending;
@@ -44,6 +56,15 @@ class TunnelTokenHttpClient implements HttpClient {
         uri.host == '127.0.0.1' &&
         uri.port == current.port) {
       request.headers.set(tunnelTokenHeader, current.token);
+      // `done` completes with the response `close` returns. A failed request
+      // is the caller's to handle, so the error is dropped here.
+      unawaited(
+        request.done.then((response) {
+          if (response.headers.value(tunnelUnavailableHeader) != null) {
+            _onUnavailable();
+          }
+        }, onError: (Object _) {}),
+      );
     }
     return request;
   }

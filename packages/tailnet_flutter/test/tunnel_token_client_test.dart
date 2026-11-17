@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailnet_flutter/tailnet_flutter.dart';
 import 'package:tailnet_flutter/services/tunnel_token_client.dart';
 
 void main() {
@@ -12,6 +13,11 @@ void main() {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
       seen.add(request.headers.value(tunnelTokenHeader));
+      if (request.uri.path == '/down') {
+        request.response
+          ..statusCode = HttpStatus.gatewayTimeout
+          ..headers.set(tunnelUnavailableHeader, 'timeout');
+      }
       await request.response.close();
     });
   });
@@ -53,5 +59,24 @@ void main() {
     await send(client, Uri.parse('http://127.0.0.1:${server.port}/a'));
 
     expect(seen, [null, null, null]);
+  });
+
+  test('reports an unavailable answer from the proxy, and nothing else '
+      '(#3884)', () async {
+    var reports = 0;
+    final client = TunnelTokenHttpClient(
+      HttpClient(),
+      credentials: () => (port: server.port, token: 'secret'),
+      onUnavailable: () => reports++,
+    );
+    addTearDown(client.close);
+
+    await send(client, Uri.parse('http://127.0.0.1:${server.port}/a'));
+    expect(reports, 0);
+    await send(client, Uri.parse('http://127.0.0.1:${server.port}/down'));
+    expect(reports, 1);
+    // Another host setting the header is not the proxy speaking.
+    await send(client, Uri.parse('http://localhost:${server.port}/down'));
+    expect(reports, 1);
   });
 }

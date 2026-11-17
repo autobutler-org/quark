@@ -7,12 +7,26 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/local_trust.dart';
 import 'package:quark/services/local_trust_pin_io.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:tailnet_flutter/tailnet_flutter.dart';
 
 /// Thrown when an API call returns 401 — session expired or invalid.
 class UnauthorizedException implements Exception {
   const UnauthorizedException();
   @override
   String toString() => 'Session expired. Please log in again.';
+}
+
+/// The remote-access proxy answered for the Quark, which never answered over
+/// the tunnel: the dial failed or timed out, or no response headers came in
+/// time (#3884). The proxy marks that answer with [tunnelUnavailableHeader].
+///
+/// A [http.ClientException], so `isQuarkUnreachableError` and [Errors] treat
+/// it as the Quark being unreachable, as they do a dropped connection, rather
+/// than as a 502 or 504 the Quark sent.
+class RemoteAccessUnavailableException extends http.ClientException {
+  /// The request to [uri] got no answer over remote access.
+  RemoteAccessUnavailableException([Uri? uri])
+    : super('The Quark did not answer over remote access', uri);
 }
 
 /// Returns when [response] is a 2xx and throws for anything else, through
@@ -55,6 +69,11 @@ void throwUnlessOk(
 /// own per-attempt timeout.
 /// A host that is silent rather than actively refusing otherwise hangs for
 /// however long the OS feels like waiting.
+///
+/// Over remote access the connect is to the proxy on 127.0.0.1, which never
+/// waits. The tunnel's own dial and header wait are bounded in the proxy
+/// (`cmd/tsnetbridge/proxy.go`), which answers with [tunnelUnavailableHeader]
+/// when either runs out (#3884).
 const Duration kConnectTimeout = Duration(seconds: 5);
 
 /// Returns an [http.Client] that trusts a self-signed certificate from the
@@ -243,6 +262,10 @@ mixin AuthenticatedService {
     // The request's own headers win, as they do on the verbs above.
     request.headers.addAll({...authHeaders, ...request.headers});
     final response = await httpClient.send(request);
+    if (response.headers.containsKey(tunnelUnavailableHeader)) {
+      await response.stream.drain<void>();
+      throw RemoteAccessUnavailableException(request.url);
+    }
     if (response.statusCode == 401) {
       // `drain` throws the body away as it arrives rather than accumulating it.
       await response.stream.drain<void>();
@@ -298,6 +321,9 @@ mixin AuthenticatedService {
 
   Future<http.Response> _checked(Future<http.Response> pending) async {
     final response = await pending;
+    if (response.headers.containsKey(tunnelUnavailableHeader)) {
+      throw RemoteAccessUnavailableException(response.request?.url);
+    }
     checkUnauthorized(response);
     return response;
   }
