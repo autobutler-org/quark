@@ -1399,9 +1399,21 @@ definitions:
     type: object
   photoutil.PhotoSummary:
     properties:
+      durationMs:
+        description: |-
+          DurationMs is a video's length in milliseconds, read from its headers
+          for the page being returned. Zero for a photo, and for a video whose
+          container the device cannot parse.
+        type: integer
       fileName:
         type: string
       hasLiveVideo:
+        type: boolean
+      isVideo:
+        description: |-
+          IsVideo marks a video, which the library lists beside its photos
+          (#3428). A Live Photo's companion video is not listed on its own; it
+          sets its photo's HasLiveVideo instead.
         type: boolean
       mtime:
         type: integer
@@ -9487,10 +9499,13 @@ paths:
   /photos:
     get:
       description: Finds all photos across all managed devices with pagination support.
-        Under sort=taken each photo carries its EXIF capture date as takenAt, read
-        on the spot for a photo never read before, and pendingDates counts those left
-        for a later listing. q keeps the photos whose file name contains that text,
-        ignoring case, and total counts those matches.
+        With includeVideos=true videos are listed beside them; a video carries isVideo
+        and, where its headers parse, durationMs; a Live Photo's companion video is
+        not listed on its own but sets its photo's hasLiveVideo. Videos sort by their
+        date added under sort=taken. Under sort=taken each photo carries its EXIF
+        capture date as takenAt, read on the spot for a photo never read before, and
+        pendingDates counts those left for a later listing. q keeps the photos whose
+        file name contains that text, ignoring case, and total counts those matches.
       parameters:
       - description: Pagination offset (default 0)
         in: query
@@ -9513,6 +9528,11 @@ paths:
         in: query
         name: order
         type: string
+      - description: List videos beside the photos (default false, for clients that
+          only open images)
+        in: query
+        name: includeVideos
+        type: boolean
       - description: File name substring to keep, ignoring case. Blank lists the whole
           library
         in: query

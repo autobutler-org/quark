@@ -6277,7 +6277,7 @@ const List<ApiEndpoint> apiEndpoints = [
     inSwagger: true,
     tags: ['photos'],
     summary: 'List photos',
-    description: 'Finds all photos across all managed devices with pagination support. Under sort=taken each photo carries its EXIF capture date as takenAt, read on the spot for a photo never read before, and pendingDates counts those left for a later listing. q keeps the photos whose file name contains that text, ignoring case, and total counts those matches.',
+    description: 'Finds all photos across all managed devices with pagination support. With includeVideos=true videos are listed beside them; a video carries isVideo and, where its headers parse, durationMs; a Live Photo\'s companion video is not listed on its own but sets its photo\'s hasLiveVideo. Videos sort by their date added under sort=taken. Under sort=taken each photo carries its EXIF capture date as takenAt, read on the spot for a photo never read before, and pendingDates counts those left for a later listing. q keeps the photos whose file name contains that text, ignoring case, and total counts those matches.',
     parameters: [
       ApiParameter(
         name: 'offset',
@@ -6310,6 +6310,12 @@ const List<ApiEndpoint> apiEndpoints = [
         description: 'Sort order: asc or desc (default desc)',
       ),
       ApiParameter(
+        name: 'includeVideos',
+        location: ApiParameterLocation.query,
+        type: 'boolean',
+        description: 'List videos beside the photos (default false, for clients that only open images)',
+      ),
+      ApiParameter(
         name: 'q',
         location: ApiParameterLocation.query,
         type: 'string',
@@ -6320,7 +6326,7 @@ const List<ApiEndpoint> apiEndpoints = [
       ApiResponse(
         status: '200',
         description: 'OK',
-        schema: '{"type":"object","properties":{"limit":{"type":"integer"},"offset":{"type":"integer"},"pendingDates":{"description":"PendingDates counts the photos whose capture date has still not been\\nread, under sort=taken only. They sort by their date added until a later\\nlisting reads them, so a client lists again while it is above zero\\n(#3356).","type":"integer"},"photos":{"type":"array","items":{"type":"object","properties":{"fileName":{"type":"string"},"hasLiveVideo":{"type":"boolean"},"mtime":{"type":"integer"},"relPath":{"type":"string"},"serial":{"type":"string"},"size":{"type":"integer"},"takenAt":{"description":"TakenAt is the EXIF capture date in Unix seconds, set under SortTaken\\nfor a photo whose date is known (#2592). A photo whose EXIF has not been\\nread yet is read by the listing itself, so a fresh upload carries its\\ndate the first time it is listed (#3356).","type":"integer"}}}},"total":{"type":"integer"}}}',
+        schema: '{"type":"object","properties":{"limit":{"type":"integer"},"offset":{"type":"integer"},"pendingDates":{"description":"PendingDates counts the photos whose capture date has still not been\\nread, under sort=taken only. They sort by their date added until a later\\nlisting reads them, so a client lists again while it is above zero\\n(#3356).","type":"integer"},"photos":{"type":"array","items":{"type":"object","properties":{"durationMs":{"description":"DurationMs is a video\'s length in milliseconds, read from its headers\\nfor the page being returned. Zero for a photo, and for a video whose\\ncontainer the device cannot parse.","type":"integer"},"fileName":{"type":"string"},"hasLiveVideo":{"type":"boolean"},"isVideo":{"description":"IsVideo marks a video, which the library lists beside its photos\\n(#3428). A Live Photo\'s companion video is not listed on its own; it\\nsets its photo\'s HasLiveVideo instead.","type":"boolean"},"mtime":{"type":"integer"},"relPath":{"type":"string"},"serial":{"type":"string"},"size":{"type":"integer"},"takenAt":{"description":"TakenAt is the EXIF capture date in Unix seconds, set under SortTaken\\nfor a photo whose date is known (#2592). A photo whose EXIF has not been\\nread yet is read by the listing itself, so a fresh upload carries its\\ndate the first time it is listed (#3356).","type":"integer"}}}},"total":{"type":"integer"}}}',
       ),
       ApiResponse(
         status: '500',

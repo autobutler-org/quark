@@ -201,3 +201,43 @@ func TestListPhotos_SortByTakenDatesFreshUpload(t *testing.T) {
 		t.Errorf("pendingDates = %d, want 0", resp.PendingDates)
 	}
 }
+
+// TestListPhotos_IncludeVideosIsOptIn pins #3428's contract: a plain listing
+// is images only, which is all an app installed before videos were listed can
+// open, and includeVideos=true adds the videos, each flagged isVideo.
+func TestListPhotos_IncludeVideosIsOptIn(t *testing.T) {
+	engine, mem := newPhotosEngineWithNS(t)
+	ctx := context.Background()
+	for name, content := range map[string]string{"a.jpg": "img", "clip.mp4": "vid"} {
+		if err := mem.Write(ctx, "/"+name, strings.NewReader(content), vfs.WriteOptions{}); err != nil {
+			t.Fatalf("seed %s: %v", name, err)
+		}
+	}
+	list := func(url string) map[string]bool {
+		t.Helper()
+		w := doPhotosReq(engine, http.MethodGet, url, nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s returned %d: %s", url, w.Code, w.Body.String())
+		}
+		var resp v0_photos.PaginatedPhotosResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		got := map[string]bool{}
+		for _, p := range resp.Photos {
+			got[p.FileName] = p.IsVideo
+		}
+		if resp.Total != len(got) {
+			t.Errorf("%s: total %d, listed %d", url, resp.Total, len(got))
+		}
+		return got
+	}
+
+	if got := list("/api/v0/photos"); len(got) != 1 || got["a.jpg"] {
+		t.Errorf("plain listing = %v, want only a.jpg as a photo", got)
+	}
+	got := list("/api/v0/photos?includeVideos=true")
+	if len(got) != 2 || got["a.jpg"] || !got["clip.mp4"] {
+		t.Errorf("includeVideos listing = %v, want a.jpg as a photo and clip.mp4 as a video", got)
+	}
+}

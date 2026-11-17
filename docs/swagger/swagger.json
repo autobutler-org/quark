@@ -8154,7 +8154,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Finds all photos across all managed devices with pagination support. Under sort=taken each photo carries its EXIF capture date as takenAt, read on the spot for a photo never read before, and pendingDates counts those left for a later listing. q keeps the photos whose file name contains that text, ignoring case, and total counts those matches.",
+                "description": "Finds all photos across all managed devices with pagination support. With includeVideos=true videos are listed beside them; a video carries isVideo and, where its headers parse, durationMs; a Live Photo's companion video is not listed on its own but sets its photo's hasLiveVideo. Videos sort by their date added under sort=taken. Under sort=taken each photo carries its EXIF capture date as takenAt, read on the spot for a photo never read before, and pendingDates counts those left for a later listing. q keeps the photos whose file name contains that text, ignoring case, and total counts those matches.",
                 "produces": [
                     "application/json"
                 ],
@@ -8191,6 +8191,12 @@
                         "type": "string",
                         "description": "Sort order: asc or desc (default desc)",
                         "name": "order",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "List videos beside the photos (default false, for clients that only open images)",
+                        "name": "includeVideos",
                         "in": "query"
                     },
                     {
@@ -14517,10 +14523,18 @@
         "photoutil.PhotoSummary": {
             "type": "object",
             "properties": {
+                "durationMs": {
+                    "description": "DurationMs is a video's length in milliseconds, read from its headers\nfor the page being returned. Zero for a photo, and for a video whose\ncontainer the device cannot parse.",
+                    "type": "integer"
+                },
                 "fileName": {
                     "type": "string"
                 },
                 "hasLiveVideo": {
+                    "type": "boolean"
+                },
+                "isVideo": {
+                    "description": "IsVideo marks a video, which the library lists beside its photos\n(#3428). A Live Photo's companion video is not listed on its own; it\nsets its photo's HasLiveVideo instead.",
                     "type": "boolean"
                 },
                 "mtime": {

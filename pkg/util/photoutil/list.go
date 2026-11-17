@@ -16,6 +16,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/pptxutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/videoutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -35,7 +36,7 @@ const (
 	OrderDesc = "desc"
 )
 
-// PhotoSummary is a photo file as the listing endpoints report it.
+// PhotoSummary is a photo or video file as the listing endpoints report it.
 type PhotoSummary struct {
 	RelPath      string `json:"relPath"`
 	FileName     string `json:"fileName"`
@@ -48,6 +49,14 @@ type PhotoSummary struct {
 	// read yet is read by the listing itself, so a fresh upload carries its
 	// date the first time it is listed (#3356).
 	TakenAt int64 `json:"takenAt,omitempty"`
+	// IsVideo marks a video, which the library lists beside its photos
+	// (#3428). A Live Photo's companion video is not listed on its own; it
+	// sets its photo's HasLiveVideo instead.
+	IsVideo bool `json:"isVideo,omitempty"`
+	// DurationMs is a video's length in milliseconds, read from its headers
+	// for the page being returned. Zero for a photo, and for a video whose
+	// container the device cannot parse.
+	DurationMs int64 `json:"durationMs,omitempty"`
 }
 
 // ListPhotosParams describes one page of the photo library.
@@ -79,6 +88,11 @@ type ListPhotosParams struct {
 	// Index answers the listing from memory when one has been built; nil
 	// walks the VFS.
 	Index *indexutil.FileIndex
+	// IncludeVideos lists videos beside the photos (#3428). It is opt-in so a
+	// client that can only open an image, such as an app installed before
+	// videos were listed, never gets one; the hashing backfill leaves it off
+	// too, since a video has nothing to hash or read EXIF from.
+	IncludeVideos bool
 }
 
 // ListPhotosResult is a page of photos plus the pagination metadata.
@@ -247,7 +261,8 @@ func sortPhotos(photos []PhotoSummary, sortBy, order string) {
 }
 
 // ListPhotos returns one page of the photo library, sorted by Sort and Order.
-// The pictures a PowerPoint import copied into the folder beside its .qslide
+// The library is every image and every video but a Live Photo's companion,
+// when IncludeVideos asks for them (#3428). The pictures a PowerPoint import copied into the folder beside its .qslide
 // are the presentation's, and are left out. Query narrows the page to photos whose file name contains that text, and
 // Total counts those matches.
 //
@@ -255,21 +270,26 @@ func sortPhotos(photos []PhotoSummary, sortBy, order string) {
 // no longer walks every device on every request (#2759); without one it is
 // walked through the VFS.
 func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
-	// Videos are listed too, only to mark the photos that are Live Photos, and
-	// presentations, only to leave out the pictures an import copied out of
-	// them: a slide's diagrams and icons are not photos.
+	// Every video is seen, to mark the photos that are Live Photos, and every
+	// presentation, to leave out the pictures an import copied out of them: a
+	// slide's diagrams and icons are not photos.
 	liveVideos := map[DuplicatePhoto]bool{}
+	livePhotos := map[DuplicatePhoto]bool{}
 	slideMedia := map[DuplicatePhoto]bool{}
 	var candidates []PhotoSummary
 	err := eachLibraryFile(params, func(fi vfs.FileInfo) {
 		serial := fi.DeviceSerial
-		if strings.HasPrefix(fi.MimeType, "video/") {
+		isVideo := strings.HasPrefix(fi.MimeType, "video/")
+		if isVideo {
 			liveVideos[liveVideoKey(serial, fi.Path)] = true
+		} else if canHaveLiveVideo(fi.Name) {
+			livePhotos[liveVideoKey(serial, fi.Path)] = true
 		}
 		for _, dir := range pptxutil.MediaDirsOf(fi.Path) {
 			slideMedia[DuplicatePhoto{DeviceSerial: serial, RelPath: dir}] = true
 		}
-		if !strings.HasPrefix(fi.MimeType, "image/") ||
+		listed := strings.HasPrefix(fi.MimeType, "image/") || (isVideo && params.IncludeVideos)
+		if !listed ||
 			!params.Access.Check(serial, fi.Path, accessutil.Read).Readable ||
 			!nameMatches(fi.Name, params.Query) {
 			return
@@ -280,18 +300,27 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 			Size:     fi.Size,
 			MTime:    fi.ModTime.Unix(),
 			Serial:   serial,
+			IsVideo:  isVideo,
 		})
 	})
 	if err != nil {
 		return ListPhotosResult{}, err
 	}
-	// Both need every file seen first.
+	// All three need every file seen first.
 	var allPhotos []PhotoSummary
 	for _, photo := range candidates {
 		if slideMedia[DuplicatePhoto{DeviceSerial: photo.Serial, RelPath: path.Dir(photo.RelPath)}] {
 			continue
 		}
-		photo.HasLiveVideo = canHaveLiveVideo(photo.FileName) && liveVideos[liveVideoKey(photo.Serial, photo.RelPath)]
+		key := liveVideoKey(photo.Serial, photo.RelPath)
+		if photo.IsVideo {
+			// A Live Photo's video is part of its photo, not a clip of its own.
+			if livePhotos[key] {
+				continue
+			}
+		} else {
+			photo.HasLiveVideo = canHaveLiveVideo(photo.FileName) && liveVideos[key]
+		}
 		allPhotos = append(allPhotos, photo)
 	}
 
@@ -308,6 +337,7 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 	if params.Offset < total {
 		page = allPhotos[params.Offset:min(params.Offset+params.Limit, total)]
 	}
+	fillDurations(params, page)
 	return ListPhotosResult{
 		Photos:       page,
 		Total:        total,
@@ -349,6 +379,10 @@ func fillTakenDates(params ListPhotosParams, photos []PhotoSummary) (int, error)
 
 	var unread []int
 	for i, photo := range photos {
+		// A video has no EXIF to read; it sorts by its date added.
+		if photo.IsVideo {
+			continue
+		}
 		key := DuplicatePhoto{DeviceSerial: photo.Serial, RelPath: accessutil.Canonical(photo.RelPath)}
 		if t, ok := taken.Dates[key]; ok {
 			photos[i].TakenAt = t.Unix()
@@ -412,4 +446,41 @@ func recordTakenAt(params ListPhotosParams, photo DuplicatePhoto, stored bool) (
 		return sql.NullTime{}, fmt.Errorf("store capture date: %w", err)
 	}
 	return takenAt, nil
+}
+
+// fillDurations sets DurationMs on every video in page, read from its headers
+// through its device's namespace. Only the page is probed, so a listing costs
+// a few header reads per video it returns rather than one per video in the
+// library. A video that cannot be read is logged and keeps a zero duration:
+// it is still listed, and the viewer reports why it will not play.
+func fillDurations(params ListPhotosParams, page []PhotoSummary) {
+	for i, item := range page {
+		if !item.IsVideo || params.Ctx.Err() != nil {
+			continue
+		}
+		duration, err := probeDuration(params, item)
+		if err != nil {
+			log.Printf("[photos] read duration of %q (serial=%q): %v", item.RelPath, item.Serial, err)
+			continue
+		}
+		page[i].DurationMs = duration.Milliseconds()
+	}
+}
+
+// probeDuration reads one video's length from its headers.
+func probeDuration(params ListPhotosParams, item PhotoSummary) (time.Duration, error) {
+	fsys, err := DeviceFS(params.Registry, item.Serial)
+	if err != nil {
+		return 0, err
+	}
+	src, err := videoutil.OpenSource(params.Ctx, videoutil.OpenSourceParams{FS: fsys, Path: item.RelPath})
+	if err != nil {
+		return 0, err
+	}
+	defer src.Close()
+	info, err := videoutil.ProbeSource(params.Ctx, src)
+	if err != nil {
+		return 0, err
+	}
+	return info.Duration, nil
 }
