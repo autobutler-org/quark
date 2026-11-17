@@ -31,4 +31,15 @@ typedef FileListColumnToggle =
     void Function(FileListColumn column, bool visible);
 
 /// What a file listing is sorted by. [type] is the Kind column.
-enum SortColumn { name, type, modified, size, device }
+enum SortColumn {
+  name('Name'),
+  type('Kind'),
+  modified('Modified'),
+  size('Size'),
+  device('Device');
+
+  const SortColumn(this.label);
+
+  /// What the sort is called on the phone's "Sort and view" chip and sheet.
+  final String label;
+}

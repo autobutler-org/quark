@@ -5,6 +5,7 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_nav_buttons.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_path_row.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_search_area.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_select_button.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_upload_chip.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -18,6 +19,12 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// [FileTopBarPathRow], whose actions collapse into the bar's labeled menu on
 /// a phone, or while search is open a [FileTopBarSearchArea], so the field
 /// has the bar's whole width even on a phone (#3454).
+///
+/// [compact], below the split view's breakpoint, drops the way up and the
+/// path row: the bar is one row of Search and Select, and the page puts the
+/// path over its list (#4226). Search still opens its field in a second row,
+/// so a compact bar's height follows [isSearchMode], which the page keeps
+/// true from [onSearchOpened] until the field closes.
 ///
 /// Probe keys: those of [FileTopBarNavButtons], [FileTopBarSearchArea] and
 /// [FileTopBarPathRow].
@@ -56,8 +63,16 @@ class FileTopBar extends StatefulWidget implements PreferredSizeWidget {
     this.onDeviceToggled,
     this.columns = const {},
     this.onColumnToggled,
+    this.compact = false,
+    this.onSearchOpened,
     super.key,
   });
+
+  /// Whether the bar is laid out for a phone list. See the class doc.
+  final bool compact;
+
+  /// Called when the search field opens, before anything is typed in it.
+  final VoidCallback? onSearchOpened;
 
   /// Enters multi-select, for a pointer that cannot long-press (#2057).
   /// Null hides the control.
@@ -133,8 +148,9 @@ class FileTopBar extends StatefulWidget implements PreferredSizeWidget {
 
   /// One bar row, plus the path row or, while searching, the search row.
   @override
-  Size get preferredSize =>
-      const Size.fromHeight(kToolbarHeight + QuarkAppBarBottom.height);
+  Size get preferredSize => Size.fromHeight(
+    kToolbarHeight + (compact && !isSearchMode ? 0 : QuarkAppBarBottom.height),
+  );
 
   @override
   State<FileTopBar> createState() => _FileTopBarState();
@@ -170,6 +186,7 @@ class _FileTopBarState extends State<FileTopBar> {
 
   void _openSearch() {
     setState(() => _searchExpanded = true);
+    widget.onSearchOpened?.call();
     // Focus after the frame, once the search row has built its field.
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _searchFocusNode.requestFocus(),
@@ -204,6 +221,35 @@ class _FileTopBarState extends State<FileTopBar> {
   @override
   Widget build(BuildContext context) {
     final searchOpen = _searchExpanded || widget.isSearchMode;
+    final searchArea = FileTopBarSearchArea(
+      controller: _searchController,
+      focusNode: _searchFocusNode,
+      onChanged: _onSearchChanged,
+      onClose: _closeSearch,
+      onStartSelection: widget.onStartSelection,
+    );
+    if (widget.compact) {
+      final onStartSelection = widget.onStartSelection;
+      return QuarkAppBar(
+        label: 'Files',
+        icon: QuarkIcons.storage,
+        onRefresh: widget.onRefresh,
+        isRefreshing: widget.isRefreshing,
+        actions: searchOpen
+            ? const []
+            : [
+                QuarkBarIconButton(
+                  key: const ValueKey('file_top_bar_search'),
+                  icon: QuarkIcons.search,
+                  tooltip: 'Search',
+                  onPressed: _openSearch,
+                ),
+                if (onStartSelection != null)
+                  FileTopBarSelectButton(onPressed: onStartSelection),
+              ],
+        bottom: searchOpen ? searchArea : null,
+      );
+    }
     return QuarkAppBar(
       label: 'Files',
       icon: QuarkIcons.storage,
@@ -223,13 +269,7 @@ class _FileTopBarState extends State<FileTopBar> {
       ),
 
       bottom: searchOpen
-          ? FileTopBarSearchArea(
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              onChanged: _onSearchChanged,
-              onClose: _closeSearch,
-              onStartSelection: widget.onStartSelection,
-            )
+          ? searchArea
           : FileTopBarPathRow(
               currentPath: widget.currentPath,
               rootPath: widget.rootPath,

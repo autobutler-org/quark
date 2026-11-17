@@ -254,4 +254,48 @@ void main() {
       );
     });
   }
+
+  // #4226: on a phone the footer was a thin bar whose figures were cut off.
+  // It now reads the scope, the bar and how much of it is used.
+  for (final size in const [Size(1280, 800), Size(360, 640)]) {
+    testWidgets('a compact footer reads N% used at ${size.width.toInt()}', (
+      tester,
+    ) async {
+      setViewport(tester, size);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                const Spacer(),
+                FileStorageFooter(
+                  compact: true,
+                  scope: FileStorageFooterScope(
+                    label: kStorageFooterScope,
+                    explanation: kStorageFooterExplanation,
+                    usedBytes: 38 * (1 << 30),
+                    totalBytes: 100 * (1 << 30),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Device storage'), findsOneWidget);
+      expect(find.text('38% used'), findsOneWidget);
+      expect(find.byType(QuarkStorageBar), findsOneWidget);
+      expect(
+        tester.getRect(find.text('Device storage')).right,
+        lessThan(tester.getRect(find.byType(QuarkStorageBar)).left),
+      );
+      expect(
+        tester.getRect(find.byType(QuarkStorageBar)).right,
+        lessThan(tester.getRect(find.text('38% used')).left),
+      );
+    });
+  }
 }

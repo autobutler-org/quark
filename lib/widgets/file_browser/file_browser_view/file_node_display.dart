@@ -61,3 +61,34 @@ String formatFileSize(int bytes, bool isDir, {int compressedSize = 0}) {
   }
   return sizeStr;
 }
+
+/// The muted line under a name in the phone list (#4226): `Folder · Nov 14`
+/// for a folder, `Today · 47.1 KB` for a file. A date reads Today,
+/// Yesterday, "Nov 14" within [now]'s year and "Nov 14, 2025" before it, in
+/// the viewer's own time zone. A part the Quark sent nothing for is left out.
+String fileRowMetaText(FileNode node, DateTime now) {
+  final time = node.modifiedAt?.toLocal();
+  final local = now.toLocal();
+  final today = DateTime(local.year, local.month, local.day);
+  final String? when;
+  if (time == null) {
+    when = null;
+  } else {
+    final day = DateTime(time.year, time.month, time.day);
+    final month = CalendarLabels.monthShort(time.month);
+    when = day == today
+        ? 'Today'
+        : day == DateTime(local.year, local.month, local.day - 1)
+        ? 'Yesterday'
+        : time.year == local.year
+        ? '$month ${time.day}'
+        : '$month ${time.day}, ${time.year}';
+  }
+  final parts = node.isDir
+      ? ['Folder', ?when]
+      : [
+          ?when,
+          formatFileSize(node.size, false, compressedSize: node.compressedSize),
+        ];
+  return parts.join(' · ');
+}

@@ -7,9 +7,14 @@ import 'package:quark/widgets/file_browser/file_browser_view/file_list_leading.d
 import 'package:quark/widgets/file_browser/file_browser_view/file_menu.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_menu_button.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.dart';
+import 'package:quark_widgets/quark_widgets.dart' show FileNameText;
 
 /// One file or folder in the list view: its name, then one cell per entry of
 /// [columns], laid out with the flexes `FileSortHeader` uses.
+///
+/// [compact], on a phone, drops the columns for one line of name over one
+/// muted line of when and how big ([fileRowMetaText]), in a row at least
+/// [compactMinHeight] tall (#4226).
 class FileBrowserListTile extends StatelessWidget {
   const FileBrowserListTile({
     required this.item,
@@ -28,8 +33,16 @@ class FileBrowserListTile extends StatelessWidget {
     this.onNavigateToFolder,
     this.onVersionHistory,
     this.onSelectionChanged,
+    this.compact = false,
     super.key,
   });
+
+  /// The least a compact row is tall.
+  static const double compactMinHeight = 56;
+
+  /// Whether this is the phone's one-line row rather than the columned one.
+  /// [columns] is ignored when true.
+  final bool compact;
 
   final FileNode item;
   final bool isSelected;
@@ -81,6 +94,11 @@ class FileBrowserListTile extends StatelessWidget {
     // outside it; the row's own context is what the entries dispatch against,
     // since it outlives the menu. A right-click opens the same menu (#2276).
     final hasMenu = showFileSizeAndMenu && !selectionMode;
+    // A compact row's second line says when and how big; a caller's own
+    // line, such as where a trashed item came from, follows it.
+    final subtitleText = compact
+        ? [fileRowMetaText(item, DateTime.now()), ?subtitle].join(' · ')
+        : subtitle;
     return GestureDetector(
       onLongPressStart: hasMenu
           ? (details) => menu.showAt(context, details.globalPosition)
@@ -103,42 +121,48 @@ class FileBrowserListTile extends StatelessWidget {
                   onChanged: (_) => onSelectionChanged?.call(item),
                 )
               : FileListLeading(key: fileThumbnailKey(item), item: item),
-          title: Row(
-            children: [
-              Expanded(
-                flex: FileListColumn.nameFlex,
-                child: Text(
-                  item.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+          title: compact
+              ? FileNameText(item.name)
+              : Row(
+                  children: [
+                    Expanded(
+                      flex: FileListColumn.nameFlex,
+                      child: Text(
+                        item.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    for (final column in columns)
+                      Expanded(
+                        flex: FileListColumn.flex,
+                        // The device column is a tag per device, in its color.
+                        child: column == FileListColumn.device
+                            ? Align(
+                                alignment: AlignmentDirectional.centerStart,
+                                child: FileDeviceTags(item: item),
+                              )
+                            : Text(
+                                fileListCellText(column, item),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                ),
+                              ),
+                      ),
+                  ],
                 ),
-              ),
-              for (final column in columns)
-                Expanded(
-                  flex: FileListColumn.flex,
-                  // The device column is a tag per device, in its color.
-                  child: column == FileListColumn.device
-                      ? Align(
-                          alignment: AlignmentDirectional.centerStart,
-                          child: FileDeviceTags(item: item),
-                        )
-                      : Text(
-                          fileListCellText(column, item),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: colors.onSurfaceVariant),
-                        ),
-                ),
-            ],
-          ),
-          subtitle: subtitle == null
+          subtitle: subtitleText == null
               ? null
               : Text(
-                  subtitle!,
+                  subtitleText,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: colors.onSurfaceVariant),
                 ),
+          minTileHeight: compact ? compactMinHeight : null,
+          // The menu button is a 48dp target at every width.
           trailing: showFileSizeAndMenu ? FileMenuButton(menu: menu) : null,
           onTap: selectionMode
               ? () => onSelectionChanged?.call(item)

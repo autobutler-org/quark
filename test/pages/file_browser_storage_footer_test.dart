@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_io_http.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show setViewport, wideViewport;
 
 /// Serves an empty folder and a health reading that the test controls, so it
 /// can change the disk usage between refreshes and hold a reading in flight.
@@ -53,6 +54,8 @@ void main() {
     final second = Completer<String>();
     final quark = _healthQuark([Future.value(_reading(10)), second.future]);
 
+    // Wide: a phone's footer leaves the byte figures out (#4226).
+    setViewport(tester, wideViewport);
     await HttpOverrides.runZoned(() async {
       await tester.pumpWidget(const MaterialApp(home: FileBrowserPage()));
       await tester.pumpAndSettle();
@@ -85,6 +88,8 @@ void main() {
     final health = Completer<String>();
     final quark = _healthQuark([health.future]);
 
+    // Wide: a phone's footer leaves the byte figures out (#4226).
+    setViewport(tester, wideViewport);
     await HttpOverrides.runZoned(() async {
       await tester.pumpWidget(const MaterialApp(home: FileBrowserPage()));
       await tester.pump();

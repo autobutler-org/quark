@@ -78,8 +78,34 @@ class FileBrowserView extends StatefulWidget {
     this.selectedPaths = const {},
     this.onSelectionChanged,
     this.columns = defaultColumns,
+    this.compact = false,
+    this.sortColumn,
+    this.sortDirection,
+    this.onSortChanged,
     super.key,
   });
+
+  /// Whether the listing is laid out for a phone: one line of name over one
+  /// muted line per row, and no column header (#4226). The caller sorts
+  /// through [onSortChanged] instead, from a `FileSortViewRow`.
+  final bool compact;
+
+  /// What the listing is sorted by, when the caller owns the sort. Null, with
+  /// [sortDirection], leaves the sort to the view, starting at Name.
+  final SortColumn? sortColumn;
+
+  /// Which way [sortColumn] runs.
+  final SortDirection? sortDirection;
+
+  /// Called with the sort a column header asks for. Set it whenever
+  /// [sortColumn] is set: the view then only reports a header tap.
+  final void Function(SortColumn column, SortDirection direction)?
+  onSortChanged;
+
+  /// Whether a listing in [context] is laid out for a phone ([compact]):
+  /// narrower than [QuarkSplitView.collapseBreakpoint] (#4226).
+  static bool isCompactWidth(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < QuarkSplitView.collapseBreakpoint;
 
   /// The list columns of a listing that offers no choice of them: the trash
   /// and the folder picker.
@@ -189,20 +215,26 @@ class FileBrowserView extends StatefulWidget {
 }
 
 class _FileBrowserViewState extends State<FileBrowserView> {
-  SortColumn _sortColumn = SortColumn.name;
-  SortDirection _sortDirection = SortDirection.asc;
+  SortColumn _ownSortColumn = SortColumn.name;
+  SortDirection _ownSortDirection = SortDirection.asc;
   final Set<String> _extractingPaths = {};
 
+  SortColumn get _sortColumn => widget.sortColumn ?? _ownSortColumn;
+  SortDirection get _sortDirection => widget.sortDirection ?? _ownSortDirection;
+
   void _toggleSort(SortColumn column) {
+    final direction =
+        _sortColumn == column && _sortDirection == SortDirection.asc
+        ? SortDirection.desc
+        : SortDirection.asc;
+    final onSortChanged = widget.onSortChanged;
+    if (onSortChanged != null) {
+      onSortChanged(column, direction);
+      return;
+    }
     setState(() {
-      if (_sortColumn == column) {
-        _sortDirection = _sortDirection == SortDirection.asc
-            ? SortDirection.desc
-            : SortDirection.asc;
-      } else {
-        _sortColumn = column;
-        _sortDirection = SortDirection.asc;
-      }
+      _ownSortColumn = column;
+      _ownSortDirection = direction;
     });
   }
 
@@ -355,6 +387,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
             onNavigateToFolder: widget.onNavigateToFolder,
             onVersionHistory: widget.onVersionHistory,
             onSelectionChanged: widget.onSelectionChanged,
+            compact: widget.compact,
           ),
         );
 
@@ -449,6 +482,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
           );
         }
 
+        if (widget.compact) return body;
         return Column(
           children: [
             if (widget.isGridView)
