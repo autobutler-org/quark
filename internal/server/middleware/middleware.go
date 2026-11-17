@@ -108,10 +108,13 @@ func queryTokenAllowed(path string) bool {
 // link, which cannot carry an Authorization header, so the browser streams the
 // file to disk instead of the app holding it in memory (#2226). The token is
 // bound to filePath, which on the archive route names the archive: the caller
-// can read every entry of an archive they can read.
+// can read every entry of an archive they can read. On the selection route
+// filePath is the selection key the token was issued for, and the handler
+// checks the posted paths hash to it (#4195).
 var downloadTokenPaths = map[string]bool{
 	"/api/v0/files/download":              true,
 	"/api/v0/files/download-archive-file": true,
+	"/api/v0/files/download-selection":    true,
 }
 
 // authExemptPaths are API paths that don't require a valid session. A path is
