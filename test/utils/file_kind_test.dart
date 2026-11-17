@@ -55,4 +55,10 @@ void main() {
       expect(fileKindForName(name), FileKind.archive, reason: name);
     }
   });
+
+  test('TIFF and BMP get a server thumbnail (#4199)', () {
+    for (final ext in ['.tif', '.tiff', '.bmp']) {
+      expect(thumbnailImageExtensions, contains(ext), reason: ext);
+    }
+  });
 }

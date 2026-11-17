@@ -1073,3 +1073,30 @@ Quark holds an earlier version of it.
   `PUT /api/v0/playback/watched`. Moving or renaming the video starts it over.
 - A watched video stays watched while it is played again, until **Mark as unwatched**.
 - A "Continue watching" row, a theater library, subtitles and chapters are not built yet (#2985).
+
+---
+
+<!-- cspell:ignore CMYK -->
+
+### JN-FB-049: A TIFF or BMP shows a thumbnail and opens in the viewer
+
+**Preconditions:** A `.tif`, `.tiff` or `.bmp` exists in a folder in Files or in the photo library.
+
+**Steps:**
+
+1. Open the folder in Files, or All photos.
+2. Tap the image.
+
+**Expected result:**
+
+- The row or tile shows a thumbnail of the picture, not the plain image icon.
+- The image opens in the photo viewer, turned the way its EXIF orientation says.
+- A very large scan or panorama TIFF (over 256 MiB once decoded, such as a 200 MP scan) still shows a thumbnail and
+  opens: the viewer shows it at 4096 pixels on its long side. The Quark reads it from a smaller copy stored inside
+  the file when there is one, and otherwise shrinks it as it reads, so it never holds the whole picture in memory.
+
+**Notes:**
+
+- **Download** still saves the original file, at full size.
+- A large TIFF saved with JPEG compression, separate color planes, CMYK or floating-point samples keeps the plain
+  icon, as does a BMP over 256 MiB decoded.

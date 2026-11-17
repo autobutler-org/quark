@@ -448,6 +448,8 @@ by date (JN-PH-018).
 
 ---
 
+<!-- cspell:ignore CMYK -->
+
 ### JN-PH-022: Clear out duplicate photos
 
 **Preconditions:** Demo mode is off, and the library holds copies of the same photo. Quark hashes a photo when it
@@ -492,7 +494,10 @@ added outside Quark shows up once its thumbnail loads or after the next restart.
   the pass after the photo it is reading, and **Resume indexing** carries on from there; a restart of the Quark
   forgets a pause. When photos could not be read, **N photos couldn't be read** lists each by name and folder with a
   plain reason: it can't be read as a photo, it is a camera RAW photo and this Quark can't convert RAW files, it is
-  too large to check, or it couldn't be opened. The status updates as the pass moves, without a refresh.
+  too large to check, or it couldn't be opened. Since #4199 a large TIFF is checked from a smaller copy, so "too
+  large to check" is left to images over 64 megapixels in other formats, 16-bit images that would need more than
+  256 MiB in other formats, and large TIFFs saved with JPEG compression, separate color planes, CMYK, or
+  floating-point samples. The status updates as the pass moves, without a refresh.
 - Anyone who is not an admin sees no index status: the Quark tells only admins whether indexing is done, so an empty
   page for them may still mean "not indexed yet".
 
