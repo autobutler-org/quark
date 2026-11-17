@@ -7,7 +7,9 @@ import (
 	"github.com/KononK/resize"
 )
 
-// cropToFit scales and center-crops an image to the target dimensions.
+// cropToFit scales and center-crops an image to the target dimensions. A
+// zero width or height asks for the whole image instead, uncropped, its long
+// edge scaled down to the other dimension and never up (#4220).
 func cropToFit(img image.Image, width, height uint) (image.Image, string, error) {
 	bounds := img.Bounds()
 	srcW := uint(bounds.Dx())
@@ -15,6 +17,9 @@ func cropToFit(img image.Image, width, height uint) (image.Image, string, error)
 
 	if srcW == 0 || srcH == 0 {
 		return nil, "", fmt.Errorf("source image has zero dimensions")
+	}
+	if width == 0 || height == 0 {
+		return fitLongEdge(img, srcW, srcH, max(width, height)), "jpeg", nil
 	}
 
 	var scaledW, scaledH uint
@@ -46,4 +51,16 @@ func cropToFit(img image.Image, width, height uint) (image.Image, string, error)
 		}
 	}
 	return cropped, "jpeg", nil
+}
+
+// fitLongEdge scales a srcW x srcH image so its long edge is at most
+// longEdge, keeping its aspect ratio. A smaller image is returned as it is.
+func fitLongEdge(img image.Image, srcW, srcH, longEdge uint) image.Image {
+	if max(srcW, srcH) <= longEdge {
+		return img
+	}
+	if srcW >= srcH {
+		return resize.Resize(longEdge, 0, img, resize.Lanczos3)
+	}
+	return resize.Resize(0, longEdge, img, resize.Lanczos3)
 }

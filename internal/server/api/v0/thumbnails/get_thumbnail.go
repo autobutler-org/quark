@@ -33,7 +33,7 @@ var errModelNeedsClient = errors.New("the device does not draw 3D models")
 // @Produce png,jpeg
 // @Param filePath path string true "Path to the image file"
 // @Param serial query string false "Device serial number (for device-specific files)"
-// @Param size query string false "Thumbnail size tier: sm (96px), md (240px), lg (400px). Defaults to lg." Enums(sm, md, lg)
+// @Param size query string false "Thumbnail size tier: sm (96px), md (240px), lg (400px), cropped square; or preview, the whole photo uncropped with its long edge at most 2048px, always a JPEG, for a viewer to show before the original. A preview has the file's EXIF orientation applied but not the user's rotation, which a viewer applies to it as it does to the original. A preview is never made from a client's thumbnail, so one the device cannot render is a plain 404. Defaults to lg." Enums(sm, md, lg, preview)
 // @Param v query string false "The photo's version from the photo listing: its mtime and rotationQuarters joined by a dot, as in 1700000000.1. When it is current the response is cacheable as immutable; otherwise it must be revalidated by ETag"
 // @Success 200 {file} file
 // @Failure 304 "Not Modified"
@@ -121,10 +121,18 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(err)
 	}
 
+	size := thumbnailutil.ParseSize(c.Query("size"))
+	// A preview is a screen-sized rendition of the photo (#4220), and a
+	// client's thumbnail is a 400px one, so the preview is only ever made
+	// from the file.
+	isPreview := size == thumbnailutil.SizePreview
+
 	// A thumbnail a client rendered comes first (#2379); generating one here
 	// is the fallback.
-	if resp := getClientThumbnail(c, deps, relPath, filePath, serial, srcInfo.ModTime, version); resp != clientThumbnailFallthrough {
-		return resp
+	if !isPreview {
+		if resp := getClientThumbnail(c, deps, relPath, filePath, serial, srcInfo.ModTime, version); resp != clientThumbnailFallthrough {
+			return resp
+		}
 	}
 	// The device draws no 3D model: only a client can make its thumbnail.
 	if isModel {
@@ -136,7 +144,7 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		Serial:     serial,
 		RelPath:    relPath,
 		FilePath:   filePath,
-		Size:       thumbnailutil.ParseSize(c.Query("size")),
+		Size:       size,
 		SrcModTime: srcInfo.ModTime,
 	})
 	if err != nil {
@@ -176,7 +184,12 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 			CachedPath:       prepared.CachedPath,
 		})
 		// A video or HEIC the device could not render is one a client can:
-		// say so, so it renders one and PUTs it (#2379).
+		// say so, so it renders one and PUTs it (#2379). Its thumbnail would
+		// not make a preview, so a preview is a plain 404 the viewer answers
+		// by showing the original.
+		if genErr != nil && thumbnailutil.NeedsClientRender(relPath) && isPreview {
+			return serverutil.NotFound(genErr)
+		}
 		if genErr != nil && thumbnailutil.NeedsClientRender(relPath) {
 			return clientRenderNotFound(filePath, srcInfo.ModTime, genErr)
 		}
@@ -191,7 +204,7 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		cachedModTime = generated.CachedModTime
 	}
 
-	thumbContentType := thumbnailutil.ContentTypeForExt(ext)
+	thumbContentType := thumbnailutil.ContentType(ext, size)
 	if isVideo {
 		thumbContentType = "image/jpeg"
 	}

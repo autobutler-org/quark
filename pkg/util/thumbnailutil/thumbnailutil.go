@@ -62,6 +62,21 @@ const (
 	SizeSm Size = "sm" // 96×96  – grid icons / file browser
 	SizeMd Size = "md" // 240×240 – card previews
 	SizeLg Size = "lg" // 400×400 – detail view (legacy default)
+	// SizePreview is the whole photo, uncropped, its long edge scaled down
+	// to [PreviewLongEdge]: what the viewer shows full screen before, and
+	// usually instead of, the original (#4220). It is always a JPEG.
+	SizePreview Size = "preview"
+)
+
+// PreviewLongEdge is the long edge of a [SizePreview] thumbnail, in pixels:
+// sharp on a phone or laptop screen, a few hundred KB as a JPEG.
+const PreviewLongEdge = 2048
+
+// The JPEG qualities the cache encodes at: the square tiers, and the preview,
+// which is large enough that a little less quality saves a lot of bytes.
+const (
+	gridQuality    = 85
+	previewQuality = 82
 )
 
 // The reasons [ClientRenderReason] gives.
@@ -338,14 +353,20 @@ func ParseSize(raw string) Size {
 		return SizeSm
 	case SizeMd:
 		return SizeMd
+	case SizePreview:
+		return SizePreview
 	default:
 		return SizeLg
 	}
 }
 
-// Dimensions returns the pixel dimensions for a given size tier.
+// Dimensions returns the pixel dimensions for a given size tier. The preview
+// tier's height is 0: it is fit within [PreviewLongEdge] rather than cropped
+// to a square.
 func Dimensions(size Size) (width, height uint) {
 	switch size {
+	case SizePreview:
+		return PreviewLongEdge, 0
 	case SizeSm:
 		return 96, 96
 	case SizeMd:
@@ -359,6 +380,15 @@ func Dimensions(size Size) (width, height uint) {
 // modification time.
 func ETagFromModTime(t time.Time) string {
 	return fmt.Sprintf(`"%x"`, t.UnixNano())
+}
+
+// ContentType returns the MIME type of a size tier of a thumbnail whose source
+// has the extension ext: the preview tier is always a JPEG.
+func ContentType(ext string, size Size) string {
+	if size == SizePreview {
+		return "image/jpeg"
+	}
+	return ContentTypeForExt(ext)
 }
 
 // ContentTypeForExt returns the MIME type for a thumbnail based on its source

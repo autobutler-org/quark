@@ -70,7 +70,8 @@ func Generate(params GenerateParams) (GenerateResult, error) {
 		}
 	}
 
-	modTime, err := writeCache(params.CachedPath, result.Thumbnail, false)
+	_, quality := cacheEncoding(params.Ext, params.Height)
+	modTime, err := writeCache(params.CachedPath, result.Thumbnail, false, quality)
 	if err != nil {
 		return GenerateResult{}, err
 	}
@@ -94,7 +95,8 @@ func GenerateFromReader(params GenerateFromReaderParams) (GenerateResult, error)
 		storeHashes(params.Queries, params.Serial, params.RelPath, result.DHash, params.Reader)
 	}
 
-	modTime, err := writeCache(params.CachedPath, result.Thumbnail, params.Ext == ".png")
+	encodePNG, quality := cacheEncoding(params.Ext, params.Height)
+	modTime, err := writeCache(params.CachedPath, result.Thumbnail, encodePNG, quality)
 	if err != nil {
 		return GenerateResult{}, err
 	}

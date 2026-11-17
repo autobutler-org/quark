@@ -199,7 +199,8 @@ func FromClientThumbnail(params FromClientThumbnailParams) (FromClientThumbnailR
 	if prepared.RotationQuarters != 0 {
 		thumb = photoutil.ApplyRotation(thumb, prepared.RotationQuarters)
 	}
-	modTime, err := writeCache(prepared.CachedPath, thumb, false)
+	_, quality := cacheEncoding("", prepared.Height)
+	modTime, err := writeCache(prepared.CachedPath, thumb, false, quality)
 	if err != nil {
 		return FromClientThumbnailResult{}, err
 	}
