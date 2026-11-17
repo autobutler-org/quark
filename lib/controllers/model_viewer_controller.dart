@@ -196,7 +196,7 @@ class ModelViewerController extends ChangeNotifier with SafeNotifier {
       );
       return page.bytes;
     } on ApiException catch (e) {
-      if (e.statusCode != 404) rethrow;
+      if (e.statusCode != 404 || e is DriveNotConnected) rethrow;
       throw QuarkModelParseException(
         QuarkModelParseIssue.malformed,
         '$name is missing',

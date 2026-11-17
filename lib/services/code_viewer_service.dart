@@ -20,7 +20,8 @@ class CodeViewerService {
   ///
   /// A [start] at or past the end of the file answers with no bytes. A Quark
   /// that ignores the range sends the whole file; reading stops at [length]
-  /// either way. A refused request throws an [ApiException].
+  /// either way. A refused request throws an [ApiException], a
+  /// [DriveNotConnected] when the file's drive is unplugged.
   ///
   /// api: GET /api/v0/files/download
   static Future<CodeViewerRange> readRange(
@@ -40,9 +41,10 @@ class CodeViewerService {
       return (bytes: Uint8List(0), totalSize: _totalSize(response.headers));
     }
     if (status < 200 || status >= 300) {
-      // An unread body pins the connection out of the pool.
-      await response.stream.drain<void>();
-      throw ApiException(status, 'Failed to read the file');
+      // A refusal's body is the Quark's short JSON error, never the file, and
+      // reading it also frees the connection for the pool.
+      final body = await response.stream.bytesToString();
+      throwFileApiError(status, body, 'Failed to read the file');
     }
     final bytes = BytesBuilder(copy: false);
     await for (final chunk in response.stream) {
