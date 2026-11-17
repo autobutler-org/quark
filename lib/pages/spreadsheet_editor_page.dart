@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/utils/auto_save_scheduler.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
@@ -75,7 +76,10 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   int _selected = 0;
 
   static const _autoSaveDelay = Duration(seconds: 2);
-  Timer? _autoSaveTimer;
+  late final AutoSaveScheduler _autoSave = AutoSaveScheduler(
+    delay: _autoSaveDelay,
+    onFire: _doSave,
+  );
 
   String get _displayName =>
       fileNameWithoutExtension(widget.filePath, '.qsheet');
@@ -91,9 +95,24 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
 
   /// Closes a sheet that has no history behind it, landing on the page it was
   /// opened from (#2403). A sheet reached by a link has none, and lands in the
-  /// folder that holds it rather than the home folder (#1749).
-  void _leave() => context.go(
-    AppRoutes.leaveFile(context, widget.filePath, serial: widget.deviceSerial),
+  /// folder that holds it rather than the home folder (#1749). Unsaved edits
+  /// are asked about first.
+  Future<void> _leave() async {
+    if (!await _mayLeave() || !mounted) return;
+    context.go(
+      AppRoutes.leaveFile(
+        context,
+        widget.filePath,
+        serial: widget.deviceSerial,
+      ),
+    );
+  }
+
+  /// Asks before leaving unsaved edits, with auto-save held while the
+  /// prompt is open (#4110).
+  Future<bool> _mayLeave() => _autoSave.confirmLeave(
+    isDirty: () => _dirty,
+    ask: () => confirmLeaveUnsaved(context),
   );
 
   @override
@@ -104,7 +123,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
 
   @override
   void dispose() {
-    _autoSaveTimer?.cancel();
+    _autoSave.dispose();
     for (final tab in _tabs) {
       tab.dispose();
     }
@@ -261,11 +280,13 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
 
   void _onSheetChanged() {
     if (!_dirty && mounted) setState(() => _dirty = true);
-    _autoSaveTimer?.cancel();
-    _autoSaveTimer = Timer(_autoSaveDelay, _doSave);
+    _autoSave.schedule();
   }
 
-  Future<void> _doSave() async {
+  /// Saves, tracked so a leave prompt waits for it to land (#4110).
+  Future<void> _doSave() => _autoSave.track(_save());
+
+  Future<void> _save() async {
     if (_saving || !mounted) return;
     setState(() => _saving = true);
     try {
@@ -295,7 +316,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   }
 
   Future<void> _manualSave() async {
-    _autoSaveTimer?.cancel();
+    _autoSave.cancel();
     try {
       await _doSave();
       if (!mounted) return;
@@ -317,7 +338,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     _exporting = true;
     try {
       if (_dirty) {
-        _autoSaveTimer?.cancel();
+        _autoSave.cancel();
         await _doSave();
         if (!mounted || _dirty) return;
       }
@@ -344,7 +365,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     _renaming = true;
     try {
       if (_dirty) {
-        _autoSaveTimer?.cancel();
+        _autoSave.cancel();
         await _doSave();
         if (!mounted || _dirty) return;
       }
@@ -378,7 +399,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
         siblings: siblings,
       );
       if (renamed == null || !mounted) return;
-      _autoSaveTimer?.cancel();
+      _autoSave.cancel();
       context.go(
         AppRoutes.sheetFile(
           renamed,
@@ -464,6 +485,11 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       );
     }
 
-    return LeavePopScope(onLeave: _leave, child: page);
+    return LeavePopScope(
+      onLeave: _leave,
+      dirty: _dirty,
+      mayLeave: _mayLeave,
+      child: page,
+    );
   }
 }

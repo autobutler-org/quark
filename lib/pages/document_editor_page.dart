@@ -13,6 +13,7 @@ import 'package:printing/printing.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/utils/auto_save_scheduler.dart';
 import 'package:quark/utils/editor_focus_restore.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
@@ -20,6 +21,7 @@ import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/widgets/document_editor/document_editor_body.dart';
 import 'package:quark/widgets/document_editor/highlight_picker_dialog.dart';
+import 'package:quark/widgets/layout/leave_pop_scope.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/settings_service.dart';
@@ -96,7 +98,10 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   bool get _editorDarkPage => AppSettings.instance.documentDarkPage.value;
   bool get _autoSaveEnabled => AppSettings.instance.documentAutoSave.value;
   static const _autoSaveDelay = Duration(seconds: 2);
-  Timer? _autoSaveTimer;
+  late final AutoSaveScheduler _autoSave = AutoSaveScheduler(
+    delay: _autoSaveDelay,
+    onFire: _autoSaveSilently,
+  );
 
   // Word count. `toPlainText()` walks the whole document, so it is recomputed
   // on a debounce and published through a notifier — the count changing
@@ -129,7 +134,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     WidgetsBinding.instance.removeObserver(this);
     AppSettings.instance.documentDarkPage.removeListener(_onPrefsChanged);
     AppSettings.instance.documentAutoSave.removeListener(_onPrefsChanged);
-    _autoSaveTimer?.cancel();
+    _autoSave.dispose();
     _hintTimer?.cancel();
     _wordCountTimer?.cancel();
     _docChanges?.cancel();
@@ -155,10 +160,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   /// opened from (#2403). A doc reached by a link has none, and lands in the
   /// folder that holds it rather than the home folder (#1749).
   Future<void> _leave() async {
-    if (_dirty && !await _confirmDiscard(context)) {
-      return;
-    }
-    if (!mounted) return;
+    if (!await _mayLeave() || !mounted) return;
     context.go(
       AppRoutes.leaveFile(
         context,
@@ -170,8 +172,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
 
   void _onPrefsChanged() {
     if (!_autoSaveEnabled) {
-      _autoSaveTimer?.cancel();
-      _autoSaveTimer = null;
+      _autoSave.cancel();
     }
     setState(() {});
   }
@@ -192,7 +193,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     setState(() => _isReadOnly = true);
     _editorFocus.unfocus();
     if (_dirty) {
-      _autoSaveTimer?.cancel();
+      _autoSave.cancel();
       await _autoSaveSilently();
     }
   }
@@ -325,8 +326,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     _wordCountTimer?.cancel();
     _wordCountTimer = Timer(_wordCountDelay, _recountWords);
     if (_autoSaveEnabled) {
-      _autoSaveTimer?.cancel();
-      _autoSaveTimer = Timer(_autoSaveDelay, _autoSaveSilently);
+      _autoSave.schedule();
     }
   }
 
@@ -350,7 +350,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   }
 
   Future<void> _saveDocument() async {
-    _autoSaveTimer?.cancel();
+    _autoSave.cancel();
     try {
       await _doSave();
       if (!mounted) return;
@@ -361,7 +361,10 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     }
   }
 
-  Future<void> _doSave() async {
+  /// Saves, tracked so a leave prompt waits for it to land (#4110).
+  Future<void> _doSave() => _autoSave.track(_save());
+
+  Future<void> _save() async {
     if (_saving) return;
     setState(() => _saving = true);
     try {
@@ -398,7 +401,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     _renaming = true;
     try {
       if (_dirty) {
-        _autoSaveTimer?.cancel();
+        _autoSave.cancel();
         try {
           await _doSave();
         } catch (e) {
@@ -438,7 +441,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
         siblings: siblings,
       );
       if (renamed == null || !mounted) return;
-      _autoSaveTimer?.cancel();
+      _autoSave.cancel();
       context.go(
         AppRoutes.docFile(
           renamed,
@@ -503,25 +506,10 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
 
   @override
   Widget build(BuildContext context) {
-    final canPop = Navigator.of(context).canPop();
-    return PopScope(
-      // With nothing underneath, a system back would close the app; it
-      // leaves as the app bar's back button does.
-      canPop: !_dirty && canPop,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        if (!canPop) {
-          await _leave();
-          return;
-        }
-        final leave = await _confirmDiscard(context);
-        if (!context.mounted) {
-          return;
-        }
-        if (leave) {
-          Navigator.of(context).pop();
-        }
-      },
+    return LeavePopScope(
+      onLeave: _leave,
+      dirty: _dirty,
+      mayLeave: _mayLeave,
       child: CallbackShortcuts(
         bindings: {
           // Ctrl+F / Cmd+F — toggle find bar (#1046). Only fires when focus is
@@ -715,15 +703,13 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     }
   }
 
-  Future<bool> _confirmDiscard(BuildContext context) async {
-    final result = await confirmAction(
-      context,
-      title: 'Unsaved changes',
-      message: 'You have unsaved changes. Leave without saving?',
-      confirmLabel: 'Leave',
-    );
-    return result ?? false;
-  }
+  /// Asks before leaving unsaved edits, with auto-save held while the
+  /// prompt is open (#4110).
+  Future<bool> _mayLeave() => _autoSave.confirmLeave(
+    isDirty: () => _dirty,
+    ask: () => confirmLeaveUnsaved(context),
+    resume: _autoSaveEnabled,
+  );
 }
 
 // Produces "#AARRGGBB" matching flutter_quill's BackgroundAttribute storage format.
