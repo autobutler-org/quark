@@ -963,128 +963,122 @@ class PhotosPageState extends State<PhotosPage>
                       onDrop: _uploadDroppedFiles,
                       child: RefreshIndicator(
                         onRefresh: manualRefresh,
-                        child: PhotoGridScrollLabel(
-                          child: QuarkSplitView(
-                            controller: _scrollController,
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            // A phone gets the library from the bar's
-                            // picker chip, so the grid is the first thing
-                            // under the bar there (#4149).
-                            isSidebarOpen: false,
-                            sidebar: PhotoLibraryNav(
-                              controller: c,
-                              onShowAlbum: _showAlbum,
-                              onCreateAlbum: _createAlbum,
-                              onAlbumMenu: _showAlbumActions,
-                              sizeControl: PhotoColumnsSlider(
-                                columns: c.columns,
-                                minColumns: columnBounds.min,
-                                maxColumns: columnBounds.max,
-                                onColumnsChanged: c.setColumns,
-                              ),
+                        child: QuarkSplitView(
+                          controller: _scrollController,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          // A phone gets the library from the bar's
+                          // picker chip, so the grid is the first thing
+                          // under the bar there (#4149).
+                          isSidebarOpen: false,
+                          sidebar: PhotoLibraryNav(
+                            controller: c,
+                            onShowAlbum: _showAlbum,
+                            onCreateAlbum: _createAlbum,
+                            onAlbumMenu: _showAlbumActions,
+                            sizeControl: PhotoColumnsSlider(
+                              columns: c.columns,
+                              minColumns: columnBounds.min,
+                              maxColumns: columnBounds.max,
+                              onColumnsChanged: c.setColumns,
                             ),
-                            slivers: [
-                              SubAlbumStrip(
-                                albums: c.subAlbums,
-                                onSelected: (item) => _showAlbum(item.id),
-                              ),
-                              PhotoGrid(
-                                photos: photos,
-                                sections: c.photoSections,
-                                crossAxisCount: PhotoGridConfig.columnsFor(
-                                  contentWidth,
-                                  c.columns,
-                                ),
-                                // The album being added to's own photos
-                                // show checked, and cannot be picked
-                                // (#3361).
-                                selectedIds: {
-                                  ...selectedIds,
-                                  ...c.albumMemberIds,
-                                },
-                                selectionMode: c.selectionMode,
-                                isLoading:
-                                    isInitialLoad ||
-                                    c.albumLoading ||
-                                    c.isSearching,
-                                // Unreachable has its own view in the empty state.
-                                error: searchError != null
-                                    ? Errors.message(
-                                        searchError,
-                                        'search your photos',
-                                      )
-                                    : albumError == null || c.quarkUnreachable
-                                    ? null
-                                    : Errors.message(
-                                        albumError,
-                                        'load the album',
-                                      ),
-                                hasMore: c.hasMore,
-                                isLoadingMore: c.isLoadingMore,
-                                emptyState: c.searchQuery.isNotEmpty
-                                    ? EmptyStateWidget(
-                                        icon: QuarkIcons.search,
-                                        headline:
-                                            'No photos match "${c.searchQuery}"',
-                                        subtext: 'Search looks at file names.',
-                                      )
-                                    : PhotosEmptyState(
-                                        unreachable: c.quarkUnreachable,
-                                        showingFavorites: showingFavorites,
-                                        albumName: album?.name,
-                                        hostAddress: c.activeHost,
-                                        onRetry: manualRefresh,
-                                        onManageHosts: () => context.go(
-                                          AppRoutes.settingsTab(
-                                            SettingsTab.general,
-                                          ),
-                                        ),
-                                        onUploadPhotos: c.isUploading
-                                            ? null
-                                            : _uploadPhotos,
-                                        // Same action as the app bar's Add Photos, and
-                                        // absent for the same albums (#992).
-                                        onAddPhotosToAlbum:
-                                            album != null &&
-                                                !album.isSystemAlbum
-                                            ? () => _addPhotosTo(
-                                                album.toAlbumItem(),
-                                              )
-                                            : null,
-                                      ),
-                                thumbnailBuilder: (context, photo) =>
-                                    PhotoThumbnail(
-                                      url: c.thumbnailUrl(photo.id),
-                                      asset: c.assetFor(photo.id),
-                                      path: c.thumbnailSource(photo.id)?.path,
-                                      serial: c
-                                          .thumbnailSource(photo.id)
-                                          ?.serial,
-                                    ),
-                                onTap: (i) => _onPhotoTap(photos, i),
-                                // In an album the menu takes the long press; in
-                                // the library it stays selection (#2276).
-                                onLongPress: (i) =>
-                                    c.selectFromLongPress(photos[i].id),
-                                longPressOpensMenu:
-                                    album != null && !c.selectionMode,
-                                onMenu: _demo
-                                    ? null
-                                    : album == null
-                                    ? (i, position) => _showLibraryPhotoActions(
-                                        photos[i],
-                                        position,
-                                      )
-                                    : (i, position) => _showAlbumItemActions(
-                                        album,
-                                        photos[i].id,
-                                        position,
-                                      ),
-                                onDoubleTap: (i) =>
-                                    _toggleFavorite(photos[i].id),
-                              ),
-                            ],
                           ),
+                          slivers: [
+                            SubAlbumStrip(
+                              albums: c.subAlbums,
+                              onSelected: (item) => _showAlbum(item.id),
+                            ),
+                            PhotoGrid(
+                              photos: photos,
+                              sections: c.photoSections,
+                              crossAxisCount: PhotoGridConfig.columnsFor(
+                                contentWidth,
+                                c.columns,
+                              ),
+                              // The album being added to's own photos
+                              // show checked, and cannot be picked
+                              // (#3361).
+                              selectedIds: {
+                                ...selectedIds,
+                                ...c.albumMemberIds,
+                              },
+                              selectionMode: c.selectionMode,
+                              isLoading:
+                                  isInitialLoad ||
+                                  c.albumLoading ||
+                                  c.isSearching,
+                              // Unreachable has its own view in the empty state.
+                              error: searchError != null
+                                  ? Errors.message(
+                                      searchError,
+                                      'search your photos',
+                                    )
+                                  : albumError == null || c.quarkUnreachable
+                                  ? null
+                                  : Errors.message(
+                                      albumError,
+                                      'load the album',
+                                    ),
+                              hasMore: c.hasMore,
+                              isLoadingMore: c.isLoadingMore,
+                              emptyState: c.searchQuery.isNotEmpty
+                                  ? EmptyStateWidget(
+                                      icon: QuarkIcons.search,
+                                      headline:
+                                          'No photos match "${c.searchQuery}"',
+                                      subtext: 'Search looks at file names.',
+                                    )
+                                  : PhotosEmptyState(
+                                      unreachable: c.quarkUnreachable,
+                                      showingFavorites: showingFavorites,
+                                      albumName: album?.name,
+                                      hostAddress: c.activeHost,
+                                      onRetry: manualRefresh,
+                                      onManageHosts: () => context.go(
+                                        AppRoutes.settingsTab(
+                                          SettingsTab.general,
+                                        ),
+                                      ),
+                                      onUploadPhotos: c.isUploading
+                                          ? null
+                                          : _uploadPhotos,
+                                      // Same action as the app bar's Add Photos, and
+                                      // absent for the same albums (#992).
+                                      onAddPhotosToAlbum:
+                                          album != null && !album.isSystemAlbum
+                                          ? () => _addPhotosTo(
+                                              album.toAlbumItem(),
+                                            )
+                                          : null,
+                                    ),
+                              thumbnailBuilder: (context, photo) =>
+                                  PhotoThumbnail(
+                                    url: c.thumbnailUrl(photo.id),
+                                    asset: c.assetFor(photo.id),
+                                    path: c.thumbnailSource(photo.id)?.path,
+                                    serial: c.thumbnailSource(photo.id)?.serial,
+                                  ),
+                              onTap: (i) => _onPhotoTap(photos, i),
+                              // In an album the menu takes the long press; in
+                              // the library it stays selection (#2276).
+                              onLongPress: (i) =>
+                                  c.selectFromLongPress(photos[i].id),
+                              longPressOpensMenu:
+                                  album != null && !c.selectionMode,
+                              onMenu: _demo
+                                  ? null
+                                  : album == null
+                                  ? (i, position) => _showLibraryPhotoActions(
+                                      photos[i],
+                                      position,
+                                    )
+                                  : (i, position) => _showAlbumItemActions(
+                                      album,
+                                      photos[i].id,
+                                      position,
+                                    ),
+                              onDoubleTap: (i) => _toggleFavorite(photos[i].id),
+                            ),
+                          ],
                         ),
                       ),
                     ),
