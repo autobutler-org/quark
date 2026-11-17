@@ -44,6 +44,9 @@
   "ignoreRandomStrings": true,
   "gitignoreRoot": ".gitignore",
   "words": [
+    "openstreetmap",
+    "latlong",
+    "antimeridian",
     "aaabcd",
     "AARRGGBB",
     "abema",

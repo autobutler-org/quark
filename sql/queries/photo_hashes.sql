@@ -1,22 +1,24 @@
--- UpsertPhotoHash stores a photo's hashes, and its capture date when
--- taken_checked says the EXIF was read. A write that did not read it keeps
--- the date already stored.
+-- UpsertPhotoHash stores a photo's hashes, and its capture date and GPS
+-- position when taken_checked says the EXIF was read. A write that did not
+-- read it keeps the date and position already stored.
 -- name: UpsertPhotoHash :exec
-INSERT INTO photo_hashes (device_serial, rel_path, dhash, content_hash, taken_at, taken_checked)
-VALUES (sqlc.arg(device_serial), sqlc.arg(rel_path), sqlc.arg(dhash), sqlc.arg(content_hash), sqlc.arg(taken_at), sqlc.arg(taken_checked))
+INSERT INTO photo_hashes (device_serial, rel_path, dhash, content_hash, taken_at, latitude, longitude, taken_checked)
+VALUES (sqlc.arg(device_serial), sqlc.arg(rel_path), sqlc.arg(dhash), sqlc.arg(content_hash), sqlc.arg(taken_at), sqlc.arg(latitude), sqlc.arg(longitude), sqlc.arg(taken_checked))
 ON CONFLICT (device_serial, rel_path)
 DO UPDATE SET
     dhash         = excluded.dhash,
     content_hash  = excluded.content_hash,
     taken_at      = CASE WHEN excluded.taken_checked THEN excluded.taken_at ELSE photo_hashes.taken_at END,
+    latitude      = CASE WHEN excluded.taken_checked THEN excluded.latitude ELSE photo_hashes.latitude END,
+    longitude     = CASE WHEN excluded.taken_checked THEN excluded.longitude ELSE photo_hashes.longitude END,
     taken_checked = photo_hashes.taken_checked OR excluded.taken_checked,
     computed_at   = strftime('%Y-%m-%d %H:%M:%f', 'now');
 
--- SetPhotoTakenAt records the capture date of a photo whose hashes are
--- already stored (#2592).
+-- SetPhotoTakenAt records the capture date (#2592) and GPS position (#3557)
+-- of a photo whose hashes are already stored.
 -- name: SetPhotoTakenAt :exec
 UPDATE photo_hashes
-SET taken_at = sqlc.arg(taken_at), taken_checked = TRUE
+SET taken_at = sqlc.arg(taken_at), latitude = sqlc.arg(latitude), longitude = sqlc.arg(longitude), taken_checked = TRUE
 WHERE device_serial = sqlc.arg(device_serial) AND rel_path = sqlc.arg(rel_path);
 
 -- ListPhotoHashStates reports what is stored for every photo, for the
@@ -30,6 +32,13 @@ FROM photo_hashes;
 SELECT device_serial, rel_path, taken_at
 FROM photo_hashes
 WHERE taken_at IS NOT NULL;
+
+-- ListPhotoLocations returns every GPS position known, for the Locations
+-- view (#3557). Callers drop the photos the account cannot read.
+-- name: ListPhotoLocations :many
+SELECT device_serial, rel_path, latitude, longitude, taken_at
+FROM photo_hashes
+WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
 
 -- name: ListExactDuplicates :many
 SELECT content_hash, device_serial, rel_path

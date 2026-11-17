@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/models/calendar_view.dart';
 import 'package:quark/models/trash_item.dart';
@@ -17,6 +18,7 @@ import 'package:quark/pages/login_page.dart';
 import 'package:quark/pages/markdown_viewer_page.dart';
 import 'package:quark/pages/model_viewer_page.dart';
 import 'package:quark/pages/photo_duplicates_page.dart';
+import 'package:quark/pages/photo_locations_page.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/pages/plaintext_editor_page.dart';
 import 'package:quark/pages/recover_page.dart';
@@ -63,6 +65,11 @@ class AppRoutes {
 
   /// Photos that duplicate each other, a drill-down from Photos (#1666).
   static const photoDuplicates = '/photos/duplicates';
+
+  /// Where the photos were taken, on a map (#3557), a drill-down from Photos.
+  /// A position to center on travels as the route's `extra`, never in the
+  /// URL.
+  static const photoLocations = '/photos/locations';
 
   /// The query parameter naming the album the Photos page shows.
   static const photosAlbumParam = 'album';
@@ -706,6 +713,11 @@ final router = GoRouter(
         GoRoute(
           path: 'duplicates',
           builder: (context, state) => const PhotoDuplicatesPage(),
+        ),
+        GoRoute(
+          path: 'locations',
+          builder: (context, state) =>
+              PhotoLocationsPage(focus: state.extra as LatLng?),
         ),
       ],
     ),

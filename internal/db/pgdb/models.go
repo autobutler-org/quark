@@ -335,6 +335,8 @@ type PhotoHash struct {
 	ComputedAt   time.Time
 	TakenAt      sql.NullTime
 	TakenChecked bool
+	Latitude     sql.NullFloat64
+	Longitude    sql.NullFloat64
 }
 
 type PhotoRotation struct {

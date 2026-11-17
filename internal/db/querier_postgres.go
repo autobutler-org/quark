@@ -1211,6 +1211,18 @@ func (a *postgresQueries) ListPhotoHashStates(ctx context.Context) ([]ListPhotoH
 	return items, nil
 }
 
+func (a *postgresQueries) ListPhotoLocations(ctx context.Context) ([]ListPhotoLocationsRow, error) {
+	rows, err := a.q.ListPhotoLocations(ctx)
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListPhotoLocationsRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListPhotoLocationsRow(row)
+	}
+	return items, nil
+}
+
 func (a *postgresQueries) ListPhotoTakenAt(ctx context.Context) ([]ListPhotoTakenAtRow, error) {
 	rows, err := a.q.ListPhotoTakenAt(ctx)
 	if err != nil || rows == nil {

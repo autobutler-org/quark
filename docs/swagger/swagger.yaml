@@ -1399,6 +1399,51 @@ definitions:
           it.
         type: integer
     type: object
+  photoutil.LocationPoint:
+    properties:
+      fileName:
+        type: string
+      lat:
+        type: number
+      lon:
+        type: number
+      mtime:
+        description: |-
+          MTime is when the file was last written, in Unix seconds, the date a
+          photo with no capture date goes by.
+        type: integer
+      relPath:
+        type: string
+      serial:
+        type: string
+      takenAt:
+        description: TakenAt is the EXIF capture date in Unix seconds, 0 when unknown.
+        type: integer
+    type: object
+  photoutil.LocationsResult:
+    properties:
+      located:
+        description: |-
+          Located is len(Points); Unlocated is Total - Located, the photos read
+          that have no position plus those still waiting to be read.
+        type: integer
+      pending:
+        description: |-
+          Pending counts the photos among Unlocated whose EXIF the index has not
+          read yet (#3556), so the view can say why they are missing.
+        type: integer
+      points:
+        description: Points are the placed photos, newest first, ties by serial then
+          path.
+        items:
+          $ref: '#/definitions/photoutil.LocationPoint'
+        type: array
+      total:
+        description: Total is the photos and videos the caller can read.
+        type: integer
+      unlocated:
+        type: integer
+    type: object
   playbackutil.State:
     properties:
       durationMs:
@@ -10028,6 +10073,79 @@ paths:
       security:
       - BearerAuth: []
       summary: Resume the photo library index pass
+      tags:
+      - photos
+  /photos/locations:
+    get:
+      description: Returns every photo the caller can read that has a GPS position
+        in its EXIF data, for the Locations view's map, newest first. Positions come
+        only from each photo's own EXIF, read by the library index; a photo with no
+        position, or a 0,0 one, is never placed. total counts the caller's photos
+        and videos, located those placed, unlocated the rest, and pending those among
+        the rest whose EXIF the index has not read yet. A photo the caller cannot
+        read is neither placed nor counted.
+      parameters:
+      - description: Restrict to one device
+        in: query
+        name: serial
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/photoutil.LocationsResult'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: List where photos were taken
+      tags:
+      - photos
+  /photos/map-tiles/{z}/{x}/{y}:
+    get:
+      description: Serves one 256-pixel PNG tile of the Quark's own offline map tile
+        pack, a z/x/y.png tree in the data directory, which the Locations view draws
+        its map from by default so no third party learns which area is being looked
+        at. A tile the pack does not hold, or a z/x/y that names no tile, is 404.
+        The request names only the tile, never a photo or a photo's position.
+      parameters:
+      - description: Zoom level, 0 to 19
+        in: path
+        name: z
+        required: true
+        type: integer
+      - description: Tile column
+        in: path
+        name: x
+        required: true
+        type: integer
+      - description: Tile row, without the .png extension
+        in: path
+        name: "y"
+        required: true
+        type: integer
+      produces:
+      - image/png
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Get a map tile
       tags:
       - photos
   /photos/metadata:

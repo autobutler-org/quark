@@ -229,7 +229,8 @@ func backfillPhoto(params BackfillHashesParams, photo DuplicatePhoto, dhash stri
 	return decodeErr, nil
 }
 
-// backfillTakenAt reads the capture date of one already-hashed photo under
+// backfillTakenAt reads the capture date and GPS position of one
+// already-hashed photo under
 // the IO semaphore. Only the EXIF header is read, not the whole file.
 func backfillTakenAt(params BackfillHashesParams, photo DuplicatePhoto) error {
 	release, err := acquireBackfillSlot(params)
@@ -246,13 +247,11 @@ func backfillTakenAt(params BackfillHashesParams, photo DuplicatePhoto) error {
 		return err
 	}
 	defer f.Close()
-	takenAt, err := readTakenAt(f, photo.RelPath)
+	facts, err := readExifFacts(f, photo.RelPath)
 	if err != nil {
 		return err
 	}
-	return params.Queries.SetPhotoTakenAt(params.Ctx, db.SetPhotoTakenAtParams{
-		TakenAt: takenAt, DeviceSerial: photo.DeviceSerial, RelPath: photo.RelPath,
-	})
+	return params.Queries.SetPhotoTakenAt(params.Ctx, facts.setParams(photo))
 }
 
 // acquireBackfillSlot waits for the IO semaphore, when there is one, and

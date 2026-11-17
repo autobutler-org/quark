@@ -713,3 +713,42 @@ results (JN-PH-023).
 - On a phone the library stays in the bar's picker (JN-PH-001 is unchanged there).
 - The photo viewer's details sidebar, at 600 pixels and wider, resizes from its inner edge the same way, and dragging
   it below 100 pixels hides it as the info button does. Its width is remembered per device too.
+
+---
+
+### JN-PH-030: Browse photos on a map
+
+**Preconditions:** Some photos were taken by a camera that saved its GPS position in the photo's EXIF data, and
+**Show photos on a map** is on in Settings › General › Photo map (it is by default).
+
+**Steps:**
+
+1. In Photos, tap **Locations** in the bar's second row (on a phone, in its **Tools** menu).
+2. Zoom and pan the map: pinch, scroll wheel or touchpad, the **+** and **−** buttons, or, with the map focused,
+   the `+` and `-` keys and the arrow keys.
+3. Tap a marker. On a phone its photos rise in a sheet you can drag up to a full grid; on a wide screen they open in
+   a pane beside the map. Double-tap a marker to zoom into it.
+4. Tap a photo to open it in the viewer, or long-press to select some and tap **Add to album**.
+5. Tap **List** in the bar for the same places as rows, which a keyboard or screen reader can walk.
+6. In the viewer's info panel, tap the small map above a photo's coordinates to open Locations centered there.
+
+**Expected result:**
+
+- Each marker shows the newest photo of the ones it stands for, and a count when there is more than one. Markers
+  merge as the map zooms out and split as it zooms in, down to single photos.
+- A marker's photos are exactly those it counts, newest first. Nothing is copied or created by looking; Add to album
+  adds each photo where it already is, as the library's own Add to album does.
+- Under the map, a line reads "N of M photos have a location · K have none", and says how many the Quark is still
+  reading while the library index runs.
+- "© OpenStreetMap contributors" is on every map, linking to OpenStreetMap's copyright page.
+- A photo another account keeps private never shows up in a marker, a count or a thumbnail.
+
+**Notes:**
+
+- Positions come only from each photo's own EXIF GPS. There is no recognition and no place names: a photo with no
+  position, or a 0,0 one, is not placed.
+- Map tiles come from the Quark's own offline tile pack, a `z/x/y.png` tree under `maps/tiles` in its data
+  directory, by default. Settings can switch them to OpenStreetMap's public servers or a household tile server
+  instead. Whichever serves them learns only which area is on screen: no photo's position is ever part of a
+  request.
+- Turning the photo map off hides Locations and the viewer's preview, and no tile is fetched.

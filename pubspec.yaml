@@ -103,6 +103,11 @@ dependencies:
   # their own video_player backends.
   video_player_media_kit: ^2.0.0
   media_kit_libs_linux: ^1.2.1
+  # The Locations view's map (#3557): the same Dart code on every target,
+  # with a tile layer whose every request the app controls, so no photo's
+  # position ever leaves in one. cspell:words latlong
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
 
 # desktop_drop pinned to upstream's merge commit of MixinNetwork/flutter-plugins#503
 # (the #1831 fix): upstream's web handler called webkitGetAsEntry()! on every
