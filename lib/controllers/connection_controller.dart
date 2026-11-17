@@ -185,6 +185,9 @@ class ConnectionController extends ChangeNotifier {
   Duration _backoff = ConnectionConfig.offlineBackoffInitial;
   bool _started = false;
 
+  /// When [reportRemoteAccessUnavailable] last started a check.
+  DateTime? _lastUnavailableCheck;
+
   /// What the app was doing when automatic pairing failed, for [Errors].
   static const _pairAction = 'set up remote access on this phone';
 
@@ -261,6 +264,7 @@ class ConnectionController extends ChangeNotifier {
     _watchEmbeddedTunnel(() {
       unawaited(check());
     });
+    onTunnelUnavailable = reportRemoteAccessUnavailable;
     _activeHostChanges.addListener(_onHostChanged);
     unawaited(_restore().then((_) => check()));
   }
@@ -355,6 +359,26 @@ class ConnectionController extends ChangeNotifier {
     _backoff = doubled > ConnectionConfig.offlineBackoffMax
         ? ConnectionConfig.offlineBackoffMax
         : doubled;
+  }
+
+  /// A request through the remote-access proxy got no answer from the Quark:
+  /// the tunnel dial failed or timed out, or no response headers came in time
+  /// (#3884). The routine check may still think the route is fine, so check
+  /// now rather than at the next [ConnectionConfig.recheckInterval].
+  ///
+  /// Only while started and on the remote address, and at most once per
+  /// [ConnectionConfig.unavailableRecheckGap]: every request on a screen
+  /// fails at once, and each check restarts the one before it.
+  void reportRemoteAccessUnavailable() {
+    if (!_started || _mode != ConnectionMode.remote) return;
+    final now = _now();
+    final last = _lastUnavailableCheck;
+    if (last != null &&
+        now.difference(last) < ConnectionConfig.unavailableRecheckGap) {
+      return;
+    }
+    _lastUnavailableCheck = now;
+    unawaited(check());
   }
 
   /// Resets the offline backoff and schedules the next routine check.
@@ -675,6 +699,9 @@ class ConnectionController extends ChangeNotifier {
     _pauseTimer?.cancel();
     if (_started) {
       _activeHostChanges.removeListener(_onHostChanged);
+    }
+    if (onTunnelUnavailable == reportRemoteAccessUnavailable) {
+      onTunnelUnavailable = null;
     }
     super.dispose();
   }

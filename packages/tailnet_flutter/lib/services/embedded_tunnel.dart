@@ -20,6 +20,20 @@ import 'package:tailnet_flutter/services/embedded_tunnel_stub.dart'
     if (dart.library.ffi) 'package:tailnet_flutter/services/embedded_tunnel_io.dart'
     as impl;
 
+/// The header the proxy sets on an answer it wrote itself because the Quark
+/// never answered over the tunnel: the dial failed or timed out, or no
+/// response headers came in time (#3884). Its value is `timeout` or
+/// `unreachable`. The Quark never sets it, so a response carrying it means the
+/// remote-access path is down, not that the Quark refused. HTTP header names
+/// are case-insensitive; `package:http` hands them back lowercase.
+/// `cmd/tsnetbridge/proxy.go` names the same one.
+const tunnelUnavailableHeader = 'x-quark-tunnel-unavailable';
+
+/// Called when the proxy answers a request with [tunnelUnavailableHeader]:
+/// the Quark never answered over the tunnel (#3884). The app points it at its
+/// connection check; `tunnel_token_client.dart` calls it. Null does nothing.
+void Function()? onTunnelUnavailable;
+
 /// What the bridge reports about its node.
 ///
 /// Parsed from the JSON `quark_tsnet_status` returns:

@@ -438,6 +438,55 @@ void main() {
     });
   });
 
+  group('remote access unavailable (#3884)', () {
+    testWidgets('a proxy that says the Quark did not answer checks now, '
+        'at most once per gap', (tester) async {
+      var now = DateTime(2026, 11, 16);
+      clock = () => now;
+      answering = {_remote};
+      final c = build(autoDispose: false)..start();
+      await tester.pump();
+      await tester.pump();
+      expect(c.mode, ConnectionMode.remote);
+      expect(onTunnelUnavailable, isNotNull);
+
+      var before = probed.length;
+      onTunnelUnavailable!();
+      await tester.pump();
+      expect(probed.length, before + 2, reason: 'home, then remote');
+
+      // A screen of thumbnails fails at once; one check covers them all.
+      before = probed.length;
+      onTunnelUnavailable!();
+      onTunnelUnavailable!();
+      await tester.pump();
+      expect(probed.length, before);
+
+      now = now.add(ConnectionConfig.unavailableRecheckGap);
+      answering = {};
+      onTunnelUnavailable!();
+      await tester.pump();
+      expect(c.mode, ConnectionMode.offline);
+
+      c.dispose();
+      expect(onTunnelUnavailable, isNull);
+    });
+
+    testWidgets('is ignored on the home address', (tester) async {
+      answering = {_lan};
+      final c = build(autoDispose: false)..start();
+      await tester.pump();
+      await tester.pump();
+      expect(c.mode, ConnectionMode.local);
+
+      final before = probed.length;
+      c.reportRemoteAccessUnavailable();
+      await tester.pump();
+      expect(probed.length, before);
+      c.dispose();
+    });
+  });
+
   group('automatic pairing', () {
     test('pairs a signed-in phone at home when nothing is stored', () async {
       connectedAtHome();

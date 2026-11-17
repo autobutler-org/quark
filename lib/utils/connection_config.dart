@@ -24,4 +24,10 @@ abstract final class ConnectionConfig {
   /// The longest wait between tries while offline. The backoff doubles from
   /// [offlineBackoffInitial] up to this.
   static const Duration offlineBackoffMax = Duration(minutes: 1);
+
+  /// The least time between two checks started because the remote-access
+  /// proxy said the Quark did not answer over the tunnel (#3884). A screen of
+  /// thumbnails fails together, and each check restarts the last one, so
+  /// without a gap a dead path would be probed over and over and never settle.
+  static const Duration unavailableRecheckGap = Duration(seconds: 10);
 }

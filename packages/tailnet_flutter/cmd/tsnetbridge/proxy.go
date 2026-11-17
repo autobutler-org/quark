@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -17,6 +18,27 @@ import (
 // TokenHeader carries the per-start token. The proxy answers 403 to a
 // request without it and never forwards it to the Quark.
 const TokenHeader = "X-Quark-Tunnel-Token"
+
+// UnavailableHeader marks an answer the proxy wrote itself because it got no
+// answer from the Quark over the tunnel: the dial failed or timed out, or the
+// Quark sent no response headers in time (#3884). Its value is "timeout" or
+// "unreachable". The app reads it as "remote access path unavailable", not as
+// an error from the Quark, which never sets it.
+const UnavailableHeader = "X-Quark-Tunnel-Unavailable"
+
+// Bounds on the tunnel's network leg. The app's own connect timeout covers
+// only its connect to 127.0.0.1, which never waits, so without these a
+// request over a relayed or recovering path hangs for as long as the tunnel
+// does (#3884). Neither caps a response body or an upgraded connection: the
+// header wait ends at the first response line, and a 101 is that line.
+// Variables so a test can shorten them.
+var (
+	// tunnelDialTimeout bounds opening a connection to the Quark.
+	tunnelDialTimeout = 10 * time.Second
+	// responseHeaderTimeout bounds the wait, after the request is written,
+	// for the Quark's response headers.
+	responseHeaderTimeout = 15 * time.Second
+)
 
 // serveProxy listens on 127.0.0.1 and forwards each request to upstream over
 // dial. Response bodies are streamed with io.Copy. Nothing is buffered.
@@ -44,10 +66,15 @@ func serveProxy(upstream string, dial DialFunc) (int, string, *http.Server, erro
 		return 0, "", nil, err
 	}
 	transport := &http.Transport{
-		DialContext:         dial,
-		DisableCompression:  true,
-		MaxIdleConnsPerHost: 8,
-		IdleConnTimeout:     90 * time.Second,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			ctx, cancel := context.WithTimeout(ctx, tunnelDialTimeout)
+			defer cancel()
+			return dial(ctx, network, addr)
+		},
+		ResponseHeaderTimeout: responseHeaderTimeout,
+		DisableCompression:    true,
+		MaxIdleConnsPerHost:   8,
+		IdleConnTimeout:       90 * time.Second,
 	}
 	srv := &http.Server{
 		Handler: &forwarder{
@@ -103,7 +130,7 @@ func (p *forwarder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req.ContentLength = r.ContentLength
 	resp, err := p.transport.RoundTrip(req)
 	if err != nil {
-		w.WriteHeader(http.StatusBadGateway)
+		unavailable(w, err)
 		return
 	}
 	if resp.StatusCode == http.StatusSwitchingProtocols {
@@ -114,6 +141,19 @@ func (p *forwarder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	copyHeader(w.Header(), resp.Header, false)
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(flushOnWrite{ResponseWriter: w}, resp.Body)
+}
+
+// unavailable answers a request the tunnel could not carry: 504 with reason
+// "timeout" when the dial or the header wait ran out, 502 with "unreachable"
+// for any other failure to reach the Quark.
+func unavailable(w http.ResponseWriter, err error) {
+	status, reason := http.StatusBadGateway, "unreachable"
+	var ne net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()) {
+		status, reason = http.StatusGatewayTimeout, "timeout"
+	}
+	w.Header().Set(UnavailableHeader, reason)
+	w.WriteHeader(status)
 }
 
 // flushOnWrite flushes after each chunk so an event stream and a media

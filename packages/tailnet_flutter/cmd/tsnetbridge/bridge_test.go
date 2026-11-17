@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"tailscale.com/envknob"
 )
@@ -319,5 +321,150 @@ func TestUpNode_DisablesLogUploadBeforeNode(t *testing.T) {
 	}
 	if !envknob.NoLogsNoSupport() {
 		t.Fatal("NoLogsNoSupport() = false after upNode; want log upload off before the node is built")
+	}
+}
+
+// shortTunnelTimeouts shortens the proxy's tunnel bounds for one test.
+func shortTunnelTimeouts(t *testing.T, dial, header time.Duration) {
+	t.Helper()
+	prevDial, prevHeader := tunnelDialTimeout, responseHeaderTimeout
+	tunnelDialTimeout, responseHeaderTimeout = dial, header
+	t.Cleanup(func() { tunnelDialTimeout, responseHeaderTimeout = prevDial, prevHeader })
+}
+
+// proxyGet sends one tokened GET through the proxy on port and times it.
+func proxyGet(t *testing.T, port int, token string) (*http.Response, time.Duration) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:"+strconv.Itoa(port)+"/api/v0/files", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(TokenHeader, token)
+	start := time.Now()
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	return resp, time.Since(start)
+}
+
+// TestProxy_BoundsTunnelDial verifies a dial that never completes ends at the
+// dial bound with a 504 the app can tell from the Quark's own answers (#3884).
+func TestProxy_BoundsTunnelDial(t *testing.T) {
+	shortTunnelTimeouts(t, 100*time.Millisecond, 5*time.Second)
+	hang := func(ctx context.Context, _, _ string) (net.Conn, error) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(10 * time.Second):
+			return nil, io.EOF
+		}
+	}
+	port, token, err := Start(Config{Upstream: "http://100.64.0.4", Dial: hang})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = Stop() })
+
+	resp, took := proxyGet(t, port, token)
+	if took > 3*time.Second {
+		t.Fatalf("a hung dial took %v", took)
+	}
+	if resp.StatusCode != http.StatusGatewayTimeout || resp.Header.Get(UnavailableHeader) != "timeout" {
+		t.Fatalf("status %d, %s = %q", resp.StatusCode, UnavailableHeader, resp.Header.Get(UnavailableHeader))
+	}
+}
+
+// TestProxy_RefusedDialIsUnreachable verifies a dial that fails at once is a
+// 502 marked unreachable, not a bare 502 that reads as the Quark's (#3884).
+func TestProxy_RefusedDialIsUnreachable(t *testing.T) {
+	refuse := func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("no route")
+	}
+	port, token, err := Start(Config{Upstream: "http://100.64.0.5", Dial: refuse})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = Stop() })
+
+	resp, _ := proxyGet(t, port, token)
+	if resp.StatusCode != http.StatusBadGateway || resp.Header.Get(UnavailableHeader) != "unreachable" {
+		t.Fatalf("status %d, %s = %q", resp.StatusCode, UnavailableHeader, resp.Header.Get(UnavailableHeader))
+	}
+}
+
+// TestProxy_BoundsResponseHeaderWaitNotBody verifies a Quark that accepts the
+// connection and never answers is cut off at the header bound, while one that
+// answers at once and then streams a body for longer than that bound is not
+// (#3884). A Quark error keeps no unavailable header.
+func TestProxy_BoundsResponseHeaderWaitNotBody(t *testing.T) {
+	const bound = 200 * time.Millisecond
+	shortTunnelTimeouts(t, 5*time.Second, bound)
+	release := make(chan struct{})
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v0/files":
+			<-release
+		case "/api/v0/stream":
+			w.WriteHeader(http.StatusOK)
+			for i := 0; i < 5; i++ {
+				_, _ = w.Write([]byte("chunk"))
+				w.(http.Flusher).Flush()
+				time.Sleep(bound)
+			}
+		default:
+			w.WriteHeader(http.StatusBadGateway)
+		}
+	}))
+	t.Cleanup(backend.Close)
+	t.Cleanup(func() { close(release) })
+
+	port, token, err := Start(Config{
+		Upstream: "http://100.64.0.6",
+		Dial: func(context.Context, string, string) (net.Conn, error) {
+			return net.Dial("tcp", backend.Listener.Addr().String())
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = Stop() })
+
+	resp, took := proxyGet(t, port, token)
+	if took > 3*time.Second {
+		t.Fatalf("a silent Quark held the request %v", took)
+	}
+	if resp.StatusCode != http.StatusGatewayTimeout || resp.Header.Get(UnavailableHeader) != "timeout" {
+		t.Fatalf("silent: status %d, %s = %q", resp.StatusCode, UnavailableHeader, resp.Header.Get(UnavailableHeader))
+	}
+
+	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:"+strconv.Itoa(port)+"/api/v0/stream", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(TokenHeader, token)
+	stream, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := io.ReadAll(stream.Body)
+	stream.Body.Close()
+	if err != nil || string(got) != strings.Repeat("chunk", 5) {
+		t.Fatalf("slow body = %q, err %v", got, err)
+	}
+
+	req, err = http.NewRequest(http.MethodGet, "http://127.0.0.1:"+strconv.Itoa(port)+"/api/v0/broken", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(TokenHeader, token)
+	quark, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quark.Body.Close()
+	if quark.StatusCode != http.StatusBadGateway || quark.Header.Get(UnavailableHeader) != "" {
+		t.Fatalf("the Quark's own 502 came back as %d with %q", quark.StatusCode, quark.Header.Get(UnavailableHeader))
 	}
 }
