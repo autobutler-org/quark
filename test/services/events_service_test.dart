@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark/utils/events_config.dart';
 
 import '../support/fake_events_channel.dart';
 import '../support/secure_storage.dart';
@@ -118,6 +120,96 @@ void main() {
     expect(kinds, ['resync']);
 
     events.stop();
+  });
+
+  // #3448: Photos reloaded once per event, so a burst of uploads or resyncs
+  // from the socket reloaded it again and again while the grid sat idle.
+  group('listingChanges', () {
+    const upload = FileEvent(kind: 'upload', path: 'a.jpg');
+    const resync = FileEvent(kind: 'resync', path: '');
+
+    testWidgets('a burst of events from the socket is one change', (
+      tester,
+    ) async {
+      await settings.addHost(
+        HostEntry(name: 'Quark', hostAddress: 'https://quark.local'),
+      );
+      await settings.setSessionToken('a-token');
+      final events = EventsService.instance;
+      var changes = 0;
+      final sub = events.listingChanges.listen((_) => changes++);
+      addTearDown(sub.cancel);
+      events.start();
+      await tester.pump();
+
+      for (var i = 0; i < 40; i++) {
+        channels.single.send(
+          i.isEven
+              ? '{"kind":"upload","path":"p$i.jpg"}'
+              : '{"kind":"resync","path":""}',
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(changes, 0, reason: 'waits for the burst to end');
+      await tester.pump(EventsConfig.refreshQuiet);
+      expect(changes, 1);
+      await tester.pump(EventsConfig.refreshMaxWait);
+      expect(changes, 1, reason: 'the max-wait timer went with the flush');
+
+      events.stop();
+    });
+
+    testWidgets('ignores events that change no listing', (tester) async {
+      final source = StreamController<FileEvent>();
+      var changes = 0;
+      final sub = EventsService.coalesceListingChanges(
+        source.stream,
+      ).listen((_) => changes++);
+      addTearDown(sub.cancel);
+
+      source.add(const FileEvent(kind: 'job_progress', path: ''));
+      source.add(const FileEvent(kind: 'chat_message_created', path: ''));
+      await tester.pump(EventsConfig.refreshMaxWait);
+      expect(changes, 0);
+    });
+
+    testWidgets('a steady stream changes once per max wait, not never', (
+      tester,
+    ) async {
+      final source = StreamController<FileEvent>();
+      var changes = 0;
+      final sub = EventsService.coalesceListingChanges(
+        source.stream,
+        quiet: const Duration(seconds: 2),
+        maxWait: const Duration(seconds: 10),
+      ).listen((_) => changes++);
+      addTearDown(sub.cancel);
+
+      // One event a second for 25 s never leaves the quiet period alone.
+      for (var i = 0; i < 25; i++) {
+        source.add(i.isEven ? upload : resync);
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(changes, 2);
+      await tester.pump(const Duration(seconds: 2));
+      expect(changes, 3);
+    });
+
+    testWidgets('canceling drops a pending change', (tester) async {
+      final source = StreamController<FileEvent>.broadcast();
+      var changes = 0;
+      final sub = EventsService.coalesceListingChanges(
+        source.stream,
+      ).listen((_) => changes++);
+
+      source.add(upload);
+      await tester.pump();
+      unawaited(sub.cancel());
+      await tester.pump();
+      expect(source.hasListener, isFalse);
+      await tester.pump(EventsConfig.refreshMaxWait);
+      expect(changes, 0);
+    });
   });
 
   // #2763: reconnects had no jitter, so after a restart every app came back,

@@ -74,6 +74,55 @@ class EventsService {
   /// gone, and a rollout drops every client's socket at once.
   Stream<FileEvent> get events => _controller.stream;
 
+  /// One signal per burst of [events] that can change a listing (see
+  /// [FileEvent.changesListing]), for a page that reloads its whole listing
+  /// rather than filtering by path, such as Photos.
+  ///
+  /// A conversion job, a restore or a dropped socket sends `upload` and
+  /// `resync` events in bursts, and a reload per event reloaded the page
+  /// every few hundred ms while it sat idle (#3448). Each listener gets its
+  /// own stream; see [coalesceListingChanges] for the timing.
+  Stream<void> get listingChanges => coalesceListingChanges(events);
+
+  /// Signals once [quiet] has passed with no further listing-changing event
+  /// from [source], or [maxWait] after the first of them, whichever comes
+  /// first, so a burst of N events costs one reload and a steady stream one
+  /// per [maxWait]. Canceling the subscription drops a pending signal.
+  static Stream<void> coalesceListingChanges(
+    Stream<FileEvent> source, {
+    Duration quiet = EventsConfig.refreshQuiet,
+    Duration maxWait = EventsConfig.refreshMaxWait,
+  }) {
+    late final StreamController<void> out;
+    StreamSubscription<FileEvent>? sub;
+    Timer? quietTimer;
+    Timer? maxTimer;
+    void cancelTimers() {
+      quietTimer?.cancel();
+      maxTimer?.cancel();
+      quietTimer = maxTimer = null;
+    }
+
+    void flush() {
+      cancelTimers();
+      out.add(null);
+    }
+
+    out = StreamController<void>(
+      onListen: () => sub = source.listen((event) {
+        if (!event.changesListing) return;
+        quietTimer?.cancel();
+        quietTimer = Timer(quiet, flush);
+        maxTimer ??= Timer(maxWait, flush);
+      }),
+      onCancel: () {
+        cancelTimers();
+        return sub?.cancel();
+      },
+    );
+    return out.stream;
+  }
+
   final _connections = StreamController<void>.broadcast();
 
   /// Fires each time the socket opens, reconnects included.
