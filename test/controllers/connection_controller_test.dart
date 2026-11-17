@@ -751,6 +751,54 @@ void main() {
     );
 
     test(
+      'a pairing from before the Quark re-enrolled pairs again at home (#3612)',
+      () async {
+        connectedAtHome();
+        // Switching remote access off and on enrolls the Quark afresh: it
+        // gets a new address, and this phone's node is left on the old one,
+        // still reporting Running.
+        pairings[_lan] = const StoredPairing(
+          authKey: 'old',
+          controlUrl: 'https://control.example',
+          quarkAddress: 'http://100.64.0.3:80',
+        );
+        final c = build();
+        await c.check();
+        expect(pairCalls, 1);
+        expect(pairings[_lan]?.authKey, 'key');
+        expect(pairings[_lan]?.quarkAddress, _remote);
+        expect(enrolled.single.quarkAddress, _remote);
+        expect(warmed, ['', _remote]);
+        expect(c.phoneRemoteAccess, PhoneRemoteAccess.ready);
+        expect(c.setupLog.join('\n'), contains('re-enrolled'));
+      },
+    );
+
+    test('a Quark switched off and on while the phone is away pairs it on the '
+        'first check at home (#3612)', () async {
+      // Away, never paired: the phone says to finish at home and its switch
+      // reads off.
+      status = const RemoteAccessStatus(
+        enabled: true,
+        connected: true,
+        remoteUrl: _remote,
+      );
+      final c = build();
+      await c.check();
+      expect(c.mode, ConnectionMode.offline);
+      expect(c.phoneRemoteAccess, PhoneRemoteAccess.notSetUp);
+      expect(c.remoteAccessOnThisPhone, isFalse);
+      expect(c.offlineReason, Errors.finishRemoteAccessAtHome);
+      expect(pairCalls, 0);
+
+      answering = {_lan};
+      await c.check();
+      expect(pairCalls, 1);
+      expect(c.phoneRemoteAccess, PhoneRemoteAccess.ready);
+      expect(c.remoteAccessOnThisPhone, isTrue);
+    });
+
+    test(
       'a node that does not start keeps no pairing and the next check pairs',
       () async {
         connectedAtHome();
