@@ -97,7 +97,7 @@ class PhotosPageState extends State<PhotosPage>
   /// down and comes back on the way up (#4150).
   bool _fabVisible = true;
   double _lastScrollOffset = 0;
-  StreamSubscription<FileEvent>? _eventSub;
+  StreamSubscription<void>? _eventSub;
 
   @override
   void initState() {
@@ -105,14 +105,14 @@ class PhotosPageState extends State<PhotosPage>
     EventsService.instance.start();
     // A photo deleted, moved or uploaded anywhere, the duplicates view
     // underneath this page included, or a sharing change. This page's own
-    // upload reloads once it finishes. A reconnect arrives here as a resync,
-    // so it needs no listener of its own.
-    _eventSub = EventsService.instance.events.listen((evt) {
+    // upload reloads once it finishes. A reconnect arrives as a resync, so it
+    // needs no listener of its own. A burst of them, from a conversion job, a
+    // restore or a dropped socket, reloads once rather than once per event
+    // (#3448).
+    _eventSub = EventsService.instance.listingChanges.listen((_) {
       // An upload and an action on the selection each reload once when they
       // finish, rather than once per photo they changed (#4154).
-      if (evt.changesListing &&
-          !_controller.isUploading &&
-          !_controller.isActingOnSelection) {
+      if (!_controller.isUploading && !_controller.isActingOnSelection) {
         manualRefresh();
       }
     });

@@ -31,6 +31,9 @@ class ReconnectingEvents {
     await tester.pump(const Duration(seconds: 2));
   }
 
+  /// Delivers [frame] on the open socket, as the Quark would.
+  void send(String frame) => _channels.last.send(frame);
+
   /// Stops the service and puts the settings back as [start] found them.
   Future<void> stop() async {
     EventsService.instance.stop();
