@@ -55,6 +55,50 @@ func lastNetcheck(ctx context.Context, s *tsnet.Server) *netcheck.Report {
 	return conn.GetLastNetcheckReport(ctx)
 }
 
+// refreshNetcheck asks s's node for a new network check and waits up to
+// timeout for it to land.
+func refreshNetcheck(s *tsnet.Server, timeout time.Duration) {
+	sys := s.Sys()
+	if sys == nil {
+		return
+	}
+	conn, ok := sys.MagicSock.GetOK()
+	if !ok || conn == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	awaitFreshNetcheck(ctx, conn.GetLastNetcheckReport, func() { conn.ReSTUN("remote-access path report") }, netcheckPollInterval)
+}
+
+// netcheckPollInterval is how often awaitFreshNetcheck looks for the check it
+// asked for.
+const netcheckPollInterval = 200 * time.Millisecond
+
+// awaitFreshNetcheck notes the last check's time, calls trigger, and polls
+// last until a check newer than that lands or ctx ends. It returns the newest
+// check it saw, which is the old one (or nil) when the new one never landed.
+func awaitFreshNetcheck(ctx context.Context, last func(context.Context) *netcheck.Report, trigger func(), every time.Duration) *netcheck.Report {
+	before := last(ctx)
+	var since time.Time
+	if before != nil {
+		since = before.Now
+	}
+	trigger()
+	tick := time.NewTicker(every)
+	defer tick.Stop()
+	for {
+		if r := last(ctx); r != nil && r.Now.After(since) {
+			return r
+		}
+		select {
+		case <-ctx.Done():
+			return before
+		case <-tick.C:
+		}
+	}
+}
+
 // peerPathsFrom lists every peer in st, online first, then by OS.
 func peerPathsFrom(st *ipnstate.Status) []PeerPath {
 	paths := []PeerPath{}

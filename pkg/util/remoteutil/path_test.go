@@ -3,7 +3,9 @@
 package remoteutil
 
 import (
+	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -160,8 +162,69 @@ func TestPathTracker_LogsNetworkCheckOnChange(t *testing.T) {
 // TestPathReport_Stopped reports a stopped node as not connected with no
 // peers, so the endpoint answers before remote access is on.
 func TestPathReport_Stopped(t *testing.T) {
-	got, err := PathReport()
+	got, err := PathReport(PathReportParams{RefreshNetwork: true})
 	if err != nil || got.Connected || got.Peers == nil || len(got.Peers) != 0 || got.Network != nil {
-		t.Errorf("PathReport() = %+v, %v; want not connected, an empty peer list, no error", got, err)
+		t.Errorf("PathReport(refresh) = %+v, %v; want not connected, an empty peer list, no error", got, err)
+	}
+}
+
+// TestAwaitFreshNetcheck_NewReport returns the check that lands after the
+// trigger, not the one that was there before it.
+func TestAwaitFreshNetcheck_NewReport(t *testing.T) {
+	old := &netcheck.Report{Now: time.Unix(100, 0)}
+	fresh := &netcheck.Report{Now: time.Unix(200, 0), UDP: true}
+	var mu sync.Mutex
+	current, triggered := old, false
+	last := func(context.Context) *netcheck.Report {
+		mu.Lock()
+		defer mu.Unlock()
+		return current
+	}
+	trigger := func() {
+		mu.Lock()
+		defer mu.Unlock()
+		triggered = true
+		go func() {
+			time.Sleep(5 * time.Millisecond)
+			mu.Lock()
+			defer mu.Unlock()
+			current = fresh
+		}()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if got := awaitFreshNetcheck(ctx, last, trigger, time.Millisecond); got != fresh {
+		t.Errorf("awaitFreshNetcheck = %+v; want the fresh report", got)
+	}
+	if !triggered {
+		t.Error("trigger was not called")
+	}
+}
+
+// TestAwaitFreshNetcheck_FirstReport accepts any check when there was none.
+func TestAwaitFreshNetcheck_FirstReport(t *testing.T) {
+	var calls int
+	first := &netcheck.Report{Now: time.Unix(1, 0)}
+	last := func(context.Context) *netcheck.Report {
+		calls++
+		if calls == 1 {
+			return nil
+		}
+		return first
+	}
+	if got := awaitFreshNetcheck(context.Background(), last, func() {}, time.Millisecond); got != first {
+		t.Errorf("awaitFreshNetcheck = %+v; want the first report", got)
+	}
+}
+
+// TestAwaitFreshNetcheck_Timeout gives back the old check when no new one
+// lands before ctx ends.
+func TestAwaitFreshNetcheck_Timeout(t *testing.T) {
+	old := &netcheck.Report{Now: time.Unix(100, 0)}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	got := awaitFreshNetcheck(ctx, func(context.Context) *netcheck.Report { return old }, func() {}, time.Millisecond)
+	if got != old {
+		t.Errorf("awaitFreshNetcheck = %+v; want the old report", got)
 	}
 }

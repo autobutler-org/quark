@@ -38,6 +38,7 @@ account name, file path, or full IP address (the #3613 redaction rules). A direc
   on demand: `connected`, the last `network` check, and one entry per peer with `path` (`direct`, `relay`,
   `peer-relay`, `idle`), `network`, `relayRegion`, `lastHandshake`, `rxBytes` and `txBytes`. The network
   check refreshes on its own every half minute or so while the node is active. `at` gives its age.
+  Add `?refresh=true` to run a new check first; the answer waits up to 10 seconds for it.
 
 ### On the phone
 
@@ -70,7 +71,7 @@ For each network in the matrix:
 4. Download a ~10 MB file and read its `bodyMs` and `bytes` from the request log. Throughput is
    bytes ÷ bodyMs.
 5. Read `EmbeddedTunnel.peerStatus()['network']` for the phone's NAT. On the Quark, run
-   `GET /settings/remote-access/paths` and read the phone's entry and the Quark's network check. A
+   `GET /settings/remote-access/paths?refresh=true` and read the phone's entry and the Quark's network check. A
    phone that stays `relay` after traffic has flowed for a minute could not be reached directly.
 6. Wait two minutes with traffic flowing and repeat step 3, to see whether the path upgraded from relay
    to direct.
