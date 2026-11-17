@@ -167,9 +167,11 @@ abstract final class Errors {
       'Unable to play this audio file. The format may not be supported by '
       'this browser.';
 
+  /// The browser refused a file nothing else explains. It may be damaged as
+  /// well as unsupported, so this does not blame the codec (#3423).
   static const String unplayableMedia =
-      'Unable to play this media. The file may use an unsupported '
-      'codec/profile.';
+      "This video won't play here. It may be damaged, or in a format this "
+      "browser can't play.";
 
   static String unsupportedVideoFormat(String extension) =>
       "This video format ($extension) isn't supported for in-browser "
@@ -400,26 +402,64 @@ abstract final class Errors {
       "Your Quark couldn't queue the conversion, so no job was started. Try "
       'again in a moment.';
 
-  /// A conversion that could not be started. A 403 gets [cantSaveInFolder],
-  /// a 422 [unreadableVideo], and a 500 [transcodeNotQueued].
-  static String transcode(Object? error) => switch (error) {
-    ApiException(statusCode: 403) => cantSaveInFolder,
-    ApiException(statusCode: 422) => unreadableVideo,
-    ApiException(statusCode: 500) => transcodeNotQueued,
-    _ => message(error, 'convert the video'),
+  /// A file that is there but in a container the Quark doesn't read, or not
+  /// a video at all: an AVI, or a document renamed `.mp4` (#3423).
+  static const String videoUnsupportedFormat =
+      "Your Quark can't open this file as a video. It's in a format your "
+      "Quark doesn't support, or it isn't a video.";
+
+  /// A video whose file is damaged or cut short (#3423).
+  static const String videoDamaged =
+      "This video is damaged or incomplete, so your Quark can't open it.";
+
+  /// A trim of an MP4 or MOV saved in fragments, the way some cameras and
+  /// streaming apps write them (#3423).
+  static const String cantTrimFragmented =
+      "This video was saved in a streaming layout your Quark can't trim. "
+      'Download it to edit it on your computer.';
+
+  /// A trim of a video in a format the Quark never cuts, such as MPEG-TS.
+  static const String cantTrimFormat =
+      "Your Quark can't trim videos in this format. Download it to edit it "
+      'on your computer.';
+
+  /// The sentence for the cause a [VideoRefusal] names, or null when it
+  /// names none this app knows.
+  static String? _videoRefusal(Object? error) => switch (error) {
+    VideoRefusal(reason: 'unsupported_format') => videoUnsupportedFormat,
+    VideoRefusal(reason: 'damaged') => videoDamaged,
+    VideoRefusal(reason: 'fragmented') => cantTrimFragmented,
+    VideoRefusal(reason: 'cannot_trim') => cantTrimFormat,
+    _ => null,
   };
 
-  /// A trim the Quark refused with a 422: the video's container can't be cut
-  /// on the device, or the file can't be read as a video.
+  /// A conversion that could not be started. A 422 names its cause, or gets
+  /// [unreadableVideo] when it names none; a 403 gets [cantSaveInFolder] and
+  /// a 500 [transcodeNotQueued].
+  static String transcode(Object? error) =>
+      _videoRefusal(error) ??
+      switch (error) {
+        ApiException(statusCode: 403) => cantSaveInFolder,
+        ApiException(statusCode: 422) => unreadableVideo,
+        ApiException(statusCode: 500) => transcodeNotQueued,
+        _ => message(error, 'convert the video'),
+      };
+
+  /// A trim the Quark refused with a 422 that named no cause: the video's
+  /// container can't be cut on the device, or the file can't be read as a
+  /// video.
   static const String cantTrimVideo =
       "Your Quark can't trim this video. It may be damaged, or in a format "
       "it can't cut.";
 
-  /// A trim that failed. A 422 gets [cantTrimVideo].
-  static String trim(Object? error) => switch (error) {
-    ApiException(statusCode: 422) => cantTrimVideo,
-    _ => message(error, 'trim the video'),
-  };
+  /// A trim that failed. A 422 names its cause, or gets [cantTrimVideo] when
+  /// it names none.
+  static String trim(Object? error) =>
+      _videoRefusal(error) ??
+      switch (error) {
+        ApiException(statusCode: 422) => cantTrimVideo,
+        _ => message(error, 'trim the video'),
+      };
 
   /// A PowerPoint file the Quark could not read: damaged, not really a
   /// PowerPoint file, or past the import's size limits (#1171).
@@ -462,13 +502,15 @@ abstract final class Errors {
   };
 
   /// A retry the Quark refused. Only a failed job can be retried, so a 409
-  /// means this one didn't fail; a 422 means the file it used is gone; a 404
+  /// means this one didn't fail; a 422 means the file it used is gone or no
+  /// longer reads as what the job needs, such as a damaged video (#3423); a 404
   /// means the Quark no longer knows the job, or no longer shows it to this
   /// account; a 403 means the account that queued it can't save files in the
   /// folder any more. Retrying again would fail the same way.
   static String retryJob(Object? error) => switch (error) {
     ApiException(statusCode: 409) => "That job can't be retried.",
-    ApiException(statusCode: 422) => 'The file this job used no longer exists.',
+    ApiException(statusCode: 422) =>
+      'The file this job used is missing or can no longer be read.',
     ApiException(statusCode: 404) => 'That job no longer exists.',
     ApiException(statusCode: 403) => cantSaveInFolder,
     _ => message(error, 'retry the job'),
@@ -840,6 +882,38 @@ class ApiException implements Exception {
   @override
   String toString() =>
       'ApiException($statusCode)${context == null ? '' : ': $context'}';
+}
+
+/// A 422 the Quark sent about a video that is there but can't be read or cut,
+/// with the cause it named (#3423). [Errors.transcode] and [Errors.trim] word
+/// each [reason] the same way, whichever request was refused.
+class VideoRefusal extends ApiException {
+  /// The `reason` code: `unsupported_format`, `damaged`, `fragmented`,
+  /// `cannot_trim`, or null when the Quark named none.
+  final String? reason;
+
+  const VideoRefusal(this.reason, [String? context]) : super(422, context);
+
+  @override
+  String toString() =>
+      'VideoRefusal($reason)${context == null ? '' : ': $context'}';
+}
+
+/// Throws for a refused request about a video: a [VideoRefusal] carrying the
+/// `reason` in a 422's [body], an [ApiException] for any other status.
+Never throwVideoApiError(int statusCode, String body, String context) {
+  if (statusCode != 422) throw ApiException(statusCode, context);
+  Object? reason;
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map) reason = decoded['reason'];
+  } on FormatException {
+    reason = null;
+  }
+  throw VideoRefusal(
+    reason is String && reason.isNotEmpty ? reason : null,
+    context,
+  );
 }
 
 /// Throws the right exception for a response the Quark refused: its own

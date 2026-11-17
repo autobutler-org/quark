@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
@@ -19,7 +18,7 @@ import (
 
 // trimVideo godoc
 // @Summary Trim a video clip
-// @Description Copies the sub-clip [startMs, endMs] of the source video into a new file beside it without re-encoding (fast, lossless). The clip is shown from startMs: the frames back to the keyframe before it are kept but hidden, so they still decode. actualStartMs reports where the clip is shown from, which is startMs except where there is nothing to hide the lead-in behind or nothing to hide: a start before the video's first keyframe or past its last frame, or a TS output, begins at that keyframe instead. An endMs at or past the end of the video keeps the rest of it; a startMs at or past the end is a 400. The clip keeps the source's format where the device writes it and is an MP4 otherwise. The original file is not modified. An MPEG-TS source cannot be trimmed and is a 422, and so is a file that can't be read as a video. Needs read access on the video and write access on its folder; the caller owns the new clip.
+// @Description Copies the sub-clip [startMs, endMs] of the source video into a new file beside it without re-encoding (fast, lossless). The clip is shown from startMs: the frames back to the keyframe before it are kept but hidden, so they still decode. actualStartMs reports where the clip is shown from, which is startMs except where there is nothing to hide the lead-in behind or nothing to hide: a start before the video's first keyframe or past its last frame, or a TS output, begins at that keyframe instead. An endMs at or past the end of the video keeps the rest of it; a startMs at or past the end is a 400. The clip keeps the source's format where the device writes it and is an MP4 otherwise. The original file is not modified. An MPEG-TS or fragmented MP4 source cannot be trimmed and is a 422, and so is a file that can't be read as a video; a 422's reason names which. Needs read access on the video and write access on its folder; the caller owns the new clip.
 // @Tags videos
 // @Accept json
 // @Produce json
@@ -28,7 +27,7 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
-// @Failure 422 {object} serverutil.Response "Unprocessable Entity — the video's container can't be trimmed, or the file can't be read as a video"
+// @Failure 422 {object} videoRefusalJSON "Unprocessable Entity — the video's container can't be trimmed, or the file can't be read as a video"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Security BearerAuth
 // @Router /videos/trim [post]
@@ -82,7 +81,7 @@ func trimVideo(c *gin.Context) *serverutil.Response {
 	case errors.Is(err, videoutil.ErrStartPastEnd):
 		return serverutil.BadRequest(fmt.Errorf("startMs (%d) is at or past the end of the video: %w", req.StartMs, err))
 	case errors.Is(err, videoutil.ErrCannotTrim):
-		return serverutil.NewResponse().WithStatusCode(http.StatusUnprocessableEntity).WithError(err)
+		return refuseVideo(err)
 	case err != nil:
 		return openError(err, req.RelPath)
 	}

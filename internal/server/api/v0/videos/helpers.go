@@ -73,15 +73,17 @@ func openError(err error, relPath string) *serverutil.Response {
 	case errors.Is(err, vfs.ErrNotFound), errors.Is(err, vfs.ErrIsDirectory):
 		return serverutil.NotFound(fmt.Errorf("video not found: %s", relPath))
 	case errors.Is(err, videoutil.ErrNotAVideo):
-		return unreadableVideo(err)
+		return refuseVideo(fmt.Errorf("%w: %w", errUnreadableVideo, err))
 	}
 	return serverutil.InternalServerError(err)
 }
 
-// unreadableVideo is the 422 for err, a file that does not read as a video.
-func unreadableVideo(err error) *serverutil.Response {
+// refuseVideo is the 422 for err, a video that is there but can't be read or
+// cut. Its body carries the cause as videoutil.ReasonOf names it, so every
+// route says the same thing about the same file (#3423).
+func refuseVideo(err error) *serverutil.Response {
 	return serverutil.NewResponse().WithStatusCode(http.StatusUnprocessableEntity).
-		WithError(fmt.Errorf("%w: %w", errUnreadableVideo, err))
+		WithData(videoRefusalJSON{Error: err.Error(), Reason: videoutil.ReasonOf(err)})
 }
 
 // filesVFS is the files namespace of the device with serial, the internal

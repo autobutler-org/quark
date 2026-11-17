@@ -234,6 +234,86 @@ void main() {
     });
   });
 
+  group('a video refusal names its cause (#3423)', () {
+    test('the 422 body is read into a reason', () {
+      expect(
+        () => throwVideoApiError(
+          422,
+          '{"error":"probe x: sprocket: corrupt file","reason":"damaged"}',
+          'trim',
+        ),
+        throwsA(
+          isA<VideoRefusal>()
+              .having((e) => e.reason, 'reason', 'damaged')
+              .having((e) => e.statusCode, 'statusCode', 422),
+        ),
+      );
+      expect(
+        () => throwVideoApiError(404, '{"error":"video not found"}', 'trim'),
+        throwsA(
+          isA<ApiException>()
+              .having((e) => e.statusCode, 'statusCode', 404)
+              .having((e) => e is VideoRefusal, 'is VideoRefusal', isFalse),
+        ),
+      );
+    });
+
+    test('a file that is there is never called gone', () {
+      for (final reason in ['unsupported_format', 'damaged']) {
+        for (final message in [
+          Errors.transcode(VideoRefusal(reason)),
+          Errors.trim(VideoRefusal(reason)),
+        ]) {
+          expect(message, isNot(contains('no longer')));
+          expect(message, isNot(contains('moved or deleted')));
+        }
+      }
+    });
+
+    test('each reason has its own sentence, the same for every action', () {
+      final byReason = {
+        for (final reason in [
+          'unsupported_format',
+          'damaged',
+          'fragmented',
+          'cannot_trim',
+        ])
+          reason: Errors.trim(VideoRefusal(reason)),
+      };
+      expect(byReason.values.toSet(), hasLength(byReason.length));
+      expect(byReason['damaged'], contains('damaged'));
+      expect(byReason['unsupported_format'], contains('format'));
+      expect(
+        Errors.transcode(const VideoRefusal('damaged')),
+        byReason['damaged'],
+      );
+      expect(
+        Errors.transcode(const VideoRefusal('unsupported_format')),
+        byReason['unsupported_format'],
+      );
+    });
+
+    test('a trim the Quark cannot cut says why', () {
+      expect(
+        Errors.trim(const VideoRefusal('fragmented')),
+        isNot(Errors.trim(const VideoRefusal('cannot_trim'))),
+      );
+      expect(Errors.trim(const VideoRefusal('fragmented')), contains('trim'));
+    });
+
+    test('a 422 with no reason keeps the general sentence', () {
+      expect(Errors.trim(const VideoRefusal(null)), Errors.cantTrimVideo);
+      expect(
+        Errors.transcode(const VideoRefusal('something_new')),
+        Errors.unreadableVideo,
+      );
+    });
+
+    test('a file the browser will not play does not blame the codec', () {
+      expect(Errors.unplayableMedia.toLowerCase(), isNot(contains('codec')));
+    });
+  });
+
   group('Errors.importPowerPoint', () {
     test('a 400 says the file could not be read as a PowerPoint file', () {
       expect(
@@ -306,10 +386,10 @@ void main() {
       );
     });
 
-    test('a 422 says the file is gone', () {
+    test('a 422 does not claim a file that is there is gone (#3423)', () {
       expect(
         Errors.retryJob(const ApiException(422)),
-        'The file this job used no longer exists.',
+        'The file this job used is missing or can no longer be read.',
       );
     });
 

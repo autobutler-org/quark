@@ -330,10 +330,7 @@ void main() {
       await tapMenuItem(tester, const ValueKey('video_viewer_convert'));
       await tester.pump();
       expect(find.text('Convert video'), findsOneWidget);
-      expect(
-        find.text('There are no formats to convert this video to.'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('nothing to convert it to'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
     });

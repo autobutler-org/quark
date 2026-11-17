@@ -49,6 +49,9 @@ var (
 	// ErrCannotTrim is returned by Trim for a source it cannot cut on the
 	// device: an MPEG-TS file, or a fragmented MP4.
 	ErrCannotTrim = errors.New("this video's container can't be trimmed")
+	// ErrFragmented is returned by Trim, beside ErrCannotTrim, for an MP4 or
+	// MOV written in fragments, which sprocket does not cut.
+	ErrFragmented = errors.New("this video is fragmented")
 	// ErrNotAVideo is returned for a file that does not parse as a video.
 	ErrNotAVideo = errors.New("not a readable video")
 	// ErrStartPastEnd is returned by TrimFile for a start at or past the end of
@@ -63,6 +66,47 @@ var (
 // no decoder for, which is every one but AV1 and VP8, and for a frame over the
 // decoder's size cap. The file is fine; the device just cannot picture it.
 var ErrNoDecoder = errors.New("this video's codec can't be decoded on the device")
+
+// Reason is why a video the user has can't be read or cut, as a code a
+// client turns into its own sentence. ReasonOf is the one place an error
+// becomes a Reason, so every handler that refuses a video names the same
+// cause for it (#3423).
+type Reason string
+
+const (
+	// ReasonNone is an error that is not about the file: a failed read, a
+	// canceled request.
+	ReasonNone Reason = ""
+	// ReasonUnsupportedFormat is a file the device does not read as a video:
+	// a container it does not parse, or not a video at all.
+	ReasonUnsupportedFormat Reason = "unsupported_format"
+	// ReasonDamaged is a video whose headers are malformed or cut short.
+	ReasonDamaged Reason = "damaged"
+	// ReasonFragmented is an MP4 or MOV written in fragments, which can't be
+	// trimmed.
+	ReasonFragmented Reason = "fragmented"
+	// ReasonCannotTrim is a video in a container Trim does not cut, such as
+	// MPEG-TS, or whose codecs don't fit the clip's container.
+	ReasonCannotTrim Reason = "cannot_trim"
+)
+
+// ReasonOf names the cause of err, an error from this package, or
+// ReasonNone when err is not about the file itself.
+func ReasonOf(err error) Reason {
+	switch {
+	case err == nil:
+		return ReasonNone
+	case errors.Is(err, sprocket.ErrCorrupt):
+		return ReasonDamaged
+	case errors.Is(err, ErrFragmented):
+		return ReasonFragmented
+	case errors.Is(err, ErrCannotTrim):
+		return ReasonCannotTrim
+	case errors.Is(err, ErrNotAVideo):
+		return ReasonUnsupportedFormat
+	}
+	return ReasonNone
+}
 
 // Formats returns every Format Remux writes, in the order clients list them.
 func Formats() []Format {
@@ -216,11 +260,14 @@ type TrimResult struct {
 // Trim copies [Start, End) of Source into Output, in TrimFormat of its name,
 // without re-encoding. It stops with ctx's error when ctx is done. The result
 // reports where the output is shown from. A source it cannot cut returns
-// ErrCannotTrim.
+// ErrCannotTrim, and a fragmented one ErrFragmented as well.
 func Trim(ctx context.Context, params TrimParams) (TrimResult, error) {
 	src := params.Source
 	w := &progressWriter{ctx: ctx, w: params.Output, total: src.Size}
 	start, err := sprocket.Trim(src.File, src.Size, w, sprocket.Container(TrimFormat(src.Name)), params.Start, params.End)
+	if errors.Is(err, sprocket.ErrUnsupportedContainer) && isFragmented(src) {
+		return TrimResult{}, fmt.Errorf("%w: %w: %w", ErrCannotTrim, ErrFragmented, err)
+	}
 	if errors.Is(err, sprocket.ErrUnsupportedContainer) || errors.Is(err, sprocket.ErrIncompatible) {
 		return TrimResult{}, fmt.Errorf("%w: %w", ErrCannotTrim, err)
 	}

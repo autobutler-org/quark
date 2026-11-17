@@ -1285,7 +1285,11 @@ class FilesService with AuthenticatedService {
       body: body,
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to trim video');
+      throwVideoApiError(
+        response.statusCode,
+        response.body,
+        'Failed to trim video',
+      );
     }
     return TrimResult.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
@@ -1317,7 +1321,11 @@ class FilesService with AuthenticatedService {
       body: body,
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to start transcode');
+      throwVideoApiError(
+        response.statusCode,
+        response.body,
+        'Failed to start transcode',
+      );
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return (data['jobId'] as num).toInt();
@@ -1338,8 +1346,9 @@ class FilesService with AuthenticatedService {
         );
     final response = await instance.authenticatedGet(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(
+      throwVideoApiError(
         response.statusCode,
+        response.body,
         'Failed to list transcode formats',
       );
     }

@@ -42,7 +42,7 @@ type VideoMetadataJSON struct {
 // @Success 200 {object} VideoMetadataJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Not Found"
-// @Failure 422 {object} serverutil.Response "Unprocessable Entity — the file can't be read as a video"
+// @Failure 422 {object} videoRefusalJSON "Unprocessable Entity — the file can't be read as a video"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Security BearerAuth
 // @Router /videos/metadata [get]

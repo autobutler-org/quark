@@ -9585,7 +9585,7 @@ const List<ApiEndpoint> apiEndpoints = [
       ApiResponse(
         status: '422',
         description: 'Unprocessable Entity — the file can\'t be read as a video',
-        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+        schema: '{"type":"object","properties":{"error":{"description":"Error is the cause in full, for logs.","type":"string"},"reason":{"description":"Reason is the cause as a code a client words for its user, or empty\\nwhen there is none to name.","allOf":[{"type":"string","enum":["","unsupported_format","damaged","fragmented","cannot_trim"],"x-enum-varnames":["ReasonNone","ReasonUnsupportedFormat","ReasonDamaged","ReasonFragmented","ReasonCannotTrim"]}]}}}',
       ),
       ApiResponse(
         status: '500',
@@ -9635,7 +9635,7 @@ const List<ApiEndpoint> apiEndpoints = [
       ApiResponse(
         status: '422',
         description: 'Unprocessable Entity — the file can\'t be read as a video',
-        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+        schema: '{"type":"object","properties":{"error":{"description":"Error is the cause in full, for logs.","type":"string"},"reason":{"description":"Reason is the cause as a code a client words for its user, or empty\\nwhen there is none to name.","allOf":[{"type":"string","enum":["","unsupported_format","damaged","fragmented","cannot_trim"],"x-enum-varnames":["ReasonNone","ReasonUnsupportedFormat","ReasonDamaged","ReasonFragmented","ReasonCannotTrim"]}]}}}',
       ),
       ApiResponse(
         status: '500',
@@ -9685,7 +9685,7 @@ const List<ApiEndpoint> apiEndpoints = [
       ApiResponse(
         status: '422',
         description: 'Unprocessable Entity — the file can\'t be read as a video',
-        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+        schema: '{"type":"object","properties":{"error":{"description":"Error is the cause in full, for logs.","type":"string"},"reason":{"description":"Reason is the cause as a code a client words for its user, or empty\\nwhen there is none to name.","allOf":[{"type":"string","enum":["","unsupported_format","damaged","fragmented","cannot_trim"],"x-enum-varnames":["ReasonNone","ReasonUnsupportedFormat","ReasonDamaged","ReasonFragmented","ReasonCannotTrim"]}]}}}',
       ),
       ApiResponse(
         status: '500',
@@ -9701,7 +9701,7 @@ const List<ApiEndpoint> apiEndpoints = [
     inSwagger: true,
     tags: ['videos'],
     summary: 'Trim a video clip',
-    description: 'Copies the sub-clip [startMs, endMs] of the source video into a new file beside it without re-encoding (fast, lossless). The clip is shown from startMs: the frames back to the keyframe before it are kept but hidden, so they still decode. actualStartMs reports where the clip is shown from, which is startMs except where there is nothing to hide the lead-in behind or nothing to hide: a start before the video\'s first keyframe or past its last frame, or a TS output, begins at that keyframe instead. An endMs at or past the end of the video keeps the rest of it; a startMs at or past the end is a 400. The clip keeps the source\'s format where the device writes it and is an MP4 otherwise. The original file is not modified. An MPEG-TS source cannot be trimmed and is a 422, and so is a file that can\'t be read as a video. Needs read access on the video and write access on its folder; the caller owns the new clip.',
+    description: 'Copies the sub-clip [startMs, endMs] of the source video into a new file beside it without re-encoding (fast, lossless). The clip is shown from startMs: the frames back to the keyframe before it are kept but hidden, so they still decode. actualStartMs reports where the clip is shown from, which is startMs except where there is nothing to hide the lead-in behind or nothing to hide: a start before the video\'s first keyframe or past its last frame, or a TS output, begins at that keyframe instead. An endMs at or past the end of the video keeps the rest of it; a startMs at or past the end is a 400. The clip keeps the source\'s format where the device writes it and is an MP4 otherwise. The original file is not modified. An MPEG-TS or fragmented MP4 source cannot be trimmed and is a 422, and so is a file that can\'t be read as a video; a 422\'s reason names which. Needs read access on the video and write access on its folder; the caller owns the new clip.',
     parameters: [
       ApiParameter(
         name: 'body',
@@ -9736,7 +9736,7 @@ const List<ApiEndpoint> apiEndpoints = [
       ApiResponse(
         status: '422',
         description: 'Unprocessable Entity — the video\'s container can\'t be trimmed, or the file can\'t be read as a video',
-        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+        schema: '{"type":"object","properties":{"error":{"description":"Error is the cause in full, for logs.","type":"string"},"reason":{"description":"Reason is the cause as a code a client words for its user, or empty\\nwhen there is none to name.","allOf":[{"type":"string","enum":["","unsupported_format","damaged","fragmented","cannot_trim"],"x-enum-varnames":["ReasonNone","ReasonUnsupportedFormat","ReasonDamaged","ReasonFragmented","ReasonCannotTrim"]}]}}}',
       ),
       ApiResponse(
         status: '500',

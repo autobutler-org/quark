@@ -1,3 +1,5 @@
+// cspell:words isobmff
+
 package videoutil
 
 import (
@@ -27,6 +29,15 @@ func probe(src Source) (sprocket.Info, error) {
 		return sprocket.Info{}, fmt.Errorf("%w: probe %s: %w", ErrNotAVideo, src.Name, err)
 	}
 	return info, nil
+}
+
+// isFragmented reports whether src, which sprocket.Trim refused as an
+// unsupported container, is an MP4-family file. sprocket probes one but does
+// not cut it only when it is fragmented; an MPEG-TS or unparsable source is
+// not this. It costs a probe, on the refused path only.
+func isFragmented(src Source) bool {
+	info, err := probe(src)
+	return err == nil && info.Family == sprocket.ISOBMFF
 }
 
 // writeTrim runs one Trim into a new file at p in fsys. The clip streams into

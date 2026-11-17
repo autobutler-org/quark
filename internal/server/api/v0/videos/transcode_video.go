@@ -26,7 +26,7 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
-// @Failure 422 {object} serverutil.Response "Unprocessable Entity — the file can't be read as a video"
+// @Failure 422 {object} videoRefusalJSON "Unprocessable Entity — the file can't be read as a video"
 // @Failure 500 {object} serverutil.Response "Internal Server Error — the job could not be queued; the cause is logged"
 // @Security BearerAuth
 // @Router /videos/transcode [post]
@@ -69,7 +69,7 @@ func transcodeVideo(c *gin.Context) *serverutil.Response {
 	case errors.Is(err, transcodeutil.ErrSourceNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, videoutil.ErrNotAVideo):
-		return unreadableVideo(err)
+		return openError(err, req.RelPath)
 	case err != nil:
 		// Nothing else records why, and the job was never created (#3422).
 		slog.Error("transcode: could not queue the conversion", "path", req.RelPath, "serial", req.Serial, "format", req.Format, "err", err)
