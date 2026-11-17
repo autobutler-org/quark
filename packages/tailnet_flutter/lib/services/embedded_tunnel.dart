@@ -5,7 +5,9 @@
 /// The phone joins the tailnet itself, so the user does not install the
 /// official Tailscale app. [EmbeddedTunnel] is the whole API: [enroll] joins
 /// the tailnet and starts a plain HTTP proxy on 127.0.0.1, [warm] restarts or
-/// stops it, and [status] reports the node. The proxy dials the Quark. The app's remote
+/// stops it, and [status] reports the node. [peerStatus] and [ping] say
+/// whether traffic to the Quark goes direct or through a relay, for debugging
+/// slow remote access (#3883). The proxy dials the Quark. The app's remote
 /// address becomes that proxy, and [ConnectionController] already sends every
 /// request there. The proxy forwards only requests that carry the token it
 /// hands this app on each start; `tunnel_token_client.dart` adds it.
@@ -96,6 +98,29 @@ abstract final class EmbeddedTunnel {
   /// The node's current state.
   static Future<TunnelStatus> status() async =>
       TunnelStatus.fromJson(await impl.tunnelStatusJson());
+
+  /// How traffic to the Quark travels, for debugging slow remote access
+  /// (#3883).
+  ///
+  /// The bridge's JSON as it is: `state`; `quark`, the Quark's current path
+  /// (`path` is `direct`, `relay`, `peer-relay`, `idle` or `unknown`, with
+  /// `network` `lan` or `internet` when direct, `relayRegion` when relayed,
+  /// `lastHandshake`, `rxBytes`, `txBytes`), or null without a node;
+  /// `pathChanges`, the latest moves between direct and relayed with their
+  /// times; and `requests`, the latest requests the proxy carried with their
+  /// route, status, time to headers and to the end of the body, and size. It
+  /// holds no keys, tokens or full addresses. Debug tooling only: never shown
+  /// to a user as it is.
+  static Future<Map<String, dynamic>> peerStatus() =>
+      impl.tunnelPeerStatusJson();
+
+  /// Pings the Quark [count] times inside the tunnel and over TCP through it
+  /// (#3883), and returns the bridge's JSON: `tunnel` and `tcp`, each with
+  /// `sent`, `received`, `minMs`, `avgMs`, and `error`; `tunnel` also has
+  /// `path`, how the last answer traveled. `tunnel` is null without a node.
+  /// Takes up to a few seconds per ping. Debug tooling only.
+  static Future<Map<String, dynamic>> ping({int count = 5}) =>
+      impl.tunnelPingJson(count);
 
   /// The proxy URL in front of [upstream], or null when this platform has no
   /// node or the phone has not paired yet.

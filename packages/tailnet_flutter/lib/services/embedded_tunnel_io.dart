@@ -15,6 +15,7 @@
 /// restarts one that does not (#3882). There is no background mode.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:ffi';
@@ -27,6 +28,7 @@ import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tailnet_flutter/services/embedded_tunnel.dart'
     show tunnelHealthProbe;
+import 'package:tailnet_flutter/services/tunnel_path_log.dart';
 import 'package:tailnet_flutter/services/tunnel_resume.dart';
 import 'package:tailnet_flutter/services/tunnel_token_client.dart';
 
@@ -68,6 +70,18 @@ external void _stop();
 )
 external Pointer<Utf8> _status();
 
+@Native<Pointer<Utf8> Function()>(
+  symbol: 'quark_tsnet_peer_status',
+  assetId: 'package:tailnet_flutter/services/embedded_tunnel_io.dart',
+)
+external Pointer<Utf8> _peerStatus();
+
+@Native<Pointer<Utf8> Function(Int32)>(
+  symbol: 'quark_tsnet_ping',
+  assetId: 'package:tailnet_flutter/services/embedded_tunnel_io.dart',
+)
+external Pointer<Utf8> _ping(int count);
+
 @Native<Void Function(Pointer<Utf8>)>(
   symbol: 'quark_tsnet_free',
   assetId: 'package:tailnet_flutter/services/embedded_tunnel_io.dart',
@@ -101,6 +115,11 @@ _TunnelConfig? _config;
 var _watching = false;
 final _lifecycle = TunnelLifecycleObserver()..log = _log;
 
+/// How often a debug build logs the Quark's path and recent requests (#3883).
+const _pathLogInterval = Duration(seconds: 30);
+Timer? _pathLogTimer;
+final _pathLog = TunnelPathLog();
+
 /// A debug-only timeline of the node's lifecycle (#3882).
 void _log(String message) {
   assert(() {
@@ -131,6 +150,58 @@ Future<Map<String, dynamic>> tunnelStatusJson() async {
     };
   }
   return _serialized(_statusNative);
+}
+
+Future<Map<String, dynamic>> tunnelPeerStatusJson() async {
+  if (!_mobile) {
+    return const {
+      'state': 'Stopped',
+      'quark': null,
+      'pathChanges': <Object>[],
+      'requests': <Object>[],
+    };
+  }
+  // Not serialized: it only reads, and the bridge locks its own state.
+  return Isolate.run(() => _readJson(_peerStatus()));
+}
+
+Future<Map<String, dynamic>> tunnelPingJson(int count) async {
+  if (!_mobile) {
+    return const {
+      'tunnel': null,
+      'tcp': {
+        'sent': 0,
+        'received': 0,
+        'minMs': 0,
+        'avgMs': 0,
+        'error': 'no node',
+      },
+    };
+  }
+  return Isolate.run(() => _readJson(_ping(count)));
+}
+
+/// In a debug build, logs the Quark's path and the requests the proxy carried
+/// every [_pathLogInterval] while the node runs (#3883). Release builds never
+/// start the timer.
+void _startPathLog() {
+  assert(() {
+    _pathLogTimer?.cancel();
+    _pathLog.reset();
+    _pathLogTimer = Timer.periodic(_pathLogInterval, (_) async {
+      try {
+        _pathLog.lines(await tunnelPeerStatusJson()).forEach(_log);
+      } catch (error) {
+        _log('path status failed: $error');
+      }
+    });
+    return true;
+  }());
+}
+
+void _stopPathLog() {
+  _pathLogTimer?.cancel();
+  _pathLogTimer = null;
 }
 
 Future<String?> tunnelProxyUrl(String upstream) {
@@ -286,6 +357,7 @@ Future<(int, String)> _startNative({
       hostname: hostname,
       upstream: upstream,
     );
+    _startPathLog();
   }
   _log(port > 0 ? 'started on $port' : 'start failed: $error');
   return (port, error);
@@ -293,6 +365,7 @@ Future<(int, String)> _startNative({
 
 Future<void> _stopNative() async {
   _log('stop');
+  _stopPathLog();
   await Isolate.run(_stopBlocking);
   _running = false;
   _port = 0;
@@ -345,12 +418,14 @@ void _stopBlocking() => _stop();
 
 Map<String, dynamic> _statusBlocking() => _readStatus();
 
-Map<String, dynamic> _readStatus() {
-  final pointer = _status();
+Map<String, dynamic> _readStatus() => _readJson(_status());
+
+/// Decodes a JSON object the bridge returned and frees it.
+Map<String, dynamic> _readJson(Pointer<Utf8> pointer) {
   try {
     final decoded = jsonDecode(pointer.toDartString());
     if (decoded is Map<String, dynamic>) return decoded;
-    return const {'state': 'Stopped', 'error': 'status was not an object'};
+    return const {'state': 'Stopped', 'error': 'bridge JSON was not an object'};
   } finally {
     _free(pointer);
   }
