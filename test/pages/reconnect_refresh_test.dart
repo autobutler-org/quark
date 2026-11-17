@@ -8,6 +8,7 @@ import 'package:quark/pages/trash_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark/utils/events_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_events_channel.dart';
@@ -67,8 +68,10 @@ void main() {
       tester,
     ) async {
       // Photos keeps a spinner going, so this pumps a few frames rather than
-      // waiting for the tree to settle.
+      // waiting for the tree to settle. It also reloads only once events go
+      // quiet (#3448), so each settle waits that out first.
       Future<void> settle() async {
+        await tester.pump(EventsConfig.refreshQuiet);
         for (var i = 0; i < 5; i++) {
           await tester.pump(const Duration(milliseconds: 100));
         }
@@ -122,6 +125,7 @@ void main() {
   }
   testWidgets('Photos reloads on a delete event', (tester) async {
     Future<void> settle() async {
+      await tester.pump(EventsConfig.refreshQuiet);
       for (var i = 0; i < 5; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
