@@ -632,8 +632,10 @@ mode is off.
 
 - **Favorite** stars every selected photo that is not yet a favorite. When every selected photo already is one, the
   action reads **Unfavorite** and takes them all out of Favorites.
-- **Download** saves each photo as its own file, as a single photo's Download does, four at a time. On iOS and
-  Android they land in the phone's gallery.
+- **Download** saves the selected photos as one zip, `selection.zip`, whichever folders and drives they are on. On
+  the web the browser saves it to its downloads; on iOS and Android the save dialog asks where it goes. Two photos
+  with the same name are kept as `IMG_0001.jpg` and `IMG_0001 (1).jpg`. A photo the Quark could not read is left
+  out of the zip and named in a `skipped.txt` inside it. More than 2,000 photos come as one zip per 2,000.
 - **Share…** shows only while exactly one photo is selected, since the share sheet shares one item.
 - **Make copies** copies each photo beside itself, four at a time.
 - **Delete** asks once ("Move 37 photos to the trash?"), then moves them all to the trash, where they can be
@@ -642,7 +644,7 @@ mode is off.
 - The grid reloads once when the action finishes, not once per photo. When the action worked for every photo,
   selection ends.
 - When some photos fail, one message says how many ("Couldn't download 3 of 50 photos."), the failed photos stay
-  selected to try again, and the rest are deselected.
+  selected to try again, and the rest are deselected. A zip the Quark refuses fails every photo in it.
 - When the selection holds a photo only on this phone (the Mobile category), every action but **Add to album** is
   off, and its tooltip says why.
 
@@ -650,7 +652,6 @@ mode is off.
 
 - On a phone the bar keeps the count and **Add to album** in the row, and the other actions move into a menu labeled
   **More**.
-- Downloading many photos as one zip is not offered yet.
 
 ---
 

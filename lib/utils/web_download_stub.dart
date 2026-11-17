@@ -9,3 +9,10 @@ Future<String?> saveBytesForDownload(Uint8List data, String fileName) async {
 Future<String?> saveUrlForDownload(Uri url, String fileName) async {
   return null;
 }
+
+Future<String?> submitFormForDownload(
+  Uri action,
+  Map<String, String> fields,
+) async {
+  return null;
+}
