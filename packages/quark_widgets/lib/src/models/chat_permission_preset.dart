@@ -20,13 +20,14 @@ enum ChatPermissionPreset {
     ChatPermission.attachFiles,
   }),
 
-  /// A member who also deletes other people's messages and reactions and
-  /// manages members.
+  /// A member who also mentions everyone, deletes other people's messages
+  /// and reactions, and manages members.
   moderator('Moderator', {
     ChatPermission.readMessages,
     ChatPermission.sendMessages,
     ChatPermission.addReactions,
     ChatPermission.attachFiles,
+    ChatPermission.mentionEveryone,
     ChatPermission.deleteMessages,
     ChatPermission.manageReactions,
     ChatPermission.manageMembers,
@@ -38,6 +39,7 @@ enum ChatPermissionPreset {
     ChatPermission.sendMessages,
     ChatPermission.addReactions,
     ChatPermission.attachFiles,
+    ChatPermission.mentionEveryone,
     ChatPermission.deleteMessages,
     ChatPermission.manageReactions,
     ChatPermission.manageChannel,

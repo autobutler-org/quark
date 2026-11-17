@@ -41,6 +41,50 @@ void main() {
     expect(ChatMentions.mentions('ping ada', names, 'ada'), isFalse);
   });
 
+  group('@everyone (#4293)', () {
+    final allowed = ChatMentions.withEveryone(names, allowed: true);
+    final refused = ChatMentions.withEveryone(names, allowed: false);
+
+    test('is offered first only when allowed', () {
+      expect(allowed, ['everyone', ...names]);
+      expect(refused, names);
+      expect(ChatMentions.matching(allowed, 'e'), ['everyone']);
+    });
+
+    test('mentions every member, whatever the case', () {
+      for (final name in names) {
+        expect(ChatMentions.mentions('hi @everyone', allowed, name), isTrue);
+      }
+      expect(ChatMentions.mentions('hi @EveryOne!', allowed, 'ada'), isTrue);
+      expect(ChatMentions.mentions('(@everyone)', allowed, 'ada'), isTrue);
+    });
+
+    test('keeps the word boundaries of a name', () {
+      expect(ChatMentions.mentions('@everyone_else', allowed, 'ada'), isFalse);
+      expect(ChatMentions.mentions('@everyone2', allowed, 'ada'), isFalse);
+      expect(ChatMentions.mentions('a@everyone', allowed, 'ada'), isFalse);
+      expect(ChatMentions.mentions('everyone', allowed, 'ada'), isFalse);
+    });
+
+    test('is plain text from an author without the permission', () {
+      expect(ChatMentions.mentionsIn('hi @everyone', refused), isEmpty);
+      expect(ChatMentions.mentions('hi @everyone', refused, 'ada'), isFalse);
+      // A member named everyone from before the name was reserved is not
+      // a way around the permission.
+      final legacy = ChatMentions.withEveryone(const [
+        'ada',
+        'Everyone',
+      ], allowed: false);
+      expect(ChatMentions.mentions('hi @everyone', legacy, 'ada'), isFalse);
+    });
+
+    test('reaches the reader', () {
+      expect(ChatMentions.reaches('everyone', 'ada'), isTrue);
+      expect(ChatMentions.reaches('Ada', 'ada'), isTrue);
+      expect(ChatMentions.reaches('bob', 'ada'), isFalse);
+    });
+  });
+
   test('reads the mention being typed at the caret', () {
     expect(ChatMentions.queryAt('hi @a', 5), (start: 3, query: 'a'));
     expect(ChatMentions.queryAt('@', 1), (start: 0, query: ''));

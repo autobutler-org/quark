@@ -533,6 +533,7 @@ void main() {
             'send_messages',
             'add_reactions',
             'attach_files',
+            'mention_everyone',
             'delete_messages',
             'manage_reactions',
             'manage_members',

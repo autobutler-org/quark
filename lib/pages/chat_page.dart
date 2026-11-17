@@ -726,6 +726,8 @@ class _ChatPageState extends State<ChatPage>
                                     : c.selectedPermissions,
                                 currentUserId: c.currentUserKey,
                                 mentionNames: c.mentionNames,
+                                mentionEveryoneAuthorIds:
+                                    c.mentionEveryoneAuthorIds,
                                 currentUserName: c.currentUserName,
                                 onCopy: _copyMessage,
                                 onDelete: _deleteMessage,

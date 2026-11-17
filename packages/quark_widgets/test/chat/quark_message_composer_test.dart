@@ -394,6 +394,52 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // #4293: everyone is offered first, and only to a holder of
+    // mention_everyone.
+    testBothViewports('offers everyone first with mention_everyone', (
+      tester,
+      size,
+    ) async {
+      final sent = <String>[];
+      Future<void> pump(Set<ChatPermission> permissions) => pumpAt(
+        tester,
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: QuarkMessageComposer(
+            key: ValueKey(permissions.length),
+            onSend: sent.add,
+            mentionNames: names,
+            permissions: permissions,
+          ),
+        ),
+        size: size,
+      );
+      const everyone = ValueKey('mention_suggestion_everyone');
+      const member = {ChatPermission.readMessages, ChatPermission.sendMessages};
+
+      await pump(member);
+      await tester.enterText(find.byKey(field), 'hi @');
+      await tester.pump();
+      expect(find.byKey(suggestions), findsOne);
+      expect(find.byKey(everyone), findsNothing);
+
+      await pump({...member, ChatPermission.mentionEveryone});
+      await tester.enterText(find.byKey(field), 'hi @');
+      await tester.pump();
+      final top = tester.getTopLeft(find.byKey(everyone)).dy;
+      for (final name in names) {
+        final row = find.byKey(ValueKey('mention_suggestion_$name'));
+        expect(tester.getTopLeft(row).dy, greaterThan(top), reason: name);
+      }
+
+      await tester.tap(find.byKey(everyone));
+      await tester.pump();
+      await tester.tap(find.byKey(send));
+      await tester.pump();
+      expect(sent, ['hi @everyone']);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a tap writes the mention and sends it as text', (
       tester,
     ) async {

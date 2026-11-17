@@ -13,6 +13,7 @@ void main() {
   const members = ChatPermission.manageMembers;
   const reactions = ChatPermission.manageReactions;
   const attach = ChatPermission.attachFiles;
+  const everyone = ChatPermission.mentionEveryone;
 
   test('every permission carries the name the Quark uses', () {
     expect(
@@ -22,6 +23,7 @@ void main() {
         'send_messages',
         'add_reactions',
         'attach_files',
+        'mention_everyone',
         'delete_messages',
         'manage_reactions',
         'manage_channel',
@@ -43,6 +45,7 @@ void main() {
         send,
         react,
         attach,
+        everyone,
         delete,
         reactions,
         members,
@@ -52,6 +55,7 @@ void main() {
         send,
         react,
         attach,
+        everyone,
         delete,
         reactions,
         channel,
@@ -77,6 +81,7 @@ void main() {
     expect(send.requires, {read});
     expect(react.requires, {read});
     expect(attach.requires, {read});
+    expect(everyone.requires, {read});
     expect(delete.requires, {read});
     expect(reactions.requires, {read});
     expect(read.requires, isEmpty);

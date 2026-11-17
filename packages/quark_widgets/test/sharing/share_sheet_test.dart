@@ -529,7 +529,7 @@ void main() {
       expect(events, [
         'add group_2 read_messages,send_messages,add_reactions,attach_files',
         'add group_2 read_messages,send_messages,add_reactions,attach_files,'
-            'delete_messages,manage_reactions,manage_members',
+            'mention_everyone,delete_messages,manage_reactions,manage_members',
       ]);
     });
 

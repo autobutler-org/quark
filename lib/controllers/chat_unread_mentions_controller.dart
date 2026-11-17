@@ -141,6 +141,7 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
       final me = _currentUserId();
       final name = members.nameOfUser(me);
       final names = members.mentionNames;
+      final everyone = members.userIdsHolding(ChatPermission.mentionEveryone);
       final unopened = <ChatMessage>[];
       var mentions = 0;
       for (final message
@@ -150,7 +151,15 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
         final text = _openMessage(message);
         if (text == null) {
           unopened.add(message);
-        } else if (name != null && ChatMentions.mentions(text, names, name)) {
+        } else if (name != null &&
+            ChatMentions.mentions(
+              text,
+              ChatMentions.withEveryone(
+                names,
+                allowed: everyone.contains(message.authorId),
+              ),
+              name,
+            )) {
           mentions++;
         }
       }
