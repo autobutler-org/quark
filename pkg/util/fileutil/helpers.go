@@ -19,7 +19,7 @@ func dbRelPath(p string) string {
 	return strings.TrimPrefix(path.Clean("/"+filepath.ToSlash(p)), "/")
 }
 
-// movePhotoRows points favorites and album items at a moved file, or at
+// movePhotoRows points favorites, album items and rotations at a moved file, or at
 // everything under a moved folder. A row whose destination already exists is
 // left behind by the update and dropped afterwards: the file it named is gone.
 func movePhotoRows(ctx context.Context, q db.Querier, oldSerial, oldPath, newSerial, newPath string) error {
@@ -43,6 +43,18 @@ func movePhotoRows(ctx context.Context, q db.Querier, oldSerial, oldPath, newSer
 		return err
 	}
 	if err := q.DeletePhotoFromAllAlbums(ctx, db.DeletePhotoFromAllAlbumsParams{DeviceSerial: oldSerial, RelPath: oldPath}); err != nil {
+		return err
+	}
+	// A rotation describes the file, not an account, so the moved one wins:
+	// whatever was stored at the destination belonged to a file that is gone
+	// (#4284).
+	if err := q.DeletePhotoRotationsUnder(ctx, db.DeletePhotoRotationsUnderParams{DeviceSerial: newSerial, RelPath: newPath}); err != nil {
+		return err
+	}
+	if err := q.MovePhotoRotations(ctx, db.MovePhotoRotationsParams{
+		OldDeviceSerial: oldSerial, OldRelPath: oldPath,
+		NewDeviceSerial: newSerial, NewRelPath: newPath,
+	}); err != nil {
 		return err
 	}
 	// Hashes are dropped rather than carried: the next thumbnail at the new

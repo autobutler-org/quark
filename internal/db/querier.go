@@ -177,6 +177,9 @@ type Querier interface {
 	// everything under it when the path is a folder.
 	DeletePhotoHashesUnder(ctx context.Context, arg DeletePhotoHashesUnderParams) error
 	DeletePhotoRotation(ctx context.Context, arg DeletePhotoRotationParams) error
+	// DeletePhotoRotationsUnder drops the rotation of a deleted path, and of
+	// every photo under it when the path is a folder.
+	DeletePhotoRotationsUnder(ctx context.Context, arg DeletePhotoRotationsUnderParams) error
 	DeleteSession(ctx context.Context, token string) error
 	// DeleteStaleIndexedSerial drops what a reconcile of the device did not write.
 	DeleteStaleIndexedSerial(ctx context.Context, arg DeleteStaleIndexedSerialParams) error
@@ -548,6 +551,10 @@ type Querier interface {
 	// case-insensitive and treats _ and % as wildcards, and "foo" must not match
 	// "foobar". The CAST gives sqlc a type for the parameter inside length().
 	MovePathAccessTree(ctx context.Context, arg MovePathAccessTreeParams) (int64, error)
+	// MovePhotoRotations points the rotations of a moved file or folder at its
+	// new path. The caller clears the destination with DeletePhotoRotationsUnder
+	// first, so no moved row collides with one already there.
+	MovePhotoRotations(ctx context.Context, arg MovePhotoRotationsParams) error
 	// Only an active account can be promoted; anything else matches no row.
 	PromoteToAdmin(ctx context.Context, username string) (PromoteToAdminRow, error)
 	// Drops peers not seen since the cutoff, and every peer past the newest keep

@@ -24,7 +24,7 @@ type MoveFileParams struct {
 	Registry vfs.Registry
 	// EventBus is told where the file went.
 	EventBus *eventbus.Bus
-	// Database holds the favorites and album items that follow the file. Nil
+	// Database holds the favorites, album items and rotations that follow the file. Nil
 	// skips that half.
 	Database *db.DatabaseSqlc
 	// OldFilePath and NewFilePath are the paths moved between.
@@ -59,7 +59,7 @@ func MoveFile(params MoveFileParams) (MoveFileResult, error) {
 	if params.Database != nil {
 		if err := movePhotoRows(context.WithoutCancel(params.Ctx), params.Database.Queries,
 			params.OldDeviceSerial, params.OldFilePath, params.NewDeviceSerial, params.NewFilePath); err != nil {
-			log.Printf("quark: move cleanup: carry favorites and album items from %q to %q: %v",
+			log.Printf("quark: move cleanup: carry favorites, album items and rotations from %q to %q: %v",
 				params.OldFilePath, params.NewFilePath, err)
 		}
 	}

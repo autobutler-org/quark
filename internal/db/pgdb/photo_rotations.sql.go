@@ -26,6 +26,28 @@ func (q *Queries) DeletePhotoRotation(ctx context.Context, arg DeletePhotoRotati
 	return err
 }
 
+const deletePhotoRotationsUnder = `-- name: DeletePhotoRotationsUnder :exec
+DELETE FROM photo_rotations
+WHERE
+    device_serial = $1
+    AND (
+        rel_path = $2
+        OR substr(rel_path, 1, length($2) + 1) = $2 || '/'
+    )
+`
+
+type DeletePhotoRotationsUnderParams struct {
+	DeviceSerial string
+	RelPath      string
+}
+
+// DeletePhotoRotationsUnder drops the rotation of a deleted path, and of
+// every photo under it when the path is a folder.
+func (q *Queries) DeletePhotoRotationsUnder(ctx context.Context, arg DeletePhotoRotationsUnderParams) error {
+	_, err := q.db.ExecContext(ctx, deletePhotoRotationsUnder, arg.DeviceSerial, arg.RelPath)
+	return err
+}
+
 const getPhotoRotation = `-- name: GetPhotoRotation :one
 SELECT
     rotation_quarters
@@ -48,6 +70,39 @@ func (q *Queries) GetPhotoRotation(ctx context.Context, arg GetPhotoRotationPara
 	var rotation_quarters int64
 	err := row.Scan(&rotation_quarters)
 	return rotation_quarters, err
+}
+
+const movePhotoRotations = `-- name: MovePhotoRotations :exec
+UPDATE photo_rotations
+SET
+    device_serial = $1,
+    rel_path = $2 || substr(photo_rotations.rel_path, length(CAST($3 AS TEXT)) + 1)
+WHERE
+    photo_rotations.device_serial = $4
+    AND (
+        photo_rotations.rel_path = $3
+        OR substr(photo_rotations.rel_path, 1, length($3) + 1) = $3 || '/'
+    )
+`
+
+type MovePhotoRotationsParams struct {
+	NewDeviceSerial string
+	NewRelPath      string
+	OldRelPath      string
+	OldDeviceSerial string
+}
+
+// MovePhotoRotations points the rotations of a moved file or folder at its
+// new path. The caller clears the destination with DeletePhotoRotationsUnder
+// first, so no moved row collides with one already there.
+func (q *Queries) MovePhotoRotations(ctx context.Context, arg MovePhotoRotationsParams) error {
+	_, err := q.db.ExecContext(ctx, movePhotoRotations,
+		arg.NewDeviceSerial,
+		arg.NewRelPath,
+		arg.OldRelPath,
+		arg.OldDeviceSerial,
+	)
+	return err
 }
 
 const upsertPhotoRotation = `-- name: UpsertPhotoRotation :exec

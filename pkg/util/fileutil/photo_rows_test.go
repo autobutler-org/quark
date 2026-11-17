@@ -355,3 +355,144 @@ func usbRegistry(t *testing.T, mountPoint, serial string) vfs.Registry {
 	}
 	return registry
 }
+
+// rotationOf is the saved rotation at a path, 0 when none is stored.
+func rotationOf(t *testing.T, q db.Querier, serial, relPath string) int64 {
+	t.Helper()
+	quarters, err := q.GetPhotoRotation(context.Background(), db.GetPhotoRotationParams{DeviceSerial: serial, RelPath: relPath})
+	if err == sql.ErrNoRows {
+		return 0
+	}
+	if err != nil {
+		t.Fatalf("GetPhotoRotation(%q, %q): %v", serial, relPath, err)
+	}
+	return quarters
+}
+
+func rotate(t *testing.T, q db.Querier, serial, relPath string, quarters int64) {
+	t.Helper()
+	if err := q.UpsertPhotoRotation(context.Background(), db.UpsertPhotoRotationParams{
+		DeviceSerial: serial, RelPath: relPath, RotationQuarters: quarters,
+	}); err != nil {
+		t.Fatalf("UpsertPhotoRotation(%q): %v", relPath, err)
+	}
+}
+
+// TestMoveFileCarriesPhotoRotation: a rotated photo stays rotated at its new
+// path, whether it is renamed, moved inside a folder, or moved to another
+// device (#4284). A rotation already stored at a replaced destination is the
+// old file's and goes; a prefix-sharing sibling keeps its own.
+func TestMoveFileCarriesPhotoRotation(t *testing.T) {
+	const usb = "USB-4284"
+	ctx := context.Background()
+	internal := vfs.NewMemVFS(vfs.FilesNamespace(""))
+	drive := vfs.NewMemVFS(vfs.FilesNamespace(usb))
+	registry := vfs.NewRegistry()
+	for serial, fsys := range map[string]vfs.VFS{"": internal, usb: drive} {
+		if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace(serial)}, fsys); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, p := range []string{"a.jpg", "b.jpg", "replaced.jpg", "trip/c.jpg", "trip/sub/d.jpg", "trips/e.jpg", "far.jpg"} {
+		if err := internal.Write(ctx, p, strings.NewReader("x"), vfs.WriteOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	database := dbtest.NewDB(t)
+	q := database.Queries
+	rotate(t, q, "", "a.jpg", 1)
+	rotate(t, q, "", "replaced.jpg", 3)
+	rotate(t, q, "", "trip/c.jpg", 2)
+	rotate(t, q, "", "trip/sub/d.jpg", 3)
+	rotate(t, q, "", "trips/e.jpg", 1)
+	rotate(t, q, "", "far.jpg", 2)
+
+	for _, m := range []struct{ oldSerial, oldPath, newSerial, newPath string }{
+		{"", "a.jpg", "", "renamed.jpg"},
+		{"", "b.jpg", "", "replaced.jpg"}, // b has no rotation; replaced.jpg's goes with its old content
+		{"", "/trip", "", "2024/trip"},
+		{"", "far.jpg", usb, "moved/far.jpg"},
+	} {
+		if _, err := MoveFile(MoveFileParams{
+			Ctx: ctx, Registry: registry, EventBus: eventbus.New(), Database: database,
+			OldDeviceSerial: m.oldSerial, OldFilePath: m.oldPath, NewDeviceSerial: m.newSerial, NewFilePath: m.newPath,
+		}); err != nil {
+			t.Fatalf("MoveFile(%q, %q): %v", m.oldPath, m.newPath, err)
+		}
+	}
+
+	for _, c := range []struct {
+		serial, path string
+		want         int64
+	}{
+		{"", "renamed.jpg", 1},
+		{"", "a.jpg", 0},
+		{"", "replaced.jpg", 0},
+		{"", "2024/trip/c.jpg", 2},
+		{"", "2024/trip/sub/d.jpg", 3},
+		{"", "trip/c.jpg", 0},
+		{"", "trip/sub/d.jpg", 0},
+		{"", "trips/e.jpg", 1},
+		{usb, "moved/far.jpg", 2},
+		{"", "far.jpg", 0},
+	} {
+		if got := rotationOf(t, q, c.serial, c.path); got != c.want {
+			t.Errorf("rotation of %q|%q = %d, want %d", c.serial, c.path, got, c.want)
+		}
+	}
+}
+
+// TestDeleteFilesForgetsPhotoRotation: a deleted photo, or a photo in a
+// deleted folder, loses its saved rotation; a prefix-sharing sibling and the
+// same path on another device keep theirs.
+func TestDeleteFilesForgetsPhotoRotation(t *testing.T) {
+	const serial = "USB-4284"
+	mountPoint := t.TempDir()
+	filesDir := filepath.Join(mountPoint, "quark", "data", "files")
+	paths := []string{"keep.jpg", "gone.jpg", "trip/b.jpg", "trip/sub/c.jpg", "trips/d.jpg"}
+	for _, p := range paths {
+		full := filepath.Join(filesDir, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	database := dbtest.NewDB(t)
+	q := database.Queries
+	for _, p := range paths {
+		rotate(t, q, serial, p, 1)
+	}
+	rotate(t, q, "", "gone.jpg", 2) // same path, other device
+
+	if _, err := DeleteFiles(DeleteFilesParams{
+		Registry:  usbRegistry(t, mountPoint, serial),
+		EventBus:  eventbus.New(),
+		Database:  database,
+		RootDir:   "/",
+		FilePaths: []string{"gone.jpg", "trip"},
+		Serial:    serial,
+	}); err != nil {
+		t.Fatalf("DeleteFiles: %v", err)
+	}
+
+	rotations := func() []int64 {
+		return []int64{
+			rotationOf(t, q, serial, "keep.jpg"),
+			rotationOf(t, q, serial, "trips/d.jpg"),
+			rotationOf(t, q, "", "gone.jpg"),
+			rotationOf(t, q, serial, "gone.jpg"),
+			rotationOf(t, q, serial, "trip/b.jpg"),
+			rotationOf(t, q, serial, "trip/sub/c.jpg"),
+		}
+	}
+	want := []int64{1, 1, 2, 0, 0, 0}
+	deadline := time.Now().Add(5 * time.Second)
+	for !reflect.DeepEqual(rotations(), want) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := rotations(); !reflect.DeepEqual(got, want) {
+		t.Errorf("rotations (keep, trips/d, other device's gone, gone, trip/b, trip/sub/c) = %v, want %v", got, want)
+	}
+}
