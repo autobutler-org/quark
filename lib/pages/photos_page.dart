@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/photos_controller.dart';
+import 'package:quark/controllers/sidebar_controller.dart';
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/router.dart';
@@ -86,6 +87,12 @@ class PhotosPageState extends State<PhotosPage>
 
   final ScrollController _scrollController = ScrollController();
 
+  /// The wide layout's library sidebar, kept per device (#4294).
+  final _libraryPane = SidebarController(
+    'photos_library',
+    defaultWidth: QuarkSplitView.defaultSidebarWidth,
+  );
+
   /// Whether a phone's upload button shows: it fades while the grid scrolls
   /// down and comes back on the way up (#4150).
   bool _fabVisible = true;
@@ -110,6 +117,7 @@ class PhotosPageState extends State<PhotosPage>
       }
     });
     _scrollController.addListener(_onScroll);
+    _libraryPane.addListener(_onLibraryPaneChanged);
     _controller.addListener(_scheduleAlbumUrlSync);
     _controller.showAlbumLink(widget.album);
   }
@@ -151,10 +159,15 @@ class PhotosPageState extends State<PhotosPage>
     _eventSub?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _libraryPane.dispose();
     _controller.removeListener(_scheduleAlbumUrlSync);
     _controller.dispose();
     super.dispose();
   }
+
+  /// Rebuilds for a resized or hidden sidebar, which moves the grid's
+  /// column count.
+  void _onLibraryPaneChanged() => setState(() {});
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
@@ -772,7 +785,11 @@ class PhotosPageState extends State<PhotosPage>
     // Narrower still, a phone's bar is compact: two actions, and Upload
     // moves to a + button in the corner (#4150).
     final phone = QuarkAppBar.isCompact(context);
-    final contentWidth = QuarkSplitView.contentWidthOf(context);
+    final contentWidth = QuarkSplitView.contentWidthOf(
+      context,
+      sidebarWidth: _libraryPane.width,
+      isSidebarCollapsed: _libraryPane.isCollapsed,
+    );
     final columnBounds = PhotoGridConfig.columnBounds(contentWidth);
 
     return CallbackShortcuts(
@@ -984,6 +1001,10 @@ class PhotosPageState extends State<PhotosPage>
                           // picker chip, so the grid is the first thing
                           // under the bar there (#4149).
                           isSidebarOpen: false,
+                          sidebarWidth: _libraryPane.width,
+                          isSidebarCollapsed: _libraryPane.isCollapsed,
+                          onSidebarWidthChanged: _libraryPane.setWidth,
+                          onSidebarCollapsedChanged: _libraryPane.setCollapsed,
                           sidebar: PhotoLibraryNav(
                             controller: c,
                             onShowAlbum: _showAlbum,

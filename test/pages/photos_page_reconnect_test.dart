@@ -4,6 +4,7 @@ import 'package:quark/controllers/photos_controller.dart';
 import 'package:quark/models/paginated_photos_response.dart';
 import 'package:quark/models/photo_sort.dart';
 import 'package:quark/pages/photos_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/reconnecting_events.dart';
 
@@ -11,6 +12,8 @@ import '../support/reconnecting_events.dart';
 /// reconnect refreshed it twice.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  // The page keeps its library sidebar's width in SharedPreferences (#4294).
+  setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('a reconnect refreshes the Photos page exactly once', (
     tester,

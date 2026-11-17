@@ -2,13 +2,15 @@ import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../theme/quark_tokens.dart';
+import 'quark_resizable_pane.dart';
 
 /// A sidebar beside a scrolling content pane on a wide window, and the same
 /// sidebar stacked above that content on a narrow one.
 ///
 /// This is the one place the sidebar breakpoint is written down. Above
-/// [collapseBreakpoint] the sidebar is a fixed [sidebarWidth] pane on the
-/// leading edge with a divider between it and the content. Below it the pane
+/// [collapseBreakpoint] the sidebar is a [QuarkResizablePane] of
+/// [sidebarWidth] on the leading edge, with a drag handle between it and the
+/// content. Below it the pane
 /// would leave the content a sliver of screen, so the sidebar collapses into
 /// the top of the content's own scroll view: scroll up and it is there, scroll
 /// down and the content has the whole viewport.
@@ -25,10 +27,21 @@ import '../theme/quark_tokens.dart';
 /// own, and a caller that would rather present the sidebar as a drawer or a
 /// sheet passes `isSidebarOpen: false` and shows its own.
 ///
+/// The wide pane's width and collapsed flag are the caller's as well
+/// (#4294): [sidebarWidth] and [isSidebarCollapsed] in,
+/// [onSidebarWidthChanged] and [onSidebarCollapsedChanged] out. With the
+/// collapse callback supplied, the wide layout shows the same show/hide
+/// button at the top of the content, which is how a collapsed sidebar comes
+/// back. [contentWidthOf] takes both values, so a caller sizing its content
+/// follows the drag.
+///
 /// Key prefixes:
 /// - `split_view_sidebar` for the sidebar pane, in either layout
-/// - `split_view_toggle` for the show/hide button, rendered only when the
-///   layout is collapsed and [onToggleSidebar] is supplied
+/// - `split_view_toggle` for the show/hide button, rendered in the collapsed
+///   layout when [onToggleSidebar] is supplied and in the wide one when
+///   [onSidebarCollapsedChanged] is
+/// - [QuarkResizablePane]'s keys with the id `split_view` on the wide pane
+///   and its handle
 ///
 /// ```dart
 /// QuarkSplitView(
@@ -48,6 +61,9 @@ class QuarkSplitView extends StatelessWidget {
     this.isSidebarOpen = true,
     this.onToggleSidebar,
     this.collapsedSidebarKey,
+    this.isSidebarCollapsed = false,
+    this.onSidebarWidthChanged,
+    this.onSidebarCollapsedChanged,
     super.key,
   });
 
@@ -61,7 +77,8 @@ class QuarkSplitView extends StatelessWidget {
   /// The width of the sidebar pane in the wide layout.
   static const double defaultSidebarWidth = 280;
 
-  /// The hairline between the sidebar and the content in the wide layout.
+  /// The hairline between the sidebar and the content in the collapsed
+  /// layout.
   static const double dividerWidth = 1;
 
   /// Whether a [QuarkSplitView] built under [context] collapses its sidebar.
@@ -74,17 +91,26 @@ class QuarkSplitView extends StatelessWidget {
       MediaQuery.sizeOf(context).width < collapseBreakpoint;
 
   /// How wide the content pane of a full-width [QuarkSplitView] is under
-  /// [context], the sidebar and its divider taken off in the wide layout.
+  /// [context], the sidebar (unless [isSidebarCollapsed]) and its handle
+  /// taken off in the wide layout.
   ///
   /// The number a caller needs to decide how many columns of its own content
-  /// fit. Only meaningful for a split view that fills the window.
+  /// fit. Pass the same [sidebarWidth] and [isSidebarCollapsed] the split view
+  /// gets. Only meaningful for a split view that fills the window.
   static double contentWidthOf(
     BuildContext context, {
     double sidebarWidth = defaultSidebarWidth,
+    bool isSidebarCollapsed = false,
   }) {
     final width = MediaQuery.sizeOf(context).width;
     if (isCollapsed(context)) return width;
-    return (width - sidebarWidth - dividerWidth).clamp(1.0, double.infinity);
+    final pane = isSidebarCollapsed
+        ? 0
+        : QuarkResizablePane.widthIn(context, width: sidebarWidth);
+    return (width - pane - QuarkResizablePane.handleWidth).clamp(
+      1.0,
+      double.infinity,
+    );
   }
 
   /// The sidebar, rendered as a pane when wide and stacked above the content
@@ -101,7 +127,8 @@ class QuarkSplitView extends StatelessWidget {
   /// The scroll physics for the content's scroll view.
   final ScrollPhysics? physics;
 
-  /// The width of the sidebar pane in the wide layout.
+  /// The width of the sidebar pane in the wide layout, clamped by
+  /// [QuarkResizablePane.widthIn].
   final double sidebarWidth;
 
   /// Whether the collapsed sidebar is showing. Ignored in the wide layout,
@@ -117,24 +144,65 @@ class QuarkSplitView extends StatelessWidget {
   /// it. Unused in the wide layout.
   final Key? collapsedSidebarKey;
 
+  /// Whether the wide layout's sidebar is collapsed to its handle. Ignored
+  /// in the collapsed layout.
+  final bool isSidebarCollapsed;
+
+  /// Fires with the wide sidebar's new width as its handle is dragged. Null
+  /// keeps it at [sidebarWidth].
+  final ValueChanged<double>? onSidebarWidthChanged;
+
+  /// Fires when the wide sidebar is collapsed or reopened, by its handle or
+  /// the show/hide button. Null leaves the button out of the wide layout and
+  /// keeps the sidebar open.
+  final ValueChanged<bool>? onSidebarCollapsedChanged;
+
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
+    final wide = !isCollapsed(context);
+    final onSidebarCollapsedChanged = this.onSidebarCollapsedChanged;
+    final showing = wide ? !isSidebarCollapsed : isSidebarOpen;
+    final onToggle = !wide
+        ? onToggleSidebar
+        : onSidebarCollapsedChanged == null
+        ? null
+        : () => onSidebarCollapsedChanged(!isSidebarCollapsed);
+    final toggle = onToggle == null
+        ? null
+        : SliverToBoxAdapter(
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: IconButton(
+                key: const ValueKey('split_view_toggle'),
+                icon: Icon(showing ? QuarkIcons.menu_open : QuarkIcons.menu),
+                tooltip: showing ? 'Hide sidebar' : 'Show sidebar',
+                onPressed: onToggle,
+              ),
+            ),
+          );
 
-    if (!isCollapsed(context)) {
+    if (wide) {
       return Row(
         children: [
-          SizedBox(
-            key: const ValueKey('split_view_sidebar'),
+          QuarkResizablePane(
+            id: 'split_view',
+            semanticLabel: 'Resize sidebar',
             width: sidebarWidth,
-            child: sidebar,
+            defaultWidth: defaultSidebarWidth,
+            isCollapsed: isSidebarCollapsed,
+            onWidthChanged: onSidebarWidthChanged,
+            onCollapsedChanged: onSidebarCollapsedChanged,
+            child: KeyedSubtree(
+              key: const ValueKey('split_view_sidebar'),
+              child: sidebar,
+            ),
           ),
-          VerticalDivider(width: dividerWidth, color: tokens.border),
           Expanded(
             child: CustomScrollView(
               controller: controller,
               physics: physics,
-              slivers: slivers,
+              slivers: [?toggle, ...slivers],
             ),
           ),
         ],
@@ -145,20 +213,7 @@ class QuarkSplitView extends StatelessWidget {
       controller: controller,
       physics: physics,
       slivers: [
-        if (onToggleSidebar != null)
-          SliverToBoxAdapter(
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: IconButton(
-                key: const ValueKey('split_view_toggle'),
-                icon: Icon(
-                  isSidebarOpen ? QuarkIcons.menu_open : QuarkIcons.menu,
-                ),
-                tooltip: isSidebarOpen ? 'Hide sidebar' : 'Show sidebar',
-                onPressed: onToggleSidebar,
-              ),
-            ),
-          ),
+        ?toggle,
         if (isSidebarOpen)
           SliverToBoxAdapter(
             child: Column(

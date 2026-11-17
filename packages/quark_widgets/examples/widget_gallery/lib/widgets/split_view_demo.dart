@@ -20,6 +20,8 @@ class SplitViewDemo extends StatefulWidget {
 
 class _SplitViewDemoState extends State<SplitViewDemo> {
   bool _sidebarOpen = true;
+  double _sidebarWidth = QuarkSplitView.defaultSidebarWidth;
+  bool _sidebarCollapsed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -37,13 +39,28 @@ class _SplitViewDemoState extends State<SplitViewDemo> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Above the breakpoint: the sidebar is a pane',
+          'Above the breakpoint: the sidebar is a pane; drag its edge to resize '
+          'it, or hide it with the button',
           style: theme.textTheme.titleSmall,
         ),
         SizedBox(height: tokens.spacingSm),
         FramedViewport(
           width: 1000,
           child: QuarkSplitView(
+            sidebarWidth: _sidebarWidth,
+            isSidebarCollapsed: _sidebarCollapsed,
+            onSidebarWidthChanged: (width) {
+              widget.log(
+                'QuarkSplitView.onSidebarWidthChanged(${width.round()})',
+              );
+              setState(() => _sidebarWidth = width);
+            },
+            onSidebarCollapsedChanged: (collapsed) {
+              widget.log(
+                'QuarkSplitView.onSidebarCollapsedChanged($collapsed)',
+              );
+              setState(() => _sidebarCollapsed = collapsed);
+            },
             sidebar: const DemoAlbumSidebar(),
             slivers: slivers,
           ),

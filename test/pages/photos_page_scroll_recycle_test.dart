@@ -10,6 +10,7 @@ import 'package:quark/models/photo_sort.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/services/thumbnail_cache_manager.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_thumbnail_store.dart';
 import '../support/tap_target_guidelines.dart' show setViewport;
@@ -83,6 +84,8 @@ void main() {
   const photoManager = MethodChannel('com.fluttercandies/photo_manager');
   TestWidgetsFlutterBinding.ensureInitialized();
   final images = <String, Uint8List>{};
+  // The page keeps its library sidebar's width in SharedPreferences (#4294).
+  setUp(() => SharedPreferences.setMockInitialValues({}));
 
   setUpAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

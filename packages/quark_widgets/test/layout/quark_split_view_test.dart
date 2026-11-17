@@ -282,29 +282,129 @@ void main() {
       wideContent,
       wideViewport.width -
           QuarkSplitView.defaultSidebarWidth -
-          QuarkSplitView.dividerWidth,
-      reason: 'the pane and its divider come off the content width',
+          QuarkResizablePane.handleWidth,
+      reason: 'the pane and its handle come off the content width',
     );
+  });
+
+  testWidgets('contentWidthOf follows the sidebar width and collapse', (
+    tester,
+  ) async {
+    late double resized;
+    late double collapsed;
+    late double clamped;
+    await pumpAt(
+      tester,
+      Builder(
+        builder: (context) {
+          resized = QuarkSplitView.contentWidthOf(context, sidebarWidth: 400);
+          collapsed = QuarkSplitView.contentWidthOf(
+            context,
+            sidebarWidth: 400,
+            isSidebarCollapsed: true,
+          );
+          clamped = QuarkSplitView.contentWidthOf(context, sidebarWidth: 900);
+          return const SizedBox();
+        },
+      ),
+      size: wideViewport,
+    );
+    const handle = QuarkResizablePane.handleWidth;
+    expect(resized, wideViewport.width - 400 - handle);
+    expect(collapsed, wideViewport.width - handle);
+    expect(
+      clamped,
+      wideViewport.width - QuarkResizablePane.defaultMaxWidth - handle,
+    );
+  });
+
+  /// A wide split view whose sidebar width and collapsed flag live in a
+  /// StatefulBuilder, the way the photos page holds them (#4294).
+  Widget resizable(List<String> events) {
+    var width = QuarkSplitView.defaultSidebarWidth;
+    var collapsed = false;
+    return StatefulBuilder(
+      builder: (context, setState) => QuarkSplitView(
+        sidebarWidth: width,
+        isSidebarCollapsed: collapsed,
+        onSidebarWidthChanged: (w) => setState(() {
+          events.add('width ${w.round()}');
+          width = w;
+        }),
+        onSidebarCollapsedChanged: (c) => setState(() {
+          events.add('collapsed $c');
+          collapsed = c;
+        }),
+        sidebar: const Text('Albums'),
+        slivers: [
+          SliverList.builder(
+            itemCount: 3,
+            itemBuilder: (context, index) => Text('row $index'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  testWidgets('wide: dragging the handle resizes the sidebar', (tester) async {
+    final events = <String>[];
+    await pumpAt(tester, resizable(events), size: wideViewport);
+
+    await tester.drag(
+      find.byKey(const ValueKey('resizable_pane_handle_split_view')),
+      const Offset(40, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getRect(find.byKey(const ValueKey('split_view_sidebar'))).width,
+      QuarkSplitView.defaultSidebarWidth + 40,
+    );
+    expect(events.last, 'width 320');
+  });
+
+  testWidgets('wide: the toggle hides and shows the sidebar', (tester) async {
+    final events = <String>[];
+    await pumpAt(tester, resizable(events), size: wideViewport);
+
+    expect(find.byTooltip('Hide sidebar'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('split_view_toggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('Albums'), findsNothing);
+    expect(find.byTooltip('Show sidebar'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('split_view_toggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('Albums'), findsOneWidget);
+    expect(events, ['collapsed true', 'collapsed false']);
+  });
+
+  testWidgets('narrow: no handle, whatever the caller supplies', (
+    tester,
+  ) async {
+    await pumpAt(tester, resizable([]), size: narrowViewport);
+
+    expect(find.byType(QuarkResizablePane), findsNothing);
+    expect(find.byKey(const ValueKey('split_view_toggle')), findsNothing);
+    expect(find.text('Albums'), findsOneWidget);
   });
 
   for (final (label, brightness, tokens) in [
     ('dark', Brightness.dark, QuarkTokens.dark),
     ('light', Brightness.light, QuarkTokens.light),
   ]) {
-    testWidgets('$label: the divider color comes from the tokens', (
+    testWidgets('$label: the narrow divider color comes from the tokens', (
       tester,
     ) async {
       await pumpAt(
         tester,
         buildSplitView(),
-        size: wideViewport,
+        size: narrowViewport,
         brightness: brightness,
       );
 
       expect(tester.takeException(), isNull);
-      final divider = tester.widget<VerticalDivider>(
-        find.byType(VerticalDivider),
-      );
+      final divider = tester.widget<Divider>(find.byType(Divider));
       expect(divider.color, tokens.border);
     });
   }
