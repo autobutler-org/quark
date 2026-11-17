@@ -73,6 +73,7 @@ func startLocked(authKey string) error {
 	}
 	running = true
 	lastErr = nil
+	go watchPaths(srv)
 	return nil
 }
 
