@@ -467,6 +467,7 @@ definitions:
           - manage_members
           - manage_reactions
           - attach_files
+          - mention_everyone
           type: string
         type: array
       serverId:
@@ -723,6 +724,7 @@ definitions:
           - manage_members
           - manage_reactions
           - attach_files
+          - mention_everyone
           type: string
         type: array
       userId:
@@ -2274,6 +2276,7 @@ definitions:
           - manage_members
           - manage_reactions
           - attach_files
+          - mention_everyone
           type: string
         type: array
       userId:

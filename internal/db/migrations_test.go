@@ -1046,3 +1046,38 @@ func TestMillisecondTimestampsMigration(t *testing.T) {
 		t.Errorf("%d tables default to milliseconds after migrating again, want %d", n, tables)
 	}
 }
+
+// chatMentionEveryoneVersion is 049_chat_mention_everyone, which gives
+// mention_everyone (256) to every Moderator and Owner row (#4293).
+const chatMentionEveryoneVersion = 49
+
+// TestChatMentionEveryoneMigration checks the rows holding every Moderator
+// bit (239) gain mention_everyone, a Member row and a custom set short of a
+// Moderator bit do not, and the rollback takes the bit away again.
+func TestChatMentionEveryoneMigration(t *testing.T) {
+	conn, m := migrateTo(t, chatMentionEveryoneVersion-1)
+	if _, err := conn.Exec(`
+INSERT INTO users (id, username, password_hash, recovery_phrase_hash) VALUES (1, 'maya', 'h', 'r'), (2, 'ben', 'h', 'r'), (3, 'ida', 'h', 'r'), (4, 'tom', 'h', 'r');
+INSERT INTO chat_channels (id, server_id, name) VALUES (100, (SELECT id FROM chat_servers LIMIT 1), 'room');
+INSERT INTO chat_channel_members (channel_id, user_id, permissions) VALUES (100, 1, 255), (100, 2, 239), (100, 3, 135), (100, 4, 231);
+`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(chatMentionEveryoneVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", chatMentionEveryoneVersion, err)
+	}
+	want := map[int]int{1: 511, 2: 495, 3: 135, 4: 231}
+	for user, perms := range want {
+		if n := count(t, conn, `SELECT COUNT(*) FROM chat_channel_members WHERE user_id = ? AND permissions = ?`, user, perms); n != 1 {
+			t.Errorf("user %d's permissions are not %d", user, perms)
+		}
+	}
+
+	if err := m.Migrate(chatMentionEveryoneVersion - 1); err != nil {
+		t.Fatalf("migrate down: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM chat_channel_members WHERE permissions & 256 = 256`); n != 0 {
+		t.Errorf("%d rows keep mention_everyone after the down migration", n)
+	}
+}

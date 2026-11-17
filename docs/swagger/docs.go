@@ -13499,7 +13499,8 @@ const docTemplate = `{
                             "manage_channel",
                             "manage_members",
                             "manage_reactions",
-                            "attach_files"
+                            "attach_files",
+                            "mention_everyone"
                         ]
                     }
                 },
@@ -13849,7 +13850,8 @@ const docTemplate = `{
                             "manage_channel",
                             "manage_members",
                             "manage_reactions",
-                            "attach_files"
+                            "attach_files",
+                            "mention_everyone"
                         ]
                     }
                 },
@@ -15810,7 +15812,8 @@ const docTemplate = `{
                             "manage_channel",
                             "manage_members",
                             "manage_reactions",
-                            "attach_files"
+                            "attach_files",
+                            "mention_everyone"
                         ]
                     }
                 },

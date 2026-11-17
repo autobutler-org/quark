@@ -173,8 +173,8 @@ func TestCreateUser_PrivateFolder(t *testing.T) {
 	}
 }
 
-// TestCreateUser_RefusalsLeaveNothing checks a taken name and an invalid name
-// are refused with no account row.
+// TestCreateUser_RefusalsLeaveNothing checks a taken name, an invalid name
+// and a reserved name are refused with no account row.
 func TestCreateUser_RefusalsLeaveNothing(t *testing.T) {
 	f := newCreateUserFixture(t)
 	before := f.userCount(t)
@@ -186,6 +186,10 @@ func TestCreateUser_RefusalsLeaveNothing(t *testing.T) {
 		if _, err := f.create(name); !errors.Is(err, authutil.ErrInvalidUsername) {
 			t.Errorf("create %q = %v, want ErrInvalidUsername", name, err)
 		}
+	}
+	// @everyone mentions every member of a chat channel (#4293).
+	if _, err := f.create("everyone"); !errors.Is(err, authutil.ErrReservedUsername) {
+		t.Errorf("create everyone = %v, want ErrReservedUsername", err)
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(f.filesDir), "x")); !os.IsNotExist(err) {
 		t.Errorf("../x made a folder outside the files directory: %v", err)

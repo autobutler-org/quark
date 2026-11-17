@@ -54,7 +54,8 @@ func requestAccount(c *gin.Context) *serverutil.Response {
 		return serverutil.NotFound(err)
 	case errors.Is(err, authutil.ErrUsernameTaken):
 		return serverutil.Conflict(err)
-	case errors.Is(err, authutil.ErrInvalidUsername), errors.Is(err, authutil.ErrInvalidAuthKey),
+	case errors.Is(err, authutil.ErrInvalidUsername), errors.Is(err, authutil.ErrReservedUsername),
+		errors.Is(err, authutil.ErrInvalidAuthKey),
 		errors.Is(err, authutil.ErrInvalidRecoveryKey), errors.Is(err, authutil.ErrInvalidRecoveryPhraseWords):
 		return serverutil.BadRequest(err)
 	case err != nil:
