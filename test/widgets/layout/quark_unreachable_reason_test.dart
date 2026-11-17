@@ -11,7 +11,6 @@ void main() {
     expect(
       quarkUnreachableReason(
         onDevice: false,
-        mode: ConnectionMode.offline,
         paused: false,
         phone: PhoneRemoteAccess.notSetUp,
       ),
@@ -23,7 +22,6 @@ void main() {
     expect(
       quarkUnreachableReason(
         onDevice: true,
-        mode: ConnectionMode.offline,
         paused: false,
         phone: PhoneRemoteAccess.notSetUp,
       ),
@@ -35,7 +33,6 @@ void main() {
     expect(
       quarkUnreachableReason(
         onDevice: true,
-        mode: ConnectionMode.offline,
         paused: true,
         phone: PhoneRemoteAccess.notSetUp,
       ),
@@ -50,30 +47,39 @@ void main() {
       PhoneRemoteAccess.notWorking,
     ]) {
       expect(
-        quarkUnreachableReason(
-          onDevice: true,
-          mode: ConnectionMode.offline,
-          paused: false,
-          phone: phone,
-        ),
+        quarkUnreachableReason(onDevice: true, paused: false, phone: phone),
         QuarkUnreachableReason.notAnswering,
         reason: phone.name,
       );
     }
   });
 
-  test('a reachable Quark has no unreachable reason', () {
-    for (final mode in [null, ConnectionMode.local, ConnectionMode.remote]) {
-      expect(
-        quarkUnreachableReason(
-          onDevice: true,
-          mode: mode,
-          paused: true,
-          phone: PhoneRemoteAccess.notSetUp,
-        ),
-        isNull,
-        reason: mode?.name ?? 'unknown',
-      );
-    }
+  // #3881: a page can fail while the connection still reads reachable. A
+  // phone still shows its own reason then, never the home Wi-Fi checklist.
+  test('a phone always has a reason', () {
+    expect(
+      quarkUnreachableReason(
+        onDevice: true,
+        paused: false,
+        phone: PhoneRemoteAccess.ready,
+      ),
+      isNotNull,
+    );
+  });
+
+  test('the screens name the route, never the home address on a phone', () {
+    expect(
+      quarkRouteLabel(onDevice: true, mode: ConnectionMode.remote),
+      'Using remote access',
+    );
+    expect(
+      quarkRouteLabel(onDevice: false, mode: ConnectionMode.local),
+      'Using your home network',
+    );
+    expect(quarkRouteLabel(onDevice: true, mode: ConnectionMode.offline), '');
+    expect(
+      quarkRouteLabel(onDevice: false, mode: ConnectionMode.offline),
+      isNull,
+    );
   });
 }

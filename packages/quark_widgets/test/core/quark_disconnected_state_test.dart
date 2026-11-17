@@ -175,6 +175,102 @@ void main() {
     });
   });
 
+  // #3881: over remote access one failed request turned a page into "You're
+  // not connected" while the app was connected, named the home address, and
+  // told a phone to join home Wi-Fi.
+  group('while the app still reaches the Quark', () {
+    setUp(() => QuarkDisconnectedView.reconnecting = true);
+    tearDown(() {
+      QuarkDisconnectedView.reconnecting = false;
+      QuarkDisconnectedView.route = null;
+      QuarkDisconnectedView.onShown = null;
+    });
+
+    testBothViewports('the view says it is reconnecting, not offline', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkDisconnectedView(hostAddress: 'quark.lan:8080', onRetry: () {}),
+        size: size,
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(find.text(quarkReconnectingHeadline), findsOneWidget);
+      expect(find.text(quarkReconnectingBody), findsOneWidget);
+      expect(find.text(quarkDisconnectedHeadline), findsNothing);
+      expect(find.text(quarkTroubleshootingSteps.first), findsNothing);
+      expect(find.byType(QuarkLoader), findsOneWidget);
+      expect(find.byKey(const ValueKey('disconnected_retry')), findsOneWidget);
+    });
+
+    testBothViewports('the banner says it is reconnecting, not offline', (
+      tester,
+      size,
+    ) async {
+      QuarkDisconnectedView.reason = QuarkUnreachableReason.notAnswering;
+      addTearDown(() => QuarkDisconnectedView.reason = null);
+      await pumpAt(tester, const QuarkDisconnectedBanner(), size: size);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text(quarkReconnectingHeadline), findsOneWidget);
+      expect(find.text("Your Quark isn't answering."), findsNothing);
+      expect(find.text(quarkTroubleshootingStepsInPlace.first), findsNothing);
+    });
+
+    testWidgets('names the route in place of the address', (tester) async {
+      QuarkDisconnectedView.route = 'Using remote access';
+      await pumpAt(
+        tester,
+        const QuarkDisconnectedView(hostAddress: 'quark.lan:8080'),
+      );
+
+      expect(find.text('Using remote access'), findsOneWidget);
+      expect(find.text('quark.lan:8080'), findsNothing);
+    });
+
+    testWidgets('an empty route hides the address', (tester) async {
+      QuarkDisconnectedView.route = '';
+      await pumpAt(
+        tester,
+        const QuarkDisconnectedView(hostAddress: 'quark.lan:8080'),
+      );
+
+      expect(find.text('quark.lan:8080'), findsNothing);
+    });
+
+    testWidgets('tells the app each time a screen comes up, and retries '
+        'every screen on request', (tester) async {
+      var shown = 0;
+      var viewRetries = 0;
+      var bannerRetries = 0;
+      QuarkDisconnectedView.onShown = () => shown++;
+      await pumpAt(
+        tester,
+        Column(
+          children: [
+            QuarkDisconnectedBanner(onRetry: () => bannerRetries++),
+            Expanded(
+              child: QuarkDisconnectedView(onRetry: () => viewRetries++),
+            ),
+          ],
+        ),
+      );
+
+      expect(shown, 2);
+      expect(QuarkDisconnectedView.showing, isTrue);
+      QuarkDisconnectedView.retryShown();
+      expect(viewRetries, 1);
+      expect(bannerRetries, 1);
+
+      await pumpAt(tester, const SizedBox());
+      expect(QuarkDisconnectedView.showing, isFalse);
+      QuarkDisconnectedView.retryShown();
+      expect(viewRetries, 1);
+    });
+  });
+
   // #3778: the checklist used to name a networking vendor and ask for a
   // manual network check. A browser gets three plain steps. A phone shows
   // the reason it already knows (#3776) and no checklist.

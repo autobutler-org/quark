@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/controllers/upload_sessions_controller.dart';
 import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/router.dart';
+import 'package:quark/utils/connection_config.dart';
 import 'package:quark/widgets/layout/account_sheet/app_account_button.dart';
 import 'package:quark/widgets/layout/connection_sheet_button.dart';
 import 'package:quark/widgets/layout/remote_access_pause_banner.dart';
@@ -32,6 +34,17 @@ import 'package:tailnet_flutter/tailnet_flutter.dart';
 /// A phone's bar has no room for the three, so the scope's compact control
 /// is one [AppAccountButton] whose sheet holds them all, with the theme and
 /// the switch to another Quark (#4150).
+///
+/// It is also the one place that decides whether a page that could not
+/// load is offline (#3881). A [QuarkDisconnectedView] or
+/// [QuarkDisconnectedBanner] coming on screen asks [connection] to check,
+/// once however many pages failed together. While that check runs, and
+/// whenever the connection says the Quark is reachable, those screens say
+/// they are reconnecting rather than offline, and every one of them loads
+/// again by itself when a check finds the Quark, or when an offline Quark
+/// comes back. Off the web they name the way the app reaches the Quark,
+/// never its home address, and a phone always shows its own reason rather
+/// than the home Wi-Fi checklist.
 class AppBarTrailingHost extends StatefulWidget {
   /// Creates the scope around [child].
   const AppBarTrailingHost({
@@ -41,8 +54,15 @@ class AppBarTrailingHost extends StatefulWidget {
     required this.notifications,
     required this.onNavigate,
     required this.child,
+    @visibleForTesting bool? runsOnDeviceNode,
     super.key,
-  });
+  }) : _runsOnDeviceNode = runsOnDeviceNode;
+
+  /// How long after a check the screens still showing check again. Doubles
+  /// each time, up to [ConnectionConfig.offlineBackoffMax].
+  static const Duration recheckWhileShown = Duration(seconds: 5);
+
+  final bool? _runsOnDeviceNode;
 
   /// Where the running count comes from.
   final JobsController jobs;
@@ -69,12 +89,74 @@ class AppBarTrailingHost extends StatefulWidget {
 }
 
 class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
+  bool _checking = false;
+  Timer? _recheck;
+  Duration _recheckDelay = AppBarTrailingHost.recheckWhileShown;
+  ConnectionMode? _lastMode;
+
+  bool get _onDevice =>
+      widget._runsOnDeviceNode ?? EmbeddedTunnel.runsOnDeviceNode;
+
+  static bool _reachable(ConnectionMode? mode) =>
+      mode == ConnectionMode.local || mode == ConnectionMode.remote;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastMode = widget.connection.mode;
+    widget.connection.addListener(_onConnectionChanged);
+    // The web app has no connection to check: the browser already found it.
+    if (!kIsWeb) QuarkDisconnectedView.onShown = _checkForShown;
+  }
+
   @override
   void dispose() {
+    widget.connection.removeListener(_onConnectionChanged);
+    _recheck?.cancel();
     QuarkPageScaffold.pauseBanner = null;
     QuarkDisconnectedView.turnOnRemoteAccess = null;
     QuarkDisconnectedView.reason = null;
+    QuarkDisconnectedView.onShown = null;
+    QuarkDisconnectedView.reconnecting = false;
+    QuarkDisconnectedView.route = null;
     super.dispose();
+  }
+
+  /// An offline Quark that answers again reloads every screen that gave up.
+  void _onConnectionChanged() {
+    final mode = widget.connection.mode;
+    final cameBack = !_reachable(_lastMode) && _reachable(mode);
+    _lastMode = mode;
+    if (cameBack && !_checking) QuarkDisconnectedView.retryShown();
+  }
+
+  /// Checks once for every screen that just failed. Another screen failing
+  /// while a check runs, or before the next one is due, joins that check.
+  void _checkForShown() {
+    if (_checking || _recheck != null) return;
+    unawaited(_checkAndRetry());
+  }
+
+  Future<void> _checkAndRetry() async {
+    setState(() => _checking = true);
+    await widget.connection.check();
+    if (!mounted) return;
+    setState(() => _checking = false);
+    if (_reachable(widget.connection.mode)) {
+      QuarkDisconnectedView.retryShown();
+    }
+    _recheck = Timer(_recheckDelay, () {
+      _recheck = null;
+      if (QuarkDisconnectedView.showing) {
+        _checkForShown();
+      } else {
+        _recheckDelay = AppBarTrailingHost.recheckWhileShown;
+      }
+    });
+    final doubled = _recheckDelay * 2;
+    _recheckDelay = doubled > ConnectionConfig.offlineBackoffMax
+        ? ConnectionConfig.offlineBackoffMax
+        : doubled;
   }
 
   @override
@@ -84,7 +166,7 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
       listenable: connection,
       builder: (context, _) {
         final mode = connection.mode;
-        final onDevice = EmbeddedTunnel.runsOnDeviceNode;
+        final onDevice = _onDevice;
         final paused = onDevice && connection.remoteAccessPaused;
         QuarkPageScaffold.pauseBanner = (context) =>
             paused ? RemoteAccessPauseBanner(controller: connection) : null;
@@ -93,9 +175,14 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
             : null;
         QuarkDisconnectedView.reason = quarkUnreachableReason(
           onDevice: onDevice,
-          mode: mode,
           paused: connection.remoteAccessPaused,
           phone: connection.phoneRemoteAccess,
+        );
+        QuarkDisconnectedView.reconnecting =
+            !kIsWeb && (_checking || _reachable(mode));
+        QuarkDisconnectedView.route = quarkRouteLabel(
+          onDevice: onDevice,
+          mode: mode,
         );
         final connectionButton = mode != null || paused
             ? ConnectionSheetButton(
@@ -148,23 +235,40 @@ class _AppBarTrailingHostState extends State<AppBarTrailingHost> {
 }
 
 /// Which away-screen reason a phone already knows, or null when this device
-/// is not a phone or the Quark is still reachable.
+/// is not a phone.
 ///
-/// A browser cannot use remote access, so it keeps the checklist. The screen
-/// can also say there is no internet or that the network wants a sign-in;
-/// those are passed in by whoever measured them. This returns only the three
-/// a [ConnectionController] can already tell apart: not set up, paused, or
-/// the Quark not answering.
+/// A browser cannot use remote access, so it keeps the checklist. A phone
+/// never does (#3881): a page can fail while the connection still reads
+/// reachable, and the home Wi-Fi checklist is wrong advice for a phone away
+/// from home. The screen can also say there is no internet or that the
+/// network wants a sign-in; those are passed in by whoever measured them.
+/// This returns only the three a [ConnectionController] can already tell
+/// apart: not set up, paused, or the Quark not answering.
 QuarkUnreachableReason? quarkUnreachableReason({
   required bool onDevice,
-  required ConnectionMode? mode,
   required bool paused,
   required PhoneRemoteAccess phone,
 }) {
-  if (!onDevice || mode != ConnectionMode.offline) return null;
+  if (!onDevice) return null;
   if (paused) return QuarkUnreachableReason.paused;
   if (phone == PhoneRemoteAccess.notSetUp) {
     return QuarkUnreachableReason.notSetUp;
   }
   return QuarkUnreachableReason.notAnswering;
 }
+
+/// How the app reaches the Quark, in words for the disconnected screens, in
+/// place of the home address they used to show (#3881).
+///
+/// Null keeps the address the page passed, which a browser and a desktop
+/// without a way to the Quark do. A phone that cannot reach it shows no
+/// address at all: its reason already says what is wrong, and the home
+/// address reads as the app trying the wrong place.
+String? quarkRouteLabel({
+  required bool onDevice,
+  required ConnectionMode? mode,
+}) => switch (mode) {
+  ConnectionMode.local => 'Using your home network',
+  ConnectionMode.remote => 'Using remote access',
+  _ => onDevice ? '' : null,
+};

@@ -23,6 +23,7 @@ import 'package:quark_icons/quark_icons.dart';
 
 import '../theme/quark_tokens.dart';
 import 'empty_state_widget.dart';
+import 'quark_loader.dart';
 import 'quark_disconnected_state/troubleshooting_list.dart';
 
 /// Headline for both shapes. A plain statement of fact, no error vocabulary.
@@ -41,6 +42,13 @@ const String quarkDisconnectedInline =
 /// Terse form, for a row in a list where a [QuarkDisconnectedBanner] on the
 /// same page already carries the explanation and the steps.
 const String quarkDisconnectedShort = 'Not connected';
+
+/// Headline while the app still has a way to the Quark and is checking it
+/// again, in place of [quarkDisconnectedHeadline] (#3881).
+const String quarkReconnectingHeadline = 'Reconnecting…';
+
+/// The sentence under [quarkReconnectingHeadline].
+const String quarkReconnectingBody = 'This should only take a moment.';
 
 /// What a browser can check when the Quark is unreachable.
 ///
@@ -115,11 +123,20 @@ enum QuarkUnreachableReason {
   final String body;
 }
 
-/// The words both shapes show: a phone's reason, or the browser checklist.
+/// The words both shapes show: reconnecting, a phone's reason, or the
+/// browser checklist.
 ({String headline, String body, List<String>? steps}) _disconnectedCopy({
+  required bool reconnecting,
   required QuarkUnreachableReason? unreachableReason,
   required List<String> steps,
 }) {
+  if (reconnecting) {
+    return (
+      headline: quarkReconnectingHeadline,
+      body: quarkReconnectingBody,
+      steps: null,
+    );
+  }
   if (unreachableReason != null) {
     return (
       headline: unreachableReason.headline,
@@ -134,11 +151,42 @@ enum QuarkUnreachableReason {
   );
 }
 
+/// Every [QuarkDisconnectedView] and [QuarkDisconnectedBanner] on screen, so
+/// the app can ask them all to try again once the Quark answers.
+final Set<_ShownState> _shown = {};
+
+/// Tracks a disconnected screen while it is on screen.
+mixin _ShownState<T extends StatefulWidget> on State<T> {
+  /// The load that failed, re-run by [QuarkDisconnectedView.retryShown].
+  VoidCallback? get retry;
+
+  @override
+  void initState() {
+    super.initState();
+    _shown.add(this);
+    // After the frame, so the app may rebuild in response.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) QuarkDisconnectedView.onShown?.call();
+    });
+  }
+
+  @override
+  void dispose() {
+    _shown.remove(this);
+    super.dispose();
+  }
+}
+
 /// Full-page disconnected state, for a page with nothing left to show.
 ///
 /// A browser shows [quarkTroubleshootingSteps]. A phone that already knows
 /// why passes [unreachableReason], or the app sets [reason], and that
 /// reason replaces the checklist, including on a view already on screen.
+///
+/// While the app still has a way to the Quark ([reconnecting]), a failed
+/// load is a hiccup rather than being offline: the view says
+/// [quarkReconnectingHeadline] instead, and the app calls [retryShown] once
+/// the Quark answers (#3881).
 ///
 /// Key prefixes: `disconnected_retry`, `disconnected_manage_hosts`, and
 /// `disconnected_turn_on_remote_access` on the buttons, each rendered only
@@ -151,7 +199,7 @@ enum QuarkUnreachableReason {
 ///   onManageHosts: () => context.go(AppRoutes.settings),
 /// );
 /// ```
-class QuarkDisconnectedView extends StatelessWidget {
+class QuarkDisconnectedView extends StatefulWidget {
   /// Creates the full-page disconnected state.
   const QuarkDisconnectedView({
     super.key,
@@ -166,7 +214,8 @@ class QuarkDisconnectedView extends StatelessWidget {
 
   /// The address the app tried and could not reach, shown under the body so a
   /// user with several Quarks can see which one this is about. Omit it, or
-  /// pass an empty string, when the app has no address to name.
+  /// pass an empty string, when the app has no address to name. [route]
+  /// replaces it when the app sets one.
   final String? hostAddress;
 
   /// Re-runs whatever load failed. Usually the page's own refresh. The retry
@@ -202,10 +251,21 @@ class QuarkDisconnectedView extends StatelessWidget {
   /// builds this view can offer the button without a new argument.
   static VoidCallback? turnOnRemoteAccess;
 
+  /// Called once each time a view or banner comes on screen, so the app can
+  /// check whether the Quark is really out of reach.
+  static VoidCallback? onShown;
+
   // Assigned while an ancestor builds. Listening rebuilds the screens that
   // are already up; the page around them stays mounted.
   static final ValueNotifier<QuarkUnreachableReason?> _reason =
       ValueNotifier<QuarkUnreachableReason?>(null);
+  static final ValueNotifier<bool> _reconnecting = ValueNotifier<bool>(false);
+  static final ValueNotifier<String?> _route = ValueNotifier<String?>(null);
+  static final Listenable _changes = Listenable.merge([
+    _reason,
+    _reconnecting,
+    _route,
+  ]);
 
   /// [unreachableReason] for pages that already build this view.
   ///
@@ -223,18 +283,65 @@ class QuarkDisconnectedView extends StatelessWidget {
     _reason.value = value;
   }
 
+  /// Whether the app still has a way to the Quark, or is checking for one.
+  ///
+  /// While true, every view and banner says [quarkReconnectingHeadline]
+  /// instead of being offline, and shows no checklist or reason.
+  static bool get reconnecting => _reconnecting.value;
+
+  /// Sets [reconnecting] on every screen already showing.
+  static set reconnecting(bool value) {
+    _reconnecting.value = value;
+  }
+
+  /// How the app reaches the Quark, in words, shown in place of
+  /// [hostAddress] — "Using remote access" rather than a home address the
+  /// phone is not using. An empty string hides the line; null keeps
+  /// [hostAddress].
+  static String? get route => _route.value;
+
+  /// Sets [route] on every view already showing.
+  static set route(String? value) {
+    _route.value = value;
+  }
+
+  /// Whether any view or banner is on screen.
+  static bool get showing => _shown.isNotEmpty;
+
+  /// Re-runs the failed load behind every view and banner on screen, for
+  /// when the Quark answers again.
+  static void retryShown() {
+    for (final state in _shown.toList()) {
+      state.retry?.call();
+    }
+  }
+
+  @override
+  State<QuarkDisconnectedView> createState() => _QuarkDisconnectedViewState();
+}
+
+class _QuarkDisconnectedViewState extends State<QuarkDisconnectedView>
+    with _ShownState {
+  @override
+  VoidCallback? get retry => widget.onRetry;
+
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<QuarkUnreachableReason?>(
-      valueListenable: _reason,
-      builder: (context, reason, _) {
+    return ListenableBuilder(
+      listenable: QuarkDisconnectedView._changes,
+      builder: (context, _) {
         final colorScheme = Theme.of(context).colorScheme;
         final tokens = QuarkTokens.of(context);
-        final address = hostAddress;
-        final turnOn = onTurnOnRemoteAccess ?? turnOnRemoteAccess;
+        final reconnecting = QuarkDisconnectedView.reconnecting;
+        final address = QuarkDisconnectedView.route ?? widget.hostAddress;
+        final turnOn =
+            widget.onTurnOnRemoteAccess ??
+            QuarkDisconnectedView.turnOnRemoteAccess;
         final copy = _disconnectedCopy(
-          unreachableReason: unreachableReason ?? reason,
-          steps: steps,
+          reconnecting: reconnecting,
+          unreachableReason:
+              widget.unreachableReason ?? QuarkDisconnectedView.reason,
+          steps: widget.steps,
         );
 
         // The icon and the two lines are the shared empty state. The address,
@@ -243,7 +350,9 @@ class QuarkDisconnectedView extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
             child: EmptyStateWidget(
-              icon: QuarkIcons.cloud_off_outlined,
+              icon: reconnecting
+                  ? QuarkIcons.cloud_sync_outlined
+                  : QuarkIcons.cloud_off_outlined,
               headline: copy.headline,
               subtext: copy.body,
               action: Column(
@@ -258,6 +367,10 @@ class QuarkDisconnectedView extends StatelessWidget {
                         color: colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                     ),
+                    SizedBox(height: tokens.spacingLg),
+                  ],
+                  if (reconnecting) ...[
+                    const QuarkLoader(size: 20),
                     SizedBox(height: tokens.spacingLg),
                   ],
                   if (copy.steps case final checklist?) ...[
@@ -277,18 +390,18 @@ class QuarkDisconnectedView extends StatelessWidget {
                           onPressed: turnOn,
                           child: const Text('Turn on remote access'),
                         ),
-                      if (onRetry != null)
+                      if (widget.onRetry case final onRetry?)
                         FilledButton.icon(
                           key: const ValueKey('disconnected_retry'),
                           onPressed: onRetry,
                           icon: const Icon(QuarkIcons.refresh),
                           label: const Text('Try again'),
                         ),
-                      if (onManageHosts != null)
+                      if (widget.onManageHosts case final onManageHosts?)
                         OutlinedButton(
                           key: const ValueKey('disconnected_manage_hosts'),
                           onPressed: onManageHosts,
-                          child: Text(manageHostsLabel),
+                          child: Text(widget.manageHostsLabel),
                         ),
                     ],
                   ),
@@ -308,7 +421,8 @@ class QuarkDisconnectedView extends StatelessWidget {
 /// Uses [quarkTroubleshootingStepsInPlace] unless [unreachableReason] or
 /// [QuarkDisconnectedView.reason] names why this phone cannot reach the
 /// Quark. That reason replaces the checklist, including on a banner already
-/// on screen.
+/// on screen. While [QuarkDisconnectedView.reconnecting] it says
+/// [quarkReconnectingHeadline] instead.
 ///
 /// Key prefixes: `disconnected_banner_retry` on the retry button, rendered
 /// only when [onRetry] is supplied.
@@ -316,7 +430,7 @@ class QuarkDisconnectedView extends StatelessWidget {
 /// ```dart
 /// QuarkDisconnectedBanner(onRetry: controller.refresh);
 /// ```
-class QuarkDisconnectedBanner extends StatelessWidget {
+class QuarkDisconnectedBanner extends StatefulWidget {
   /// Creates the compact disconnected banner.
   const QuarkDisconnectedBanner({
     super.key,
@@ -343,15 +457,28 @@ class QuarkDisconnectedBanner extends StatelessWidget {
   final QuarkUnreachableReason? unreachableReason;
 
   @override
+  State<QuarkDisconnectedBanner> createState() =>
+      _QuarkDisconnectedBannerState();
+}
+
+class _QuarkDisconnectedBannerState extends State<QuarkDisconnectedBanner>
+    with _ShownState {
+  @override
+  VoidCallback? get retry => widget.onRetry;
+
+  @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<QuarkUnreachableReason?>(
-      valueListenable: QuarkDisconnectedView._reason,
-      builder: (context, reason, _) {
+    return ListenableBuilder(
+      listenable: QuarkDisconnectedView._changes,
+      builder: (context, _) {
         final colorScheme = Theme.of(context).colorScheme;
         final tokens = QuarkTokens.of(context);
+        final reconnecting = QuarkDisconnectedView.reconnecting;
         final copy = _disconnectedCopy(
-          unreachableReason: unreachableReason ?? reason,
-          steps: steps,
+          reconnecting: reconnecting,
+          unreachableReason:
+              widget.unreachableReason ?? QuarkDisconnectedView.reason,
+          steps: widget.steps,
         );
 
         return Semantics(
@@ -369,11 +496,14 @@ class QuarkDisconnectedBanner extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(
-                      QuarkIcons.cloud_off_outlined,
-                      size: 20,
-                      color: colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
+                    if (reconnecting)
+                      const QuarkLoader(size: 20)
+                    else
+                      Icon(
+                        QuarkIcons.cloud_off_outlined,
+                        size: 20,
+                        color: colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
                     SizedBox(width: tokens.spacingSm),
                     Expanded(
                       child: Text(
@@ -400,7 +530,7 @@ class QuarkDisconnectedBanner extends StatelessWidget {
                   SizedBox(height: tokens.spacingSm + tokens.spacingXs),
                   TroubleshootingList(steps: checklist),
                 ],
-                if (onRetry != null) ...[
+                if (widget.onRetry case final onRetry?) ...[
                   SizedBox(height: tokens.spacingXs),
                   Align(
                     alignment: Alignment.centerLeft,
