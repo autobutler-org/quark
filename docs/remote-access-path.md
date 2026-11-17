@@ -114,9 +114,9 @@ Pending the matrix above, the code-level findings point to three changes, in thi
 
 1. **Give the Quark's node a fixed UDP port**, and ask the router to map it with UPnP/NAT-PMP/PCP where
    available. That gives the phone something stable to punch through to, and gives a user who forwards a
-   port by hand something to forward.
+   port by hand something to forward (#4273).
 2. **Run our own relay near users**: turn on the coordination server's embedded relay and a real STUN
    listener on 3478, or remove the dead 3478 rule if we stay on public relays. That bounds the cost of the
-   relayed case.
+   relayed case (#4274).
 3. **Keep the phone's node warm across resume** (#3882), so a return from the background does not throw
    away a direct path.
