@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/drive_health_controller.dart';
 import 'package:quark/services/data_protection_service.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/storage_devices/backup_drive_runs_section.dart';
 import 'package:quark/widgets/storage_devices/backup_progress_card.dart';
 import 'package:quark/widgets/storage_devices/data_drive_backup_section.dart';
@@ -177,7 +178,16 @@ class DeviceCard extends StatelessWidget {
             ),
             const SizedBox(height: 2),
 
-            if (device.isUnmounted) ...[
+            if (device.needsRestart) ...[
+              Text(
+                key: ValueKey('device_card_needs_restart_${device.serial}'),
+                Errors.driveNeedsRestart,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+              const SizedBox(height: 2),
+            ] else if (device.isUnmounted) ...[
               Text(
                 key: const ValueKey('device_card_safe_to_remove'),
                 'Not mounted · safe to unplug',
@@ -204,11 +214,15 @@ class DeviceCard extends StatelessWidget {
               ),
             ],
 
-            const SizedBox(height: 8),
-            DriveHealthSection(
-              health: DriveHealthController.view(device.health),
-              id: DriveHealthController.idFor(device),
-            ),
+            // A drive that needs a restart cannot be read either, and the
+            // line above already says why, so its health stays quiet.
+            if (!device.needsRestart) ...[
+              const SizedBox(height: 8),
+              DriveHealthSection(
+                health: DriveHealthController.view(device.health),
+                id: DriveHealthController.idFor(device),
+              ),
+            ],
 
             if (dataDrive != null) ...[
               const SizedBox(height: 8),
@@ -294,7 +308,9 @@ class DeviceCard extends StatelessWidget {
               ),
             ],
 
-            if (!device.isEnabled && onMount != null) ...[
+            if (!device.isEnabled &&
+                !device.needsRestart &&
+                onMount != null) ...[
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: isMounting ? null : onMount,

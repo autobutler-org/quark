@@ -123,6 +123,7 @@ class StorageDevice {
     this.categories = const {},
     this.health,
     this.activeBackupJobId,
+    this.needsRestart = false,
   });
 
   factory StorageDevice.fromJson(Map<String, dynamic> json) {
@@ -151,6 +152,7 @@ class StorageDevice {
       categories: categories,
       health: _driveHealth(json),
       activeBackupJobId: json['activeBackupJobId'] as String?,
+      needsRestart: json['needsRestart'] as bool? ?? false,
     );
   }
 
@@ -180,6 +182,11 @@ class StorageDevice {
   /// The snapshot backup pending or running onto this drive, whoever started
   /// it. Only a backup drive has one; null when nothing is running onto it.
   final String? activeBackupJobId;
+
+  /// Whether the Quark sees this drive but cannot mount it until it restarts:
+  /// it has no device node, as for a drive plugged into a container after the
+  /// container started (#4018). Such a drive offers no Mount.
+  final bool needsRestart;
 
   /// Whether this device is detected but not yet mounted.
   bool get isUnmounted => !isInternal && mountPoint.isEmpty;

@@ -329,8 +329,9 @@ docker run -d --name quark --restart unless-stopped --privileged \
 Quark mounts a drive the way it does on a device, with `sudo mount` onto
 `/var/lib/quark/data/mounts/<serial>`. The image carries `sudo` and the same one-line sudoers rule
 `quark install` writes, which allows `mount` and `umount` under that directory and nothing else.
-Without `--privileged` the container has no `CAP_SYS_ADMIN` and no `/dev/sdX` nodes, so the mount
-fails with `permission denied`. Everything else in Quark works without it.
+Without `--privileged` the container has no `CAP_SYS_ADMIN` and no `/dev/sdX` nodes. Quark still
+sees the drive through sysfs, so System → Storage lists it, but without its node it cannot be mounted
+(see below). Everything else in Quark works without it.
 
 `--privileged` gives the container root's power over the host's devices, so the container stops
 isolating Quark from the machine it runs on. Leave it off if you do not need USB drives.
@@ -339,8 +340,12 @@ The `quark` user is in the image's `disk` group (gid 6), so `blkid` can read a d
 type and an exFAT or NTFS drive is mounted writable by Quark. Debian and Ubuntu hosts own `/dev/sd*`
 as gid 6 too. On a host where `disk` has a different gid, add it with `--group-add <gid>`.
 
-Docker copies `/dev` when the container starts, so a drive plugged in afterwards does not appear
-until `docker restart quark`. A mount lives in the container's own mount namespace: the host does
+Docker copies `/dev` when the container starts, so a drive plugged in afterwards has no device node
+until `docker restart quark`. Quark finds drives through sysfs, which the container sees live, so the
+drive is listed anyway. Quark checks for the node before it mounts: a drive without one is reported as
+needing a restart (`needsRestart` on `GET /api/v0/storage/devices/status`), and its card on System →
+Storage says "Quark can't reach this drive until it restarts." in place of a Mount button and a health
+line. Quark never runs `mount` on it, and the drive is mountable once the container restarts. A mount lives in the container's own mount namespace: the host does
 not see it, and a restart drops it until Quark mounts the drive again.
 
 ## TLS

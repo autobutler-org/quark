@@ -1,5 +1,6 @@
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Maps an app [PhotoAlbum] onto the package's [AlbumItem], subtree included.
@@ -39,7 +40,8 @@ extension StorageDeviceToTarget on StorageDevice {
   /// The package's view of this device as somewhere to upload to. A device
   /// that is connected but not enabled is unavailable, and says what enables
   /// it (#3191). The one an admin gave the default storage role is the
-  /// default (#3194).
+  /// default (#3194). One that cannot be mounted until the Quark restarts
+  /// says that instead (#4018).
   UploadTarget toUploadTarget() => UploadTarget(
     serial: serial,
     name: name,
@@ -48,6 +50,8 @@ extension StorageDeviceToTarget on StorageDevice {
     isDefault: role == 'default-storage',
     unavailableReason: isEnabled
         ? null
+        : needsRestart
+        ? Errors.driveNeedsRestart
         : 'Not enabled. Mount it under System > Storage.',
   );
 }

@@ -361,6 +361,12 @@ abstract final class Errors {
   static const String noBackupsYet =
       'There are no backups on this drive yet. Back up onto it first.';
 
+  /// A plugged-in drive the Quark sees but cannot mount until it restarts: it
+  /// was plugged into a container after the container started, so it has no
+  /// device node (#4018).
+  static const String driveNeedsRestart =
+      "Quark can't reach this drive until it restarts.";
+
   /// A backup deleted while a backup onto its drive, or a restore from it,
   /// is running: the Quark answers 409 (#4044).
   static const String backupDriveBusy =
