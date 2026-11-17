@@ -145,9 +145,8 @@ class _FakeQuark {
   /// Devices whose trash request the Quark refuses.
   final Set<String> failingDeletes = {};
 
-  /// How many downloads are running now, and the most that ever ran at once.
-  int savesInFlight = 0;
-  int maxSavesInFlight = 0;
+  /// Whether the Quark refuses a selection zip (#4195).
+  bool failZips = false;
 
   /// The capture date the Quark reports for an album item's path.
   DateTime? Function(String relPath) albumTakenOf = (_) => null;
@@ -351,11 +350,14 @@ class _FakeQuark {
         },
     saveFile: (filePath, {serial, fileName}) async {
       calls.add('save($filePath, $serial, $fileName)');
-      savesInFlight++;
-      if (savesInFlight > maxSavesInFlight) maxSavesInFlight = savesInFlight;
-      await Future<void>.delayed(Duration.zero);
-      savesInFlight--;
       if (failing.contains(filePath)) throw const ApiException(500);
+      return null;
+    },
+    saveSelectionZip: (paths) async {
+      calls.add(
+        'zip(${paths.map((p) => '${p.serial}:${p.filePath}').join(',')})',
+      );
+      if (failZips) throw const ApiException(503);
       return null;
     },
     copyPhoto: (relPath, {serial}) async {
@@ -1056,28 +1058,42 @@ void main() {
       expect(count(quark, 'listAlbums'), 1);
     });
 
-    test('downloads each photo, at most four at a time', () async {
-      final (quark, controller) = await selecting(total: 10);
+    test('downloads the selection as one zip (#4195)', () async {
+      final quark = _FakeQuark(total: 3)
+        ..serialOf = (i) => i == 1 ? 'usb2' : 'sd1';
+      final controller = quark.controller();
+      await controller.refresh();
+      controller.enterSelectionMode();
       selectQuarkPhotos(controller);
+      quark.calls.clear();
 
       final outcome = await controller.downloadSelected();
 
-      expect(outcome.done, 10);
-      expect(count(quark, 'save('), 10);
-      expect(quark.calls, contains('save(camera/3.jpg, sd1, 3.jpg)'));
-      expect(quark.maxSavesInFlight, PhotosController.selectionConcurrency);
+      expect(outcome.done, 3);
+      expect(quark.calls, hasLength(1));
+      expect(
+        quark.calls.single,
+        allOf(
+          startsWith('zip('),
+          contains('sd1:camera/0.jpg'),
+          contains('usb2:camera/1.jpg'),
+          contains('sd1:camera/2.jpg'),
+        ),
+      );
+      expect(count(quark, 'save('), 0);
       expect(controller.selectionMode, isFalse);
     });
 
-    test('a failed download stays selected', () async {
+    test('a refused zip keeps the whole selection', () async {
       final (quark, controller) = await selecting();
-      quark.failing.add('camera/2.jpg');
+      quark.failZips = true;
       selectQuarkPhotos(controller);
 
       final outcome = await controller.downloadSelected();
 
-      expect((outcome.done, outcome.failed), (2, 1));
-      expect(controller.selectedIds, {'sd1:camera/2.jpg'});
+      expect((outcome.done, outcome.failed), (0, 3));
+      expect(outcome.error, isA<ApiException>());
+      expect(controller.selectedIds, hasLength(3));
     });
 
     test('copies each photo and reloads the library once', () async {

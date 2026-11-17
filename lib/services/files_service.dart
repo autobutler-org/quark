@@ -737,6 +737,103 @@ class FilesService with AuthenticatedService {
     fallbackPath: entryPath,
   );
 
+  /// The most files one selection zip may hold, the Quark's
+  /// `zipselectionutil.MaxPaths`.
+  static const int maxSelectionZipPaths = 2000;
+
+  /// The name the Quark gives a selection zip.
+  static const String selectionZipName = 'selection.zip';
+
+  /// Saves the files [paths] name, from any folders on any devices, as one
+  /// zip (#4195): streamed by the browser on the web, through the platform's
+  /// save dialog everywhere else. A file the Quark cannot read is left out
+  /// and named in a `skipped.txt` inside the zip rather than failing it.
+  /// [paths] holds 1 to [maxSelectionZipPaths] files. Returns where it was
+  /// saved, or null when the save was canceled or the browser has it.
+  ///
+  /// api: POST /api/v0/files/download-selection
+  static Future<String?> saveSelectionZip(
+    List<({String serial, String filePath})> paths,
+  ) async {
+    if (kIsWeb) {
+      // A form cannot send the Authorization header, so it carries a token
+      // bound to exactly these paths.
+      final (:token, :selection) = await createSelectionDownloadToken(paths);
+      return web_download.submitFormForDownload(
+        _selectionUri.replace(
+          queryParameters: {'downloadToken': token, 'filePath': selection},
+        ),
+        _selectionFields(paths),
+      );
+    }
+    return saveDownloadThroughDialog(
+      fileNameFor: (headers) => _resolveDownloadFileName(
+        headers['content-disposition'],
+        fallbackPath: selectionZipName,
+      ),
+      download: () => downloadSelectionZip(paths),
+    );
+  }
+
+  /// Streams the zip of the files [paths] name onto disk, the way
+  /// [saveSelectionZip] does on a native platform. The caller owns the
+  /// returned file and must delete it. Not available on web.
+  ///
+  /// api: POST /api/v0/files/download-selection
+  static Future<DownloadedFile> downloadSelectionZip(
+    List<({String serial, String filePath})> paths,
+  ) => instance.authenticatedDownload(
+    _selectionUri,
+    fields: _selectionFields(paths),
+  );
+
+  /// Asks the Quark for a token that authenticates one selection download of
+  /// exactly [paths], and the selection it is bound to, which the download
+  /// passes back as `filePath`.
+  ///
+  /// api: POST /api/v0/files/download-selection-token
+  static Future<({String token, String selection})>
+  createSelectionDownloadToken(
+    List<({String serial, String filePath})> paths,
+  ) async {
+    final response = await instance.authenticatedPost(
+      apiBaseUri.resolve('/api/v0/files/download-selection-token'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'paths': _selectionJson(paths)}),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to issue download token');
+    }
+    final decoded = jsonDecode(response.body);
+    final (token, selection) = decoded is Map<String, dynamic>
+        ? (decoded['token'], decoded['selection'])
+        : (null, null);
+    if (token is! String ||
+        token.isEmpty ||
+        selection is! String ||
+        selection.isEmpty) {
+      throw Exception('Selection token response had no token');
+    }
+    return (token: token, selection: selection);
+  }
+
+  /// Where a selection zip is downloaded from.
+  ///
+  /// api: none
+  static Uri get _selectionUri =>
+      apiBaseUri.resolve('/api/v0/files/download-selection');
+
+  static List<Map<String, String>> _selectionJson(
+    List<({String serial, String filePath})> paths,
+  ) => [
+    for (final path in paths)
+      {'serial': path.serial, 'filePath': path.filePath},
+  ];
+
+  static Map<String, String> _selectionFields(
+    List<({String serial, String filePath})> paths,
+  ) => {'paths': jsonEncode(_selectionJson(paths))};
+
   static Future<String?> _saveDownload(
     Uri uri, {
     String? fileName,

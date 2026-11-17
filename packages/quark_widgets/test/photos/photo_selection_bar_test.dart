@@ -176,6 +176,41 @@ void main() {
       }
     });
 
+    testBothViewports('Download is labeled and downloads the selection once '
+        '(#4195)', (tester, size) async {
+      final events = <String>[];
+      await pumpAt(
+        tester,
+        PhotoSelectionBar(
+          selectedCount: 12,
+          onAddToAlbum: () => events.add('add'),
+          onDownload: () => events.add('download'),
+        ),
+        size: size,
+      );
+
+      if (size == wideViewport) {
+        expect(
+          tester
+              .widget<QuarkBarIconButton>(
+                find.byKey(const ValueKey('photo_selection_download')),
+              )
+              .tooltip,
+          'Download',
+        );
+      } else {
+        // A phone keeps it under More.
+        await tester.tap(find.byKey(const ValueKey('photo_selection_more')));
+        await tester.pumpAndSettle();
+        expect(find.text('Download'), findsOneWidget);
+      }
+      await tester.tap(find.byKey(const ValueKey('photo_selection_download')));
+      await tester.pumpAndSettle();
+
+      expect(events, ['download']);
+      expect(tester.takeException(), isNull);
+    });
+
     testBothViewports('a device photo in the selection turns the Quark '
         'actions off and says why', (tester, size) async {
       final events = <String>[];

@@ -226,9 +226,19 @@ mixin AuthenticatedService {
   /// The caller owns the returned file and must [DownloadedFile.delete] it.
   /// Not available on web, which has no filesystem to stream onto.
   ///
+  /// With [fields], the request is a form POST of them instead of a GET, for
+  /// a download whose input is too large for a query string (#4195).
+  ///
   /// api: none
-  Future<DownloadedFile> authenticatedDownload(Uri uri) async {
-    final response = await authenticatedSend(http.Request('GET', uri));
+  Future<DownloadedFile> authenticatedDownload(
+    Uri uri, {
+    Map<String, String>? fields,
+  }) async {
+    final response = await authenticatedSend(
+      fields == null
+          ? http.Request('GET', uri)
+          : (http.Request('POST', uri)..bodyFields = fields),
+    );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       await response.stream.drain<void>();

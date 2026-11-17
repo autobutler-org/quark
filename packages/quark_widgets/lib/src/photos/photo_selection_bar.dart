@@ -74,7 +74,8 @@ class PhotoSelectionBar extends StatelessWidget {
   /// leaves the action out.
   final VoidCallback? onFavorite;
 
-  /// Downloads every selected photo. Null leaves the action out.
+  /// Downloads the selection, which the app saves as one zip. Null leaves
+  /// the action out.
   final VoidCallback? onDownload;
 
   /// Opens the share sheet for the selection. Null leaves the action out.

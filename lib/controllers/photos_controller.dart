@@ -200,6 +200,9 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
         })
         saveFile =
         FilesService.saveFile,
+    Future<String?> Function(List<({String serial, String filePath})> paths)
+        saveSelectionZip =
+        FilesService.saveSelectionZip,
     Future<String> Function(String relPath, {String? serial}) copyPhoto =
         FilesService.copyPhoto,
     Future<void> Function(
@@ -247,6 +250,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
        _renderDroppedFile = renderDroppedFile,
        _renderFromPath = renderFromPath,
        _saveFile = saveFile,
+       _saveSelectionZip = saveSelectionZip,
        _copyPhoto = copyPhoto,
        _deleteFile = deleteFile,
        _deleteFiles = deleteFiles,
@@ -389,6 +393,8 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     String? fileName,
   })
   _saveFile;
+  final Future<String?> Function(List<({String serial, String filePath})> paths)
+  _saveSelectionZip;
   final Future<String> Function(String relPath, {String? serial}) _copyPhoto;
   final Future<void> Function(
     String rootDir,
@@ -1644,17 +1650,29 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     );
   }
 
-  /// Downloads every selected photo as its own file, the way [downloadPhoto]
-  /// does, [selectionConcurrency] at a time (#4154).
-  Future<SelectionOutcome> downloadSelected() => _actOnSelection(
-    (photos) => _eachOf(photos, (photo) async {
-      await _saveFile(
-        photo.relPath!,
-        serial: (photo.serial ?? '').isEmpty ? null : photo.serial,
-        fileName: photo.name,
-      );
-    }),
-  );
+  /// Downloads the selected photos as one zip (#4195), or one zip per
+  /// [FilesService.maxSelectionZipPaths] of them. A batch the Quark refuses
+  /// fails as a whole and stays selected; a photo it cannot read is named in
+  /// the zip's `skipped.txt` instead.
+  Future<SelectionOutcome> downloadSelected() =>
+      _actOnSelection((photos) async {
+        const size = FilesService.maxSelectionZipPaths;
+        final failed = <String>{};
+        Object? error;
+        for (var i = 0; i < photos.length; i += size) {
+          final batch = photos.sublist(i, (i + size).clamp(0, photos.length));
+          try {
+            await _saveSelectionZip([
+              for (final photo in batch)
+                (serial: photo.serial ?? '', filePath: photo.relPath!),
+            ]);
+          } catch (e) {
+            failed.addAll(batch.map((photo) => photo.id));
+            error = e;
+          }
+        }
+        return (failed: failed, error: error);
+      });
 
   /// Copies every selected photo beside itself, [selectionConcurrency] at a
   /// time, then reloads the library once (#4154).
