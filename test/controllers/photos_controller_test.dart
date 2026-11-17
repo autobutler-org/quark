@@ -898,6 +898,15 @@ void main() {
       expect(quark.calls, contains('getPhotos(0)'));
     });
 
+    test('hands over its bytes for the clipboard (#3436)', () async {
+      final (quark, controller) = await loaded();
+
+      final bytes = await controller.photoBytes('sd1:camera/1.jpg');
+
+      expect(bytes, [1, 2, 3]);
+      expect(quark.calls, ['download(camera/1.jpg)']);
+    });
+
     test('deletes it from its folder and reloads', () async {
       final (quark, controller) = await loaded();
 
@@ -912,6 +921,7 @@ void main() {
 
       await controller.downloadPhoto('asset:dev1');
       expect(await controller.copyPhoto('asset:dev1'), isNull);
+      expect(await controller.photoBytes('asset:dev1'), isNull);
       await controller.deletePhoto('asset:dev1');
 
       expect(quark.calls, isEmpty);

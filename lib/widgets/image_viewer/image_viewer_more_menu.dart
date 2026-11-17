@@ -25,7 +25,9 @@ class ImageViewerMoreMenu {
     required this.onToggleSidebar,
     required this.onAddToAlbum,
     required this.onRemoveFromAlbum,
-    required this.onMakeACopy,
+    required this.onCopy,
+    required this.copyUnavailableReason,
+    required this.onDuplicate,
     required this.onShare,
     required this.onDelete,
   });
@@ -47,7 +49,16 @@ class ImageViewerMoreMenu {
   final VoidCallback onToggleSidebar;
   final VoidCallback onAddToAlbum;
   final VoidCallback onRemoveFromAlbum;
-  final VoidCallback onMakeACopy;
+
+  /// Copies the photo showing to the system clipboard (#3436).
+  final VoidCallback onCopy;
+
+  /// Why the clipboard cannot take a photo here, or null when it can. While
+  /// set, the Copy entry is disabled.
+  final String? copyUnavailableReason;
+
+  /// Duplicates the photo on the Quark, beside the original.
+  final VoidCallback onDuplicate;
   final VoidCallback onShare;
   final VoidCallback onDelete;
 
@@ -60,7 +71,7 @@ class ImageViewerMoreMenu {
     QuarkMenuEntry entry(
       String id,
       String label,
-      VoidCallback onSelected, {
+      VoidCallback? onSelected, {
       bool destructive = false,
     }) => QuarkMenuEntry(
       key: ValueKey('image_viewer_more_$id'),
@@ -90,7 +101,8 @@ class ImageViewerMoreMenu {
           )
         else
           entry('add_to_album', 'Add to Album', onAddToAlbum),
-        entry('copy', 'Make a Copy', onMakeACopy),
+        entry('copy', 'Copy', copyUnavailableReason == null ? onCopy : null),
+        entry('duplicate', 'Duplicate', onDuplicate),
         entry('share', 'Share…', onShare),
         entry('delete', 'Delete photo', onDelete, destructive: true),
       ],

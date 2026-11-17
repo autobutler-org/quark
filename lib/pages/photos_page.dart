@@ -11,6 +11,7 @@ import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/overlay_history.dart';
@@ -509,7 +510,9 @@ class PhotosPageState extends State<PhotosPage>
         relPath: path.relPath,
         name: photo.name,
       ),
-      onMakeACopy: () => _copyPhoto(photo.id),
+      onCopy: () => _copyToClipboard(photo.id),
+      copyUnavailableReason: imageClipboardUnavailableReason,
+      onDuplicate: () => _duplicatePhoto(photo.id),
       onDelete: () => _deletePhoto(photo),
     ).showAt(context, position);
   }
@@ -538,7 +541,20 @@ class PhotosPageState extends State<PhotosPage>
     }
   }
 
-  Future<void> _copyPhoto(String id) async {
+  /// Copies the Quark photo [id] to the system clipboard (#3436).
+  Future<void> _copyToClipboard(String id) =>
+      copyPhotoToClipboard(context, () => _controller.photoBytes(id));
+
+  /// Ctrl/Cmd+C in the library: copies the one selected photo (#3436).
+  void _copySelectedToClipboard() {
+    final selected = _controller.selectedIds;
+    if (selected.length != 1) return;
+    final id = selected.single;
+    if (_controller.quarkPathOf(id) == null) return;
+    _copyToClipboard(id);
+  }
+
+  Future<void> _duplicatePhoto(String id) async {
     try {
       final name = await _controller.copyPhoto(id);
       if (mounted && name != null) showMessage(context, 'Copy saved as $name');
@@ -637,6 +653,10 @@ class PhotosPageState extends State<PhotosPage>
 
     return CallbackShortcuts(
       bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyC, control: true):
+            _copySelectedToClipboard,
+        const SingleActivator(LogicalKeyboardKey.keyC, meta: true):
+            _copySelectedToClipboard,
         const SingleActivator(LogicalKeyboardKey.escape): () {
           if (_controller.selectionMode) {
             _controller.exitSelectionMode();

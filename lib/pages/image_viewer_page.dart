@@ -13,6 +13,7 @@ import 'package:quark/services/album_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/favorites_service.dart';
 import 'package:quark/services/thumbnail_cache_manager.dart';
+import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_viewer_actions.dart';
@@ -759,7 +760,14 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     );
   }
 
-  Future<void> _makeACopy() async {
+  /// Copies the photo showing to the system clipboard (#3436).
+  Future<void> _copyToClipboard() async {
+    if (_currentRelPath == null) return;
+    final bytes = _currentBytes;
+    await copyPhotoToClipboard(context, () async => bytes);
+  }
+
+  Future<void> _duplicate() async {
     final relPath = _currentRelPath;
     if (relPath == null) return;
     try {
@@ -834,6 +842,12 @@ class _ImageViewerPageState extends State<ImageViewerPage>
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final keyboard = HardwareKeyboard.instance;
+    if (event.logicalKey == LogicalKeyboardKey.keyC &&
+        (keyboard.isControlPressed || keyboard.isMetaPressed)) {
+      _copyToClipboard();
+      return KeyEventResult.handled;
+    }
     switch (event.logicalKey) {
       case LogicalKeyboardKey.arrowLeft:
         _goToPage(-1);
@@ -879,7 +893,9 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       onToggleSidebar: _toggleSidebar,
       onAddToAlbum: _addToAlbum,
       onRemoveFromAlbum: () => _removeFromAlbum(widget.sourceAlbum!),
-      onMakeACopy: _makeACopy,
+      onCopy: _copyToClipboard,
+      copyUnavailableReason: imageClipboardUnavailableReason,
+      onDuplicate: _duplicate,
       onShare: _share,
       onDelete: _confirmDelete,
     );
