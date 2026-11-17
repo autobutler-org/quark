@@ -103,9 +103,9 @@ func (h handler) validate(raw json.RawMessage) error {
 	return err
 }
 
-// lane puts every job in LaneCopy once the source probes as a video whose
-// codecs the target format holds, which is the table the formats endpoint
-// lists from and Remux acts on. A source that does not probe is
+// lane puts every job in LaneCopy once the source probes as a video that
+// videoutil.Targets offers the format for, which is the list the formats
+// endpoint returns and a dry run of Remux agrees with. A source that does not probe is
 // videoutil.ErrNotAVideo, with sprocket's reason still in the chain.
 func (h handler) lane(ctx context.Context, raw json.RawMessage) (string, error) {
 	p, err := decodeParams(raw)

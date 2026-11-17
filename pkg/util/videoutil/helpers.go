@@ -40,6 +40,23 @@ func isFragmented(src Source) bool {
 	return err == nil && info.Family == sprocket.ISOBMFF
 }
 
+// writable reports whether sprocket writes src into target, by running Remux
+// into a dryRunWriter: every refusal sprocket can make from the headers and
+// the first cluster comes before the first write, so this costs a header
+// build and no payload. A refusal is false; a read that failed is that read's
+// error, so a disk fault never reads as a format the video cannot take.
+func writable(src Source, target sprocket.Container) (bool, error) {
+	file := &readRecorder{File: src.File}
+	err := sprocket.Remux(file, src.Size, dryRunWriter{}, target)
+	switch {
+	case err == nil, errors.Is(err, errDryRunDone):
+		return true, nil
+	case file.err != nil:
+		return false, fmt.Errorf("remux %s: %w", src.Name, file.err)
+	}
+	return false, nil
+}
+
 // writeTrim runs one Trim into a new file at p in fsys. The clip streams into
 // fsys.Write through a pipe, so it is never buffered and never visible at p
 // until it is whole. A name already taken is vfs.ErrConflict, and Write

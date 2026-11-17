@@ -12811,7 +12811,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Lists the video formats POST /videos/transcode writes, in display order. With relPath, only the ones the video there can be converted to: those whose container holds its codecs, leaving out its own format. Without it, every format the device writes, whatever a given video's codecs allow. A relPath that is missing is a 404; one that cannot be read as a video, damaged or in a container the device does not read, is a 422.",
+                "description": "Lists the video formats POST /videos/transcode writes, in display order. With relPath, only the ones the video there can be converted to: those whose container holds its codecs and that the device can write it into, leaving out its own format. A fragmented MP4 has none. Without it, every format the device writes, whatever a given video's codecs allow. A relPath that is missing is a 404; one that cannot be read as a video, damaged or in a container the device does not read, is a 422.",
                 "produces": [
                     "application/json"
                 ],

@@ -60,6 +60,11 @@ var (
 	// ErrNoFreeName is returned by PlaceUnderFreeName when every name it tried
 	// was taken.
 	ErrNoFreeName = errors.New("no free name for the new file")
+	// ErrCannotConvert is returned by Remux for a source it cannot write into
+	// the format asked for: a codec the format cannot hold, or a source the
+	// device cannot write from, such as a fragmented MP4. sprocket's reason
+	// follows it in the message.
+	ErrCannotConvert = errors.New("this video can't be converted")
 )
 
 // ErrNoDecoder is returned by Keyframe for a video whose codec the device has
@@ -208,10 +213,15 @@ func ProbeSource(_ context.Context, src Source) (*VideoInfo, error) {
 	}, nil
 }
 
-// Targets returns the Formats src can be remuxed into, in Formats order: every
-// one sprocket.CanRemux allows for its codecs and its container family,
-// leaving out its own format, which would only copy the file. Remux reads the
-// same table. A file that does not parse as a video is ErrNotAVideo.
+// Targets returns the Formats src can be remuxed into, in Formats order,
+// leaving out its own format, which would only copy the file. A format is
+// offered when sprocket.CanRemux allows it for the codecs and the container
+// family, and a dry run of Remux then gets as far as writing the first byte.
+// CanRemux speaks for the first video and audio codec alone, so the dry run is
+// what refuses a fragmented MP4, another track the format cannot hold, or a
+// laced Matroska block in the first cluster, ahead of a job that would fail.
+// A file that does not parse as a video is ErrNotAVideo, and one that could
+// not be read is that read's error.
 func Targets(src Source) ([]Format, error) {
 	info, err := probe(src)
 	if err != nil {
@@ -220,7 +230,14 @@ func Targets(src Source) ([]Format, error) {
 	own := formatOf(src.Name)
 	targets := []Format{}
 	for _, spec := range formatSpecs {
-		if Format(spec.container) != own && sprocket.CanRemux(info, spec.container) {
+		if Format(spec.container) == own || !sprocket.CanRemux(info, spec.container) {
+			continue
+		}
+		ok, err := writable(src, spec.container)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			targets = append(targets, Format(spec.container))
 		}
 	}
@@ -349,15 +366,20 @@ type RemuxParams struct {
 }
 
 // Remux copies Source's video and audio streams into Output as Format without
-// re-encoding them. It stops with ctx's error when ctx is done. A source whose
-// codecs Format cannot hold is refused; Targets names the formats that fit.
+// re-encoding them. It stops with ctx's error when ctx is done. A source
+// Format cannot hold, or one the device cannot write from, is ErrCannotConvert
+// with sprocket's reason; Targets names the formats that fit.
 func Remux(ctx context.Context, params RemuxParams) error {
 	if !params.Format.Valid() {
 		return fmt.Errorf("unknown remux format %q", params.Format)
 	}
 	src := params.Source
 	w := &progressWriter{ctx: ctx, w: params.Output, total: src.Size, onProgress: params.OnProgress}
-	return sprocket.Remux(src.File, src.Size, w, sprocket.Container(params.Format))
+	err := sprocket.Remux(src.File, src.Size, w, sprocket.Container(params.Format))
+	if errors.Is(err, sprocket.ErrUnsupportedContainer) || errors.Is(err, sprocket.ErrIncompatible) {
+		return fmt.Errorf("%w to %s: %w", ErrCannotConvert, params.Format.Label(), err)
+	}
+	return err
 }
 
 // PlaceUnderFreeNameParams describes a new file landing in a folder.
