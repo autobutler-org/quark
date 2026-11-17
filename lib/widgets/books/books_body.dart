@@ -8,7 +8,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// Everything under the Books app bar: the load state, the error or
 /// disconnected view, the empty state, or one row per book with its folder
-/// and size (#1678).
+/// and size (#1678). When the books span more than one drive, each row
+/// names its drive first, as Docs, Sheets and Slides do (#3980).
 ///
 /// Key prefixes: `book_tile_<path>` on a book on the internal drive, and
 /// `book_tile_<serial>_<path>` on any other drive, where the path is the
@@ -32,7 +33,8 @@ class BooksBody extends StatelessWidget {
   /// [SlidesErrorView] decides what it means.
   final Object? error;
 
-  /// The books to list, in order.
+  /// The books to list, in order. A book's [FileNode.deviceName] is shown
+  /// only when the books span more than one drive.
   final List<FileNode> books;
 
   /// Called by the error view's retry button.
@@ -69,6 +71,8 @@ class BooksBody extends StatelessWidget {
         ],
       );
     }
+    // The drive only tells rows apart when they span more than one (#2272).
+    final showDrive = {for (final b in books) b.deviceSerial}.length > 1;
     return ListView.builder(
       itemCount: books.length,
       itemBuilder: (context, i) {
@@ -87,6 +91,7 @@ class BooksBody extends StatelessWidget {
           title: Text(book.name, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text(
             [
+              if (showDrive && book.deviceName.isNotEmpty) book.deviceName,
               if (folder.isNotEmpty) folder,
               StorageDevice.formatBytes(book.size),
             ].join(' · '),
