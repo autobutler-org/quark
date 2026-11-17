@@ -14,6 +14,12 @@ import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_viewer_actions.dart'
+    show downloadViewedPhotoAsJpeg;
+import 'package:quark/services/client_thumbnails.dart'
+    show canConvertImageToJpeg;
+import 'package:quark/services/photo_jpeg_download.dart'
+    show offersJpegDownload;
 import 'package:quark/utils/overlay_history.dart';
 import 'package:quark/utils/photo_grid_config.dart';
 import 'package:quark/utils/trash_config.dart';
@@ -624,6 +630,14 @@ class PhotosPageState extends State<PhotosPage>
       copyUnavailableReason: imageClipboardUnavailableReason,
       onDuplicate: () => _duplicatePhoto(photo.id),
       onDelete: () => _deletePhoto(photo),
+      onDownloadAsJpeg: canConvertImageToJpeg && offersJpegDownload(photo.name)
+          ? () => downloadViewedPhotoAsJpeg(
+              context,
+              path: path.relPath,
+              serial: path.serial.isEmpty ? null : path.serial,
+              name: photo.name,
+            )
+          : null,
     ).showAt(context, position);
   }
 

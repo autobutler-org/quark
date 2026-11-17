@@ -10,6 +10,7 @@ void main() {
     required List<String> events,
     String? relPath = 'Photos/beach.jpg',
     String? copyUnavailableReason,
+    VoidCallback? onDownloadAsJpeg,
   }) => ImageViewerMoreMenu(
     includeBarActions: false,
     isFavorite: false,
@@ -27,6 +28,7 @@ void main() {
     onDuplicate: () => events.add('duplicate'),
     onShare: () {},
     onDelete: () {},
+    onDownloadAsJpeg: onDownloadAsJpeg,
   );
 
   QuarkMenuEntry entryOf(ImageViewerMoreMenu m, String id) =>
@@ -60,5 +62,30 @@ void main() {
     final m = menu(events: <String>[], relPath: null);
 
     expect(m.entries, isEmpty);
+  });
+
+  test('a HEIC photo offers Download as JPEG (#4188)', () {
+    final events = <String>[];
+    final m = menu(
+      events: events,
+      relPath: 'Photos/IMG_0001.HEIC',
+      onDownloadAsJpeg: () => events.add('download_jpeg'),
+    );
+
+    final jpeg = entryOf(m, 'download_jpeg');
+    expect(jpeg.label, 'Download as JPEG');
+    jpeg.onSelected!();
+    expect(events, ['download_jpeg']);
+  });
+
+  test('without a JPEG action there is no such entry (#4188)', () {
+    final m = menu(events: <String>[]);
+
+    expect(
+      m.entries.where(
+        (e) => e.key == const ValueKey('image_viewer_more_download_jpeg'),
+      ),
+      isEmpty,
+    );
   });
 }

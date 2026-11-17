@@ -439,6 +439,12 @@ by date (JN-PH-018).
   disabled, and Ctrl+C says why.
 - A long press on the photo still starts selecting, as before. A device photo has no menu, since there is nothing on
   the Quark to act on.
+- A HEIC or HEIF photo also offers **Download as JPEG** (#4188), here and in the image viewer's More options. It saves
+  `IMG_0001.jpg` beside **Download**'s byte-for-byte `IMG_0001.HEIC`: full size, upright, and keeping the photo's EXIF
+  (capture date, camera). The phone or browser doing the download converts it, because the Quark has no HEIC decoder
+  (#2382). The entry shows on iOS, Android and the web app, and not in the desktop apps, which cannot decode HEIC. A
+  browser that cannot decode HEIC either (most besides Safari) saves the original and says that it could not convert
+  it. Downloading a selection or a folder zip always gives the files as stored.
 
 ---
 

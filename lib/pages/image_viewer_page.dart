@@ -17,6 +17,10 @@ import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_viewer_actions.dart';
+import 'package:quark/services/client_thumbnails.dart'
+    show canConvertImageToJpeg;
+import 'package:quark/services/photo_jpeg_download.dart'
+    show offersJpegDownload;
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/utils/image_viewer_config.dart';
 import 'package:quark/widgets/image_viewer/current_photo.dart';
@@ -709,6 +713,18 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     );
   }
 
+  /// Saves a JPEG copy of the HEIC photo showing (#4188).
+  Future<void> _downloadAsJpeg() async {
+    final relPath = _currentRelPath;
+    if (relPath == null) return;
+    await downloadViewedPhotoAsJpeg(
+      context,
+      path: relPath,
+      serial: _currentSerial,
+      name: _currentName,
+    );
+  }
+
   Future<void> _addToAlbum() async {
     final relPath = _currentRelPath;
     if (relPath == null) return;
@@ -911,6 +927,10 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       onDuplicate: _duplicate,
       onShare: _share,
       onDelete: _confirmDelete,
+      onDownloadAsJpeg:
+          canConvertImageToJpeg && offersJpegDownload(_currentName)
+          ? _downloadAsJpeg
+          : null,
     );
     final photoArea = PhotoArea(
       currentPhoto: bytes != null

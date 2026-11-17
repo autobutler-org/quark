@@ -1,7 +1,8 @@
 /// Renders the thumbnail a photo or video carries with it when it is uploaded
 /// (#2379), with the platform's own decoders, so the Quark never has to decode
 /// H.264, HEVC or HEIC itself: a JPEG with a long edge of 400, rotation
-/// applied.
+/// applied. The same decoders turn a HEIC into a full-size JPEG for
+/// "Download as JPEG" (#4188).
 ///
 /// Every function here returns null rather than throwing when it cannot
 /// render: the file uploads either way, and one without a thumbnail gets
@@ -24,6 +25,17 @@ import 'package:quark/services/client_thumbnails_io.dart'
 /// The thumbnail of the file [name] whose bytes are already in memory.
 Future<Uint8List?> renderThumbnailFromBytes(String name, Uint8List bytes) =>
     platform.renderThumbnailFromBytesPlatform(name, bytes);
+
+/// The image [name], whose bytes are [bytes], as a full-size JPEG with its
+/// EXIF rotation applied (#4188), for "Download as JPEG". The JPEG carries
+/// no metadata of its own; `jpegWithExif` adds it back. Null when this
+/// device cannot decode the image: desktop, or a browser without HEIC.
+Future<Uint8List?> convertImageToJpeg(String name, Uint8List bytes) =>
+    platform.convertImageToJpegPlatform(name, bytes);
+
+/// Whether [convertImageToJpeg] can work here at all. A browser may still
+/// fail on a format it lacks; desktop never converts.
+bool get canConvertImageToJpeg => platform.canConvertImageToJpegPlatform;
 
 /// The thumbnail of the file [name] on disk at [path]. The web has no paths
 /// and renders nothing here.

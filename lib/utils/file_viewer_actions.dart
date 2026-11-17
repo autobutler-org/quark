@@ -3,6 +3,7 @@ import 'package:quark/pages/generic_file_viewer_open_stub.dart'
     if (dart.library.io) 'package:quark/pages/generic_file_viewer_open_native.dart'
     as native_open;
 import 'package:quark/services/files_service.dart';
+import 'package:quark/services/photo_jpeg_download.dart';
 import 'package:quark/utils/error_text.dart';
 
 /// Saves the file at [path] to this device and reports the outcome in a snack
@@ -29,6 +30,40 @@ Future<void> downloadViewedFile(
   }
   messenger.showSnackBar(SnackBar(content: Text(message)));
 }
+
+/// "Download as JPEG" for the HEIC photo at [path] (#4188), reported the way
+/// [downloadViewedFile] reports: the JPEG it saved, or, when this device
+/// could not convert it, that the original was saved instead and why.
+/// Canceling the save dialog says nothing.
+Future<void> downloadViewedPhotoAsJpeg(
+  BuildContext context, {
+  required String path,
+  required String? serial,
+  required String name,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  String message;
+  try {
+    final saved = await savePhotoAsJpeg(path: path, serial: serial, name: name);
+    if (saved.savedAt == null) return;
+    message = saved.converted
+        ? 'Downloaded ${saved.fileName}'
+        : Errors.jpegConversionUnavailable(name);
+  } catch (e) {
+    message = Errors.message(e, 'download the photo');
+  }
+  messenger.showSnackBar(SnackBar(content: Text(message)));
+}
+
+/// What [downloadViewedPhotoAsJpeg] converts and saves with. A test, which
+/// has no Quark or decoder, swaps it.
+@visibleForTesting
+Future<PhotoJpegDownload> Function({
+  required String path,
+  required String? serial,
+  required String name,
+})
+savePhotoAsJpeg = downloadPhotoAsJpeg;
 
 /// What [downloadViewedFile] saves with: returns where the file landed, or
 /// null when the user canceled. A test, which has no save dialog, swaps it.

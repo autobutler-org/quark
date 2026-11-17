@@ -28,6 +28,7 @@ void main() {
     required List<String> events,
     bool isFavorite = false,
     String? copyUnavailableReason,
+    bool heic = false,
   }) async {
     setViewport(tester, size);
 
@@ -59,6 +60,9 @@ void main() {
                     copyUnavailableReason: copyUnavailableReason,
                     onDuplicate: () => events.add('duplicate'),
                     onDelete: () => events.add('delete'),
+                    onDownloadAsJpeg: heic
+                        ? () => events.add('download_jpeg')
+                        : null,
                   ).showAt(context, position),
                 ),
               ),
@@ -162,5 +166,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(events, isEmpty);
+  });
+
+  testWidgets('a HEIC photo also offers Download as JPEG (#4188)', (
+    tester,
+  ) async {
+    final events = <String>[];
+    await pumpTile(tester, size: narrowViewport, events: events, heic: true);
+
+    await tester.tap(find.byKey(const ValueKey('photo_tile_menu_p1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Download as JPEG'), findsOneWidget);
+    await tester.tap(action('download_jpeg'));
+    await tester.pumpAndSettle();
+
+    expect(events, ['download_jpeg']);
+  });
+
+  testWidgets('any other photo does not (#4188)', (tester) async {
+    await pumpTile(tester, size: narrowViewport, events: <String>[]);
+
+    await tester.tap(find.byKey(const ValueKey('photo_tile_menu_p1')));
+    await tester.pumpAndSettle();
+
+    expect(action('download_jpeg'), findsNothing);
   });
 }

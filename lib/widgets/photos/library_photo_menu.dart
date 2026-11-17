@@ -9,6 +9,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The tile's `more_vert` button and a right-click open it at the pointer. A
 /// long press stays selection, as it always has in the library.
 ///
+/// A HEIC photo also offers **Download as JPEG**, a copy the other side can
+/// open (#4188).
+///
 /// **Copy** puts the image on the system clipboard; **Duplicate** makes a
 /// second file on the Quark (#3436).
 ///
@@ -26,6 +29,7 @@ class LibraryPhotoMenu {
     required this.copyUnavailableReason,
     required this.onDuplicate,
     required this.onDelete,
+    this.onDownloadAsJpeg,
   });
 
   /// Whether the photo is starred, which words the favorite entry.
@@ -33,6 +37,10 @@ class LibraryPhotoMenu {
   final VoidCallback onAddToAlbum;
   final VoidCallback onToggleFavorite;
   final VoidCallback onDownload;
+
+  /// Saves a JPEG copy of a HEIC photo (#4188), or null to leave the entry
+  /// out, as for every other format.
+  final VoidCallback? onDownloadAsJpeg;
   final VoidCallback onShare;
 
   /// Copies the photo to the system clipboard (#3436).
@@ -70,6 +78,13 @@ class LibraryPhotoMenu {
             icon: QuarkIcons.download_outlined,
             onSelected: onDownload,
           ),
+          if (onDownloadAsJpeg != null)
+            QuarkMenuEntry(
+              key: const ValueKey('library_photo_action_download_jpeg'),
+              label: 'Download as JPEG',
+              icon: QuarkIcons.download_outlined,
+              onSelected: onDownloadAsJpeg,
+            ),
           QuarkMenuEntry(
             key: const ValueKey('library_photo_action_share'),
             label: 'Share…',
