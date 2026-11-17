@@ -23,6 +23,10 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
   bool _channelsOpen = false;
   bool _membersOpen = false;
   Set<String> _expanded = const {};
+  double _channelWidth = QuarkChatLayout.channelListWidth;
+  double _memberWidth = QuarkChatLayout.memberListWidth;
+  bool _channelsCollapsed = false;
+  bool _membersCollapsed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -112,13 +116,38 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
         widget.log('QuarkChatLayout.onToggleMemberList');
         setState(() => _membersOpen = !_membersOpen);
       },
+      channelPaneWidth: _channelWidth,
+      isChannelPaneCollapsed: _channelsCollapsed,
+      onChannelPaneWidthChanged: (width) {
+        widget.log(
+          'QuarkChatLayout.onChannelPaneWidthChanged(${width.round()})',
+        );
+        setState(() => _channelWidth = width);
+      },
+      onChannelPaneCollapsedChanged: (collapsed) {
+        widget.log('QuarkChatLayout.onChannelPaneCollapsedChanged($collapsed)');
+        setState(() => _channelsCollapsed = collapsed);
+      },
+      memberPaneWidth: _memberWidth,
+      isMemberPaneCollapsed: _membersCollapsed,
+      onMemberPaneWidthChanged: (width) {
+        widget.log(
+          'QuarkChatLayout.onMemberPaneWidthChanged(${width.round()})',
+        );
+        setState(() => _memberWidth = width);
+      },
+      onMemberPaneCollapsedChanged: (collapsed) {
+        widget.log('QuarkChatLayout.onMemberPaneCollapsedChanged($collapsed)');
+        setState(() => _membersCollapsed = collapsed);
+      },
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Above the breakpoint: channels, messages and members side by side',
+          'Above the breakpoint: channels, messages and members side by side; '
+          'drag a pane\'s edge to resize it, or use the header buttons',
           style: theme.textTheme.titleSmall,
         ),
         SizedBox(height: tokens.spacingSm),

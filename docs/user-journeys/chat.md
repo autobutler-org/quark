@@ -5,7 +5,7 @@ end-to-end encrypted messages, unlocking chat on web after a reload, waiting
 for a channel key, and creating, sharing, renaming, leaving and deleting
 channels (#2422), reacting to messages (#2426), a message's menu (#2631),
 searching a channel on the device (#2429), mentioning a member (#2623) or everyone (#4293), polls (#3894),
-and attaching a file and saving it (#2425).
+attaching a file and saving it (#2425), and resizing or hiding the channel and member panes (#4294).
 
 ---
 
@@ -740,3 +740,32 @@ open.
   author whose permissions on the channel include it.
 - An unread `@everyone` counts as a mention of every member but its author.
 - No account can be created with the username `everyone`.
+
+---
+
+### JN-CHAT-031: Resize and hide the side panes
+
+**Preconditions:** JN-CHAT-001, on a window at least 900 pixels wide.
+
+**Steps:**
+
+1. Drag the edge between the channel list and the messages to the right.
+2. Tap **Hide channels** beside the channel name.
+3. Reload the page.
+4. Tap **Show channels**.
+5. Drag the edge between the messages and the member list toward the messages, then double-click it.
+
+**Expected result:**
+
+- During step 1 the channel list widens with the pointer, up to 480 pixels or a quarter of the window, whichever is
+  smaller, and long channel names show more of themselves.
+- After step 2 the channel list is gone, with no rail left behind, and the messages take its room.
+- After step 3 the channel list is still hidden; after step 4 it is back at the width from step 1.
+- In step 5 the member list widens while dragging and goes back to its default width on the double-click.
+
+**Notes:**
+
+- Dragging a pane below 100 pixels hides it; dragging its edge back out shows it again.
+- The edge takes the keyboard: arrow keys resize, Enter or Space hides and shows.
+- Widths and hidden panes are remembered per device, not per account.
+- On a phone nothing changes: the channel list is a drawer and the members a sheet.

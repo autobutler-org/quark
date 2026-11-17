@@ -8,6 +8,7 @@ import 'package:quark/controllers/chat_channel_share_target.dart';
 import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/controllers/chat_messages_controller.dart';
 import 'package:quark/controllers/chat_unread_controller.dart';
+import 'package:quark/controllers/sidebar_controller.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -115,6 +116,16 @@ class _ChatPageState extends State<ChatPage>
   late final ChatController _controller =
       (widget.controller ?? ChatController())..select(widget.channelId);
 
+  /// The wide layout's channel and member panes, kept per device (#4294).
+  final _channelPane = SidebarController(
+    'chat_channels',
+    defaultWidth: QuarkChatLayout.channelListWidth,
+  );
+  final _memberPane = SidebarController(
+    'chat_members',
+    defaultWidth: QuarkChatLayout.memberListWidth,
+  );
+
   /// Whether this window is focused on the page. An unfocused window keeps
   /// the open channel's unread badge; a focused one does not (#3255).
   bool _windowFocused = true;
@@ -166,6 +177,8 @@ class _ChatPageState extends State<ChatPage>
       ..removeListener(_followController)
       ..dispose();
     ChatUnreadController.instance.setViewing(null, focused: false);
+    _channelPane.dispose();
+    _memberPane.dispose();
     super.dispose();
   }
 
@@ -597,7 +610,7 @@ class _ChatPageState extends State<ChatPage>
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _controller,
+      listenable: Listenable.merge([_controller, _channelPane, _memberPane]),
       builder: (context, _) {
         final c = _controller;
         final channel = c.selectedChannel;
@@ -892,6 +905,14 @@ class _ChatPageState extends State<ChatPage>
                   isMemberListOpen: c.isMemberListOpen,
                   onToggleChannelList: c.toggleChannelList,
                   onToggleMemberList: c.toggleMemberList,
+                  channelPaneWidth: _channelPane.width,
+                  isChannelPaneCollapsed: _channelPane.isCollapsed,
+                  onChannelPaneWidthChanged: _channelPane.setWidth,
+                  onChannelPaneCollapsedChanged: _channelPane.setCollapsed,
+                  memberPaneWidth: _memberPane.width,
+                  isMemberPaneCollapsed: _memberPane.isCollapsed,
+                  onMemberPaneWidthChanged: _memberPane.setWidth,
+                  onMemberPaneCollapsedChanged: _memberPane.setCollapsed,
                 ),
         );
       },
