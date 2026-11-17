@@ -2,7 +2,10 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/photo_metadata.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/image_viewer/metadata_content.dart';
+
+import '../../support/fake_map_tiles.dart';
 
 /// #3364: the info panel showed a photo's location as "48.85660, 2.35220",
 /// text that went nowhere when tapped.
@@ -11,6 +14,7 @@ void main() {
   final launched = <String>[];
 
   setUp(() {
+    useFakeMapTiles();
     launched.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
@@ -75,5 +79,30 @@ void main() {
     await pumpContent(tester, const PhotoExif(make: 'Google'));
     expect(find.text('LOCATION'), findsNothing);
     expect(openInMaps, findsNothing);
+  });
+
+  // #3557: a small map of the position sits above it while the photo map is
+  // on, and is gone, with no tile fetched, while it is off.
+  testWidgets('the photo map preview follows the setting', (tester) async {
+    final settings = AppSettings.instance;
+    final was = settings.photoMapEnabled.value;
+    addTearDown(() => settings.photoMapEnabled.value = was);
+    final preview = find.byKey(const ValueKey('photo_map_preview'));
+
+    settings.photoMapEnabled.value = true;
+    await pumpContent(
+      tester,
+      const PhotoExif(latitude: 48.8566, longitude: 2.3522),
+    );
+    expect(preview, findsOneWidget);
+    expect(openInMaps, findsOneWidget);
+
+    settings.photoMapEnabled.value = false;
+    await pumpContent(
+      tester,
+      const PhotoExif(latitude: 48.8566, longitude: 2.3522),
+    );
+    expect(preview, findsNothing);
+    expect(openInMaps, findsOneWidget);
   });
 }

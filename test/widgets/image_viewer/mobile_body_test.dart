@@ -5,11 +5,14 @@ import 'package:quark/models/photo_metadata.dart';
 import 'package:quark/widgets/image_viewer/metadata_drawer.dart';
 import 'package:quark/widgets/image_viewer/mobile_body.dart';
 
+import '../../support/fake_map_tiles.dart';
 import '../../support/tap_target_guidelines.dart' show setViewport;
 
 /// #3359: on a phone the info sheet peeked with File info and Albums below
 /// the screen edge, and neither its handle nor its rows dragged it up.
 void main() {
+  setUp(useFakeMapTiles);
+
   final metadata = PhotoMetadata(
     fileName: 'files-photo-0003-20220922.jpg',
     fileSize: 2400000,

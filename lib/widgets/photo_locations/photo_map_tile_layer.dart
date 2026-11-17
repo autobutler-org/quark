@@ -41,6 +41,14 @@ class PhotoMapTileLayer extends StatefulWidget {
   /// `DisabledMapCachingProvider`.
   final MapCachingProvider? cachingProvider;
 
+  /// The client and cache every layer built without its own uses, for a test
+  /// of a screen that draws a map deep inside it, such as the viewer's info
+  /// panel.
+  @visibleForTesting
+  static http.Client? debugHttpClient;
+  @visibleForTesting
+  static MapCachingProvider? debugCachingProvider;
+
   @override
   State<PhotoMapTileLayer> createState() => _PhotoMapTileLayerState();
 }
@@ -78,9 +86,11 @@ class _PhotoMapTileLayerState extends State<PhotoMapTileLayer> {
       headers: quark ? PhotoLocationsService.quarkTileHeaders() : null,
       httpClient:
           widget.httpClient ??
+          PhotoMapTileLayer.debugHttpClient ??
           (quark ? PhotoLocationsService.instance.httpClient : null),
       silenceExceptions: true,
-      cachingProvider: widget.cachingProvider,
+      cachingProvider:
+          widget.cachingProvider ?? PhotoMapTileLayer.debugCachingProvider,
     );
   }
 
