@@ -2,7 +2,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_menu_label.dart';
 import '../layout/quark_bar_icon_button.dart';
+import '../layout/quark_bar_menu_button.dart';
 import '../models/chat_permission.dart';
 import '../theme/quark_tokens.dart';
 import 'chat_mentions.dart';
@@ -17,7 +19,9 @@ import 'quark_mention_suggestions.dart';
 /// still composing, since that Enter confirms the composition. What is sent is trimmed, a blank message is
 /// never sent, and the field clears once [onSend] has been called.
 /// [onAttach] is separate: it asks the caller to send a file, which may have
-/// an empty caption. This field still refuses a blank message.
+/// an empty caption. This field still refuses a blank message. With
+/// [onAttachMedia] as well, the attach button opens a menu of the two
+/// sources, File and Photo or video, rather than calling [onAttach] itself.
 ///
 /// The field is replaced by a sentence saying why the user can't write, for
 /// two reasons of the channel's own and one of the caller's, first match
@@ -48,7 +52,9 @@ import 'quark_mention_suggestions.dart';
 /// Key prefixes: `message_composer_field` on the text field,
 /// `message_composer_attach` on the attach button, shown when [onAttach]
 /// is set and [permissions] allows [ChatPermission.attachFiles] (or
-/// [permissions] is null),
+/// [permissions] is null), `message_composer_attach_file` and
+/// `message_composer_attach_media` on its menu's entries when
+/// [onAttachMedia] is set,
 /// `message_composer_send` on the send button,
 /// `message_composer_disabled` on the disabled sentence, and those of
 /// `QuarkMentionSuggestions`.
@@ -76,6 +82,7 @@ class QuarkMessageComposer extends StatefulWidget {
     this.maxLength,
     this.mentionNames = const [],
     this.onAttach,
+    this.onAttachMedia,
     super.key,
   });
 
@@ -144,6 +151,13 @@ class QuarkMessageComposer extends StatefulWidget {
   /// Null [permissions] shows it, the same way null [permissions] leaves send
   /// unchecked.
   final VoidCallback? onAttach;
+
+  /// Called when Photo or video is chosen from the attach button's menu. Set,
+  /// the button opens a menu of File, which calls [onAttach], and Photo or
+  /// video, which calls this; null, the button calls [onAttach] directly.
+  /// Shown only where [onAttach] would show the button. Like [onAttach], it
+  /// picks nothing itself.
+  final VoidCallback? onAttachMedia;
 
   /// Said when Enter is pressed on a blank message, under the field with key
   /// `message_composer_hint`, and as the turned-off send button's tooltip.
@@ -392,6 +406,7 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
             }
           });
 
+          final onAttachMedia = widget.onAttachMedia;
           final canAttach =
               widget.onAttach != null &&
               (permissions == null ||
@@ -417,12 +432,43 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     if (canAttach) ...[
-                      QuarkBarIconButton(
-                        key: const ValueKey('message_composer_attach'),
-                        icon: QuarkIcons.attach_file,
-                        tooltip: 'Attach',
-                        onPressed: widget.onAttach,
-                      ),
+                      if (onAttachMedia == null)
+                        QuarkBarIconButton(
+                          key: const ValueKey('message_composer_attach'),
+                          icon: QuarkIcons.attach_file,
+                          tooltip: 'Attach',
+                          onPressed: widget.onAttach,
+                        )
+                      else
+                        QuarkBarMenuButton(
+                          buttonKey: const ValueKey('message_composer_attach'),
+                          icon: QuarkIcons.attach_file,
+                          tooltip: 'Attach',
+                          menuChildren: [
+                            MenuItemButton(
+                              key: const ValueKey(
+                                'message_composer_attach_file',
+                              ),
+                              onPressed: widget.onAttach,
+                              child: quarkMenuLabel(
+                                leading: const Icon(
+                                  QuarkIcons.insert_drive_file_outlined,
+                                ),
+                                label: const Text('File'),
+                              ),
+                            ),
+                            MenuItemButton(
+                              key: const ValueKey(
+                                'message_composer_attach_media',
+                              ),
+                              onPressed: onAttachMedia,
+                              child: quarkMenuLabel(
+                                leading: const Icon(QuarkIcons.photo_library),
+                                label: const Text('Photo or video'),
+                              ),
+                            ),
+                          ],
+                        ),
                       SizedBox(width: tokens.spacingSm),
                     ],
                     Expanded(

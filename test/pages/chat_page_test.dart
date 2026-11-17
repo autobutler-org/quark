@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -1161,5 +1162,74 @@ void main() {
       expect(chat.calls.last, endsWith('Lunch.qsheet keepBoth=true'));
       expect(find.textContaining('Exported to '), findsOneWidget);
     });
+  }
+
+  // #4296: a phone offers its photo picker beside the file browser.
+  group('attach', () {
+    const attach = ValueKey('message_composer_attach');
+    const media = ValueKey('message_composer_attach_media');
+    late _CancelingFilePicker picker;
+
+    setUp(() {
+      picker = _CancelingFilePicker();
+      FilePickerPlatform.instance = picker;
+    });
+
+    testWidgets('on Android, Photo or video opens the media picker and a '
+        'cancel keeps the draft', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      try {
+        await pumpChat(tester, narrow);
+        await tester.enterText(find.byKey(field), 'look at this');
+        await tester.tap(find.byKey(attach));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(media));
+        await tester.pumpAndSettle();
+
+        expect(picker.types, [FileType.media]);
+        expect(fieldText(tester), 'look at this');
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('on a desktop, attach opens the file picker directly', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      try {
+        await pumpChat(tester, wide);
+        await tester.tap(find.byKey(attach));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(media), findsNothing);
+        expect(picker.types, [FileType.any]);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+  });
+}
+
+/// A file picker whose every pick is canceled, recording the type asked for.
+class _CancelingFilePicker extends FilePickerPlatform {
+  final types = <FileType>[];
+
+  @override
+  Future<PlatformFile?> pickFile({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    int compressionQuality = 0,
+    AndroidOptions androidOptions = const AndroidOptions(),
+    DarwinOptions darwinOptions = const DarwinOptions(),
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
+  }) async {
+    types.add(type);
+    return null;
   }
 }
