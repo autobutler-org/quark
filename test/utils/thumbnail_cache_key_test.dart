@@ -9,9 +9,15 @@ void main() {
     String path = 'photos/beach.jpg',
     String? serial,
     String? size,
+    String? version,
     String? token = 'token-a',
   }) => Uri.parse('$base/api/v0/thumbnails/$path').replace(
-    queryParameters: {'serial': ?serial, 'size': ?size, 'token': ?token},
+    queryParameters: {
+      'serial': ?serial,
+      'size': ?size,
+      'v': ?version,
+      'token': ?token,
+    },
   );
 
   String key(Uri url, {String host = 'quark.local', String account = 'ada'}) =>
@@ -40,6 +46,21 @@ void main() {
       key(url(serial: 'usb-1', size: 'sm')),
     };
     expect(keys, hasLength(5));
+  });
+
+  test('a new version is a new entry (#4217)', () {
+    // A versioned thumbnail is stored as immutable, so a rotated photo's new
+    // version must not find the old bytes under the same key.
+    final keys = {
+      key(url()),
+      key(url(version: '1700000000.0')),
+      key(url(version: '1700000000.1')),
+    };
+    expect(keys, hasLength(3));
+    expect(
+      key(url(version: '1700000000.1', token: 'token-b')),
+      key(url(version: '1700000000.1')),
+    );
   });
 
   test('another Quark or another account gets its own key', () {

@@ -12,6 +12,10 @@ import 'package:quark/utils/thumbnail_cache_key.dart';
 ///
 /// A widget shows [image]. On the web caching is left to the browser and the
 /// store goes unused.
+///
+/// A thumbnail whose URL names its version in `v` comes back from the Quark as
+/// immutable, so the store keeps it for a year without revalidating; any other
+/// is revalidated by ETag each time it is shown (#4217).
 abstract final class ThumbnailCacheManager {
   /// The one store, shared so its object budget is counted once. A test
   /// swaps in a fake one so thumbnails load without the network or a disk.
@@ -56,8 +60,9 @@ abstract final class ThumbnailCacheManager {
     try {
       await (manager ?? instance).removeFile(key);
     } on Exception {
-      // Best effort: bytes left behind are shown once more and then replaced,
-      // since every load revalidates them by ETag.
+      // Best effort: unversioned bytes left behind are shown once more and
+      // then replaced, since every load revalidates them by ETag. A versioned
+      // entry is never asked for again once its version has moved on.
     }
     final image = CacheManagerImage(
       url.toString(),

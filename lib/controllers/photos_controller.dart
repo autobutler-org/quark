@@ -30,6 +30,7 @@ import 'package:quark/utils/photo_month_sections.dart';
 import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark/utils/task_pool.dart';
+import 'package:quark/utils/thumbnail_version.dart';
 import 'package:quark/utils/upload_destination.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -2023,12 +2024,16 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   }
 
   /// Where the thumbnail of the Quark photo [id] is served, or null for a
-  /// device photo.
+  /// device photo. A photo from the library listing gets its version in `v`,
+  /// so the thumbnail is fetched once and then kept (#4217).
   Uri? thumbnailUrl(String id) {
     final photo = _byId(id);
     final relPath = photo?.relPath;
     if (relPath == null) return null;
-    return _thumbnailUrl(relPath, serial: photo!.serial);
+    return withThumbnailVersion(
+      _thumbnailUrl(relPath, serial: photo!.serial),
+      photo.thumbVersion,
+    );
   }
 
   /// The path and device of the Quark photo [id], or null for a device
@@ -2111,6 +2116,7 @@ class _Photo {
     this.hasLiveVideo = false,
     this.date,
     this.takenDate,
+    this.thumbVersion,
   });
 
   /// A Quark-stored photo from the paginated photos endpoint.
@@ -2136,6 +2142,7 @@ class _Photo {
       takenDate: photo.takenAt == null
           ? null
           : DateTime.fromMillisecondsSinceEpoch(photo.takenAt! * 1000),
+      thumbVersion: thumbnailVersion(photo.mtime, photo.rotationQuarters),
     );
   }
 
@@ -2182,6 +2189,12 @@ class _Photo {
   /// A device photo's creation time already is its capture time, so it
   /// carries none and uses [date].
   final DateTime? takenDate;
+
+  /// The thumbnail's version, from the listing's mtime and rotation, which
+  /// [PhotosController.thumbnailUrl] puts in `v` so the thumbnail is cached
+  /// as immutable (#4217). Null for an album item, which carries neither,
+  /// and for a device photo.
+  final String? thumbVersion;
 
   bool get isRemote => relPath != null;
 

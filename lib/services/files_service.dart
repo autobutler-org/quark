@@ -91,11 +91,16 @@ class FilesService with AuthenticatedService {
   /// The backend exposes thumbnails at /api/v0/thumbnails/*filePath where filePath is a
   /// path-like segment. Each path segment is percent-encoded to preserve slashes.
   ///
+  /// [version], from `thumbnailVersion`, goes in `v`: when it is current the
+  /// Quark answers with an immutable response, so the thumbnail is not asked
+  /// for again until a rotation or a new file changes the URL (#4217).
+  ///
   /// api: GET /api/v0/thumbnails/{filePath}
   static Uri constructThumbnailUrl(
     String filePath, {
     String? serial,
     String? size,
+    String? version,
   }) {
     final trimmed = filePath.trim();
     final normalized = trimmed.startsWith('/') ? trimmed.substring(1) : trimmed;
@@ -111,6 +116,7 @@ class FilesService with AuthenticatedService {
     final serialValue = serial?.trim() ?? '';
     if (serialValue.isNotEmpty) params['serial'] = serialValue;
     if (size != null && size.isNotEmpty) params['size'] = size;
+    if (version != null) params['v'] = version;
     final token = AppSettings.instance.bearerToken;
     if (token != null && token.isNotEmpty) params['token'] = token;
 

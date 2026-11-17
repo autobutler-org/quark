@@ -6277,7 +6277,7 @@ const List<ApiEndpoint> apiEndpoints = [
     inSwagger: true,
     tags: ['photos'],
     summary: 'List photos',
-    description: 'Finds all photos across all managed devices with pagination support. With includeVideos=true videos are listed beside them; a video carries isVideo and, where its headers parse, durationMs; a Live Photo\'s companion video is not listed on its own but sets its photo\'s hasLiveVideo. Videos sort by their date added under sort=taken. Under sort=taken each photo carries its EXIF capture date as takenAt, read on the spot for a photo never read before, and pendingDates counts those left for a later listing. q keeps the photos whose file name contains that text, ignoring case, and total counts those matches.',
+    description: 'Finds all photos across all managed devices with pagination support. With includeVideos=true videos are listed beside them; a video carries isVideo and, where its headers parse, durationMs; a Live Photo\'s companion video is not listed on its own but sets its photo\'s hasLiveVideo. Videos sort by their date added under sort=taken. Each item carries rotationQuarters when the photo has been rotated, so a client can name the thumbnail version, mtime and rotationQuarters joined by a dot, in the thumbnail URL. Under sort=taken each photo carries its EXIF capture date as takenAt, read on the spot for a photo never read before, and pendingDates counts those left for a later listing. q keeps the photos whose file name contains that text, ignoring case, and total counts those matches.',
     parameters: [
       ApiParameter(
         name: 'offset',
@@ -6326,7 +6326,7 @@ const List<ApiEndpoint> apiEndpoints = [
       ApiResponse(
         status: '200',
         description: 'OK',
-        schema: '{"type":"object","properties":{"limit":{"type":"integer"},"offset":{"type":"integer"},"pendingDates":{"description":"PendingDates counts the photos whose capture date has still not been\\nread, under sort=taken only. They sort by their date added until a later\\nlisting reads them, so a client lists again while it is above zero\\n(#3356).","type":"integer"},"photos":{"type":"array","items":{"type":"object","properties":{"durationMs":{"description":"DurationMs is a video\'s length in milliseconds, read from its headers\\nfor the page being returned. Zero for a photo, and for a video whose\\ncontainer the device cannot parse.","type":"integer"},"fileName":{"type":"string"},"hasLiveVideo":{"type":"boolean"},"isVideo":{"description":"IsVideo marks a video, which the library lists beside its photos\\n(#3428). A Live Photo\'s companion video is not listed on its own; it\\nsets its photo\'s HasLiveVideo instead.","type":"boolean"},"mtime":{"type":"integer"},"relPath":{"type":"string"},"serial":{"type":"string"},"size":{"type":"integer"},"takenAt":{"description":"TakenAt is the EXIF capture date in Unix seconds, set under SortTaken\\nfor a photo whose date is known (#2592). A photo whose EXIF has not been\\nread yet is read by the listing itself, so a fresh upload carries its\\ndate the first time it is listed (#3356).","type":"integer"}}}},"total":{"type":"integer"}}}',
+        schema: '{"type":"object","properties":{"limit":{"type":"integer"},"offset":{"type":"integer"},"pendingDates":{"description":"PendingDates counts the photos whose capture date has still not been\\nread, under sort=taken only. They sort by their date added until a later\\nlisting reads them, so a client lists again while it is above zero\\n(#3356).","type":"integer"},"photos":{"type":"array","items":{"type":"object","properties":{"durationMs":{"description":"DurationMs is a video\'s length in milliseconds, read from its headers\\nfor the page being returned. Zero for a photo, and for a video whose\\ncontainer the device cannot parse.","type":"integer"},"fileName":{"type":"string"},"hasLiveVideo":{"type":"boolean"},"isVideo":{"description":"IsVideo marks a video, which the library lists beside its photos\\n(#3428). A Live Photo\'s companion video is not listed on its own; it\\nsets its photo\'s HasLiveVideo instead.","type":"boolean"},"mtime":{"type":"integer"},"relPath":{"type":"string"},"rotationQuarters":{"type":"integer"},"serial":{"type":"string"},"size":{"type":"integer"},"takenAt":{"description":"TakenAt is the EXIF capture date in Unix seconds, set under SortTaken\\nfor a photo whose date is known (#2592). A photo whose EXIF has not been\\nread yet is read by the listing itself, so a fresh upload carries its\\ndate the first time it is listed (#3356).","type":"integer"}}}},"total":{"type":"integer"}}}',
       ),
       ApiResponse(
         status: '500',
@@ -8444,6 +8444,12 @@ const List<ApiEndpoint> apiEndpoints = [
         type: 'string',
         description: 'Thumbnail size tier: sm (96px), md (240px), lg (400px). Defaults to lg.',
       ),
+      ApiParameter(
+        name: 'v',
+        location: ApiParameterLocation.query,
+        type: 'string',
+        description: 'The photo\'s version from the photo listing: its mtime and rotationQuarters joined by a dot, as in 1700000000.1. When it is current the response is cacheable as immutable; otherwise it must be revalidated by ETag',
+      ),
     ],
     responses: [
       ApiResponse(
@@ -8825,7 +8831,7 @@ const List<ApiEndpoint> apiEndpoints = [
     inSwagger: true,
     tags: ['users'],
     summary: 'Get a user\'s profile picture',
-    description: 'Serves a user\'s 256x256 profile picture to any signed-in user, with an ETag derived from its version; a matching If-None-Match gets 304. Clients add the picture\'s avatarUpdatedAt as the v query parameter, so a changed picture is a new URL. A user with no picture is a 404.',
+    description: 'Serves a user\'s 256x256 profile picture to any signed-in user, with an ETag derived from its version; a matching If-None-Match gets 304. Clients add the picture\'s avatarUpdatedAt as the v query parameter, so a changed picture is a new URL; when v is the current avatarUpdatedAt the response is cacheable as immutable, and without it, or with a stale one, it must be revalidated. A user with no picture is a 404.',
     parameters: [
       ApiParameter(
         name: 'id',
@@ -8838,7 +8844,7 @@ const List<ApiEndpoint> apiEndpoints = [
         name: 'v',
         location: ApiParameterLocation.query,
         type: 'integer',
-        description: 'Cache-buster, the picture\'s avatarUpdatedAt; ignored by the Quark',
+        description: 'The picture\'s avatarUpdatedAt; when current, the response is cacheable as immutable',
       ),
     ],
     responses: [
