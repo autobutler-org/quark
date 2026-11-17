@@ -16,7 +16,8 @@ import 'package:quark_icons/quark_icons.dart';
 /// Every row is at least 48dp tall: no compact density (#2605).
 ///
 /// Probe keys: `file_top_bar_views_list`, `file_top_bar_views_grid` and
-/// `file_top_bar_views_grouping`, `file_top_bar_grouping_help` for the
+/// `file_top_bar_views_grouping` (the Per-device switch, on while the
+/// per-device view is), `file_top_bar_grouping_help` for the
 /// grouping's (i), plus `file_top_bar_views_column_<name>` for
 /// each column's checkbox — `file_top_bar_views_column_kind`,
 /// `file_top_bar_views_column_modified`, `file_top_bar_views_column_device`
@@ -122,26 +123,24 @@ class FileTopBarViewsMenu extends StatelessWidget {
           ],
         ),
         // One toggle with the row's text as its label, rather than a row and
-        // an unlabeled switch inside it (#2603).
+        // an unlabeled switch inside it (#2603). The label names one fixed
+        // mode and the switch says whether it is on, so the two never
+        // disagree: a label that followed the mode read "Per-device", off,
+        // while the per-device view was on screen (#3939).
         SwitchListTile.adaptive(
           key: const ValueKey('file_top_bar_views_grouping'),
           dense: true,
           secondary: Icon(
-            isUnifiedView
-                ? QuarkIcons.folder_copy_outlined
-                : QuarkIcons.device_hub_outlined,
+            QuarkIcons.device_hub_outlined,
             size: 18,
             color: colorScheme.onSurfaceVariant,
           ),
-          title: Text(
-            isUnifiedView ? 'Unified' : 'Per-device',
-            style: const TextStyle(fontSize: 14),
-          ),
+          title: const Text('Per-device', style: TextStyle(fontSize: 14)),
           subtitle: Text(
-            ViewGroupingCopy.forMode(isUnified: isUnifiedView),
+            ViewGroupingCopy.perDevice,
             style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
           ),
-          value: isUnifiedView,
+          value: !isUnifiedView,
           onChanged: (_) => onToggleUnifiedView(),
         ),
       ],

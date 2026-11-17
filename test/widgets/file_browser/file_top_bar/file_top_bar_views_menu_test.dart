@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_views_menu.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/view_grouping_copy.dart';
 
 import '../../../support/tap_target_guidelines.dart';
 
@@ -119,6 +120,48 @@ void main() {
       await pump(enabled: false);
       await tester.tap(box(FileListColumn.kind));
       expect(toggles, hasLength(2));
+    });
+  }
+
+  // #3939: the grouping switch's label and its state describe the same thing,
+  // so a mode it names is never shown off while that mode is on screen.
+  for (final unified in [true, false]) {
+    final mode = unified ? 'unified' : 'per-device';
+    testWidgets('the grouping switch agrees with the view ($mode)', (
+      tester,
+    ) async {
+      setViewport(tester, narrowViewport);
+      var toggles = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: FileTopBarViewsMenu(
+                isGridView: false,
+                isUnifiedView: unified,
+                onToggleView: () {},
+                onToggleUnifiedView: () => toggles++,
+              ),
+            ),
+          ),
+        ),
+      );
+      final grouping = find.byKey(
+        const ValueKey('file_top_bar_views_grouping'),
+      );
+
+      final handle = tester.ensureSemantics();
+      final data = tester.getSemantics(grouping).getSemanticsData();
+      expect(data.label, contains('Per-device'));
+      expect(data.label, contains(ViewGroupingCopy.perDevice));
+      expect(
+        data.flagsCollection.isToggled,
+        unified ? Tristate.isFalse : Tristate.isTrue,
+      );
+      handle.dispose();
+
+      await tester.tap(grouping);
+      expect(toggles, 1);
     });
   }
 }
