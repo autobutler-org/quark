@@ -904,6 +904,45 @@ void main() {
       expect(controller.photos, hasLength(50));
       expect(controller.isLoadingMore, isFalse);
     });
+
+    test('a refresh keeps the pages already scrolled through, so scrolling '
+        'asks for each page once (#3365)', () async {
+      final quark = _FakeQuark(total: 364);
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.loadMoreQuarkPhotos();
+
+      await controller.refresh();
+      expect(controller.photos, hasLength(100));
+      await controller.loadMoreQuarkPhotos();
+
+      expect(controller.photos, hasLength(150));
+      expect(quark.calls.where((c) => c.startsWith('getPhotos')), [
+        'getPhotos(0)',
+        'getPhotos(50)',
+        'getPhotos(0)',
+        'getPhotos(100)',
+      ]);
+    });
+
+    test('a refresh past the most one listing returns asks in steps '
+        '(#3365)', () async {
+      final quark = _FakeQuark(total: 364);
+      final controller = quark.controller();
+      await controller.refresh();
+      for (var i = 0; i < 4; i++) {
+        await controller.loadMoreQuarkPhotos();
+      }
+      quark.calls.clear();
+
+      await controller.refresh();
+
+      expect(controller.photos, hasLength(250));
+      expect(quark.calls.where((c) => c.startsWith('getPhotos')), [
+        'getPhotos(0)',
+        'getPhotos(200)',
+      ]);
+    });
   });
 
   group('one Quark photo (#2276)', () {

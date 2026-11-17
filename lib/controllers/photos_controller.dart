@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
@@ -315,6 +316,10 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   /// How many Quark photos one page fetches.
   static const int pageSize = 50;
 
+  /// The most photos the Quark returns for one listing, so a [refresh] that
+  /// keeps more than this many on screen asks in steps of it.
+  static const int maxListing = 200;
+
   /// How many device photos the first (and only) page fetches.
   static const int deviceAssetPageSize = 200;
 
@@ -322,7 +327,8 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   static const Duration searchDebounce = Duration(milliseconds: 300);
 
   /// How long to wait before asking the Quark again while it is still
-  /// reading capture dates (#3356).
+  /// reading capture dates (#3356). Only the photos are asked again, and only
+  /// while the count keeps dropping (#3365).
   static const Duration pendingDatesRetry = Duration(seconds: 3);
 
   final Future<wire.PaginatedPhotosResponse> Function({
@@ -425,7 +431,8 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
 
   /// How many library photos the Quark had still to date at the last page,
   /// under the taken sort (#3356). While above zero, [refresh] sets
-  /// [_datesTimer] to ask again.
+  /// [_datesTimer] to relist the photos, and each relist that sees it drop
+  /// sets it again (#3365).
   int _pendingDates = 0;
   Timer? _datesTimer;
   bool _quarkLoaded = false;
@@ -803,14 +810,17 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
       ? _albumId != null || _pendingLink != null
       : _albumId != null && albumById(_albumId!) != null;
 
-  /// Reloads everything: the first page of Quark photos, the device photos,
-  /// the favorites, and the album tree.
+  /// Reloads everything: the Quark photos loaded so far, at least the first
+  /// page, the device photos, the favorites, and the album tree.
   ///
   /// The current lists stay in place until the new ones arrive, so a refresh
   /// never blanks the grid, and Quark photos already showing in this sort
-  /// stay when the Quark cannot be asked for new ones (#1778).
+  /// stay when the Quark cannot be asked for new ones (#1778). Keeping the
+  /// pages already scrolled through means scrolling on never asks for one of
+  /// them again (#3365).
   Future<void> refresh() async {
     final generation = ++_generation;
+    _datesTimer?.cancel();
     final noHost = _activeHost() == null;
     // Read before the requests, so an answer for a Quark, account or sort
     // left mid-request is not kept for the one that replaced it.
@@ -820,7 +830,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
 
     final Future<_QuarkPage?> quark = noHost
         ? Future.value()
-        : _firstQuarkPage();
+        : _loadedQuarkPhotos(sort, order);
     final mobile = _isWeb ? Future.value(const <_Photo>[]) : _devicePhotos();
     final favorites = noHost
         ? Future<Set<String>?>.value()
@@ -871,31 +881,71 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
       _quarkLoaded = false;
       _quarkUnreachable = false;
     } else if (error == null || _quark.isEmpty || _quarkSort != (sort, order)) {
-      _quark = quarkPage.photos.map(_Photo.fromWire).toList(growable: false);
-      _quarkSort = (sort, order);
-      _quarkTotal = quarkPage.total;
-      _pendingDates = quarkPage.pendingDates;
-      _quarkLoaded = true;
-      _quarkUnreachable = error != null && isQuarkUnreachableError(error);
-      if (error == null && sameScope) {
-        _listCache.putPhotos(
-          quarkPage.photos,
-          total: quarkPage.total,
-          sort: sort,
-          order: order,
-          pendingDates: quarkPage.pendingDates,
-        );
-      }
+      _putQuark(quarkPage, sort, order, cache: sameScope);
     }
     // While the Quark is still reading capture dates, ask again so the grid
-    // re-sections once they land (#3356). Each listing reads another batch,
-    // so the count only goes down. A Quark that did not answer is left to the
-    // next refresh rather than asked on a timer.
-    _datesTimer?.cancel();
+    // re-sections once they land (#3356). A Quark that did not answer is left
+    // to the next refresh rather than asked on a timer.
     if (error == null && _pendingDates > 0) {
-      _datesTimer = Timer(_pendingDatesDelay, refresh);
+      _datesTimer = Timer(_pendingDatesDelay, _relistForDates);
     }
     notifyListeners();
+  }
+
+  /// Asks for the Quark photos on screen again while it reads capture dates,
+  /// so the grid re-sections as they land (#3356), and nothing else: the
+  /// favorites and the album tree do not change with a date (#3365).
+  ///
+  /// Each listing reads another batch, so the count goes down until it is
+  /// done. One that did not drop (a photo whose date cannot be read stays
+  /// pending) stops the asking, and the next [refresh] starts it again.
+  Future<void> _relistForDates() async {
+    final generation = _generation;
+    final scope = _listCache.scope;
+    final sort = _sortField;
+    final order = _sortOrder;
+    final before = _pendingDates;
+    final shown = _quark;
+    final page = await _loadedQuarkPhotos(sort, order);
+    if (generation != _generation || isDisposed || page.error != null) return;
+    if (sort != _sortField || order != _sortOrder) return;
+    // A page scrolled in meanwhile is kept, and the next relist covers it.
+    if (identical(shown, _quark)) {
+      _putQuark(page, sort, order, cache: scope == _listCache.scope);
+    } else {
+      _pendingDates = page.pendingDates;
+    }
+    if (_pendingDates > 0 && _pendingDates < before) {
+      _datesTimer = Timer(_pendingDatesDelay, _relistForDates);
+    }
+    notifyListeners();
+  }
+
+  /// Shows [page] as the Quark photos in [sort] and [order], and, when it
+  /// arrived without an error and [cache] says the Quark and account are
+  /// still the ones asked, leaves it for the next visit (#1778).
+  void _putQuark(
+    _QuarkPage page,
+    PhotoSortField sort,
+    PhotoSortOrder order, {
+    required bool cache,
+  }) {
+    final error = page.error;
+    _quark = page.photos.map(_Photo.fromWire).toList(growable: false);
+    _quarkSort = (sort, order);
+    _quarkTotal = page.total;
+    _pendingDates = page.pendingDates;
+    _quarkLoaded = true;
+    _quarkUnreachable = error != null && isQuarkUnreachableError(error);
+    if (error == null && cache) {
+      _listCache.putPhotos(
+        page.photos,
+        total: page.total,
+        sort: sort,
+        order: order,
+        pendingDates: page.pendingDates,
+      );
+    }
   }
 
   /// Fetches the next page of Quark photos, if there is one and none is
@@ -954,16 +1004,31 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     }
   }
 
-  Future<_QuarkPage> _firstQuarkPage() async {
+  /// Lists as many Quark photos in [sort] and [order] as the grid holds in
+  /// them now, the first page when it holds none, at most [maxListing] per
+  /// request.
+  Future<_QuarkPage> _loadedQuarkPhotos(
+    PhotoSortField sort,
+    PhotoSortOrder order,
+  ) async {
+    final want = _quarkSort == (sort, order)
+        ? math.max(pageSize, _quark.length)
+        : pageSize;
+    final photos = <wire.PhotoItem>[];
     try {
-      final response = await _getPhotos(
-        offset: 0,
-        limit: pageSize,
-        sort: _sortField,
-        order: _sortOrder,
-      );
+      wire.PaginatedPhotosResponse response;
+      do {
+        response = await _getPhotos(
+          offset: photos.length,
+          limit: math.min(maxListing, want - photos.length),
+          sort: sort,
+          order: order,
+        );
+        photos.addAll(response.photos);
+      } while (response.photos.isNotEmpty &&
+          photos.length < math.min(want, response.total));
       return (
-        photos: response.photos,
+        photos: photos,
         total: response.total,
         pendingDates: response.pendingDates,
         error: null,
@@ -2188,7 +2253,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   );
 }
 
-/// The first page of Quark photos, or the [error] that kept it away.
+/// The Quark photos a listing returned, or the [error] that kept them away.
 typedef _QuarkPage = ({
   List<wire.PhotoItem> photos,
   int total,
