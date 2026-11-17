@@ -129,7 +129,11 @@ class _TranscodeDialogState extends State<TranscodeDialog> {
                 ],
               )
             else if (!widget.formats.any((o) => _offered(o.format)))
-              const Text('There are no formats to convert this video to.')
+              // Say why, or the disabled Convert reads as a fault (#3423).
+              const Text(
+                "There's no other format that can hold this video's picture "
+                "and sound, so there's nothing to convert it to.",
+              )
             else
               Wrap(
                 spacing: tokens.spacingSm,

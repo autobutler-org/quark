@@ -144,6 +144,10 @@ void main() {
       formats: const [TranscodeFormatOption(format: 'mov', label: 'MOV')],
     );
 
-    expect(find.textContaining('no formats'), findsOneWidget);
+    // It says why the list is empty, not just that it is (#3423).
+    expect(
+      find.textContaining('no other format that can hold'),
+      findsOneWidget,
+    );
   });
 }

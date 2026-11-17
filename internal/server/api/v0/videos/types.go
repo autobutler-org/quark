@@ -2,6 +2,7 @@ package v0_videos
 
 import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/videoutil"
 )
 
 type router struct{}
@@ -64,4 +65,14 @@ type trimVideoResponse struct {
 type albumRefJSON struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
+}
+
+// videoRefusalJSON is the body of a 422 about a video that is there but can't
+// be read or cut.
+type videoRefusalJSON struct {
+	// Error is the cause in full, for logs.
+	Error string `json:"error"`
+	// Reason is the cause as a code a client words for its user, or empty
+	// when there is none to name.
+	Reason videoutil.Reason `json:"reason"`
 }

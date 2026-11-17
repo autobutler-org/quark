@@ -84,4 +84,35 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('a video the Quark cannot read is not called gone (#3423)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => convertVideo(
+                context,
+                relPath: 'clips/old.avi',
+                loadFormats: (relPath, {serial}) async =>
+                    throw const VideoRefusal('unsupported_format'),
+                transcode: (relPath, {serial, required format}) async => 1,
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(Errors.transcode(const VideoRefusal('unsupported_format'))),
+      findsOneWidget,
+    );
+    expect(find.textContaining('no longer'), findsNothing);
+  });
 }
