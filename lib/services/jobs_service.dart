@@ -9,7 +9,8 @@ import 'package:quark/utils/error_text.dart';
 ///
 /// A refusal throws [ApiException] rather than going through [throwApiError]:
 /// a job's error text is a diagnostic, not copy for a user, so the status code
-/// is what [Errors] reads.
+/// is what [Errors] reads. A retry's 422 is a [VideoRefusal], whose reason
+/// code [Errors] reads too.
 class JobsService with AuthenticatedService {
   JobsService._();
   static final JobsService instance = JobsService._();
@@ -44,15 +45,20 @@ class JobsService with AuthenticatedService {
 
   /// Puts failed job [id] back to pending. The job keeps its id, so there is
   /// nothing to return. A 409 means it didn't fail, a 422 that its files are
-  /// gone, and a 404 that the Quark doesn't know it. Show a failure with
-  /// `Errors.retryJob`.
+  /// gone or, as a [VideoRefusal] naming the reason, that its video no longer
+  /// reads as one (#4255), and a 404 that the Quark doesn't know it. Show a
+  /// failure with `Errors.retryJob`.
   ///
   /// api: POST /api/v0/jobs/{id}/retry
   static Future<void> retryJob(int id) async {
     final uri = apiBaseUri.resolve('/api/v0/jobs/$id/retry');
     final response = await instance.authenticatedPost(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to retry job');
+      throwVideoApiError(
+        response.statusCode,
+        response.body,
+        'Failed to retry job',
+      );
     }
   }
 

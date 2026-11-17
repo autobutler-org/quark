@@ -458,27 +458,39 @@ func TestConvertCancelOfAPendingJob(t *testing.T) {
 // POST and the run: deleted, overwritten with bytes that are not a video, or
 // replaced with a video whose codecs the target cannot hold. Each job ends
 // failed with a diagnostic error and one failed event, leaves no output, and
-// a retry is refused with a 422 while the source stays that way.
+// a retry is refused with a 422 while the source stays that way, naming the
+// reason when the source is there but no longer reads as a video (#4255).
 func TestConvertFailureIsAFailedJobWithAReason(t *testing.T) {
 	cases := []struct {
 		name   string
 		format string
 		breaks func(t *testing.T, path string)
 		reason string
+		// retryReason is the reason code the refused retry's 422 carries.
+		retryReason videoutil.Reason
 	}{
 		{"source deleted", "mkv", func(t *testing.T, path string) {
 			if err := os.Remove(path); err != nil {
 				t.Fatal(err)
 			}
-		}, transcodeutil.ErrSourceNotFound.Error()},
+		}, transcodeutil.ErrSourceNotFound.Error(), videoutil.ReasonNone},
 		{"source no longer a video", "mkv", func(t *testing.T, path string) {
 			if err := os.WriteFile(path, []byte("not a video any more"), 0o644); err != nil {
 				t.Fatal(err)
 			}
-		}, ""},
+		}, "", videoutil.ReasonUnsupportedFormat},
+		{"source damaged", "mkv", func(t *testing.T, path string) {
+			clip, err := os.ReadFile(gopFixture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, clip[:len(clip)/2], 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}, "", videoutil.ReasonDamaged},
 		{"source's codecs no longer fit the format", "m4v", func(t *testing.T, path string) {
 			copyFixture(t, webmFixture, path)
-		}, ""},
+		}, "", videoutil.ReasonNone},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -507,8 +519,8 @@ func TestConvertFailureIsAFailedJobWithAReason(t *testing.T) {
 				t.Errorf("a failed conversion published uploads %v", uploads)
 			}
 			w := h.send(http.MethodPost, fmt.Sprintf("/api/v0/jobs/%d/retry", id), "")
-			if w.Code != http.StatusUnprocessableEntity {
-				t.Errorf("retry returned %d %s, want 422", w.Code, w.Body.String())
+			if got := refusalOf(t, w.Code, w.Body.Bytes()).Reason; got != string(c.retryReason) {
+				t.Errorf("retry reason = %q, want %q (%s)", got, c.retryReason, w.Body.String())
 			}
 			if job := h.job(t, id); job.Status != jobutil.StatusFailed {
 				t.Errorf("a refused retry left the job %+v, want it still failed", job)

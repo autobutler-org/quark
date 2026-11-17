@@ -2624,6 +2624,19 @@ definitions:
       jobId:
         type: integer
     type: object
+  v0_jobs.retryRefusalJSON:
+    properties:
+      error:
+        description: Error is the cause in full, for logs.
+        type: string
+      reason:
+        allOf:
+        - $ref: '#/definitions/videoutil.Reason'
+        description: |-
+          Reason is the cause as videoutil.ReasonOf names it, for a transcode
+          whose source is there but can't be read, or empty when there is none to
+          name, such as a source that was deleted.
+    type: object
   v0_music.AlbumsResponse:
     properties:
       albums:
@@ -9147,7 +9160,8 @@ paths:
         that queued it, which must still be active and able to write the folder of
         the file the job works on, or the retry is refused with 403. A retry whose
         inputs no longer exist, such as a transcode of a video that was moved or deleted,
-        is refused with 422.
+        is refused with 422. When that input is a video that is there but no longer
+        reads as one, the body's reason names why, as on the /videos routes.
       parameters:
       - description: Job ID
         in: path
@@ -9180,9 +9194,10 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "422":
-          description: Unprocessable Entity — the job's inputs no longer exist
+          description: Unprocessable Entity — the job's inputs no longer exist or
+            no longer read as a video
           schema:
-            $ref: '#/definitions/serverutil.Response'
+            $ref: '#/definitions/v0_jobs.retryRefusalJSON'
         "500":
           description: Internal Server Error
           schema:

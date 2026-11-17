@@ -393,6 +393,19 @@ void main() {
       );
     });
 
+    test('a 422 naming a reason says why, as a conversion does (#4255)', () {
+      for (final reason in ['damaged', 'unsupported_format']) {
+        expect(
+          Errors.retryJob(VideoRefusal(reason)),
+          Errors.transcode(VideoRefusal(reason)),
+        );
+      }
+      expect(
+        Errors.retryJob(const VideoRefusal(null)),
+        'The file this job used is missing or can no longer be read.',
+      );
+    });
+
     test('a 404 says the job is gone', () {
       expect(
         Errors.retryJob(const ApiException(404)),

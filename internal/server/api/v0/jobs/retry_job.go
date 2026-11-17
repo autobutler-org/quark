@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/videoutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,7 +20,7 @@ var errCreatorReadOnly = errors.New("the account that queued this job can't save
 
 // retryJob godoc
 // @Summary Retry a background job
-// @Description Resets a failed job to pending so it runs again. It keeps its id and createdAt; progress, error, startedAt, and finishedAt are cleared, and the returned jobId is the same id. Only the account that queued the job, or an admin, may retry it; any other caller gets 404. The job runs as the account that queued it, which must still be active and able to write the folder of the file the job works on, or the retry is refused with 403. A retry whose inputs no longer exist, such as a transcode of a video that was moved or deleted, is refused with 422.
+// @Description Resets a failed job to pending so it runs again. It keeps its id and createdAt; progress, error, startedAt, and finishedAt are cleared, and the returned jobId is the same id. Only the account that queued the job, or an admin, may retry it; any other caller gets 404. The job runs as the account that queued it, which must still be active and able to write the folder of the file the job works on, or the retry is refused with 403. A retry whose inputs no longer exist, such as a transcode of a video that was moved or deleted, is refused with 422. When that input is a video that is there but no longer reads as one, the body's reason names why, as on the /videos routes.
 // @Tags jobs
 // @Produce json
 // @Param id path int true "Job ID"
@@ -28,7 +29,7 @@ var errCreatorReadOnly = errors.New("the account that queued this job can't save
 // @Failure 403 {object} serverutil.Response "Forbidden — the account that queued the job can no longer sign in or write the folder"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 409 {object} serverutil.Response "Conflict — only a failed job can be retried, and a job already reset by a retry is no longer failed"
-// @Failure 422 {object} serverutil.Response "Unprocessable Entity — the job's inputs no longer exist"
+// @Failure 422 {object} retryRefusalJSON "Unprocessable Entity — the job's inputs no longer exist or no longer read as a video"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Security BearerAuth
 // @Router /jobs/{id}/retry [post]
@@ -65,7 +66,8 @@ func retryJob(c *gin.Context) *serverutil.Response {
 	case errors.Is(err, jobutil.ErrJobNotRetryable):
 		return serverutil.Conflict(err)
 	case errors.Is(err, jobutil.ErrRetryRejected):
-		return serverutil.NewResponse().WithStatusCode(http.StatusUnprocessableEntity).WithError(err)
+		return serverutil.NewResponse().WithStatusCode(http.StatusUnprocessableEntity).
+			WithData(retryRefusalJSON{Error: err.Error(), Reason: videoutil.ReasonOf(err)})
 	case err != nil:
 		return serverutil.InternalServerError(err)
 	}

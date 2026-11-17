@@ -7690,7 +7690,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Resets a failed job to pending so it runs again. It keeps its id and createdAt; progress, error, startedAt, and finishedAt are cleared, and the returned jobId is the same id. Only the account that queued the job, or an admin, may retry it; any other caller gets 404. The job runs as the account that queued it, which must still be active and able to write the folder of the file the job works on, or the retry is refused with 403. A retry whose inputs no longer exist, such as a transcode of a video that was moved or deleted, is refused with 422.",
+                "description": "Resets a failed job to pending so it runs again. It keeps its id and createdAt; progress, error, startedAt, and finishedAt are cleared, and the returned jobId is the same id. Only the account that queued the job, or an admin, may retry it; any other caller gets 404. The job runs as the account that queued it, which must still be active and able to write the folder of the file the job works on, or the retry is refused with 403. A retry whose inputs no longer exist, such as a transcode of a video that was moved or deleted, is refused with 422. When that input is a video that is there but no longer reads as one, the body's reason names why, as on the /videos routes.",
                 "produces": [
                     "application/json"
                 ],
@@ -7739,9 +7739,9 @@
                         }
                     },
                     "422": {
-                        "description": "Unprocessable Entity — the job's inputs no longer exist",
+                        "description": "Unprocessable Entity — the job's inputs no longer exist or no longer read as a video",
                         "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
+                            "$ref": "#/definitions/v0_jobs.retryRefusalJSON"
                         }
                     },
                     "500": {
@@ -16122,6 +16122,23 @@
             "properties": {
                 "jobId": {
                     "type": "integer"
+                }
+            }
+        },
+        "v0_jobs.retryRefusalJSON": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "description": "Error is the cause in full, for logs.",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "Reason is the cause as videoutil.ReasonOf names it, for a transcode\nwhose source is there but can't be read, or empty when there is none to\nname, such as a source that was deleted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/videoutil.Reason"
+                        }
+                    ]
                 }
             }
         },

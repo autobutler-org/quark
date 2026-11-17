@@ -502,19 +502,22 @@ abstract final class Errors {
   };
 
   /// A retry the Quark refused. Only a failed job can be retried, so a 409
-  /// means this one didn't fail; a 422 means the file it used is gone or no
-  /// longer reads as what the job needs, such as a damaged video (#3423); a 404
+  /// means this one didn't fail; a 422 that names a cause, such as a damaged
+  /// video, gets the sentence a conversion would (#4255), and one that names
+  /// none means the file it used is gone or no longer reads; a 404
   /// means the Quark no longer knows the job, or no longer shows it to this
   /// account; a 403 means the account that queued it can't save files in the
   /// folder any more. Retrying again would fail the same way.
-  static String retryJob(Object? error) => switch (error) {
-    ApiException(statusCode: 409) => "That job can't be retried.",
-    ApiException(statusCode: 422) =>
-      'The file this job used is missing or can no longer be read.',
-    ApiException(statusCode: 404) => 'That job no longer exists.',
-    ApiException(statusCode: 403) => cantSaveInFolder,
-    _ => message(error, 'retry the job'),
-  };
+  static String retryJob(Object? error) =>
+      _videoRefusal(error) ??
+      switch (error) {
+        ApiException(statusCode: 409) => "That job can't be retried.",
+        ApiException(statusCode: 422) =>
+          'The file this job used is missing or can no longer be read.',
+        ApiException(statusCode: 404) => 'That job no longer exists.',
+        ApiException(statusCode: 403) => cantSaveInFolder,
+        _ => message(error, 'retry the job'),
+      };
 
   /// A cancel the Quark refused: a 409 means the job had already finished, a
   /// 404 that the Quark no longer knows it or no longer shows it to this
