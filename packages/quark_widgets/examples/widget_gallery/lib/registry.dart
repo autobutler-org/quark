@@ -429,6 +429,34 @@ final List<GalleryEntry> registry = [
   ),
 
   GalleryEntry(
+    name: 'QuarkInfoNote',
+    group: 'Core',
+    build: (context, log) => const QuarkInfoNote(
+      text:
+          'Items here are deleted for good after 30 days. Restore puts each '
+          'one back in the folder it came from.',
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkDangerButton',
+    group: 'Core',
+    build: (context, log) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        QuarkDangerButton(
+          label: 'Empty trash',
+          icon: QuarkIcons.delete_forever_outlined,
+          onPressed: () => log('QuarkDangerButton.onPressed'),
+        ),
+        const QuarkDangerButton(
+          label: 'Empty trash (disabled)',
+          onPressed: null,
+        ),
+      ],
+    ),
+  ),
+
+  GalleryEntry(
     name: 'QuarkAvatar',
     group: 'Core',
     build: (context, log) => Wrap(

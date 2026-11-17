@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quark/models/trash_item.dart';
 import 'package:quark/pages/trash_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
@@ -15,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_events_channel.dart';
 import '../support/secure_storage.dart';
+import '../support/tap_target_guidelines.dart' show narrowViewport;
 
 /// #2250: the trash has had multi-select since it had a restore button, but
 /// the only way in was a long press on a row. A mouse does not long-press, so
@@ -171,5 +173,83 @@ void main() {
     }
 
     expect(tester.widget<QuarkBarIconButton>(emptyTrash).onPressed, isNotNull);
+  });
+
+  // #4233: on a phone the bar is brand, Select and account; emptying the
+  // whole trash is a labeled button under the list, never a bar icon.
+  group('on a phone', () {
+    Future<void> pumpPhone(WidgetTester tester, {TrashLocation? at}) async {
+      tester.view.physicalSize = narrowViewport;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(home: TrashPage(location: at)));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    final inBar = find.descendant(
+      of: find.byType(QuarkAppBar),
+      matching: emptyTrash,
+    );
+    final button = find.byType(QuarkDangerButton);
+    final note = find.byType(QuarkInfoNote);
+
+    testWidgets('empties from a button under the list, not the bar', (
+      tester,
+    ) async {
+      serve([trashedNote]);
+      await pumpPhone(tester);
+
+      expect(inBar, findsNothing);
+      expect(select, findsOneWidget);
+      expect(button, findsOneWidget);
+      expect(note, findsOneWidget);
+      expect(
+        find.text(
+          'Items here are deleted for good after 30 days. Restore puts each '
+          'one back in the folder it came from.',
+        ),
+        findsOneWidget,
+      );
+      // The phone row: name over its subtitle, no Device or Size column.
+      expect(find.text('notes.txt'), findsOneWidget);
+      expect(find.text('Size'), findsNothing);
+      expect(find.text('Device'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Empty trash?'), findsOneWidget);
+    });
+
+    testWidgets('hides the button and the note when the trash is empty', (
+      tester,
+    ) async {
+      await pumpPhone(tester);
+
+      expect(find.text('Trash is empty'), findsOneWidget);
+      expect(button, findsNothing);
+      expect(note, findsNothing);
+      expect(emptyTrash, findsNothing);
+    });
+
+    testWidgets('hides the button inside a folder', (tester) async {
+      serve(
+        const [],
+        contents: const {
+          'items': [
+            {'name': 'one.jpg', 'path': 'one.jpg', 'isDir': false, 'size': 12},
+          ],
+          'originalPath': 'Pictures/album',
+          'expiresAt': '2026-10-01T12:00:00Z',
+        },
+      );
+      await pumpPhone(tester, at: (serial: '', trashName: 'x_album', path: ''));
+
+      expect(find.text('one.jpg'), findsOneWidget);
+      expect(button, findsNothing);
+    });
   });
 }
