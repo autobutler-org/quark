@@ -1,6 +1,7 @@
 # Smoke test for the Docs and Sheets pages (#3752), driven by their key
 # prefixes. Needs a signed-in session; works on an empty library, since the
-# search bar and the new-file chip show either way.
+# search bar and the + button (a phone's create action, #4227) show either
+# way.
 
 test "docs page searches and clears"
   @smoke
@@ -9,7 +10,7 @@ test "docs page searches and clears"
   wait until #drawer_docs appears
   tap #drawer_docs
   wait until #docs_search appears
-  see #docs_new
+  see #docs_create_fab
   type "zzz-no-such-doc" into #docs_search
   wait until #docs_search_clear appears
   tap #docs_search_clear
@@ -22,7 +23,7 @@ test "sheets page searches and clears"
   wait until #drawer_sheets appears
   tap #drawer_sheets
   wait until #sheets_search appears
-  see #sheets_new
+  see #sheets_create_fab
   type "zzz-no-such-sheet" into #sheets_search
   wait until #sheets_search_clear appears
   tap #sheets_search_clear

@@ -206,6 +206,7 @@ class DocSheetBody extends StatelessWidget {
     DocSheetTile nodeTile(FileNode node, VoidCallback onTap) => DocSheetTile(
       relPath: node.apiPath,
       deviceName: node.deviceName,
+      modifiedAt: node.modifiedAt,
       showDevice: showDevice,
       snippet: snippets[DocSheetTile.fileKey(node.deviceSerial, node.apiPath)],
       onTap: onTap,

@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/utils/file_kind.dart';
+import 'package:quark/utils/list_date_label.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark_icons/quark_icons.dart';
 
@@ -7,7 +8,8 @@ import 'package:quark_icons/quark_icons.dart';
 /// or by content, so the same file looks the same either way (#2272).
 ///
 /// The file's own extension picks its icon, so a sheet on the Docs page still
-/// looks like a sheet.
+/// looks like a sheet. The subtitle says where and when: `Documents ·
+/// Yesterday` (#4227), so two files of one name tell apart.
 class DocSheetTile extends StatelessWidget {
   /// Path relative to the device's files root, e.g. `reports/q1.qdoc`.
   final String relPath;
@@ -18,6 +20,10 @@ class DocSheetTile extends StatelessWidget {
   /// Whether the rows being shown span more than one device, so the device
   /// name tells same-named files apart instead of repeating on every row.
   final bool showDevice;
+
+  /// When the file last changed, shown after the folder as a
+  /// [listDateLabel]; null when the Quark did not say.
+  final DateTime? modifiedAt;
 
   /// Matched text from a content search, shown under the location.
   final String? snippet;
@@ -40,6 +46,7 @@ class DocSheetTile extends StatelessWidget {
     required this.deviceName,
     required this.showDevice,
     required this.onTap,
+    this.modifiedAt,
     this.snippet,
     this.onRename,
     this.onShare,
@@ -78,9 +85,11 @@ class DocSheetTile extends StatelessWidget {
     final slash = relPath.lastIndexOf('/');
     final filename = relPath.substring(slash + 1);
     final folder = slash < 0 ? '' : relPath.substring(0, slash);
+    final modifiedAt = this.modifiedAt;
     final location = [
       if (showDevice && deviceName.isNotEmpty) deviceName,
       if (folder.isNotEmpty) folder,
+      if (modifiedAt != null) listDateLabel(modifiedAt),
     ].join(' · ');
     final snippet = this.snippet;
     final subtitleStyle = TextStyle(

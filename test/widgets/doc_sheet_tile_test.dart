@@ -109,4 +109,49 @@ void main() {
     expect(DocSheetTile.isSlides('a/B.QSLIDE'), isTrue);
     expect(DocSheetTile.isSheet('a/B.qslide'), isFalse);
   });
+
+  group('the subtitle says where and when (#4227)', () {
+    Future<void> pumpDated(
+      WidgetTester tester, {
+      required String relPath,
+      DateTime? modifiedAt,
+    }) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DocSheetTile(
+            relPath: relPath,
+            deviceName: '',
+            showDevice: false,
+            modifiedAt: modifiedAt,
+            onTap: () {},
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('folder, then the date', (tester) async {
+      await pumpDated(
+        tester,
+        relPath: 'Documents/Notes.qdoc',
+        modifiedAt: DateTime.now().subtract(const Duration(days: 1)),
+      );
+      expect(find.text('Documents · Yesterday'), findsOneWidget);
+    });
+
+    testWidgets('a file at the top level shows only the date', (tester) async {
+      await pumpDated(
+        tester,
+        relPath: 'Notes.qdoc',
+        modifiedAt: DateTime.now(),
+      );
+      expect(find.text('Today'), findsOneWidget);
+    });
+
+    testWidgets('no date from the Quark leaves the folder alone', (
+      tester,
+    ) async {
+      await pumpDated(tester, relPath: 'Documents/Notes.qdoc');
+      expect(find.text('Documents'), findsOneWidget);
+    });
+  });
 }

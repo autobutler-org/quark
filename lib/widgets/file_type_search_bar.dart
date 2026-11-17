@@ -1,7 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The filter strip above the Docs, Sheets and Slides lists.
+/// The filter strip above the Docs, Sheets and Slides lists. Its rounded
+/// field is at least 44 px tall and its text 16 px, so iOS Safari does not
+/// zoom the page when it takes the focus (#4227), and it grows with large
+/// text rather than clipping it.
 ///
 /// Key prefixes: `<keyPrefix>_search` on the field and
 /// `<keyPrefix>_search_clear` on its clear button, so `slides_search`,
