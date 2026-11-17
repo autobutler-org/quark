@@ -1527,6 +1527,123 @@ void main() {
       },
     );
 
+    group('range and drag (#4171)', () {
+      test('a shift-click selects every photo between it and the last one '
+          'picked, in grid order, in one rebuild', () async {
+        final controller = _FakeQuark(total: 60).controller();
+        await controller.refresh();
+        final ids = [for (final photo in controller.photos) photo.id];
+        controller.selectFromLongPress(ids[2]);
+        var rebuilds = 0;
+        controller.addListener(() => rebuilds++);
+
+        controller.selectRangeTo(ids[39]);
+
+        expect(controller.selectedIds, ids.sublist(2, 40).toSet());
+        expect(controller.selectedIds, hasLength(38));
+        expect(rebuilds, 1);
+      });
+
+      test('a range adds to what was selected and runs either way', () async {
+        final controller = _FakeQuark(total: 20).controller();
+        await controller.refresh();
+        final ids = [for (final photo in controller.photos) photo.id];
+        controller
+          ..selectFromLongPress(ids[15])
+          ..toggleSelection(ids[8]);
+
+        controller.selectRangeTo(ids[5]);
+
+        expect(controller.selectedIds, {...ids.sublist(5, 9), ids[15]});
+      });
+
+      test('a shift-click with nothing selected starts selecting at that '
+          'photo', () async {
+        final controller = _FakeQuark(total: 10).controller();
+        await controller.refresh();
+        final ids = [for (final photo in controller.photos) photo.id];
+
+        controller.selectRangeTo(ids[4]);
+
+        expect(controller.selectionMode, isTrue);
+        expect(controller.selectedIds, {ids[4]});
+
+        controller.selectRangeTo(ids[6]);
+        expect(controller.selectedIds, ids.sublist(4, 7).toSet());
+      });
+
+      test('a drag adds what it covers to the selection, and gives back what '
+          'it no longer covers', () async {
+        final controller = _FakeQuark(total: 10).controller();
+        await controller.refresh();
+        final ids = [for (final photo in controller.photos) photo.id];
+        controller.selectFromLongPress(ids[0]);
+        var rebuilds = 0;
+        controller.addListener(() => rebuilds++);
+
+        controller
+          ..beginDragSelection()
+          ..updateDragSelection(ids.sublist(3, 7));
+        expect(controller.selectedIds, {ids[0], ...ids.sublist(3, 7)});
+
+        // Swiping back over tiles takes them out again, but never what was
+        // selected before the drag.
+        controller.updateDragSelection(ids.sublist(3, 5));
+        expect(controller.selectedIds, {ids[0], ...ids.sublist(3, 5)});
+        controller.updateDragSelection(ids.sublist(0, 1));
+        expect(controller.selectedIds, {ids[0]});
+        controller.updateDragSelection(ids.sublist(0, 1));
+        expect(rebuilds, 3, reason: 'an update that changes nothing is quiet');
+
+        controller
+          ..updateDragSelection(ids.sublist(1, 3))
+          ..endDragSelection()
+          ..updateDragSelection(ids.sublist(5, 6));
+        expect(controller.selectedIds, ids.sublist(0, 3).toSet());
+      });
+
+      test('a drag outside selection mode starts selecting', () async {
+        final controller = _FakeQuark(total: 10).controller();
+        await controller.refresh();
+        final ids = [for (final photo in controller.photos) photo.id];
+
+        controller
+          ..beginDragSelection()
+          ..updateDragSelection(ids.sublist(1, 3));
+
+        expect(controller.selectionMode, isTrue);
+        expect(controller.selectedIds, ids.sublist(1, 3).toSet());
+      });
+
+      test('neither a range nor a drag picks a photo the album being added '
+          'to holds (#3361)', () async {
+        final quark = _FakeQuark();
+        final controller = quark.controller();
+        await controller.refresh();
+        await controller.showAlbum(1);
+        controller.enterSelectionMode(
+          addingTo: const AlbumItem(id: 1, name: 'Trips'),
+        );
+        await pumpEventQueue();
+        const member = 'sd1:camera/1.jpg';
+        expect(controller.albumMemberIds, {member});
+
+        controller
+          ..toggleSelection('sd1:camera/0.jpg')
+          ..selectRangeTo('sd1:camera/2.jpg');
+        expect(controller.selectedIds, {
+          'sd1:camera/0.jpg',
+          'sd1:camera/2.jpg',
+        });
+
+        controller
+          ..deselectAll()
+          ..beginDragSelection()
+          ..updateDragSelection(['sd1:camera/0.jpg', member]);
+        expect(controller.selectedIds, {'sd1:camera/0.jpg'});
+      });
+    });
+
     test('adding counts what was added, skipped and refused', () async {
       final quark = _FakeQuark()..failingAdds.add('camera/2.jpg');
       final controller = quark.controller();

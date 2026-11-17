@@ -217,6 +217,8 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 - Canceling the selection (or pressing Escape) also returns to the album, with nothing added.
 - System albums (Favorites, Inbox) show no **Add Photos** action.
 - Photos can also be added from plain selection mode: **Select**, pick photos, then **Add to album** in the bottom bar.
+- Picking many at once works here too (JN-PH-028), and a range or drag skips the photos the album already holds just
+  as a tap does.
 
 ---
 
@@ -643,3 +645,30 @@ mode is off.
 - On a phone the bar keeps the count and **Add to album** in the row, and the other actions move into a menu labeled
   **More**.
 - Downloading many photos as one zip is not offered yet.
+
+---
+
+### JN-PH-028: Select many photos in one gesture
+
+**Preconditions:** Photos are visible in the grid (JN-PH-001), an album (JN-PH-012), a category tab, or search
+results (JN-PH-023).
+
+**Steps:**
+
+1. On a computer, click a photo, then hold Shift and click another.
+2. Or, on a computer, press on a photo and drag the mouse across others.
+3. Or, on a phone, long-press a photo and, without lifting the finger, swipe across others.
+
+**Expected result:**
+
+- A shift-click selects every photo from the one picked last to the one clicked, in the order the grid shows them,
+  month headers and search results included. With nothing picked yet, it starts selecting at the clicked photo.
+- A mouse drag selects the photos in the rows and columns between where it started and the pointer, like a file
+  manager's rubber band. Dragging back over them leaves them out again.
+- On a phone, the swipe selects every photo between the long-pressed one and the finger, in grid order, so a swipe
+  across a row selects that row and a swipe down takes whole rows. Swiping back gives them back.
+- A range or a drag only adds: photos selected before it stay selected.
+- Holding a drag near the top or bottom of the grid scrolls it, so one drag can cover more than a screen.
+- A range or drag stops at the last loaded photo; it never selects photos the grid has not fetched yet.
+- A swipe that does not follow a long press scrolls the grid and selects nothing.
+- The selection bar's count and actions (JN-PH-027) apply to everything selected this way.

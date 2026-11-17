@@ -1062,6 +1062,16 @@ class PhotosPageState extends State<PhotosPage>
                               // the library it stays selection (#2276).
                               onLongPress: (i) =>
                                   c.selectFromLongPress(photos[i].id),
+                              // Many photos in one gesture (#4171): the
+                              // grid reports it, the controller picks.
+                              onRangeSelect: (i) =>
+                                  c.selectRangeTo(photos[i].id),
+                              onDragSelectStart: c.beginDragSelection,
+                              onDragSelectUpdate: (indices) =>
+                                  c.updateDragSelection([
+                                    for (final i in indices) photos[i].id,
+                                  ]),
+                              onDragSelectEnd: c.endDragSelection,
                               longPressOpensMenu:
                                   album != null && !c.selectionMode,
                               onMenu: _demo

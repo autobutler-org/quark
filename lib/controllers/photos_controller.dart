@@ -453,6 +453,14 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   bool _selectionMode = false;
   final Set<String> _selectedIds = {};
   bool _actingOnSelection = false;
+
+  /// The photo the last tap, long press, range or drag picked, which a
+  /// shift-click extends a range from (#4171).
+  String? _selectionAnchor;
+
+  /// What was selected when a drag began, which every update of the drag
+  /// adds to, or null with no drag running (#4171).
+  Set<String>? _dragBase;
   AlbumItem? _addingToAlbum;
 
   /// The photos [_addingToAlbum] already holds, which cannot be picked.
@@ -1205,6 +1213,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     _addingToAlbum = addingTo;
     _albumMemberIds = {...?showing?.map((photo) => photo.id)};
     _selectedIds.clear();
+    _selectionAnchor = null;
     notifyListeners();
     if (addingTo != null && showing == null) {
       unawaited(_loadAlbumMembers(addingTo));
@@ -1235,6 +1244,8 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     _addingToAlbum = null;
     _albumMemberIds = const {};
     _selectedIds.clear();
+    _selectionAnchor = null;
+    _dragBase = null;
     notifyListeners();
     if (returnTo != null) unawaited(showAlbum(returnTo.id));
   }
@@ -1244,6 +1255,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   void toggleSelection(String id) {
     if (_albumMemberIds.contains(id)) return;
     if (!_selectedIds.remove(id)) _selectedIds.add(id);
+    _selectionAnchor = id;
     notifyListeners();
   }
 
@@ -1261,19 +1273,80 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   /// Clears the selection but keeps selecting.
   void deselectAll() {
     _selectedIds.clear();
+    _selectionAnchor = null;
     notifyListeners();
   }
 
   /// What a long press does: starts selecting if nothing is being selected,
   /// then toggles [id].
   void selectFromLongPress(String id) {
-    if (!_selectionMode) {
-      _selectionMode = true;
-      _addingToAlbum = null;
-      _albumMemberIds = const {};
-      _selectedIds.clear();
-    }
+    _startSelecting();
     toggleSelection(id);
+  }
+
+  /// What a shift-click does (#4171): adds every photo from the last one
+  /// picked to [id], in the grid's order, to the selection, with one
+  /// rebuild however many there are. With nothing picked yet, or the last
+  /// one no longer in the grid, it starts selecting at [id] alone. A range
+  /// only covers loaded photos, and never takes one the album being added
+  /// to holds.
+  void selectRangeTo(String id) {
+    _startSelecting();
+    final ids = [for (final photo in _visible()) photo.id];
+    final to = ids.indexOf(id);
+    final from = _selectionAnchor == null ? -1 : ids.indexOf(_selectionAnchor!);
+    if (to < 0) return;
+    final (start, end) = from < 0
+        ? (to, to)
+        : from < to
+        ? (from, to)
+        : (to, from);
+    _selectedIds.addAll(
+      ids.sublist(start, end + 1).where((id) => !_albumMemberIds.contains(id)),
+    );
+    _selectionAnchor = id;
+    notifyListeners();
+  }
+
+  /// Starts a drag across the grid (#4171), a mouse's rubber band or a
+  /// finger's swipe after a long press. Starts selecting if nothing is.
+  /// Until [endDragSelection], each [updateDragSelection] adds the photos
+  /// the drag covers to what was selected now.
+  void beginDragSelection() {
+    _startSelecting();
+    _dragBase = {..._selectedIds};
+  }
+
+  /// The photos the running drag covers now, all of them rather than what
+  /// changed, so a drag that turns back gives back what it no longer
+  /// covers. What was selected before the drag stays. Rebuilds only when
+  /// the selection changed, and does nothing without a drag running.
+  void updateDragSelection(Iterable<String> ids) {
+    final base = _dragBase;
+    if (base == null) return;
+    final next = {...base, ...ids.where((id) => !_albumMemberIds.contains(id))};
+    if (next.length == _selectedIds.length && next.containsAll(_selectedIds)) {
+      return;
+    }
+    _selectedIds
+      ..clear()
+      ..addAll(next);
+    if (ids.isNotEmpty) _selectionAnchor = ids.last;
+    notifyListeners();
+  }
+
+  /// Ends the running drag, keeping what it selected.
+  void endDragSelection() => _dragBase = null;
+
+  /// Turns selection mode on for plain selection, with nothing selected,
+  /// unless it is on already.
+  void _startSelecting() {
+    if (_selectionMode) return;
+    _selectionMode = true;
+    _addingToAlbum = null;
+    _albumMemberIds = const {};
+    _selectedIds.clear();
+    _selectionAnchor = null;
   }
 
   /// Adds every selected Quark photo to [albumId], then leaves selection mode
