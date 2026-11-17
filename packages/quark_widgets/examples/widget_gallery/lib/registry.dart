@@ -4226,7 +4226,7 @@ final List<GalleryEntry> registry = [
       height: 420,
       child: VaultEntryList(
         entries: const [
-          VaultEntryItem(id: 1, name: 'GitHub', subtitle: 'github.com'),
+          VaultEntryItem(id: 1, name: 'GitHub', subtitle: 'github.com · grace'),
           VaultEntryItem(id: 2, name: 'Bank', subtitle: 'bank.example'),
           VaultEntryItem(id: 3, name: 'Wi-Fi'),
         ],
@@ -4239,6 +4239,8 @@ final List<GalleryEntry> registry = [
         onFolderSelected: (id) => log('VaultEntryList.onFolderSelected($id)'),
         onDeleteFolder: (id) => log('VaultEntryList.onDeleteFolder($id)'),
         onTapEntry: (id) => log('VaultEntryList.onTapEntry($id)'),
+        onEntryAction: (id, action) =>
+            log('VaultEntryList.onEntryAction($id, ${action.name})'),
       ),
     ),
   ),

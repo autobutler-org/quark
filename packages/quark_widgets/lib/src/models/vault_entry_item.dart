@@ -70,3 +70,18 @@ class VaultEntryDraft {
   /// The folder it is filed in, or null for none.
   final int? folderId;
 }
+
+/// What an entry row's menu offers, in the order it lists them.
+enum VaultEntryAction {
+  /// Copies the entry's password.
+  copyPassword,
+
+  /// Copies the entry's username.
+  copyUsername,
+
+  /// Opens the entry's form.
+  edit,
+
+  /// Deletes the entry, once the caller has asked.
+  delete,
+}

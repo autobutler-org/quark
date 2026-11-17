@@ -7,8 +7,8 @@ import '../theme/quark_tokens.dart';
 import 'vault_entry_list/vault_entry_tile.dart';
 import 'vault_entry_list/vault_folder_chips.dart';
 
-/// An unlocked vault's entries: a search box, a folder filter when there are
-/// folders, and one row per entry.
+/// An unlocked vault's entries: a rounded search field first, a folder filter
+/// when there are folders, and one row per entry (#4234).
 ///
 /// Filtering is the caller's: [entries] is already what the search and the
 /// folder leave, and the box and chips only report what was typed or chosen.
@@ -17,7 +17,11 @@ import 'vault_entry_list/vault_folder_chips.dart';
 ///
 /// Key prefixes: `vault_search` on the search box, `vault_entry_<id>` on each
 /// row, `vault_folder_all` and `vault_folder_<id>` on the folder chips, and
-/// `vault_folder_delete` on the chosen folder's delete button.
+/// `vault_folder_delete` on the chosen folder's delete button. With
+/// [onEntryAction] set each row has a ⋮ menu, keyed `vault_entry_menu_<id>`,
+/// whose rows are `vault_entry_<action>_<id>` for each [VaultEntryAction].
+///
+/// The list leaves room at its end for a page's floating `+` button.
 ///
 /// ```dart
 /// VaultEntryList(
@@ -29,6 +33,7 @@ import 'vault_entry_list/vault_folder_chips.dart';
 ///   onFolderSelected: controller.filterFolder,
 ///   onDeleteFolder: confirmDeleteFolder,
 ///   onTapEntry: openEntry,
+///   onEntryAction: runEntryAction,
 /// );
 /// ```
 class VaultEntryList extends StatelessWidget {
@@ -43,6 +48,7 @@ class VaultEntryList extends StatelessWidget {
     this.onDeleteFolder,
     this.vaultIsEmpty = false,
     this.initialQuery = '',
+    this.onEntryAction,
     super.key,
   });
 
@@ -74,10 +80,26 @@ class VaultEntryList extends StatelessWidget {
   /// What the search box starts with.
   final String initialQuery;
 
+  /// Called with an entry's id and the row its menu chose: copy the password
+  /// or username, edit, or delete. Null hides the menus.
+  final void Function(int id, VaultEntryAction action)? onEntryAction;
+
+  /// The search field's height: the 48 px touch target the app's
+  /// accessibility checks hold every control to.
+  static const double searchHeight = 48;
+
+  /// Space left under the last row so a floating `+` button never covers it.
+  static const double floatingButtonClearance = 88;
+
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final onFolderSelected = this.onFolderSelected;
+    final onEntryAction = this.onEntryAction;
+    final pill = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(searchHeight / 2),
+      borderSide: BorderSide(color: tokens.border),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -88,16 +110,28 @@ class VaultEntryList extends StatelessWidget {
             tokens.spacingMd,
             tokens.spacingSm,
           ),
-          child: TextFormField(
-            key: const ValueKey('vault_search'),
-            initialValue: initialQuery,
-            decoration: const InputDecoration(
-              hintText: 'Search the vault',
-              prefixIcon: Icon(QuarkIcons.search),
-              border: OutlineInputBorder(),
-              isDense: true,
+          child: SizedBox(
+            height: searchHeight,
+            child: TextFormField(
+              key: const ValueKey('vault_search'),
+              initialValue: initialQuery,
+              style: const TextStyle(fontSize: 16),
+              textAlignVertical: TextAlignVertical.center,
+              decoration: InputDecoration(
+                hintText: 'Search the vault',
+                prefixIcon: const Icon(QuarkIcons.search),
+                border: pill,
+                enabledBorder: pill,
+                focusedBorder: pill.copyWith(
+                  borderSide: BorderSide(color: tokens.focus, width: 2),
+                ),
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: tokens.spacingMd,
+                ),
+              ),
+              onChanged: onSearchChanged,
             ),
-            onChanged: onSearchChanged,
           ),
         ),
         if (folders.isNotEmpty && onFolderSelected != null)
@@ -123,12 +157,18 @@ class VaultEntryList extends StatelessWidget {
                       : null,
                 )
               : ListView.builder(
+                  padding: const EdgeInsets.only(
+                    bottom: floatingButtonClearance,
+                  ),
                   itemCount: entries.length,
                   itemBuilder: (context, index) {
                     final entry = entries[index];
                     return VaultEntryTile(
                       entry: entry,
                       onTap: () => onTapEntry(entry.id),
+                      onAction: onEntryAction == null
+                          ? null
+                          : (action) => onEntryAction(entry.id, action),
                     );
                   },
                 ),

@@ -9,7 +9,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// One vault entry, pushed over the vault page: its details, with edit and
 /// delete in the bar, or the form that edits it. With no [entryId] it is the
-/// form for a new entry.
+/// form for a new entry, and with [startEditing] it opens on the form for
+/// [entryId], as an entry row's Edit does.
 ///
 /// Everything it saves or deletes goes through [controller], which encrypts
 /// it; it pops itself once the entry is saved as new or deleted, and when
@@ -19,7 +20,12 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// `delete_vault_entry_confirm` on the confirmation.
 class VaultEntryPage extends StatefulWidget {
   /// Creates the page for entry [entryId], or a new one.
-  const VaultEntryPage({required this.controller, this.entryId, super.key});
+  const VaultEntryPage({
+    required this.controller,
+    this.entryId,
+    this.startEditing = false,
+    super.key,
+  });
 
   /// The vault the entry is in.
   final VaultController controller;
@@ -27,12 +33,15 @@ class VaultEntryPage extends StatefulWidget {
   /// The entry shown, or null for a new one.
   final int? entryId;
 
+  /// Whether an existing entry opens on its form rather than its details.
+  final bool startEditing;
+
   @override
   State<VaultEntryPage> createState() => _VaultEntryPageState();
 }
 
 class _VaultEntryPageState extends State<VaultEntryPage> {
-  late bool _editing = widget.entryId == null;
+  late bool _editing = widget.entryId == null || widget.startEditing;
   bool _showPassword = false;
   bool _saving = false;
   bool _left = false;

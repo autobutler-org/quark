@@ -1,12 +1,12 @@
-import 'dart:typed_data';
-
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/vault_controller.dart';
 import 'package:quark/models/vault_item.dart';
 import 'package:quark/pages/vault_page.dart';
 import 'package:quark/services/account_crypto.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/widgets/vault/vault_bar_bottom.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/fake_vault.dart';
@@ -76,13 +76,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// Taps the bar action [key], opening the phone's "Manage" menu first when
-  /// the row has collapsed into it (#3589).
+  /// Taps the create action [key]: in the sheet a phone's + button opens
+  /// (#4234), else on the bar's second row, opening its "Manage" menu first
+  /// when the row has collapsed into it (#3589).
   Future<void> tapBarAction(WidgetTester tester, String key) async {
+    final fab = find.byKey(const ValueKey('vault_create_fab'));
     final menu = find.byKey(const ValueKey('app_bar_bottom_menu'));
-    if (menu.evaluate().isNotEmpty) {
-      await tester.tap(menu);
-      await tester.pumpAndSettle();
+    for (final opener in [fab, menu]) {
+      if (opener.evaluate().isNotEmpty) {
+        await tester.tap(opener);
+        await tester.pumpAndSettle();
+        break;
+      }
     }
     await tester.tap(find.byKey(ValueKey(key)));
     await tester.pumpAndSettle();
@@ -132,7 +137,7 @@ void main() {
 
         await submitPassword(tester, _password);
         expect(find.text('Bank of Somewhere'), findsOneWidget);
-        expect(find.text('bank.example'), findsOneWidget);
+        expect(find.text('bank.example · ada@example.com'), findsOneWidget);
         expect(find.byKey(const ValueKey('vault_folder_all')), findsOneWidget);
         expect(tester.takeException(), isNull);
 
@@ -436,4 +441,133 @@ void main() {
       vault.lock();
     },
   );
+
+  group('phone layout (#4234)', () {
+    testWidgets('search and folders come first, and + opens the create sheet', (
+      tester,
+    ) async {
+      setViewport(tester, narrowViewport);
+      await seed();
+      final vault = await pump(tester);
+      await submitPassword(tester, _password);
+
+      expect(find.byType(VaultBarBottom), findsNothing);
+      expect(find.byKey(const ValueKey('vault_lock')), findsOneWidget);
+      // Export moved to More.
+      expect(find.byKey(const ValueKey('vault_export')), findsOneWidget);
+      expect(find.byTooltip('More'), findsOneWidget);
+      // The search field is the first thing under the bar.
+      final bar = tester.getRect(find.byType(QuarkAppBar));
+      final search = tester.getRect(find.byKey(const ValueKey('vault_search')));
+      expect(search.top - bar.bottom, lessThan(16));
+      expect(
+        tester.getRect(find.byKey(const ValueKey('vault_folder_all'))).top,
+        greaterThan(search.bottom),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('vault_create_fab')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('vault_new_entry')), findsOneWidget);
+      expect(find.byKey(const ValueKey('vault_new_folder')), findsOneWidget);
+      expect(find.byKey(const ValueKey('vault_import')), findsOneWidget);
+      expect(find.text('Export'), findsNothing);
+      expect(tester.takeException(), isNull);
+      vault.lock();
+    });
+
+    testWidgets('a folder chip filters the list', (tester) async {
+      setViewport(tester, narrowViewport);
+      await seed();
+      final vault = await pump(tester);
+      await submitPassword(tester, _password);
+      final home = await vault.save(const VaultItemData.folder('Home'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bank of Somewhere'), findsOneWidget);
+      await tester.tap(find.byKey(ValueKey('vault_folder_$home')));
+      await tester.pumpAndSettle();
+      expect(find.text('Bank of Somewhere'), findsNothing);
+      expect(find.text('No matching entries'), findsOneWidget);
+
+      final work = vault.folders.firstWhere((f) => f.data.name == 'Work');
+      await tester.tap(find.byKey(ValueKey('vault_folder_${work.id}')));
+      await tester.pumpAndSettle();
+      expect(find.text('Bank of Somewhere'), findsOneWidget);
+      vault.lock();
+    });
+
+    testWidgets('an entry row\'s menu copies, edits and deletes', (
+      tester,
+    ) async {
+      setViewport(tester, narrowViewport);
+      await seed();
+      final vault = await pump(tester);
+      await submitPassword(tester, _password);
+      final bank = vault.entries.single;
+      final menu = find.byKey(ValueKey('vault_entry_menu_${bank.id}'));
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied.add((call.arguments as Map)['text'] as String);
+          }
+          return null;
+        },
+      );
+
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(ValueKey('vault_entry_copyPassword_${bank.id}')),
+      );
+      await tester.pump();
+      expect(copied, ['hunter22-hunter22']);
+      expect(find.text('Password copied'), findsOneWidget);
+
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(ValueKey('vault_entry_copyUsername_${bank.id}')),
+      );
+      await tester.pump();
+      expect(copied.last, 'ada@example.com');
+      await tester.pumpAndSettle();
+
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('vault_entry_edit_${bank.id}')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('vault_entry_name')), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('vault_entry_delete_${bank.id}')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('delete_vault_entry_confirm')),
+      );
+      await tester.pumpAndSettle();
+      expect(server.items.containsKey(bank.id), isFalse);
+      expect(find.text('Bank of Somewhere'), findsNothing);
+      expect(tester.takeException(), isNull);
+      vault.lock();
+    });
+  });
+
+  testWidgets('the wide layout keeps the second bar and no + button', (
+    tester,
+  ) async {
+    setViewport(tester, wideViewport);
+    await seed();
+    final vault = await pump(tester);
+    await submitPassword(tester, _password);
+
+    expect(find.byType(VaultBarBottom), findsOneWidget);
+    expect(find.byKey(const ValueKey('vault_create_fab')), findsNothing);
+    expect(find.text('Export'), findsOneWidget);
+    vault.lock();
+  });
 }
