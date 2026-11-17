@@ -133,6 +133,10 @@ lib/widgets/
     file_viewer_chrome.dart     FileViewerChrome, the scaffold of a pushed
                                 viewer: file name, an optional closer in place
                                 of Back, and the theme toggle
+    file_viewer_unavailable.dart
+                                FileViewerUnavailable, a viewer's chrome around
+                                why the file could not be opened and Go back;
+                                reads Errors
     leave_pop_scope.dart        LeavePopScope, a system back on a page opened
                                 at its own URL leaves instead of closing the
                                 app; tied to the router's history

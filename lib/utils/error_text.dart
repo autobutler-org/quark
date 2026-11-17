@@ -33,6 +33,7 @@ abstract final class Errors {
     if (error is UnauthorizedException) return sessionExpired;
     if (error is KdfParamsOutOfRange) return keyCostOutOfRange;
     if (error is MessageException) return _sentence(error.message);
+    if (error is DriveNotConnected) return driveNotConnected;
     if (error is ApiException) return _forStatus(error.statusCode, action);
     // Everything above is an answer from the Quark, which a refused
     // certificate never gets as far as. The handshake failure itself reaches
@@ -88,6 +89,11 @@ abstract final class Errors {
         ? capitalized
         : '$capitalized.';
   }
+
+  /// A file on a drive that is no longer plugged into the Quark (#3981): the
+  /// Quark has no drive by that serial, so nothing on it can be opened.
+  static const String driveNotConnected =
+      "This drive isn't connected to your Quark. Plug it back in, or go back.";
 
   /// The fallback: what the app was doing, and that it didn't work.
   static String couldNot(String action) => "Couldn't $action.";
@@ -885,6 +891,33 @@ class ApiException implements Exception {
   @override
   String toString() =>
       'ApiException($statusCode)${context == null ? '' : ': $context'}';
+}
+
+/// A 404 the Quark sent because the request named a drive it does not have:
+/// one that was unplugged after the link to its file was made (#3981).
+/// [Errors.message] says so in place of "it's no longer there".
+class DriveNotConnected extends ApiException {
+  const DriveNotConnected([String? context]) : super(404, context);
+
+  @override
+  String toString() =>
+      'DriveNotConnected${context == null ? '' : ': $context'}';
+}
+
+/// Whether the Quark refused a request with [statusCode] and [body] because
+/// its `serial` names no attached drive: the 404 carrying
+/// `fileutil.ErrNoDevice`'s text, which every files route answers with.
+bool isNoDeviceRefusal(int statusCode, String body) =>
+    statusCode == 404 && serverErrorText(body) == 'storage device not found';
+
+/// Throws for a refused request about a file on the Quark: a
+/// [DriveNotConnected] when [body] says the file's drive is not attached, an
+/// [ApiException] carrying [statusCode] otherwise. [context] is for logs only.
+Never throwFileApiError(int statusCode, String body, String context) {
+  if (isNoDeviceRefusal(statusCode, body)) {
+    throw DriveNotConnected(context);
+  }
+  throw ApiException(statusCode, context);
 }
 
 /// A 422 the Quark sent about a video that is there but can't be read or cut,

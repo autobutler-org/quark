@@ -77,6 +77,15 @@ void main() {
           200,
         );
       }
+      // A viewer that loads its file from a URL asks after it first (#3981).
+      // The folder's own stat is left to fail, as it always has here.
+      if (path.endsWith('/api/v0/files/stat') &&
+          request.url.queryParameters['filePath'] != '/trip') {
+        return http.Response(
+          jsonEncode({'isDir': false, 'fileType': 'generic', 'name': ''}),
+          200,
+        );
+      }
       // The merged listing every case shows, whatever the device filter:
       // with only A selected the stick's entries are still on screen.
       if (path.endsWith('/api/v0/files')) {

@@ -434,7 +434,8 @@ class FilesService with AuthenticatedService {
 
   /// Returns filesystem metadata for [filePath]: whether it is a directory
   /// and its resolved [fileType] string (e.g. "image", "qdoc", "folder").
-  /// Throws if the path does not exist or the request fails.
+  /// Throws if the path does not exist or the request fails: a
+  /// [DriveNotConnected] when [serial] names a drive that is not attached.
   ///
   /// api: GET /api/v0/files/stat
   static Future<({bool isDir, String fileType, String name})> statFile(
@@ -451,6 +452,9 @@ class FilesService with AuthenticatedService {
     final endpointUri = apiBaseUri.resolve('/api/v0/files/stat');
     final uri = endpointUri.replace(query: querySegments.join('&'));
     final response = await instance.authenticatedGet(uri);
+    if (isNoDeviceRefusal(response.statusCode, response.body)) {
+      throw const DriveNotConnected('Failed to stat file');
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw FilesRequestException(
         statusCode: response.statusCode,
@@ -932,7 +936,11 @@ class FilesService with AuthenticatedService {
     }
     final response = await instance.authenticatedGet(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to download file');
+      throwFileApiError(
+        response.statusCode,
+        response.body,
+        'Failed to download file',
+      );
     }
 
     return response.bodyBytes;
@@ -1006,7 +1014,11 @@ class FilesService with AuthenticatedService {
       _buildDownloadUri(filePath, serial: serial),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to download file');
+      throwFileApiError(
+        response.statusCode,
+        response.body,
+        'Failed to download file',
+      );
     }
     return response.bodyBytes;
   }

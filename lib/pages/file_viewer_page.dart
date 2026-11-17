@@ -13,6 +13,9 @@ import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_kind.dart';
+import 'package:quark/widgets/layout/file_viewer_chrome.dart';
+import 'package:quark/widgets/layout/file_viewer_unavailable.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The page at `/view/<path>`: the viewer for one file, picked by its kind.
 ///
@@ -32,6 +35,12 @@ import 'package:quark/utils/file_kind.dart';
 /// address bar's entry with the photo's own `/view` URL rather than adding
 /// one, so a reload reopens the photo on screen and back still closes the
 /// viewer.
+///
+/// A PDF, video or audio file is loaded by the browser or the player straight
+/// from its URL, which never shows the app a refusal: an unplugged drive's
+/// PDF came up as the Quark's JSON in the browser's own viewer (#3981). So
+/// those kinds ask the Quark about the file first, and a file it cannot hand
+/// over opens [FileViewerUnavailable], which says why, instead of a viewer.
 class FileViewerPage extends StatefulWidget {
   /// The file's path on the Quark, as the route's `:path` delivers it.
   final String filePath;
@@ -49,12 +58,18 @@ class FileViewerPage extends StatefulWidget {
   final Future<List<FileNode>> Function(String path, {List<String>? serials})
   listFiles;
 
+  /// Asks the Quark about a file a viewer would load from its URL, and throws
+  /// when it cannot hand the file over. A parameter so a test can answer
+  /// without a Quark.
+  final Future<void> Function(String filePath, {String? serial}) statFile;
+
   const FileViewerPage({
     super.key,
     required this.filePath,
     this.serial = '',
     this.downloadBytes = FilesService.downloadFileBytes,
     this.listFiles = FilesService.getFiles,
+    this.statFile = FilesService.statFile,
   });
 
   @override
@@ -70,6 +85,13 @@ class _FileViewerPageState extends State<FileViewerPage> {
   /// (#1806), so this page fetches it.
   late final Future<Uint8List?>? _svgBytes = _kind == FileKind.svg
       ? widget.downloadBytes(widget.filePath, serial: _serial)
+      : null;
+
+  /// Whether the Quark has the file, for a kind whose viewer loads it from a
+  /// URL and so never sees a refusal; null for every other kind.
+  late final Future<void>? _available =
+      const {FileKind.pdf, FileKind.video, FileKind.audio}.contains(_kind)
+      ? widget.statFile(widget.filePath, serial: _serial)
       : null;
 
   late final Uri _mediaUrl = FilesService.constructMediaUrl(
@@ -172,62 +194,78 @@ class _FileViewerPageState extends State<FileViewerPage> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _close();
       },
-      child: switch (_kind) {
-        FileKind.image => ImageViewerPage(
-          name: _name,
-          relPath: widget.filePath,
-          serial: _serial,
-          initialIndex: _photos?.indexOf(_name) ?? 0,
-          imageCount: _photos?.length ?? 1,
-          onLoadImage: _photos == null ? null : _loadPhoto,
-          onPrefetchImage: _photos == null ? null : _photoBytes,
-          onImageShown: _showInAddressBar,
-          onClose: _close,
-        ),
-        FileKind.svg => FutureBuilder<Uint8List?>(
-          future: _svgBytes,
-          builder: (context, snapshot) => SvgViewerPage(
-            bytes: snapshot.data,
+      child: FutureBuilder<void>(
+        future: _available,
+        builder: (context, available) => switch (_kind) {
+          _ when available.hasError => FileViewerUnavailable(
             name: _name,
-            error:
-                snapshot.connectionState == ConnectionState.done &&
-                    snapshot.data == null
-                ? Errors.message(snapshot.error, 'open the file')
-                : null,
+            error: available.error,
             onClose: _close,
           ),
-        ),
-        // Audio has no video track, so the video viewer paints only its black
-        // backdrop (#1573).
-        FileKind.audio => AudioPlayerPage(
-          url: _mediaUrl,
-          name: _name,
-          onClose: _close,
-        ),
-        FileKind.video => VideoViewerPage(
-          url: _mediaUrl,
-          name: _name,
-          onClose: _close,
-        ),
-        FileKind.pdf => PdfViewerPage(
-          filePath: widget.filePath,
-          serial: _serial,
-          name: _name,
-          onClose: _close,
-        ),
-        _ => GenericFileViewerPage(
-          node: FileNode(
+          _
+              when _available != null &&
+                  available.connectionState != ConnectionState.done =>
+            FileViewerChrome(
+              name: _name,
+              onClose: _close,
+              body: const Center(child: QuarkLoader()),
+            ),
+          FileKind.image => ImageViewerPage(
             name: _name,
-            size: 0,
-            isDir: false,
-            deviceName: '',
-            devicePath: '',
-            deviceSerial: widget.serial,
-            dirPath: widget.filePath,
+            relPath: widget.filePath,
+            serial: _serial,
+            initialIndex: _photos?.indexOf(_name) ?? 0,
+            imageCount: _photos?.length ?? 1,
+            onLoadImage: _photos == null ? null : _loadPhoto,
+            onPrefetchImage: _photos == null ? null : _photoBytes,
+            onImageShown: _showInAddressBar,
+            onClose: _close,
           ),
-          onClose: _close,
-        ),
-      },
+          FileKind.svg => FutureBuilder<Uint8List?>(
+            future: _svgBytes,
+            builder: (context, snapshot) => SvgViewerPage(
+              bytes: snapshot.data,
+              name: _name,
+              error:
+                  snapshot.connectionState == ConnectionState.done &&
+                      snapshot.data == null
+                  ? Errors.message(snapshot.error, 'open the file')
+                  : null,
+              onClose: _close,
+            ),
+          ),
+          // Audio has no video track, so the video viewer paints only its black
+          // backdrop (#1573).
+          FileKind.audio => AudioPlayerPage(
+            url: _mediaUrl,
+            name: _name,
+            onClose: _close,
+          ),
+          FileKind.video => VideoViewerPage(
+            url: _mediaUrl,
+            name: _name,
+            onClose: _close,
+          ),
+          FileKind.pdf => PdfViewerPage(
+            filePath: widget.filePath,
+            serial: _serial,
+            name: _name,
+            onClose: _close,
+          ),
+          _ => GenericFileViewerPage(
+            node: FileNode(
+              name: _name,
+              size: 0,
+              isDir: false,
+              deviceName: '',
+              devicePath: '',
+              deviceSerial: widget.serial,
+              dirPath: widget.filePath,
+            ),
+            onClose: _close,
+          ),
+        },
+      ),
     );
   }
 }

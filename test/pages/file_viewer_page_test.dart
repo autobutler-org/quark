@@ -19,8 +19,10 @@ import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/image_viewer/current_photo.dart';
 import 'package:quark/widgets/image_viewer/metadata_sidebar.dart';
+import 'package:quark/widgets/layout/file_viewer_unavailable.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
@@ -69,6 +71,7 @@ void main() {
     String file, {
     Future<Uint8List?> Function(String, {String? serial})? downloadBytes,
     Future<List<FileNode>> Function(String, {List<String>? serials})? listFiles,
+    Future<void> Function(String, {String? serial})? statFile,
     String? from,
     String? serial,
   }) async {
@@ -78,19 +81,18 @@ void main() {
     final r = GoRouter(
       initialLocation: AppRoutes.filesPath(folder),
       routes: [
-        if (downloadBytes == null && listFiles == null)
-          view
-        else
-          GoRoute(
-            path: view.path,
-            redirect: view.redirect,
-            builder: (_, state) => FileViewerPage(
-              filePath: state.pathParameters['path']!,
-              serial: state.uri.queryParameters['serial'] ?? '',
-              downloadBytes: downloadBytes ?? FilesService.downloadFileBytes,
-              listFiles: listFiles ?? FilesService.getFiles,
-            ),
+        GoRoute(
+          path: view.path,
+          redirect: view.redirect,
+          builder: (_, state) => FileViewerPage(
+            filePath: state.pathParameters['path']!,
+            serial: state.uri.queryParameters['serial'] ?? '',
+            downloadBytes: downloadBytes ?? FilesService.downloadFileBytes,
+            listFiles: listFiles ?? FilesService.getFiles,
+            // The Quark has the file unless the test says otherwise.
+            statFile: statFile ?? (_, {serial}) async {},
           ),
+        ),
         GoRoute(
           path: AppRoutes.books,
           builder: (_, _) => const Scaffold(body: Text('books')),
@@ -132,6 +134,104 @@ void main() {
     final viewer = tester.widget<PdfViewerPage>(find.byType(PdfViewerPage));
     expect(viewer.filePath, 'papers/my report.pdf');
     expect(viewer.name, 'my report.pdf');
+    await unmount(tester);
+  });
+
+  // #3981: the browser's own PDF viewer showed the Quark's JSON refusal.
+  group('a file whose drive is unplugged', () {
+    Future<void> unplugged(String _, {String? serial}) async =>
+        throw const DriveNotConnected('Failed to stat file');
+
+    testWidgets('says so instead of opening the pdf viewer', (tester) async {
+      String? askedSerial;
+      await openFromFolder(
+        tester,
+        'books',
+        'books/novel.pdf',
+        serial: 'usb1',
+        from: AppRoutes.books,
+        statFile: (path, {serial}) {
+          askedSerial = serial;
+          return unplugged(path, serial: serial);
+        },
+      );
+
+      expect(askedSerial, 'usb1');
+      expect(find.byType(PdfViewerPage), findsNothing);
+      expect(find.byType(FileViewerUnavailable), findsOneWidget);
+      expect(find.text(Errors.driveNotConnected), findsOneWidget);
+      expect(find.text('novel.pdf'), findsOneWidget);
+    });
+
+    testWidgets('goes back to where it was opened from', (tester) async {
+      final r = await openFromFolder(
+        tester,
+        'books',
+        'books/novel.pdf',
+        serial: 'usb1',
+        from: AppRoutes.books,
+        statFile: unplugged,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('file_viewer_unavailable_back')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(at(r), AppRoutes.books);
+    });
+
+    testWidgets('says so instead of opening a player', (tester) async {
+      await openFromFolder(
+        tester,
+        'movies',
+        'movies/clip.mp4',
+        serial: 'usb1',
+        statFile: unplugged,
+      );
+      expect(find.byType(VideoViewerPage), findsNothing);
+      expect(find.text(Errors.driveNotConnected), findsOneWidget);
+      await unmount(tester);
+
+      await openFromFolder(
+        tester,
+        'music',
+        'music/song.mp3',
+        serial: 'usb1',
+        statFile: unplugged,
+      );
+      expect(find.byType(AudioPlayerPage), findsNothing);
+      expect(find.text(Errors.driveNotConnected), findsOneWidget);
+    });
+
+    testWidgets('says so for an svg it could not fetch', (tester) async {
+      await openFromFolder(
+        tester,
+        'art',
+        'art/logo.svg',
+        serial: 'usb1',
+        downloadBytes: (_, {serial}) async =>
+            throw const DriveNotConnected('Failed to download file'),
+      );
+
+      expect(find.byType(SvgPicture), findsNothing);
+      expect(find.text(Errors.driveNotConnected), findsOneWidget);
+    });
+  });
+
+  testWidgets('a pdf waits for the Quark before showing', (tester) async {
+    final stat = Completer<void>();
+    await openFromFolder(
+      tester,
+      'papers',
+      'papers/my report.pdf',
+      statFile: (_, {serial}) => stat.future,
+    );
+    expect(find.byType(PdfViewerPage), findsNothing);
+
+    stat.complete();
+    await tester.pump();
+    expect(find.byType(PdfViewerPage), findsOneWidget);
     await unmount(tester);
   });
 
