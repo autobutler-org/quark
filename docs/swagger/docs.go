@@ -9643,6 +9643,37 @@ const docTemplate = `{
                 }
             }
         },
+        "/settings/remote-access/paths": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Admin-only debugging aid (#3883): for each device on remote access, whether its traffic to the Quark goes direct or through a relay, the relay region, the last handshake and byte counts, plus the Quark's last network check (UDP, NAT mapping behavior, router port mapping, preferred relay and its latency). Holds no keys, names or addresses.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Get remote access paths",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/remoteutil.PathReportResult"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/settings/theme-color": {
             "put": {
                 "security": [
@@ -14580,6 +14611,108 @@ const docTemplate = `{
                 "watched": {
                     "description": "Watched stays set until SetWatched clears it.",
                     "type": "boolean"
+                }
+            }
+        },
+        "remoteutil.NetworkCheck": {
+            "type": "object",
+            "properties": {
+                "at": {
+                    "description": "At is when the check ran.",
+                    "type": "string"
+                },
+                "ipv4": {
+                    "description": "IPv4 and IPv6 are whether a round trip completed on each family.",
+                    "type": "boolean"
+                },
+                "ipv6": {
+                    "type": "boolean"
+                },
+                "mappingVariesByDestination": {
+                    "description": "MappingVariesByDestination is \"yes\" for a NAT that picks a new public\nport per destination (symmetric, hard to punch through), \"no\" for one\nthat keeps one mapping, or \"unknown\".",
+                    "type": "string"
+                },
+                "natpmp": {
+                    "type": "string"
+                },
+                "pcp": {
+                    "type": "string"
+                },
+                "preferredRelay": {
+                    "description": "PreferredRelay is the region code of the relay this node homes on.",
+                    "type": "string"
+                },
+                "preferredRelayLatencyMs": {
+                    "description": "PreferredRelayLatencyMs is the measured latency to it.",
+                    "type": "number"
+                },
+                "udp": {
+                    "description": "UDP is whether a UDP round trip to a STUN server completed.",
+                    "type": "boolean"
+                },
+                "upnp": {
+                    "description": "UPnP, NATPMP and PCP are whether the router answered each port-mapping\nprotocol: \"yes\", \"no\" or \"unknown\".",
+                    "type": "string"
+                }
+            }
+        },
+        "remoteutil.PathReportResult": {
+            "type": "object",
+            "properties": {
+                "connected": {
+                    "description": "Connected is whether the node is on the tailnet.",
+                    "type": "boolean"
+                },
+                "network": {
+                    "description": "Network is the last network check, nil before the first one finishes.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/remoteutil.NetworkCheck"
+                        }
+                    ]
+                },
+                "peers": {
+                    "description": "Peers is every peer the node knows, online first.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/remoteutil.PeerPath"
+                    }
+                }
+            }
+        },
+        "remoteutil.PeerPath": {
+            "type": "object",
+            "properties": {
+                "lastHandshake": {
+                    "description": "LastHandshake is the last encrypted-session handshake with the peer,\nzero when there has been none.",
+                    "type": "string"
+                },
+                "network": {
+                    "description": "Network says where a direct path goes: NetworkLAN for a private\naddress, NetworkInternet for a public one. Empty unless Path is direct.",
+                    "type": "string"
+                },
+                "online": {
+                    "description": "Online is whether the coordination server sees the peer.",
+                    "type": "boolean"
+                },
+                "os": {
+                    "description": "OS is what the peer reports itself as: \"iOS\", \"android\", \"linux\".",
+                    "type": "string"
+                },
+                "path": {
+                    "description": "Path is PathDirect, PathRelay, PathPeerRelay or PathIdle.",
+                    "type": "string"
+                },
+                "relayRegion": {
+                    "description": "RelayRegion is the relay's region code. Set when Path is PathRelay,\nand on an idle peer it is the region the peer homes on.",
+                    "type": "string"
+                },
+                "rxBytes": {
+                    "description": "RxBytes and TxBytes count what this node received from and sent to the\npeer since the node started.",
+                    "type": "integer"
+                },
+                "txBytes": {
+                    "type": "integer"
                 }
             }
         },

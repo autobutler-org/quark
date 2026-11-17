@@ -9,7 +9,8 @@
 //
 // Admin-only: the routes that change appliance-wide settings, such as turning remote access on and off, account
 // requests (PUT /settings/access-requests), a feature flag (PUT /settings/features/:key), and the Quark's theme
-// color (PUT /settings/theme-color).
+// color (PUT /settings/theme-color), and reading how each device's remote-access traffic travels (GET
+// /settings/remote-access/paths).
 package v0_settings
 
 import "github.com/autobutler-org/quark/pkg/util/serverutil"
