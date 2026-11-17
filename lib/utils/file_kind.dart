@@ -90,8 +90,9 @@ const proseExtensions = {'.txt', '.md', '.markdown', '.rst'};
 bool isProseFile(String name) => proseExtensions.contains(fileExtension(name));
 
 /// Image extensions the server's thumbnail endpoint can decode. Narrower than
-/// [FileKind.image] on purpose: raw camera formats, BMP and TIFF are images
-/// the server cannot resize, so their rows keep the plain icon.
+/// [FileKind.image] on purpose: raw camera formats are images the server
+/// cannot resize, so their rows keep the plain icon. TIFF and BMP are
+/// decoded on the server, an oversized TIFF at a reduced size (#4199).
 const thumbnailImageExtensions = {
   '.jpg',
   '.jpeg',
@@ -100,6 +101,9 @@ const thumbnailImageExtensions = {
   '.webp',
   '.heic',
   '.heif',
+  '.tif',
+  '.tiff',
+  '.bmp',
 };
 
 /// Image extensions `Image.memory` decodes on every platform without a server
