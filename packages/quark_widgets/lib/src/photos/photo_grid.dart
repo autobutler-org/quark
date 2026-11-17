@@ -5,7 +5,6 @@ import '../models/photo_grid_section.dart';
 import '../models/photo_item.dart';
 import '../theme/quark_tokens.dart';
 import 'photo_grid/photo_grid_section_header.dart';
-import 'photo_grid_scroll_label/photo_grid_scroll_label_scope.dart';
 import 'photo_grid_tile.dart';
 
 /// A grid of [PhotoGridTile]s, as a sliver, with its loading, error, empty
@@ -40,10 +39,6 @@ import 'photo_grid_tile.dart';
 /// run scrolls past. Every run is its own lazy grid, so only the visible
 /// tiles are built however many sections there are. Indices in callbacks
 /// still count across the whole of [photos].
-///
-/// Inside a `PhotoGridScrollLabel`, a sectioned grid reports which section is
-/// at the top of the viewport, for the label to float over it while it
-/// scrolls.
 ///
 /// Key prefixes: `photo_grid` on the grid, `photo_grid_section_<id>` on each
 /// section header, `photo_grid_loading_more` on the trailing spinner cell,
@@ -218,53 +213,33 @@ class PhotoGrid extends StatelessWidget {
       sections.fold<int>(0, (sum, s) => sum + s.count) == photos.length,
       'The section counts must add up to the number of photos.',
     );
-    final tracker = PhotoGridScrollLabelScope.maybeOf(context);
-    if (tracker != null) {
-      tracker
-        ..scrollable = Scrollable.maybeOf(context)
-        ..setSections([
-          for (final s in sections)
-            if (s.count > 0) s.label,
-        ]);
-    }
     final groups = <Widget>[];
     var start = 0;
     for (final section in sections) {
       final first = start;
       start += section.count;
       if (section.count == 0) continue;
-      final index = groups.length;
-      final group = SliverMainAxisGroup(
-        slivers: [
-          PinnedHeaderSliver(
-            child: PhotoGridSectionHeader(
-              key: ValueKey('photo_grid_section_${section.id}'),
-              label: section.label,
-            ),
-          ),
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(gap, 0, gap, gap),
-            sliver: SliverGrid(
-              gridDelegate: gridDelegate,
-              delegate: SliverChildBuilderDelegate(
-                (context, i) => tile(first + i),
-                childCount: section.count,
-              ),
-            ),
-          ),
-        ],
-      );
       groups.add(
-        tracker == null
-            ? group
-            // Handing back the same group each time means a scroll frame
-            // re-lays it out without rebuilding a single tile.
-            : SliverLayoutBuilder(
-                builder: (context, constraints) {
-                  tracker.observe(index, constraints.scrollOffset);
-                  return group;
-                },
+        SliverMainAxisGroup(
+          slivers: [
+            PinnedHeaderSliver(
+              child: PhotoGridSectionHeader(
+                key: ValueKey('photo_grid_section_${section.id}'),
+                label: section.label,
               ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(gap, 0, gap, gap),
+              sliver: SliverGrid(
+                gridDelegate: gridDelegate,
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) => tile(first + i),
+                  childCount: section.count,
+                ),
+              ),
+            ),
+          ],
+        ),
       );
     }
     return SliverMainAxisGroup(

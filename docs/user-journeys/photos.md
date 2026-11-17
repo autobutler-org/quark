@@ -409,8 +409,7 @@ by date (JN-PH-018).
   goes by: a photo taken in 2019 and uploaded today is under its 2019 month when sorted by date taken, and under
   this month when sorted by date added. The header of the month in
   view stays pinned to the top of the grid until the next month's header pushes it out.
-- While the grid scrolls, a label naming the month in view floats at the right edge of the grid, and fades
-  out about a second and a half after scrolling stops. Scrolling the album sidebar does not show it.
+- Nothing floats over the photos while the grid scrolls: the pinned header is the only month indicator.
 - In an album sorted by date added, a photo is filed under the month it was added to the album. A photo with no
   date sits under **Unknown date**.
 - Under a name sort there are no headers.
