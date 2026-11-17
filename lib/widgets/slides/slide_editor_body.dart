@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:quark/controllers/sidebar_controller.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/widgets/slides/insert/slide_image_upload_status.dart';
 import 'package:quark/widgets/slides/notes/slide_notes_panel.dart';
@@ -40,10 +41,19 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// phone, switching at [QuarkSplitView.collapseBreakpoint] so the editor
 /// collapses where every other sidebar in the app does.
 ///
+/// On a wide window the panel and the properties panel are
+/// [QuarkResizablePane]s (#4294): their widths come from [slidePane] and
+/// [propertiesPane], which the page owns and keeps per device. Dragging the
+/// properties panel below its min width hides it through the toolbar's
+/// toggle; the slide list resizes but does not collapse, since nothing on
+/// screen would bring it back.
+///
 /// It reads [controller] and calls its commands; the page owns the
 /// controller.
 ///
-/// Key prefixes: `slide_editor_stage` on the center area.
+/// Key prefixes: `slide_editor_stage` on the center area;
+/// [QuarkResizablePane]'s with the ids `slides_list` and
+/// `slides_properties`.
 class SlideEditorBody extends StatelessWidget {
   /// Shows [controller]'s presentation.
   const SlideEditorBody({
@@ -52,9 +62,18 @@ class SlideEditorBody extends StatelessWidget {
     required this.onImageFromQuark,
     required this.onShowShortcuts,
     required this.onDeleteSlide,
+    required this.slidePane,
+    required this.propertiesPane,
     this.onPresent,
     super.key,
   });
+
+  /// The wide layout's slide panel width.
+  final SidebarController slidePane;
+
+  /// The wide layout's properties panel width. Whether it shows is
+  /// [SlideEditorController.propertiesOpen].
+  final SidebarController propertiesPane;
 
   /// The open presentation.
   final SlideEditorController controller;
@@ -162,8 +181,14 @@ class SlideEditorBody extends StatelessWidget {
         : Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(width: SlidePanel.sideWidth, child: panel),
-              VerticalDivider(width: 1, color: tokens.border),
+              QuarkResizablePane(
+                id: 'slides_list',
+                semanticLabel: 'Resize slides',
+                width: slidePane.width,
+                defaultWidth: SlidePanel.sideWidth,
+                onWidthChanged: slidePane.setWidth,
+                child: panel,
+              ),
               Expanded(child: stage),
             ],
           );
@@ -190,16 +215,20 @@ class SlideEditorBody extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(child: editor),
-                  if (c.propertiesOpen &&
-                      !SlideToolbar.isCompact(constraints.maxWidth)) ...[
-                    VerticalDivider(width: 1, color: tokens.border),
-                    SizedBox(
-                      width: SlidePropertiesPanel.sideWidth,
+                  if (!SlideToolbar.isCompact(constraints.maxWidth))
+                    QuarkResizablePane(
+                      id: 'slides_properties',
+                      semanticLabel: 'Resize properties',
+                      edge: QuarkPaneEdge.end,
+                      width: propertiesPane.width,
+                      defaultWidth: SlidePropertiesPanel.sideWidth,
+                      isCollapsed: !c.propertiesOpen,
+                      onWidthChanged: propertiesPane.setWidth,
+                      onCollapsedChanged: (_) => c.toggleProperties(),
                       child: SingleChildScrollView(
                         child: SlidePropertiesPanel(controller: c),
                       ),
                     ),
-                  ],
                 ],
               ),
             ),

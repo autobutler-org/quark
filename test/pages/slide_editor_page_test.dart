@@ -211,6 +211,42 @@ void main() {
     await letAutosaveRun(tester);
   });
 
+  // The slide list and the properties panel resize from their inner edges,
+  // and their widths are kept per device (#4294).
+  testWidgets('the side panes resize, and properties hide below min', (
+    tester,
+  ) async {
+    tap.setViewport(tester, tap.wideViewport);
+    final c = await pumpEditor(tester);
+    final list = find.byType(SlidePanel);
+    final properties = find.byKey(const ValueKey('slide_properties'));
+    final listWidth = tester.getSize(list).width;
+    final propertiesWidth = tester.getSize(properties).width;
+
+    await tester.drag(
+      find.byKey(const ValueKey('resizable_pane_handle_slides_list')),
+      const Offset(40, 0),
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('resizable_pane_handle_slides_properties')),
+      const Offset(-40, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.getSize(list).width, listWidth + 40);
+    expect(tester.getSize(properties).width, propertiesWidth + 40);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getDouble('sidebar_slides_list_width'), listWidth + 40);
+
+    await tester.drag(
+      find.byKey(const ValueKey('resizable_pane_handle_slides_properties')),
+      const Offset(300, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(c.propertiesOpen, isFalse);
+    expect(properties, findsNothing);
+  });
+
   testWidgets('tapping a thumbnail selects it', (tester) async {
     tap.setViewport(tester, tap.wideViewport);
     final c = await pumpEditor(tester);
@@ -903,6 +939,8 @@ void main() {
 
       await tester.tap(key('slide_properties_toggle'));
       await tester.pump();
+      // The panel slides out (#4294).
+      await tester.pump(QuarkResizablePane.collapseDuration);
       expect(key('slide_properties'), findsNothing);
       expect(c.propertiesOpen, isFalse);
       await letAutosaveRun(tester);
