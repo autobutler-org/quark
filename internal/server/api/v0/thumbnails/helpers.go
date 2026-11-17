@@ -1,3 +1,5 @@
+// cspell:words thumbversionutil
+
 package v0_thumbnails
 
 import (
@@ -14,6 +16,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/thumbnailutil"
+	"github.com/autobutler-org/quark/pkg/util/thumbversionutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
@@ -107,7 +110,8 @@ func getArchiveThumbnail(
 		cachedModTime = generated.CachedModTime
 	}
 
-	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, thumbnailutil.ContentTypeForExt(ext))
+	// An archive entry has no version a client could name.
+	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, thumbnailutil.ContentTypeForExt(ext), "")
 }
 
 // getCoverThumbnail serves a track's cover art at the requested size. The
@@ -164,7 +168,8 @@ func getCoverThumbnail(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, 
 		cachedModTime = generated.CachedModTime
 	}
 
-	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, "image/jpeg")
+	// Cover art is shared between tracks and has no version a client could name.
+	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, "image/jpeg", "")
 }
 
 // clientThumbnailFallthrough is returned by getClientThumbnail when the file
@@ -173,8 +178,9 @@ var clientThumbnailFallthrough = &serverutil.Response{}
 
 // getClientThumbnail serves a size tier resized from the thumbnail a client
 // uploaded for the file, modified at srcModTime, or falls through when there
-// is none.
-func getClientThumbnail(c *gin.Context, deps deputil.Dependencies, relPath, filePath, serial string, srcModTime time.Time) *serverutil.Response {
+// is none. version is the thumbnail's current version, as for
+// serveCachedThumbnail.
+func getClientThumbnail(c *gin.Context, deps deputil.Dependencies, relPath, filePath, serial string, srcModTime time.Time, version string) *serverutil.Response {
 	result, err := thumbnailutil.FromClientThumbnail(thumbnailutil.FromClientThumbnailParams{
 		Queries:       deps.Database().Queries,
 		Serial:        serial,
@@ -189,7 +195,7 @@ func getClientThumbnail(c *gin.Context, deps deputil.Dependencies, relPath, file
 	if !result.Found {
 		return clientThumbnailFallthrough
 	}
-	return serveCachedThumbnail(c, result.CachedPath, result.CachedModTime, "image/jpeg")
+	return serveCachedThumbnail(c, result.CachedPath, result.CachedModTime, "image/jpeg", version)
 }
 
 // clientRenderNotFound is the 404 for a video or HEIC the device could not
@@ -207,14 +213,15 @@ func clientRenderNotFound(filePath string, modTime time.Time, cause error) *serv
 
 // serveCachedThumbnail writes the caching headers for a cache entry and either
 // answers a matching If-None-Match with 304 or sends the cached bytes.
-func serveCachedThumbnail(c *gin.Context, cachedPath string, cachedModTime time.Time, contentType string) *serverutil.Response {
+// version is the thumbnail's current version, empty when it has none: a
+// request whose v names it gets an immutable response, since a rotation or a
+// new file changes the version and so the URL (#4217). Every other request
+// gets no-cache, revalidating by an ETag that covers the rotation, because the
+// cache key includes it.
+func serveCachedThumbnail(c *gin.Context, cachedPath string, cachedModTime time.Time, contentType, version string) *serverutil.Response {
 	etag := thumbnailutil.ETagFromModTime(cachedModTime)
 	c.Header("ETag", etag)
-	// no-cache: the browser must revalidate every request via If-None-Match.
-	// The ETag covers rotation state (cache key includes rotationQuarters),
-	// so the browser gets fresh bytes immediately after a rotation without
-	// waiting for a max-age window to expire.
-	c.Header("Cache-Control", "no-cache")
+	c.Header("Cache-Control", thumbversionutil.CacheControl(c.Query("v"), version))
 	c.Header("Content-Type", contentType)
 
 	if match := c.GetHeader("If-None-Match"); match == etag {
@@ -233,4 +240,23 @@ func serveCachedThumbnail(c *gin.Context, cachedPath string, cachedModTime time.
 	// ServeContent nothing to sniff from.
 	http.ServeContent(c.Writer, c.Request, "", cachedModTime, f)
 	return nil
+}
+
+// currentVersion is the version of the thumbnail of the photo at relPath,
+// modified at srcModTime, for a request whose v names one, and empty for a
+// request without v, which never needs it.
+func currentVersion(c *gin.Context, deps deputil.Dependencies, serial, relPath string, srcModTime time.Time) (string, error) {
+	if c.Query("v") == "" {
+		return "", nil
+	}
+	rotation, err := thumbversionutil.Rotation(thumbversionutil.RotationParams{
+		Ctx:     c.Request.Context(),
+		Queries: deps.Database().Queries,
+		Serial:  serial,
+		RelPath: relPath,
+	})
+	if err != nil {
+		return "", err
+	}
+	return thumbversionutil.Version(srcModTime, rotation.Quarters), nil
 }

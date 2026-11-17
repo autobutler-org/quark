@@ -30,6 +30,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:quark/widgets/photos/album_picker_sheet.dart';
 import 'package:quark/utils/quark_widget_items.dart';
+import 'package:quark/utils/thumbnail_version.dart';
 
 const _kSidebarOpenKey = 'photo_viewer_sidebar_open';
 
@@ -655,13 +656,25 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       );
       // Drop the old thumbnail, on disk and decoded, in both sizes the app
       // draws — the list's `sm` and the grids' default — so the next load
-      // fetches the rotated one instead of showing the stale one first.
-      for (final size in const [null, 'sm']) {
+      // fetches the rotated one instead of showing the stale one first. The
+      // photos grid names the version in `v`, and the rotation moved it to a
+      // new URL the grid picks up when it refreshes; its old entry, cached as
+      // immutable, goes too (#4217).
+      final mtime = _metadata?.mtime;
+      final oldVersion = mtime == null
+          ? null
+          : thumbnailVersion(mtime.millisecondsSinceEpoch ~/ 1000, oldQuarters);
+      for (final (size, version) in [
+        (null, null),
+        ('sm', null),
+        if (oldVersion != null) (null, oldVersion),
+      ]) {
         await ThumbnailCacheManager.evict(
           FilesService.constructThumbnailUrl(
             _currentRelPath!,
             serial: _currentSerial,
             size: size,
+            version: version,
           ),
         );
       }

@@ -49,6 +49,11 @@ class PhotoItem {
   /// which the listing itself does for a photo never read before (#3356).
   final int? takenAt;
 
+  /// The photo's saved rotation in quarter turns clockwise, 0 to 3. With
+  /// [mtime] it is the thumbnail version the grid puts in the thumbnail URL,
+  /// so a rotated photo gets a new URL (#4217).
+  final int rotationQuarters;
+
   const PhotoItem({
     required this.relPath,
     required this.fileName,
@@ -57,6 +62,7 @@ class PhotoItem {
     required this.serial,
     this.hasLiveVideo = false,
     this.takenAt,
+    this.rotationQuarters = 0,
   });
 
   factory PhotoItem.fromJson(Map<String, dynamic> json) {
@@ -68,6 +74,7 @@ class PhotoItem {
       serial: json['serial'] as String? ?? '',
       hasLiveVideo: json['hasLiveVideo'] as bool? ?? false,
       takenAt: json['takenAt'] as int?,
+      rotationQuarters: json['rotationQuarters'] as int? ?? 0,
     );
   }
 }
