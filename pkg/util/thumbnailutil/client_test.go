@@ -10,13 +10,16 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"mime/multipart"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/videoutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/autobutler-org/sprocket/pkg/sprocket"
 )
 
@@ -137,6 +140,45 @@ func TestStoreClientThumbnailRecordsHashesForPhotos(t *testing.T) {
 	if len(rows) != 1 || rows[0].RelPath != "photo.heic" || !rows[0].Dhash.Valid ||
 		rows[0].ContentHash.String != hex.EncodeToString(want[:]) {
 		t.Fatalf("want one row for photo.heic with both hashes, got %+v", rows)
+	}
+}
+
+func TestStoreClientThumbnailsDoesNotHashDocumentMedia(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	ctx := context.Background()
+	fsys := memFS(t, map[string][]byte{"Talk_media/photo.heic": []byte("source")})
+	if err := photoutil.MarkDocumentMedia(ctx, fsys, "Talk_media"); err != nil {
+		t.Fatal(err)
+	}
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, fsys); err != nil {
+		t.Fatal(err)
+	}
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	part, err := w.CreateFormFile("thumbnail", "thumbnail.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(clientJPEG(t, 400, 300)); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	database := dbtest.NewDB(t)
+	if _, err := StoreClientThumbnails(StoreClientThumbnailsParams{
+		Queries: database.Queries, Registry: registry, RelPath: "Talk_media/photo.heic",
+		Reader: multipart.NewReader(&body, w.Boundary()),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := database.Queries.ListNearDuplicates(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("stored hashes for document media: %+v", rows)
 	}
 }
 

@@ -16,8 +16,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/pptxutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -120,7 +122,9 @@ func TestImportPptxToQslideWritesThePresentationAndItsPictures(t *testing.T) {
 		t.Errorf("result = %+v", result)
 	}
 	if got, want := f.tree(t), []string{
-		"decks", "decks/Talk.pptx", "decks/Talk.qslide", "decks/Talk_media", "decks/Talk_media/image1.png",
+		"decks", "decks/Talk.pptx", "decks/Talk.qslide", "decks/Talk_media",
+		"decks/Talk_media/.trash", "decks/Talk_media/.trash/embedded-document-media",
+		"decks/Talk_media/image1.png",
 	}; !slices.Equal(got, want) {
 		t.Errorf("tree = %v, want %v", got, want)
 	}
@@ -168,6 +172,36 @@ func TestImportPptxToQslideWritesThePresentationAndItsPictures(t *testing.T) {
 	if !slices.Equal(paths, []string{"decks", "decks/Talk_media"}) {
 		t.Errorf("event paths = %v", paths)
 	}
+
+	// The ownership marker, not the presentation's current name or location,
+	// keeps its pictures out of Photos. It is already durable before the first
+	// photo listing, so deleting the deck cannot expose them.
+	fsys, err := fileutil.FilesVFS(params.Registry, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fsys.MkdirAll(params.Ctx, "archive"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fsys.Move(params.Ctx, result.Path, "archive/Renamed.qslide"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fsys.Delete(params.Ctx, "archive/Renamed.qslide", vfs.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
+	photos, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
+		Ctx: params.Ctx, Registry: params.Registry, Access: loaded.Access, Limit: 50,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if photos.Total != 0 {
+		t.Fatalf("after presentation rename, move and delete: photos = %+v, want none", photos.Photos)
+	}
 }
 
 func TestImportPptxToQslideKeepsBoth(t *testing.T) {
@@ -187,7 +221,8 @@ func TestImportPptxToQslideKeepsBoth(t *testing.T) {
 		t.Errorf("second import = %+v", result)
 	}
 	if got, want := f.tree(t), []string{
-		"Talk.pptx", "Talk.qslide", "Talk_(1).qslide", "Talk_media", "Talk_media/image1.png", "Talk_media/image1_(1).png",
+		"Talk.pptx", "Talk.qslide", "Talk_(1).qslide", "Talk_media", "Talk_media/.trash",
+		"Talk_media/.trash/embedded-document-media", "Talk_media/image1.png", "Talk_media/image1_(1).png",
 	}; !slices.Equal(got, want) {
 		t.Errorf("tree = %v, want %v", got, want)
 	}

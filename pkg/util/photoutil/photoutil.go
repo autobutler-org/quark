@@ -5,16 +5,19 @@
 package photoutil
 
 import (
+	"context"
 	"fmt"
 	"image"
 	// Registers the GIF decoder with image.Decode.
 	_ "image/gif"
 	"io"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 
 	// Registers the BMP decoder with image.Decode.
 	_ "golang.org/x/image/bmp"
@@ -23,6 +26,34 @@ import (
 	// Registers the WebP decoder with image.Decode.
 	_ "golang.org/x/image/webp"
 )
+
+// MarkDocumentMedia records that every media file beneath dir belongs to an
+// embedded document rather than the photo library. The marker is kept inside
+// a reserved hidden bookkeeping directory, so it moves with the media folder
+// without surfacing as a user file.
+func MarkDocumentMedia(ctx context.Context, fsys vfs.VFS, dir string) error {
+	marker := documentMediaMarker(path.Clean(dir))
+	if err := fsys.MkdirAll(ctx, path.Dir(marker)); err != nil {
+		return fmt.Errorf("create document media marker directory: %w", err)
+	}
+	if err := fsys.Write(ctx, marker, strings.NewReader("1\n"), vfs.WriteOptions{}); err != nil {
+		_ = fsys.Delete(ctx, marker, vfs.DeleteOptions{})
+		return fmt.Errorf("write document media marker: %w", err)
+	}
+	return nil
+}
+
+// IsDocumentMedia reports whether relPath is beneath a directory marked by
+// [MarkDocumentMedia]. It checks ancestors so a document importer may keep an
+// internal hierarchy beneath one owned media directory.
+func IsDocumentMedia(ctx context.Context, fsys vfs.VFS, relPath string) bool {
+	for dir := path.Dir(path.Clean(relPath)); dir != "." && dir != "/"; dir = path.Dir(dir) {
+		if _, err := fsys.Stat(ctx, documentMediaMarker(dir)); err == nil {
+			return true
+		}
+	}
+	return false
+}
 
 // IsHEICFile reports whether filePath names a HEIC or HEIF image. The device
 // has no HEIC decoder (#2382): such a file is served as it is, and its

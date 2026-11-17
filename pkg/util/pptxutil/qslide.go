@@ -222,6 +222,38 @@ func qslideError(err error) error {
 	return fmt.Errorf("%w: %v", ErrNotQslide, err)
 }
 
+// imageSources reads only the fields that can name a picture while retaining
+// walkQslide's schema validation and one-slide-at-a-time memory bound.
+func imageSources(source io.Reader) (string, []string, error) {
+	var sources []string
+	seen := map[string]bool{}
+	add := func(source string) {
+		if source != "" && !seen[source] {
+			seen[source] = true
+			sources = append(sources, source)
+		}
+	}
+	var addElements func([]qslideElement)
+	addElements = func(elements []qslideElement) {
+		for _, element := range elements {
+			if element.Type == typeImage {
+				add(element.Source)
+			}
+			addElements(element.Children)
+		}
+	}
+	dec := json.NewDecoder(source)
+	dec.UseNumber()
+	header, err := walkQslide(dec, func(_ qslideHeader, slide qslideSlide) error {
+		if slide.Background != nil {
+			add(slide.Background.Image)
+		}
+		addElements(slide.Elements)
+		return nil
+	})
+	return header.title, sources, err
+}
+
 func (c *cappedReader) Read(p []byte) (int, error) {
 	if c.remaining <= 0 {
 		// One byte past the cap is what tells a document that is too large

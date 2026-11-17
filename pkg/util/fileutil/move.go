@@ -11,6 +11,8 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -204,9 +206,19 @@ func moveBetween(ctx context.Context, src vfs.VFS, srcPath string, dst vfs.VFS, 
 	if err := dst.MkdirAll(ctx, dstPath); err != nil {
 		return err
 	}
+	// Internal markers are intentionally absent from recursive listings. Carry
+	// this one explicitly when its whole owned media subtree crosses devices.
+	if photoutil.IsDocumentMedia(ctx, src, path.Join(srcPath, ".marker-check")) {
+		if err := photoutil.MarkDocumentMedia(ctx, dst, dstPath); err != nil {
+			return err
+		}
+	}
 	base := cleanRelPath(srcPath)
 	for _, entry := range entries {
 		rel := strings.TrimPrefix(strings.TrimPrefix(entry.Path, base), "/")
+		if internalPath(rel) {
+			continue
+		}
 		target := path.Join(dstPath, rel)
 		if entry.IsDir {
 			err = dst.MkdirAll(ctx, target)
@@ -218,6 +230,18 @@ func moveBetween(ctx context.Context, src vfs.VFS, srcPath string, dst vfs.VFS, 
 		}
 	}
 	return src.Delete(ctx, srcPath, vfs.DeleteOptions{Recursive: true})
+}
+
+// internalPath reports an entry beneath one of the namespace's hidden
+// bookkeeping directories. Disk-backed listings already omit these; this
+// keeps cross-device moves equivalent on every VFS implementation.
+func internalPath(rel string) bool {
+	for _, part := range strings.Split(rel, "/") {
+		if storageutil.IsInternalName(part) {
+			return true
+		}
+	}
+	return false
 }
 
 // exists reports whether something occupies p in fsys.

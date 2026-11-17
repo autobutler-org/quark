@@ -196,6 +196,18 @@ func ExportQslide(params ExportQslideParams) (ExportQslideResult, error) {
 	return writePptx(params.Out, &cappedReader{r: params.Source, remaining: MaxQslideBytes}, params.OpenImage)
 }
 
+// ImageSources returns the title and file references used by pictures and
+// slide backgrounds in a .qslide. Each source appears once, in presentation
+// order. The input is streamed one slide at a time and bounded by
+// [MaxQslideBytes]. Errors wrap [ErrNotQslide] or [ErrTooLarge] like
+// [ExportQslide].
+func ImageSources(source io.Reader) (string, []string, error) {
+	if source == nil {
+		return "", nil, errors.New("pptxutil: Source is required")
+	}
+	return imageSources(&cappedReader{r: source, remaining: MaxQslideBytes})
+}
+
 // StoreMediaFunc stores a picture an import found, under a name like
 // image1.png whose extension matches its content, and returns the reference
 // the .qslide names it by. Part is the picture's entry in the package, such

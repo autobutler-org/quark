@@ -2,6 +2,7 @@ package pptxutil_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/pptxutil"
@@ -27,6 +28,24 @@ func TestMediaDirsOf(t *testing.T) {
 				t.Fatalf("MediaDirsOf(%q) = %v, want %v", tt.path, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestImageSources(t *testing.T) {
+	deck := `{"schemaVersion":1,"title":"Talk","slides":[
+		{"background":{"image":"background.png"},"elements":[
+			{"type":"image","source":"photo.png"},
+			{"type":"group","children":[{"type":"image","source":"nested.png"}]},
+			{"type":"image","source":"photo.png"}
+		]}
+	]}`
+	title, got, err := pptxutil.ImageSources(strings.NewReader(deck))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"background.png", "photo.png", "nested.png"}
+	if title != "Talk" || !slices.Equal(got, want) {
+		t.Fatalf("title and image sources = %q, %v; want Talk, %v", title, got, want)
 	}
 }
 

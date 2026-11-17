@@ -22,14 +22,19 @@ import (
 // in-process from its host path, capped to the tier's longer side, and then
 // cropped the same way a photo is.
 func Generate(params GenerateParams) (GenerateResult, error) {
+	documentMedia := photoutil.IsDocumentMedia(params.Ctx, params.FS, params.RelPath)
 	if !params.IsVideo && !photoutil.IsRawFile(params.RelPath) {
 		source, err := params.FS.Open(params.Ctx, params.RelPath)
 		if err != nil {
 			return GenerateResult{}, fmt.Errorf("open %s: %w", params.RelPath, err)
 		}
 		defer source.Close()
+		queries := params.Queries
+		if documentMedia {
+			queries = nil
+		}
 		return GenerateFromReader(GenerateFromReaderParams{
-			Queries:          params.Queries,
+			Queries:          queries,
 			Serial:           params.Serial,
 			RelPath:          params.RelPath,
 			Reader:           source,
@@ -56,7 +61,7 @@ func Generate(params GenerateParams) (GenerateResult, error) {
 		result.Thumbnail = photoutil.ApplyRotation(result.Thumbnail, params.RotationQuarters)
 	}
 
-	if !params.IsVideo && params.Queries != nil {
+	if !params.IsVideo && params.Queries != nil && !documentMedia {
 		if source, err := params.FS.Open(params.Ctx, params.RelPath); err != nil {
 			slog.Warn("thumbnail: could not open photo to hash it", "path", params.RelPath, "err", err)
 		} else {

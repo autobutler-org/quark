@@ -246,6 +246,30 @@ func TestGenerateStoresTheSameHashesAtEveryTier(t *testing.T) {
 	}
 }
 
+// TestGenerateDoesNotHashDocumentMedia: opening an imported picture in Files
+// still renders its thumbnail, but must not add it to duplicate detection.
+func TestGenerateDoesNotHashDocumentMedia(t *testing.T) {
+	ctx := context.Background()
+	fsys := memFS(t, map[string][]byte{"Talk_media/image1.jpg": sourceJPEG(t)})
+	if err := photoutil.MarkDocumentMedia(ctx, fsys, "Talk_media"); err != nil {
+		t.Fatal(err)
+	}
+	database := dbtest.NewDB(t)
+	if _, err := Generate(GenerateParams{
+		Ctx: ctx, Queries: database.Queries, FS: fsys, RelPath: "Talk_media/image1.jpg",
+		Ext: ".jpg", Width: 16, Height: 16, CachedPath: filepath.Join(t.TempDir(), "entry"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := database.Queries.ListNearDuplicates(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("stored hashes for document media: %+v", rows)
+	}
+}
+
 // memFS is a MemVFS holding files.
 func memFS(t *testing.T, files map[string][]byte) vfs.VFS {
 	t.Helper()

@@ -276,6 +276,7 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 	liveVideos := map[DuplicatePhoto]bool{}
 	livePhotos := map[DuplicatePhoto]bool{}
 	slideMedia := map[DuplicatePhoto]bool{}
+	var slides []DuplicatePhoto
 	var candidates []PhotoSummary
 	err := eachLibraryFile(params, func(fi vfs.FileInfo) {
 		serial := fi.DeviceSerial
@@ -287,6 +288,9 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 		}
 		for _, dir := range pptxutil.MediaDirsOf(fi.Path) {
 			slideMedia[DuplicatePhoto{DeviceSerial: serial, RelPath: dir}] = true
+		}
+		if strings.EqualFold(path.Ext(fi.Path), ".qslide") {
+			slides = append(slides, DuplicatePhoto{DeviceSerial: serial, RelPath: fi.Path})
 		}
 		listed := strings.HasPrefix(fi.MimeType, "image/") || (isVideo && params.IncludeVideos)
 		if !listed ||
@@ -306,10 +310,20 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 	if err != nil {
 		return ListPhotosResult{}, err
 	}
+	adopted := adoptLegacyDocumentMedia(params.Ctx, params.Registry, slides)
+	markerCache := map[DuplicatePhoto]bool{}
 	// All three need every file seen first.
 	var allPhotos []PhotoSummary
 	for _, photo := range candidates {
-		if slideMedia[DuplicatePhoto{DeviceSerial: photo.Serial, RelPath: path.Dir(photo.RelPath)}] {
+		dir := DuplicatePhoto{DeviceSerial: photo.Serial, RelPath: path.Dir(photo.RelPath)}
+		marked, checked := markerCache[dir]
+		if !checked {
+			if fsys, fsErr := DeviceFS(params.Registry, photo.Serial); fsErr == nil {
+				marked = IsDocumentMedia(params.Ctx, fsys, photo.RelPath)
+			}
+			markerCache[dir] = marked
+		}
+		if slideMedia[dir] || adopted[dir] || marked {
 			continue
 		}
 		key := liveVideoKey(photo.Serial, photo.RelPath)
@@ -345,6 +359,68 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 		Limit:        params.Limit,
 		PendingDates: pending,
 	}, nil
+}
+
+// adoptLegacyDocumentMedia marks the old <stem>_media directories still
+// referenced by presentations imported before durable ownership markers.
+// References, unlike the deck's current path or name, survive a rename or
+// move. A malformed deck or a marker write failure does not break Photos; the
+// old name correlation remains as a fallback, and a later listing retries.
+func adoptLegacyDocumentMedia(ctx context.Context, registry vfs.Registry, slides []DuplicatePhoto) map[DuplicatePhoto]bool {
+	adopted := map[DuplicatePhoto]bool{}
+	for _, slide := range slides {
+		fsys, err := DeviceFS(registry, slide.DeviceSerial)
+		if err != nil {
+			continue
+		}
+		source, err := fsys.Open(ctx, slide.RelPath)
+		if err != nil {
+			continue
+		}
+		title, references, readErr := pptxutil.ImageSources(source)
+		source.Close()
+		if readErr != nil {
+			continue
+		}
+		for _, reference := range references {
+			cleaned := path.Clean(strings.TrimLeft(strings.TrimSpace(reference), "/"))
+			if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") ||
+				strings.HasPrefix(cleaned, "asset:") || strings.HasPrefix(cleaned, "part:") {
+				continue
+			}
+			dir := path.Dir(cleaned)
+			if title == "" || !strings.EqualFold(path.Base(dir), title+"_media") {
+				continue
+			}
+			if info, statErr := fsys.Stat(ctx, cleaned); statErr != nil || info.IsDir {
+				continue
+			}
+			key := DuplicatePhoto{DeviceSerial: slide.DeviceSerial, RelPath: dir}
+			adopted[key] = true
+			if err := MarkDocumentMedia(ctx, fsys, dir); err != nil {
+				log.Printf("quark: photos: could not adopt document media %q (serial=%q): %v", dir, slide.DeviceSerial, err)
+			}
+		}
+	}
+	return adopted
+}
+
+// legacyDocumentSlides finds presentations for the duplicates path, which
+// normally reads only hash rows and would otherwise never trigger adoption.
+func legacyDocumentSlides(ctx context.Context, registry vfs.Registry) []DuplicatePhoto {
+	infos, err := vfs.ListDevices(vfs.ListDevicesParams{
+		Ctx: ctx, Registry: registry, Filter: &vfs.ListFilter{Recursive: true},
+	})
+	if err != nil {
+		return nil
+	}
+	var slides []DuplicatePhoto
+	for _, info := range infos {
+		if !info.IsDir && strings.EqualFold(path.Ext(info.Path), ".qslide") {
+			slides = append(slides, DuplicatePhoto{DeviceSerial: deviceSerial(info), RelPath: info.Path})
+		}
+	}
+	return slides
 }
 
 // takenDatesPerList caps the EXIF headers one SortTaken listing reads, so a

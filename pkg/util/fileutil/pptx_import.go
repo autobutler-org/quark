@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/pptxutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -150,6 +151,13 @@ func ImportPptxToQslide(params ImportPptxParams) (ImportPptxResult, error) {
 			return ImportPptxResult{}, importError(outcome.err)
 		}
 		return ImportPptxResult{}, writeErr
+	}
+	if len(media) > 0 {
+		if err := photoutil.MarkDocumentMedia(params.Ctx, fsys, mediaDir); err != nil {
+			discardTemp(params.Ctx, fsys, written.Path)
+			discardImport(params, fsys, media, mediaDir, mediaDirExisted)
+			return ImportPptxResult{}, err
+		}
 	}
 
 	publish := func(dir string) {
