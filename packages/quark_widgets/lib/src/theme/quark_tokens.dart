@@ -199,7 +199,9 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// The colors a person can give a calendar event, in the order the picker
   /// offers them. The first is every event's default: a blue of its own, which
   /// does not follow the theme color. An event stores its index, so reordering
-  /// these recolors saved events.
+  /// these recolors saved events. They also color the device tags in Files,
+  /// whose outline is the only cue left when a tag is squeezed, so each is at
+  /// least 3:1 on [card] (#3936).
   final List<Color> eventColors;
 
   /// The dark token set, and Quark's default appearance.
@@ -292,7 +294,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     spacingXl: 32,
     focusRingWidth: 2,
     eventColors: [
-      Color(0xFF0EA5E9), // sky
+      Color(0xFF0284C7), // sky, darker so its outline is 3:1 on white (#3936)
       Color(0xFF059669), // green
       Color(0xFFD97706), // amber
       Color(0xFF7C3AED), // violet
@@ -387,7 +389,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     spacingXl: 32,
     focusRingWidth: 3,
     eventColors: [
-      Color(0xFF0EA5E9), // sky
+      Color(0xFF0284C7), // sky, darker so its outline is 3:1 on white (#3936)
       Color(0xFF059669), // green
       Color(0xFFD97706), // amber
       Color(0xFF7C3AED), // violet

@@ -181,12 +181,40 @@ void main() {
       expect(seen, QuarkTokens.dark);
     });
 
-    test('both sets offer the same event colors, the same blue first', () {
-      for (final tokens in [QuarkTokens.dark, QuarkTokens.light]) {
+    test('both sets offer the same event colors, a blue first', () {
+      // An event stores its index, and its color does not follow the theme
+      // color (#2740). Light's blue is darker so it holds 3:1 (#3936).
+      for (final (tokens, blue) in [
+        (QuarkTokens.dark, const Color(0xFF0EA5E9)),
+        (QuarkTokens.light, const Color(0xFF0284C7)),
+      ]) {
         expect(tokens.eventColors, hasLength(6));
-        // An event stores its index, and its color does not follow the
-        // theme color (#2740).
-        expect(tokens.eventColors.first, const Color(0xFF0EA5E9));
+        expect(tokens.eventColors.first, blue);
+      }
+    });
+
+    // #3936: a device tag squeezed to its outline is told apart by color
+    // alone, so every event color is a 3:1 non-text color on the card.
+    test('every event color is 3:1 on the card in every theme', () {
+      final sets = <String, QuarkTokens>{
+        'dark': QuarkTokens.dark,
+        'light': QuarkTokens.light,
+        'highContrastDark': QuarkTokens.highContrastDark,
+        'highContrastLight': QuarkTokens.highContrastLight,
+        for (final preset in QuarkThemeColor.presets)
+          for (final brightness in Brightness.values)
+            for (final highContrast in [false, true])
+              '${preset.name} ${brightness.name}${highContrast ? ' hc' : ''}':
+                  preset.tokensFor(brightness, highContrast: highContrast),
+      };
+      for (final MapEntry(key: name, value: tokens) in sets.entries) {
+        for (final (i, color) in tokens.eventColors.indexed) {
+          expect(
+            contrastRatio(color, tokens.card),
+            greaterThanOrEqualTo(3),
+            reason: '$name event color $i',
+          );
+        }
       }
     });
 

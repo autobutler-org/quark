@@ -13,6 +13,7 @@ class FileDeviceGroup extends StatelessWidget {
     required this.device,
     required this.itemCount,
     required this.children,
+    this.color,
     super.key,
   });
 
@@ -25,6 +26,10 @@ class FileDeviceGroup extends StatelessWidget {
   /// The section's items: list rows, or one grid of tiles.
   final List<Widget> children;
 
+  /// The device's color among every drive on the Quark, from
+  /// [DeviceTag.colorsFor]. Null picks it for this device alone.
+  final Color? color;
+
   @override
   Widget build(BuildContext context) {
     return ExpansionTile(
@@ -35,7 +40,7 @@ class FileDeviceGroup extends StatelessWidget {
         child: DeviceTag(
           key: ValueKey('device_group_tag_${device.serial}'),
           label: device.name,
-          color: DeviceTag.colorFor(context, device.serial),
+          color: color ?? DeviceTag.colorFor(context, device.serial),
         ),
       ),
       subtitle: Text('$itemCount item${itemCount == 1 ? '' : 's'}'),

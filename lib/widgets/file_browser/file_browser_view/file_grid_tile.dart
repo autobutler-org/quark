@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_device_tags.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_grid_layout.dart';
@@ -20,6 +21,7 @@ class FileGridTile extends StatelessWidget {
     required this.selectionMode,
     required this.showFileSizeAndMenu,
     this.onTap,
+    this.deviceColors = const {},
     super.key,
   });
 
@@ -41,6 +43,9 @@ class FileGridTile extends StatelessWidget {
 
   /// Called when the tile is tapped; null leaves it inert.
   final VoidCallback? onTap;
+
+  /// Each attached device's color by serial, for the device tags.
+  final Map<String, Color> deviceColors;
 
   @override
   Widget build(BuildContext context) {
@@ -86,24 +91,46 @@ class FileGridTile extends StatelessWidget {
                     const SizedBox(height: FileGridLayout.slotGap),
                     SizedBox(
                       height: FileGridLayout.menuRowHeight,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          if (showFileSizeAndMenu)
-                            Flexible(
-                              child: Text(
-                                formatFileSize(
-                                  item.size,
-                                  item.isDir,
-                                  compressedSize: item.compressedSize,
+                      // The size takes what it needs, up to half the row,
+                      // and the device tags get the rest rather than an
+                      // even split that left them as empty pills (#3936).
+                      child: LayoutBuilder(
+                        builder: (context, constraints) => Row(
+                          children: [
+                            if (showFileSizeAndMenu)
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: constraints.maxWidth / 2,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                                child: Text(
+                                  formatFileSize(
+                                    item.size,
+                                    item.isDir,
+                                    compressedSize: item.compressedSize,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            Expanded(
+                              child: Align(
+                                alignment: showFileSizeAndMenu
+                                    ? AlignmentDirectional.centerEnd
+                                    : AlignmentDirectional.centerStart,
+                                child: Padding(
+                                  padding: EdgeInsetsDirectional.only(
+                                    start: QuarkTokens.of(context).spacingXs,
+                                  ),
+                                  child: FileDeviceTags(
+                                    item: item,
+                                    deviceColors: deviceColors,
+                                  ),
+                                ),
                               ),
                             ),
-                          Flexible(child: FileDeviceTags(item: item)),
-                          if (showFileSizeAndMenu) FileMenuButton(menu: menu),
-                        ],
+                            if (showFileSizeAndMenu) FileMenuButton(menu: menu),
+                          ],
+                        ),
                       ),
                     ),
                   ],
