@@ -139,8 +139,8 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
         startIndex: widget.startIndex,
       );
 
-  /// The wide layout's slide panel and properties panel widths, kept per
-  /// device (#4294).
+  /// The wide layout's slide panel and properties panel widths, and whether
+  /// the slide panel is hidden, kept per device (#4294).
   final _slidePane = SidebarController(
     'slides_list',
     defaultWidth: SlidePanel.sideWidth,

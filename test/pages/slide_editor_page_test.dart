@@ -247,6 +247,73 @@ void main() {
     expect(properties, findsNothing);
   });
 
+  // The slide list hides from the toolbar's toggle or by dragging it below
+  // its min width, and stays hidden per device (#4294).
+  testWidgets('the slide list hides from its toggle and below min', (
+    tester,
+  ) async {
+    tap.setViewport(tester, tap.wideViewport);
+    await pumpEditor(tester);
+    final list = find.byType(SlidePanel);
+    final toggle = find.byKey(const ValueKey('slide_list_toggle'));
+    final prefs = await SharedPreferences.getInstance();
+    expect(find.byTooltip('Hide slides'), findsOneWidget);
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(list, findsNothing);
+    expect(find.byTooltip('Show slides'), findsOneWidget);
+    expect(prefs.getBool('sidebar_slides_list_collapsed'), isTrue);
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(list, findsOneWidget);
+    expect(prefs.getBool('sidebar_slides_list_collapsed'), isFalse);
+
+    await tester.drag(
+      find.byKey(const ValueKey('resizable_pane_handle_slides_list')),
+      const Offset(-300, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(list, findsNothing);
+    expect(prefs.getBool('sidebar_slides_list_collapsed'), isTrue);
+  });
+
+  testWidgets('a hidden slide list stays hidden after a reload', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'sidebar_slides_list_collapsed': true,
+    });
+    tap.setViewport(tester, tap.wideViewport);
+    await pumpEditor(tester);
+    expect(find.byType(SlidePanel), findsNothing);
+    expect(find.byTooltip('Show slides'), findsOneWidget);
+  });
+
+  // Between the toolbar's breakpoint and the split view's, the toolbar
+  // shows but the slides are a strip across the top, which never hides.
+  testWidgets('the slide strip has no toggle and ignores a stored hide', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'sidebar_slides_list_collapsed': true,
+    });
+    tap.setViewport(
+      tester,
+      const Size(
+        (QuarkAppBarBottom.collapseBreakpoint +
+                QuarkSplitView.collapseBreakpoint) /
+            2,
+        800,
+      ),
+    );
+    await pumpEditor(tester);
+    expect(find.byKey(const ValueKey('slide_toolbar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('slide_list_toggle')), findsNothing);
+    expect(find.byType(SlidePanel), findsOneWidget);
+  });
+
   testWidgets('tapping a thumbnail selects it', (tester) async {
     tap.setViewport(tester, tap.wideViewport);
     final c = await pumpEditor(tester);
