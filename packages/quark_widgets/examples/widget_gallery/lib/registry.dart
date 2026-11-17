@@ -15,6 +15,7 @@ import 'widgets/framed_viewport.dart';
 import 'widgets/model_viewer_demo.dart';
 import 'widgets/password_strength_demo.dart';
 import 'widgets/poll_editor_demo.dart';
+import 'widgets/resizable_pane_demo.dart';
 import 'widgets/split_view_demo.dart';
 import 'widgets/token_swatches.dart';
 
@@ -1255,6 +1256,11 @@ final List<GalleryEntry> registry = [
     name: 'QuarkSplitView',
     group: 'Layout',
     build: (context, log) => SplitViewDemo(log: log),
+  ),
+  GalleryEntry(
+    name: 'QuarkResizablePane',
+    group: 'Layout',
+    build: (context, log) => ResizablePaneDemo(log: log),
   ),
   GalleryEntry(
     name: 'QuarkSection',
