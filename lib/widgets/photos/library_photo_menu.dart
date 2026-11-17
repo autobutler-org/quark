@@ -9,6 +9,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The tile's `more_vert` button and a right-click open it at the pointer. A
 /// long press stays selection, as it always has in the library.
 ///
+/// **Copy** puts the image on the system clipboard; **Duplicate** makes a
+/// second file on the Quark (#3436).
+///
 /// Key prefix: `library_photo_action_<action>` on the entries.
 @immutable
 class LibraryPhotoMenu {
@@ -19,7 +22,9 @@ class LibraryPhotoMenu {
     required this.onToggleFavorite,
     required this.onDownload,
     required this.onShare,
-    required this.onMakeACopy,
+    required this.onCopy,
+    required this.copyUnavailableReason,
+    required this.onDuplicate,
     required this.onDelete,
   });
 
@@ -29,7 +34,16 @@ class LibraryPhotoMenu {
   final VoidCallback onToggleFavorite;
   final VoidCallback onDownload;
   final VoidCallback onShare;
-  final VoidCallback onMakeACopy;
+
+  /// Copies the photo to the system clipboard (#3436).
+  final VoidCallback onCopy;
+
+  /// Why the clipboard cannot take a photo here, or null when it can. While
+  /// set, the Copy entry is disabled.
+  final String? copyUnavailableReason;
+
+  /// Duplicates the photo on the Quark, beside the original.
+  final VoidCallback onDuplicate;
   final VoidCallback onDelete;
 
   /// Opens the menu at [globalPosition].
@@ -64,9 +78,15 @@ class LibraryPhotoMenu {
           ),
           QuarkMenuEntry(
             key: const ValueKey('library_photo_action_copy'),
-            label: 'Make a copy',
+            label: 'Copy',
             icon: QuarkIcons.content_copy,
-            onSelected: onMakeACopy,
+            onSelected: copyUnavailableReason == null ? onCopy : null,
+          ),
+          QuarkMenuEntry(
+            key: const ValueKey('library_photo_action_duplicate'),
+            label: 'Duplicate',
+            icon: QuarkIcons.duplicate,
+            onSelected: onDuplicate,
           ),
           const QuarkMenuEntry.divider(),
           QuarkMenuEntry(

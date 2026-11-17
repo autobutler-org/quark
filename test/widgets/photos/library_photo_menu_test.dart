@@ -17,6 +17,7 @@ void main() {
     'download',
     'share',
     'copy',
+    'duplicate',
     'delete',
   ];
   Finder action(String id) => find.byKey(ValueKey('library_photo_action_$id'));
@@ -26,6 +27,7 @@ void main() {
     required Size size,
     required List<String> events,
     bool isFavorite = false,
+    String? copyUnavailableReason,
   }) async {
     setViewport(tester, size);
 
@@ -53,7 +55,9 @@ void main() {
                     onToggleFavorite: () => events.add('favorite'),
                     onDownload: () => events.add('download'),
                     onShare: () => events.add('share'),
-                    onMakeACopy: () => events.add('copy'),
+                    onCopy: () => events.add('copy'),
+                    copyUnavailableReason: copyUnavailableReason,
+                    onDuplicate: () => events.add('duplicate'),
                     onDelete: () => events.add('delete'),
                   ).showAt(context, position),
                 ),
@@ -128,5 +132,35 @@ void main() {
 
     expect(find.text('Unfavorite'), findsOneWidget);
     expect(find.text('Favorite'), findsNothing);
+  });
+
+  testWidgets('Copy and Duplicate read differently (#3436)', (tester) async {
+    await pumpTile(tester, size: wideViewport, events: <String>[]);
+
+    await tester.tap(find.byKey(const ValueKey('photo_tile_menu_p1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Copy'), findsOneWidget);
+    expect(find.text('Duplicate'), findsOneWidget);
+    expect(find.text('Make a copy'), findsNothing);
+  });
+
+  testWidgets('Copy is disabled where the clipboard takes no image (#3436)', (
+    tester,
+  ) async {
+    final events = <String>[];
+    await pumpTile(
+      tester,
+      size: wideViewport,
+      events: events,
+      copyUnavailableReason: 'Clipboard unavailable — use HTTPS to enable',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('photo_tile_menu_p1')));
+    await tester.pumpAndSettle();
+    await tester.tap(action('copy'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(events, isEmpty);
   });
 }

@@ -425,14 +425,17 @@ by date (JN-PH-018).
 **Steps:**
 
 1. Tap a photo's menu button, or right-click the photo.
-2. Choose **Add to album**, **Favorite** (or **Unfavorite**), **Download**, **Share…**, **Make a copy**, or
-   **Delete**.
+2. Choose **Add to album**, **Favorite** (or **Unfavorite**), **Download**, **Share…**, **Copy**, **Duplicate**,
+   or **Delete**. With one photo selected, Ctrl+C (Cmd+C on a Mac) does what **Copy** does.
 
 **Expected result:**
 
 - The menu opens at the pointer, or under the button, and the action runs as it does from the image viewer's
-  More options. **Make a copy** and **Delete** reload the grid; **Delete** asks first and moves the photo to the
+  More options. **Duplicate** and **Delete** reload the grid; **Delete** asks first and moves the photo to the
   trash.
+- **Copy** puts the photo on the system clipboard as a PNG at most 2048 px on its longest side, ready to paste into
+  another app, and confirms with "Copied to clipboard". It works in the web app over HTTPS; elsewhere the entry is
+  disabled, and Ctrl+C says why.
 - A long press on the photo still starts selecting, as before. A device photo has no menu, since there is nothing on
   the Quark to act on.
 

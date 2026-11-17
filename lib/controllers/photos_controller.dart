@@ -1447,6 +1447,15 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
     );
   }
 
+  /// The displayable bytes of the Quark photo [id], through the photo cache,
+  /// for copying it to the clipboard (#3436). Null for a device photo or one
+  /// with nothing to show. Throws what the Quark threw.
+  Future<Uint8List?> photoBytes(String id) async {
+    final photo = _byId(id);
+    if (photo?.relPath == null) return null;
+    return _cachedBytes(photo!);
+  }
+
   /// Copies the Quark photo [id] beside itself and reloads the library, so
   /// the copy shows. Returns the copy's file name, or null for a device
   /// photo. Throws what the Quark threw.
