@@ -68,7 +68,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # errand: remove on errand-x64-medium-quark-backend; ci-backend carries Go.
       - name: Setup go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       # errand: remove on errand-x64-medium-quark-backend; ci-backend carries sqlc.
@@ -132,7 +132,7 @@ jobs:
           fetch-depth: 0
       # errand: remove on errand-x64-quark-full; ci-full carries Go.
       - name: Setup go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       # errand: remove on errand-x64-quark-full; ci-full carries Flutter.
@@ -278,7 +278,7 @@ jobs:
       # tailnet while Flutter archives, and it fails closed when go is not on PATH.
       # Same version the backend jobs install, from go.mod.
       - name: Setup go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       # Dependabot pull requests run with the secrets withheld, so the signing material
