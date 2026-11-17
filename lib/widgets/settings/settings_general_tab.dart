@@ -7,7 +7,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The General tab of Settings (#2350): backend hosts, theme, the high
 /// contrast switch (#2601), the left-handed switch (#1812), the theme color (#2740), the view Calendar opens on
-/// (#2521), the [notifications] switches (#2493), the auto-refresh interval and demo mode, plus a link to the
+/// (#2521), the [notifications] switches (#2493), the [photoCache] (#4221), the auto-refresh interval and demo mode, plus a link to the
 /// drives. Beta switches live on the Features tab (#2542).
 ///
 /// First because it holds the backend hosts, which every "manage hosts" link
@@ -30,6 +30,7 @@ class SettingsGeneralTab extends StatelessWidget {
     this.defaultCalendarView = CalendarView.week,
     this.onDefaultCalendarViewChanged,
     this.notifications,
+    this.photoCache,
     required this.refreshIntervalSeconds,
     required this.onRefreshIntervalChanged,
     required this.demoMode,
@@ -88,6 +89,10 @@ class SettingsGeneralTab extends StatelessWidget {
   /// The control for which notifications the account receives, shown under
   /// the calendar setting; null shows nothing.
   final Widget? notifications;
+
+  /// The section sizing and clearing the photos kept on this device
+  /// (#4221), shown under [notifications]; null shows nothing, as on the web.
+  final Widget? photoCache;
 
   /// How often pages refresh themselves, in seconds; 0 is off.
   final int refreshIntervalSeconds;
@@ -222,6 +227,7 @@ class SettingsGeneralTab extends StatelessWidget {
           const SizedBox(height: 24),
           notifications!,
         ],
+        if (photoCache != null) ...[const SizedBox(height: 24), photoCache!],
         const SizedBox(height: 24),
         QuarkSection(
           title: 'Auto-refresh interval',

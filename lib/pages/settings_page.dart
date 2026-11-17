@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/change_password_controller.dart';
@@ -28,6 +29,7 @@ import 'package:quark/widgets/notifications/notification_preferences_card.dart';
 import 'package:quark/widgets/settings/change_password/change_password_dialog.dart';
 import 'package:quark/widgets/settings/connected_devices_card.dart';
 import 'package:quark/widgets/settings/new_recovery_phrase/new_recovery_phrase_dialog.dart';
+import 'package:quark/widgets/settings/photo_cache_setting.dart';
 import 'package:quark/widgets/settings/remote_access_card.dart';
 import 'package:quark/widgets/settings/remote_access_setup_sheet.dart';
 import 'package:quark/widgets/settings/settings_about_tab.dart';
@@ -663,6 +665,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       controller: NotificationsController.instance,
                     )
                   : null,
+              photoCache: kIsWeb ? null : const PhotoCacheSetting(),
               refreshIntervalSeconds: settings.refreshIntervalSeconds,
               onRefreshIntervalChanged: _setRefreshInterval,
               demoMode: _demoMode,

@@ -15,6 +15,7 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/services/feature_flags_service.dart';
+import 'package:quark/services/photo_disk_cache.dart';
 import 'package:quark/services/settings_service.dart';
 import 'package:quark/services/vault_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -1335,12 +1336,14 @@ class AuthService {
   /// it is what ends the session on the Quark and clears the cookie.
   ///
   /// It also forgets this phone's remote-access node and pairing for the
-  /// Quark, so whoever signs in next does not inherit them (#3785).
+  /// Quark, so whoever signs in next does not inherit them (#3785), and the
+  /// account's photos cached on this device (#4221).
   ///
   /// api: POST /api/v0/auth/logout
   static Future<void> logout() async {
     final signedIn = AppSettings.instance.sessionToken != null;
     final authorization = _authorization;
+    await _forgetPhotos();
     await AppSettings.instance.setSessionToken(null);
     await _forgetDevice();
     if (!signedIn) return;
@@ -1463,6 +1466,7 @@ class AuthService {
       }
       throwApiError(response.statusCode, body, context);
     }
+    await _forgetPhotos();
     await _forgetLocalSession();
     await _forgetDevice();
     return DeleteAccountResult(
@@ -1492,6 +1496,16 @@ class AuthService {
   static Future<void> _forgetLocalSession() async {
     await AppSettings.instance.setUsername(null);
     await AppSettings.instance.setSessionToken(null);
+  }
+
+  /// Deletes the photos this device keeps for the account signed in on the
+  /// current Quark (#4221), so they leave the phone with the account. Called
+  /// before the username is forgotten, since it names them.
+  static Future<void> _forgetPhotos() async {
+    final host = AppSettings.instance.activeHost;
+    final account = AppSettings.instance.username;
+    if (host == null || account == null) return;
+    await PhotoDiskCache.forget(host: host, account: account);
   }
 
   /// Forgets this phone's remote-access node and its pairing with the

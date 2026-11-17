@@ -4786,7 +4786,7 @@ const List<ApiEndpoint> apiEndpoints = [
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],
-    callers: ['CodeViewerService.readRange', 'FilesService.constructMediaUrl', 'FilesService.downloadFileBytes', 'FilesService.downloadForOpenWith', 'FilesService.downloadOriginalBytes', 'SlidesService.readImageSize', 'downloadPhotoAsJpeg'],
+    callers: ['CodeViewerService.readRange', 'FilesService._downloadBytes', 'FilesService.constructMediaUrl', 'FilesService.downloadFileBytes', 'FilesService.downloadForOpenWith', 'FilesService.downloadOriginalBytes', 'SlidesService.readImageSize', 'downloadPhotoAsJpeg'],
   ),
   ApiEndpoint(
     method: 'GET',
