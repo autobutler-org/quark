@@ -632,6 +632,10 @@ void main() {
       Finder header(String column) =>
           find.byKey(ValueKey('file_sort_header_$column'));
 
+      // Wide enough for column headers (a phone sorts from a sheet, #4226)
+      // and narrower than the bar's breakpoint, so the picker is the Views
+      // menu's Columns section.
+      setViewport(tester, const Size(1000, 800));
       await HttpOverrides.runZoned(() async {
         await pumpBrowser(tester);
 
@@ -642,8 +646,6 @@ void main() {
         expect(header('device'), findsNothing);
         expect(find.text('Oct 6, 2026'), findsOneWidget);
 
-        // The default test window is narrower than the bar's breakpoint, so
-        // the picker is the Views menu's Columns section.
         await tester.tap(find.byKey(const ValueKey('app_bar_bottom_menu')));
         await tester.pumpAndSettle();
         await tester.tap(
@@ -686,6 +688,46 @@ void main() {
       expect(find.byType(SharedRootsSheet), findsOne);
       expect(find.text('Shared by bob'), findsOne);
       expect(find.text('Shared by carol'), findsOne);
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  // #4226: on a phone the bar is one row, the path and the sort sit over the
+  // list, the shortcuts are chips under them, and each row is one line of
+  // name over one line of when and how big.
+  testWidgets('a phone shows the path and sort row over a one-line list', (
+    tester,
+  ) async {
+    setViewport(tester, const Size(390, 844));
+    listing = jsonEncode([
+      {
+        'name': 'budget.csv',
+        'size': 48230,
+        'isDir': false,
+        'deviceName': 'Attic',
+        'dirPath': 'users/alice/budget.csv',
+        'modifiedAt': DateTime(2024, 10, 6, 14, 30).toUtc().toIso8601String(),
+      },
+    ]);
+
+    await HttpOverrides.runZoned(() async {
+      await pumpBrowser(tester);
+
+      final chip = find.byKey(const ValueKey('file_sort_view_chip'));
+      expect(chip, findsOne);
+      expect(find.byKey(const ValueKey('file_sort_header_name')), findsNothing);
+      expect(find.byKey(const ValueKey('app_bar_bottom_menu')), findsNothing);
+      expect(find.byKey(const ValueKey('file_top_bar_search')), findsOne);
+      expect(
+        tester.getCenter(find.byKey(const ValueKey('file_shortcut_groups'))).dy,
+        greaterThan(tester.getCenter(chip).dy),
+        reason: 'the shortcuts are chips under the path and sort row',
+      );
+      expect(find.text('Oct 6, 2024 · 47.1 KB'), findsOne);
+
+      await tester.tap(chip);
+      await tester.pumpAndSettle();
+      expect(find.byType(FileSortViewSheet), findsOne);
+      expect(tester.takeException(), isNull);
     }, createHttpClient: overrides.createHttpClient);
   });
 }

@@ -8,9 +8,13 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// [scope] the page last worked out and never fetches on its own, so the
 /// page's refresh (button, timer, server events) is what keeps it current
 /// (#2151). The scope is the drives the view is showing (#2895).
+///
+/// [compact], on a phone, leaves the byte figures out and reads "Device
+/// storage", the bar, and "38% used" (#4226).
 class FileStorageFooter extends StatelessWidget {
   const FileStorageFooter({
     super.key,
+    this.compact = false,
     this.scope = const FileStorageFooterScope(
       label: kStorageFooterScope,
       explanation: kStorageFooterExplanation,
@@ -21,6 +25,9 @@ class FileStorageFooter extends StatelessWidget {
   /// has arrived, or when none could be fetched — the footer shows only the
   /// label.
   final FileStorageFooterScope scope;
+
+  /// Whether the footer is laid out for a phone.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +72,7 @@ class FileStorageFooter extends StatelessWidget {
                       maxWidth: constraints.maxWidth / 2,
                     ),
                     child: Text(
-                      usedBytes == null || totalBytes == null
+                      compact || usedBytes == null || totalBytes == null
                           ? scope.label
                           : '${scope.label}  ·  ${StorageDevice.formatBytes(usedBytes)}'
                                 ' / ${StorageDevice.formatBytes(totalBytes)}',
@@ -79,7 +86,8 @@ class FileStorageFooter extends StatelessWidget {
                   const SizedBox(width: 8),
                   if (diskPercent > 0)
                     Text(
-                      '${(diskPercent * 100).toStringAsFixed(0)}%',
+                      '${(diskPercent * 100).toStringAsFixed(0)}%'
+                      '${compact ? ' used' : ''}',
                       style: TextStyle(
                         fontSize: 11,
                         color: barColor,

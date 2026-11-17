@@ -1887,6 +1887,51 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'FileNameText',
+    group: 'File browser',
+    build: (context, log) => const SizedBox(
+      width: 180,
+      child: FileNameText('Budget 2026 quarterly projections.qsheet'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'FileSortViewBar',
+    group: 'File browser',
+    build: (context, log) => FileSortViewBar(
+      lead: const Text('My files'),
+      sortLabel: 'Name',
+      ascending: true,
+      onPressed: () => log('FileSortViewBar.onPressed'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'FileSortViewSheet',
+    group: 'File browser',
+    build: (context, log) => QuarkSheet(
+      title: 'Sort and view',
+      onClose: () => log('QuarkSheet.onClose'),
+      child: FileSortViewSheet(
+        sortOptions: const ['Name', 'Modified', 'Size'],
+        selectedSort: 'Name',
+        ascending: true,
+        isGridView: false,
+        isGroupedByDevice: false,
+        devices: const [
+          FileDeviceChoice(id: 'internal', label: 'Internal', selected: true),
+          FileDeviceChoice(id: 'usb', label: 'USB drive', selected: false),
+        ],
+        onSortSelected: (s) => log('FileSortViewSheet.onSortSelected($s)'),
+        onAscendingChanged: (a) =>
+            log('FileSortViewSheet.onAscendingChanged($a)'),
+        onGridViewChanged: (g) =>
+            log('FileSortViewSheet.onGridViewChanged($g)'),
+        onGroupedByDeviceChanged: (g) =>
+            log('FileSortViewSheet.onGroupedByDeviceChanged($g)'),
+        onDeviceToggled: (id) => log('FileSortViewSheet.onDeviceToggled($id)'),
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'SharedRootsSheet',
     group: 'File browser',
     build: (context, log) => QuarkSheet(

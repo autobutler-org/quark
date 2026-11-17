@@ -46,8 +46,10 @@ import 'package:quark/widgets/file_browser/upload_conflict_prompt.dart';
 import 'package:quark/widgets/file_versions/file_versions_sheet.dart';
 import 'package:quark/widgets/file_browser/file_route_error_state.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer.dart';
+import 'package:quark/widgets/file_browser/file_sort_view_row.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer_scope.dart';
 import 'package:quark/widgets/file_browser/file_top_bar.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_breadcrumb.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_path_row.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_upload_chip.dart';
 import 'package:quark/widgets/file_browser/files_welcome_card.dart';
@@ -131,6 +133,18 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   /// When true, files from all devices are shown merged (unified).
   /// When false, they are grouped by device with section headers.
   bool _isUnifiedView = true;
+
+  /// What the listing is sorted by. The page owns it, so the phone's
+  /// "Sort and view" row and the wide column headers share one sort (#4226).
+  SortColumn _sortColumn = SortColumn.name;
+  SortDirection _sortDirection = SortDirection.asc;
+
+  /// Whether the search field is open with nothing typed in it yet. A phone's
+  /// bar is one row until search needs a second (#4226).
+  bool _searchFieldOpen = false;
+
+  /// The hidden-crumbs menu of the breadcrumb over a phone's list.
+  final _listCrumbsController = MenuController();
 
   // Device filter state (#801)
   List<StorageDevice> _allDevices = [];
@@ -1775,6 +1789,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   /// The draft has to go too: a non-empty one that outlives [_searchQuery]
   /// keeps the banner on "searching" after the field is gone (#2098).
   void _clearSearchState() {
+    _searchFieldOpen = false;
     _isSearchMode = false;
     _searchFuture = null;
     _searchQuery = null;
@@ -2147,7 +2162,27 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     );
   }
 
-  /// Builds the horizontal device filter chip row for issue #801.
+  void _setSort(SortColumn column, SortDirection direction) => setState(() {
+    _sortColumn = column;
+    _sortDirection = direction;
+  });
+
+  /// Shows or hides one drive's files (#801). Hiding the last one shows them
+  /// all again rather than an empty listing.
+  void _toggleDevice(String devicePath) {
+    setState(() {
+      if (_activeDevicePaths.contains(devicePath)) {
+        _activeDevicePaths.remove(devicePath);
+        if (_activeDevicePaths.isEmpty) {
+          _activeDevicePaths = _allDevices.map((d) => d.devicePath).toSet();
+        }
+      } else {
+        _activeDevicePaths.add(devicePath);
+      }
+      _reloadFiles();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final routeFailure = _routeFailure;
@@ -2164,6 +2199,18 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         : _currentPath;
     final disableNavigation =
         _handlingPendingFile && isLikelyFilePath(_currentPath);
+    // Inside an archive every crumb is the archive's own, so nothing is out
+    // of reach there.
+    final rootPath = archive != null ? '' : _landingPath;
+    final onGoHome = archive != null ? _exitArchive : _goHome;
+    final onPathSelected = archive != null ? null : _setPath;
+    final devices = _allDevices.length > 1 ? _allDevices : null;
+    void toggleView() => setState(() => _isGridView = !_isGridView);
+    void toggleUnifiedView() =>
+        setState(() => _isUnifiedView = !_isUnifiedView);
+    // A phone's list is one line per file, with the path and the sort over
+    // it rather than in the bar (#4226).
+    final compact = FileBrowserView.isCompactWidth(context);
     // Not a QuarkPageScaffold: selecting drops the bar altogether, so the
     // page picks the edge for its drawer and its create button itself (#1812).
     final leftHanded = QuarkHandedness.isLeftHanded(context);
@@ -2177,22 +2224,23 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           ? null
           : FileTopBar(
               currentPath: displayPath,
-              // Inside an archive every crumb is the archive's own, so
-              // nothing is out of reach there.
-              rootPath: archive != null ? '' : _landingPath,
+              rootPath: rootPath,
               isGridView: _isGridView,
-              isSearchMode: searchActive,
+              // An open field counts too, so a phone's bar keeps its second
+              // row for it before anything is typed.
+              isSearchMode: searchActive || _searchFieldOpen,
+              compact: compact,
+              onSearchOpened: () => setState(() => _searchFieldOpen = true),
               isUploading: _isUploading,
               isCreatingFolder: _isCreatingFolder,
               disableNavigation: disableNavigation,
               isRefreshing: isRefreshing,
-              onGoHome: archive != null ? _exitArchive : _goHome,
+              onGoHome: onGoHome,
               onGoUp: _goUpOneLevel,
-              onPathSelected: archive != null ? null : _setPath,
+              onPathSelected: onPathSelected,
               isUnifiedView: _isUnifiedView,
-              onToggleView: () => setState(() => _isGridView = !_isGridView),
-              onToggleUnifiedView: () =>
-                  setState(() => _isUnifiedView = !_isUnifiedView),
+              onToggleView: toggleView,
+              onToggleUnifiedView: toggleUnifiedView,
               onSearchChanged: _handleSearchChanged,
               onSearchDraft: _handleSearchDraft,
               onSearchClosed: _handleSearchClosed,
@@ -2219,23 +2267,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                       _selectedPaths.clear();
                     })
                   : null,
-              devices: _allDevices.length > 1 ? _allDevices : null,
+              devices: devices,
               activeDevicePaths: _activeDevicePaths,
-              onDeviceToggled: (devicePath) {
-                setState(() {
-                  if (_activeDevicePaths.contains(devicePath)) {
-                    _activeDevicePaths.remove(devicePath);
-                    if (_activeDevicePaths.isEmpty) {
-                      _activeDevicePaths = _allDevices
-                          .map((d) => d.devicePath)
-                          .toSet();
-                    }
-                  } else {
-                    _activeDevicePaths.add(devicePath);
-                  }
-                  _reloadFiles();
-                });
-              },
+              onDeviceToggled: _toggleDevice,
               columns: AppSettings.instance.fileListColumns.value,
               onColumnToggled: AppSettings.instance.setFileListColumnVisible,
             ),
@@ -2258,6 +2292,27 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                   onPressed: _selectedPaths.isNotEmpty ? _moveSelected : null,
                 ),
               ],
+            ),
+          if (compact && !_noHostSelected)
+            FileSortViewRow(
+              lead: FileTopBarBreadcrumb(
+                currentPath: displayPath,
+                rootPath: rootPath,
+                navEnabled: !disableNavigation,
+                hiddenCrumbsController: _listCrumbsController,
+                onGoHome: onGoHome,
+                onPathSelected: onPathSelected,
+              ),
+              sortColumn: _sortColumn,
+              sortDirection: _sortDirection,
+              isGridView: _isGridView,
+              isUnifiedView: _isUnifiedView,
+              onSortChanged: _setSort,
+              onToggleView: toggleView,
+              onToggleUnifiedView: toggleUnifiedView,
+              devices: devices,
+              activeDevicePaths: _activeDevicePaths,
+              onDeviceToggled: _toggleDevice,
             ),
           if (!_selectionMode && !searchActive && !_noHostSelected)
             FileShortcutBar(
@@ -2426,6 +2481,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                               onOpenDirectory: _handleOpenNode,
                               isGridView: _isGridView,
                               isUnifiedView: _isUnifiedView,
+                              compact: compact,
+                              sortColumn: _sortColumn,
+                              sortDirection: _sortDirection,
+                              onSortChanged: _setSort,
                               columns:
                                   AppSettings.instance.fileListColumns.value,
                               isSearchMode: _isSearchMode,
@@ -2506,6 +2565,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           ),
           if (!_noHostSelected)
             FileStorageFooter(
+              compact: compact,
               scope: FileStorageFooterScope.of(
                 devices: _allDevices,
                 activeDevicePaths: _activeDevicePaths,

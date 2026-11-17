@@ -27,6 +27,8 @@ FileTopBar testFileTopBar({
   VoidCallback? onStartSelection,
   Set<FileListColumn> columns = const {},
   FileListColumnToggle? onColumnToggled,
+  bool compact = false,
+  VoidCallback? onSearchOpened,
 }) => FileTopBar(
   currentPath: currentPath,
   rootPath: '',
@@ -62,4 +64,6 @@ FileTopBar testFileTopBar({
   onStartSelection: onStartSelection,
   columns: columns,
   onColumnToggled: onColumnToggled,
+  compact: compact,
+  onSearchOpened: onSearchOpened,
 );
