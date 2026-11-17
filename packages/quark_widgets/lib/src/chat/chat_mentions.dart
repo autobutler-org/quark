@@ -21,7 +21,33 @@ typedef ChatMentionQuery = ({int start, String query});
 /// has to start a word, so the `@` in an email address is not a mention, and
 /// the name has to end one, so `@ann` is not found inside `@annette`. Text
 /// that names no member is left alone.
+///
+/// `@everyone` (#4293) mentions every member, by the same rules as a name,
+/// but only in [names] built by [withEveryone] for an author allowed to use
+/// it. The Quark can't see the text, so each reader decides that from the
+/// author's permissions; from anyone else it is plain text.
 abstract final class ChatMentions {
+  /// The name `@everyone` mentions every member by.
+  static const String everyone = 'everyone';
+
+  /// [names] for a message whose author may or may not ([allowed]) mention
+  /// everyone: with [everyone] first when allowed, so it is offered first,
+  /// and without any name spelled like it otherwise, so a member named
+  /// `everyone` is no way around the permission.
+  static List<String> withEveryone(
+    List<String> names, {
+    required bool allowed,
+  }) => [
+    if (allowed) everyone,
+    for (final name in names)
+      if (name.toLowerCase() != everyone) name,
+  ];
+
+  /// Whether a mention of [mentioned], as [mentionsIn] spells it, reaches
+  /// [name]: it names them, or it is [everyone].
+  static bool reaches(String mentioned, String name) =>
+      mentioned == everyone || mentioned.toLowerCase() == name.toLowerCase();
+
   /// The most names [matching] offers by default.
   static const int suggestionLimit = 5;
 
@@ -62,12 +88,10 @@ abstract final class ChatMentions {
     return found;
   }
 
-  /// Whether [text] mentions [name], one of [names].
+  /// Whether [text] mentions [name], one of [names], by name or as
+  /// [everyone] when [names] holds it.
   static bool mentions(String text, Iterable<String> names, String name) =>
-      mentionsIn(
-        text,
-        names,
-      ).any((mention) => mention.name.toLowerCase() == name.toLowerCase());
+      mentionsIn(text, names).any((mention) => reaches(mention.name, name));
 
   /// The mention being typed in [text] with the caret at [caret], or null
   /// when the caret is not in one: there is no `@` before it, the `@` does

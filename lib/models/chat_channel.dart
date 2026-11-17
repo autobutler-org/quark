@@ -187,6 +187,14 @@ extension ChatMemberNames on List<ChatMember> {
         ...m.userId != null ? [m.name] : m.users.map((u) => u.username),
   }.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
+  /// The accounts holding [permission] on the channel, through their own
+  /// row or a group's, such as the authors whose `@everyone` counts (#4293).
+  Set<int> userIdsHolding(ChatPermission permission) => {
+    for (final m in this)
+      if (m.permissions.contains(permission))
+        ...m.userId != null ? [m.userId!] : m.users.map((u) => u.id),
+  };
+
   /// Account [userId]'s name as it is in [mentionNames], or null when it is
   /// not among the members.
   String? nameOfUser(int? userId) {

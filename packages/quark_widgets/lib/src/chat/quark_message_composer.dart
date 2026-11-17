@@ -43,7 +43,10 @@ import 'quark_mention_suggestions.dart';
 /// through the list and Escape closes it until another `@` is typed. Every
 /// `@name` in the field that names a member is drawn as a mention, so a
 /// mention that will reach someone looks different from one that won't. What
-/// is sent is still the plain text, `@name` included.
+/// is sent is still the plain text, `@name` included. When [permissions]
+/// holds [ChatPermission.mentionEveryone], `everyone` is offered first and
+/// `@everyone` is drawn as a mention too (#4293); readers decide for
+/// themselves whether to honor it, so leaving it out is a convenience.
 ///
 /// The text controller and focus node are [State] because Flutter needs them
 /// to live across rebuilds, as is where the keyboard is in the suggestions;
@@ -177,7 +180,7 @@ class QuarkMessageComposer extends StatefulWidget {
 
 class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
   late final _MentionTextController _text = _MentionTextController()
-    ..names = widget.mentionNames;
+    ..names = _mentionNames;
   final FocusNode _focus = FocusNode();
 
   /// Whether Enter was pressed on a blank message; typing anything clears it.
@@ -209,8 +212,16 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
   @override
   void didUpdateWidget(QuarkMessageComposer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _text.names = widget.mentionNames;
+    _text.names = _mentionNames;
   }
+
+  /// [QuarkMessageComposer.mentionNames], with `everyone` first for a holder
+  /// of [ChatPermission.mentionEveryone].
+  List<String> get _mentionNames => ChatMentions.withEveryone(
+    widget.mentionNames,
+    allowed:
+        widget.permissions?.contains(ChatPermission.mentionEveryone) ?? false,
+  );
 
   void _onTextChanged() {
     if (_text.text != _lastText) {
@@ -230,14 +241,12 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
   /// null when there is nothing to suggest.
   ({int start, List<String> names})? _suggestions() {
     final selection = _text.selection;
-    if (widget.mentionNames.isEmpty ||
-        !selection.isValid ||
-        !selection.isCollapsed) {
+    if (_text.names.isEmpty || !selection.isValid || !selection.isCollapsed) {
       return null;
     }
     final query = ChatMentions.queryAt(_text.text, selection.baseOffset);
     if (query == null || query.start == _dismissedAt) return null;
-    final names = ChatMentions.matching(widget.mentionNames, query.query);
+    final names = ChatMentions.matching(_text.names, query.query);
     return names.isEmpty ? null : (start: query.start, names: names);
   }
 

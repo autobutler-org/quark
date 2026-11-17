@@ -18,8 +18,8 @@ typedef ChatMessageLink = ({int start, int end, Uri uri});
 /// plain: no link is styled that a tap could not open.
 ///
 /// Each `@name` in [text] that names one of [mentionNames] is drawn as a
-/// mention (see [ChatMentions]), and more heavily when it names [selfName],
-/// the reader. A mention is not tappable, and one inside a web address stays
+/// mention (see [ChatMentions]), and more heavily when it reaches
+/// [selfName], the reader: names them, or is `@everyone`. A mention is not tappable, and one inside a web address stays
 /// part of the link.
 ///
 /// A part of `ChatMessageRow`, tested through `QuarkMessageList`. Spans carry
@@ -154,7 +154,7 @@ class _ChatMessageBodyState extends State<ChatMessageBody> {
 
     final tokens = QuarkTokens.of(context);
     final primary = tokens.primary;
-    final selfName = widget.selfName?.toLowerCase();
+    final selfName = widget.selfName;
     final linkStyle = TextStyle(
       color: primary,
       decoration: TextDecoration.underline,
@@ -180,7 +180,9 @@ class _ChatMessageBodyState extends State<ChatMessageBody> {
             text: text.substring(mention.start, mention.end),
             style: ChatMentions.styleOf(
               tokens,
-              isSelf: mention.name.toLowerCase() == selfName,
+              isSelf:
+                  selfName != null &&
+                  ChatMentions.reaches(mention.name, selfName),
             ),
           ),
         ),

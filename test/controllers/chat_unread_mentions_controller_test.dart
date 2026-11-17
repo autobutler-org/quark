@@ -48,6 +48,16 @@ void main() {
       ChatMember(userId: 7, name: 'ada', permissions: read),
       ChatMember(userId: 8, name: 'bob', permissions: read),
       ChatMember(userId: 9, name: 'ada-marie', permissions: read),
+      // cy holds mention_everyone through a group, not a row of her own.
+      ChatMember(
+        groupId: 3,
+        name: 'mods',
+        permissions: {
+          ChatPermission.readMessages,
+          ChatPermission.mentionEveryone,
+        },
+        users: [ChatMemberUser(id: 10, username: 'cy')],
+      ),
     ],
     fetchMessages: (channelId, {limit}) async {
       calls.add('messages $channelId');
@@ -113,6 +123,22 @@ void main() {
     expect(mentions.countOf(2), 0);
     expect(notified, 1);
     expect(calls, ['keys 1', 'messages 1'], reason: 'channel 2 has no unread');
+    mentions.dispose();
+  });
+
+  // #4293: @everyone counts only from an author holding mention_everyone.
+  test('counts @everyone from an author allowed to use it', () async {
+    messages[1] = [
+      message('@everyone from cy', author: 10),
+      message('@everyone from bob, who may not', author: 8),
+      message('@everyone_else from cy', author: 10),
+    ];
+    final mentions = build();
+
+    setUnread({1: 3});
+    await pumpEventQueue();
+
+    expect(mentions.countOf(1), 1);
     mentions.dispose();
   });
 

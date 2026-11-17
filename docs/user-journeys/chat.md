@@ -4,7 +4,7 @@ Covers chat (#2414): opening a channel, sending and receiving
 end-to-end encrypted messages, unlocking chat on web after a reload, waiting
 for a channel key, and creating, sharing, renaming, leaving and deleting
 channels (#2422), reacting to messages (#2426), a message's menu (#2631),
-searching a channel on the device (#2429), mentioning a member (#2623), polls (#3894),
+searching a channel on the device (#2429), mentioning a member (#2623) or everyone (#4293), polls (#3894),
 and attaching a file and saving it (#2425).
 
 ---
@@ -709,3 +709,34 @@ but general. The accounts whose chat should come back exist here under the same 
 - Attachments are files the snapshot already copies; the restore brings back only the chat's rows.
 - On PostgreSQL the chat is in the operator's database backup instead, and the route answers 501.
 - `POST /api/v0/storage/devices/snapshot-backup/restore-chat`, admin-only (#2428).
+
+---
+
+### JN-CHAT-030: Mention everyone
+
+**Preconditions:** `ada` is an **Owner** of a channel, and `bob` and `carol` are **Member**s of it, each with it
+open.
+
+**Steps:**
+
+1. As `ada`, type `@e` in the composer, tap `@everyone`, add `dinner at 7`, and send.
+2. As `bob`, look at the message.
+3. As `carol`, type `@e` in the composer, then send `@everyone hello`.
+4. As `bob`, look at `carol`'s message.
+
+**Expected result:**
+
+- After step 1, `everyone` is the first suggestion, above any member whose name starts with `e`.
+- After step 2, `@everyone` is drawn as a mention, and the message stands on a tint with a bar down its leading
+  edge for `bob` as it does for `carol`.
+- After step 3, `carol` is not offered `everyone`.
+- After step 4, `@everyone` is plain text and the message is not highlighted.
+
+**Notes:**
+
+- Using `@everyone` takes the `mention_everyone` permission, which the Moderator and Owner presets carry and the
+  Member preset does not. An owner can grant it on its own.
+- Chat is end-to-end encrypted, so the Quark cannot enforce it: each reader's app honors `@everyone` only from an
+  author whose permissions on the channel include it.
+- An unread `@everyone` counts as a mention of every member but its author.
+- No account can be created with the username `everyone`.

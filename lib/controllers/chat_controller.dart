@@ -653,6 +653,14 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   /// this list is all that decides what counts as one.
   List<String> get mentionNames => _members.mentionNames;
 
+  /// The authors, as `ChatMessageItem.authorId`s, whose `@everyone` mentions
+  /// every member of the open channel (#4293): those holding
+  /// [ChatPermission.mentionEveryone] in the member list.
+  Set<String> get mentionEveryoneAuthorIds => {
+    for (final id in _members.userIdsHolding(ChatPermission.mentionEveryone))
+      '$id',
+  };
+
   /// The signed-in account's name as it is in [mentionNames], which a
   /// message has to mention to be highlighted. Null when the account is not
   /// among the open channel's members.

@@ -9,6 +9,7 @@ import '../models/chat_message_item.dart';
 import '../models/chat_poll_answer.dart';
 import '../models/chat_permission.dart';
 import '../theme/quark_tokens.dart';
+import 'chat_mentions.dart';
 import 'quark_message_list/chat_day_separator.dart';
 import 'quark_message_list/chat_load_older_row.dart';
 import 'quark_message_list/chat_message_row.dart';
@@ -95,7 +96,9 @@ import 'quark_message_list/chat_system_line.dart';
 /// as a mention, and a message that mentions [currentUserName] is highlighted
 /// (#2623). Chat is end-to-end encrypted, so a mention is only that text
 /// inside the message: the list finds it, and nothing else says who was
-/// mentioned.
+/// mentioned. `@everyone` mentions every reader, but only in a message whose
+/// author is in [mentionEveryoneAuthorIds] (#4293); from anyone else it is
+/// plain text.
 ///
 /// With [onEncryptionHelp] set, each system line about encryption
 /// ([ChatMessageItem.isEncryptionEvent]) and each unverified system line ends
@@ -166,6 +169,7 @@ class QuarkMessageList extends StatefulWidget {
     this.currentUserId,
     this.mentionNames = const [],
     this.currentUserName,
+    this.mentionEveryoneAuthorIds = const {},
     this.onCopy,
     this.onDelete,
     this.onReact,
@@ -240,6 +244,11 @@ class QuarkMessageList extends StatefulWidget {
   /// The signed-in account's name as it is in [mentionNames]. A message that
   /// mentions it is highlighted. Null highlights nothing.
   final String? currentUserName;
+
+  /// The [ChatMessageItem.authorId]s whose `@everyone` mentions every
+  /// member: the members holding [ChatPermission.mentionEveryone]. Empty
+  /// leaves `@everyone` plain text in every message.
+  final Set<String> mentionEveryoneAuthorIds;
 
   /// Called with a text message's id to copy its text; the clipboard is the
   /// caller's. Null leaves "Copy text" out of every menu.
@@ -611,7 +620,12 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
                             attachment,
                           ),
                     thumbnailBuilder: widget.thumbnailBuilder,
-                    mentionNames: widget.mentionNames,
+                    mentionNames: ChatMentions.withEveryone(
+                      widget.mentionNames,
+                      allowed: widget.mentionEveryoneAuthorIds.contains(
+                        message.authorId,
+                      ),
+                    ),
                     selfName: widget.currentUserName,
                     avatar: !QuarkMessageList.startsGroup(message, older)
                         ? null

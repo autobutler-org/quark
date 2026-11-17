@@ -30,6 +30,15 @@ enum ChatPermission {
   /// Upload a file into the channel (#2425).
   attachFiles('attach_files', 'Attach files', 'Upload files into the channel'),
 
+  /// Mention every member at once with `@everyone` (#4293). Readers' devices
+  /// honor it only from an author who holds this, since the Quark can't see
+  /// the text to enforce it.
+  mentionEveryone(
+    'mention_everyone',
+    'Mention everyone',
+    'Notify every member with @everyone',
+  ),
+
   /// Delete other people's messages. Everyone may delete their own.
   deleteMessages(
     'delete_messages',
@@ -76,6 +85,7 @@ enum ChatPermission {
     sendMessages ||
     addReactions ||
     attachFiles ||
+    mentionEveryone ||
     deleteMessages ||
     manageReactions => const {readMessages},
     readMessages || manageChannel || manageMembers => const {},
@@ -107,8 +117,8 @@ enum ChatPermission {
 
   /// [permissions] without [removed] and without everything that needs it,
   /// so clearing `read_messages` also clears `send_messages`,
-  /// `add_reactions`, `attach_files`, `delete_messages` and
-  /// `manage_reactions`, and leaves
+  /// `add_reactions`, `attach_files`, `mention_everyone`, `delete_messages`
+  /// and `manage_reactions`, and leaves
   /// the management permissions, which need nothing.
   static Set<ChatPermission> withoutDependents(
     Set<ChatPermission> permissions,

@@ -1801,6 +1801,33 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // #4293: @everyone mentions the reader, but only from an author in
+    // mentionEveryoneAuthorIds.
+    testBothViewports('@everyone reaches the reader from an allowed author', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: [
+            msg('m2', day2.add(const Duration(minutes: 1)), body: '@everyone'),
+            msg('m1', day2, author: 'bob', body: 'hi @everyone'),
+          ],
+          mentionNames: const ['ada', 'bob'],
+          mentionEveryoneAuthorIds: const {'bob'},
+          currentUserName: 'ada',
+        ),
+        size: size,
+      );
+
+      expect(mentionsIn(tester, 'm1'), ['@everyone']);
+      expect(find.byKey(const ValueKey('message_mention_m1')), findsOneWidget);
+      expect(mentionsIn(tester, 'm2'), isEmpty);
+      expect(find.byKey(const ValueKey('message_mention_m2')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('without names or a reader nothing is marked', (tester) async {
       await pumpAt(tester, QuarkMessageList(messages: mentioning));
       expect(mentionsIn(tester, 'm1'), isEmpty);

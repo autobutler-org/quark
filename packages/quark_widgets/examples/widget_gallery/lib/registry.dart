@@ -2778,6 +2778,7 @@ final List<GalleryEntry> registry = [
         permissions: ChatPermissionPreset.moderator.permissions,
         currentUserId: galleryChatUserId,
         mentionNames: const ['ada', 'bob', 'eve'],
+        mentionEveryoneAuthorIds: const {'bob'},
         currentUserName: galleryChatUserId,
         onCopy: (id) => log('QuarkMessageList.onCopy($id)'),
         onDelete: (id) => log('QuarkMessageList.onDelete($id)'),
@@ -3012,8 +3013,8 @@ final List<GalleryEntry> registry = [
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         QuarkMessageComposer(
-          hintText: 'Message #general, @ to mention',
-          permissions: ChatPermissionPreset.member.permissions,
+          hintText: 'Message #general, @ to mention, everyone included',
+          permissions: ChatPermissionPreset.moderator.permissions,
           mentionNames: const ['ada', 'bob', 'eve'],
           onSend: (text) => log('QuarkMessageComposer.onSend($text)'),
           onAttach: () => log('QuarkMessageComposer.onAttach'),
