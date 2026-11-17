@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"path"
 	"slices"
 	"strings"
 
@@ -244,9 +245,18 @@ func comparePhotos(a, b DuplicatePhoto) int {
 // missing is gone, along with every photo on a device with no namespace, as
 // one unplugged; any other failure to stat keeps the photo.
 func ExistsIn(ctx context.Context, registry vfs.Registry) func(serial, relPath string) bool {
+	legacyChecked := false
 	return func(serial, relPath string) bool {
 		fsys, err := DeviceFS(registry, serial)
 		if err != nil {
+			return false
+		}
+		if !legacyChecked && strings.HasSuffix(strings.ToLower(path.Base(path.Dir(relPath))), "_media") &&
+			!IsDocumentMedia(ctx, fsys, relPath) {
+			legacyChecked = true
+			adoptLegacyDocumentMedia(ctx, registry, legacyDocumentSlides(ctx, registry))
+		}
+		if IsDocumentMedia(ctx, fsys, relPath) {
 			return false
 		}
 		_, err = fsys.Stat(ctx, relPath)

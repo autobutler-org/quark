@@ -220,6 +220,7 @@ func StoreClientThumbnails(params StoreClientThumbnailsParams) (StoreClientThumb
 	if info, err := fsys.Stat(ctx, params.RelPath); err != nil || info.IsDir {
 		return StoreClientThumbnailsResult{}, ErrSourceNotFound
 	}
+	documentMedia := photoutil.IsDocumentMedia(ctx, fsys, params.RelPath)
 	// The photo is read for its content hash.
 	source, err := fsys.Open(ctx, params.RelPath)
 	if err != nil {
@@ -245,7 +246,7 @@ func StoreClientThumbnails(params StoreClientThumbnailsParams) (StoreClientThumb
 			RelPath:  params.RelPath,
 			Source:   source,
 			Reader:   part,
-			SkipHash: storageutil.DetermineFileTypeFromPath(params.RelPath) != storageutil.FileTypeImage,
+			SkipHash: documentMedia || storageutil.DetermineFileTypeFromPath(params.RelPath) != storageutil.FileTypeImage,
 		})
 		part.Close()
 		return StoreClientThumbnailsResult{}, err

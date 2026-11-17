@@ -9,6 +9,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -49,5 +50,35 @@ func TestMoveFileRunsBeforeOverwriteOnlyWhenReplacingAFile(t *testing.T) {
 	}
 	if want := []string{"b.qslide=replaced"}; !slices.Equal(seen, want) {
 		t.Errorf("BeforeOverwrite saw %q, want %q", seen, want)
+	}
+}
+
+func TestMoveFileCarriesDocumentMediaMarkerAcrossDevices(t *testing.T) {
+	ctx := context.Background()
+	registry := vfs.NewRegistry()
+	devices := map[string]*vfs.MemVFS{
+		"":    vfs.NewMemVFS(vfs.FilesNamespace("")),
+		"USB": vfs.NewMemVFS(vfs.FilesNamespace("USB")),
+	}
+	for serial, fsys := range devices {
+		if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace(serial)}, fsys); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := devices[""].Write(ctx, "Talk_media/image.png", strings.NewReader("picture"), vfs.WriteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := photoutil.MarkDocumentMedia(ctx, devices[""], "Talk_media"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fileutil.MoveFile(fileutil.MoveFileParams{
+		Ctx: ctx, Registry: registry, EventBus: eventbus.New(),
+		OldFilePath: "Talk_media", NewFilePath: "archive/assets",
+		NewDeviceSerial: "USB",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !photoutil.IsDocumentMedia(ctx, devices["USB"], "archive/assets/image.png") {
+		t.Fatal("moved media lost its document ownership marker")
 	}
 }
