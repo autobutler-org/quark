@@ -34,6 +34,7 @@ var errModelNeedsClient = errors.New("the device does not draw 3D models")
 // @Param filePath path string true "Path to the image file"
 // @Param serial query string false "Device serial number (for device-specific files)"
 // @Param size query string false "Thumbnail size tier: sm (96px), md (240px), lg (400px). Defaults to lg." Enums(sm, md, lg)
+// @Param v query string false "The photo's version from the photo listing: its mtime and rotationQuarters joined by a dot, as in 1700000000.1. When it is current the response is cacheable as immutable; otherwise it must be revalidated by ETag"
 // @Success 200 {file} file
 // @Failure 304 "Not Modified"
 // @Failure 404 {object} clientRenderResponse "Not Found. clientRender is true when a client should render the thumbnail and PUT it"
@@ -113,9 +114,16 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		return getCoverThumbnail(c, deps, fsys, serial, relPath)
 	}
 
+	// The version a client can name in v, looked up only for a request that
+	// names one (#4217).
+	version, err := currentVersion(c, deps, serial, relPath, srcInfo.ModTime)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+
 	// A thumbnail a client rendered comes first (#2379); generating one here
 	// is the fallback.
-	if resp := getClientThumbnail(c, deps, relPath, filePath, serial, srcInfo.ModTime); resp != clientThumbnailFallthrough {
+	if resp := getClientThumbnail(c, deps, relPath, filePath, serial, srcInfo.ModTime, version); resp != clientThumbnailFallthrough {
 		return resp
 	}
 	// The device draws no 3D model: only a client can make its thumbnail.
@@ -187,7 +195,7 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	if isVideo {
 		thumbContentType = "image/jpeg"
 	}
-	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, thumbContentType)
+	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, thumbContentType, version)
 }
 
 var getThumbnailRoute = serverutil.ApiRoute("GET", "/thumbnails/*filePath", getThumbnail)

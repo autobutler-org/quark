@@ -1,3 +1,5 @@
+// cspell:words thumbversionutil
+
 package v0_users
 
 import (
@@ -9,16 +11,17 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/thumbnailutil"
+	"github.com/autobutler-org/quark/pkg/util/thumbversionutil"
 	"github.com/gin-gonic/gin"
 )
 
 // getAvatar godoc
 // @Summary Get a user's profile picture
-// @Description Serves a user's 256x256 profile picture to any signed-in user, with an ETag derived from its version; a matching If-None-Match gets 304. Clients add the picture's avatarUpdatedAt as the v query parameter, so a changed picture is a new URL. A user with no picture is a 404.
+// @Description Serves a user's 256x256 profile picture to any signed-in user, with an ETag derived from its version; a matching If-None-Match gets 304. Clients add the picture's avatarUpdatedAt as the v query parameter, so a changed picture is a new URL; when v is the current avatarUpdatedAt the response is cacheable as immutable, and without it, or with a stale one, it must be revalidated. A user with no picture is a 404.
 // @Tags users
 // @Produce jpeg,png
 // @Param id path int true "User id"
-// @Param v query int false "Cache-buster, the picture's avatarUpdatedAt; ignored by the Quark"
+// @Param v query int false "The picture's avatarUpdatedAt; when current, the response is cacheable as immutable"
 // @Success 200 {file} file
 // @Failure 304 "Not Modified"
 // @Failure 400 {object} serverutil.Response
@@ -45,7 +48,7 @@ func getAvatar(c *gin.Context) *serverutil.Response {
 
 	etag := thumbnailutil.ETagFromModTime(opened.UpdatedAt)
 	c.Header("ETag", etag)
-	c.Header("Cache-Control", "no-cache")
+	c.Header("Cache-Control", thumbversionutil.CacheControl(c.Query("v"), thumbversionutil.AvatarVersion(opened.UpdatedAt)))
 	c.Header("Content-Type", opened.ContentType)
 	if c.GetHeader("If-None-Match") == etag {
 		c.Status(http.StatusNotModified)
