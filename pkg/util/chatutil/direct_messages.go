@@ -31,6 +31,9 @@ var (
 	// ErrDirectMessageMembers reports opening a direct message with no one
 	// else, or with more accounts than MaxDirectMessageMembers.
 	ErrDirectMessageMembers = errors.New("a direct message is with 1 to 15 other people")
+	// ErrDirectMessageFork reports adding people to a direct message without
+	// keeping everyone already in it, or without adding anyone.
+	ErrDirectMessageFork = errors.New("a new conversation from this one keeps everyone in it and adds someone")
 )
 
 // OpenDirectMessageParams names the accounts to message.
@@ -44,6 +47,10 @@ type OpenDirectMessageParams struct {
 	// UserIDs are the other accounts. The caller is always in it; repeats and
 	// the caller's own id are harmless.
 	UserIDs []int64
+	// FromChannelID, when set, is the direct message the caller is adding
+	// people to. A new one is then marked Forked, so its members are told it
+	// started from an earlier conversation whose messages stay there.
+	FromChannelID int64
 }
 
 // OpenDirectMessageResult is the direct message, and whether this call made
@@ -60,7 +67,10 @@ type OpenDirectMessageResult struct {
 // (accessutil.ErrPrincipalNotFound). The unique dm_key settles two people
 // opening the same one at once. A new one publishes chat_channel_changed to
 // its members alone; the first member to open it creates its key, as for any
-// channel.
+// channel. With FromChannelID, the caller must be in that direct message
+// (ErrChannelNotFound otherwise) and the set must keep all of its people and
+// add someone (ErrDirectMessageFork); a new one is then marked Forked. One
+// these people already have comes back as it is.
 func OpenDirectMessage(params OpenDirectMessageParams) (OpenDirectMessageResult, error) {
 	if params.Database == nil {
 		return OpenDirectMessageResult{}, accessutil.ErrNoDatabase
@@ -78,6 +88,13 @@ func OpenDirectMessage(params OpenDirectMessageParams) (OpenDirectMessageResult,
 			return OpenDirectMessageResult{}, err
 		}
 	}
+	var forked int64
+	if params.FromChannelID != 0 {
+		if err := checkFork(params.Ctx, queries, params.Principal.UserID, params.FromChannelID, members); err != nil {
+			return OpenDirectMessageResult{}, err
+		}
+		forked = 1
+	}
 	key := sql.NullString{String: dmKey(members), Valid: true}
 	row, err := queries.GetChatDirectMessage(params.Ctx, key)
 	created := errors.Is(err, sql.ErrNoRows)
@@ -85,7 +102,7 @@ func OpenDirectMessage(params OpenDirectMessageParams) (OpenDirectMessageResult,
 		err = db.InTx(params.Ctx, params.Database.Db, func(q db.Querier) error {
 			var err error
 			row, err = q.CreateChatDirectMessage(params.Ctx, db.CreateChatDirectMessageParams{
-				CreatedBy: sql.NullInt64{Int64: params.Principal.UserID, Valid: true}, DmKey: key,
+				CreatedBy: sql.NullInt64{Int64: params.Principal.UserID, Valid: true}, DmKey: key, Forked: forked,
 			})
 			if errors.Is(err, sql.ErrNoRows) {
 				// Someone opened it first: theirs is committed and complete.

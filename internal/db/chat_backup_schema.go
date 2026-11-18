@@ -24,7 +24,9 @@ const ChatBackupVersion = 3
 // Version 3 added chat_attachments (#2425). chat_channels.dm_key (#2423) is
 // exported but never restored, as client_message_id is: it names accounts by
 // their ids, which a restore renumbers, so the restore works it out again
-// from the members it restored.
+// from the members it restored. chat_channels.forked is exported and not
+// restored either, so a version 3 file without it still reads: a restored
+// conversation loses the line saying it was started from an earlier one.
 const ChatBackupSchemaDDL = `
 PRAGMA user_version = 3;
 
@@ -53,7 +55,8 @@ CREATE TABLE chat_channels (
     is_default INTEGER NOT NULL,
     created_by INTEGER,
     created_at DATETIME NOT NULL,
-    dm_key     TEXT
+    dm_key     TEXT,
+    forked     INTEGER NOT NULL
 );
 
 CREATE TABLE chat_channel_members (

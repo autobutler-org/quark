@@ -588,6 +588,10 @@ of accounts, or makes it.
 
 - Who is in a direct message with whom, and when it was opened. `dm_key` stores the accounts' ids, sorted, so the
   same people always land in the same conversation. It keeps the id of an account since deleted.
+- Whether a direct message was started by adding people to another one (`forked`). The request that opens it
+  names the one it came from, and the Quark checks the opener is in it and that everyone in it stays, but stores
+  only the flag. The app draws the line that says so from the flag and the opener; nobody can write it into a
+  conversation as a message, and it is not counted as unread.
 - Everything the channel sections list: who posts when, key versions and grants.
 
 ### Rules
@@ -602,7 +606,7 @@ of accounts, or makes it.
   hold no key to act on.
 - **A deleted account** drops out of the member rows. The others keep the conversation and its history. Opening one
   with the same people who are left starts a new conversation, because the stored key still names the deleted one.
-- **A restore** works `dm_key` out again from the restored members' new ids. A direct message that lost an account
+- **A restore** leaves `forked` out, so a restored conversation loses that line. It works `dm_key` out again from the restored members' new ids. A direct message that lost an account
   the restoring Quark doesn't have keeps no key: its people keep its history but can't reopen it by picking them.
 
 ## The vault

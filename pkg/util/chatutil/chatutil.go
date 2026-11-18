@@ -316,6 +316,9 @@ type Channel struct {
 	// Members are a direct message's accounts, the caller included, by
 	// username; absent for a named channel.
 	Members []MemberUser `json:"members,omitempty"`
+	// Forked marks a direct message started by adding people to an earlier
+	// one, whose messages stay there; false for anything else.
+	Forked bool `json:"forked,omitempty"`
 }
 
 // Member is one row on a channel: an account or a group.
@@ -432,6 +435,7 @@ func ListChannels(params ListChannelsParams) (ListChannelsResult, error) {
 			Permissions: Perms(row.Permissions),
 			CreatedBy:   row.CreatedBy.Int64,
 			CreatedAt:   row.CreatedAt,
+			Forked:      row.Forked != 0,
 		})
 	}
 	for i := range channels {

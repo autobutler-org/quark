@@ -79,7 +79,8 @@ type Querier interface {
 	CreateChatChannelKey(ctx context.Context, arg CreateChatChannelKeyParams) (ChatChannelKey, error)
 	// CreateChatDirectMessage adds a direct message (#2423) unless one with the
 	// same dm_key already exists, in which case it returns no row: the unique
-	// index on dm_key settles two openers racing, on either engine.
+	// index on dm_key settles two openers racing, on either engine. forked is 1
+	// for one started by adding people to another.
 	CreateChatDirectMessage(ctx context.Context, arg CreateChatDirectMessageParams) (ChatChannel, error)
 	// Chat messages (#2418). The Quark stores ciphertext and never opens it.
 	// CreateChatMessage stores a message. nonce is the ciphertext's first 24

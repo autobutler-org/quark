@@ -63,6 +63,7 @@ type ChatChannel struct {
 	CreatedBy sql.NullInt64
 	CreatedAt time.Time
 	DmKey     sql.NullString
+	Forked    int64
 }
 
 type ChatChannelEvent struct {
