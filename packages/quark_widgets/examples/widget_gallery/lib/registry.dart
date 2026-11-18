@@ -3078,6 +3078,19 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkComposerContextBar',
+    group: 'Chat',
+    build: (context, log) => SizedBox(
+      width: 360,
+      child: QuarkComposerContextBar(
+        icon: QuarkIcons.edit_outlined,
+        title: 'Editing message',
+        text: 'Dinner at 7, traffic permitting',
+        onCancel: () => log('QuarkComposerContextBar.onCancel'),
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkMemberList',
     group: 'Chat',
     build: (context, log) => Wrap(

@@ -9,7 +9,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 
 /// The chat message routes (#2418): paging a channel's messages, posting
-/// one, and deleting one; reacting to one and taking a reaction back
+/// one, editing one (#2426), and deleting one; reacting to one and taking a reaction back
 /// (#2426); posting, answering and closing a poll (#3894); and uploading
 /// and downloading an attachment's ciphertext (#2425).
 ///
@@ -171,6 +171,28 @@ class ChatMessagesService with AuthenticatedService {
       return const Stream<List<int>>.empty();
     }
     return response.stream;
+  }
+
+  /// Replaces this account's message [messageId] with [ciphertext], encrypted
+  /// under [keyVersion], and returns the edited row, which carries no
+  /// reactions (#2426).
+  ///
+  /// api: PUT /api/v0/chat/messages/{id}
+  static Future<ChatMessage> editMessage(
+    int messageId,
+    int keyVersion,
+    Uint8List ciphertext,
+  ) async {
+    final response = await instance.authenticatedPut(
+      apiBaseUri.resolve('/api/v0/chat/messages/$messageId'),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'keyVersion': keyVersion,
+        'ciphertext': base64Encode(ciphertext),
+      }),
+    );
+    throwUnlessOk(response, 'edit message $messageId');
+    return ChatMessage.fromJson(_json(response));
   }
 
   /// Deletes message [messageId] and returns its tombstone.

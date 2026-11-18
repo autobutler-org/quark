@@ -48,6 +48,7 @@ class ChatMessageItem {
     this.reactions = const [],
     this.attachments = const [],
     this.poll,
+    this.isEdited = false,
   });
 
   /// The message's id on the Quark, and what keys and callbacks carry.
@@ -91,6 +92,10 @@ class ChatMessageItem {
   /// kinds; a poll message without one draws nothing in its body.
   final ChatPollItem? poll;
 
+  /// Whether its author edited a [ChatMessageKind.text] message after
+  /// sending it (#2426), which draws "(edited)" under the body.
+  final bool isEdited;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -105,7 +110,8 @@ class ChatMessageItem {
           other.isEncryptionEvent == isEncryptionEvent &&
           listEquals(other.reactions, reactions) &&
           listEquals(other.attachments, attachments) &&
-          other.poll == poll;
+          other.poll == poll &&
+          other.isEdited == isEdited;
 
   @override
   int get hashCode => Object.hash(
@@ -120,5 +126,6 @@ class ChatMessageItem {
     Object.hashAll(reactions),
     Object.hashAll(attachments),
     poll,
+    isEdited,
   );
 }

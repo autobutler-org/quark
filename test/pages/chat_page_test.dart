@@ -565,6 +565,68 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('the author edits a message in the composer (#2426) ($label)', (
+      tester,
+    ) async {
+      final fake = FakeChat();
+      ChatTimelineMessage mine(int id, String text, {DateTime? editedAt}) =>
+          ChatTimelineMessage(
+            message: ChatMessage(
+              id: id,
+              channelId: 1,
+              authorId: 7,
+              keyVersion: 1,
+              ciphertext: null,
+              createdAt: DateTime.utc(2026, 9, 25, 10),
+              editedAt: editedAt,
+            ),
+            state: ChatMessageState.ready,
+            text: text,
+          );
+      fake.entries[1] = [mine(12, 'Dinner at 7')];
+      await pumpChat(tester, size, chat: fake);
+      Finder key(String value) => find.byKey(ValueKey(value));
+      String field() => tester
+          .widget<TextField>(key('message_composer_field'))
+          .controller!
+          .text;
+      await tester.enterText(key('message_composer_field'), 'a draft');
+      await tester.pump();
+
+      await tester.longPress(key('message_body_12'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('message_edit_12'));
+      await tester.pumpAndSettle();
+      expect(key('composer_context'), findsOneWidget);
+      expect(field(), 'Dinner at 7');
+
+      // Stopping puts the draft back; the message is untouched.
+      await tester.tap(key('composer_context_cancel'));
+      await tester.pumpAndSettle();
+      expect(key('composer_context'), findsNothing);
+      expect(field(), 'a draft');
+
+      await tester.longPress(key('message_body_12'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('message_edit_12'));
+      await tester.pumpAndSettle();
+      await tester.enterText(key('message_composer_field'), 'Dinner at 6');
+      await tester.tap(key('message_composer_send'));
+      await tester.pumpAndSettle();
+
+      expect(fake.opened[1]!.edited, ['12 Dinner at 6']);
+      expect(fake.opened[1]!.sent, isEmpty);
+      expect(key('composer_context'), findsNothing);
+      expect(field(), 'a draft');
+
+      fake.opened[1]!.setEntries([
+        mine(12, 'Dinner at 6', editedAt: DateTime.utc(2026, 9, 25, 11)),
+      ]);
+      await tester.pumpAndSettle();
+      expect(key('message_edited_12'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a member reacts and sees reactions grouped ($label)', (
       tester,
     ) async {

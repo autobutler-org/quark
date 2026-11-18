@@ -413,6 +413,67 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('Edit is on the user\'s own text messages alone (#2426)', (
+      tester,
+    ) async {
+      final edited = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: [
+            msg('u1', day2, author: 'ada', body: 'garbled', isUnverified: true),
+            ...messages,
+          ],
+          currentUserId: 'ada',
+          // Every permission still grants no edit of someone else's.
+          permissions: ChatPermission.values.toSet(),
+          onCopy: (_) {},
+          onEdit: edited.add,
+        ),
+      );
+
+      Future<bool> offersEdit(String id) async {
+        await tester.longPress(key('message_body_$id'));
+        await tester.pumpAndSettle();
+        final offered = key('message_edit_$id').evaluate().isNotEmpty;
+        await tester.tapAt(const Offset(1, 1));
+        await tester.pumpAndSettle();
+        return offered;
+      }
+
+      expect(await offersEdit('m4'), isFalse);
+      expect(await offersEdit('u1'), isFalse);
+      expect(await offersEdit('m2'), isTrue);
+
+      await tester.longPress(key('message_body_m2'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('message_edit_m2'));
+      await tester.pumpAndSettle();
+      expect(edited, ['m2']);
+    });
+
+    testWidgets('an edited message says so under its body', (tester) async {
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: [
+            ChatMessageItem(
+              id: 'e1',
+              authorId: 'ada',
+              authorName: 'Ada',
+              sentAt: day2,
+              body: 'Dinner at 6, traffic',
+              isEdited: true,
+            ),
+            ...messages,
+          ],
+        ),
+      );
+
+      expect(key('message_edited_e1'), findsOneWidget);
+      expect(find.text('(edited)'), findsOneWidget);
+    });
+
     testBothViewports('a right-click opens the menu at the pointer', (
       tester,
       size,

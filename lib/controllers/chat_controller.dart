@@ -917,6 +917,59 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     }
   }
 
+  /// The message being edited in the composer, an id from [messageItems],
+  /// or null (#2426).
+  String? get editingMessageId => _editing?.id;
+
+  /// The text the composer starts from while editing: the message's own, or
+  /// what a failed [submitEdit] tried, so it isn't lost.
+  String get editingText => _editText;
+
+  ChatMessageItem? _editing;
+  String _editText = '';
+
+  /// Puts this account's message [messageId], an id from [messageItems],
+  /// into the composer to edit. Anything else is ignored.
+  void startEdit(String messageId) {
+    final me = currentUserKey;
+    _editing = messageItems
+        .where(
+          (m) =>
+              m.id == messageId &&
+              m.authorId == me &&
+              m.kind == ChatMessageKind.text &&
+              !m.isUnverified,
+        )
+        .firstOrNull;
+    _editText = _editing?.body ?? '';
+    notifyListeners();
+  }
+
+  /// Stops editing without changing the message.
+  void cancelEdit() {
+    _editing = null;
+    notifyListeners();
+  }
+
+  /// Replaces the text of the message being edited with [text] and stops
+  /// editing. Null on success, otherwise the failure, for `Errors.message`;
+  /// a failure keeps the editing open so the text isn't lost.
+  Future<Object?> submitEdit(String text) async {
+    final editing = _editing;
+    if (editing == null) return null;
+    final error = await _onMessage(
+      editing.id,
+      (messages, id) => messages.edit(id, text),
+    );
+    if (_editing != editing) return error;
+    if (error == null) {
+      cancelEdit();
+    } else {
+      _editText = text;
+    }
+    return error;
+  }
+
   /// Deletes message [messageId], an id from [messageItems], in the open
   /// channel. Null on success, otherwise the failure, for `Errors.message`.
   Future<Object?> deleteMessage(String messageId) =>
@@ -1233,6 +1286,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
           ChatMessageState.deleted => ChatMessageKind.deleted,
         },
         isUnverified: state == ChatMessageState.unreadable,
+        isEdited: message.editedAt != null,
         reactions: reactionItems(reactions, me),
         attachments: state == ChatMessageState.ready
             ? [
@@ -1484,6 +1538,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     _isLoadingOlder = false;
     // The next channel's list says where it sits once it is laid out.
     _isAtBottom = false;
+    _editing = null;
     _closeSearch();
   }
 

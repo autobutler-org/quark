@@ -142,6 +142,8 @@ class _FakeQuark {
           }
           return message;
         },
+    editMessage: (id, keyVersion, ciphertext) async =>
+        edit(id, keyVersion, ciphertext),
     deleteMessage: (id) async {
       final i = messages.indexWhere((m) => m.id == id);
       messages[i] = messages[i].tombstone(_epoch);
@@ -314,6 +316,36 @@ class _FakeQuark {
     );
     audience[event] = hears;
     live.add(event);
+  }
+
+  /// Replaces message [id]'s ciphertext as the Quark does: editedAt set,
+  /// and the row without its reactions to every reader.
+  ChatMessage edit(int id, int keyVersion, Uint8List ciphertext) {
+    final i = messages.indexWhere((m) => m.id == id);
+    final old = messages[i];
+    final edited = messages[i] = ChatMessage(
+      id: id,
+      channelId: old.channelId,
+      authorId: old.authorId,
+      keyVersion: keyVersion,
+      ciphertext: ciphertext,
+      createdAt: old.createdAt,
+      editedAt: _epoch.add(const Duration(days: 1)),
+    );
+    _emit('chat_message_edited', {
+      'channelId': old.channelId,
+      'messageId': id,
+      'message': {
+        'id': id,
+        'channelId': old.channelId,
+        'authorId': old.authorId,
+        'keyVersion': keyVersion,
+        'ciphertext': base64Encode(ciphertext),
+        'createdAt': old.createdAt.toIso8601String(),
+        'editedAt': edited.editedAt!.toIso8601String(),
+      },
+    });
+    return edited;
   }
 
   ChatMessage post(
@@ -765,6 +797,75 @@ void main() {
     );
     await pumpEventQueue();
     expect((reader.entries[2] as ChatTimelineSystem).isVerified, isTrue);
+  });
+
+  group('edit (#2426)', () {
+    test('the author edits, and readers see the new text live, with its '
+        'reactions kept', () async {
+      final key = crypto.newChannelKey();
+      final alice = quark.client(_FakeKeys()..grant(1, key), crypto);
+      final bob = quark.client(
+        _FakeKeys()..grant(1, crypto.channelKeyFromBytes(key.extractBytes())),
+        crypto,
+        userId: 3,
+      );
+      await alice.open();
+      await bob.open();
+      await alice.send('Dinner at 7');
+      await pumpEventQueue();
+      final id = quark.messages.single.id;
+      final before = quark.messages.single.ciphertext!;
+      await bob.toggleReaction(id, '👍');
+      await pumpEventQueue();
+
+      await alice.edit(id, 'Dinner at 6, traffic');
+      await pumpEventQueue();
+
+      expect(texts(alice), ['Dinner at 6, traffic']);
+      expect(texts(bob), ['Dinner at 6, traffic']);
+      final stored = quark.messages.single.ciphertext!;
+      expect(stored.sublist(0, 24), isNot(before.sublist(0, 24)));
+      expect(
+        utf8.decode(stored, allowMalformed: true),
+        isNot(contains('Dinner')),
+      );
+      final entry = bob.entries.whereType<ChatTimelineMessage>().single;
+      expect(entry.message.editedAt, isNotNull);
+      expect(entry.reactions.single.emoji, '👍');
+      final item = ChatController.itemFor(entry, (_) => 'Ada', me: 3);
+      expect(item.isEdited, isTrue);
+      expect(item.reactions.single.count, 1);
+      alice.dispose();
+      bob.dispose();
+    });
+
+    test('editing a caption keeps the file', () async {
+      final key = crypto.newChannelKey();
+      final alice = quark.client(_FakeKeys()..grant(1, key), crypto);
+      await alice.open();
+      await alice.sendAttachment(
+        name: 'cabin.png',
+        mime: 'image/png',
+        bytes: Uint8List.fromList(const [1, 2, 3, 4]),
+        caption: 'look',
+      );
+      final sent = alice.entries.whereType<ChatTimelineMessage>().single;
+
+      await alice.edit(sent.message.id, 'look at this');
+
+      final reader = quark.client(
+        _FakeKeys()..grant(1, crypto.channelKeyFromBytes(key.extractBytes())),
+        crypto,
+        userId: 3,
+      );
+      await reader.open();
+      final got = reader.entries.whereType<ChatTimelineMessage>().single;
+      expect(got.text, 'look at this');
+      expect(got.attachments.single.id, sent.attachments.single.id);
+      expect(got.attachments.single.key, sent.attachments.single.key);
+      alice.dispose();
+      reader.dispose();
+    });
   });
 
   group('reactions (#2426)', () {

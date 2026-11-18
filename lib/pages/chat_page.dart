@@ -352,6 +352,15 @@ class _ChatPageState extends State<ChatPage>
     }
   }
 
+  /// Saves the message being edited as [text]. A failure keeps the editing
+  /// open with [text] back in the composer.
+  Future<void> _submitEdit(String text) async {
+    final error = await _controller.submitEdit(text);
+    if (error == null || !mounted) return;
+    setState(() => _composerEpoch++);
+    showMessage(context, Errors.message(error, 'edit the message'));
+  }
+
   Future<void> _react(String id, String emoji) async {
     final error = await _controller.toggleReaction(id, emoji);
     if (error == null || !mounted) return;
@@ -628,6 +637,7 @@ class _ChatPageState extends State<ChatPage>
             ? '${channel.id}'
             : null;
         final partner = channel == null ? null : c.directPartnerOf(channel);
+        final editing = c.editingMessageId;
         return QuarkPageScaffold(
           title: 'Chat',
           icon: QuarkIcons.forum_outlined,
@@ -743,6 +753,7 @@ class _ChatPageState extends State<ChatPage>
                                     c.mentionEveryoneAuthorIds,
                                 currentUserName: c.currentUserName,
                                 onCopy: _copyMessage,
+                                onEdit: c.startEdit,
                                 onDelete: _deleteMessage,
                                 onReact: _react,
                                 onAnswerPoll: _answerPoll,
@@ -825,6 +836,14 @@ class _ChatPageState extends State<ChatPage>
                           onRetry: () => c.retry(send.id),
                           onDiscard: () => c.discard(send.id),
                         ),
+                      if (editing != null)
+                        QuarkComposerContextBar(
+                          icon: QuarkIcons.edit_outlined,
+                          title: 'Editing message',
+                          text: c.editingText,
+                          cancelTooltip: 'Stop editing',
+                          onCancel: c.cancelEdit,
+                        ),
                       // Chrome pinned to the bottom edge keeps clear of the
                       // rounded display corners and the home indicator
                       // (#2788).
@@ -844,31 +863,47 @@ class _ChatPageState extends State<ChatPage>
                               child: QuarkMessageComposer(
                                 // A new state per channel. The text is that
                                 // channel's draft, kept for this app session.
+                                // While editing, the field holds the
+                                // message, not the draft, which waits.
                                 key: ValueKey(
-                                  'chat_composer_${channel?.id}_$_composerEpoch',
+                                  'chat_composer_${channel?.id}_${editing ?? ''}'
+                                  '_$_composerEpoch',
                                 ),
-                                initialText: channel == null
+                                initialText: editing != null
+                                    ? c.editingText
+                                    : channel == null
                                     ? ''
                                     : c.draftFor(channel.id),
-                                onChanged: channel == null
+                                onChanged: channel == null || editing != null
                                     ? null
                                     : (text) => c.setDraft(channel.id, text),
-                                hintText: channel == null
+                                hintText: editing != null
+                                    ? 'Edit message'
+                                    : channel == null
                                     ? 'Message'
                                     : 'Message ${c.titleOf(channel)}',
+                                // Editing is authorship, not send_messages
+                                // (#2426): a read-only author still edits.
                                 permissions: channel == null
                                     ? null
+                                    : editing != null
+                                    ? {
+                                        ...c.selectedPermissions,
+                                        ChatPermission.sendMessages,
+                                      }
                                     : c.selectedPermissions,
                                 isWaitingForKey: c.isWaitingForKey,
                                 disabledReason: c.composerDisabledReason,
                                 maxLength: ChatConfig.maxMessageLength,
                                 mentionNames: c.mentionNames,
-                                onSend: c.send,
-                                onAttach: channel == null
+                                onSend: editing != null ? _submitEdit : c.send,
+                                onAttach: channel == null || editing != null
                                     ? null
                                     : () => unawaited(_attachFile()),
                                 onAttachMedia:
-                                    channel == null || !_offersMediaPicker
+                                    channel == null ||
+                                        editing != null ||
+                                        !_offersMediaPicker
                                     ? null
                                     : () => unawaited(
                                         _attachFile(type: FileType.media),

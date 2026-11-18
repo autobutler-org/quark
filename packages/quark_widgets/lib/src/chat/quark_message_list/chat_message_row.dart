@@ -36,8 +36,9 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// one.
 ///
 /// A text message's actions are "Copy text" with [onCopy], "Add reaction"
-/// with [onReact], and "Delete" with [onDelete]. A null callback leaves its
-/// action out, and with all three null there are none. They come in one of
+/// with [onReact], "Edit" with [onEdit], and "Delete" with [onDelete]. A null
+/// callback leaves its action out, and with all of them null there are none.
+/// An edited message says "(edited)" under its body. They come in one of
 /// two presentations, which [touchMenu] picks:
 ///
 /// - **Pointer** (the default, and what `QuarkMessageList` uses on the
@@ -75,7 +76,8 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// null when no menu is open), `message_mention_<id>` on the highlight of a message that
 /// mentions the reader, `message_body_<id>` on a text message's body,
 /// `message_menu_<id>` on the menu button, `message_copy_<id>`,
-/// `message_menu_react_<id>` and `message_delete_<id>` on the menu's entries
+/// `message_menu_react_<id>`, `message_edit_<id>` and `message_delete_<id>`
+/// on the menu's entries, `message_edited_<id>` on the "(edited)" marker
 /// (the touch menu has no `message_menu_react_<id>`: its bar replaces it),
 /// `message_menu_react_<id>_<emoji>` on each emoji "Add reaction" or the
 /// touch menu's bar offers, `message_menu_react_<id>_more` on their "More
@@ -91,6 +93,7 @@ class ChatMessageRow extends StatefulWidget {
     required this.avatar,
     this.avatarSize = 32,
     this.onCopy,
+    this.onEdit,
     this.onDelete,
     this.onReact,
     this.pickMoreEmoji,
@@ -122,6 +125,9 @@ class ChatMessageRow extends StatefulWidget {
 
   /// Copies the message's text. Null leaves "Copy text" out of the menu.
   final VoidCallback? onCopy;
+
+  /// Starts editing the message. Null leaves "Edit" out of the menu.
+  final VoidCallback? onEdit;
 
   /// Deletes the message. Null leaves "Delete" out of the menu.
   final VoidCallback? onDelete;
@@ -195,6 +201,7 @@ class ChatMessageRow extends StatefulWidget {
     ValueChanged<Future<void>>? onReactionMenu,
   }) {
     final onCopy = this.onCopy;
+    final onEdit = this.onEdit;
     final onDelete = this.onDelete;
     final onReact = this.onReact;
     final pickMoreEmoji = this.pickMoreEmoji;
@@ -239,6 +246,13 @@ class ChatMessageRow extends StatefulWidget {
             );
             onReactionMenu?.call(emojiMenu);
           },
+        ),
+      if (onEdit != null)
+        QuarkMenuEntry(
+          key: ValueKey('message_edit_${message.id}'),
+          label: 'Edit',
+          icon: QuarkIcons.edit_outlined,
+          onSelected: onEdit,
         ),
       if (onDelete != null)
         QuarkMenuEntry(
@@ -337,6 +351,7 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
     final message = widget.message;
     final avatarSize = widget.avatarSize;
     final onCopy = widget.onCopy;
+    final onEdit = widget.onEdit;
     final onDelete = widget.onDelete;
     final onOpenLink = widget.onOpenLink;
     final touchMenu = widget.touchMenu;
@@ -351,7 +366,11 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
         selfName != null &&
         ChatMentions.mentions(message.body, mentionNames, selfName);
     final hasMenu =
-        reacts && (onCopy != null || onReact != null || onDelete != null);
+        reacts &&
+        (onCopy != null ||
+            onReact != null ||
+            onEdit != null ||
+            onDelete != null);
     final poll = message.poll;
     final muted = TextStyle(
       color: tokens.mutedForeground,
@@ -491,6 +510,17 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
                                         message.kind != ChatMessageKind.text ||
                                         message.attachments.isEmpty)
                                       body,
+                                    if (reacts && message.isEdited)
+                                      Text(
+                                        '(edited)',
+                                        key: ValueKey(
+                                          'message_edited_${message.id}',
+                                        ),
+                                        style: TextStyle(
+                                          color: tokens.mutedForeground,
+                                          fontSize: 12,
+                                        ),
+                                      ),
                                     if (reacts)
                                       for (final attachment
                                           in message.attachments)
