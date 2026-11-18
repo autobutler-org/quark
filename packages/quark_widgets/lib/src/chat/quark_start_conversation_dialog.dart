@@ -5,14 +5,16 @@ import '../models/principal_item.dart';
 import '../theme/quark_tokens.dart';
 import '../users/principal_picker.dart';
 
-/// Asks who to message privately (#2497): a sentence saying it makes a
-/// private channel with just the two of you, a searchable list of people,
-/// and a start button.
+/// Asks who to message (#2497, #2423): a sentence saying the same people
+/// always get the same conversation, a searchable list of people to pick one
+/// or a few from, and a start button.
 ///
 /// It does not close itself, and it decides nothing. The people, who is
 /// picked, loading, and errors are the caller's: [people] and [selected]
-/// in, [onSelected] out. [onStart] fires on the start button once someone
-/// is picked; the caller makes or opens the channel and pops the dialog.
+/// in, [onSelected] out, where the caller adds the person tapped to
+/// [selected] or takes them out. [onStart] fires on the start button once
+/// someone is picked; the caller opens the conversation and pops the
+/// dialog.
 /// [loadError] stands in for the list when the people didn't load, and
 /// [error] says why starting failed.
 ///
@@ -27,8 +29,8 @@ import '../users/principal_picker.dart';
 ///     people: controller.people,
 ///     selected: picked,
 ///     isLoading: controller.isLoadingPeople,
-///     onSelected: (person) => picked = person,
-///     onStart: () => start(picked!),
+///     onSelected: toggle,
+///     onStart: () => start(picked),
 ///     onCancel: () => Navigator.of(ctx).pop(),
 ///   ),
 /// );
@@ -40,7 +42,7 @@ class QuarkStartConversationDialog extends StatelessWidget {
     required this.onSelected,
     required this.onStart,
     required this.onCancel,
-    this.selected,
+    this.selected = const {},
     this.isLoading = false,
     this.loadError,
     this.isSubmitting = false,
@@ -51,18 +53,18 @@ class QuarkStartConversationDialog extends StatelessWidget {
   /// The accounts that can be messaged, in the order they are shown.
   final List<PrincipalItem> people;
 
-  /// Called with the person tapped.
+  /// Called with the person tapped, to pick or unpick.
   final ValueChanged<PrincipalItem> onSelected;
 
   /// Called when the start button is tapped. The button is enabled only with
-  /// [selected] set and nothing submitting.
+  /// someone in [selected] and nothing submitting.
   final VoidCallback onStart;
 
   /// Called when the cancel button is tapped.
   final VoidCallback onCancel;
 
-  /// The person picked, marked in the list. Null picks no one.
-  final PrincipalItem? selected;
+  /// The people picked, marked in the list.
+  final Set<PrincipalItem> selected;
 
   /// Whether the people are still loading. Shows a spinner in their place.
   final bool isLoading;
@@ -94,9 +96,9 @@ class QuarkStartConversationDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'This starts a private channel with just the two of you, or '
-              'opens the one you already have. You can add more people later '
-              "from Members in the channel's settings.",
+              'Pick one person, or a few. The same people always get the '
+              'same conversation. Adding someone later starts a new one, so '
+              "they don't see what was said before.",
               style: TextStyle(color: tokens.mutedForeground),
             ),
             SizedBox(height: tokens.spacingMd),
@@ -112,7 +114,7 @@ class QuarkStartConversationDialog extends StatelessWidget {
             else
               PrincipalPicker(
                 options: people,
-                selected: selected,
+                selection: selected,
                 searchLabel: 'Search people',
                 onSelected: onSelected,
               ),
@@ -131,7 +133,7 @@ class QuarkStartConversationDialog extends StatelessWidget {
         ),
         FilledButton(
           key: const ValueKey('start_conversation_submit'),
-          onPressed: selected == null || isSubmitting ? null : onStart,
+          onPressed: selected.isEmpty || isSubmitting ? null : onStart,
           child: isSubmitting
               ? const QuarkLoader(size: 20)
               : const Text('Message'),

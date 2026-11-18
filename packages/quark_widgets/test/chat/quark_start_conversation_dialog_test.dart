@@ -4,8 +4,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
 
-/// Picking someone to message privately (#2497): the people listed, who is
-/// picked passed in, and start enabled only with someone picked.
+/// Picking who to message (#2497, #2423): the people listed, who is picked
+/// passed in, several marked at once, and start enabled only with someone
+/// picked.
 void main() {
   const bob = PrincipalItem(kind: PrincipalKind.user, id: 8, name: 'bob');
   const cy = PrincipalItem(kind: PrincipalKind.user, id: 9, name: 'cy');
@@ -16,7 +17,7 @@ void main() {
     WidgetTester tester, {
     Size size = wideViewport,
     List<PrincipalItem> people = const [bob, cy],
-    PrincipalItem? selected,
+    Set<PrincipalItem> selected = const {},
     bool isLoading = false,
     String? loadError,
     bool isSubmitting = false,
@@ -41,30 +42,37 @@ void main() {
     return log;
   }
 
-  testBothViewports('says it makes a private channel, and lists people', (
-    tester,
-    size,
-  ) async {
-    final log = await pumpDialog(tester, size: size);
+  testBothViewports(
+    'says the same people keep one conversation, and lists people',
+    (tester, size) async {
+      final log = await pumpDialog(tester, size: size);
 
-    expect(find.text('Message someone'), findsOneWidget);
-    expect(find.textContaining('private channel'), findsOneWidget);
-    expect(key('principal_option_user_8'), findsOneWidget);
-    expect(
-      tester.widget<FilledButton>(key('start_conversation_submit')).onPressed,
-      isNull,
-      reason: 'no one picked yet',
-    );
+      expect(find.text('Message someone'), findsOneWidget);
+      expect(find.textContaining('same conversation'), findsOneWidget);
+      expect(key('principal_option_user_8'), findsOneWidget);
+      expect(
+        tester.widget<FilledButton>(key('start_conversation_submit')).onPressed,
+        isNull,
+        reason: 'no one picked yet',
+      );
 
-    await tester.ensureVisible(key('principal_option_user_9'));
-    await tester.tap(key('principal_option_user_9'));
-    await tester.tap(key('start_conversation_cancel'));
-    expect(log, ['select cy', 'cancel']);
-    expect(tester.takeException(), isNull);
-  });
+      await tester.ensureVisible(key('principal_option_user_9'));
+      await tester.tap(key('principal_option_user_9'));
+      await tester.tap(key('start_conversation_cancel'));
+      expect(log, ['select cy', 'cancel']);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('starts with someone picked', (tester) async {
-    final log = await pumpDialog(tester, selected: bob);
+  testWidgets('marks everyone picked, and starts', (tester) async {
+    final log = await pumpDialog(tester, selected: {bob, cy});
+
+    for (final id in [8, 9]) {
+      expect(
+        tester.widget<ListTile>(key('principal_option_user_$id')).selected,
+        isTrue,
+      );
+    }
 
     await tester.tap(key('start_conversation_submit'));
     expect(log, ['start']);
@@ -87,7 +95,7 @@ void main() {
   ) async {
     await pumpDialog(
       tester,
-      selected: bob,
+      selected: {bob},
       isSubmitting: true,
       error: 'Something went wrong.',
     );

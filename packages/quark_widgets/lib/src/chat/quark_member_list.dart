@@ -22,10 +22,14 @@ import 'quark_member_list/chat_member_row.dart';
 /// them, whatever callbacks are passed. The Quark still decides; a remove it
 /// refuses comes back through the caller's error.
 ///
+/// [onMessage] puts a Message button on every account but [selfId], in a
+/// group or not, whatever the caller may manage (#2423).
+///
 /// Key prefixes: `member_row_<id>` on each top-level row, where tapping a
 /// group's row expands or collapses it, `member_row_<groupId>_<id>` on an
 /// account listed under an expanded group, `member_list_add` on the add
-/// button, and `member_remove_<id>` on each row's remove button.
+/// button, `member_remove_<id>` on each row's remove button, and
+/// `member_message_<id>` on an account's Message button.
 ///
 /// ```dart
 /// QuarkMemberList(
@@ -35,6 +39,8 @@ import 'quark_member_list/chat_member_row.dart';
 ///   onToggleExpanded: controller.toggleGroup,
 ///   onAddMembers: openShareSheet,
 ///   onRemove: controller.removeMember,
+///   selfId: '${controller.userId}',
+///   onMessage: controller.messageUser,
 ///   avatarBuilder: (context, userId) => AppAvatar(userId: userId),
 /// );
 /// ```
@@ -47,6 +53,8 @@ class QuarkMemberList extends StatelessWidget {
     this.onToggleExpanded,
     this.onAddMembers,
     this.onRemove,
+    this.onMessage,
+    this.selfId,
     this.avatarBuilder,
     this.isLoading = false,
     this.error,
@@ -80,6 +88,14 @@ class QuarkMemberList extends StatelessWidget {
   /// out.
   final ValueChanged<String>? onRemove;
 
+  /// Called with an account's id to message them. Null leaves the buttons
+  /// out.
+  final ValueChanged<String>? onMessage;
+
+  /// The signed-in account's id, whose row gets no Message button. Null
+  /// when unknown.
+  final String? selfId;
+
   /// Builds the avatar for an account's id, [avatarSize] across. Null draws
   /// a `QuarkAvatar` with the account's initials.
   final Widget Function(BuildContext context, String userId)? avatarBuilder;
@@ -101,6 +117,11 @@ class QuarkMemberList extends StatelessWidget {
     final manages = permissions.contains(ChatPermission.manageMembers);
     final onAddMembers = manages ? this.onAddMembers : null;
     final onRemove = manages ? this.onRemove : null;
+    final onMessage = this.onMessage;
+    VoidCallback? messaging(ChatMemberItem member) =>
+        onMessage == null || member.isGroup || member.id == selfId
+        ? null
+        : () => onMessage(member.id);
 
     return ListView(
       padding: EdgeInsets.all(tokens.spacingSm),
@@ -155,6 +176,7 @@ class QuarkMemberList extends StatelessWidget {
                   ? () => onToggleExpanded(member.id)
                   : null,
               onRemove: onRemove == null ? null : () => onRemove(member.id),
+              onMessage: messaging(member),
             ),
             if (member.isGroup && expandedIds.contains(member.id))
               for (final inner in member.members)
@@ -164,6 +186,7 @@ class QuarkMemberList extends StatelessWidget {
                   avatarBuilder: avatarBuilder,
                   avatarSize: avatarSize,
                   indent: tokens.spacingLg,
+                  onMessage: messaging(inner),
                 ),
           ],
       ],

@@ -20,8 +20,8 @@ import 'user_list/user_row.dart';
 ///
 /// Key prefixes: `user_row_<username>` on each row, `user_menu_<username>` on
 /// its menu button, and `user_action_<action>_<username>` on the menu
-/// entries, where the action is `promote`, `demote`, `disable`, `enable` or
-/// `delete`.
+/// entries, where the action is `message`, `promote`, `demote`, `disable`,
+/// `enable` or `delete`.
 ///
 /// ```dart
 /// UserList(
@@ -30,6 +30,7 @@ import 'user_list/user_row.dart';
 ///   isLoading: controller.isLoading,
 ///   error: loadError,
 ///   busyUsernames: controller.busyUsernames,
+///   onMessage: message,
 ///   onPromote: promote,
 ///   onDemote: demote,
 ///   onDisable: disable,
@@ -45,6 +46,7 @@ class UserList extends StatelessWidget {
     this.isLoading = false,
     this.error,
     this.busyUsernames = const {},
+    this.onMessage,
     this.onPromote,
     this.onDemote,
     this.onDisable,
@@ -70,6 +72,10 @@ class UserList extends StatelessWidget {
   /// Accounts with an action in flight. Their rows show progress in place of
   /// the menu.
   final Set<String> busyUsernames;
+
+  /// Called with the username to message in chat (#2423). Offered on active
+  /// accounts. Null leaves the entry out.
+  final ValueChanged<String>? onMessage;
 
   /// Called with the username to make an admin. Offered on active accounts
   /// that are not admins. Null leaves the entry out.
@@ -127,6 +133,7 @@ class UserList extends StatelessWidget {
             user: user,
             isSelf: user.username == selfUsername,
             isBusy: busyUsernames.contains(user.username),
+            onMessage: bind(onMessage, user.username),
             onPromote: bind(onPromote, user.username),
             onDemote: bind(onDemote, user.username),
             onDisable: bind(onDisable, user.username),
