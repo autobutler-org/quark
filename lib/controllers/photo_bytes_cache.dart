@@ -2,7 +2,8 @@ import 'dart:typed_data';
 
 import 'package:quark/utils/image_viewer_config.dart';
 
-/// In-memory LRU of downloaded photo bytes, keyed by relPath + serial.
+/// In-memory LRU of downloaded photo bytes, keyed by relPath + serial, and
+/// for a photo's screen-sized preview by [previewKey] (#4220).
 ///
 /// Sibling to `FileBrowserCache`, which does the same job for folder listings:
 /// a process-wide singleton, so a viewer opened, closed and reopened still
@@ -29,8 +30,15 @@ class PhotoBytesCache {
 
   int _heldBytes = 0;
 
+  /// The key of a photo's original bytes.
   static String key(String relPath, String? serial) =>
       '${serial ?? ''} $relPath';
+
+  /// The key of a photo's preview, which the viewer shows before, and
+  /// usually instead of, the original: its own entry, so holding one never
+  /// passes for having the other.
+  static String previewKey(String relPath, String? serial) =>
+      'preview:${key(relPath, serial)}';
 
   /// The cached bytes for [cacheKey], or null. Marks the entry
   /// most-recently-used.

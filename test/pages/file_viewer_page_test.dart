@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/file_viewer_page.dart';
@@ -70,6 +71,7 @@ void main() {
     String folder,
     String file, {
     Future<Uint8List?> Function(String, {String? serial})? downloadBytes,
+    Future<Uint8List?> Function(String, {String? serial})? downloadPreview,
     Future<List<FileNode>> Function(String, {List<String>? serials})? listFiles,
     Future<void> Function(String, {String? serial})? statFile,
     String? from,
@@ -88,6 +90,11 @@ void main() {
             filePath: state.pathParameters['path']!,
             serial: state.uri.queryParameters['serial'] ?? '',
             downloadBytes: downloadBytes ?? FilesService.downloadFileBytes,
+            // No preview unless the test says otherwise, so a photo comes
+            // from downloadBytes, the original.
+            downloadPreview:
+                downloadPreview ??
+                (_, {serial}) async => throw ApiException(404, 'no preview'),
             listFiles: listFiles ?? FilesService.getFiles,
             // The Quark has the file unless the test says otherwise.
             statFile: statFile ?? (_, {serial}) async {},
@@ -384,6 +391,7 @@ void main() {
 
     setUp(() {
       SharedPreferences.setMockInitialValues({});
+      PhotoBytesCache.instance.clear();
       resetSharedHttpClient();
       // The viewer's own download of the opened photo, and its metadata.
       sharedHttpClientFactory = () => MockClient((request) async {
@@ -550,6 +558,99 @@ void main() {
       expect(viewer(tester).imageCount, 1);
       expect(shown(tester), 'b.jpg');
       expect(history, ['/files/photos', '/view/photos/b.jpg']);
+    });
+    // #4220: opening a photo downloaded the whole original, and prefetched
+    // the next original too.
+    group('preview first', () {
+      // The same picture, as distinct bytes, so the test can tell which one
+      // is on screen.
+      final preview = Uint8List.fromList(png);
+      final original = Uint8List.fromList(png);
+
+      Uint8List onScreen(WidgetTester tester) =>
+          tester.widget<CurrentPhoto>(find.byType(CurrentPhoto)).bytes;
+
+      testWidgets('shows previews, and the original once zoomed in', (
+        tester,
+      ) async {
+        final previews = <String>[];
+        final originals = <String>[];
+        await openFromFolder(
+          tester,
+          'photos',
+          'photos/b.jpg',
+          listFiles: (_, {serials}) async => [
+            node('a.jpg'),
+            node('b.jpg'),
+            node('c.jpg'),
+          ],
+          downloadPreview: (path, {serial}) async {
+            previews.add(path);
+            return preview;
+          },
+          downloadBytes: (path, {serial}) async {
+            originals.add(path);
+            return original;
+          },
+        );
+        await settle(tester);
+
+        // The photo and both its neighbors, as previews; no original.
+        expect(onScreen(tester), same(preview));
+        expect(previews.toSet(), {
+          'photos/a.jpg',
+          'photos/b.jpg',
+          'photos/c.jpg',
+        });
+        expect(originals, isEmpty);
+
+        // A step shows the prefetched preview, still no original.
+        await press(tester, LogicalKeyboardKey.arrowRight);
+        expect(shown(tester), 'c.jpg');
+        expect(onScreen(tester), same(preview));
+        expect(originals, isEmpty);
+
+        // Zooming in fetches this photo's original and swaps it in.
+        tester
+            .widget<InteractiveViewer>(find.byType(InteractiveViewer))
+            .transformationController!
+            .value = Matrix4.diagonal3Values(
+          2,
+          2,
+          1,
+        );
+        await settle(tester);
+        expect(originals, ['photos/c.jpg']);
+        expect(onScreen(tester), same(original));
+        // Still zoomed: the swap did not reset the view.
+        expect(
+          tester
+              .widget<InteractiveViewer>(find.byType(InteractiveViewer))
+              .transformationController!
+              .value
+              .getMaxScaleOnAxis(),
+          2,
+        );
+      });
+
+      testWidgets('a photo with no preview shows its original', (tester) async {
+        final originals = <String>[];
+        await openFromFolder(
+          tester,
+          'photos',
+          'photos/b.heic',
+          listFiles: (_, {serials}) async => [node('b.heic')],
+          downloadPreview: (_, {serial}) async =>
+              throw ApiException(404, 'no preview'),
+          downloadBytes: (path, {serial}) async {
+            originals.add(path);
+            return original;
+          },
+        );
+        await settle(tester);
+        expect(originals, ['photos/b.heic']);
+        expect(onScreen(tester), same(original));
+      });
     });
   });
 }

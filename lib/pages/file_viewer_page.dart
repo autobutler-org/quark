@@ -11,6 +11,7 @@ import 'package:quark/pages/svg_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/services/photo_preview_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/widgets/layout/file_viewer_chrome.dart';
@@ -36,6 +37,12 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// one, so a reload reopens the photo on screen and back still closes the
 /// viewer.
 ///
+/// A photo shows its screen-sized preview first, and its neighbors are
+/// prefetched as previews: a few hundred KB each rather than the several MB
+/// of an original. The original is downloaded only once the user zooms in,
+/// or copies the photo; a photo the Quark has no preview for, such as a
+/// HEIC, falls back to the original (#4220).
+///
 /// A PDF, video or audio file is loaded by the browser or the player straight
 /// from its URL, which never shows the app a refusal: an unplugged drive's
 /// PDF came up as the Quark's JSON in the browser's own viewer (#3981). So
@@ -53,6 +60,11 @@ class FileViewerPage extends StatefulWidget {
   final Future<Uint8List?> Function(String filePath, {String? serial})
   downloadBytes;
 
+  /// Fetches a photo's screen-sized preview, shown before the original. A
+  /// parameter so a test can answer without a Quark.
+  final Future<Uint8List?> Function(String filePath, {String? serial})
+  downloadPreview;
+
   /// Lists the folder a photo steps through. A parameter so a test can answer
   /// without a Quark.
   final Future<List<FileNode>> Function(String path, {List<String>? serials})
@@ -68,6 +80,7 @@ class FileViewerPage extends StatefulWidget {
     required this.filePath,
     this.serial = '',
     this.downloadBytes = FilesService.downloadFileBytes,
+    this.downloadPreview = PhotoPreviewService.downloadPreviewBytes,
     this.listFiles = FilesService.getFiles,
     this.statFile = FilesService.statFile,
   });
@@ -149,13 +162,30 @@ class _FileViewerPageState extends State<FileViewerPage> {
     return (bytes, _photos![index], _photoPath(index), _serial);
   }
 
-  Future<Uint8List?> _photoBytes(int index) {
-    final path = _photoPath(index);
-    return PhotoBytesCache.instance.fetch(
-      PhotoBytesCache.key(path, _serial),
-      () => widget.downloadBytes(path, serial: _serial),
-    );
-  }
+  Future<Uint8List?> _photoBytes(int index) =>
+      _previewBytes(_photoPath(index), serial: _serial);
+
+  /// The preview of the photo at [path], or its original when the Quark
+  /// answers without one. A request that never got an answer is thrown, so
+  /// the viewer offers a retry rather than spending the original's bytes.
+  Future<Uint8List?> _previewBytes(String path, {String? serial}) =>
+      PhotoBytesCache.instance.fetch(
+        PhotoBytesCache.previewKey(path, serial),
+        () async {
+          try {
+            return await widget.downloadPreview(path, serial: serial);
+          } on ApiException catch (e) {
+            debugPrint('FileViewerPage: no preview of $path: $e');
+            return _originalBytes(path, serial: serial);
+          }
+        },
+      );
+
+  Future<Uint8List?> _originalBytes(String path, {String? serial}) =>
+      PhotoBytesCache.instance.fetch(
+        PhotoBytesCache.key(path, serial),
+        () => widget.downloadBytes(path, serial: serial),
+      );
 
   /// Puts the photo the viewer stepped to in the address bar, in place of
   /// this entry: browser history holds the viewer once, however many photos
@@ -218,6 +248,8 @@ class _FileViewerPageState extends State<FileViewerPage> {
             imageCount: _photos?.length ?? 1,
             onLoadImage: _photos == null ? null : _loadPhoto,
             onPrefetchImage: _photos == null ? null : _photoBytes,
+            loadBytes: _previewBytes,
+            loadOriginal: _originalBytes,
             onImageShown: _showInAddressBar,
             onClose: _close,
           ),

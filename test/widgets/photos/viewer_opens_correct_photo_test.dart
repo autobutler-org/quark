@@ -134,6 +134,19 @@ void main() {
     // kept (#1782), so it has to come from this factory.
     sharedHttpClientFactory = () => MockClient((request) async {
       final url = request.url;
+      // Files and /view show a photo's preview first (#4220). It is read off
+      // the same disk, so a failing photo fails as a preview too, and the
+      // viewer falls back to the original.
+      if (url.pathSegments.take(3).join('/') == 'api/v0/thumbnails' &&
+          url.queryParameters['size'] == 'preview') {
+        try {
+          final path = url.pathSegments.skip(3).join('/');
+          final bytes = read(url.queryParameters['serial'], path);
+          return http.Response.bytes(bytes, 200);
+        } on ApiException catch (e) {
+          return http.Response('', e.statusCode);
+        }
+      }
       switch (url.path) {
         case '/api/v0/storage/devices/status':
           return http.Response(
