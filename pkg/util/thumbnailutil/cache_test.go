@@ -172,7 +172,7 @@ func TestWriteCacheConcurrentSameEntry(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, errs[i] = writeCache(cachedPath, img, false)
+			_, errs[i] = writeCache(cachedPath, img, false, gridQuality)
 		}()
 	}
 	wg.Wait()

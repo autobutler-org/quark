@@ -37,12 +37,13 @@ func getArchiveThumbnail(
 		return serverutil.NotFound(fmt.Errorf("no thumbnail for archive entry: %s", filePath))
 	}
 
+	size := thumbnailutil.ParseSize(c.Query("size"))
 	prepared, err := thumbnailutil.Prepare(thumbnailutil.PrepareParams{
 		Queries:    deps.Database().Queries,
 		Serial:     serial,
 		RelPath:    strings.TrimPrefix(filePath, "/"),
 		FilePath:   filePath,
-		Size:       thumbnailutil.ParseSize(c.Query("size")),
+		Size:       size,
 		SrcModTime: archive.ModTime,
 	})
 	if err != nil {
@@ -111,7 +112,7 @@ func getArchiveThumbnail(
 	}
 
 	// An archive entry has no version a client could name.
-	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, thumbnailutil.ContentTypeForExt(ext), "")
+	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, thumbnailutil.ContentType(ext, size), "")
 }
 
 // getCoverThumbnail serves a track's cover art at the requested size. The

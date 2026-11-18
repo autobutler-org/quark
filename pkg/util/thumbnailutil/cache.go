@@ -45,15 +45,23 @@ func CacheKey(serial, filePath string, rotationQuarters int64, size Size) string
 // server-side rotation, the target dimensions, and whether the entry on disk
 // is still newer than the source. Rotation and size are part of the key, so
 // each combination gets its own entry.
+//
+// The preview tier is the exception: it is the file as its EXIF orientation
+// shows it, without the user's rotation, so it stands in for the original
+// bytes in the viewer, which turns either by that rotation itself (#4220).
 func Prepare(params PrepareParams) (PrepareResult, error) {
 	var rotationQuarters int64
-	if rq, err := params.Queries.GetPhotoRotation(
-		context.Background(),
-		db.GetPhotoRotationParams{DeviceSerial: params.Serial, RelPath: params.RelPath},
-	); err == nil {
-		rotationQuarters = rq
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		return PrepareResult{}, fmt.Errorf("get photo rotation: %w", err)
+	if params.Size != SizePreview {
+		rq, err := params.Queries.GetPhotoRotation(
+			context.Background(),
+			db.GetPhotoRotationParams{DeviceSerial: params.Serial, RelPath: params.RelPath},
+		)
+		switch {
+		case err == nil:
+			rotationQuarters = rq
+		case !errors.Is(err, sql.ErrNoRows):
+			return PrepareResult{}, fmt.Errorf("get photo rotation: %w", err)
+		}
 	}
 
 	dir, err := CacheDir()
@@ -91,7 +99,8 @@ func OpenCached(cachedPath string) (*os.File, error) {
 // writeCache encodes img and commits it to cachedPath through a temporary
 // file, so a reader never sees a half-written thumbnail. It returns the
 // committed entry's modification time, which the ETag is derived from.
-func writeCache(cachedPath string, img image.Image, encodePNG bool) (time.Time, error) {
+// quality is the JPEG quality, unused for a PNG.
+func writeCache(cachedPath string, img image.Image, encodePNG bool, quality int) (time.Time, error) {
 	// A unique temporary file per writer: concurrent first requests for one
 	// thumbnail each commit it, and a shared path made all but one fail.
 	f, err := os.CreateTemp(filepath.Dir(cachedPath), filepath.Base(cachedPath)+".*.tmp")
@@ -103,7 +112,7 @@ func writeCache(cachedPath string, img image.Image, encodePNG bool) (time.Time, 
 	if encodePNG {
 		err = png.Encode(f, img)
 	} else {
-		err = jpeg.Encode(f, img, &jpeg.Options{Quality: 85})
+		err = jpeg.Encode(f, img, &jpeg.Options{Quality: quality})
 	}
 	f.Close()
 	if err != nil {
@@ -121,4 +130,14 @@ func writeCache(cachedPath string, img image.Image, encodePNG bool) (time.Time, 
 		return time.Time{}, err
 	}
 	return info.ModTime(), nil
+}
+
+// cacheEncoding is how a thumbnail of target height whose source has the
+// extension ext is encoded: a PNG stays a PNG in the square tiers, and the
+// preview tier, whose height is 0, is a smaller JPEG.
+func cacheEncoding(ext string, height uint) (encodePNG bool, quality int) {
+	if height == 0 {
+		return false, previewQuality
+	}
+	return ext == ".png", gridQuality
 }

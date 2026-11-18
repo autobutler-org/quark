@@ -71,7 +71,8 @@ func GenerateCover(params GenerateCoverParams) (GenerateResult, error) {
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("%w: %w", ErrUnsupportedSource, err)
 	}
-	modTime, err := writeCache(params.CachedPath, result.Thumbnail, false)
+	_, quality := cacheEncoding("", params.Height)
+	modTime, err := writeCache(params.CachedPath, result.Thumbnail, false, quality)
 	if err != nil {
 		return GenerateResult{}, err
 	}
