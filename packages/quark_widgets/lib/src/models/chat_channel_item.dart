@@ -30,8 +30,8 @@ class ChatChannelItem {
   /// everyone on the Quark. Private channels show a lock.
   final bool isPrivate;
 
-  /// Whether this is a private conversation with one other person, whose
-  /// name is then the [name]. Drawn with a person, not a `#`.
+  /// Whether this is a direct message (#2423), named for the people in it.
+  /// Drawn with a person, not a `#`.
   final bool isDirect;
 
   /// What the signed-in account may do in the channel, shown under its name

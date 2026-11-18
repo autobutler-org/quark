@@ -2663,10 +2663,25 @@ final List<GalleryEntry> registry = [
       children: [
         SizedBox(
           width: 280,
-          height: 240,
+          height: 360,
           child: QuarkChannelList(
             serverName: 'Lovelace home',
             channels: galleryChatChannels,
+            directMessages: const [
+              ChatChannelItem(
+                id: 'dm-grace',
+                name: 'grace',
+                isPrivate: true,
+                isDirect: true,
+                unreadCount: 2,
+              ),
+              ChatChannelItem(
+                id: 'dm-trip',
+                name: 'bob, cy, grace',
+                isPrivate: true,
+                isDirect: true,
+              ),
+            ],
             selectedChannelId: 'family',
             onSelect: (id) => log('QuarkChannelList.onSelect($id)'),
           ),
@@ -3120,6 +3135,7 @@ final List<GalleryEntry> registry = [
                 log('QuarkMemberList.onToggleExpanded($id)'),
             onAddMembers: () => log('QuarkMemberList.onAddMembers'),
             onRemove: (id) => log('QuarkMemberList.onRemove($id)'),
+            onMessage: (id) => log('QuarkMemberList.onMessage($id)'),
           ),
         ),
         SizedBox(
@@ -3785,6 +3801,7 @@ final List<GalleryEntry> registry = [
         UserAccountItem(username: 'cy', status: UserAccountStatus.disabled),
       ],
       selfUsername: 'ada',
+      onMessage: (username) => log('UserList.onMessage($username)'),
       onPromote: (username) => log('UserList.onPromote($username)'),
       onDemote: (username) => log('UserList.onDemote($username)'),
       onDisable: (username) => log('UserList.onDisable($username)'),

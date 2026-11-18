@@ -143,6 +143,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testBothViewports('offers Message on every account but your own', (
+    tester,
+    size,
+  ) async {
+    final messaged = <String>[];
+    await pumpAt(
+      tester,
+      QuarkMemberList(
+        members: members,
+        selfId: 'ada',
+        expandedIds: const {'family'},
+        onMessage: messaged.add,
+      ),
+      size: size,
+    );
+
+    Finder message(String id) => find.byKey(ValueKey('member_message_$id'));
+    expect(message('ada'), findsNothing, reason: 'yourself');
+    expect(message('family'), findsNothing, reason: 'a group');
+    expect(find.byKey(const ValueKey('member_remove_dee')), findsNothing);
+    await tester.tap(message('dee'));
+    await tester.tap(message('bob'));
+    expect(messaged, ['dee', 'bob']);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('shows a viewer no member-management buttons', (tester) async {
     await pumpAt(
       tester,

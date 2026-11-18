@@ -5,11 +5,13 @@ import '../models/principal_item.dart';
 import '../theme/quark_tokens.dart';
 
 /// A searchable list of accounts and groups to pick one from, for adding a
-/// member to a group or choosing who to share with.
+/// member to a group or choosing who to share with, or several from, for
+/// choosing who to message.
 ///
 /// The options are listed in the order given, and typing in the search field
-/// narrows them to names containing the text, ignoring case. Which option is
-/// picked is the caller's: [selected] in, [onSelected] out. The search text
+/// narrows them to names containing the text, ignoring case. Which options
+/// are picked is the caller's: [selected] or [selection] in, [onSelected]
+/// out. The search text
 /// is [State] because it is the field's own transient input.
 ///
 /// The options lay out as a column rather than scrolling themselves, so the
@@ -32,6 +34,7 @@ class PrincipalPicker extends StatefulWidget {
     required this.options,
     required this.onSelected,
     this.selected,
+    this.selection = const {},
     this.searchLabel = 'Search',
     super.key,
   });
@@ -44,6 +47,10 @@ class PrincipalPicker extends StatefulWidget {
 
   /// The option currently picked, which is marked. Null marks none.
   final PrincipalItem? selected;
+
+  /// The options currently picked when several can be, each marked like
+  /// [selected].
+  final Set<PrincipalItem> selection;
 
   /// The search field's label.
   final String searchLabel;
@@ -94,11 +101,17 @@ class _PrincipalPickerState extends State<PrincipalPicker> {
             ),
           )
         else
-          for (final option in matches)
+          for (final (option, isPicked) in [
+            for (final option in matches)
+              (
+                option,
+                option == widget.selected || widget.selection.contains(option),
+              ),
+          ])
             ListTile(
               key: ValueKey('principal_option_${option.keySuffix}'),
               contentPadding: EdgeInsets.zero,
-              selected: option == widget.selected,
+              selected: isPicked,
               selectedColor: tokens.primary,
               leading: Icon(
                 option.kind == PrincipalKind.user
@@ -116,9 +129,7 @@ class _PrincipalPickerState extends State<PrincipalPicker> {
                       style: TextStyle(color: tokens.mutedForeground),
                     )
                   : null,
-              trailing: option == widget.selected
-                  ? const Icon(QuarkIcons.check)
-                  : null,
+              trailing: isPicked ? const Icon(QuarkIcons.check) : null,
               onTap: () => widget.onSelected(option),
             ),
       ],

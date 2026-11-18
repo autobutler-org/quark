@@ -167,6 +167,27 @@ void main() {
     expect(deleted, ['bob', 'cy']);
   });
 
+  testWidgets('offers Message on active accounts but your own (#2423)', (
+    tester,
+  ) async {
+    final messaged = <String>[];
+    await pumpAt(
+      tester,
+      UserList(users: users, selfUsername: 'ada', onMessage: messaged.add),
+    );
+
+    expect(find.byKey(const ValueKey('user_menu_ada')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('user_menu_cy')),
+      findsNothing,
+      reason: 'a disabled account has no one to message',
+    );
+    await openMenu(tester, 'bob');
+    await tester.tap(find.byKey(const ValueKey('user_action_message_bob')));
+    await tester.pumpAndSettle();
+    expect(messaged, ['bob']);
+  });
+
   testWidgets('emits every documented action key for another admin', (
     tester,
   ) async {
@@ -179,11 +200,12 @@ void main() {
         onDisable: (_) {},
         onEnable: (_) {},
         onDelete: (_) {},
+        onMessage: (_) {},
       ),
     );
 
     await openMenu(tester, 'grace');
-    for (final action in ['demote', 'disable', 'delete']) {
+    for (final action in ['message', 'demote', 'disable', 'delete']) {
       expect(
         find.byKey(ValueKey('user_action_${action}_grace')),
         findsOneWidget,

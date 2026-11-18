@@ -12,7 +12,8 @@ import '../../theme/quark_tokens.dart';
 ///
 /// A part of `QuarkMemberList`, tested through it.
 ///
-/// Key prefix: `member_remove_<id>` on the remove button.
+/// Key prefixes: `member_remove_<id>` on the remove button and
+/// `member_message_<id>` on the Message button.
 class ChatMemberRow extends StatelessWidget {
   /// Creates the row for [member].
   const ChatMemberRow({
@@ -23,6 +24,7 @@ class ChatMemberRow extends StatelessWidget {
     this.indent = 0,
     this.onTap,
     this.onRemove,
+    this.onMessage,
     super.key,
   });
 
@@ -48,12 +50,16 @@ class ChatMemberRow extends StatelessWidget {
   /// Removes the member from the channel. Null leaves the button out.
   final VoidCallback? onRemove;
 
+  /// Messages the account. Null leaves the button out.
+  final VoidCallback? onMessage;
+
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final permissions = member.permissions;
     final avatarBuilder = this.avatarBuilder;
     final onRemove = this.onRemove;
+    final onMessage = this.onMessage;
     final chevron = member.isGroup
         ? Icon(
             isExpanded ? QuarkIcons.expand_less : QuarkIcons.expand_more,
@@ -90,21 +96,33 @@ class ChatMemberRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: tokens.mutedForeground),
             ),
-      trailing: onRemove == null
+      trailing: onRemove == null && onMessage == null
           ? chevron
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(
-                  key: ValueKey('member_remove_${member.id}'),
-                  tooltip: 'Remove ${member.name}',
-                  icon: Icon(
-                    QuarkIcons.close,
-                    size: 18,
-                    color: tokens.mutedForeground,
+                if (onMessage != null)
+                  IconButton(
+                    key: ValueKey('member_message_${member.id}'),
+                    tooltip: 'Message ${member.name}',
+                    icon: Icon(
+                      QuarkIcons.forum_outlined,
+                      size: 18,
+                      color: tokens.mutedForeground,
+                    ),
+                    onPressed: onMessage,
                   ),
-                  onPressed: onRemove,
-                ),
+                if (onRemove != null)
+                  IconButton(
+                    key: ValueKey('member_remove_${member.id}'),
+                    tooltip: 'Remove ${member.name}',
+                    icon: Icon(
+                      QuarkIcons.close,
+                      size: 18,
+                      color: tokens.mutedForeground,
+                    ),
+                    onPressed: onRemove,
+                  ),
                 ?chevron,
               ],
             ),

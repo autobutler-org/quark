@@ -18,6 +18,7 @@ class UserRow extends StatelessWidget {
     required this.user,
     this.isSelf = false,
     this.isBusy = false,
+    this.onMessage,
     this.onPromote,
     this.onDemote,
     this.onDisable,
@@ -34,6 +35,10 @@ class UserRow extends StatelessWidget {
 
   /// Whether an action on this account is in flight.
   final bool isBusy;
+
+  /// Messages the account in chat. Offered on active accounts; null leaves
+  /// it out.
+  final VoidCallback? onMessage;
 
   /// Makes the account an admin. Offered on active accounts that are not
   /// admins; null leaves it out.
@@ -61,6 +66,8 @@ class UserRow extends StatelessWidget {
     final actions = isSelf
         ? const <(String, String, VoidCallback)>[]
         : <(String, String, VoidCallback)>[
+            if (isActive && onMessage != null)
+              ('message', 'Message', onMessage!),
             if (!user.isAdmin && isActive && onPromote != null)
               ('promote', 'Make admin', onPromote!),
             if (user.isAdmin && onDemote != null)

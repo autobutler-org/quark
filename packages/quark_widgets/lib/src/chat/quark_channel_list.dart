@@ -5,6 +5,7 @@ import '../core/empty_state_widget.dart';
 import '../core/quark_loader.dart';
 import '../models/chat_channel_item.dart';
 import '../theme/quark_tokens.dart';
+import 'quark_channel_list/chat_channel_list_heading.dart';
 import 'quark_channel_list/chat_channel_tile.dart';
 
 /// A chat server's channels under the server's name, the open one
@@ -12,9 +13,9 @@ import 'quark_channel_list/chat_channel_tile.dart';
 /// [ChatChannelItem.unreadCount] above zero in bold with the count in a pill
 /// at its end (`99+` above 99), after an `@` pill counting the ones that
 /// mention the signed-in account when [ChatChannelItem.mentionCount] is above
-/// zero. [otherChannels], the
-/// ones an admin manages without being in them, follow under their own
-/// heading.
+/// zero. [directMessages], the conversations named for their people (#2423),
+/// follow under "Direct messages", and [otherChannels], the ones an admin
+/// manages without being in them, under their own heading.
 ///
 /// Which channel is open is the caller's: [selectedChannelId] in, [onSelect]
 /// out. Loading, the error and the empty list are the caller's to decide too,
@@ -22,6 +23,7 @@ import 'quark_channel_list/chat_channel_tile.dart';
 /// parent and scrolls on its own, so it sits in a pane or a drawer.
 ///
 /// Key prefixes: `channel_list_header` on the server name,
+/// `channel_list_dm_header` on the direct messages' heading,
 /// `channel_list_other_header` on the other channels' heading,
 /// `channel_tile_<id>` on each channel, `channel_unread_<id>` on a
 /// channel's unread count, and `channel_mention_<id>` on its unread
@@ -31,6 +33,7 @@ import 'quark_channel_list/chat_channel_tile.dart';
 /// QuarkChannelList(
 ///   serverName: controller.serverName,
 ///   channels: controller.channels,
+///   directMessages: controller.directMessages,
 ///   selectedChannelId: controller.channelId,
 ///   isLoading: controller.isLoadingChannels,
 ///   error: channelsError,
@@ -42,6 +45,7 @@ class QuarkChannelList extends StatelessWidget {
   const QuarkChannelList({
     required this.serverName,
     required this.channels,
+    this.directMessages = const [],
     this.otherChannels = const [],
     this.selectedChannelId,
     this.isLoading = false,
@@ -55,6 +59,10 @@ class QuarkChannelList extends StatelessWidget {
 
   /// The channels, in the order they are shown.
   final List<ChatChannelItem> channels;
+
+  /// Direct messages, listed apart under "Direct messages", each drawn with a
+  /// person and named for the people in it. Empty shows no heading.
+  final List<ChatChannelItem> directMessages;
 
   /// Channels listed apart, under "Other channels": for an admin, the ones
   /// they can manage but are not in. Empty shows no heading.
@@ -81,6 +89,11 @@ class QuarkChannelList extends StatelessWidget {
     final theme = Theme.of(context);
     final error = this.error;
     final onSelect = this.onSelect;
+    final sections = [
+      (null, '', channels),
+      ('channel_list_dm_header', 'Direct messages', directMessages),
+      ('channel_list_other_header', 'Other channels', otherChannels),
+    ];
 
     return ListView(
       padding: EdgeInsets.all(tokens.spacingSm),
@@ -108,41 +121,26 @@ class QuarkChannelList extends StatelessWidget {
             padding: EdgeInsets.all(tokens.spacingMd),
             child: Text(error, style: TextStyle(color: tokens.error)),
           )
-        else if (channels.isEmpty)
+        else if (channels.isEmpty && directMessages.isEmpty)
           const EmptyStateWidget(
             icon: QuarkIcons.forum_outlined,
             headline: 'No channels yet',
           )
-        else ...[
-          for (final channel in channels)
-            ChatChannelTile(
-              channel: channel,
-              isSelected: channel.id == selectedChannelId,
-              onSelect: onSelect,
-            ),
-          if (otherChannels.isNotEmpty)
-            Padding(
-              key: const ValueKey('channel_list_other_header'),
-              padding: EdgeInsets.fromLTRB(
-                tokens.spacingSm,
-                tokens.spacingMd,
-                tokens.spacingSm,
-                tokens.spacingXs,
-              ),
-              child: Text(
-                'Other channels',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: tokens.mutedForeground,
+        else
+          for (final (headingKey, heading, items) in sections)
+            if (items.isNotEmpty) ...[
+              if (headingKey != null)
+                ChatChannelListHeading(
+                  key: ValueKey(headingKey),
+                  label: heading,
                 ),
-              ),
-            ),
-          for (final channel in otherChannels)
-            ChatChannelTile(
-              channel: channel,
-              isSelected: channel.id == selectedChannelId,
-              onSelect: onSelect,
-            ),
-        ],
+              for (final channel in items)
+                ChatChannelTile(
+                  channel: channel,
+                  isSelected: channel.id == selectedChannelId,
+                  onSelect: onSelect,
+                ),
+            ],
       ],
     );
   }

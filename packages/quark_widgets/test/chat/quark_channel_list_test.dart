@@ -198,6 +198,53 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testBothViewports('lists direct messages under their own heading', (
+    tester,
+    size,
+  ) async {
+    final selected = <String>[];
+    await pumpAt(
+      tester,
+      QuarkChannelList(
+        serverName: 'Home',
+        channels: channels,
+        directMessages: const [
+          ChatChannelItem(
+            id: '7',
+            name: 'grace, a very long list of people in one conversation',
+            isPrivate: true,
+            isDirect: true,
+          ),
+        ],
+        otherChannels: const [
+          ChatChannelItem(id: 'secret', name: 'secret', isPrivate: true),
+        ],
+        onSelect: selected.add,
+      ),
+      size: size,
+    );
+
+    final heading = find.byKey(const ValueKey('channel_list_dm_header'));
+    expect(heading, findsOneWidget);
+    expect(find.text('Direct messages'), findsOneWidget);
+    final tile = find.byKey(const ValueKey('channel_tile_7'));
+    expect(
+      tester.getTopLeft(tile).dy,
+      greaterThan(tester.getTopLeft(heading).dy),
+    );
+    expect(
+      tester.getTopLeft(tile).dy,
+      lessThan(
+        tester
+            .getTopLeft(find.byKey(const ValueKey('channel_list_other_header')))
+            .dy,
+      ),
+    );
+    await tester.tap(tile);
+    expect(selected, ['7']);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('shows no other heading without other channels', (tester) async {
     await pumpAt(
       tester,
@@ -208,6 +255,7 @@ void main() {
       find.byKey(const ValueKey('channel_list_other_header')),
       findsNothing,
     );
+    expect(find.byKey(const ValueKey('channel_list_dm_header')), findsNothing);
   });
 
   testBothViewports('names what the account may do in each channel', (

@@ -475,7 +475,7 @@ class _ChatPageState extends State<ChatPage>
         listenable: Listenable.merge([_controller, picked]),
         builder: (dialogContext, _) => QuarkStartConversationDialog(
           people: _controller.people,
-          selected: picked.value,
+          selected: {?picked.value},
           isLoading: _controller.isLoadingPeople,
           loadError: _controller.peopleError == null
               ? null
