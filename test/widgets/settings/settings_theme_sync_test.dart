@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/settings/settings_general_tab.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../../support/tap_target_guidelines.dart' show setViewport;
@@ -114,8 +115,27 @@ void main() {
   testWidgets('the interval control follows the setting', (tester) async {
     addTearDown(() => settings.refreshInterval.value = 15);
     await pumpSettings(tester, const Size(1280, 800));
+    // Not the only int dropdown on the tab, and lazily built below the fold.
+    final section = find.byKey(
+      ValueKey('section_${QuarkSection.slug('Auto-refresh interval')}'),
+    );
+    await tester.scrollUntilVisible(
+      section,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(SettingsGeneralTab),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     int? shown() => tester
-        .state<FormFieldState<int>>(find.byType(DropdownButtonFormField<int>))
+        .state<FormFieldState<int>>(
+          find.descendant(
+            of: section,
+            matching: find.byType(DropdownButtonFormField<int>),
+          ),
+        )
         .value;
     expect(shown(), 15);
 

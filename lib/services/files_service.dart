@@ -14,6 +14,7 @@ import 'package:quark/models/trim_result.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/file_save.dart';
+import 'package:quark/services/photo_disk_cache.dart';
 import 'package:quark/services/thumbnail_backfill.dart';
 import 'package:quark/services/upload_batch.dart';
 import 'package:quark/utils/error_text.dart';
@@ -1018,15 +1019,41 @@ class FilesService with AuthenticatedService {
     );
   }
 
+  /// A photo comes from the copy kept on this device when there is one, and
+  /// is kept there once fetched (#4221): a HEIC's preview among the previews,
+  /// any other image among the originals. So does a photo opened in an
+  /// earlier session open with no network.
+  ///
   /// api: GET /api/v0/files/download
   static Future<Uint8List?> downloadFileBytes(
     String filePath, {
     String? serial,
     String? fileName,
-  }) async {
+  }) {
     if (heicImageExtensions.contains(fileExtension(filePath))) {
-      return _storedPreviewBytes(filePath, serial: serial);
+      return PhotoDiskCache.preview(
+        filePath,
+        serial: serial,
+        download: () => _storedPreviewBytes(filePath, serial: serial),
+      );
     }
+    if (fileKindForName(filePath) == FileKind.image) {
+      return PhotoDiskCache.original(
+        filePath,
+        serial: serial,
+        download: () => _downloadBytes(filePath, serial: serial),
+      );
+    }
+    return _downloadBytes(filePath, serial: serial);
+  }
+
+  /// The file at [filePath] from the Quark, as [downloadFileBytes] gives it.
+  ///
+  /// api: GET /api/v0/files/download
+  static Future<Uint8List?> _downloadBytes(
+    String filePath, {
+    String? serial,
+  }) async {
     var uri = _buildDownloadUri(filePath, serial: serial);
     if (serverConvertedImageExtensions.contains(fileExtension(filePath))) {
       // Not just a web concern: Flutter's built-in image decoder (Skia, via
@@ -1169,6 +1196,8 @@ class FilesService with AuthenticatedService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, 'Failed to save rotation');
     }
+    // The Quark rewrote the photo, so the copy on this device is stale.
+    await PhotoDiskCache.evict(relPath, serial: serial);
   }
 
   /// Duplicates a photo on the server. Returns the relative path of the new

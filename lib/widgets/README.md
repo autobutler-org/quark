@@ -201,6 +201,10 @@ lib/widgets/
                                 the admin's device name card on the Network
                                 tab and on setup's last step, absent on a
                                 Quark that can't be renamed
+    photo_cache_setting.dart    the General tab's photo cache section
+                                (#4221): its size, the preview budget and
+                                "Clear cached photos"; reads PhotoDiskCache
+                                and saves the budget through AppSettings
     repair_installation_section.dart
                                 hosts RepairController: the repair button and
                                 its confirmation, or the one-time install step

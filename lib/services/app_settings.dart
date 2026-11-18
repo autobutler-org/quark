@@ -14,8 +14,10 @@ import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/photo_sort.dart';
 import 'package:quark/services/local_trust.dart';
+import 'package:quark/services/photo_disk_cache.dart';
 import 'package:quark/utils/emulator_loopback.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/photo_disk_cache_config.dart';
 import 'package:quark/utils/session_cookie.dart';
 import 'package:quark_widgets/quark_widgets.dart'
     show AlbumSort, QuarkThemeColor;
@@ -186,6 +188,12 @@ class AppSettings {
   /// the brand button and the drawer on the right, floating buttons on the
   /// left.
   final ValueNotifier<bool> leftHanded = ValueNotifier(false);
+
+  /// How many bytes of photo previews this device keeps on disk (#4221),
+  /// picked in Settings from `PhotoDiskCacheConfig.previewBudgetChoices`.
+  final ValueNotifier<int> photoPreviewCacheBytes = ValueNotifier(
+    PhotoDiskCacheConfig.defaultPreviewBudgetBytes,
+  );
 
   /// The view a bare `/calendar` opens on, on this device (#2521). Week until
   /// the user picks another in Settings; a link naming a view still wins.
@@ -358,6 +366,7 @@ class AppSettings {
   static const _documentDarkPageKey = 'document_editor_dark_page';
   static const _highContrastKey = 'highContrast';
   static const _leftHandedKey = 'leftHanded';
+  static const _photoPreviewCacheBytesKey = 'photoPreviewCacheBytes';
 
   /// Holds the chosen view's slug.
   static const _defaultCalendarViewKey = 'defaultCalendarView';
@@ -435,6 +444,11 @@ class AppSettings {
     _prefs = await SharedPreferences.getInstance();
     highContrast.value = _prefs!.getBool(_highContrastKey) ?? false;
     leftHanded.value = _prefs!.getBool(_leftHandedKey) ?? false;
+    final previewBytes = _prefs!.getInt(_photoPreviewCacheBytesKey);
+    photoPreviewCacheBytes.value =
+        PhotoDiskCacheConfig.previewBudgetChoices.contains(previewBytes)
+        ? previewBytes!
+        : PhotoDiskCacheConfig.defaultPreviewBudgetBytes;
     final calendarViewRaw = _prefs!.getString(_defaultCalendarViewKey);
     defaultCalendarView.value = CalendarView.values.firstWhere(
       (view) => view.slug == calendarViewRaw,
@@ -1251,6 +1265,8 @@ class AppSettings {
 
   Future<void> removeHost(int idx) async {
     if (idx >= 0 && idx < _hosts.length) {
+      // Its photos go with it, whoever was signed in (#4221).
+      await PhotoDiskCache.forget(host: _hosts[idx].hostAddress);
       // Forgetting a Quark forgets the session with it. Only touches storage
       // when there was actually a token — a host nobody signed into must not
       // drag the secure-storage plugin into the call.
@@ -1316,6 +1332,14 @@ class AppSettings {
   Future<void> setLeftHanded(bool enabled) async {
     leftHanded.value = enabled;
     await _prefs?.setBool(_leftHandedKey, enabled);
+  }
+
+  /// Keeps up to [bytes] of photo previews on this device, trimming what is
+  /// there now when it holds more.
+  Future<void> setPhotoPreviewCacheBytes(int bytes) async {
+    photoPreviewCacheBytes.value = bytes;
+    await _prefs?.setInt(_photoPreviewCacheBytesKey, bytes);
+    await PhotoDiskCache.trimPreviews();
   }
 
   /// Sets the view a bare `/calendar` opens on and persists it (#2521).
