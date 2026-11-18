@@ -137,7 +137,7 @@ func TestFilterEventChatMessages(t *testing.T) {
 	member := f.load(t, accessutil.Principal{UserID: f.userID})
 	system := f.load(t, accessutil.System)
 
-	for _, kind := range []eventbus.EventKind{eventbus.EventChatMessageCreated, eventbus.EventChatMessageDeleted} {
+	for _, kind := range []eventbus.EventKind{eventbus.EventChatMessageCreated, eventbus.EventChatMessageEdited, eventbus.EventChatMessageDeleted} {
 		toMember := eventbus.Event{Kind: kind, Data: eventbus.ChatMessageChanged{ChannelID: 7, MessageID: 3, Audience: []int64{f.userID}}}
 		toAdmin := eventbus.Event{Kind: kind, Data: eventbus.ChatMessageChanged{ChannelID: 7, MessageID: 3, Audience: []int64{adminID}}}
 		for _, tc := range []struct {

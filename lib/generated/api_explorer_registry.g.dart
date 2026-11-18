@@ -3828,6 +3828,78 @@ const List<ApiEndpoint> apiEndpoints = [
     ],
   ),
   ApiEndpoint(
+    method: 'PUT',
+    path: '/api/v0/chat/messages/{id}',
+    inSwagger: true,
+    tags: ['chat'],
+    summary: 'Edit a chat message',
+    description: 'Replaces the message\'s ciphertext with new base64 ciphertext the author\'s client encrypted under the channel key of keyVersion, sets editedAt, and sends the edited row, without its reactions, to the channel\'s readers as chat_message_edited. No earlier version is kept. Only the author may edit, and only while they hold read_messages; send_messages is not needed. Another reader gets 403, and anyone without read_messages 404, delegated managers, demoted authors and admins included. The ciphertext follows a post\'s rules: at most 16 KiB, and a nonce the channel already holds under keyVersion on another message is 409. A deleted message or a poll is 409.',
+    parameters: [
+      ApiParameter(
+        name: 'id',
+        location: ApiParameterLocation.path,
+        required: true,
+        type: 'integer',
+        description: 'Message id',
+      ),
+      ApiParameter(
+        name: 'body',
+        location: ApiParameterLocation.body,
+        required: true,
+        type: 'object',
+        description: 'The new encrypted message',
+      ),
+    ],
+    requestSchema: '{"type":"object","properties":{"ciphertext":{"type":"array","items":{"type":"integer"}},"keyVersion":{"type":"integer"}}}',
+    responses: [
+      ApiResponse(
+        status: '200',
+        description: 'OK',
+        schema: '{"type":"object","properties":{"authorId":{"description":"AuthorID is absent once the author\'s account is deleted.","type":"integer"},"channelId":{"type":"integer"},"ciphertext":{"description":"Ciphertext is nonce || XChaCha20-Poly1305 output under the channel key\\nof KeyVersion, with the channel id and key version as additional data\\n(docs/chat-security.md). Absent once deleted.","type":"array","items":{"type":"integer"}},"createdAt":{"type":"string"},"deletedAt":{"type":"string"},"editedAt":{"type":"string"},"id":{"type":"integer"},"keyVersion":{"type":"integer"},"poll":{"description":"Poll is set when the message is a poll (#3893): its settings, whether\\nit is closed, and in a ListMessages page the answers the caller may\\nsee. A deleted poll has none of it.","allOf":[{"type":"object","properties":{"allowChange":{"description":"AllowChange lets an account replace its answer; without it a second\\nanswer is refused.","type":"boolean"},"anonymous":{"description":"Anonymous serves answers without the account that gave them, and without\\nthe time they arrived, to everyone, the author included. The Quark\\nstill knows.","type":"boolean"},"answers":{"description":"Answers are the answers the caller may see in a ListMessages page, oldest\\nfirst, or by ciphertext when the poll is anonymous.","type":"array","items":{"type":"object","properties":{"ciphertext":{"description":"Ciphertext is nonce || XChaCha20-Poly1305 output over the answer\\npadded to PollAnswerPlaintextBytes, under the channel key of\\nKeyVersion (docs/chat-security.md).","type":"array","items":{"type":"integer"}},"createdAt":{"description":"CreatedAt is when the answer was stored, omitted on an anonymous poll.","type":"string"},"id":{"description":"ID is the stored row on a poll that names who answered. On an anonymous\\npoll it is an opaque id, stable when that account changes its answer,\\nthat does not follow arrival order.","type":"integer"},"keyVersion":{"type":"integer"},"messageId":{"type":"integer"},"mine":{"description":"Mine is whether the caller gave this answer. It is false on an event.","type":"boolean"},"updatedAt":{"description":"UpdatedAt is when the answer last changed, omitted on an anonymous poll.","type":"string"},"userId":{"description":"UserID is who answered, absent when the poll is anonymous.","type":"integer"}}}},"closed":{"description":"Closed is whether the poll has stopped taking answers: ClosedAt is set\\nor ClosesAt has passed.","type":"boolean"},"closedAt":{"description":"ClosedAt is when the author closed the poll by hand.","type":"string"},"closesAt":{"description":"ClosesAt, when set, is when the poll stops taking answers. Posting\\nrefuses a time in the past or more than a year ahead.","type":"string"},"resultsAfterClose":{"description":"ResultsAfterClose shows the answers only to the author until the poll\\ncloses; everyone else sees only their own.","type":"boolean"}}}]},"reactions":{"description":"Reactions are the message\'s reactions, oldest first, in a\\nListMessages page. A deleted message has none: they go with its\\nciphertext.","type":"array","items":{"type":"object","properties":{"ciphertext":{"description":"Ciphertext is nonce || XChaCha20-Poly1305 output under the channel key\\nof KeyVersion, with the channel, key version, message and reacting\\naccount as additional data (docs/chat-security.md).","type":"array","items":{"type":"integer"}},"createdAt":{"type":"string"},"id":{"type":"integer"},"keyVersion":{"description":"KeyVersion is the channel key the reaction was encrypted under, which\\nneedn\'t be its message\'s.","type":"integer"},"messageId":{"type":"integer"},"userId":{"type":"integer"}}}}}}',
+      ),
+      ApiResponse(
+        status: '400',
+        description: 'ciphertext too short, or a key version the channel doesn\'t have',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '401',
+        description: 'Unauthorized',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '403',
+        description: 'the caller reads the channel but didn\'t write the message',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '404',
+        description: 'no such message, or the caller lacks read_messages in its channel',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '409',
+        description: 'the message was deleted, is a poll, or another message holds this nonce',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '413',
+        description: 'ciphertext over 16 KiB',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '429',
+        description: 'the caller sent too many of these in a short time; the limit is per account',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '500',
+        description: 'Internal Server Error',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+    ],
+  ),
+  ApiEndpoint(
     method: 'DELETE',
     path: '/api/v0/chat/messages/{id}',
     inSwagger: true,

@@ -55,6 +55,48 @@ func (q *Queries) CreateChatMessage(ctx context.Context, arg CreateChatMessagePa
 	return i, err
 }
 
+const editChatMessage = `-- name: EditChatMessage :one
+UPDATE chat_messages
+SET ciphertext = $1, key_version = $2, nonce = $3,
+    edited_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+WHERE id = $4 AND deleted_at IS NULL
+RETURNING id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at, nonce, client_message_id
+`
+
+type EditChatMessageParams struct {
+	Ciphertext []byte
+	KeyVersion int64
+	Nonce      []byte
+	ID         int64
+}
+
+// EditChatMessage replaces a live message's ciphertext with its author's new
+// one and stamps edited_at (#2426). nonce follows the new ciphertext, so the
+// unique index keeps refusing a replay of what the message says now. A
+// deleted message matches nothing.
+func (q *Queries) EditChatMessage(ctx context.Context, arg EditChatMessageParams) (ChatMessage, error) {
+	row := q.db.QueryRowContext(ctx, editChatMessage,
+		arg.Ciphertext,
+		arg.KeyVersion,
+		arg.Nonce,
+		arg.ID,
+	)
+	var i ChatMessage
+	err := row.Scan(
+		&i.ID,
+		&i.ChannelID,
+		&i.AuthorID,
+		&i.KeyVersion,
+		&i.Ciphertext,
+		&i.CreatedAt,
+		&i.EditedAt,
+		&i.DeletedAt,
+		&i.Nonce,
+		&i.ClientMessageID,
+	)
+	return i, err
+}
+
 const getChatMessage = `-- name: GetChatMessage :one
 SELECT id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at, nonce, client_message_id FROM chat_messages WHERE id = $1
 `

@@ -596,7 +596,7 @@ func messageFromRow(row db.ChatMessage) Message {
 }
 
 // publishMessage tells a channel's readers about a message: the whole row
-// when it was created, only its id when deleted.
+// when it was created or edited, only its id when deleted.
 func publishMessage(ctx context.Context, queries db.Querier, bus *eventbus.Bus, kind eventbus.EventKind, message Message) error {
 	if bus == nil {
 		return nil
@@ -606,7 +606,7 @@ func publishMessage(ctx context.Context, queries db.Querier, bus *eventbus.Bus, 
 		return err
 	}
 	data := eventbus.ChatMessageChanged{ChannelID: message.ChannelID, MessageID: message.ID, Audience: audience}
-	if kind == eventbus.EventChatMessageCreated {
+	if kind != eventbus.EventChatMessageDeleted {
 		data.Message = message
 	}
 	bus.Publish(eventbus.Event{Kind: kind, Data: data})

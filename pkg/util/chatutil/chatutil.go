@@ -39,8 +39,10 @@
 // actor's client signs.
 //
 // Messages (#2418) are ciphertext under a channel key version; the Quark
-// stores, pages and tombstones them and never opens one. Posting and deleting
-// publish chat_message_created and chat_message_deleted to the channel's
+// stores, pages and tombstones them and never opens one. Its author may
+// replace one's ciphertext (#2426), which sets editedAt and keeps no earlier
+// version. Posting, editing and deleting publish chat_message_created,
+// chat_message_edited and chat_message_deleted to the channel's
 // readers, the holders of read_messages, alone: delegated managers and admins
 // who aren't readers hear neither, and like everyone else get
 // ErrChannelNotFound for its messages.
@@ -2123,6 +2125,93 @@ func DeleteMessage(params DeleteMessageParams) (DeleteMessageResult, error) {
 		log.Printf("chat: message %d deleted but not announced: %v", row.ID, err)
 	}
 	return DeleteMessageResult{Message: message}, nil
+}
+
+var (
+	// ErrNotEditAuthor reports editing someone else's message. Editing is
+	// authorship, not a permission: no set lets anyone else do it.
+	ErrNotEditAuthor = errors.New("only its author can edit a message")
+	// ErrPollNotEditable reports editing a poll, whose answers were given to
+	// the question as it was posted.
+	ErrPollNotEditable = errors.New("a poll can't be edited")
+)
+
+// EditMessageParams replaces one message's ciphertext.
+type EditMessageParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_message_edited. Nil skips it.
+	EventBus   *eventbus.Bus
+	Principal  accessutil.Principal
+	MessageID  int64
+	KeyVersion int64
+	Ciphertext []byte
+}
+
+// EditMessageResult is the message as edited, without its reactions.
+type EditMessageResult struct {
+	Message Message
+}
+
+// EditMessage replaces a message's ciphertext with its author's new one, sets
+// editedAt, and sends the row to the channel's readers as chat_message_edited
+// (#2426). No earlier version is kept. Only the author edits, and only while
+// they hold read_messages: anyone without it, an author who was removed or
+// demoted to a manage-only set included, gets ErrMessageNotFound, and another
+// reader ErrNotEditAuthor. send_messages is not needed. A deleted message is
+// ErrMessageDeleted and a poll ErrPollNotEditable. The ciphertext is checked
+// like a post's, its nonce included: one the channel already holds under
+// KeyVersion on another message is ErrDuplicateMessage.
+func EditMessage(params EditMessageParams) (EditMessageResult, error) {
+	if len(params.Ciphertext) > MaxCiphertextBytes {
+		return EditMessageResult{}, ErrMessageTooLarge
+	}
+	if len(params.Ciphertext) < MinCiphertextBytes {
+		return EditMessageResult{}, ErrInvalidMessage
+	}
+	if params.Database == nil {
+		return EditMessageResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	row, _, err := readableMessage(params.Ctx, queries, params.Principal, params.MessageID)
+	if err != nil {
+		return EditMessageResult{}, err
+	}
+	if !row.AuthorID.Valid || row.AuthorID.Int64 != params.Principal.UserID {
+		return EditMessageResult{}, ErrNotEditAuthor
+	}
+	if row.DeletedAt.Valid {
+		return EditMessageResult{}, ErrMessageDeleted
+	}
+	if _, err := queries.GetChatPoll(params.Ctx, row.ID); err == nil {
+		return EditMessageResult{}, ErrPollNotEditable
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return EditMessageResult{}, err
+	}
+	versions, err := queries.ListChatChannelKeys(params.Ctx, row.ChannelID)
+	if err != nil {
+		return EditMessageResult{}, err
+	}
+	if !slices.ContainsFunc(versions, func(k db.ChatChannelKey) bool { return k.Version == params.KeyVersion }) {
+		return EditMessageResult{}, ErrInvalidMessage
+	}
+	row, err = queries.EditChatMessage(params.Ctx, db.EditChatMessageParams{
+		ID: row.ID, KeyVersion: params.KeyVersion, Ciphertext: params.Ciphertext, Nonce: params.Ciphertext[:NonceBytes],
+	})
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// Deleted between the read above and the update.
+		return EditMessageResult{}, ErrMessageDeleted
+	case sqlutil.IsUniqueConstraintErr(err):
+		return EditMessageResult{}, ErrDuplicateMessage
+	case err != nil:
+		return EditMessageResult{}, err
+	}
+	message := messageFromRow(row)
+	if err := publishMessage(params.Ctx, queries, params.EventBus, eventbus.EventChatMessageEdited, message); err != nil {
+		log.Printf("chat: message %d edited but not announced: %v", row.ID, err)
+	}
+	return EditMessageResult{Message: message}, nil
 }
 
 // Reaction limits (#2426). A reaction's ciphertext is a padded emoji under

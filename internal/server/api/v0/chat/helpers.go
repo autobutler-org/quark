@@ -130,7 +130,7 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, chatutil.ErrReadOnly), errors.Is(err, chatutil.ErrNotMessageAuthor),
 		errors.Is(err, chatutil.ErrNoReactions), errors.Is(err, chatutil.ErrNotReactionAuthor),
 		errors.Is(err, chatutil.ErrNoAnswers), errors.Is(err, chatutil.ErrNotPollAuthor),
-		errors.Is(err, chatutil.ErrCannotAttach):
+		errors.Is(err, chatutil.ErrCannotAttach), errors.Is(err, chatutil.ErrNotEditAuthor):
 		return serverutil.Forbidden(err)
 	case errors.Is(err, chatutil.ErrInvalidPerms), errors.Is(err, chatutil.ErrNoPerms):
 		return serverutil.NewResponse().WithStatusCode(http.StatusUnprocessableEntity).WithError(err)
@@ -141,7 +141,7 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, chatutil.ErrMessageDeleted), errors.Is(err, chatutil.ErrTooManyReactions),
 		errors.Is(err, chatutil.ErrDuplicateMessage),
 		errors.Is(err, chatutil.ErrPollClosed), errors.Is(err, chatutil.ErrAlreadyAnswered),
-		errors.Is(err, chatutil.ErrAttachmentExists):
+		errors.Is(err, chatutil.ErrAttachmentExists), errors.Is(err, chatutil.ErrPollNotEditable):
 		return serverutil.Conflict(err)
 	case errors.Is(err, chatutil.ErrInvalidName), errors.Is(err, chatutil.ErrInvalidTopic),
 		errors.Is(err, chatutil.ErrDefaultChannel), errors.Is(err, chatutil.ErrDefaultEveryone), errors.Is(err, chatutil.ErrLastOwner),

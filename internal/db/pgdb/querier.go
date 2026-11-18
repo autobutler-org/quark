@@ -209,6 +209,11 @@ type Querier interface {
 	// unreadable; DeleteVaultItems goes with it.
 	DeleteVaultKey(ctx context.Context, userID int64) error
 	DemoteFromAdmin(ctx context.Context, username string) (DemoteFromAdminRow, error)
+	// EditChatMessage replaces a live message's ciphertext with its author's new
+	// one and stamps edited_at (#2426). nonce follows the new ciphertext, so the
+	// unique index keeps refusing a replay of what the message says now. A
+	// deleted message matches nothing.
+	EditChatMessage(ctx context.Context, arg EditChatMessageParams) (ChatMessage, error)
 	// Makes sure a periodic task has a row for ClaimMaintenanceRun to take, dated
 	// so that a task that has never run is due.
 	EnsureMaintenanceRun(ctx context.Context, name string) error

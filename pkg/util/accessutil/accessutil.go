@@ -565,7 +565,7 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 	// doesn't add anyone to a channel (#2418), so this goes before the admin
 	// pass below.
 	if evt.Kind == eventbus.EventChatMessageCreated || evt.Kind == eventbus.EventChatMessageDeleted ||
-		evt.Kind == eventbus.EventChatPollClosed {
+		evt.Kind == eventbus.EventChatMessageEdited || evt.Kind == eventbus.EventChatPollClosed {
 		changed, ok := evt.Data.(eventbus.ChatMessageChanged)
 		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
 	}
