@@ -871,8 +871,10 @@ open.
 2. Send `hi bob`.
 3. As `bob`, open chat.
 4. As `bob`, tap **Message** on `ada` in `general`'s member list.
-5. As `ada`, tap **Message someone** in the top bar, pick `bob` and `carol`, and tap **Message**.
+5. As `ada`, in the conversation with `bob`, open its settings, tap **Add people**, pick `carol`, and tap
+   **Message**.
 6. As `carol`, look at the channel list, and at the list with every channel an admin can manage.
+7. As `bob`, open the `ada, carol` conversation.
 
 **Expected result:**
 
@@ -881,15 +883,19 @@ open.
 - After step 3, `bob` has the conversation under **Direct messages**, called `ada`, with `hi bob` in it and its
   unread count.
 - After step 4, `bob` lands in the same conversation, not a new one.
-- After step 5, a second conversation opens, called `bob, carol`. `hi bob` is not in it.
-- After step 6, `carol` sees the `ada, bob, carol` conversation she is in, and the one between `ada` and `bob`
-  nowhere, as an admin or otherwise.
+- After step 5, a second conversation opens, called `bob, carol`. `hi bob` is not in it. Its first line reads
+  "ada started this conversation by adding people to an earlier one. Messages from before stay there."
+- After step 6, `carol` sees the conversation she is in, called `ada, bob`, with the same first line. The one
+  between `ada` and `bob` is nowhere, as an admin or otherwise.
+- After step 7, `bob` sees the same first line, whether or not he had chat open in step 5. The line adds
+  nothing to the conversation's unread count.
 
 **Notes:**
 
 - The same people always get the same conversation. Adding someone means starting a new conversation with
   everyone, so a newcomer never reads what was said before they were in it.
-- A conversation has no settings: no name, no members to change, and no leaving or deleting it.
+- A conversation's only setting is **Add people**: no name, no members to change, and no leaving or deleting
+  it.
 - **Message** is offered on every account but your own, and on the Users page in each account's menu.
 - On a Quark where you are the only account, **Message someone** says that no one else has an account yet, and
   there is no one to pick.

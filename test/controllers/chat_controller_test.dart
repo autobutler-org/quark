@@ -992,6 +992,55 @@ void main() {
       chat.controller.dispose();
     });
 
+    // #2423: adding someone opens a new conversation that says so.
+    test(
+      'adding people forks a new conversation that opens with a line',
+      () async {
+        final chat = FakeChat();
+        await chat.controller.refresh();
+        await chat.controller.loadPeople();
+        final pair = await chat.controller.startConversation({8});
+        chat.controller.select('${pair?.id}');
+        await chat.controller.refresh();
+        expect(chat.controller.peopleToAdd.map((p) => p.name), ['cy']);
+        chat.calls.clear();
+
+        final group = await chat.controller.addPeople({9});
+
+        expect(chat.calls.first, 'open dm 8,9 from ${pair?.id}');
+        expect(group?.forked, isTrue);
+        chat.controller.select('${group?.id}');
+        await chat.controller.refresh();
+        chat.opened[group!.id]!.hasOlder = false;
+        final items = chat.controller.messageItems;
+        expect(items.last.id, ChatController.forkLineId);
+        expect(items.last.kind, ChatMessageKind.system);
+        expect(
+          items.last.body,
+          'ada started this conversation by adding people to an earlier one. '
+          'Messages from before stay there.',
+        );
+        expect(chat.controller.directMessageItems.last.unreadCount, 0);
+
+        // Until the oldest message is loaded, the line waits at the top.
+        chat.opened[group.id]!.hasOlder = true;
+        expect(
+          chat.controller.messageItems.map((i) => i.id),
+          isNot(contains(ChatController.forkLineId)),
+        );
+
+        chat.controller.select('${pair?.id}');
+        await chat.controller.refresh();
+        chat.opened[pair!.id]!.hasOlder = false;
+        expect(
+          chat.controller.messageItems.map((i) => i.id),
+          isNot(contains(ChatController.forkLineId)),
+          reason: 'the conversation it came from has no line',
+        );
+        chat.controller.dispose();
+      },
+    );
+
     test('an admin manages nothing in a direct message', () async {
       final chat = FakeChat(isAdmin: true);
       await chat.controller.refresh();

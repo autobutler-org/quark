@@ -49,14 +49,19 @@ class ChatChannelsService with AuthenticatedService {
   }
 
   /// Opens the direct message between the signed-in account and [userIds]:
-  /// the one these people already have, or a new one.
+  /// the one these people already have, or a new one. [fromChannelId] is
+  /// the direct message people are being added to, which marks a new one as
+  /// forked from it.
   ///
   /// api: POST /api/v0/chat/dms
-  static Future<ChatChannel> openDirectMessage(List<int> userIds) async {
+  static Future<ChatChannel> openDirectMessage(
+    List<int> userIds, {
+    int? fromChannelId,
+  }) async {
     final response = await instance.authenticatedPost(
       apiBaseUri.resolve('/api/v0/chat/dms'),
       headers: _jsonHeaders,
-      body: jsonEncode({'userIds': userIds}),
+      body: jsonEncode({'userIds': userIds, 'fromChannelId': ?fromChannelId}),
     );
     throwUnlessOk(response, 'open a direct message');
     return ChatChannel.fromJson(_json(response));

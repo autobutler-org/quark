@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/chat_channel_share_target.dart';
 import 'package:quark/controllers/chat_controller.dart';
+import 'package:quark/models/chat_channel.dart';
 import 'package:quark/controllers/chat_messages_controller.dart';
 import 'package:quark/controllers/chat_unread_controller.dart';
 import 'package:quark/controllers/sidebar_controller.dart';
@@ -63,7 +64,8 @@ import 'package:url_launcher/url_launcher.dart';
 /// message, the same one every time for the same people (#2497, #2423), as
 /// does Message on an account in the member list. Direct messages are listed
 /// under their own heading, named for their people, and offer no settings,
-/// leaving or deleting. A private channel's header carries a
+/// leaving or deleting: only Add people, which starts a new one with everyone
+/// and opens with a line saying so. A private channel's header carries a
 /// lock that says the same. The channel header's settings (#2422), with
 /// leave and delete set apart below a divider (#2498), edit the name and
 /// topic and delete, for holders of
@@ -467,7 +469,24 @@ class _ChatPageState extends State<ChatPage>
     );
   }
 
-  Future<void> _messageSomeone() async {
+  Future<void> _messageSomeone() => _pickPeople(
+    people: () => _controller.people,
+    start: (ids) => _controller.startConversation(ids),
+  );
+
+  /// Adds people to the open direct message by starting a new one with
+  /// everyone (#2423), which opens with a line saying so.
+  Future<void> _addPeople() => _pickPeople(
+    people: () => _controller.peopleToAdd,
+    start: (ids) => _controller.addPeople(ids),
+  );
+
+  /// Asks who to message from [people] and goes to the conversation [start]
+  /// opens with their ids.
+  Future<void> _pickPeople({
+    required List<PrincipalItem> Function() people,
+    required Future<ChatChannel?> Function(Set<int> ids) start,
+  }) async {
     _controller.clearSaveError();
     unawaited(_controller.loadPeople());
     // Not disposed, for the same reason as in _createChannel.
@@ -477,7 +496,7 @@ class _ChatPageState extends State<ChatPage>
       builder: (dialogContext) => ListenableBuilder(
         listenable: Listenable.merge([_controller, picked]),
         builder: (dialogContext, _) => QuarkStartConversationDialog(
-          people: _controller.people,
+          people: people(),
           selected: picked.value,
           isLoading: _controller.isLoadingPeople,
           loadError: _controller.peopleError == null
@@ -489,7 +508,7 @@ class _ChatPageState extends State<ChatPage>
               ? ({...picked.value}..remove(person))
               : {...picked.value, person},
           onStart: () async {
-            final channel = await _controller.startConversation({
+            final channel = await start({
               for (final person in picked.value) person.id,
             });
             if (channel == null || !dialogContext.mounted) return;
@@ -703,6 +722,7 @@ class _ChatPageState extends State<ChatPage>
                           onSearch: c.canSearch ? c.toggleSearch : null,
                           onEdit: c.canManageSelected ? _editChannel : null,
                           onMembers: c.canManageMembers ? _openMembers : null,
+                          onAddPeople: channel.isDirect ? _addPeople : null,
                           onDelete: c.canManageSelected && !channel.isDefault
                               ? _deleteChannel
                               : null,

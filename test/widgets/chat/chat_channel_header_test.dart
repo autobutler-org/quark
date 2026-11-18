@@ -68,6 +68,29 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('a direct message offers Add people alone at $size', (
+      tester,
+    ) async {
+      final log = <String>[];
+      await pumpHeader(
+        tester,
+        size,
+        ChatChannelHeader(
+          name: 'bob, cy',
+          isDirect: true,
+          onAddPeople: () => log.add('add'),
+        ),
+      );
+      await openMenu(tester);
+
+      expect(find.text('Add people'), findsOneWidget);
+      expect(key('chat_channel_menu_divider'), findsNothing);
+      await tester.tap(key('chat_channel_add_people'));
+      await tester.pumpAndSettle();
+      expect(log, ['add']);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('no divider without both kinds at $size', (tester) async {
       await pumpHeader(
         tester,

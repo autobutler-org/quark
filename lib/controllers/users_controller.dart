@@ -11,7 +11,8 @@ typedef AccountActionFn = Future<void> Function(String username);
 typedef DeleteUserFn = Future<int> Function(String username);
 typedef ReadAccessRequestsFn = Future<bool> Function();
 typedef SetAccessRequestsFn = Future<bool> Function(bool enabled);
-typedef OpenDirectMessageFn = Future<ChatChannel> Function(List<int> userIds);
+typedef OpenDirectMessageFn =
+    Future<ChatChannel> Function(List<int> userIds, {int? fromChannelId});
 typedef CreateUserFn =
     Future<UserAccount> Function({
       required String username,

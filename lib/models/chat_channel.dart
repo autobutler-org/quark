@@ -18,6 +18,8 @@ class ChatChannel {
     this.lastReadMessageId = 0,
     this.kind = channelKind,
     this.members = const [],
+    this.forked = false,
+    this.createdAt,
   });
 
   /// [kind] of a named channel.
@@ -66,6 +68,13 @@ class ChatChannel {
   /// A direct message's accounts, this one included; empty for a channel.
   final List<ChatMemberUser> members;
 
+  /// Whether this direct message was started by adding people to an
+  /// earlier one, whose messages stay there (#2423).
+  final bool forked;
+
+  /// When the channel was made; null from a Quark that sends none.
+  final DateTime? createdAt;
+
   /// Whether this is a direct message.
   bool get isDirect => kind == directKind;
 
@@ -101,6 +110,8 @@ class ChatChannel {
     unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
     lastReadMessageId: (json['lastReadMessageId'] as num?)?.toInt() ?? 0,
     kind: json['kind'] as String? ?? channelKind,
+    forked: json['forked'] as bool? ?? false,
+    createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
     members: [
       for (final m in json['members'] as List? ?? const [])
         ChatMemberUser.fromJson(m as Map<String, dynamic>),

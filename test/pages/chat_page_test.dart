@@ -1250,7 +1250,71 @@ void main() {
       find.byKey(const ValueKey('channel_list_dm_header')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('chat_channel_settings')), findsNothing);
+    await tapKey(tester, 'chat_channel_settings');
+    expect(
+      find.byKey(const ValueKey('chat_channel_add_people')),
+      findsOneWidget,
+    );
+    for (final k in ['edit', 'members', 'leave', 'delete']) {
+      expect(find.byKey(ValueKey('chat_channel_$k')), findsNothing);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  // #2423: Add people in a direct message forks a new one, which says so.
+  testWidgets('adds people to a direct message as a new one', (tester) async {
+    final fake = FakeChat(
+      channels: [
+        ...fakeChannels,
+        ChatChannel(
+          id: 5,
+          name: '',
+          kind: ChatChannel.directKind,
+          isPrivate: true,
+          permissions: ChatPermissionPreset.member.permissions,
+          members: const [
+            ChatMemberUser(id: 7, username: 'ada'),
+            ChatMemberUser(id: 8, username: 'bob'),
+          ],
+        ),
+      ],
+    );
+    final (r, _) = await pumpChat(
+      tester,
+      wide,
+      location: '/chat/5',
+      chat: fake,
+    );
+
+    await tapKey(tester, 'chat_channel_settings');
+    await tapKey(tester, 'chat_channel_add_people');
+    expect(
+      find.byKey(const ValueKey('principal_option_user_8')),
+      findsNothing,
+      reason: 'bob is already in it',
+    );
+    await tapKey(tester, 'principal_option_user_9');
+    await tapKey(tester, 'start_conversation_submit');
+
+    expect(fake.calls, contains('open dm 8,9 from 5'));
+    final forked = fake.channels.last;
+    expect(at(r), '/chat/${forked.id}');
+    expect(forked.forked, isTrue);
+
+    // The line opens the new conversation as a system line: no body to
+    // long-press, so no Edit, Reply or Delete on it.
+    fake.opened[forked.id]!
+      ..hasOlder = false
+      ..setEntries(const []);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('message_dm_forked')), findsOneWidget);
+    expect(
+      find.textContaining('started this conversation by adding people'),
+      findsOneWidget,
+    );
+    for (final k in ['body', 'reply', 'edit', 'delete']) {
+      expect(find.byKey(ValueKey('message_${k}_dm_forked')), findsNothing);
+    }
     expect(tester.takeException(), isNull);
   });
 
