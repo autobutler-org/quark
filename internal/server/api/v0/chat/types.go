@@ -59,6 +59,9 @@ type createChannelBody struct {
 // openDirectMessageBody names the other accounts in a direct message.
 type openDirectMessageBody struct {
 	UserIDs []int64 `json:"userIds"`
+	// FromChannelID is the direct message the caller is adding people to,
+	// which marks a new one as forked from it.
+	FromChannelID int64 `json:"fromChannelId,omitempty"`
 }
 
 // updateChannelBody changes a channel's name, topic or both. A field left out

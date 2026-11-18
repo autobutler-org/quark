@@ -315,3 +315,64 @@ func TestDirectMessageEditAndTypingSkipANonMemberAdmin(t *testing.T) {
 		}
 	}
 }
+
+// TestDirectMessageForkIsMarked opens a bigger conversation from a direct
+// message and marks it as started from an earlier one, for every member, and
+// refuses a fork that drops someone or comes from a conversation the caller
+// isn't in (#2423).
+func TestDirectMessageForkIsMarked(t *testing.T) {
+	f := newFixture(t)
+	pair := f.dm(t, "bob", "carol").Channel
+	fork := func(as string, from int64, with ...string) (chatutil.OpenDirectMessageResult, error) {
+		ids := []int64{}
+		for _, name := range with {
+			ids = append(ids, f.users[name])
+		}
+		return chatutil.OpenDirectMessage(chatutil.OpenDirectMessageParams{
+			Ctx: context.Background(), Database: f.database, EventBus: f.bus, Principal: f.as(as), UserIDs: ids, FromChannelID: from,
+		})
+	}
+
+	if _, err := fork("dave", pair.ID, "bob", "carol"); !errors.Is(err, chatutil.ErrChannelNotFound) {
+		t.Errorf("fork from a conversation dave isn't in = %v, want ErrChannelNotFound", err)
+	}
+	if _, err := fork("bob", pair.ID, "dave"); !errors.Is(err, chatutil.ErrDirectMessageFork) {
+		t.Errorf("fork that drops carol = %v, want ErrDirectMessageFork", err)
+	}
+	if _, err := fork("bob", pair.ID, "carol"); !errors.Is(err, chatutil.ErrDirectMessageFork) {
+		t.Errorf("fork that adds no one = %v, want ErrDirectMessageFork", err)
+	}
+	general := f.general(t)
+	if _, err := fork("bob", general.ID, "carol", "dave"); !errors.Is(err, chatutil.ErrChannelNotFound) {
+		t.Errorf("fork from a named channel = %v, want ErrChannelNotFound", err)
+	}
+
+	group, err := fork("bob", pair.ID, "carol", "dave")
+	if err != nil || !group.Created || !group.Channel.Forked {
+		t.Fatalf("fork = %+v, %v; want a new conversation marked as forked", group, err)
+	}
+	if pair.Forked {
+		t.Errorf("the conversation it came from is marked as forked")
+	}
+	listed, err := chatutil.ListChannels(chatutil.ListChannelsParams{Ctx: context.Background(), Database: f.database, Principal: f.as("dave")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, channel := range listed.Channels {
+		if channel.ID == group.Channel.ID && !channel.Forked {
+			t.Errorf("dave's list doesn't mark the fork")
+		}
+	}
+
+	// The same people already have it: reopening is not a fork, and a
+	// conversation first opened plainly stays unmarked.
+	plain := f.dm(t, "carol", "dave").Channel
+	again, err := fork("carol", plain.ID, "dave", "bob")
+	if err != nil || again.Created || again.Channel.ID != group.Channel.ID || !again.Channel.Forked {
+		t.Errorf("reopen through a fork = %+v, %v; want the existing conversation unchanged", again, err)
+	}
+	trio := f.dm(t, "admin", "bob", "dave").Channel
+	if trio.Forked {
+		t.Errorf("a conversation opened plainly is marked as forked")
+	}
+}

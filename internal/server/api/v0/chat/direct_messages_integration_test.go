@@ -59,3 +59,27 @@ func TestDirectMessageRoutes(t *testing.T) {
 		t.Errorf("member renaming the dm = %d, want 400", status)
 	}
 }
+
+// TestDirectMessageForkRoute adds someone to a direct message over HTTP: a
+// new conversation marked forked, and a 404 from one the caller isn't in.
+func TestDirectMessageForkRoute(t *testing.T) {
+	h := newHarness(t)
+	id := func(name string) string { return strconv.FormatInt(h.users[name], 10) }
+	_, pair := h.do(t, http.MethodPost, "/chat/dms", "bob", `{"userIds":[`+id("carol")+`]}`)
+	var from struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(pair), &from); err != nil {
+		t.Fatal(err)
+	}
+	fork := `{"userIds":[` + id("carol") + `,` + id("dave") + `],"fromChannelId":` + strconv.FormatInt(from.ID, 10) + `}`
+	if status, _ := h.do(t, http.MethodPost, "/chat/dms", "dave", fork); status != http.StatusNotFound {
+		t.Errorf("fork by someone outside it = %d, want 404", status)
+	}
+	if status, got := h.do(t, http.MethodPost, "/chat/dms", "bob", fork); status != http.StatusCreated || !strings.Contains(got, `"forked":true`) {
+		t.Errorf("fork = %d %s, want 201 with forked", status, got)
+	}
+	if strings.Contains(pair, `"forked"`) {
+		t.Errorf("a plain direct message says forked: %s", pair)
+	}
+}

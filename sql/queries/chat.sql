@@ -13,6 +13,7 @@ SELECT
     chat_channels.is_default,
     chat_channels.created_by,
     chat_channels.created_at,
+    chat_channels.forked,
     chat_channel_members.permissions,
     CAST(CASE WHEN NOT EXISTS (
         SELECT
@@ -141,12 +142,13 @@ VALUES
 
 -- CreateChatDirectMessage adds a direct message (#2423) unless one with the
 -- same dm_key already exists, in which case it returns no row: the unique
--- index on dm_key settles two openers racing, on either engine.
+-- index on dm_key settles two openers racing, on either engine. forked is 1
+-- for one started by adding people to another.
 -- name: CreateChatDirectMessage :one
 INSERT INTO
-    chat_channels (server_id, kind, created_by, dm_key)
+    chat_channels (server_id, kind, created_by, dm_key, forked)
 VALUES
-    ((SELECT MIN(id) FROM chat_servers), 'dm', sqlc.arg(created_by), sqlc.arg(dm_key)) ON CONFLICT (dm_key) DO NOTHING RETURNING *;
+    ((SELECT MIN(id) FROM chat_servers), 'dm', sqlc.arg(created_by), sqlc.arg(dm_key), sqlc.arg(forked)) ON CONFLICT (dm_key) DO NOTHING RETURNING *;
 
 -- name: GetChatDirectMessage :one
 SELECT * FROM chat_channels WHERE dm_key = sqlc.arg(dm_key) LIMIT 1;

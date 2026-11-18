@@ -183,6 +183,7 @@ func channelFromRow(row db.ChatChannel, perms Perms, private bool) Channel {
 		Permissions: perms,
 		CreatedBy:   row.CreatedBy.Int64,
 		CreatedAt:   row.CreatedAt,
+		Forked:      row.Forked != 0,
 	}
 }
 
@@ -262,6 +263,38 @@ func directMembers(ctx context.Context, queries db.Querier, channelID int64) ([]
 		}
 	}
 	return members, err
+}
+
+// checkFork checks that a direct message for the sorted members may be
+// started from direct message fromID by userID: they are in it, and the
+// members keep everyone in it and add someone.
+func checkFork(ctx context.Context, queries db.Querier, userID, fromID int64, members []int64) error {
+	from, err := queries.GetChatChannel(ctx, fromID)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && from.Kind != KindDirect) {
+		return ErrChannelNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if perms, err := resolvePerms(ctx, queries, fromID, userID); err != nil || perms == 0 {
+		if err == nil {
+			err = ErrChannelNotFound
+		}
+		return err
+	}
+	were, err := directMembers(ctx, queries, fromID)
+	if err != nil {
+		return err
+	}
+	if len(were) >= len(members) {
+		return ErrDirectMessageFork
+	}
+	for _, member := range were {
+		if _, found := slices.BinarySearch(members, member.ID); !found {
+			return ErrDirectMessageFork
+		}
+	}
+	return nil
 }
 
 // announce is publish for a channel whose kind the caller hasn't read: a

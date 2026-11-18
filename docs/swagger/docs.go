@@ -4862,7 +4862,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Opens the direct message (#2423) between the caller and the accounts named: the one these exact people already have, or a new one, which has no name, isn't listed to anyone outside it (admins included), and whose people never change. To add someone, open one with the bigger set. Each member holds the Member set. 1 to 15 other active accounts; repeats and the caller's own id are ignored. A new one publishes chat_channel_changed to its members.",
+                "description": "Opens the direct message (#2423) between the caller and the accounts named: the one these exact people already have, or a new one, which has no name, isn't listed to anyone outside it (admins included), and whose people never change. To add someone, open one with the bigger set. Each member holds the Member set. 1 to 15 other active accounts; repeats and the caller's own id are ignored. A new one publishes chat_channel_changed to its members. With fromChannelId, the caller is adding people to that direct message: they must be in it, and the set must keep everyone in it and add someone; a new one is then marked forked, so its members are told it started from an earlier conversation. Which one isn't stored.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4898,7 +4898,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "no one else, or too many people",
+                        "description": "no one else, too many people, or a fork that drops someone or adds no one",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -4910,7 +4910,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "an account that doesn't exist or isn't active",
+                        "description": "an account that doesn't exist or isn't active, or a fromChannelId the caller isn't in",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -13684,6 +13684,10 @@ const docTemplate = `{
                     "description": "CreatedBy is the account that created the channel; absent for general\nand for a channel whose creator was deleted.",
                     "type": "integer"
                 },
+                "forked": {
+                    "description": "Forked marks a direct message started by adding people to an earlier\none, whose messages stay there; false for anything else.",
+                    "type": "boolean"
+                },
                 "id": {
                     "type": "integer"
                 },
@@ -15976,6 +15980,10 @@ const docTemplate = `{
         "v0_chat.openDirectMessageBody": {
             "type": "object",
             "properties": {
+                "fromChannelId": {
+                    "description": "FromChannelID is the direct message the caller is adding people to,\nwhich marks a new one as forked from it.",
+                    "type": "integer"
+                },
                 "userIds": {
                     "type": "array",
                     "items": {
