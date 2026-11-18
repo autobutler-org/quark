@@ -8548,7 +8548,7 @@ const List<ApiEndpoint> apiEndpoints = [
         name: 'size',
         location: ApiParameterLocation.query,
         type: 'string',
-        description: 'Thumbnail size tier: sm (96px), md (240px), lg (400px). Defaults to lg.',
+        description: 'Thumbnail size tier: sm (96px), md (240px), lg (400px), cropped square; or preview, the whole photo uncropped with its long edge at most 2048px, always a JPEG, for a viewer to show before the original. A preview has the file\'s EXIF orientation applied but not the user\'s rotation, which a viewer applies to it as it does to the original. A preview is never made from a client\'s thumbnail, so one the device cannot render is a plain 404. Defaults to lg.',
       ),
       ApiParameter(
         name: 'v',
