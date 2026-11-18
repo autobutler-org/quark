@@ -86,7 +86,9 @@ func TestFilterEvent(t *testing.T) {
 }
 
 // TestFilterEventChatChannelChanged passes chat_channel_changed only to its
-// audience and to admins, and never sends the audience itself.
+// audience and to admins, and never sends the audience itself. A direct
+// message's, and every chat_key_needed and chat_key_granted, skip the admin
+// (#2423).
 func TestFilterEventChatChannelChanged(t *testing.T) {
 	f := newFixture(t)
 	carol := createUser(t, f.database, "carol")
@@ -98,6 +100,13 @@ func TestFilterEventChatChannelChanged(t *testing.T) {
 		Data: eventbus.ChatChannelChanged{ChannelID: 7, Audience: []int64{f.userID}},
 	}
 
+	direct := eventbus.Event{
+		Kind: eventbus.EventChatChannelChanged,
+		Data: eventbus.ChatChannelChanged{ChannelID: 7, Audience: []int64{f.userID}, Direct: true},
+	}
+	keyNeeded := eventbus.Event{Kind: eventbus.EventChatKeyNeeded, Data: evt.Data}
+	keyGranted := eventbus.Event{Kind: eventbus.EventChatKeyGranted, Data: evt.Data}
+
 	for _, tc := range []struct {
 		name   string
 		access accessutil.Access
@@ -106,6 +115,11 @@ func TestFilterEventChatChannelChanged(t *testing.T) {
 	}{
 		{name: "member", access: member, event: evt, want: true},
 		{name: "admin", access: admin, event: evt, want: true},
+		{name: "direct message member", access: member, event: direct, want: true},
+		{name: "direct message admin", access: admin, event: direct},
+		{name: "key needed member", access: member, event: keyNeeded, want: true},
+		{name: "key needed admin", access: admin, event: keyNeeded},
+		{name: "key granted admin", access: admin, event: keyGranted},
 		{name: "non-member", access: stranger, event: evt},
 		{name: "no data", access: member, event: eventbus.Event{Kind: eventbus.EventChatChannelChanged}},
 	} {

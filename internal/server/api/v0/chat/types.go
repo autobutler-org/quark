@@ -17,6 +17,7 @@ func (r *router) Routes() []*serverutil.Route {
 	return []*serverutil.Route{
 		listChannelsRoute,
 		createChannelRoute,
+		openDirectMessageRoute,
 		updateChannelRoute,
 		deleteChannelRoute,
 		listMembersRoute,
@@ -53,6 +54,11 @@ func (r *router) Routes() []*serverutil.Route {
 type createChannelBody struct {
 	Name  string `json:"name"`
 	Topic string `json:"topic"`
+}
+
+// openDirectMessageBody names the other accounts in a direct message.
+type openDirectMessageBody struct {
+	UserIDs []int64 `json:"userIds"`
 }
 
 // updateChannelBody changes a channel's name, topic or both. A field left out

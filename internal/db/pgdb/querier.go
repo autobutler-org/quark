@@ -77,6 +77,10 @@ type Querier interface {
 	CreateChatChannel(ctx context.Context, arg CreateChatChannelParams) (ChatChannel, error)
 	CreateChatChannelEvent(ctx context.Context, arg CreateChatChannelEventParams) (ChatChannelEvent, error)
 	CreateChatChannelKey(ctx context.Context, arg CreateChatChannelKeyParams) (ChatChannelKey, error)
+	// CreateChatDirectMessage adds a direct message (#2423) unless one with the
+	// same dm_key already exists, in which case it returns no row: the unique
+	// index on dm_key settles two openers racing, on either engine.
+	CreateChatDirectMessage(ctx context.Context, arg CreateChatDirectMessageParams) (ChatChannel, error)
 	// Chat messages (#2418). The Quark stores ciphertext and never opens it.
 	// CreateChatMessage stores a message. nonce is the ciphertext's first 24
 	// bytes, unique per channel and key version (#2487). client_message_id, when
@@ -244,6 +248,7 @@ type Querier interface {
 	GetChatAttachment(ctx context.Context, id string) (ChatAttachment, error)
 	GetChatChannel(ctx context.Context, id int64) (ChatChannel, error)
 	GetChatChannelEvent(ctx context.Context, arg GetChatChannelEventParams) (ChatChannelEvent, error)
+	GetChatDirectMessage(ctx context.Context, dmKey sql.NullString) (ChatChannel, error)
 	GetChatKeyGrant(ctx context.Context, arg GetChatKeyGrantParams) (ChatKeyGrant, error)
 	GetChatMessage(ctx context.Context, id int64) (ChatMessage, error)
 	// GetChatMessageByClientID finds the message an author already sent to a
@@ -324,8 +329,10 @@ type Querier interface {
 	ListAlbums(ctx context.Context, userID int64) ([]PhotoAlbum, error)
 	// ListAlbumsContainingPhoto lists the albums of one account that hold a photo.
 	ListAlbumsContainingPhoto(ctx context.Context, arg ListAlbumsContainingPhotoParams) ([]PhotoAlbum, error)
-	// ListAllChatChannels is every channel on the Quark, for an admin looking
-	// for the ones they are not in (#2422), ordered as ListChatChannelsForUser.
+	// ListAllChatChannels is every named channel on the Quark, for an admin
+	// looking for the ones they are not in (#2422), ordered as
+	// ListChatChannelsForUser. Direct messages are left out: they are for their
+	// members alone, admins included (#2423).
 	ListAllChatChannels(ctx context.Context) ([]ListAllChatChannelsRow, error)
 	// Every event of a calendar, for the iCalendar export and import (#1151).
 	ListCalendarEvents(ctx context.Context, calendarID int64) ([]ListCalendarEventsRow, error)

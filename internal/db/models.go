@@ -62,6 +62,7 @@ type ChatChannel struct {
 	IsDefault int64
 	CreatedBy sql.NullInt64
 	CreatedAt time.Time
+	DmKey     sql.NullString
 }
 
 type ChatChannelEvent struct {

@@ -58,10 +58,18 @@ func authorize(ctx context.Context, queries db.Querier, principal accessutil.Pri
 		return db.ChatChannel{}, 0, err
 	}
 	perms, err := resolvePerms(ctx, queries, channelID, principal.UserID)
+	direct := channel.Kind == KindDirect
 	switch {
 	case err != nil:
 		return db.ChatChannel{}, 0, err
-	case principal.IsAdmin || (perms != 0 && perms.Has(required)):
+	// A direct message is its members' alone: an admin outside it gets the
+	// 404 anyone else does (#2423), and nothing that needs a management
+	// permission applies to it.
+	case direct && perms == 0:
+		return db.ChatChannel{}, 0, ErrChannelNotFound
+	case direct && required != 0:
+		return db.ChatChannel{}, 0, ErrDirectMessage
+	case (principal.IsAdmin && !direct) || (perms != 0 && perms.Has(required)):
 		return channel, perms, nil
 	case perms == 0:
 		return db.ChatChannel{}, 0, ErrChannelNotFound
@@ -232,6 +240,42 @@ func afterMembershipChange(ctx context.Context, queries db.Querier, bus *eventbu
 	result, err := listMembers(ctx, queries, channelID, dataDir)
 	result.Event = &event
 	return result, err
+}
+
+// dmKey is a direct message's dm_key: its accounts' ids, sorted, joined by
+// commas.
+func dmKey(sorted []int64) string {
+	parts := make([]string, len(sorted))
+	for i, id := range sorted {
+		parts[i] = strconv.FormatInt(id, 10)
+	}
+	return strings.Join(parts, ",")
+}
+
+// directMembers is a direct message's accounts, by username.
+func directMembers(ctx context.Context, queries db.Querier, channelID int64) ([]MemberUser, error) {
+	rows, err := queries.ListChatChannelMembers(ctx, channelID)
+	members := make([]MemberUser, 0, len(rows))
+	for _, row := range rows {
+		if row.UserID.Valid {
+			members = append(members, MemberUser{ID: row.UserID.Int64, Username: row.Name})
+		}
+	}
+	return members, err
+}
+
+// announce is publish for a channel whose kind the caller hasn't read: a
+// direct message's event is marked Direct, so admins outside it don't hear
+// it. A channel it can't read is treated as one.
+func announce(ctx context.Context, queries db.Querier, bus *eventbus.Bus, channelID int64, audience []int64) {
+	if bus == nil {
+		return
+	}
+	channel, err := queries.GetChatChannel(ctx, channelID)
+	bus.Publish(eventbus.Event{
+		Kind: eventbus.EventChatChannelChanged,
+		Data: eventbus.ChatChannelChanged{ChannelID: channelID, Audience: audience, Direct: err != nil || channel.Kind == KindDirect},
+	})
 }
 
 // publish sends chat_channel_changed to an audience. Duplicates are harmless.

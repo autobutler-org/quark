@@ -530,6 +530,10 @@ type FilterEventResult struct {
 //     chat_poll_answer_changed and chat_poll_answers_changed pass only to the
 //     readers who may see that answer under the poll's settings. Admins get
 //     no pass: a message is for the people in the conversation.
+//   - chat_key_needed and chat_key_granted pass only to their audience, the
+//     members who can fill a grant or just got one: an admin who isn't in
+//     the channel holds no key to act on. chat_channel_changed for a direct
+//     message (#2423) passes only to its members too, admins included.
 //   - chat_read_marker_changed passes only to the account whose marker moved,
 //     so its other sessions clear their unread count. Admins get no pass here
 //     either.
@@ -556,7 +560,7 @@ type FilterEventResult struct {
 //   - chat_channel_changed carries no path and passes when the subscriber is
 //     in its audience: an account with a non-empty set on the channel before
 //     or after the change, which chatutil works out with ResolvePerms. Admins,
-//     who may manage any channel, hear it through the first rule.
+//     who may manage any named channel, hear it through the admin rule.
 //   - Anything else passes when its path is readable.
 func FilterEvent(params FilterEventParams) FilterEventResult {
 	evt := params.Event
@@ -584,6 +588,10 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 	if evt.Kind == eventbus.EventChatTyping {
 		changed, ok := evt.Data.(eventbus.ChatTyping)
 		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
+	}
+	if changed, ok := evt.Data.(eventbus.ChatChannelChanged); ok &&
+		(changed.Direct || evt.Kind == eventbus.EventChatKeyNeeded || evt.Kind == eventbus.EventChatKeyGranted) {
+		return FilterEventResult{Event: evt, Deliver: slices.Contains(changed.Audience, access.principal.UserID)}
 	}
 	if evt.Kind == eventbus.EventChatReadMarkerChanged {
 		changed, ok := evt.Data.(eventbus.ChatReadMarkerChanged)
@@ -648,7 +656,7 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 		}
 		evt.Data = access.RedactJob(job)
 		return FilterEventResult{Event: evt, Deliver: true}
-	case eventbus.EventChatChannelChanged, eventbus.EventChatKeyNeeded, eventbus.EventChatKeyGranted:
+	case eventbus.EventChatChannelChanged:
 		changed, ok := evt.Data.(eventbus.ChatChannelChanged)
 		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
 	default:

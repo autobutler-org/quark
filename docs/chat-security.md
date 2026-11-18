@@ -3,7 +3,7 @@
 Chat messages are end-to-end encrypted: only the members of a channel can read them, and the Quark stores
 ciphertext it can't open. This page covers the identity keys that make that possible (#2416) and what they
 protect against, then the channel keys and key grants built on them (#2417), then the messages encrypted under
-those keys (#2418), the files attached to them (#2425), the reactions on them (#2426) and the answers to polls (#3893). The password vault is
+those keys (#2418), the direct messages that use the same path (#2423), the files attached to them (#2425), the reactions on them (#2426) and the answers to polls (#3893). The password vault is
 encrypted with the same account keys, and [The vault](#the-vault) covers it.
 
 ## Identity keys
@@ -576,6 +576,34 @@ nothing until a channel is fetched and decrypted. Which of the two is an open de
 - `PUT /api/v0/chat/channels/:id/read` takes `{messageId}` and needs `read_messages`: anyone else gets 404,
   delegated managers and admins included, and so does an id that names no message in the channel.
 - `GET /api/v0/chat/channels` carries `unreadCount` on each channel.
+
+## Direct messages
+
+A direct message (#2423) is a channel of kind `dm`: no name, and a fixed set of accounts, each holding the Member
+set (`read_messages`, `send_messages`, `add_reactions`, `attach_files`). Its keys, grants, events and messages take
+the channel path above unchanged, so everything said there holds. `POST /api/v0/chat/dms` opens the one for a set
+of accounts, or makes it.
+
+### What the Quark sees
+
+- Who is in a direct message with whom, and when it was opened. `dm_key` stores the accounts' ids, sorted, so the
+  same people always land in the same conversation. It keeps the id of an account since deleted.
+- Everything the channel sections list: who posts when, key versions and grants.
+
+### Rules
+
+- **Members never change.** Nobody is added, removed, or leaves, and a direct message has no name to change and
+  can't be deleted: those routes answer 400. Adding someone means opening a new direct message with the bigger set,
+  so a newcomer never holds a key to history written before they were in it.
+- **Admins get no pass.** An admin outside a direct message gets the same 404 as anyone else on every channel
+  route, editing and typing included, it is left out of `GET /chat/channels?all=1`, and its
+  `chat_channel_changed` events skip them, as its message, edit and typing events do. Since this
+  change, `chat_key_needed` and `chat_key_granted` skip every admin outside the audience too, for any channel: they
+  hold no key to act on.
+- **A deleted account** drops out of the member rows. The others keep the conversation and its history. Opening one
+  with the same people who are left starts a new conversation, because the stored key still names the deleted one.
+- **A restore** works `dm_key` out again from the restored members' new ids. A direct message that lost an account
+  the restoring Quark doesn't have keeps no key: its people keep its history but can't reopen it by picking them.
 
 ## The vault
 

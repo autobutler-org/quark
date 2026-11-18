@@ -58,7 +58,7 @@ func seedChat(t *testing.T, d *sql.DB) {
 	chatExec(t, d, `INSERT INTO groups (name) VALUES ('family')`)
 
 	chatExec(t, d, `INSERT INTO chat_channels (id, server_id, name, topic, created_by, created_at) VALUES (2, 1, 'plans', 'the trip', 1, ?)`, at)
-	chatExec(t, d, `INSERT INTO chat_channels (id, server_id, kind, created_by, created_at) VALUES (3, 1, 'dm', 2, ?)`, at)
+	chatExec(t, d, `INSERT INTO chat_channels (id, server_id, kind, created_by, created_at, dm_key) VALUES (3, 1, 'dm', 2, ?, '1,2')`, at)
 	chatExec(t, d, `INSERT INTO chat_channel_members (channel_id, user_id, permissions) VALUES (2, 1, 127), (2, 3, 7), (3, 1, 7), (3, 2, 7)`)
 	chatExec(t, d, `INSERT INTO chat_channel_members (channel_id, group_id, permissions) SELECT 2, id, 7 FROM groups WHERE name = 'family'`)
 
@@ -261,6 +261,8 @@ func TestImportChat_FollowsAccountsByName(t *testing.T) {
 	// bob created the DM; SET NULL.
 	assertRows(t, live, `SELECT id, created_by FROM chat_channels ORDER BY id`,
 		"[1 <nil>]", "[2 1]", "[3 <nil>]")
+	// The DM lost bob, so it keeps no key alice could reopen it by (#2423).
+	assertRows(t, live, `SELECT id FROM chat_channels WHERE dm_key IS NOT NULL`)
 	// Memberships follow the username; bob's and the family group's cascade.
 	assertRows(t, live, `
 		SELECT m.channel_id, COALESCE(u.username, g.name) FROM chat_channel_members m
@@ -286,6 +288,23 @@ func TestImportChat_FollowsAccountsByName(t *testing.T) {
 		`[1 1 "nonce-1"]`, `[2 <nil> "nonce-2"]`, `[3 2 "nonce-3"]`, `[4 <nil> "nonce-4"]`)
 	assertRows(t, live, `SELECT user_id, CAST(ciphertext AS TEXT) FROM chat_reactions`,
 		`[2 "react-carol"]`)
+}
+
+// TestImportChat_RekeysDirectMessages works a direct message's dm_key out
+// again from the accounts' new ids, so its people reopen it (#2423).
+func TestImportChat_RekeysDirectMessages(t *testing.T) {
+	source := dbtest.NewDB(t)
+	addChatUsers(t, source.Db, "alice", "bob", "carol")
+	chatExec(t, source.Db, `INSERT INTO chat_channels (id, server_id, kind, created_by, dm_key) VALUES (2, 1, 'dm', 2, '2,3')`)
+	chatExec(t, source.Db, `INSERT INTO chat_channel_members (channel_id, user_id, permissions) VALUES (2, 2, 135), (2, 3, 135)`)
+	dir := exportChat(t, source.Db)
+
+	live := dbtest.NewDB(t).Db
+	addChatUsers(t, live, "carol", "bob")
+	if _, err := ImportChat(context.Background(), live, dir); err != nil {
+		t.Fatalf("ImportChat: %v", err)
+	}
+	assertRows(t, live, `SELECT id, dm_key FROM chat_channels WHERE kind = 'dm'`, `[2 "1,2"]`)
 }
 
 func TestImportChat_RefusesChatWithData(t *testing.T) {

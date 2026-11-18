@@ -1,5 +1,5 @@
 // Package v0_chat serves /api/v0/chat: the chat channels the caller belongs to, creating, renaming and deleting
-// channels, listing and changing a channel's members, and each account's chat keys, where /chat/keys/me holds the
+// channels, POST /chat/dms opening a direct message (#2423), which no admin outside it can see or manage, listing and changing a channel's members, and each account's chat keys, where /chat/keys/me holds the
 // caller's wrapped identity and /chat/keys/:userId serves any account's public keys. /chat/channels/:id/keys serves
 // a channel's key versions and the caller's key grants, with /keys/pending and /keys/grants for filling other
 // members' grants, POST /keys/regenerate for an admin who already holds read_messages to mint the next version
@@ -12,7 +12,7 @@
 // for its author. PUT and GET /chat/channels/:id/attachments/:attachmentId store and serve an attachment's ciphertext.
 // POST /chat/channels/:id/keys/regenerate is the one admin-only route, and it still needs
 // read_messages: another member gets 403, and anyone without read_messages gets 404. Admins may manage any
-// channel but, like everyone else, list only the channels they are members of, and keys, events and messages
+// named channel but, like everyone else, list only the channels they are members of, and keys, events and messages
 // are for members alone. A channel the caller may not see is a 404.
 package v0_chat
 
