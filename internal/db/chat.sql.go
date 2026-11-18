@@ -15,7 +15,7 @@ const createChatChannel = `-- name: CreateChatChannel :one
 INSERT INTO
     chat_channels (server_id, name, topic, created_by)
 VALUES
-    ((SELECT MIN(id) FROM chat_servers), ?1, ?2, ?3) RETURNING id, server_id, kind, name, topic, is_default, created_by, created_at
+    ((SELECT MIN(id) FROM chat_servers), ?1, ?2, ?3) RETURNING id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key
 `
 
 type CreateChatChannelParams struct {
@@ -37,6 +37,39 @@ func (q *Queries) CreateChatChannel(ctx context.Context, arg CreateChatChannelPa
 		&i.IsDefault,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.DmKey,
+	)
+	return i, err
+}
+
+const createChatDirectMessage = `-- name: CreateChatDirectMessage :one
+INSERT INTO
+    chat_channels (server_id, kind, created_by, dm_key)
+VALUES
+    ((SELECT MIN(id) FROM chat_servers), 'dm', ?1, ?2) ON CONFLICT (dm_key) DO NOTHING RETURNING id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key
+`
+
+type CreateChatDirectMessageParams struct {
+	CreatedBy sql.NullInt64
+	DmKey     sql.NullString
+}
+
+// CreateChatDirectMessage adds a direct message (#2423) unless one with the
+// same dm_key already exists, in which case it returns no row: the unique
+// index on dm_key settles two openers racing, on either engine.
+func (q *Queries) CreateChatDirectMessage(ctx context.Context, arg CreateChatDirectMessageParams) (ChatChannel, error) {
+	row := q.db.QueryRowContext(ctx, createChatDirectMessage, arg.CreatedBy, arg.DmKey)
+	var i ChatChannel
+	err := row.Scan(
+		&i.ID,
+		&i.ServerID,
+		&i.Kind,
+		&i.Name,
+		&i.Topic,
+		&i.IsDefault,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.DmKey,
 	)
 	return i, err
 }
@@ -90,7 +123,7 @@ func (q *Queries) DeleteChatChannelUserMember(ctx context.Context, arg DeleteCha
 }
 
 const getChatChannel = `-- name: GetChatChannel :one
-SELECT id, server_id, kind, name, topic, is_default, created_by, created_at FROM chat_channels WHERE id = ?1 LIMIT 1
+SELECT id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key FROM chat_channels WHERE id = ?1 LIMIT 1
 `
 
 func (q *Queries) GetChatChannel(ctx context.Context, id int64) (ChatChannel, error) {
@@ -105,6 +138,28 @@ func (q *Queries) GetChatChannel(ctx context.Context, id int64) (ChatChannel, er
 		&i.IsDefault,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.DmKey,
+	)
+	return i, err
+}
+
+const getChatDirectMessage = `-- name: GetChatDirectMessage :one
+SELECT id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key FROM chat_channels WHERE dm_key = ?1 LIMIT 1
+`
+
+func (q *Queries) GetChatDirectMessage(ctx context.Context, dmKey sql.NullString) (ChatChannel, error) {
+	row := q.db.QueryRowContext(ctx, getChatDirectMessage, dmKey)
+	var i ChatChannel
+	err := row.Scan(
+		&i.ID,
+		&i.ServerID,
+		&i.Kind,
+		&i.Name,
+		&i.Topic,
+		&i.IsDefault,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.DmKey,
 	)
 	return i, err
 }
@@ -132,6 +187,8 @@ SELECT
     ) THEN 1 ELSE 0 END AS BIGINT) AS is_private
 FROM
     chat_channels
+WHERE
+    chat_channels.kind = 'channel'
 ORDER BY
     chat_channels.is_default DESC,
     LOWER(chat_channels.name),
@@ -150,8 +207,10 @@ type ListAllChatChannelsRow struct {
 	IsPrivate int64
 }
 
-// ListAllChatChannels is every channel on the Quark, for an admin looking
-// for the ones they are not in (#2422), ordered as ListChatChannelsForUser.
+// ListAllChatChannels is every named channel on the Quark, for an admin
+// looking for the ones they are not in (#2422), ordered as
+// ListChatChannelsForUser. Direct messages are left out: they are for their
+// members alone, admins included (#2423).
 func (q *Queries) ListAllChatChannels(ctx context.Context) ([]ListAllChatChannelsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listAllChatChannels)
 	if err != nil {
@@ -596,7 +655,7 @@ func (q *Queries) SetChatChannelUserMember(ctx context.Context, arg SetChatChann
 }
 
 const updateChatChannel = `-- name: UpdateChatChannel :one
-UPDATE chat_channels SET name = ?1, topic = ?2 WHERE id = ?3 RETURNING id, server_id, kind, name, topic, is_default, created_by, created_at
+UPDATE chat_channels SET name = ?1, topic = ?2 WHERE id = ?3 RETURNING id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key
 `
 
 type UpdateChatChannelParams struct {
@@ -617,6 +676,7 @@ func (q *Queries) UpdateChatChannel(ctx context.Context, arg UpdateChatChannelPa
 		&i.IsDefault,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.DmKey,
 	)
 	return i, err
 }

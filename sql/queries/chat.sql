@@ -52,8 +52,10 @@ ORDER BY
     LOWER(chat_channels.name),
     chat_channels.id;
 
--- ListAllChatChannels is every channel on the Quark, for an admin looking
--- for the ones they are not in (#2422), ordered as ListChatChannelsForUser.
+-- ListAllChatChannels is every named channel on the Quark, for an admin
+-- looking for the ones they are not in (#2422), ordered as
+-- ListChatChannelsForUser. Direct messages are left out: they are for their
+-- members alone, admins included (#2423).
 -- name: ListAllChatChannels :many
 SELECT
     chat_channels.id,
@@ -77,6 +79,8 @@ SELECT
     ) THEN 1 ELSE 0 END AS BIGINT) AS is_private
 FROM
     chat_channels
+WHERE
+    chat_channels.kind = 'channel'
 ORDER BY
     chat_channels.is_default DESC,
     LOWER(chat_channels.name),
@@ -134,6 +138,18 @@ INSERT INTO
     chat_channels (server_id, name, topic, created_by)
 VALUES
     ((SELECT MIN(id) FROM chat_servers), sqlc.arg(name), sqlc.arg(topic), sqlc.arg(created_by)) RETURNING *;
+
+-- CreateChatDirectMessage adds a direct message (#2423) unless one with the
+-- same dm_key already exists, in which case it returns no row: the unique
+-- index on dm_key settles two openers racing, on either engine.
+-- name: CreateChatDirectMessage :one
+INSERT INTO
+    chat_channels (server_id, kind, created_by, dm_key)
+VALUES
+    ((SELECT MIN(id) FROM chat_servers), 'dm', sqlc.arg(created_by), sqlc.arg(dm_key)) ON CONFLICT (dm_key) DO NOTHING RETURNING *;
+
+-- name: GetChatDirectMessage :one
+SELECT * FROM chat_channels WHERE dm_key = sqlc.arg(dm_key) LIMIT 1;
 
 -- name: UpdateChatChannel :one
 UPDATE chat_channels SET name = sqlc.arg(name), topic = sqlc.arg(topic) WHERE id = sqlc.arg(id) RETURNING *;

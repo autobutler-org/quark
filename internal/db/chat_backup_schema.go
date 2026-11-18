@@ -21,7 +21,10 @@ const ChatBackupVersion = 3
 // agree. chat_messages.client_message_id (#3531) is exported but never
 // restored, so it left the version at 1: a file with or without it restores
 // the same. Version 2 added chat_polls and chat_poll_answers (#3893).
-// Version 3 added chat_attachments (#2425).
+// Version 3 added chat_attachments (#2425). chat_channels.dm_key (#2423) is
+// exported but never restored, as client_message_id is: it names accounts by
+// their ids, which a restore renumbers, so the restore works it out again
+// from the members it restored.
 const ChatBackupSchemaDDL = `
 PRAGMA user_version = 3;
 
@@ -49,7 +52,8 @@ CREATE TABLE chat_channels (
     topic      TEXT NOT NULL,
     is_default INTEGER NOT NULL,
     created_by INTEGER,
-    created_at DATETIME NOT NULL
+    created_at DATETIME NOT NULL,
+    dm_key     TEXT
 );
 
 CREATE TABLE chat_channel_members (

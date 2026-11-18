@@ -140,6 +140,11 @@ func (a *postgresQueries) CreateChatChannelKey(ctx context.Context, arg CreateCh
 	return ChatChannelKey(row), err
 }
 
+func (a *postgresQueries) CreateChatDirectMessage(ctx context.Context, arg CreateChatDirectMessageParams) (ChatChannel, error) {
+	row, err := a.q.CreateChatDirectMessage(ctx, pgdb.CreateChatDirectMessageParams(arg))
+	return ChatChannel(row), err
+}
+
 func (a *postgresQueries) CreateChatMessage(ctx context.Context, arg CreateChatMessageParams) (ChatMessage, error) {
 	row, err := a.q.CreateChatMessage(ctx, pgdb.CreateChatMessageParams(arg))
 	return ChatMessage(row), err
@@ -472,6 +477,11 @@ func (a *postgresQueries) GetChatChannel(ctx context.Context, id int64) (ChatCha
 func (a *postgresQueries) GetChatChannelEvent(ctx context.Context, arg GetChatChannelEventParams) (ChatChannelEvent, error) {
 	row, err := a.q.GetChatChannelEvent(ctx, pgdb.GetChatChannelEventParams(arg))
 	return ChatChannelEvent(row), err
+}
+
+func (a *postgresQueries) GetChatDirectMessage(ctx context.Context, dmKey sql.NullString) (ChatChannel, error) {
+	row, err := a.q.GetChatDirectMessage(ctx, dmKey)
+	return ChatChannel(row), err
 }
 
 func (a *postgresQueries) GetChatKeyGrant(ctx context.Context, arg GetChatKeyGrantParams) (ChatKeyGrant, error) {

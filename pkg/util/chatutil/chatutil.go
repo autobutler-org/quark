@@ -24,6 +24,11 @@
 // delete it, and list or change its members. Any active account may create a
 // channel and holds every permission on it.
 //
+// A direct message (#2423) is a channel of KindDirect with no name and a fixed
+// set of accounts, each holding the Member set; OpenDirectMessage finds or
+// makes the one for a set. It answers only to its members: admins get no
+// pass on it, and nothing changes its name or its people.
+//
 // Every change publishes chat_channel_changed to the channel's members, before
 // and after the change; accessutil.FilterEvent keeps it from everyone else.
 //
@@ -284,8 +289,8 @@ func (p *Perms) UnmarshalJSON(data []byte) error {
 type Channel struct {
 	ID       int64 `json:"id"`
 	ServerID int64 `json:"serverId"`
-	// Kind is channel; dm is reserved for direct messages (#2423).
-	Kind  string `json:"kind"`
+	// Kind is channel, or dm for a direct message (#2423).
+	Kind  string `json:"kind" enums:"channel,dm"`
 	Name  string `json:"name"`
 	Topic string `json:"topic"`
 	// IsDefault marks general.
@@ -308,6 +313,9 @@ type Channel struct {
 	// chat_read_marker_changed can restore it (#3543). It is 0 before the
 	// first read and without read_messages.
 	LastReadMessageID int64 `json:"lastReadMessageId"`
+	// Members are a direct message's accounts, the caller included, by
+	// username; absent for a named channel.
+	Members []MemberUser `json:"members,omitempty"`
 }
 
 // Member is one row on a channel: an account or a group.
@@ -391,7 +399,8 @@ type ListChannelsResult struct {
 // through a group, or through everyone, each with that set. Admins get only
 // their own channels too, unless they ask for All: then the channels they are
 // not in follow, in the same order, with an empty set, so they can manage them
-// without reading them.
+// without reading them. Direct messages come only to their members, with
+// their Members filled in.
 func ListChannels(params ListChannelsParams) (ListChannelsResult, error) {
 	if params.Database == nil {
 		return ListChannelsResult{}, accessutil.ErrNoDatabase
@@ -424,6 +433,14 @@ func ListChannels(params ListChannelsParams) (ListChannelsResult, error) {
 			CreatedBy:   row.CreatedBy.Int64,
 			CreatedAt:   row.CreatedAt,
 		})
+	}
+	for i := range channels {
+		if channels[i].Kind != KindDirect {
+			continue
+		}
+		if channels[i].Members, err = directMembers(params.Ctx, params.Database.Queries, channels[i].ID); err != nil {
+			return ListChannelsResult{}, err
+		}
 	}
 	if err := attachReadState(params.Ctx, params.Database.Queries, params.Principal.UserID, channels); err != nil {
 		return ListChannelsResult{}, err
@@ -526,7 +543,10 @@ type UpdateChannelResult struct {
 
 // UpdateChannel renames a channel or changes its topic, for a holder of
 // manage_channel or an admin. Anyone with an empty set who isn't an admin gets
-// ErrChannelNotFound, and a member without manage_channel ErrForbidden.
+// ErrChannelNotFound, and a member without manage_channel ErrForbidden. A
+// direct message is ErrChannelNotFound to everyone outside it, admins
+// included, and ErrDirectMessage to its members, here and in DeleteChannel
+// and SetMember.
 func UpdateChannel(params UpdateChannelParams) (UpdateChannelResult, error) {
 	if params.Database == nil {
 		return UpdateChannelResult{}, accessutil.ErrNoDatabase
@@ -781,7 +801,8 @@ type RemoveMemberParams struct {
 // leaving. Removing anyone else needs manage_members and the same bound as a
 // downgrade in SetMember (ErrNotSubset, ErrCreatorRow); admins are exempt.
 // everyone can't be removed from general (ErrDefaultEveryone), and a principal
-// with no row is ErrMemberNotFound. Other access errors are UpdateChannel's.
+// with no row is ErrMemberNotFound. Nobody leaves or is removed from a direct
+// message (ErrDirectMessage). Other access errors are UpdateChannel's.
 func RemoveMember(params RemoveMemberParams) (ListMembersResult, error) {
 	if (params.UserID == 0) == (params.GroupID == 0) {
 		return ListMembersResult{}, accessutil.ErrGrantTarget
@@ -798,6 +819,10 @@ func RemoveMember(params RemoveMemberParams) (ListMembersResult, error) {
 	channel, callerPerms, err := authorize(params.Ctx, queries, params.Principal, params.ChannelID, required)
 	if err != nil {
 		return ListMembersResult{}, err
+	}
+	if channel.Kind == KindDirect {
+		// Leaving needs no permission, so authorize let it through.
+		return ListMembersResult{}, ErrDirectMessage
 	}
 	if channel.IsDefault != 0 && params.GroupID != 0 {
 		everyone, err := isEveryone(params.Ctx, queries, params.GroupID)
@@ -1574,7 +1599,7 @@ func SignEvent(params SignEventParams) (SignEventResult, error) {
 	if err != nil {
 		log.Printf("chat: event %d signed but not announced: %v", params.EventID, err)
 	}
-	publish(params.EventBus, params.ChannelID, members)
+	announce(params.Ctx, queries, params.EventBus, params.ChannelID, members)
 	return SignEventResult{Event: eventFromRow(row)}, nil
 }
 
@@ -1646,7 +1671,7 @@ func PublishChannelsChanged(params PublishChannelsChangedParams) error {
 		if err != nil {
 			return err
 		}
-		publish(params.EventBus, id, members)
+		announce(params.Ctx, queries, params.EventBus, id, members)
 	}
 	return nil
 }

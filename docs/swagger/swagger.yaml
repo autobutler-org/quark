@@ -442,7 +442,10 @@ definitions:
         description: IsPrivate is whether everyone has no row on the channel.
         type: boolean
       kind:
-        description: Kind is channel; dm is reserved for direct messages (#2423).
+        description: Kind is channel, or dm for a direct message (#2423).
+        enum:
+        - channel
+        - dm
         type: string
       lastReadMessageId:
         description: |-
@@ -451,6 +454,13 @@ definitions:
           chat_read_marker_changed can restore it (#3543). It is 0 before the
           first read and without read_messages.
         type: integer
+      members:
+        description: |-
+          Members are a direct message's accounts, the caller included, by
+          username; absent for a named channel.
+        items:
+          $ref: '#/definitions/chatutil.MemberUser'
+        type: array
       name:
         type: string
       permissions:
@@ -2226,6 +2236,13 @@ definitions:
     properties:
       messageId:
         type: integer
+    type: object
+  v0_chat.openDirectMessageBody:
+    properties:
+      userIds:
+        items:
+          type: integer
+        type: array
     type: object
   v0_chat.pollAnswerBody:
     properties:
@@ -7237,6 +7254,55 @@ paths:
       security:
       - BearerAuth: []
       summary: Say the caller is typing in a chat channel
+      tags:
+      - chat
+  /chat/dms:
+    post:
+      consumes:
+      - application/json
+      description: 'Opens the direct message (#2423) between the caller and the accounts
+        named: the one these exact people already have, or a new one, which has no
+        name, isn''t listed to anyone outside it (admins included), and whose people
+        never change. To add someone, open one with the bigger set. Each member holds
+        the Member set. 1 to 15 other active accounts; repeats and the caller''s own
+        id are ignored. A new one publishes chat_channel_changed to its members.'
+      parameters:
+      - description: The other accounts
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_chat.openDirectMessageBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: the direct message these people already had
+          schema:
+            $ref: '#/definitions/chatutil.Channel'
+        "201":
+          description: a new direct message
+          schema:
+            $ref: '#/definitions/chatutil.Channel'
+        "400":
+          description: no one else, or too many people
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: an account that doesn't exist or isn't active
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Open a direct message
       tags:
       - chat
   /chat/keys/{userId}:

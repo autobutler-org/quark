@@ -4855,6 +4855,75 @@ const docTemplate = `{
                 }
             }
         },
+        "/chat/dms": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Opens the direct message (#2423) between the caller and the accounts named: the one these exact people already have, or a new one, which has no name, isn't listed to anyone outside it (admins included), and whose people never change. To add someone, open one with the bigger set. Each member holds the Member set. 1 to 15 other active accounts; repeats and the caller's own id are ignored. A new one publishes chat_channel_changed to its members.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Open a direct message",
+                "parameters": [
+                    {
+                        "description": "The other accounts",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.openDirectMessageBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "the direct message these people already had",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Channel"
+                        }
+                    },
+                    "201": {
+                        "description": "a new direct message",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Channel"
+                        }
+                    },
+                    "400": {
+                        "description": "no one else, or too many people",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "an account that doesn't exist or isn't active",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/chat/keys/me": {
             "get": {
                 "security": [
@@ -13627,12 +13696,23 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "kind": {
-                    "description": "Kind is channel; dm is reserved for direct messages (#2423).",
-                    "type": "string"
+                    "description": "Kind is channel, or dm for a direct message (#2423).",
+                    "type": "string",
+                    "enum": [
+                        "channel",
+                        "dm"
+                    ]
                 },
                 "lastReadMessageId": {
                     "description": "LastReadMessageID is the caller's read marker there, as PUT\n/chat/channels/{id}/read leaves it, so a session that missed\nchat_read_marker_changed can restore it (#3543). It is 0 before the\nfirst read and without read_messages.",
                     "type": "integer"
+                },
+                "members": {
+                    "description": "Members are a direct message's accounts, the caller included, by\nusername; absent for a named channel.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.MemberUser"
+                    }
                 },
                 "name": {
                     "type": "string"
@@ -15890,6 +15970,17 @@ const docTemplate = `{
             "properties": {
                 "messageId": {
                     "type": "integer"
+                }
+            }
+        },
+        "v0_chat.openDirectMessageBody": {
+            "type": "object",
+            "properties": {
+                "userIds": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },

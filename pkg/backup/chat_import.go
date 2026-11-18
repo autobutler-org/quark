@@ -104,6 +104,18 @@ var chatRestoreSteps = []restoreStep{
 		LEFT JOIN temp.restore_users AS u ON u.backup_id = m.user_id
 		LEFT JOIN temp.restore_groups AS g ON g.backup_id = m.group_id
 		WHERE u.live_id IS NOT NULL OR g.live_id IS NOT NULL`},
+	// A direct message's dm_key (#2423) is its accounts' live ids, sorted and
+	// joined by commas, as chatutil writes it. One that lost an account the
+	// backup knew and this Quark doesn't keeps none: the people left could
+	// otherwise collide with a conversation of their own, and get to reuse
+	// a history someone else was in.
+	{"chat_channels dm_key", `
+		UPDATE main.chat_channels SET dm_key = (
+			SELECT group_concat(m.user_id, ',' ORDER BY m.user_id)
+			FROM main.chat_channel_members AS m WHERE m.channel_id = main.chat_channels.id)
+		WHERE kind = 'dm'
+			AND (SELECT COUNT(*) FROM main.chat_channel_members AS m WHERE m.channel_id = main.chat_channels.id)
+			  = (SELECT COUNT(*) FROM chat_backup.chat_channel_members AS b WHERE b.channel_id = main.chat_channels.id)`},
 	// OR REPLACE: an account that signed in to the new install already made
 	// itself a key pair, and every grant in the backup is sealed to the old
 	// one. An account the backup does not know keeps the keys it has.

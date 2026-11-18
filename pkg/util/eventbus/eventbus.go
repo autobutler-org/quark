@@ -179,6 +179,9 @@ type ChatChannelChanged struct {
 	// the change or after it, the only non-admins who hear the event. It is
 	// never sent.
 	Audience []int64 `json:"-"`
+	// Direct marks a direct message (#2423), which only its Audience hears,
+	// admins included. It is never sent.
+	Direct bool `json:"-"`
 }
 
 // ChatMessageChanged is the data of a chat_message_created,
