@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/users_controller.dart';
+import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/user_account.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -66,8 +67,34 @@ void main() {
         if (createError != null) throw createError;
         return UserAccount(id: 9, username: username);
       },
+      openDirectMessage: (userIds) async {
+        calls.add('open dm ${userIds.join(',')}');
+        if (actionError != null) throw actionError;
+        return const ChatChannel(
+          id: 12,
+          name: '',
+          kind: ChatChannel.directKind,
+        );
+      },
     );
   }
+
+  // #2423: Message on an account opens the direct message with them.
+  test('messages an account by its id', () async {
+    final c = controller();
+    await c.load();
+    calls.clear();
+
+    expect(await c.message('bob'), 12);
+    expect(calls, ['open dm 2']);
+  });
+
+  test('a refused message throws for the page to word', () async {
+    final c = controller(actionError: const ApiException(404));
+    await c.load();
+
+    await expectLater(c.message('bob'), throwsA(isA<ApiException>()));
+  });
 
   test('loads the accounts and the requests apart', () async {
     final c = controller();

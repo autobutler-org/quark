@@ -20,27 +20,33 @@ void main() {
     expect(ChatChannel.fromJson({'id': 4, 'name': 'family'}).unreadCount, 0);
   });
 
-  // #3257: a conversation is a private channel named for both people.
-  test('names the other person in a private conversation', () {
-    const dm = ChatChannel(id: 1, name: 'grace, ux-test', isPrivate: true);
+  // #2423: a direct message is kind dm, named for the other people in it.
+  test('reads a direct message and names it for the others', () {
+    final dm = ChatChannel.fromJson({
+      'id': 9,
+      'name': '',
+      'kind': 'dm',
+      'members': [
+        {'id': 1, 'username': 'ada'},
+        {'id': 2, 'username': 'bob'},
+        {'id': 3, 'username': 'cy'},
+      ],
+    });
 
-    expect(dm.directPartner('ux-test'), 'grace');
-    expect(dm.directPartner('Grace'), 'ux-test');
-    expect(dm.directPartner('someone-else'), isNull);
-    expect(dm.directPartner(null), isNull);
-    // A public channel with the same name, or a group of three, is not one.
+    expect(dm.isDirect, isTrue);
+    expect(dm.directName(1), 'bob, cy');
+    expect(dm.directName(2), 'ada, cy');
     expect(
-      const ChatChannel(id: 2, name: 'grace, ux-test').directPartner('ux-test'),
-      isNull,
+      ChatChannel.fromJson({
+        'id': 9,
+        'kind': 'dm',
+        'members': [
+          {'id': 1, 'username': 'ada'},
+        ],
+      }).directName(1),
+      'Only you',
     );
-    expect(
-      const ChatChannel(
-        id: 3,
-        name: 'a, b, ux-test',
-        isPrivate: true,
-      ).directPartner('ux-test'),
-      isNull,
-    );
+    expect(ChatChannel.fromJson({'id': 4, 'name': 'family'}).isDirect, isFalse);
   });
 
   test('reads a read marker', () {

@@ -16,7 +16,7 @@ typedef ChatMembersChange = ({
 });
 
 /// The chat channel routes (#2421, #2422, #2424): listing, creating, renaming
-/// and deleting channels, reading and changing who is in one, and moving the
+/// and deleting channels, opening a direct message (#2423), reading and changing who is in one, and moving the
 /// signed-in account's read marker.
 ///
 /// A refusal the Quark words itself, such as "this would leave no one who
@@ -45,6 +45,20 @@ class ChatChannelsService with AuthenticatedService {
       body: jsonEncode({'name': name, 'topic': topic}),
     );
     _checkName(response, 'create a chat channel');
+    return ChatChannel.fromJson(_json(response));
+  }
+
+  /// Opens the direct message between the signed-in account and [userIds]:
+  /// the one these people already have, or a new one.
+  ///
+  /// api: POST /api/v0/chat/dms
+  static Future<ChatChannel> openDirectMessage(List<int> userIds) async {
+    final response = await instance.authenticatedPost(
+      apiBaseUri.resolve('/api/v0/chat/dms'),
+      headers: _jsonHeaders,
+      body: jsonEncode({'userIds': userIds}),
+    );
+    throwUnlessOk(response, 'open a direct message');
     return ChatChannel.fromJson(_json(response));
   }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/controllers/account_request_history_controller.dart';
 import 'package:quark/controllers/groups_controller.dart';
@@ -100,6 +101,18 @@ class _UsersPageState extends State<UsersPage>
     final message = error == null ? success : Errors.message(error, failure);
     if (message == null || !mounted) return;
     showMessage(context, message);
+  }
+
+  /// Goes to the direct message with [username] in chat (#2423).
+  Future<void> _message(String username) async {
+    try {
+      final channelId = await _controller.message(username);
+      if (mounted) context.go(AppRoutes.chatChannel('$channelId'));
+    } catch (error) {
+      if (mounted) {
+        showMessage(context, Errors.message(error, 'message $username'));
+      }
+    }
   }
 
   /// Waits for an approve or deny and, when it worked, reloads the decisions
@@ -346,6 +359,7 @@ class _UsersPageState extends State<UsersPage>
                         isLoading: isLoading,
                         error: shownError,
                         busyUsernames: c.busyUsernames,
+                        onMessage: _message,
                         onPromote: (username) => _report(
                           c.promote(username),
                           'make $username an admin',

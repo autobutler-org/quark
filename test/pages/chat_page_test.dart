@@ -990,8 +990,8 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    // #2497: one flow from the top bar to a private channel with them.
-    testWidgets('messages someone in a private channel ($label)', (
+    // #2497, #2423: one flow from the top bar to a direct message.
+    testWidgets('messages someone in a direct message ($label)', (
       tester,
     ) async {
       final (r, fake) = await pumpChat(tester, size);
@@ -1007,18 +1007,17 @@ void main() {
         find.byKey(const ValueKey('principal_option_user_8')),
       );
       await tapKey(tester, 'principal_option_user_8');
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('principal_option_user_9')),
+      );
+      await tapKey(tester, 'principal_option_user_9');
       await tapKey(tester, 'start_conversation_submit');
 
-      expect(fake.calls, [
-        'principals',
-        'create ada, bob ""',
-        'ensure keys 12',
-        'set 12 user=8 group=null Member',
-        'sign 43 user=8 $memberSet',
-      ]);
+      expect(fake.calls, ['principals', 'open dm 8,9', 'ensure keys 12']);
       expect(find.byType(QuarkStartConversationDialog), findsNothing);
       expect(at(r), '/chat/12');
-      expect(find.text('# ada, bob'), findsOneWidget);
+      expect(find.text('# bob, cy'), findsNothing);
+      expect(find.text('bob, cy'), findsWidgets);
       expect(tester.takeException(), isNull);
     });
 
@@ -1223,6 +1222,114 @@ void main() {
     expect(find.byKey(const ValueKey('chat_channel_members')), findsOneWidget);
     expect(find.byKey(const ValueKey('chat_channel_edit')), findsNothing);
     expect(find.byKey(const ValueKey('chat_channel_delete')), findsNothing);
+  });
+
+  // #2423: Message on a member opens your direct message with them.
+  testWidgets('messages a member from the member list', (tester) async {
+    final (r, fake) = await pumpChat(
+      tester,
+      wide,
+      chat: FakeChat(
+        members: [
+          ChatMember(userId: 7, name: 'ada', permissions: ownerSet),
+          ChatMember(
+            userId: 8,
+            name: 'bob',
+            permissions: ChatPermissionPreset.member.permissions,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('member_message_7')), findsNothing);
+    await tapKey(tester, 'member_message_8');
+
+    expect(fake.calls, ['open dm 8', 'ensure keys 12']);
+    expect(at(r), '/chat/12');
+    expect(
+      find.byKey(const ValueKey('channel_list_dm_header')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('chat_channel_settings')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  // #2423 with #2426: edit, reply and typing work in a direct message, under
+  // its own header.
+  testWidgets('edits, replies and sees typing in a direct message', (
+    tester,
+  ) async {
+    final fake = FakeChat(
+      channels: [
+        ...fakeChannels,
+        ChatChannel(
+          id: 5,
+          name: '',
+          kind: ChatChannel.directKind,
+          isPrivate: true,
+          permissions: ChatPermissionPreset.member.permissions,
+          members: const [
+            ChatMemberUser(id: 7, username: 'ada'),
+            ChatMemberUser(id: 8, username: 'bob'),
+          ],
+        ),
+      ],
+      members: [
+        ChatMember(
+          userId: 7,
+          name: 'ada',
+          permissions: ChatPermissionPreset.member.permissions,
+        ),
+        ChatMember(
+          userId: 8,
+          name: 'bob',
+          permissions: ChatPermissionPreset.member.permissions,
+        ),
+      ],
+    );
+    ChatTimelineMessage from(int id, int author, String text) =>
+        ChatTimelineMessage(
+          message: ChatMessage(
+            id: id,
+            channelId: 5,
+            authorId: author,
+            keyVersion: 1,
+            ciphertext: null,
+            createdAt: DateTime.utc(2026, 9, 25, 10, id),
+          ),
+          state: ChatMessageState.ready,
+          text: text,
+        );
+    fake.entries[5] = [from(12, 8, 'dentist at 10?'), from(13, 7, 'yes')];
+    await pumpChat(tester, wide, location: '/chat/5', chat: fake);
+    Finder key(String value) => find.byKey(ValueKey(value));
+
+    expect(find.text('# bob'), findsNothing);
+    expect(key('chat_channel_private'), findsNothing);
+
+    await tester.longPress(key('message_body_12'));
+    await tester.pumpAndSettle();
+    await tester.tap(key('message_reply_12'));
+    await tester.pumpAndSettle();
+    expect(key('composer_context'), findsOneWidget);
+    await tester.tap(key('composer_context_cancel'));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(key('message_body_13'));
+    await tester.pumpAndSettle();
+    await tester.tap(key('message_edit_13'));
+    await tester.pumpAndSettle();
+    await tester.enterText(key('message_composer_field'), 'yes, 10am');
+    await tester.tap(key('message_composer_send'));
+    await tester.pumpAndSettle();
+    expect(fake.opened[5]!.edited, ['13 yes, 10am']);
+
+    fake.opened[5]!
+      ..fakeTyping = {8}
+      ..setEntries([from(12, 8, 'dentist at 10?'), from(13, 7, 'yes, 10am')]);
+    await tester.pump();
+    expect(find.text('bob is typing'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('a member gets no member-management buttons', (tester) async {

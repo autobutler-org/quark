@@ -35,6 +35,10 @@ typedef ListChatMembersFn = Future<List<ChatMember>> Function(int channelId);
 typedef CreateChatChannelFn =
     Future<ChatChannel> Function(String name, String topic);
 
+/// Opens the direct message with a set of accounts.
+typedef OpenChatDirectMessageFn =
+    Future<ChatChannel> Function(List<int> userIds);
+
 /// Renames a channel and sets its topic.
 typedef UpdateChatChannelFn =
     Future<ChatChannel> Function(
@@ -132,9 +136,11 @@ class ChatPendingSend {
 ///   channels they are not in, as [otherChannelItems]; opening one shows its
 ///   members and settings but never its messages.
 /// - [createChannel] makes a private channel, or one everyone reads and
-///   posts in (#2501). [startConversation] makes a private channel with one
-///   other account, or opens the one already made (#2497); [loadPeople]
-///   lists who it can be with.
+///   posts in (#2501). [startConversation] opens the direct message with
+///   one or a few other accounts, the same one every time for the same
+///   people (#2497, #2423); [loadPeople] lists who it can be with. Direct
+///   messages are listed apart, as [directMessageItems], named for their
+///   people, and nothing about them is managed: not by an admin either.
 /// - [toggleSearch] and [search] search the open channel on the device
 ///   (#2429): while a query is set, [messageItems] is only the loaded
 ///   messages whose decrypted text contains it, whatever the case, and
@@ -160,6 +166,8 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     ListChatMembersFn listMembers = ChatChannelsService.listMembers,
     ListChatChannelsFn listAllChannels = ChatChannelsService.listAllChannels,
     CreateChatChannelFn createChannel = ChatChannelsService.createChannel,
+    OpenChatDirectMessageFn openDirectMessage =
+        ChatChannelsService.openDirectMessage,
     UpdateChatChannelFn updateChannel = ChatChannelsService.updateChannel,
     Future<void> Function(int channelId) deleteChannel =
         ChatChannelsService.deleteChannel,
@@ -196,6 +204,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
        _listMembers = listMembers,
        _listAllChannels = listAllChannels,
        _createChannel = createChannel,
+       _openDirectMessage = openDirectMessage,
        _updateChannel = updateChannel,
        _deleteChannel = deleteChannel,
        _removeMember = removeMember,
@@ -262,6 +271,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   final ListChatMembersFn _listMembers;
   final ListChatChannelsFn _listAllChannels;
   final CreateChatChannelFn _createChannel;
+  final OpenChatDirectMessageFn _openDirectMessage;
   final UpdateChatChannelFn _updateChannel;
   final Future<void> Function(int channelId) _deleteChannel;
   final RemoveChatMemberFn _removeMember;
@@ -407,10 +417,14 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   bool get isAdmin => _isAdmin();
 
   /// What this account may do as a manager of the open channel: every
-  /// permission for an admin, who may manage any channel, and otherwise its
-  /// own set. The member list and the share sheet offer changes from it.
+  /// permission for an admin, who may manage any named channel, and
+  /// otherwise its own set. The member list and the share sheet offer
+  /// changes from it. A direct message has nothing to manage, so its own
+  /// set, which manages nothing, is all an admin gets there too.
   Set<ChatPermission> get managingPermissions =>
-      isAdmin ? ChatPermission.values.toSet() : selectedPermissions;
+      isAdmin && !(_selected?.isDirect ?? false)
+      ? ChatPermission.values.toSet()
+      : selectedPermissions;
 
   /// Whether the open channel's name, topic and deletion are offered: to a
   /// holder of `manage_channel`, and to admins.
@@ -425,7 +439,8 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       managingPermissions.contains(ChatPermission.manageMembers);
 
   /// Whether the open channel can be left: by a member with a row of their
-  /// own, except in `general`. Leaving removes that row, so someone in only
+  /// own, except in `general` and a direct message, whose people never
+  /// change. Leaving removes that row, so someone in only
   /// through a group has nothing to remove.
   bool get canLeaveSelected {
     final channel = _selected;
@@ -433,6 +448,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     return channel != null &&
         channel.isMember &&
         !channel.isDefault &&
+        !channel.isDirect &&
         me != null &&
         _members.any((m) => m.userId == me);
   }
@@ -602,15 +618,14 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     ];
   }
 
-  /// The channels this account is in, for `QuarkChannelList`, each with
-  /// what it may do there.
+  /// The named channels this account is in, for `QuarkChannelList`, each
+  /// with what it may do there.
   List<ChatChannelItem> get channelItems => [
     for (final c in _channels)
-      if (c.isMember)
+      if (c.isMember && !c.isDirect)
         ChatChannelItem(
           id: '${c.id}',
-          name: directPartnerOf(c) ?? c.name,
-          isDirect: directPartnerOf(c) != null,
+          name: c.name,
           isPrivate: c.isPrivate,
           permissions: c.permissions,
           unreadCount: _unread.countOf(c.id),
@@ -618,22 +633,35 @@ class ChatController extends ChangeNotifier with SafeNotifier {
         ),
   ];
 
-  /// The other person in [channel] when it is a private conversation this
-  /// account is in, which is what it is called in place of its name
-  /// (#3257); null for a channel.
-  String? directPartnerOf(ChatChannel channel) =>
-      channel.directPartner(AppSettings.instance.username);
+  /// The direct messages this account is in, for `QuarkChannelList`, each
+  /// named for the other people in it.
+  List<ChatChannelItem> get directMessageItems => [
+    for (final c in _channels)
+      if (c.isDirect)
+        ChatChannelItem(
+          id: '${c.id}',
+          name: directNameOf(c),
+          isPrivate: true,
+          isDirect: true,
+          unreadCount: _unread.countOf(c.id),
+          mentionCount: _unreadMentions.countOf(c.id),
+        ),
+  ];
 
-  /// What [channel] is called in a sentence: the other person in a private
-  /// conversation, `#name` for a channel.
+  /// What direct message [channel] is called here: the other people in it.
+  String directNameOf(ChatChannel channel) =>
+      channel.directName(_currentUserId());
+
+  /// What [channel] is called in a sentence: the other people in a direct
+  /// message, `#name` for a channel.
   String titleOf(ChatChannel channel) =>
-      directPartnerOf(channel) ?? '#${channel.name}';
+      channel.isDirect ? directNameOf(channel) : '#${channel.name}';
 
   /// For an admin, the channels they are not in, for `QuarkChannelList`'s
   /// other channels.
   List<ChatChannelItem> get otherChannelItems => [
     for (final c in _channels)
-      if (!c.isMember)
+      if (!c.isMember && !c.isDirect)
         ChatChannelItem(id: '${c.id}', name: c.name, isPrivate: c.isPrivate),
   ];
 
@@ -1168,40 +1196,22 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     }
   }
 
-  /// Opens a private conversation with account [userId], one of [people]:
-  /// the channel named for the two of them that this account is already in,
-  /// or a new private one with them added as a Member. The name is both
-  /// usernames in order, so either side finds the same channel. The channel,
-  /// or null with [saveError] set.
-  Future<ChatChannel?> startConversation(int userId) async {
-    final them = _principals.users.where((u) => u.id == userId).firstOrNull;
-    final me = _principals.users
-        .where((u) => u.id == _currentUserId())
-        .firstOrNull;
-    if (them == null) return null;
-    final names = [
-      me?.username ?? AppSettings.instance.username ?? 'me',
-      them.username,
-    ]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    final joined = names.join(', ');
-    final name = joined.length > maxNameLength
-        ? joined.substring(0, maxNameLength)
-        : joined;
-    final existing = _channels
-        .where(
-          (c) =>
-              c.isMember &&
-              c.isPrivate &&
-              c.name.toLowerCase() == name.toLowerCase(),
-        )
-        .firstOrNull;
-    if (existing != null) return existing;
-    return _save(() async {
-      final channel = await _newChannel(name, '');
-      await _addMember(channel.id, userId: userId);
-      await _loadChannels();
-      return channel;
-    });
+  /// Opens the direct message with accounts [userIds] (#2423): the one
+  /// this account and they already have, or a new one, whose first key it
+  /// sets up. The channel list is reloaded so it shows. The channel, or null
+  /// with [saveError] set.
+  Future<ChatChannel?> startConversation(Set<int> userIds) => _save(() async {
+    final channel = await _withFirstKey(_openDirectMessage(userIds.toList()));
+    await _loadChannels();
+    return channel;
+  });
+
+  /// Opens the direct message with member [memberId], an id from
+  /// [memberItems] or the accounts under a group there, for the member
+  /// list's Message action. As [startConversation].
+  Future<ChatChannel?> messageMember(String memberId) async {
+    final userId = int.tryParse(memberId);
+    return userId == null ? null : startConversation({userId});
   }
 
   /// Renames the open channel to [name] and sets its [topic]. Whether it
@@ -1492,8 +1502,12 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   }
 
   /// Creates channel [name] and sets up its first key.
-  Future<ChatChannel> _newChannel(String name, String topic) async {
-    final channel = await _createChannel(name, topic);
+  Future<ChatChannel> _newChannel(String name, String topic) =>
+      _withFirstKey(_createChannel(name, topic));
+
+  /// The channel [made] gives, with its first key set up when it has none.
+  Future<ChatChannel> _withFirstKey(Future<ChatChannel> made) async {
+    final channel = await made;
     try {
       await _ensureKeys(channel.id);
     } catch (e) {

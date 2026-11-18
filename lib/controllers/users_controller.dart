@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/user_account.dart';
+import 'package:quark/services/chat_channels_service.dart';
 import 'package:quark/services/users_service.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -9,6 +11,7 @@ typedef AccountActionFn = Future<void> Function(String username);
 typedef DeleteUserFn = Future<int> Function(String username);
 typedef ReadAccessRequestsFn = Future<bool> Function();
 typedef SetAccessRequestsFn = Future<bool> Function(bool enabled);
+typedef OpenDirectMessageFn = Future<ChatChannel> Function(List<int> userIds);
 typedef CreateUserFn =
     Future<UserAccount> Function({
       required String username,
@@ -39,6 +42,8 @@ class UsersController extends ChangeNotifier with SafeNotifier {
     SetAccessRequestsFn setAccessRequests =
         UsersService.setAccessRequestsEnabled,
     CreateUserFn createUser = UsersService.create,
+    OpenDirectMessageFn openDirectMessage =
+        ChatChannelsService.openDirectMessage,
   }) : _listUsers = listUsers,
        _promoteUser = promoteUser,
        _demoteUser = demoteUser,
@@ -49,7 +54,8 @@ class UsersController extends ChangeNotifier with SafeNotifier {
        _deleteUser = deleteUser,
        _readAccessRequests = readAccessRequests,
        _setAccessRequests = setAccessRequests,
-       _createUser = createUser;
+       _createUser = createUser,
+       _openDirectMessage = openDirectMessage;
 
   /// The signed-in account, which the list offers no actions on.
   final String? selfUsername;
@@ -65,6 +71,7 @@ class UsersController extends ChangeNotifier with SafeNotifier {
   final ReadAccessRequestsFn _readAccessRequests;
   final SetAccessRequestsFn _setAccessRequests;
   final CreateUserFn _createUser;
+  final OpenDirectMessageFn _openDirectMessage;
 
   List<UserAccount> _users = const [];
   bool? _accessRequestsEnabled;
@@ -192,6 +199,15 @@ class UsersController extends ChangeNotifier with SafeNotifier {
   /// admin's. Null on success, otherwise the failure.
   Future<Object?> delete(String username) =>
       _act(username, () => _deleteUser(username));
+
+  /// Opens the signed-in account's direct message with [username] in chat
+  /// (#2423), made the first time, and returns its channel id for the page
+  /// to go to. Throws the failure, for the page to put into words.
+  Future<int> message(String username) async {
+    final user = _users.firstWhere((u) => u.username == username);
+    final channel = await _openDirectMessage([user.id]);
+    return channel.id;
+  }
 
   /// Creates the account [input] describes (#1873). True when it was created
   /// and the list reloaded; false when [createError] now says why not.
