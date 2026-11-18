@@ -334,8 +334,8 @@ Both have the channel open.
 
 **Expected result:**
 
-- The menu opens beside the message with **Copy text**, **Add reaction**, **Edit** on your own (JN-CHAT-032)
-  and, on a message you may delete (JN-CHAT-010), **Delete**.
+- The menu opens beside the message with **Copy text**, **Reply** (JN-CHAT-033), **Add reaction**, **Edit** on
+  your own (JN-CHAT-032) and, on a message you may delete (JN-CHAT-010), **Delete**.
 - After step 2, "Copied to clipboard" shows and the message's text is on the clipboard.
 
 **Notes:**
@@ -799,3 +799,35 @@ open.
 - A poll can't be edited, nor can a deleted message or one still waiting for its key. Editing a message with a
   file changes its caption and keeps the file.
 - An edit never adds to anyone's unread count, and a mention added by editing is drawn like any other.
+
+---
+
+### JN-CHAT-033: Reply quoting a message
+
+**Preconditions:** Two accounts, `bob` and `carol`, in a busy channel, each with it open. `carol` asked "Dentist at
+10?" this morning, and other messages followed.
+
+**Steps:**
+
+1. As `bob`, open the menu on `carol`'s question (JN-CHAT-017) and choose **Reply**.
+2. Write "Yes, 10am" and send.
+3. As `carol`, tap the quote above `bob`'s reply.
+4. As `carol`, delete the question.
+
+**Expected result:**
+
+- After step 1 a strip above the composer says "Replying to carol" with the question; its close button makes the
+  next message an ordinary one again.
+- After step 2 both see `bob`'s message with `carol`'s name and "Dentist at 10?" quoted above it.
+- In step 3 the list goes to the question and tints it for a moment, loading older messages first when it is
+  further back than what is loaded.
+- After step 4 the quote reads "Original message unavailable"; the reply itself is unchanged.
+
+**Notes:**
+
+- A reply quotes; it does not start a thread. Everything stays in the one channel.
+- The quote is taken from each reader's own decrypted copy. Only the quoted message's id travels with the reply,
+  inside the encryption, so the Quark can't tell a reply from any other message.
+- A quoted message still waiting for its key, or from another channel, also reads as unavailable.
+- A **Viewer**, who can't send, gets no **Reply**. Attaching a file is offered again once the reply is sent or
+  stopped.

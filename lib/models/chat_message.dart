@@ -257,6 +257,7 @@ final class ChatTimelineMessage extends ChatTimelineEntry {
     this.text,
     this.reactions = const [],
     this.attachments = const [],
+    this.replyTo,
     this.question,
     this.pollAnswers = const [],
   });
@@ -277,6 +278,10 @@ final class ChatTimelineMessage extends ChatTimelineEntry {
   /// bytes. Empty when the plaintext was ordinary text. The file key stays
   /// in memory with the caption and is not written down.
   final List<ChatOpenAttachment> attachments;
+
+  /// The id of the message this one quotes (#2426), read from inside the
+  /// ciphertext; null when it quotes none.
+  final int? replyTo;
 
   /// The poll's questions when the message is a poll whose [text] carries
   /// them (#3894); null for text, which a poll that won't parse is too.

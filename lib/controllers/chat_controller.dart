@@ -57,6 +57,7 @@ class ChatPendingSend {
     required this.text,
     required this.sentAt,
     required this.clientMessageId,
+    this.replyTo,
     this.error,
   });
 
@@ -77,6 +78,9 @@ class ChatPendingSend {
   /// When it was written.
   final DateTime sentAt;
 
+  /// The id of the message it quotes (#2426), or null.
+  final int? replyTo;
+
   /// Why the last attempt failed, for `Errors.message`; null while sending.
   final Object? error;
 
@@ -90,6 +94,7 @@ class ChatPendingSend {
     text: text,
     sentAt: sentAt,
     clientMessageId: clientMessageId,
+    replyTo: replyTo,
     error: error,
   );
 }
@@ -586,13 +591,14 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     final messages = _messages;
     if (channel == null || messages == null) return const [];
     final me = _currentUserId();
+    final entries = messages.entries;
+    final byId = {
+      for (final e in entries.whereType<ChatTimelineMessage>()) e.message.id: e,
+    };
     final matches = _searchMatches;
-    if (matches != null) {
-      return [for (final m in matches.reversed) itemFor(m, nameOf, me: me)];
-    }
     return [
-      for (final entry in messages.entries.reversed)
-        itemFor(entry, nameOf, me: me),
+      for (final entry in (matches ?? entries).reversed)
+        itemFor(entry, nameOf, me: me, quoted: (id) => byId[id]),
     ];
   }
 
@@ -790,6 +796,8 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   /// and the channel's draft are cleared at once; every other channel's
   /// draft stays. A failed send still here when the controller is disposed
   /// goes back into its channel's draft, so leaving chat never loses it.
+  ///
+  /// A reply begun with [startReply] quotes its message and ends here.
   Future<void> send(String text) async {
     final channel = _selected;
     if (channel == null) return;
@@ -800,7 +808,9 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       text: text,
       sentAt: _now(),
       clientMessageId: _newClientMessageId(),
+      replyTo: int.tryParse(_replyingTo?.id ?? ''),
     );
+    _replyingTo = null;
     _pending = [..._pending, pending];
     notifyListeners();
     await _deliver(pending);
@@ -917,6 +927,46 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     }
   }
 
+  /// The message the next send quotes as a reply (#2426), as its quote
+  /// draws, or null.
+  ChatQuoteItem? get replyingTo {
+    final replying = _replyingTo;
+    return replying == null
+        ? null
+        : ChatQuoteItem(
+            messageId: replying.id,
+            authorName: replying.authorName,
+            text: replying.body,
+          );
+  }
+
+  ChatMessageItem? _replyingTo;
+
+  /// Makes the next send a reply quoting message [messageId], an id from
+  /// [messageItems], which stops any editing. Anything but a text message
+  /// that opened is ignored.
+  void startReply(String messageId) {
+    _editing = null;
+    _replyingTo = _textMessage(messageId);
+    notifyListeners();
+  }
+
+  /// Makes the next send an ordinary message again.
+  void cancelReply() {
+    _replyingTo = null;
+    notifyListeners();
+  }
+
+  /// Text message [messageId] from [messageItems] that opened, or null.
+  ChatMessageItem? _textMessage(String messageId) => messageItems
+      .where(
+        (m) =>
+            m.id == messageId &&
+            m.kind == ChatMessageKind.text &&
+            !m.isUnverified,
+      )
+      .firstOrNull;
+
   /// The message being edited in the composer, an id from [messageItems],
   /// or null (#2426).
   String? get editingMessageId => _editing?.id;
@@ -930,17 +980,11 @@ class ChatController extends ChangeNotifier with SafeNotifier {
 
   /// Puts this account's message [messageId], an id from [messageItems],
   /// into the composer to edit. Anything else is ignored.
+  /// Stops any reply.
   void startEdit(String messageId) {
-    final me = currentUserKey;
-    _editing = messageItems
-        .where(
-          (m) =>
-              m.id == messageId &&
-              m.authorId == me &&
-              m.kind == ChatMessageKind.text &&
-              !m.isUnverified,
-        )
-        .firstOrNull;
+    final message = _textMessage(messageId);
+    _replyingTo = null;
+    _editing = message?.authorId == currentUserKey ? message : null;
     _editText = _editing?.body ?? '';
     notifyListeners();
   }
@@ -1253,12 +1297,16 @@ class ChatController extends ChangeNotifier with SafeNotifier {
 
   /// [entry] as `QuarkMessageList` draws it, with authors named by [nameOf]
   /// and reactions grouped by emoji, marked where account [me] reacted. A
-  /// poll is tallied as of [now] (`ChatMessagesController.pollItemFor`).
+  /// poll is tallied as of [now] (`ChatMessagesController.pollItemFor`). A
+  /// reply quotes the message [quoted] finds in this channel's loaded
+  /// timeline (#2426); one it doesn't find, or that didn't open, is a quote
+  /// with no text, which reads as unavailable.
   static ChatMessageItem itemFor(
     ChatTimelineEntry entry,
     String Function(int userId) nameOf, {
     int? me,
     DateTime? now,
+    ChatTimelineMessage? Function(int messageId)? quoted,
   }) => switch (entry) {
     ChatTimelineMessage(
       :final message,
@@ -1267,6 +1315,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       :final reactions,
       :final question,
       :final attachments,
+      :final replyTo,
     ) =>
       ChatMessageItem(
         id: '${message.id}',
@@ -1287,6 +1336,9 @@ class ChatController extends ChangeNotifier with SafeNotifier {
         },
         isUnverified: state == ChatMessageState.unreadable,
         isEdited: message.editedAt != null,
+        quote: replyTo == null || state != ChatMessageState.ready
+            ? null
+            : quoteFor(replyTo, quoted?.call(replyTo), nameOf),
         reactions: reactionItems(reactions, me),
         attachments: state == ChatMessageState.ready
             ? [
@@ -1315,6 +1367,28 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       isEncryptionEvent: event.kind == ChatChannelEvent.keyCreated,
     ),
   };
+
+  /// The quote of message [id], [found] in the timeline or not: its author
+  /// and its text, a poll's question, or a caption-less file's name. A
+  /// message that is deleted or didn't open has no text, and one not found
+  /// has no author either.
+  static ChatQuoteItem quoteFor(
+    int id,
+    ChatTimelineMessage? found,
+    String Function(int userId) nameOf,
+  ) {
+    if (found == null) return ChatQuoteItem(messageId: '$id');
+    final text = found.question?.prompt ?? found.text ?? '';
+    return ChatQuoteItem(
+      messageId: '$id',
+      authorName: nameOf(found.message.authorId),
+      text: found.state != ChatMessageState.ready
+          ? null
+          : text.isNotEmpty
+          ? text
+          : found.attachments.firstOrNull?.name,
+    );
+  }
 
   /// [reactions] grouped by emoji in the order each emoji first appeared,
   /// with how many carry it and whether account [me] is among them. One
@@ -1539,6 +1613,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     // The next channel's list says where it sits once it is laid out.
     _isAtBottom = false;
     _editing = null;
+    _replyingTo = null;
     _closeSearch();
   }
 
@@ -1581,6 +1656,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       await messages.send(
         pending.text,
         clientMessageId: pending.clientMessageId,
+        replyTo: pending.replyTo,
       );
       discard(pending.id);
     } catch (e) {

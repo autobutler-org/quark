@@ -345,16 +345,20 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   /// A retry encrypts again under a fresh nonce, so it passes the
   /// [clientMessageId] its first attempt did: that is how the Quark knows a
   /// send whose response was lost and answers with the stored message.
-  Future<void> send(String text, {String? clientMessageId}) => _post(
-    text,
-    clientMessageId: clientMessageId,
-    tooLong: Errors.chatMessageTooLong,
-  );
+  ///
+  /// With [replyTo], the message quotes that one (#2426): its id travels
+  /// inside the ciphertext, and each reader quotes it from their own copy.
+  Future<void> send(String text, {String? clientMessageId, int? replyTo}) =>
+      _post(
+        _plaintext(text, replyTo: replyTo),
+        clientMessageId: clientMessageId,
+        tooLong: Errors.chatMessageTooLong,
+      );
 
   /// Posts [draft] as a poll: its question encrypted like a message, its
   /// settings in the clear for the Quark to enforce. Throws like [send].
   Future<void> sendPoll(ChatPollDraft draft) => _post(
-    ChatPollQuestion.fromDraft(draft).toPayload(),
+    _plaintext(ChatPollQuestion.fromDraft(draft).toPayload()),
     poll: ChatPoll(
       closesAt: draft.closesAt,
       allowChange: draft.allowChange,
@@ -365,23 +369,12 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   );
 
   Future<void> _post(
-    String text, {
+    Uint8List plaintext, {
     required String tooLong,
     String? clientMessageId,
     ChatPoll? poll,
   }) async {
-    final (crypto, version, key) = await _currentKey();
-    final ciphertext = crypto.encrypt(
-      Uint8List.fromList(utf8.encode(text)),
-      key,
-      additionalData: crypto.messageAad(
-        channelId: channelId,
-        keyVersion: version,
-      ),
-    );
-    if (ciphertext.length > ChatMessagesService.maxCiphertextBytes) {
-      throw MessageException(tooLong);
-    }
+    final (ciphertext, version) = await _encrypt(plaintext, tooLong);
     final stored = await _postMessage(
       channelId,
       version,
@@ -389,7 +382,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       clientMessageId: clientMessageId,
       poll: poll,
     );
-    _put(stored, text: text);
+    _put(stored);
     notifyListeners();
   }
 
@@ -711,27 +704,47 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
 
   /// Replaces the text of this account's message [messageId] with [text],
   /// encrypted afresh under the channel's current key (#2426). The files it
-  /// carries stay with it, and so do its reactions. Throws like [send]; the
+  /// carries stay with it, and so do its quote and its reactions. Throws like [send]; the
   /// Quark refuses someone else's message, a poll and a deleted one.
   Future<void> edit(int messageId, String text) async {
     final held = _messages[messageId];
     if (held == null || held.state != ChatMessageState.ready) return;
+    final (ciphertext, version) = await _encrypt(
+      _plaintext(text, attachments: held.attachments, replyTo: held.replyTo),
+      Errors.chatMessageTooLong,
+    );
+    _putEdited(await _editMessage(messageId, version, ciphertext));
+    notifyListeners();
+  }
+
+  /// [text] as a message's plaintext: the text alone, or, with
+  /// [attachments] or [replyTo], the JSON of an attachment message, which a
+  /// client that knows nothing of replies still shows as its text (#2426).
+  static Uint8List _plaintext(
+    String text, {
+    List<ChatOpenAttachment> attachments = const [],
+    int? replyTo,
+  }) => attachments.isEmpty && replyTo == null
+      ? Uint8List.fromList(utf8.encode(text))
+      : encodeAttachmentMessage(text, [
+          for (final f in attachments)
+            AttachmentDescriptor(
+              id: f.id,
+              key: f.key,
+              nonce: f.nonce,
+              name: f.name,
+              mime: f.mime,
+              size: f.size,
+              thumbnail: f.thumbnail,
+            ),
+        ], replyTo: replyTo);
+
+  /// [plaintext] encrypted under the channel's current key, with that key's
+  /// version. Throws [tooLong] past the Quark's cap, and like [send].
+  Future<(Uint8List, int)> _encrypt(Uint8List plaintext, String tooLong) async {
     final (crypto, version, key) = await _currentKey();
     final ciphertext = crypto.encrypt(
-      held.attachments.isEmpty
-          ? Uint8List.fromList(utf8.encode(text))
-          : encodeAttachmentMessage(text, [
-              for (final f in held.attachments)
-                AttachmentDescriptor(
-                  id: f.id,
-                  key: f.key,
-                  nonce: f.nonce,
-                  name: f.name,
-                  mime: f.mime,
-                  size: f.size,
-                  thumbnail: f.thumbnail,
-                ),
-            ]),
+      plaintext,
       key,
       additionalData: crypto.messageAad(
         channelId: channelId,
@@ -739,10 +752,9 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       ),
     );
     if (ciphertext.length > ChatMessagesService.maxCiphertextBytes) {
-      throw const MessageException(Errors.chatMessageTooLong);
+      throw MessageException(tooLong);
     }
-    _putEdited(await _editMessage(messageId, version, ciphertext));
-    notifyListeners();
+    return (ciphertext, version);
   }
 
   /// Puts [edited] over the message it replaces, opened again, keeping the
@@ -872,23 +884,33 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     ];
   }
 
-  /// Stores [message], decrypting it unless [text] is already known.
-  void _put(ChatMessage message, {String? text}) {
+  /// Stores [message], decrypted.
+  void _put(ChatMessage message) {
     if (message.channelId != channelId) return;
-    _messages[message.id] = text != null && !message.isDeleted
-        ? _entry(message, ChatMessageState.ready, text)
-        : _open(message);
+    _messages[message.id] = _open(message);
   }
 
-  /// [message] in the timeline as [state], with [text] when it opened, and
-  /// its reactions and, for a poll whose text carries a question, its
-  /// answers opened.
+  /// [held] again with [message], a new state of the same row, reusing
+  /// what was decrypted from it.
+  ChatTimelineMessage _reentry(ChatTimelineMessage held, ChatMessage message) =>
+      _entry(
+        message,
+        held.state,
+        text: held.text,
+        attachments: held.attachments,
+        replyTo: held.replyTo,
+      );
+
+  /// [message] in the timeline as [state], with [text], its [attachments]
+  /// and the message it quotes, [replyTo], when it opened, and its reactions
+  /// and, for a poll whose text carries a question, its answers opened.
   ChatTimelineMessage _entry(
     ChatMessage message,
-    ChatMessageState state, [
+    ChatMessageState state, {
     String? text,
     List<ChatOpenAttachment> attachments = const [],
-  ]) {
+    int? replyTo,
+  }) {
     final poll = message.poll;
     final question = poll == null || text == null
         ? null
@@ -899,6 +921,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       text: text,
       reactions: _openReactions(message),
       attachments: attachments,
+      replyTo: replyTo,
       question: question,
       pollAnswers: poll == null || question == null
           ? const []
@@ -927,11 +950,9 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     final held = _messages[messageId];
     final poll = held?.message.poll;
     if (held == null || poll == null) return;
-    _messages[messageId] = _entry(
+    _messages[messageId] = _reentry(
+      held,
       held.message.copyWith(poll: change(poll)),
-      held.state,
-      held.text,
-      held.attachments,
     );
     notifyListeners();
   }
@@ -1011,12 +1032,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
         if (!remove.contains(r.id) && r.id != add?.id) r,
       ?add,
     ]);
-    _messages[messageId] = _entry(
-      message,
-      held.state,
-      held.text,
-      held.attachments,
-    );
+    _messages[messageId] = _reentry(held, message);
     notifyListeners();
   }
 
@@ -1080,20 +1096,26 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       );
       final decoded = decodeAttachmentMessage(plain);
       if (decoded != null) {
-        return _entry(message, ChatMessageState.ready, decoded.text, [
-          for (final file in decoded.attachments)
-            ChatOpenAttachment(
-              id: file.id,
-              name: file.name,
-              mime: file.mime,
-              size: file.size,
-              key: file.key,
-              nonce: file.nonce,
-              thumbnail: file.thumbnail,
-            ),
-        ]);
+        return _entry(
+          message,
+          ChatMessageState.ready,
+          text: decoded.text,
+          replyTo: decoded.replyTo,
+          attachments: [
+            for (final file in decoded.attachments)
+              ChatOpenAttachment(
+                id: file.id,
+                name: file.name,
+                mime: file.mime,
+                size: file.size,
+                key: file.key,
+                nonce: file.nonce,
+                thumbnail: file.thumbnail,
+              ),
+          ],
+        );
       }
-      return _entry(message, ChatMessageState.ready, utf8.decode(plain));
+      return _entry(message, ChatMessageState.ready, text: utf8.decode(plain));
     } on Object catch (e) {
       debugPrint(
         '[chat_messages_controller.dart] message ${message.id} in channel '

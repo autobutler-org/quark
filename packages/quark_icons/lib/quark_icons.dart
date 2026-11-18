@@ -675,6 +675,9 @@ class QuarkIcons {
   static const IconData send_rounded = Icons.send_rounded;
   static const IconData forum_outlined = Icons.forum_outlined;
 
+  /// Quote a message in a reply. Rounded, like send.
+  static const IconData reply = Icons.reply_rounded;
+
   /// Open the sidebar. Sharp.
   static const IconData menu = Icons.menu;
 

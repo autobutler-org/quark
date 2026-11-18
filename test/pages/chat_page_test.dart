@@ -565,6 +565,51 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('a member replies quoting a message (#2426) ($label)', (
+      tester,
+    ) async {
+      final fake = FakeChat();
+      fake.entries[1] = [
+        ChatTimelineMessage(
+          message: ChatMessage(
+            id: 12,
+            channelId: 1,
+            authorId: 8,
+            keyVersion: 1,
+            ciphertext: null,
+            createdAt: DateTime.utc(2026, 9, 25, 10),
+          ),
+          state: ChatMessageState.ready,
+          text: 'dentist at 10?',
+        ),
+      ];
+      await pumpChat(tester, size, chat: fake);
+      Finder key(String value) => find.byKey(ValueKey(value));
+
+      await tester.longPress(key('message_body_12'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('message_reply_12'));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: key('composer_context'),
+          matching: find.text('dentist at 10?'),
+        ),
+        findsOneWidget,
+      );
+      expect(key('message_composer_attach'), findsNothing);
+
+      await tester.enterText(key('message_composer_field'), 'yes, 10am');
+      await tester.pump();
+      await tester.tap(key('message_composer_send'));
+      await tester.pumpAndSettle();
+
+      expect(fake.opened[1]!.sent, ['yes, 10am']);
+      expect(fake.opened[1]!.sentReplyTo, [12]);
+      expect(key('composer_context'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('the author edits a message in the composer (#2426) ($label)', (
       tester,
     ) async {

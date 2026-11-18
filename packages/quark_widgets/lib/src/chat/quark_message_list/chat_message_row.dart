@@ -15,6 +15,7 @@ import '../quark_poll_card.dart';
 import 'chat_emoji_picker.dart';
 import 'chat_message_row/chat_message_body.dart';
 import 'chat_message_row/chat_message_context_menu.dart';
+import 'chat_message_row/chat_message_quote.dart';
 import 'chat_message_row/chat_reaction_bar.dart';
 import 'chat_message_row/chat_reaction_picker.dart';
 
@@ -35,10 +36,13 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// menu, opens the full picker, or [pickMoreEmoji] when the caller supplies
 /// one.
 ///
-/// A text message's actions are "Copy text" with [onCopy], "Add reaction"
-/// with [onReact], "Edit" with [onEdit], and "Delete" with [onDelete]. A null
-/// callback leaves its action out, and with all of them null there are none.
-/// An edited message says "(edited)" under its body. They come in one of
+/// A text message's actions are "Copy text" with [onCopy], "Reply" with
+/// [onReply], "Add reaction" with [onReact], "Edit" with [onEdit], and
+/// "Delete" with [onDelete]. A null callback leaves its action out, and with
+/// all of them null there are none. An edited message says "(edited)" under
+/// its body. A reply draws the message it quotes above its body as a
+/// `ChatMessageQuote`, and a tap on that fires [onOpenQuote]. [highlighted]
+/// tints the row the way an open menu does, for a message just gone to. They come in one of
 /// two presentations, which [touchMenu] picks:
 ///
 /// - **Pointer** (the default, and what `QuarkMessageList` uses on the
@@ -76,8 +80,8 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// null when no menu is open), `message_mention_<id>` on the highlight of a message that
 /// mentions the reader, `message_body_<id>` on a text message's body,
 /// `message_menu_<id>` on the menu button, `message_copy_<id>`,
-/// `message_menu_react_<id>`, `message_edit_<id>` and `message_delete_<id>`
-/// on the menu's entries, `message_edited_<id>` on the "(edited)" marker
+/// `message_reply_<id>`, `message_menu_react_<id>`, `message_edit_<id>` and
+/// `message_delete_<id>` on the menu's entries, those of `ChatMessageQuote`, `message_edited_<id>` on the "(edited)" marker
 /// (the touch menu has no `message_menu_react_<id>`: its bar replaces it),
 /// `message_menu_react_<id>_<emoji>` on each emoji "Add reaction" or the
 /// touch menu's bar offers, `message_menu_react_<id>_more` on their "More
@@ -93,6 +97,9 @@ class ChatMessageRow extends StatefulWidget {
     required this.avatar,
     this.avatarSize = 32,
     this.onCopy,
+    this.onReply,
+    this.onOpenQuote,
+    this.highlighted = false,
     this.onEdit,
     this.onDelete,
     this.onReact,
@@ -125,6 +132,16 @@ class ChatMessageRow extends StatefulWidget {
 
   /// Copies the message's text. Null leaves "Copy text" out of the menu.
   final VoidCallback? onCopy;
+
+  /// Starts a reply quoting the message. Null leaves "Reply" out of the menu.
+  final VoidCallback? onReply;
+
+  /// Goes to the message this one quotes. Null leaves the quote inert.
+  final VoidCallback? onOpenQuote;
+
+  /// Whether the row stands on the tint an open menu gives it, as a message
+  /// just gone to from a quote does.
+  final bool highlighted;
 
   /// Starts editing the message. Null leaves "Edit" out of the menu.
   final VoidCallback? onEdit;
@@ -201,6 +218,7 @@ class ChatMessageRow extends StatefulWidget {
     ValueChanged<Future<void>>? onReactionMenu,
   }) {
     final onCopy = this.onCopy;
+    final onReply = this.onReply;
     final onEdit = this.onEdit;
     final onDelete = this.onDelete;
     final onReact = this.onReact;
@@ -213,6 +231,13 @@ class ChatMessageRow extends StatefulWidget {
           label: 'Copy text',
           icon: QuarkIcons.content_copy,
           onSelected: onCopy,
+        ),
+      if (onReply != null)
+        QuarkMenuEntry(
+          key: ValueKey('message_reply_${message.id}'),
+          label: 'Reply',
+          icon: QuarkIcons.reply,
+          onSelected: onReply,
         ),
       if (onReact != null && reactionMenuAt != null)
         QuarkMenuEntry(
@@ -351,6 +376,7 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
     final message = widget.message;
     final avatarSize = widget.avatarSize;
     final onCopy = widget.onCopy;
+    final onReply = widget.onReply;
     final onEdit = widget.onEdit;
     final onDelete = widget.onDelete;
     final onOpenLink = widget.onOpenLink;
@@ -368,6 +394,7 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
     final hasMenu =
         reacts &&
         (onCopy != null ||
+            onReply != null ||
             onReact != null ||
             onEdit != null ||
             onDelete != null);
@@ -430,7 +457,9 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
     final tinted = DecoratedBox(
       key: ValueKey('message_menu_open_${message.id}'),
       decoration: BoxDecoration(
-        color: _menuOpen ? tokens.primary.withValues(alpha: 0.16) : null,
+        color: _menuOpen || widget.highlighted
+            ? tokens.primary.withValues(alpha: 0.16)
+            : null,
       ),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -506,6 +535,12 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    if (reacts && message.quote != null)
+                                      ChatMessageQuote(
+                                        replyId: message.id,
+                                        quote: message.quote!,
+                                        onTap: widget.onOpenQuote,
+                                      ),
                                     if (message.body.isNotEmpty ||
                                         message.kind != ChatMessageKind.text ||
                                         message.attachments.isEmpty)

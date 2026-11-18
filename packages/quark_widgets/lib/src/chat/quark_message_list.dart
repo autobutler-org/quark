@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 
@@ -43,7 +45,9 @@ import 'quark_message_list/chat_system_line.dart';
 /// caller that scrolls to the newest message with [controller] checks
 /// reduced motion itself and jumps rather than animates when it is on.
 ///
-/// Each text message has actions: "Copy text" fires [onCopy], "Add
+/// Each text message has actions: "Copy text" fires [onCopy], "Reply" fires
+/// [onReply] where [permissions] holds [ChatPermission.sendMessages] (or is
+/// null), "Add
 /// reaction" offers the quick emoji and "More emoji", which opens a
 /// searchable picker of every emoji (or [pickMoreEmoji], when set) and fires
 /// [onReact], "Edit" fires [onEdit], and "Delete" fires [onDelete]; the
@@ -54,6 +58,12 @@ import 'quark_message_list/chat_system_line.dart';
 /// messages alone, since editing is authorship and no permission grants it
 /// (#2426), and never on one that didn't open. An edited message says
 /// "(edited)" under its body.
+///
+/// A reply quotes its [ChatMessageItem.quote] above its body (#2426). A tap
+/// on the quote scrolls to the quoted message, without animating, and tints
+/// it for [highlightDuration]. One older than what is loaded is asked for
+/// with [onLoadOlder], page by page while [hasMore], and gone to once it
+/// arrives.
 ///
 /// On macOS, Windows and Linux, in a browser or not, the list is a
 /// `SelectionArea`: dragging selects message text, across messages, and the
@@ -119,8 +129,10 @@ import 'quark_message_list/chat_system_line.dart';
 /// the highlight of one that mentions the user, `message_body_<id>` on a
 /// text message's body (a link is reached by its text inside it),
 /// `message_menu_<id>` on its menu button, `message_copy_<id>`,
-/// `message_menu_react_<id>`, `message_edit_<id>` and `message_delete_<id>`
-/// on the menu's entries, `message_edited_<id>` on the "(edited)" marker
+/// `message_reply_<id>`, `message_menu_react_<id>`, `message_edit_<id>` and
+/// `message_delete_<id>` on the menu's entries, `message_edited_<id>` on the
+/// "(edited)" marker, `message_quote_<id>` on a reply's quote,
+/// `message_menu_open_<id>` on a row's tint
 /// (on a touch platform there is no `message_menu_react_<id>`; the bar takes
 /// its place), `message_menu_react_<id>_<emoji>` on each emoji the menu or
 /// the touch bar offers, `message_context_copy_<id>` on the touch menu's
@@ -150,6 +162,7 @@ import 'quark_message_list/chat_system_line.dart';
 ///   mentionNames: controller.mentionNames,
 ///   currentUserName: controller.userName,
 ///   onCopy: (id) => copy(controller.textOf(id)),
+///   onReply: controller.startReply,
 ///   onEdit: controller.startEdit,
 ///   onDelete: controller.deleteMessage,
 ///   onReact: controller.toggleReaction,
@@ -177,6 +190,7 @@ class QuarkMessageList extends StatefulWidget {
     this.currentUserName,
     this.mentionEveryoneAuthorIds = const {},
     this.onCopy,
+    this.onReply,
     this.onEdit,
     this.onDelete,
     this.onReact,
@@ -199,6 +213,9 @@ class QuarkMessageList extends StatefulWidget {
 
   /// The tooltip on an encryption line's "(?)".
   static const String encryptionHelpTooltip = 'What does this mean?';
+
+  /// How long a message gone to from a quote stays tinted.
+  static const Duration highlightDuration = Duration(seconds: 2);
 
   /// How close together one author's messages have to be to share a header.
   static const Duration groupWindow = Duration(minutes: 5);
@@ -260,6 +277,11 @@ class QuarkMessageList extends StatefulWidget {
   /// Called with a text message's id to copy its text; the clipboard is the
   /// caller's. Null leaves "Copy text" out of every menu.
   final ValueChanged<String>? onCopy;
+
+  /// Called with a text message's id to reply quoting it; the composing is
+  /// the caller's. Null, or [permissions] without
+  /// [ChatPermission.sendMessages], leaves "Reply" out of every menu.
+  final ValueChanged<String>? onReply;
 
   /// Called with the id of one of the user's own text messages to edit it;
   /// the editing is the caller's. Null leaves "Edit" out of every menu.
@@ -370,6 +392,16 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
   bool _atBottom = true;
   int _newCount = 0;
 
+  /// Each built row's context by message id, so a quote can scroll to it.
+  final Map<String, BuildContext> _rows = {};
+
+  /// The message gone to from a quote, tinted until [_highlightTimer] fires.
+  String? _highlighted;
+  Timer? _highlightTimer;
+
+  /// A quoted message older than what is loaded, gone to once it arrives.
+  String? _seeking;
+
   ScrollController get _scroll =>
       widget.controller ?? (_owned ??= ScrollController());
 
@@ -383,12 +415,67 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
   void didUpdateWidget(QuarkMessageList oldWidget) {
     super.didUpdateWidget(oldWidget);
     _countArrivals(widget.messages);
+    final seeking = _seeking;
+    if (seeking != null && !widget.isLoading) {
+      // After the frame: going there may ask the caller for another page.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _seeking == seeking) _goTo(seeking);
+      });
+    }
   }
 
   @override
   void dispose() {
+    _highlightTimer?.cancel();
     _owned?.dispose();
     super.dispose();
+  }
+
+  /// Scrolls to message [id] and tints it, asking for older pages first
+  /// while it isn't loaded and more exist.
+  Future<void> _goTo(String id) async {
+    final messages = widget.messages;
+    final index = messages.indexWhere((m) => m.id == id);
+    if (index < 0) {
+      final onLoadOlder = widget.onLoadOlder;
+      _seeking = widget.hasMore && onLoadOlder != null ? id : null;
+      if (_seeking != null && !widget.isLoading) onLoadOlder!();
+      return;
+    }
+    _seeking = null;
+    final scroll = _scroll;
+    // The list builds only the rows near the viewport, so it steps a
+    // viewport at a time toward the row until it is built. Reversed: older
+    // rows lie further along.
+    // ponytail: steps a screen at a time; jump by estimated height if a
+    // quote far back in a long history feels slow.
+    for (var step = 0; step < 200 && scroll.hasClients; step++) {
+      final row = _rows[id];
+      if (row != null && row.mounted) {
+        await Scrollable.ensureVisible(row, alignment: 0.5);
+        break;
+      }
+      final built = [
+        for (final MapEntry(key: builtId, value: context) in _rows.entries)
+          if (context.mounted) messages.indexWhere((m) => m.id == builtId),
+      ];
+      if (built.isEmpty) break;
+      final position = scroll.position;
+      final forward = index > built.reduce((a, b) => a > b ? a : b);
+      final target =
+          (position.pixels + (forward ? 1 : -1) * position.viewportDimension)
+              .clamp(position.minScrollExtent, position.maxScrollExtent);
+      if (target == position.pixels) break;
+      scroll.jumpTo(target);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
+    if (!mounted) return;
+    _highlightTimer?.cancel();
+    setState(() => _highlighted = id);
+    _highlightTimer = Timer(QuarkMessageList.highlightDuration, () {
+      if (mounted) setState(() => _highlighted = null);
+    });
   }
 
   void _remember(List<ChatMessageItem> messages) {
@@ -461,6 +548,10 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
     final onEdit = widget.onEdit;
     final onDelete = widget.onDelete;
     final permissions = widget.permissions;
+    final onReply =
+        permissions == null || permissions.contains(ChatPermission.sendMessages)
+        ? widget.onReply
+        : null;
     final deletesAny =
         permissions?.contains(ChatPermission.deleteMessages) ?? false;
     final reacts =
@@ -565,10 +656,19 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
                 older == null ||
                 !QuarkMessageList.isSameDay(message.sentAt, older.sentAt);
 
+            // The row's context, so a quote can scroll to it once built.
+            final row = Builder(
+              builder: (context) {
+                _rows[message.id] = context;
+                return const SizedBox.shrink();
+              },
+            );
+            final quote = message.quote;
             return Column(
               key: ValueKey('message_${message.id}'),
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                row,
                 if (startsDay) ChatDaySeparator(date: message.sentAt),
                 if (message.kind == ChatMessageKind.system)
                   ChatSystemLine(
@@ -584,6 +684,16 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
                         onCopy == null || message.kind != ChatMessageKind.text
                         ? null
                         : () => onCopy(message.id),
+                    onReply:
+                        onReply == null ||
+                            message.kind != ChatMessageKind.text ||
+                            message.isUnverified
+                        ? null
+                        : () => onReply(message.id),
+                    onOpenQuote: quote == null
+                        ? null
+                        : () => _goTo(quote.messageId),
+                    highlighted: _highlighted == message.id,
                     onEdit:
                         onEdit == null ||
                             message.kind != ChatMessageKind.text ||

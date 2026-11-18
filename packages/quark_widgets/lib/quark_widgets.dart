@@ -167,6 +167,7 @@ export 'src/models/chat_poll_draft.dart';
 export 'src/models/chat_poll_item.dart';
 export 'src/models/chat_poll_question_item.dart';
 export 'src/models/chat_poll_type.dart';
+export 'src/models/chat_quote_item.dart';
 export 'src/models/chat_reaction_item.dart';
 export 'src/models/connection_mode.dart';
 export 'src/models/create_user_input.dart';

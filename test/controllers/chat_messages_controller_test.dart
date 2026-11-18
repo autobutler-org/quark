@@ -9,6 +9,7 @@ import 'package:quark/controllers/chat_messages_controller.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
 import 'package:quark/models/chat_poll.dart';
+import 'package:quark/services/chat_attachment_message.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -865,6 +866,83 @@ void main() {
       expect(got.attachments.single.key, sent.attachments.single.key);
       alice.dispose();
       reader.dispose();
+    });
+  });
+
+  group('quote-reply (#2426)', () {
+    test('a reply carries its quote inside the ciphertext, quoted from each '
+        'reader\'s own copy, and degrades when the original goes', () async {
+      final key = crypto.newChannelKey();
+      final alice = quark.client(_FakeKeys()..grant(1, key), crypto);
+      final bob = quark.client(
+        _FakeKeys()..grant(1, crypto.channelKeyFromBytes(key.extractBytes())),
+        crypto,
+        userId: 3,
+      );
+      await alice.open();
+      await bob.open();
+      await alice.send('dentist at 10?');
+      await pumpEventQueue();
+      final original = quark.messages.single.id;
+
+      await bob.send('yes, 10am', replyTo: original);
+      await pumpEventQueue();
+      final reply = quark.messages.last;
+
+      // An older client reads it as a message with no files: its text.
+      final plain = crypto.decrypt(
+        reply.ciphertext!,
+        key,
+        additionalData: crypto.messageAad(channelId: _channel, keyVersion: 1),
+      );
+      final decoded = decodeAttachmentMessage(plain)!;
+      expect(decoded.text, 'yes, 10am');
+      expect(decoded.attachments, isEmpty);
+      expect(decoded.replyTo, original);
+
+      ChatQuoteItem? quoteIn(ChatMessagesController c) {
+        final byId = {
+          for (final e in c.entries.whereType<ChatTimelineMessage>())
+            e.message.id: e,
+        };
+        return ChatController.itemFor(
+          byId[reply.id]!,
+          (id) => id == 2 ? 'alice' : 'bob',
+          quoted: (id) => byId[id],
+        ).quote;
+      }
+
+      expect(
+        quoteIn(alice),
+        ChatQuoteItem(
+          messageId: '$original',
+          authorName: 'alice',
+          text: 'dentist at 10?',
+        ),
+      );
+
+      // Editing the reply keeps what it quotes.
+      await bob.edit(reply.id, 'yes, 10:30');
+      await pumpEventQueue();
+      expect(quoteIn(alice)?.messageId, '$original');
+      expect(texts(alice).last, 'yes, 10:30');
+
+      // A deleted original reads as unavailable, never as an error.
+      await alice.delete(original);
+      await pumpEventQueue();
+      expect(
+        quoteIn(alice),
+        ChatQuoteItem(messageId: '$original', authorName: 'alice'),
+      );
+      alice.dispose();
+      bob.dispose();
+    });
+
+    test('a quote the reader has not loaded names no one', () {
+      expect(
+        ChatController.quoteFor(5, null, (_) => 'x'),
+        const ChatQuoteItem(messageId: '5'),
+      );
     });
   });
 

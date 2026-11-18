@@ -112,6 +112,7 @@ class DecodedAttachmentMessage {
   const DecodedAttachmentMessage({
     required this.text,
     required this.attachments,
+    this.replyTo,
   });
 
   /// Caption. Empty when the JSON had no `text` field.
@@ -119,6 +120,9 @@ class DecodedAttachmentMessage {
 
   /// Files in the order the JSON listed them.
   final List<AttachmentDescriptor> attachments;
+
+  /// The id of the message this one quotes (#2426), or null.
+  final int? replyTo;
 }
 
 /// One opened file: the descriptor from the message and its plaintext.
@@ -317,6 +321,8 @@ Future<OpenedAttachmentMessage> openAttachmentMessage({
 /// An object with `"v": 1` and `"attachments"` is that message. Anything
 /// else, including other JSON, is a text message and this returns null. A
 /// message that claims the shape but is malformed throws [FormatException].
+/// A quote-reply (#2426) is this shape too, with `"replyTo"` naming the
+/// message it quotes and, when it carries no file, an empty list.
 DecodedAttachmentMessage? decodeAttachmentMessage(Uint8List plaintext) {
   final text = utf8.decode(plaintext);
   final Object? parsed;
@@ -339,9 +345,14 @@ DecodedAttachmentMessage _readMessage(Map<String, dynamic> json) {
   if (raw is! List) {
     throw const FormatException('An attachment message needs a list of files.');
   }
+  final replyTo = json['replyTo'];
+  if (replyTo != null && replyTo is! int) {
+    throw const FormatException('A quoted message id must be a number.');
+  }
   return DecodedAttachmentMessage(
     text: text ?? '',
     attachments: [for (final item in raw) _readAttachment(item)],
+    replyTo: replyTo as int?,
   );
 }
 
@@ -546,20 +557,25 @@ Map<String, Object> _messageMap(
 
 /// The plaintext of an attachment message whose files are already sealed
 /// and uploaded, with [text] as its caption: what an edit sends, so the
-/// files and their keys stay with the message (#2426). The caller checks
-/// the size, since an edit can't drop a thumbnail the readers already have.
+/// files and their keys stay with the message (#2426). [replyTo] names the
+/// message it quotes; a reply with no file is this shape with no files. The
+/// caller checks the size, since an edit can't drop a thumbnail the readers
+/// already have.
 Uint8List encodeAttachmentMessage(
   String text,
-  List<AttachmentDescriptor> files,
-) => utf8.encode(jsonEncode(_describedMap(text, files)));
+  List<AttachmentDescriptor> files, {
+  int? replyTo,
+}) => utf8.encode(jsonEncode(_describedMap(text, files, replyTo: replyTo)));
 
 Map<String, Object> _describedMap(
   String text,
-  List<AttachmentDescriptor> files,
-) => {
+  List<AttachmentDescriptor> files, {
+  int? replyTo,
+}) => {
   'v': 1,
   if (text.isNotEmpty) 'text': text,
   'attachments': [for (final file in files) _attachmentMap(file)],
+  'replyTo': ?replyTo,
 };
 
 Map<String, Object> _attachmentMap(AttachmentDescriptor file) {
