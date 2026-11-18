@@ -33,6 +33,7 @@ export 'src/chat/quark_channel_dialog.dart';
 export 'src/chat/quark_channel_list.dart';
 export 'src/chat/quark_chat_layout.dart';
 export 'src/chat/quark_chat_permission_picker.dart';
+export 'src/chat/quark_composer_context_bar.dart';
 export 'src/chat/quark_delete_channel_dialog.dart';
 export 'src/chat/quark_encryption_help_dialog.dart';
 export 'src/chat/quark_encryption_notice.dart';

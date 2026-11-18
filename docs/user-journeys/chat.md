@@ -334,8 +334,8 @@ Both have the channel open.
 
 **Expected result:**
 
-- The menu opens beside the message with **Copy text**, **Add reaction** and, on a message you may delete
-  (JN-CHAT-010), **Delete**.
+- The menu opens beside the message with **Copy text**, **Add reaction**, **Edit** on your own (JN-CHAT-032)
+  and, on a message you may delete (JN-CHAT-010), **Delete**.
 - After step 2, "Copied to clipboard" shows and the message's text is on the clipboard.
 
 **Notes:**
@@ -769,3 +769,33 @@ open.
 - The edge takes the keyboard: arrow keys resize, Enter or Space hides and shows.
 - Widths and hidden panes are remembered per device, not per account.
 - On a phone nothing changes: the channel list is a drawer and the members a sheet.
+
+---
+
+### JN-CHAT-032: Edit a message
+
+**Preconditions:** Two accounts, `bob` and `carol`, in a channel, each with it open. `carol` sent "Dinner at 7", and
+`bob` reacted to it with 👍 (JN-CHAT-016).
+
+**Steps:**
+
+1. As `carol`, open the message's menu (JN-CHAT-017) and choose **Edit**.
+2. Change the text in the composer to "Dinner at 6, traffic" and send.
+3. As `bob`, open the menu on the same message.
+
+**Expected result:**
+
+- After step 1 a strip above the composer says "Editing message" with the old text, and the composer holds that
+  text. Its close button stops editing and brings back whatever was being written before.
+- After step 2 both see "Dinner at 6, traffic" with "(edited)" under it, and the 👍 is still there.
+- In step 3 `bob`'s menu has no **Edit**: only the author edits, whatever their permissions.
+
+**Notes:**
+
+- No earlier version is kept. The Quark learns that the message was edited and when, not what changed
+  ([`docs/chat-security.md`](../chat-security.md)).
+- An author removed from the channel, or left with only management permissions, can no longer edit. An author who
+  can read but not send still can.
+- A poll can't be edited, nor can a deleted message or one still waiting for its key. Editing a message with a
+  file changes its caption and keeps the file.
+- An edit never adds to anyone's unread count, and a mention added by editing is drawn like any other.

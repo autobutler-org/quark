@@ -531,27 +531,46 @@ Map<String, Object> _messageMap(
   String text,
   List<_SealedFile> files,
   Set<int> dropped,
+) => _describedMap(text, [
+  for (var i = 0; i < files.length; i++)
+    AttachmentDescriptor(
+      id: files[i].id,
+      key: files[i].key,
+      nonce: files[i].nonce,
+      name: files[i].name,
+      mime: files[i].mime,
+      size: files[i].size,
+      thumbnail: dropped.contains(i) ? null : files[i].thumbnail,
+    ),
+]);
+
+/// The plaintext of an attachment message whose files are already sealed
+/// and uploaded, with [text] as its caption: what an edit sends, so the
+/// files and their keys stay with the message (#2426). The caller checks
+/// the size, since an edit can't drop a thumbnail the readers already have.
+Uint8List encodeAttachmentMessage(
+  String text,
+  List<AttachmentDescriptor> files,
+) => utf8.encode(jsonEncode(_describedMap(text, files)));
+
+Map<String, Object> _describedMap(
+  String text,
+  List<AttachmentDescriptor> files,
 ) => {
   'v': 1,
   if (text.isNotEmpty) 'text': text,
-  'attachments': [
-    for (var i = 0; i < files.length; i++)
-      _attachmentMap(files[i], dropped.contains(i)),
-  ],
+  'attachments': [for (final file in files) _attachmentMap(file)],
 };
 
-Map<String, Object> _attachmentMap(_SealedFile file, bool dropThumbnail) {
-  final map = <String, Object>{
+Map<String, Object> _attachmentMap(AttachmentDescriptor file) {
+  final thumb = file.thumbnail;
+  return {
     'id': file.id,
     'key': base64Encode(file.key),
     'nonce': base64Encode(file.nonce),
     'name': file.name,
     'mime': file.mime,
     'size': file.size,
+    if (thumb != null && thumb.isNotEmpty) 'thumbnail': base64Encode(thumb),
   };
-  final thumb = file.thumbnail;
-  if (!dropThumbnail && thumb != null && thumb.isNotEmpty) {
-    map['thumbnail'] = base64Encode(thumb);
-  }
-  return map;
 }

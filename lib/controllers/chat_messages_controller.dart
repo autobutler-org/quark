@@ -49,8 +49,10 @@ typedef UploadChatAttachmentFn =
 ///   reconnect and refresh, reads the whole loaded window again from the
 ///   oldest id held, so reactions and deletions it missed land too.
 /// - [send] encrypts under the channel's current key version, binding the
-///   channel id and version as additional data, and posts. [delete]
-///   tombstones.
+///   channel id and version as additional data, and posts. [edit] encrypts
+///   new text for one of this account's messages afresh and replaces it
+///   (#2426), keeping its files, and `chat_message_edited` brings everyone
+///   else's edits. [delete] tombstones.
 /// - [toggleReaction] adds or takes back this account's reaction (#2426),
 ///   encrypted like a message and bound to the message and account too, and
 ///   `chat_reaction_changed` keeps everyone's reactions current. A
@@ -96,6 +98,12 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       ChatPoll? poll,
     })?
     postMessage,
+    Future<ChatMessage> Function(
+      int messageId,
+      int keyVersion,
+      Uint8List ciphertext,
+    )?
+    editMessage,
     Future<ChatMessage> Function(int messageId)? deleteMessage,
     Future<ChatReaction> Function(
       int messageId,
@@ -132,6 +140,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
        _crypto = crypto ?? (() => ChatKeysController.instance.crypto),
        _fetchMessages = fetchMessages ?? ChatMessagesService.fetchMessages,
        _postMessage = postMessage ?? ChatMessagesService.postMessage,
+       _editMessage = editMessage ?? ChatMessagesService.editMessage,
        _deleteMessage = deleteMessage ?? ChatMessagesService.deleteMessage,
        _addReaction = addReaction ?? ChatMessagesService.addReaction,
        _deleteReaction = deleteReaction ?? ChatMessagesService.deleteReaction,
@@ -178,6 +187,12 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     ChatPoll? poll,
   })
   _postMessage;
+  final Future<ChatMessage> Function(
+    int messageId,
+    int keyVersion,
+    Uint8List ciphertext,
+  )
+  _editMessage;
   final Future<ChatMessage> Function(int messageId) _deleteMessage;
   final Future<ChatReaction> Function(
     int messageId,
@@ -694,6 +709,51 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     );
   }
 
+  /// Replaces the text of this account's message [messageId] with [text],
+  /// encrypted afresh under the channel's current key (#2426). The files it
+  /// carries stay with it, and so do its reactions. Throws like [send]; the
+  /// Quark refuses someone else's message, a poll and a deleted one.
+  Future<void> edit(int messageId, String text) async {
+    final held = _messages[messageId];
+    if (held == null || held.state != ChatMessageState.ready) return;
+    final (crypto, version, key) = await _currentKey();
+    final ciphertext = crypto.encrypt(
+      held.attachments.isEmpty
+          ? Uint8List.fromList(utf8.encode(text))
+          : encodeAttachmentMessage(text, [
+              for (final f in held.attachments)
+                AttachmentDescriptor(
+                  id: f.id,
+                  key: f.key,
+                  nonce: f.nonce,
+                  name: f.name,
+                  mime: f.mime,
+                  size: f.size,
+                  thumbnail: f.thumbnail,
+                ),
+            ]),
+      key,
+      additionalData: crypto.messageAad(
+        channelId: channelId,
+        keyVersion: version,
+      ),
+    );
+    if (ciphertext.length > ChatMessagesService.maxCiphertextBytes) {
+      throw const MessageException(Errors.chatMessageTooLong);
+    }
+    _putEdited(await _editMessage(messageId, version, ciphertext));
+    notifyListeners();
+  }
+
+  /// Puts [edited] over the message it replaces, opened again, keeping the
+  /// reactions and poll held for it: an edit carries neither. A message not
+  /// loaded here is left for paging to bring.
+  void _putEdited(ChatMessage edited) {
+    final held = _messages[edited.id]?.message;
+    if (held == null) return;
+    _put(edited.copyWith(reactions: held.reactions, poll: held.poll));
+  }
+
   /// Deletes message [messageId]: this account's own, or anyone's in a
   /// channel it owns.
   Future<void> delete(int messageId) async {
@@ -1080,6 +1140,11 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
         final message = data['message'];
         if (message is! Map<String, dynamic>) return;
         _put(ChatMessage.fromJson(message));
+        notifyListeners();
+      case 'chat_message_edited':
+        final message = data['message'];
+        if (message is! Map<String, dynamic>) return;
+        _putEdited(ChatMessage.fromJson(message));
         notifyListeners();
       case 'chat_message_deleted':
         final id = (data['messageId'] as num?)?.toInt();

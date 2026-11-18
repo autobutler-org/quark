@@ -46,10 +46,14 @@ import 'quark_message_list/chat_system_line.dart';
 /// Each text message has actions: "Copy text" fires [onCopy], "Add
 /// reaction" offers the quick emoji and "More emoji", which opens a
 /// searchable picker of every emoji (or [pickMoreEmoji], when set) and fires
-/// [onReact], and "Delete" fires [onDelete]; the caller asks for
+/// [onReact], "Edit" fires [onEdit], and "Delete" fires [onDelete]; the
+/// caller asks for
 /// confirmation if it wants one. "Delete" is on each message the user may
 /// delete: their own, which authorship allows, or anyone's when [permissions]
-/// holds [ChatPermission.deleteMessages].
+/// holds [ChatPermission.deleteMessages]. "Edit" is on the user's own text
+/// messages alone, since editing is authorship and no permission grants it
+/// (#2426), and never on one that didn't open. An edited message says
+/// "(edited)" under its body.
 ///
 /// On macOS, Windows and Linux, in a browser or not, the list is a
 /// `SelectionArea`: dragging selects message text, across messages, and the
@@ -115,7 +119,8 @@ import 'quark_message_list/chat_system_line.dart';
 /// the highlight of one that mentions the user, `message_body_<id>` on a
 /// text message's body (a link is reached by its text inside it),
 /// `message_menu_<id>` on its menu button, `message_copy_<id>`,
-/// `message_menu_react_<id>` and `message_delete_<id>` on the menu's entries
+/// `message_menu_react_<id>`, `message_edit_<id>` and `message_delete_<id>`
+/// on the menu's entries, `message_edited_<id>` on the "(edited)" marker
 /// (on a touch platform there is no `message_menu_react_<id>`; the bar takes
 /// its place), `message_menu_react_<id>_<emoji>` on each emoji the menu or
 /// the touch bar offers, `message_context_copy_<id>` on the touch menu's
@@ -145,6 +150,7 @@ import 'quark_message_list/chat_system_line.dart';
 ///   mentionNames: controller.mentionNames,
 ///   currentUserName: controller.userName,
 ///   onCopy: (id) => copy(controller.textOf(id)),
+///   onEdit: controller.startEdit,
 ///   onDelete: controller.deleteMessage,
 ///   onReact: controller.toggleReaction,
 ///   onOpenLink: (uri) => launchUrl(uri),
@@ -171,6 +177,7 @@ class QuarkMessageList extends StatefulWidget {
     this.currentUserName,
     this.mentionEveryoneAuthorIds = const {},
     this.onCopy,
+    this.onEdit,
     this.onDelete,
     this.onReact,
     this.pickMoreEmoji,
@@ -253,6 +260,10 @@ class QuarkMessageList extends StatefulWidget {
   /// Called with a text message's id to copy its text; the clipboard is the
   /// caller's. Null leaves "Copy text" out of every menu.
   final ValueChanged<String>? onCopy;
+
+  /// Called with the id of one of the user's own text messages to edit it;
+  /// the editing is the caller's. Null leaves "Edit" out of every menu.
+  final ValueChanged<String>? onEdit;
 
   /// Called with a message's id to delete it. Null leaves "Delete" out of
   /// every menu.
@@ -447,6 +458,7 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
     final onLoadOlder = widget.onLoadOlder;
     final avatarBuilder = widget.avatarBuilder;
     final onCopy = widget.onCopy;
+    final onEdit = widget.onEdit;
     final onDelete = widget.onDelete;
     final permissions = widget.permissions;
     final deletesAny =
@@ -572,6 +584,13 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
                         onCopy == null || message.kind != ChatMessageKind.text
                         ? null
                         : () => onCopy(message.id),
+                    onEdit:
+                        onEdit == null ||
+                            message.kind != ChatMessageKind.text ||
+                            message.isUnverified ||
+                            message.authorId != widget.currentUserId
+                        ? null
+                        : () => onEdit(message.id),
                     onDelete:
                         onDelete == null ||
                             message.kind != ChatMessageKind.text ||

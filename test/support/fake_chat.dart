@@ -39,6 +39,9 @@ class FakeChatMessages extends ChatMessagesController {
   /// The client message id of each [send], in step with [sent].
   final List<String?> sentClientIds = [];
 
+  /// Every `messageId text` [edit] was called with.
+  final List<String> edited = [];
+
   /// Every message id [delete] was called with.
   final List<int> deleted = [];
 
@@ -81,6 +84,10 @@ class FakeChatMessages extends ChatMessagesController {
     sentClientIds.add(clientMessageId);
     await onSend?.call(text);
   }
+
+  @override
+  Future<void> edit(int messageId, String text) async =>
+      edited.add('$messageId $text');
 
   @override
   Future<void> delete(int messageId) async => deleted.add(messageId);
