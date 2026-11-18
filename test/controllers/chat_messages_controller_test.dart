@@ -12,6 +12,7 @@ import 'package:quark/models/chat_poll.dart';
 import 'package:quark/services/chat_attachment_message.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark/utils/chat_config.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:sodium/sodium_sumo.dart';
@@ -89,6 +90,9 @@ class _FakeQuark {
   /// Ciphertext uploaded for an attachment id, so a later download can open it.
   final Map<String, List<int>> attachmentBodies = {};
 
+  /// How many times a client said it was typing.
+  var typings = 0;
+
   int _nextId = 1;
 
   ChatMessagesController client(
@@ -143,6 +147,13 @@ class _FakeQuark {
           }
           return message;
         },
+    sendTyping: (channelId) async {
+      typings++;
+      _emit('chat_typing', {
+        'channelId': channelId,
+        'userId': userId,
+      }, hears: {2, 3}..remove(userId));
+    },
     editMessage: (id, keyVersion, ciphertext) async =>
         edit(id, keyVersion, ciphertext),
     deleteMessage: (id) async {
@@ -866,6 +877,50 @@ void main() {
       expect(got.attachments.single.key, sent.attachments.single.key);
       alice.dispose();
       reader.dispose();
+    });
+  });
+
+  group('typing (#2426)', () {
+    testWidgets('typing reaches the others, is sent at most every interval, '
+        'and lapses on its own or when the message arrives', (tester) async {
+      final key = crypto.newChannelKey();
+      final alice = quark.client(_FakeKeys()..grant(1, key), crypto);
+      final bob = quark.client(
+        _FakeKeys()..grant(1, crypto.channelKeyFromBytes(key.extractBytes())),
+        crypto,
+        userId: 3,
+      );
+      // In the test's fake time, so the lapse timers are too.
+      unawaited(alice.open());
+      unawaited(bob.open());
+      await tester.pump();
+
+      alice.notifyTyping();
+      alice.notifyTyping();
+      await tester.pump();
+      expect(quark.typings, 1);
+      expect(bob.typingUserIds, {2});
+      expect(alice.typingUserIds, isEmpty);
+
+      // No stop event: it lapses after the timeout without another.
+      await tester.pump(ChatConfig.typingTimeout - const Duration(seconds: 1));
+      expect(bob.typingUserIds, {2});
+      await tester.pump(const Duration(seconds: 1));
+      expect(bob.typingUserIds, isEmpty);
+
+      // After the interval it is said again, and the message clears it.
+      alice.notifyTyping();
+      await tester.pump();
+      expect(quark.typings, 2);
+      expect(bob.typingUserIds, {2});
+      unawaited(alice.send('on my way'));
+      await tester.pump();
+      expect(bob.typingUserIds, isEmpty);
+
+      alice.notifyTyping();
+      bob.dispose();
+      alice.dispose();
+      await tester.pump(ChatConfig.typingTimeout);
     });
   });
 

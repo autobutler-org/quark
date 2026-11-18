@@ -15,4 +15,11 @@ abstract final class ChatConfig {
   /// message the composer let through.
   static const int maxMessageLength =
       (maxCiphertextBytes - ciphertextOverheadBytes) ~/ 3;
+
+  /// How often, at most, typing tells the channel so (#2426).
+  static const Duration typingInterval = Duration(seconds: 3);
+
+  /// How long someone shows as typing after the last word of it: two
+  /// intervals, so one lost on the way doesn't make them flicker.
+  static const Duration typingTimeout = Duration(seconds: 6);
 }

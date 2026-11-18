@@ -3091,6 +3091,18 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkTypingIndicator',
+    group: 'Chat',
+    build: (context, log) => const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        QuarkTypingIndicator(names: ['ada']),
+        QuarkTypingIndicator(names: ['ada', 'bob']),
+        QuarkTypingIndicator(names: ['ada', 'bob', 'carol']),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkMemberList',
     group: 'Chat',
     build: (context, log) => Wrap(

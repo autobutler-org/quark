@@ -51,6 +51,18 @@ class FakeChatMessages extends ChatMessagesController {
   /// Every `messageId emoji` [toggleReaction] was called with.
   final List<String> reacted = [];
 
+  /// How many times [notifyTyping] ran.
+  int typed = 0;
+
+  /// What [typingUserIds] returns.
+  Set<int> fakeTyping = const {};
+
+  @override
+  void notifyTyping() => typed++;
+
+  @override
+  Set<int> get typingUserIds => fakeTyping;
+
   /// How many times [open] ran.
   int opens = 0;
 
