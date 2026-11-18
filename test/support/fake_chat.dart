@@ -181,8 +181,11 @@ class FakeChat {
         this.channels.add(channel);
         return channel;
       },
-      openDirectMessage: (userIds) async {
-        calls.add('open dm ${userIds.join(',')}');
+      openDirectMessage: (userIds, {fromChannelId}) async {
+        calls.add(
+          'open dm ${userIds.join(',')}'
+          '${fromChannelId == null ? '' : ' from $fromChannelId'}',
+        );
         _fail();
         final people = {7, ...userIds};
         final existing = this.channels
@@ -198,6 +201,9 @@ class FakeChat {
           id: 10 + this.channels.length,
           name: '',
           kind: ChatChannel.directKind,
+          forked: fromChannelId != null,
+          createdBy: 7,
+          createdAt: DateTime.utc(2026, 9, 25, 9),
           isPrivate: true,
           permissions: ChatPermissionPreset.member.permissions,
           members: [

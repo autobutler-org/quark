@@ -19,7 +19,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Keys: `chat_channel_search` on the search button; `chat_channel_settings`
 /// on the settings button; `chat_channel_private` on the lock;
-/// `chat_channel_edit`, `chat_channel_members`,
+/// `chat_channel_edit`, `chat_channel_members`, `chat_channel_add_people`,
 /// `chat_channel_menu_divider`, `chat_channel_leave` and
 /// `chat_channel_delete` on the menu's items.
 class ChatChannelHeader extends StatelessWidget {
@@ -32,6 +32,7 @@ class ChatChannelHeader extends StatelessWidget {
     this.onSearch,
     this.onEdit,
     this.onMembers,
+    this.onAddPeople,
     this.onDelete,
     this.onLeave,
     super.key,
@@ -65,6 +66,10 @@ class ChatChannelHeader extends StatelessWidget {
   /// Opens the members sheet; null leaves it out.
   final VoidCallback? onMembers;
 
+  /// Opens the picker that adds people to a direct message by starting a
+  /// new one with them (#2423); null leaves it out.
+  final VoidCallback? onAddPeople;
+
   /// Asks to delete the channel; null leaves it out.
   final VoidCallback? onDelete;
 
@@ -91,6 +96,15 @@ class ChatChannelHeader extends StatelessWidget {
           child: quarkMenuLabel(
             leading: const Icon(QuarkIcons.group_outlined),
             label: const Text('Members'),
+          ),
+        ),
+      if (onAddPeople case final onAddPeople?)
+        MenuItemButton(
+          key: const ValueKey('chat_channel_add_people'),
+          onPressed: onAddPeople,
+          child: quarkMenuLabel(
+            leading: const Icon(QuarkIcons.person_add_outlined),
+            label: const Text('Add people'),
           ),
         ),
     ];

@@ -37,7 +37,7 @@ typedef CreateChatChannelFn =
 
 /// Opens the direct message with a set of accounts.
 typedef OpenChatDirectMessageFn =
-    Future<ChatChannel> Function(List<int> userIds);
+    Future<ChatChannel> Function(List<int> userIds, {int? fromChannelId});
 
 /// Renames a channel and sets its topic.
 typedef UpdateChatChannelFn =
@@ -615,7 +615,35 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     return [
       for (final entry in (matches ?? entries).reversed)
         itemFor(entry, nameOf, me: me, quoted: (id) => byId[id]),
+      // A fork's line opens its timeline, under the oldest message (#2423).
+      // The app draws it from the channel: it is no message, so nothing
+      // counts it as unread, and a search never matches it.
+      if (matches == null && channel.forked && !messages.hasOlder)
+        ChatMessageItem(
+          id: forkLineId,
+          authorId: '${channel.createdBy}',
+          authorName: forkOpener(channel),
+          sentAt: (channel.createdAt ?? DateTime.now()).toLocal(),
+          body: forkSentence(forkOpener(channel)),
+          kind: ChatMessageKind.system,
+        ),
     ];
+  }
+
+  /// The id of the line that opens a forked direct message's timeline.
+  static const forkLineId = 'dm_forked';
+
+  /// What that line says, naming the account that started the
+  /// conversation, [opener].
+  static String forkSentence(String opener) =>
+      '$opener started this conversation by adding people to an earlier '
+      'one. Messages from before stay there.';
+
+  /// Who started forked direct message [channel]: `Someone` once their
+  /// account is gone.
+  String forkOpener(ChatChannel channel) {
+    final id = channel.createdBy;
+    return id == null ? 'Someone' : nameOf(id);
   }
 
   /// The named channels this account is in, for `QuarkChannelList`, each
@@ -1198,13 +1226,42 @@ class ChatController extends ChangeNotifier with SafeNotifier {
 
   /// Opens the direct message with accounts [userIds] (#2423): the one
   /// this account and they already have, or a new one, whose first key it
-  /// sets up. The channel list is reloaded so it shows. The channel, or null
-  /// with [saveError] set.
-  Future<ChatChannel?> startConversation(Set<int> userIds) => _save(() async {
-    final channel = await _withFirstKey(_openDirectMessage(userIds.toList()));
+  /// sets up. [fromChannelId] is the direct message people are being added
+  /// to, which a new one then says it started from. The channel list is
+  /// reloaded so it shows. The channel, or null with [saveError] set.
+  Future<ChatChannel?> startConversation(
+    Set<int> userIds, {
+    int? fromChannelId,
+  }) => _save(() async {
+    final channel = await _withFirstKey(
+      _openDirectMessage(userIds.toList(), fromChannelId: fromChannelId),
+    );
     await _loadChannels();
     return channel;
   });
+
+  /// Opens a new direct message with everyone in the open one and [added]:
+  /// adding people never lets them read what came before (#2423). As
+  /// [startConversation].
+  Future<ChatChannel?> addPeople(Set<int> added) async {
+    final channel = _selected;
+    if (channel == null || !channel.isDirect) return null;
+    return startConversation({
+      for (final m in channel.members)
+        if (m.id != _currentUserId()) m.id,
+      ...added,
+    }, fromChannelId: channel.id);
+  }
+
+  /// The accounts that can be added to the open direct message: [people]
+  /// who aren't in it.
+  List<PrincipalItem> get peopleToAdd {
+    final inIt = {for (final m in _selected?.members ?? const []) m.id};
+    return [
+      for (final p in people)
+        if (!inIt.contains(p.id)) p,
+    ];
+  }
 
   /// Opens the direct message with member [memberId], an id from
   /// [memberItems] or the accounts under a group there, for the member

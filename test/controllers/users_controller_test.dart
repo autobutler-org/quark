@@ -67,7 +67,7 @@ void main() {
         if (createError != null) throw createError;
         return UserAccount(id: 9, username: username);
       },
-      openDirectMessage: (userIds) async {
+      openDirectMessage: (userIds, {fromChannelId}) async {
         calls.add('open dm ${userIds.join(',')}');
         if (actionError != null) throw actionError;
         return const ChatChannel(
