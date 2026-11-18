@@ -474,6 +474,163 @@ void main() {
       expect(find.text('(edited)'), findsOneWidget);
     });
 
+    testWidgets('Reply needs send_messages and calls back (#2426)', (
+      tester,
+    ) async {
+      final replied = <String>[];
+      Future<bool> offersReply(Set<ChatPermission> permissions) async {
+        await pumpAt(
+          tester,
+          QuarkMessageList(
+            messages: messages,
+            permissions: permissions,
+            onCopy: (_) {},
+            onReply: replied.add,
+          ),
+        );
+        await tester.longPress(key('message_body_m4'));
+        await tester.pumpAndSettle();
+        final offered = key('message_reply_m4').evaluate().isNotEmpty;
+        if (offered) {
+          await tester.tap(key('message_reply_m4'));
+        } else {
+          await tester.tapAt(const Offset(1, 1));
+        }
+        await tester.pumpAndSettle();
+        return offered;
+      }
+
+      expect(await offersReply({ChatPermission.readMessages}), isFalse);
+      expect(
+        await offersReply({
+          ChatPermission.readMessages,
+          ChatPermission.sendMessages,
+        }),
+        isTrue,
+      );
+      expect(replied, ['m4']);
+    });
+
+    testBothViewports('a reply quotes its message, or a placeholder', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: [
+            ChatMessageItem(
+              id: 'r2',
+              authorId: 'bob',
+              authorName: 'Bob',
+              sentAt: day2.add(const Duration(minutes: 40)),
+              body: 'it was deleted?',
+              quote: const ChatQuoteItem(messageId: 'm6', authorName: 'Ada'),
+            ),
+            ChatMessageItem(
+              id: 'r1',
+              authorId: 'bob',
+              authorName: 'Bob',
+              sentAt: day2.add(const Duration(minutes: 30)),
+              body: 'yes, 10am',
+              quote: const ChatQuoteItem(
+                messageId: 'm2',
+                authorName: 'Ada',
+                text: 'still me',
+              ),
+            ),
+            ...messages,
+          ],
+        ),
+        size: size,
+      );
+
+      expect(
+        find.descendant(
+          of: key('message_quote_r1'),
+          matching: find.text('still me'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: key('message_quote_r2'),
+          matching: find.text('Original message unavailable'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    Color? tintOf(WidgetTester tester, String id) =>
+        (tester.widget<DecoratedBox>(key('message_menu_open_$id')).decoration
+                as BoxDecoration)
+            .color;
+
+    testWidgets('a quote goes to its message far back, and tints it', (
+      tester,
+    ) async {
+      final many = [
+        ChatMessageItem(
+          id: 'reply',
+          authorId: 'bob',
+          authorName: 'Bob',
+          sentAt: day2,
+          body: 'this one',
+          quote: const ChatQuoteItem(messageId: '3', text: 'hello'),
+        ),
+        for (var i = 59; i >= 0; i--)
+          msg('$i', day1.add(Duration(minutes: i)), body: 'line $i'),
+      ];
+      await pumpAt(tester, QuarkMessageList(messages: many));
+      expect(key('message_body_3'), findsNothing);
+
+      await tester.tap(key('message_quote_reply'));
+      await tester.pumpAndSettle();
+
+      expect(key('message_body_3'), findsOneWidget);
+      expect(tintOf(tester, '3'), isNotNull);
+      await tester.pump(QuarkMessageList.highlightDuration);
+      expect(tintOf(tester, '3'), isNull);
+    });
+
+    testWidgets('a quote of an unloaded message loads older pages first', (
+      tester,
+    ) async {
+      final reply = ChatMessageItem(
+        id: 'reply',
+        authorId: 'bob',
+        authorName: 'Bob',
+        sentAt: day2,
+        body: 'this one',
+        quote: const ChatQuoteItem(messageId: 'old'),
+      );
+      var asked = 0;
+      Widget list(List<ChatMessageItem> shown, {bool hasMore = true}) =>
+          QuarkMessageList(
+            messages: shown,
+            hasMore: hasMore,
+            onLoadOlder: () => asked++,
+          );
+      await pumpAt(tester, list([reply, ...messages]));
+
+      await tester.tap(key('message_quote_reply'));
+      await tester.pumpAndSettle();
+      expect(asked, greaterThan(0));
+
+      await pumpAt(
+        tester,
+        list([
+          reply,
+          ...messages,
+          msg('old', day1.subtract(const Duration(days: 1)), body: 'way back'),
+        ], hasMore: false),
+      );
+      await tester.pumpAndSettle();
+      expect(tintOf(tester, 'old'), isNotNull);
+      await tester.pump(QuarkMessageList.highlightDuration);
+    });
+
     testBothViewports('a right-click opens the menu at the pointer', (
       tester,
       size,

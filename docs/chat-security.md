@@ -270,6 +270,14 @@ ciphertext within the same channel and version, reordering messages, or claiming
 it came from someone else, since the key is shared. Per-message signatures would close both gaps, and are left
 for later.
 
+### Quote-replies
+
+A reply quotes another message (#2426) by carrying that message's id inside its own ciphertext:
+`{"v":1,"text":"…","attachments":[],"replyTo":<id>}`, the shape of an attachment message with no files, so an app
+that knows nothing of replies still shows the text. Each reader quotes the original from their own decrypted copy,
+so nothing of it is copied into the reply, and a quote of a message that was deleted, is waiting for its key, or
+isn't in this channel reads as unavailable. The Quark can't tell a reply from any other message.
+
 ### Editing
 
 Its author may replace a message's text (#2426). The app encrypts the new text afresh, under the channel's

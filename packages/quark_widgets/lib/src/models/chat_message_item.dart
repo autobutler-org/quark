@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'chat_attachment_item.dart';
 import 'chat_poll_item.dart';
+import 'chat_quote_item.dart';
 import 'chat_reaction_item.dart';
 
 /// What a [ChatMessageItem] is, which decides how a message list draws it.
@@ -49,6 +50,7 @@ class ChatMessageItem {
     this.attachments = const [],
     this.poll,
     this.isEdited = false,
+    this.quote,
   });
 
   /// The message's id on the Quark, and what keys and callbacks carry.
@@ -96,6 +98,10 @@ class ChatMessageItem {
   /// sending it (#2426), which draws "(edited)" under the body.
   final bool isEdited;
 
+  /// The message a [ChatMessageKind.text] message quotes as a reply
+  /// (#2426), drawn above its body; null when it quotes none.
+  final ChatQuoteItem? quote;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -111,7 +117,8 @@ class ChatMessageItem {
           listEquals(other.reactions, reactions) &&
           listEquals(other.attachments, attachments) &&
           other.poll == poll &&
-          other.isEdited == isEdited;
+          other.isEdited == isEdited &&
+          other.quote == quote;
 
   @override
   int get hashCode => Object.hash(
@@ -127,5 +134,6 @@ class ChatMessageItem {
     Object.hashAll(attachments),
     poll,
     isEdited,
+    quote,
   );
 }

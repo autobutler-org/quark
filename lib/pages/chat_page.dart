@@ -638,6 +638,11 @@ class _ChatPageState extends State<ChatPage>
             : null;
         final partner = channel == null ? null : c.directPartnerOf(channel);
         final editing = c.editingMessageId;
+        final replying = c.replyingTo;
+        // ponytail: a reply is text; attaching while replying waits until
+        // the attachment format carries the quote too.
+        final canAttach =
+            channel != null && editing == null && replying == null;
         return QuarkPageScaffold(
           title: 'Chat',
           icon: QuarkIcons.forum_outlined,
@@ -753,6 +758,7 @@ class _ChatPageState extends State<ChatPage>
                                     c.mentionEveryoneAuthorIds,
                                 currentUserName: c.currentUserName,
                                 onCopy: _copyMessage,
+                                onReply: c.startReply,
                                 onEdit: c.startEdit,
                                 onDelete: _deleteMessage,
                                 onReact: _react,
@@ -844,6 +850,16 @@ class _ChatPageState extends State<ChatPage>
                           cancelTooltip: 'Stop editing',
                           onCancel: c.cancelEdit,
                         ),
+                      if (replying != null)
+                        QuarkComposerContextBar(
+                          icon: QuarkIcons.reply,
+                          title: replying.authorName == null
+                              ? 'Replying'
+                              : 'Replying to ${replying.authorName}',
+                          text: replying.text,
+                          cancelTooltip: 'Stop replying',
+                          onCancel: c.cancelReply,
+                        ),
                       // Chrome pinned to the bottom edge keeps clear of the
                       // rounded display corners and the home indicator
                       // (#2788).
@@ -897,13 +913,10 @@ class _ChatPageState extends State<ChatPage>
                                 maxLength: ChatConfig.maxMessageLength,
                                 mentionNames: c.mentionNames,
                                 onSend: editing != null ? _submitEdit : c.send,
-                                onAttach: channel == null || editing != null
+                                onAttach: !canAttach
                                     ? null
                                     : () => unawaited(_attachFile()),
-                                onAttachMedia:
-                                    channel == null ||
-                                        editing != null ||
-                                        !_offersMediaPicker
+                                onAttachMedia: !canAttach || !_offersMediaPicker
                                     ? null
                                     : () => unawaited(
                                         _attachFile(type: FileType.media),
