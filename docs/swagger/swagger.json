@@ -4941,6 +4941,98 @@
             }
         },
         "/chat/messages/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the message's ciphertext with new base64 ciphertext the author's client encrypted under the channel key of keyVersion, sets editedAt, and sends the edited row, without its reactions, to the channel's readers as chat_message_edited. No earlier version is kept. Only the author may edit, and only while they hold read_messages; send_messages is not needed. Another reader gets 403, and anyone without read_messages 404, delegated managers, demoted authors and admins included. The ciphertext follows a post's rules: at most 16 KiB, and a nonce the channel already holds under keyVersion on another message is 409. A deleted message or a poll is 409.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Edit a chat message",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Message id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The new encrypted message",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.editMessageBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Message"
+                        }
+                    },
+                    "400": {
+                        "description": "ciphertext too short, or a key version the channel doesn't have",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller reads the channel but didn't write the message",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such message, or the caller lacks read_messages in its channel",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the message was deleted, is a poll, or another message holds this nonce",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "413": {
+                        "description": "ciphertext over 16 KiB",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "the caller sent too many of these in a short time; the limit is per account",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
             "delete": {
                 "security": [
                     {
@@ -15710,6 +15802,20 @@
                     }
                 },
                 "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v0_chat.editMessageBody": {
+            "type": "object",
+            "properties": {
+                "ciphertext": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "keyVersion": {
                     "type": "integer"
                 }
             }

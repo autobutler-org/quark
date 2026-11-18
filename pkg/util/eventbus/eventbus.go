@@ -109,6 +109,10 @@ const (
 	// EventChatMessageDeleted fires when a chat message is deleted (#2418).
 	// Data is a ChatMessageChanged with no Message.
 	EventChatMessageDeleted EventKind = "chat_message_deleted"
+	// EventChatMessageEdited fires when a chat message's author replaces its
+	// ciphertext (#2426). Data is a ChatMessageChanged carrying the edited
+	// row, without its reactions.
+	EventChatMessageEdited EventKind = "chat_message_edited"
 	// EventChatReactionChanged fires when a reaction is added to or removed
 	// from a chat message (#2426). Data is a ChatReactionChanged.
 	EventChatReactionChanged EventKind = "chat_reaction_changed"
@@ -174,14 +178,15 @@ type ChatChannelChanged struct {
 	Audience []int64 `json:"-"`
 }
 
-// ChatMessageChanged is the data of a chat_message_created or
-// chat_message_deleted event. Unlike every other chat event it reaches only
+// ChatMessageChanged is the data of a chat_message_created,
+// chat_message_edited or chat_message_deleted event. Unlike every other chat event it reaches only
 // the channel's members, admins included: an admin who isn't a member hears
 // nothing.
 type ChatMessageChanged struct {
 	ChannelID int64 `json:"channelId"`
 	MessageID int64 `json:"messageId"`
-	// Message is the stored row, a chatutil.Message, on chat_message_created.
+	// Message is the stored row, a chatutil.Message, on chat_message_created
+	// and chat_message_edited.
 	// It is ciphertext and capped at 16 KiB, so it rides the event whole.
 	Message any `json:"message,omitempty"`
 	// Audience is the channel's readers, the accounts holding read_messages.

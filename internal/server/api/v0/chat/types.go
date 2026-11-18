@@ -37,6 +37,7 @@ func (r *router) Routes() []*serverutil.Route {
 		putAttachmentRoute,
 		getAttachmentRoute,
 		listMessagesRoute,
+		editMessageRoute,
 		deleteMessageRoute,
 		markReadRoute,
 		addReactionRoute,
@@ -106,6 +107,13 @@ type postMessageBody struct {
 	ClientMessageID string                 `json:"clientMessageId,omitempty"`
 	AttachmentIDs   []string               `json:"attachmentIds,omitempty"`
 	Poll            *chatutil.PollSettings `json:"poll,omitempty"`
+}
+
+// editMessageBody is the new ciphertext of a message, encrypted by its
+// author's client. Ciphertext is base64 nonce || XChaCha20-Poly1305 output.
+type editMessageBody struct {
+	Ciphertext []byte `json:"ciphertext"`
+	KeyVersion int64  `json:"keyVersion"`
 }
 
 // markReadBody names the newest message the caller has read in a channel.

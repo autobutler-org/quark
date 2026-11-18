@@ -35,3 +35,14 @@ UPDATE chat_messages
 SET ciphertext = NULL, deleted_at = COALESCE(deleted_at, strftime('%Y-%m-%d %H:%M:%f', 'now'))
 WHERE id = sqlc.arg(id)
 RETURNING *;
+
+-- EditChatMessage replaces a live message's ciphertext with its author's new
+-- one and stamps edited_at (#2426). nonce follows the new ciphertext, so the
+-- unique index keeps refusing a replay of what the message says now. A
+-- deleted message matches nothing.
+-- name: EditChatMessage :one
+UPDATE chat_messages
+SET ciphertext = sqlc.arg(ciphertext), key_version = sqlc.arg(key_version), nonce = sqlc.arg(nonce),
+    edited_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+WHERE id = sqlc.arg(id) AND deleted_at IS NULL
+RETURNING *;

@@ -270,15 +270,37 @@ ciphertext within the same channel and version, reordering messages, or claiming
 it came from someone else, since the key is shared. Per-message signatures would close both gaps, and are left
 for later.
 
+### Editing
+
+Its author may replace a message's text (#2426). The app encrypts the new text afresh, under the channel's
+current key version and a new random nonce, with the same additional data as a post, and the Quark swaps the
+ciphertext, the key version and the nonce in place and sets `edited_at`. No earlier version is kept, on the
+Quark or in the app, so the readers see "(edited)" and the text as it is now.
+
+- Only the author edits, and only while they hold `read_messages`: an author who was removed, or demoted to a
+  manage-only set, cannot reach back in. It is authorship, not a permission, so no set lets anyone else edit,
+  and an author who lost `send_messages` can still fix what they wrote.
+- The new nonce is held to the same unique index as a post's, so an edit cannot copy another message's
+  ciphertext, and a post cannot repeat what an edited message says now. The nonce a message had before an edit
+  is let go with its ciphertext, so the index no longer holds that earlier text.
+- A poll can't be edited, since its answers were given to the question as it was posted, and neither can a
+  tombstone. An edit keeps a message's reactions, its attachments and its quote: the app carries the attachment
+  keys and the quoted message's id over into the new plaintext, and the Quark keeps the attachment rows bound.
+- Mentions are found again in the new text, as for any message. An edit never moves a read marker or an unread
+  count, which count messages, not versions.
+
 ### What the Quark sees
 
 - Who posted in which channel, when, under which key version, and how long the ciphertext is.
+- Edits: that a message was edited, when it last was, and the new ciphertext's length. Not what changed, and not
+  how many times.
 - Deletions. A deleted message keeps its row as a tombstone: the ciphertext is wiped and `deleted_at` is set.
 
 ### Delivery
 
-- **Live.** `chat_message_created` carries the whole stored row, and `chat_message_deleted` carries the id and
-  channel. Both go to the channel's readers, the members holding `read_messages`, over the existing
+- **Live.** `chat_message_created` and `chat_message_edited` carry the whole stored row, the edit without its
+  reactions, and `chat_message_deleted` carries the id and channel. All three go to the channel's readers, the
+  members holding `read_messages`, over the existing
   `/api/v0/events` socket, and **only** to them. A delegated manager hears neither, and neither does an admin who
   isn't a reader, unlike every other event.
 - **Catch-up.** The socket drops events when a client falls behind, and it has no replay. So the app never
@@ -308,6 +330,8 @@ All need `read_messages`: anyone else gets 404, delegated managers and admins in
 - `POST /api/v0/chat/channels/:id/messages` takes `{ciphertext, keyVersion}` and needs `send_messages`. A reader
   without it gets 403.
 - `GET /api/v0/chat/channels/:id/messages?before=<id>&limit=50` pages backward, and `?after=<id>` pages forward.
+- `PUT /api/v0/chat/messages/:id` takes `{ciphertext, keyVersion}` and is allowed for the author alone, while
+  they hold `read_messages`. Another reader gets 403.
 - `DELETE /api/v0/chat/messages/:id` is allowed for the author or a holder of `delete_messages`, while they hold
   `read_messages`.
 

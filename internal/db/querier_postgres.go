@@ -389,6 +389,11 @@ func (a *postgresQueries) DemoteFromAdmin(ctx context.Context, username string) 
 	return DemoteFromAdminRow(row), err
 }
 
+func (a *postgresQueries) EditChatMessage(ctx context.Context, arg EditChatMessageParams) (ChatMessage, error) {
+	row, err := a.q.EditChatMessage(ctx, pgdb.EditChatMessageParams(arg))
+	return ChatMessage(row), err
+}
+
 func (a *postgresQueries) EnsureMaintenanceRun(ctx context.Context, name string) error {
 	return a.q.EnsureMaintenanceRun(ctx, name)
 }
