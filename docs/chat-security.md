@@ -486,11 +486,48 @@ Quark holds settings for it; anything else shows as text. It tallies the answers
 ### What the Quark sees
 
 - **That a message is a poll, its settings and its close time**, and when its author closed it.
-- **Who answered which poll, and when**, and when an answer was changed. One row per account and poll.
+- **Who answered which poll, and when**, and when an answer was changed. One row per account and poll. On an
+  anonymous poll the row holds a voter tag in place of the account (see below).
 - Never the question, the options, or what anyone answered.
-- **Anonymity hides names from the members, the author included, never from the Quark.** It still stores who
-  gave each answer, because it has to refuse a second one and serve each account its own. Whoever can read the
-  Quark's database can see who answered an anonymous poll, though not what.
+- **Anonymity hides names from the members, the author included, never from the running Quark.** It knows
+  which account is asking while it handles an answer, because it has to refuse a second one and serve each
+  account its own. Before #3942 it also stored the account beside each anonymous answer, so a member of the
+  channel who could read the database or a chat backup, a household admin for one, could see who answered
+  **and what**: every member can open every answer.
+
+### Voter tags
+
+An anonymous poll's answer stores no account id (#3942). The row holds a voter tag instead:
+
+```text
+HMAC-SHA256(voterKey, "quark-chat-poll-voter-v1" || be64(messageId) || be64(userId))
+```
+
+`voterKey` is 32 random bytes the Quark makes the first time it needs it, at
+`<data dir>/secrets/chat-poll-voter.key` (directory `0700`, file `0600`). It is never in the database. It is
+outside the files directory, so no snapshot copies it, it is not in `chat_backup.db`, and a bundle does not
+carry it. The tag is unique per poll, which keeps one answer per account, and the Quark finds the caller's own
+answer, `mine`, by computing the caller's tag. The `id` an anonymous answer is served under comes from its tag.
+
+What the tag hides, and what it does not:
+
+- **The database alone, a chat backup, a bundle, or a PostgreSQL dump no longer ties an anonymous answer to
+  an account.** With the tag and no key, trying every account id does not help.
+- **The database and the key file together do.** Anyone who holds both, someone with a shell on the device or
+  its disk in hand, can compute every account's tag for every poll and match the answers. The key sits beside
+  the database in the data directory, so this protects the copies of the data, not the device.
+- **The running Quark still sees who is answering**, as above.
+- **Older copies keep what they had.** Snapshots taken before the upgrade still hold the account ids, and on
+  SQLite the converted rows' old bytes can stay in the database file's free pages until SQLite reuses them.
+- **Answers stored before the upgrade** named their account. The server gives each its tag and clears the
+  account id at start, before it serves anything, and logs how many it changed.
+- **A deleted account's anonymous answers go too.** No cascade can find them, so the delete computes the
+  account's tag for every anonymous poll and removes those rows; an account given the same id later does not
+  inherit them.
+- **A restore onto another Quark, or after the key file is lost, forgets who answered.** The answers come back
+  and still count, but the tags no longer match anyone: nobody sees their own as `mine`, and an account that
+  had answered a poll still open can answer it again. A restore onto the Quark that wrote the backup keeps all
+  of it. Several servers sharing one PostgreSQL database need the same key file.
 - **A saved export is plaintext on the Quark.** When a member saves a poll's results as a file, the app has
   decrypted them, and the file in their Quark files is as readable to the Quark as any other file.
 

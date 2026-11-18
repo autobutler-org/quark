@@ -319,6 +319,7 @@
     "healthcheck",
     "healthutil",
     "hkdf",
+    "hmac",
     "hmacsha",
     "honnef",
     "hostnames",

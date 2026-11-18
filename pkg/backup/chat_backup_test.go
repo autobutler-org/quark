@@ -17,6 +17,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -97,10 +98,11 @@ func seedChat(t *testing.T, d *sql.DB) {
 	chatExec(t, d, `
 		INSERT INTO chat_polls (message_id, closes_at, closed_at, allow_change, anonymous, results_after_close)
 		VALUES (1, ?, NULL, 1, 0, 1), (4, NULL, ?, 0, 1, 0)`, at, at)
+	// Poll 4 is anonymous, so its answer holds a voter tag, not alice (#3942).
 	chatExec(t, d, `
-		INSERT INTO chat_poll_answers (message_id, user_id, key_version, ciphertext, created_at, updated_at)
-		VALUES (1, 3, 1, ?, ?, ?), (4, 1, 1, ?, ?, ?)`,
-		[]byte("answer-carol"), at, at, []byte("answer-alice"), at, at)
+		INSERT INTO chat_poll_answers (message_id, user_id, voter_tag, key_version, ciphertext, created_at, updated_at)
+		VALUES (1, 3, NULL, 1, ?, ?, ?), (4, NULL, ?, 1, ?, ?, ?)`,
+		[]byte("answer-carol"), at, at, []byte("tag-alice"), []byte("answer-alice"), at, at)
 	chatExec(t, d, `
 		INSERT INTO chat_attachments (id, channel_id, message_id, uploader_id, byte_size, created_at)
 		VALUES ('aa', 2, 1, 1, 12, ?), ('bb', 2, NULL, 2, 4, ?)`, at, at)
@@ -288,6 +290,36 @@ func TestImportChat_FollowsAccountsByName(t *testing.T) {
 		`[1 1 "nonce-1"]`, `[2 <nil> "nonce-2"]`, `[3 2 "nonce-3"]`, `[4 <nil> "nonce-4"]`)
 	assertRows(t, live, `SELECT user_id, CAST(ciphertext AS TEXT) FROM chat_reactions`,
 		`[2 "react-carol"]`)
+	// carol's named answer follows her; the anonymous one names nobody and
+	// comes back under its voter tag (#3942).
+	assertRows(t, live, `SELECT message_id, user_id, CAST(voter_tag AS TEXT) FROM chat_poll_answers ORDER BY id`,
+		`[1 2 <nil>]`, `[4 <nil> "tag-alice"]`)
+}
+
+// An anonymous poll's answer stored before voter tags is converted, and then
+// neither the database nor the backup ties it to an account (#3942).
+func TestExportChat_AnonymousAnswersNameNoAccount(t *testing.T) {
+	ctx := context.Background()
+	database := dbtest.NewDB(t)
+	seedChat(t, database.Db)
+	// As migration 052 leaves an answer from before it: alice by id.
+	chatExec(t, database.Db, `UPDATE chat_poll_answers SET user_id = 1, voter_tag = NULL WHERE message_id = 4`)
+
+	result, err := chatutil.TagAnonymousPollAnswers(chatutil.TagAnonymousPollAnswersParams{
+		Ctx: ctx, Queries: database.Queries, DataDir: t.TempDir(),
+	})
+	if err != nil || result.Tagged != 1 {
+		t.Fatalf("TagAnonymousPollAnswers = %+v, %v; want 1 tagged", result, err)
+	}
+	const named = `SELECT message_id, user_id IS NULL, voter_tag IS NULL FROM chat_poll_answers ORDER BY message_id`
+	assertRows(t, database.Db, named, "[1 0 1]", "[4 1 0]")
+
+	backupDB, err := sql.Open("sqlite", db.DSN(filepath.Join(exportChat(t, database.Db), backupChatFilename)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backupDB.Close()
+	assertRows(t, backupDB, named, "[1 0 1]", "[4 1 0]")
 }
 
 // TestImportChat_RekeysDirectMessages works a direct message's dm_key out

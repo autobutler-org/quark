@@ -5,6 +5,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,7 +40,7 @@ func listMessages(c *gin.Context) *serverutil.Response {
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
 	result, err := chatutil.ListMessages(chatutil.ListMessagesParams{
 		Ctx: c.Request.Context(), Database: deps.Database(), Principal: principal, ChannelID: id,
-		Before: before, After: afterID, Forward: forward, Limit: limit,
+		Before: before, After: afterID, Forward: forward, Limit: limit, DataDir: storageutil.GetDataDir(),
 	})
 	if err != nil {
 		return chatError(err)
