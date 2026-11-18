@@ -565,6 +565,27 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('typing is said while writing and shown for others (#2426) '
+        '($label)', (tester) async {
+      final (_, fake) = await pumpChat(tester, size);
+      final messages = fake.opened[1]!;
+
+      await tester.enterText(
+        find.byKey(const ValueKey('message_composer_field')),
+        'on my',
+      );
+      await tester.pump();
+      expect(messages.typed, greaterThan(0));
+      expect(find.byKey(const ValueKey('typing_indicator')), findsNothing);
+
+      messages
+        ..fakeTyping = {7}
+        ..setEntries(const []);
+      await tester.pump();
+      expect(find.text('ada is typing'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a member replies quoting a message (#2426) ($label)', (
       tester,
     ) async {

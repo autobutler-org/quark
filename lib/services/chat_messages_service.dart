@@ -173,6 +173,17 @@ class ChatMessagesService with AuthenticatedService {
     return response.stream;
   }
 
+  /// Tells channel [channelId]'s other readers this account is typing
+  /// there (#2426). Nothing is stored and nothing of the text is sent.
+  ///
+  /// api: POST /api/v0/chat/channels/{id}/typing
+  static Future<void> sendTyping(int channelId) async {
+    final response = await instance.authenticatedPost(
+      apiBaseUri.resolve('/api/v0/chat/channels/$channelId/typing'),
+    );
+    throwUnlessOk(response, 'say typing in channel $channelId');
+  }
+
   /// Replaces this account's message [messageId] with [ciphertext], encrypted
   /// under [keyVersion], and returns the edited row, which carries no
   /// reactions (#2426).

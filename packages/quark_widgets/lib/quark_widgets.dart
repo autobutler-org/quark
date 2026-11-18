@@ -44,6 +44,7 @@ export 'src/chat/quark_message_list.dart';
 export 'src/chat/quark_poll_card.dart';
 export 'src/chat/quark_poll_editor.dart';
 export 'src/chat/quark_start_conversation_dialog.dart';
+export 'src/chat/quark_typing_indicator.dart';
 export 'src/code/code_highlighter.dart';
 export 'src/code/code_language.dart';
 export 'src/code/code_search_match.dart';

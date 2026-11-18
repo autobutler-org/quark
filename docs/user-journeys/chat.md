@@ -831,3 +831,29 @@ open.
 - A quoted message still waiting for its key, or from another channel, also reads as unavailable.
 - A **Viewer**, who can't send, gets no **Reply**. Attaching a file is offered again once the reply is sent or
   stopped.
+
+---
+
+### JN-CHAT-034: See who is typing
+
+**Preconditions:** Two accounts, `bob` and `carol`, are **Member**s of a channel, each with it open.
+
+**Steps:**
+
+1. As `carol`, start writing a message and keep typing.
+2. Stop typing without sending, and wait.
+3. Type again and send.
+
+**Expected result:**
+
+- During step 1 `bob` sees "carol is typing" just above the composer; `carol` sees nothing about herself.
+- A few seconds into step 2 the line goes away by itself.
+- After step 3 the line goes away as `carol`'s message arrives.
+
+**Notes:**
+
+- Two people typing read "carol and dave are typing"; three or more, "Several people are typing".
+- It says who, never what: nothing of the text leaves `carol`'s device until she sends, and the Quark keeps no
+  record that she typed ([`docs/chat-security.md`](../chat-security.md)).
+- A **Viewer** can't send, so is never shown typing. Someone who can't read the channel never sees who types in it.
+- Editing a message (JN-CHAT-032) isn't typing a new one and says nothing.

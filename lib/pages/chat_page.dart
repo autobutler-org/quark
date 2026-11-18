@@ -842,6 +842,7 @@ class _ChatPageState extends State<ChatPage>
                           onRetry: () => c.retry(send.id),
                           onDiscard: () => c.discard(send.id),
                         ),
+                      QuarkTypingIndicator(names: c.typingNames),
                       if (editing != null)
                         QuarkComposerContextBar(
                           icon: QuarkIcons.edit_outlined,
@@ -892,7 +893,8 @@ class _ChatPageState extends State<ChatPage>
                                     : c.draftFor(channel.id),
                                 onChanged: channel == null || editing != null
                                     ? null
-                                    : (text) => c.setDraft(channel.id, text),
+                                    : (text) =>
+                                          c.composerChanged(channel.id, text),
                                 hintText: editing != null
                                     ? 'Edit message'
                                     : channel == null

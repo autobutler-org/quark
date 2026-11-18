@@ -787,6 +787,26 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     }
   }
 
+  /// The composer's text in channel [channelId] became [text]: kept as its
+  /// draft and, while there is any and the account may send there, said as
+  /// typing to the open channel (#2426).
+  void composerChanged(int channelId, String text) {
+    setDraft(channelId, text);
+    final messages = _messages;
+    if (text.isEmpty ||
+        messages == null ||
+        messages.channelId != channelId ||
+        !selectedPermissions.contains(ChatPermission.sendMessages)) {
+      return;
+    }
+    messages.notifyTyping();
+  }
+
+  /// The names of the others typing in the open channel now (#2426).
+  List<String> get typingNames => [
+    for (final id in _messages?.typingUserIds ?? const <int>{}) nameOf(id),
+  ];
+
   /// Forgets every draft. Tests use it so one case cannot leak into the next.
   @visibleForTesting
   static void clearSessionDrafts() => _sessionDrafts.clear();

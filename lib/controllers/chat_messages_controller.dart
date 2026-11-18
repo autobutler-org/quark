@@ -17,6 +17,7 @@ import 'package:quark/services/chat_channel_keys_service.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/chat_messages_service.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark/utils/chat_config.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -68,6 +69,11 @@ typedef UploadChatAttachmentFn =
 /// - A message under a key version this account has no grant of yet is
 ///   [ChatMessageState.waiting], and opens by itself once the grant lands
 ///   (the keys controller notifies).
+/// - [notifyTyping] tells the channel this account is typing, at most every
+///   `ChatConfig.typingInterval`, and `chat_typing` fills [typingUserIds]
+///   with the others who are (#2426). Each lapses after
+///   `ChatConfig.typingTimeout` without another, at once when their message
+///   arrives, and all of them when chat locks. None of it is kept.
 /// - [entries] is the merged timeline, oldest first.
 ///
 /// Plaintext stays in memory, and [dispose] drops it, except when an
@@ -105,6 +111,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     )?
     editMessage,
     Future<ChatMessage> Function(int messageId)? deleteMessage,
+    Future<void> Function(int channelId)? sendTyping,
     Future<ChatReaction> Function(
       int messageId,
       int keyVersion,
@@ -142,6 +149,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
        _postMessage = postMessage ?? ChatMessagesService.postMessage,
        _editMessage = editMessage ?? ChatMessagesService.editMessage,
        _deleteMessage = deleteMessage ?? ChatMessagesService.deleteMessage,
+       _sendTyping = sendTyping ?? ChatMessagesService.sendTyping,
        _addReaction = addReaction ?? ChatMessagesService.addReaction,
        _deleteReaction = deleteReaction ?? ChatMessagesService.deleteReaction,
        _answerPoll = answerPoll ?? ChatMessagesService.answerPoll,
@@ -194,6 +202,52 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   )
   _editMessage;
   final Future<ChatMessage> Function(int messageId) _deleteMessage;
+  final Future<void> Function(int channelId) _sendTyping;
+
+  /// Who else is typing here, each with the timer that lets them lapse.
+  final Map<int, Timer> _typing = {};
+
+  /// Runs for `ChatConfig.typingInterval` after this account says it is
+  /// typing; another word of it waits until it has.
+  Timer? _typedRecently;
+
+  /// The accounts typing in this channel now, never this one (#2426).
+  Set<int> get typingUserIds => Set.unmodifiable(_typing.keys);
+
+  /// Tells the channel's other readers this account is typing, unless it
+  /// already did within `ChatConfig.typingInterval`. A failure is dropped:
+  /// typing is a hint, and the next keystroke tries again.
+  void notifyTyping() {
+    if (_typedRecently?.isActive ?? false) return;
+    _typedRecently = Timer(ChatConfig.typingInterval, () {});
+    _sendTyping(channelId).catchError((Object e) {
+      debugPrint('[chat_messages_controller.dart] typing in $channelId: $e');
+    });
+  }
+
+  /// Shows [userId] as typing for `ChatConfig.typingTimeout`, or stops at
+  /// once with [stop].
+  void _setTyping(int userId, {bool stop = false}) {
+    final had = _typing.remove(userId)?..cancel();
+    if (!stop) {
+      _typing[userId] = Timer(
+        ChatConfig.typingTimeout,
+        () => _setTyping(userId, stop: true),
+      );
+    }
+    if (had == null && stop) return;
+    notifyListeners();
+  }
+
+  void _clearTyping() {
+    if (_typing.isEmpty) return;
+    for (final timer in _typing.values) {
+      timer.cancel();
+    }
+    _typing.clear();
+    notifyListeners();
+  }
+
   final Future<ChatReaction> Function(
     int messageId,
     int keyVersion,
@@ -813,6 +867,11 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       sub.cancel();
     }
     _keys.removeListener(_onKeysChanged);
+    _typedRecently?.cancel();
+    for (final timer in _typing.values) {
+      timer.cancel();
+    }
+    _typing.clear();
     _messages.clear();
     _system = const [];
     super.dispose();
@@ -1129,6 +1188,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   /// the text of any whose key is gone, as when chat locks and the keys are
   /// forgotten.
   void _onKeysChanged() {
+    if (_crypto() == null) _clearTyping();
     var changed = false;
     bool keyless(int version) =>
         _crypto() == null || _keys.keyFor(channelId, version) == null;
@@ -1161,8 +1221,14 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       case 'chat_message_created':
         final message = data['message'];
         if (message is! Map<String, dynamic>) return;
-        _put(ChatMessage.fromJson(message));
+        final created = ChatMessage.fromJson(message);
+        _put(created);
+        _typing.remove(created.authorId)?.cancel();
         notifyListeners();
+      case 'chat_typing':
+        final userId = (data['userId'] as num?)?.toInt();
+        if (userId == null || userId == _currentUserId()) return;
+        _setTyping(userId);
       case 'chat_message_edited':
         final message = data['message'];
         if (message is! Map<String, dynamic>) return;
