@@ -4797,6 +4797,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/chat/channels/{id}/typing": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sends chat_typing with {channelId, userId} to the channel's other readers, the holders of read_messages, and to no one else. It is ephemeral: nothing is stored or logged, there is no body, and it carries nothing of what is typed. A client sends it every few seconds while its user types and readers let it lapse on their own. Needs send_messages; a reader without it gets 403, and anyone without read_messages 404, delegated managers and admins included.",
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Say the caller is typing in a chat channel",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller reads the channel but lacks send_messages",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller lacks read_messages",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "the caller sent too many of these in a short time; the limit is per account",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/chat/keys/me": {
             "get": {
                 "security": [

@@ -174,6 +174,29 @@ func TestFilterEventChatMessages(t *testing.T) {
 	}
 }
 
+// TestFilterEventChatTyping delivers chat_typing to its audience alone, an
+// admin who isn't in it included, and sends who and where, nothing else
+// (#2426).
+func TestFilterEventChatTyping(t *testing.T) {
+	f := newFixture(t)
+	admin := f.load(t, accessutil.Principal{UserID: createUser(t, f.database, "root"), IsAdmin: true})
+	member := f.load(t, accessutil.Principal{UserID: f.userID})
+	evt := eventbus.Event{Kind: eventbus.EventChatTyping, Data: eventbus.ChatTyping{ChannelID: 7, UserID: 9, Audience: []int64{f.userID}}}
+	if !accessutil.FilterEvent(accessutil.FilterEventParams{Access: member, Event: evt}).Deliver {
+		t.Error("a reader in the audience did not hear it")
+	}
+	if accessutil.FilterEvent(accessutil.FilterEventParams{Access: admin, Event: evt}).Deliver {
+		t.Error("an admin outside the audience heard it")
+	}
+	body, err := json.Marshal(evt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"kind":"chat_typing","data":{"channelId":7,"userId":9}}`; string(body) != want {
+		t.Errorf("event JSON = %s, want %s", body, want)
+	}
+}
+
 // TestFilterEventChatReactions passes chat_reaction_changed only to the
 // channel's readers, never to an admin who isn't one (#2426).
 func TestFilterEventChatReactions(t *testing.T) {

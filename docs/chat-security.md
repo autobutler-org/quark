@@ -317,6 +317,21 @@ Quark or in the app, so the readers see "(edited)" and the text as it is now.
   itself once a member shares that version.
 - **Plaintext** is held in memory only, and is dropped when the channel is closed or chat locks.
 
+### Typing
+
+While someone writes, their app tells the channel so (#2426): `POST /api/v0/chat/channels/:id/typing`, with no
+body, at most every few seconds, and the Quark passes `chat_typing` with the channel and the account to the
+channel's other readers. Their apps show it for a few seconds and let it lapse unless another arrives.
+
+- It needs `send_messages`, so only someone who could post is shown typing. A reader without it gets 403, and
+  anyone without `read_messages` 404.
+- It reaches the holders of `read_messages` but the typist, and no one else: not a delegated manager, not an admin
+  who isn't a reader.
+- It is never stored or logged, and carries nothing of what is being typed. It is rate-limited per account by the
+  same limiter as the other chat writes.
+- **What the Quark learns:** that an account was typing in a channel, and when. That is metadata it did not see
+  before, like a read marker, though it keeps none of it.
+
 ### Search (#2429)
 
 The Quark can't index text it can't read, so its file search doesn't cover chat. A channel's search runs in the

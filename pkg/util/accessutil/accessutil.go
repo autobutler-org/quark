@@ -581,6 +581,10 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 		changed, ok := evt.Data.(eventbus.ChatPollAnswersChanged)
 		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
 	}
+	if evt.Kind == eventbus.EventChatTyping {
+		changed, ok := evt.Data.(eventbus.ChatTyping)
+		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
+	}
 	if evt.Kind == eventbus.EventChatReadMarkerChanged {
 		changed, ok := evt.Data.(eventbus.ChatReadMarkerChanged)
 		return FilterEventResult{Event: evt, Deliver: ok && changed.UserID != 0 && changed.UserID == access.principal.UserID}
