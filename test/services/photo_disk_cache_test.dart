@@ -8,6 +8,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/photo_disk_cache.dart';
 import 'package:quark/services/photo_disk_store.dart';
+import 'package:quark/services/photo_preview_service.dart';
 import 'package:quark/utils/photo_disk_cache_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -95,6 +96,26 @@ void main() {
 
     expect(await FilesService.downloadFileBytes('photos/beach.jpg'), photo);
     expect(requests, isEmpty);
+  });
+
+  test('a viewer preview is kept among the previews and opens with no '
+      'network, never passing for the original', () async {
+    answerWith((_) => http.Response.bytes(photo, 200));
+    expect(
+      await PhotoPreviewService.downloadPreviewBytes('photos/beach.jpg'),
+      photo,
+    );
+    expect(await (await PhotoDiskCache.originals)!.sizeInBytes(), 0);
+
+    goOffline();
+    expect(
+      await PhotoPreviewService.downloadPreviewBytes('photos/beach.jpg'),
+      photo,
+    );
+    await expectLater(
+      FilesService.downloadFileBytes('photos/beach.jpg'),
+      throwsA(anything),
+    );
   });
 
   test('a HEIC is kept among the previews, not the originals', () async {

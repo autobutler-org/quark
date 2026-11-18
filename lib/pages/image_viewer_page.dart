@@ -66,6 +66,13 @@ const _kPageAnimDuration = Duration(milliseconds: 250);
 ///
 /// Touch: a swipe sideways turns the page, a double-tap zooms in around the
 /// tap and back out, and a swipe down closes the viewer (#3358).
+///
+/// Preview first: a caller whose loaders hand over a screen-sized preview
+/// rather than the original passes [loadOriginal]. The viewer then fetches
+/// the original only once the user zooms in, and swaps it in place of the
+/// preview, which has the same shape, so nothing moves (#4220). Copying the
+/// photo copies the original too; download and share already go to the Quark
+/// for the file itself.
 class ImageViewerPage extends StatefulWidget {
   final Uint8List? bytes;
   final String name;
@@ -84,6 +91,17 @@ class ImageViewerPage extends StatefulWidget {
   /// a navigation does (a 404 on a photo the user never asked for is not a
   /// reason to refetch the grid behind them).
   final Future<void> Function(int index)? onPrefetchImage;
+
+  /// Downloads the photo a viewer opened without [bytes] shows first. Null
+  /// downloads the original with `FilesService.downloadFileBytes`.
+  final Future<Uint8List?> Function(String relPath, {String? serial})?
+  loadBytes;
+
+  /// Downloads the original of a photo when what [loadBytes] and
+  /// [onLoadImage] hand over is a preview of it; null when they already hand
+  /// over the original. Called when the user zooms in, and for a copy.
+  final Future<Uint8List?> Function(String relPath, {String? serial})?
+  loadOriginal;
 
   /// Reads how many photos [onLoadImage] can load now, after each step.
   final Future<int> Function()? getImageCount;
@@ -128,6 +146,8 @@ class ImageViewerPage extends StatefulWidget {
     this.imageCount = 1,
     this.onLoadImage,
     this.onPrefetchImage,
+    this.loadBytes,
+    this.loadOriginal,
     this.getImageCount,
     this.totalCount,
     this.onLoadMore,
@@ -147,6 +167,11 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   late int _currentIndex;
   // Null until the viewer's own download of [ImageViewerPage.relPath] lands.
   Uint8List? _currentBytes;
+  // Whether [_currentBytes] are the photo's original rather than a preview
+  // of it; always true without [ImageViewerPage.loadOriginal].
+  late bool _showingOriginal;
+  // The original's download for the photo on screen, while it runs.
+  Future<void>? _loadingOriginal;
   String? _loadError;
   late String _currentName;
   late String? _currentRelPath;
@@ -204,6 +229,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     _currentIndex = widget.initialIndex;
     _targetIndex = widget.initialIndex;
     _currentBytes = widget.bytes;
+    _showingOriginal = widget.loadOriginal == null;
     _currentName = widget.name;
     _currentRelPath = widget.relPath;
     _currentSerial = widget.serial;
@@ -229,14 +255,13 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     Uint8List? bytes;
     Object? error;
     try {
-      bytes = await FilesService.downloadFileBytes(
-        _currentRelPath ?? '',
-        serial: _currentSerial,
-      );
+      final load = widget.loadBytes ?? FilesService.downloadFileBytes;
+      bytes = await load(_currentRelPath ?? '', serial: _currentSerial);
     } catch (e) {
       error = e;
     }
-    if (!mounted) return;
+    // A zoom while the preview was on its way may have put the original up.
+    if (!mounted || _currentBytes != null) return;
     setState(() {
       _currentBytes = bytes;
       if (bytes == null) _loadError = Errors.message(error, 'load the photo');
@@ -382,12 +407,44 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   // A zoomed photo pans inside the InteractiveViewer, so the PageView has to
   // stop scrolling until it is back at 1x, and the photo has to be decoded
   // again at full resolution. Both start the moment the user pinches, so one flag
-  // and one threshold cover them (#1707, #1710).
+  // and one threshold cover them (#1707, #1710). A preview is only as sharp
+  // as the screen at 1x, so zooming in is also when the original is fetched
+  // (#4220).
   void _onZoomChanged() {
     final zoomed =
         _zoomController.value.getMaxScaleOnAxis() >
         ImageViewerConfig.zoomedInScale;
-    if (zoomed != _zoomedIn) setState(() => _zoomedIn = zoomed);
+    if (zoomed == _zoomedIn) return;
+    setState(() => _zoomedIn = zoomed);
+    if (zoomed) unawaited(_loadOriginal());
+  }
+
+  /// Swaps the preview on screen for the photo's original, once it lands.
+  /// A failure leaves the preview up: it is still the photo, only softer.
+  /// The photo it was fetched for may have been stepped away from by then, so
+  /// it is checked against the photo on screen before it goes up.
+  Future<void> _loadOriginal() {
+    final load = widget.loadOriginal;
+    final relPath = _currentRelPath;
+    if (load == null || _showingOriginal || relPath == null) {
+      return Future.value();
+    }
+    final serial = _currentSerial;
+    return _loadingOriginal ??= () async {
+      try {
+        final bytes = await load(relPath, serial: serial);
+        if (!mounted || bytes == null) return;
+        if (relPath != _currentRelPath || serial != _currentSerial) return;
+        setState(() {
+          _currentBytes = bytes;
+          _showingOriginal = true;
+        });
+      } catch (e) {
+        debugPrint('ImageViewerPage: failed to load the original: $e');
+      } finally {
+        _loadingOriginal = null;
+      }
+    }();
   }
 
   /// Downloads the photos either side of this one into the loader's cache,
@@ -481,6 +538,8 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       setState(() {
         _currentIndex = newIndex;
         _currentBytes = bytes;
+        _showingOriginal = widget.loadOriginal == null;
+        _loadingOriginal = null;
         _currentName = name;
         _currentRelPath = relPath;
         _currentSerial = serial;
@@ -805,9 +864,18 @@ class _ImageViewerPageState extends State<ImageViewerPage>
 
   /// Copies the photo showing to the system clipboard (#3436).
   Future<void> _copyToClipboard() async {
-    if (_currentRelPath == null) return;
+    final relPath = _currentRelPath;
+    if (relPath == null) return;
     final bytes = _currentBytes;
-    await copyPhotoToClipboard(context, () async => bytes);
+    final load = widget.loadOriginal;
+    final serial = _currentSerial;
+    await copyPhotoToClipboard(
+      context,
+      // A preview is a smaller copy: the clipboard gets the photo itself.
+      () async => _showingOriginal || load == null
+          ? bytes
+          : await load(relPath, serial: serial),
+    );
   }
 
   Future<void> _duplicate() async {
