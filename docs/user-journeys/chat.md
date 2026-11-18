@@ -857,3 +857,41 @@ open.
   record that she typed ([`docs/chat-security.md`](../chat-security.md)).
 - A **Viewer** can't send, so is never shown typing. Someone who can't read the channel never sees who types in it.
 - Editing a message (JN-CHAT-032) isn't typing a new one and says nothing.
+
+---
+
+### JN-CHAT-035: Message someone from the member list
+
+**Preconditions:** `ada` and `bob` both have accounts and have opened chat once, so both have chat keys. Both are in
+`general`. `carol` is an admin who is not `ada` or `bob`.
+
+**Steps:**
+
+1. As `ada`, open `general` and, in the member list, open the `everyone` group and tap **Message** on `bob`.
+2. Send `hi bob`.
+3. As `bob`, open chat.
+4. As `bob`, tap **Message** on `ada` in `general`'s member list.
+5. As `ada`, tap **Message someone** in the top bar, pick `bob` and `carol`, and tap **Message**.
+6. As `carol`, look at the channel list, and at the list with every channel an admin can manage.
+
+**Expected result:**
+
+- After step 1, chat opens a conversation with no name. The channel list shows it under **Direct messages**,
+  called `bob`, drawn with a person rather than a `#`.
+- After step 3, `bob` has the conversation under **Direct messages**, called `ada`, with `hi bob` in it and its
+  unread count.
+- After step 4, `bob` lands in the same conversation, not a new one.
+- After step 5, a second conversation opens, called `bob, carol`. `hi bob` is not in it.
+- After step 6, `carol` sees the `ada, bob, carol` conversation she is in, and the one between `ada` and `bob`
+  nowhere, as an admin or otherwise.
+
+**Notes:**
+
+- The same people always get the same conversation. Adding someone means starting a new conversation with
+  everyone, so a newcomer never reads what was said before they were in it.
+- A conversation has no settings: no name, no members to change, and no leaving or deleting it.
+- **Message** is offered on every account but your own, and on the Users page in each account's menu.
+- On a Quark where you are the only account, **Message someone** says that no one else has an account yet, and
+  there is no one to pick.
+- Private channels named for two people, the way people messaged each other before this, stay as they are:
+  they are ordinary private channels.

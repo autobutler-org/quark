@@ -959,50 +959,50 @@ void main() {
       chat.controller.dispose();
     });
 
-    test('starts a private channel with them as a Member', () async {
+    // #2423: a direct message, opened by the Quark for the set of people.
+    test('opens a direct message with them and sets up its key', () async {
       final chat = FakeChat();
       await chat.controller.refresh();
-      await chat.controller.loadPeople();
       chat.calls.clear();
 
-      final channel = await chat.controller.startConversation(8);
+      final channel = await chat.controller.startConversation({8, 9});
 
-      expect(channel?.name, 'ada, bob');
-      expect(chat.calls, [
-        'create ada, bob ""',
-        'ensure keys 12',
-        'set 12 user=8 group=null Member',
-        'sign 43 user=8 $memberSet',
+      expect(channel?.isDirect, isTrue);
+      expect(chat.calls, ['open dm 8,9', 'ensure keys ${channel?.id}']);
+      expect(chat.controller.directMessageItems.map((c) => c.name), [
+        'bob, cy',
       ]);
+      expect(
+        chat.controller.channelItems.map((c) => c.id),
+        isNot(contains('${channel?.id}')),
+        reason: 'a direct message is listed apart',
+      );
       chat.controller.dispose();
     });
 
-    test('opens the conversation you already have', () async {
-      final chat = FakeChat(
-        channels: [
-          ...fakeChannels,
-          ChatChannel(
-            id: 5,
-            name: 'Bob, Ada',
-            isPrivate: true,
-            permissions: ownerSet,
-          ),
-          ChatChannel(
-            id: 6,
-            name: 'ada, bob',
-            isPrivate: true,
-            permissions: ownerSet,
-          ),
-        ],
-      );
+    test('messages a member from the member list', () async {
+      final chat = FakeChat();
       await chat.controller.refresh();
-      await chat.controller.loadPeople();
-      chat.calls.clear();
 
-      final channel = await chat.controller.startConversation(8);
+      final first = await chat.controller.messageMember('8');
+      final again = await chat.controller.messageMember('8');
 
-      expect(channel?.id, 6);
-      expect(chat.calls, isEmpty);
+      expect(again?.id, first?.id);
+      expect(await chat.controller.messageMember('group_1'), isNull);
+      chat.controller.dispose();
+    });
+
+    test('an admin manages nothing in a direct message', () async {
+      final chat = FakeChat(isAdmin: true);
+      await chat.controller.refresh();
+      final dm = await chat.controller.startConversation({8});
+      chat.controller.select('${dm?.id}');
+      await chat.controller.refresh();
+
+      expect(chat.controller.canManageSelected, isFalse);
+      expect(chat.controller.canManageMembers, isFalse);
+      expect(chat.controller.canLeaveSelected, isFalse);
+      expect(chat.controller.titleOf(dm!), 'bob');
       chat.controller.dispose();
     });
   });

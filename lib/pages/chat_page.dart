@@ -59,8 +59,11 @@ import 'package:url_launcher/url_launcher.dart';
 ///
 /// "New channel" creates a channel and goes to it, asking whether it is
 /// private or open to every account and saying what each means (#2501).
-/// "Message someone" picks an account and goes to a private channel with
-/// them, made the first time (#2497). A private channel's header carries a
+/// "Message someone" picks one account or a few and goes to their direct
+/// message, the same one every time for the same people (#2497, #2423), as
+/// does Message on an account in the member list. Direct messages are listed
+/// under their own heading, named for their people, and offer no settings,
+/// leaving or deleting. A private channel's header carries a
 /// lock that says the same. The channel header's settings (#2422), with
 /// leave and delete set apart below a divider (#2498), edit the name and
 /// topic and delete, for holders of
@@ -468,33 +471,48 @@ class _ChatPageState extends State<ChatPage>
     _controller.clearSaveError();
     unawaited(_controller.loadPeople());
     // Not disposed, for the same reason as in _createChannel.
-    final picked = ValueNotifier<PrincipalItem?>(null);
+    final picked = ValueNotifier<Set<PrincipalItem>>({});
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => ListenableBuilder(
         listenable: Listenable.merge([_controller, picked]),
         builder: (dialogContext, _) => QuarkStartConversationDialog(
           people: _controller.people,
-          selected: {?picked.value},
+          selected: picked.value,
           isLoading: _controller.isLoadingPeople,
           loadError: _controller.peopleError == null
               ? null
               : Errors.message(_controller.peopleError, 'load the people'),
           isSubmitting: _controller.isSaving,
           error: _saveError('start the conversation'),
-          onSelected: (person) => picked.value = person,
+          onSelected: (person) => picked.value = picked.value.contains(person)
+              ? ({...picked.value}..remove(person))
+              : {...picked.value, person},
           onStart: () async {
-            final person = picked.value;
-            if (person == null) return;
-            final channel = await _controller.startConversation(person.id);
+            final channel = await _controller.startConversation({
+              for (final person in picked.value) person.id,
+            });
             if (channel == null || !dialogContext.mounted) return;
             Navigator.of(dialogContext).pop();
-            _goToCreated(channel.id, 'add ${person.name}');
+            _goToCreated(channel.id, 'start the conversation');
           },
           onCancel: () => Navigator.of(dialogContext).pop(),
         ),
       ),
     );
+  }
+
+  Future<void> _messageMember(String id) async {
+    final channel = await _controller.messageMember(id);
+    if (!mounted) return;
+    if (channel == null) {
+      showMessage(
+        context,
+        Errors.message(_controller.saveError, 'start the conversation'),
+      );
+      return;
+    }
+    context.go(AppRoutes.chatChannel('${channel.id}'));
   }
 
   /// Goes to channel [id] just made, saying so when the step after making it,
@@ -636,7 +654,6 @@ class _ChatPageState extends State<ChatPage>
         final openId = _windowFocused && channel != null
             ? '${channel.id}'
             : null;
-        final partner = channel == null ? null : c.directPartnerOf(channel);
         final editing = c.editingMessageId;
         final replying = c.replyingTo;
         // ponytail: a reply is text; attaching while replying waits until
@@ -651,7 +668,7 @@ class _ChatPageState extends State<ChatPage>
               key: const ValueKey('chat_message_someone'),
               icon: QuarkIcons.person_add_outlined,
               label: 'Message someone',
-              tooltip: 'Start a private channel with one person',
+              tooltip: 'Message one person, or a few',
               onPressed: c.isLocked ? null : _messageSomeone,
             ),
             QuarkBarChip(
@@ -677,8 +694,10 @@ class _ChatPageState extends State<ChatPage>
                   header: channel == null
                       ? null
                       : ChatChannelHeader(
-                          name: partner ?? channel.name,
-                          isDirect: partner != null,
+                          name: channel.isDirect
+                              ? c.directNameOf(channel)
+                              : channel.name,
+                          isDirect: channel.isDirect,
                           topic: channel.topic,
                           isPrivate: channel.isPrivate,
                           onSearch: c.canSearch ? c.toggleSearch : null,
@@ -692,6 +711,10 @@ class _ChatPageState extends State<ChatPage>
                   channelList: QuarkChannelList(
                     serverName: serverName,
                     channels: _channelsWithoutOwnBadge(c.channelItems, openId),
+                    directMessages: _channelsWithoutOwnBadge(
+                      c.directMessageItems,
+                      openId,
+                    ),
                     otherChannels: _channelsWithoutOwnBadge(
                       c.otherChannelItems,
                       openId,
@@ -935,6 +958,8 @@ class _ChatPageState extends State<ChatPage>
                     permissions: c.managingPermissions,
                     onAddMembers: _openMembers,
                     onRemove: _removeMember,
+                    onMessage: c.isLocked ? null : _messageMember,
+                    selfId: c.currentUserKey,
                     expandedIds: c.expandedGroupIds,
                     onToggleExpanded: c.toggleGroup,
                     isLoading: c.isLoadingMembers && c.members.isEmpty,

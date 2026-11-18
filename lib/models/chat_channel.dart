@@ -16,7 +16,15 @@ class ChatChannel {
     this.createdBy,
     this.unreadCount = 0,
     this.lastReadMessageId = 0,
+    this.kind = channelKind,
+    this.members = const [],
   });
+
+  /// [kind] of a named channel.
+  static const channelKind = 'channel';
+
+  /// [kind] of a direct message (#2423).
+  static const directKind = 'dm';
 
   /// The channel's id, the `/chat/:channelId` in its URL.
   final int id;
@@ -51,6 +59,16 @@ class ChatChannel {
   /// channel the caller doesn't read.
   final int lastReadMessageId;
 
+  /// [channelKind], or [directKind] for a direct message: no name, and
+  /// people who never change.
+  final String kind;
+
+  /// A direct message's accounts, this one included; empty for a channel.
+  final List<ChatMemberUser> members;
+
+  /// Whether this is a direct message.
+  bool get isDirect => kind == directKind;
+
   /// Whether the caller has any row here. A channel an admin lists without
   /// being in it has none.
   bool get isMember => permissions.isNotEmpty;
@@ -59,20 +77,15 @@ class ChatChannel {
   /// A channel listed without it is one the caller only manages.
   bool get canRead => permissions.contains(ChatPermission.readMessages);
 
-  /// The other person's username when this is a private conversation that
-  /// [me] is in, and null for any other channel (#3257).
-  ///
-  /// There is no conversation kind on the Quark: `startConversation` makes a
-  /// private channel named for both usernames, sorted, as `ada, bob`. So a
-  /// private channel with exactly two names, one of them [me], is one.
-  String? directPartner(String? me) {
-    if (!isPrivate || me == null) return null;
-    final names = name.split(', ');
-    if (names.length != 2) return null;
-    final self = me.toLowerCase();
-    if (names.first.toLowerCase() == self) return names.last;
-    if (names.last.toLowerCase() == self) return names.first;
-    return null;
+  /// What a direct message is called, for account [me]: the other people's
+  /// usernames, as `bob, cy`. `Only you` once everyone else's account is
+  /// gone.
+  String directName(int? me) {
+    final others = [
+      for (final m in members)
+        if (m.id != me) m.username,
+    ];
+    return others.isEmpty ? 'Only you' : others.join(', ');
   }
 
   /// Reads one channel. Permission names this version doesn't know are
@@ -87,6 +100,11 @@ class ChatChannel {
     createdBy: (json['createdBy'] as num?)?.toInt(),
     unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
     lastReadMessageId: (json['lastReadMessageId'] as num?)?.toInt() ?? 0,
+    kind: json['kind'] as String? ?? channelKind,
+    members: [
+      for (final m in json['members'] as List? ?? const [])
+        ChatMemberUser.fromJson(m as Map<String, dynamic>),
+    ],
   );
 }
 

@@ -129,6 +129,21 @@ void main() {
       expect(key('chat_channel_private'), findsNothing);
       expect(tester.takeException(), isNull);
     });
+
+    // #2423: the lock says to add people from Members, which a direct
+    // message doesn't have.
+    testWidgets('a direct message has no channel lock at $size', (
+      tester,
+    ) async {
+      await pumpHeader(
+        tester,
+        size,
+        const ChatChannelHeader(name: 'bob', isPrivate: true, isDirect: true),
+      );
+      expect(key('chat_channel_private'), findsNothing);
+      expect(find.byTooltip(ChatChannelHeader.privateTooltip), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   }
 
   // #3257: a conversation was titled like a channel, '# grace, ux-test'.
