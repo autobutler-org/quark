@@ -2043,6 +2043,51 @@ func MarkRead(params MarkReadParams) (MarkReadResult, error) {
 	return result, nil
 }
 
+// TypingParams says the caller is typing in a channel.
+type TypingParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_typing. Nil skips it.
+	EventBus  *eventbus.Bus
+	Principal accessutil.Principal
+	ChannelID int64
+}
+
+// TypingResult is empty: typing leaves nothing behind.
+type TypingResult struct{}
+
+// Typing tells the channel's other readers, with chat_typing, that the
+// caller is typing there (#2426). It is ephemeral: nothing is stored or
+// logged, and it carries who and where, never what. It needs send_messages:
+// a reader without it gets ErrReadOnly, and anyone without read_messages,
+// delegated managers and admins included, ErrChannelNotFound.
+func Typing(params TypingParams) (TypingResult, error) {
+	if params.Database == nil {
+		return TypingResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	perms, err := memberPerms(params.Ctx, queries, params.Principal, params.ChannelID)
+	if err != nil {
+		return TypingResult{}, err
+	}
+	if !perms.Has(PermSendMessages) {
+		return TypingResult{}, ErrReadOnly
+	}
+	if params.EventBus == nil {
+		return TypingResult{}, nil
+	}
+	audience, err := readers(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return TypingResult{}, err
+	}
+	params.EventBus.Publish(eventbus.Event{Kind: eventbus.EventChatTyping, Data: eventbus.ChatTyping{
+		ChannelID: params.ChannelID,
+		UserID:    params.Principal.UserID,
+		Audience:  slices.DeleteFunc(audience, func(id int64) bool { return id == params.Principal.UserID }),
+	}})
+	return TypingResult{}, nil
+}
+
 // DeleteMessageParams deletes one message.
 type DeleteMessageParams struct {
 	Ctx      context.Context

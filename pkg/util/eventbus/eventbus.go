@@ -132,6 +132,9 @@ const (
 	// channel moves forward (#2424), so its other sessions clear their unread
 	// count. Data is a ChatReadMarkerChanged.
 	EventChatReadMarkerChanged EventKind = "chat_read_marker_changed"
+	// EventChatTyping fires when a member says they are typing in a channel
+	// (#2426). Data is a ChatTyping. Nothing about it is stored or logged.
+	EventChatTyping EventKind = "chat_typing"
 
 	// EventResync tells a subscriber it missed events and should refetch or
 	// reconcile everything it holds (#2753). Data is a Resync; Path is empty.
@@ -243,6 +246,15 @@ type ChatReadMarkerChanged struct {
 	UnreadCount int64 `json:"unreadCount"`
 	// UserID is the account whose marker moved. It is never sent.
 	UserID int64 `json:"-"`
+}
+
+// ChatTyping is the data of a chat_typing event: who is typing where, and
+// nothing of what. It reaches only the channel's other readers.
+type ChatTyping struct {
+	ChannelID int64 `json:"channelId"`
+	UserID    int64 `json:"userId"`
+	// Audience is the channel's readers but the typist. It is never sent.
+	Audience []int64 `json:"-"`
 }
 
 // BackupDeleted is the data of a backup_deleted event.
