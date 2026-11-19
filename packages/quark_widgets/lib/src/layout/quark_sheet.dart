@@ -91,6 +91,10 @@ class QuarkSheet extends StatelessWidget {
   /// scrim to tap.
   static const double maxHeightFactor = 0.85;
 
+  /// The height the drag handle and header need. A sheet given less than this
+  /// while its route transitions draws nothing instead of overflowing (#3364).
+  static const double chromeHeight = 96;
+
   /// What the sheet is for, shown in its header.
   final String title;
 
@@ -116,6 +120,9 @@ class QuarkSheet extends StatelessWidget {
         final available = constraints.hasBoundedHeight
             ? constraints.maxHeight
             : MediaQuery.sizeOf(context).height;
+        if (available * maxHeightFactor < chromeHeight) {
+          return const SizedBox.shrink();
+        }
         return ConstrainedBox(
           constraints: BoxConstraints(maxHeight: available * maxHeightFactor),
           child: Padding(
