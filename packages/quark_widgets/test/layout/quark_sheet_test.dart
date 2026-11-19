@@ -59,6 +59,7 @@ Future<void> _open(
 }
 
 void main() {
+  _squeezedSheetTests();
   testBothViewports('the close button closes the sheet', (tester, size) async {
     final results = <String?>[];
     await _open(tester, size, results);
@@ -217,4 +218,33 @@ void main() {
       );
     });
   }
+}
+
+/// #3364: a sheet handed a sliver of height while its route transitions laid
+/// its handle and header out in a 1x1 box and logged "A RenderFlex overflowed
+/// by 51 pixels on the bottom".
+void _squeezedSheetTests() {
+  testBothViewports('a sheet squeezed to a sliver does not overflow', (
+    tester,
+    size,
+  ) async {
+    for (final box in [const Size(1, 1), Size(size.width, 20)]) {
+      await pumpAt(
+        tester,
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: SizedBox.fromSize(
+            size: box,
+            child: QuarkSheet(
+              title: 'Add to album',
+              onClose: () {},
+              child: const Text('content'),
+            ),
+          ),
+        ),
+        size: size,
+      );
+      expect(tester.takeException(), isNull, reason: 'at $box');
+    }
+  });
 }
