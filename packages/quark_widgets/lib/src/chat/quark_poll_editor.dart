@@ -308,7 +308,9 @@ class _QuarkPollEditorState extends State<QuarkPollEditor> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Anonymous'),
                   subtitle: const Text(
-                    'Nobody, you included, sees who answered what.',
+                    'No member, you included, sees who answered what. '
+                    'Someone with access to the Quark device itself could '
+                    'still find out.',
                   ),
                   value: draft.anonymous,
                   onChanged: (on) =>
