@@ -305,6 +305,7 @@
     "gotools",
     "govet",
     "govulncheck",
+    "GPano",
     "gradlew",
     "grayscale",
     "gremlins",
