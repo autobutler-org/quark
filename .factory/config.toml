@@ -1,0 +1,30 @@
+# cspell:words repoconfig npmjs
+# The factory's repository config (autobutler-org/factory, internal/repoconfig).
+# AGENTS.md (The factory) says how quark uses it.
+
+# What CI's check and test workflows run, short of the PostgreSQL, integration,
+# race and chaos jobs: the whole `make check`, the unit tests, and the generated
+# files committed. The worktree starts with no resolved Dart packages, and
+# without them `dart format` rewrites files under packages/, so resolve first.
+#
+# The gate runs in ghcr.io/autobutler-org/quark-factory-worker with only PATH,
+# the locale and an empty scratch HOME, so it downloads every Go module, pub
+# package and npm package it needs. The worker pod's egress has to allow
+# pub.dev, storage.googleapis.com, proxy.golang.org, registry.npmjs.org,
+# nodejs.org and release-assets.githubusercontent.com beside GitHub. The
+# updateutil tests also try quarkrelease.blob.core.windows.net and pass without it.
+gate = "flutter pub get && make check test && git diff --exit-code"
+
+# Measured in the image with 4 CPUs and 8 GiB: about 30 minutes from a cold
+# cache, 5.3 GiB of memory at the peak, 5 GB of disk.
+gate_timeout = "1h"
+session_timeout = "2h"
+
+review_rounds = 3
+
+# Every pull request gets a person's review and goes through the merge queue,
+# so the factory waits for that approval and merges nothing itself.
+require_approval = true
+
+[automate]
+merge = "off"

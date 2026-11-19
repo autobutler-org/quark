@@ -28,7 +28,7 @@ packages/                     independent Dart/Flutter packages (see Packages Di
 test/                         Flutter tests; Go tests sit beside the code they cover
 docs/                         contributor documentation
 scripts/                      CI and layout-check scripts
-ci/                           Errand job images: ci-backend, ci-frontend, ci-full
+ci/                           Errand job images (ci-backend, ci-frontend, ci-full) and the factory worker
 datalinks/                    symlinks to system directories, an in-repo view of app data
 ```
 
@@ -202,7 +202,7 @@ An agent leans on GitHub Actions for the full gate rather than running it locall
   Formatting still has to be clean.
 - **The commit hook runs `make check/fast`.** `make setup/hooks` installs it. It checks gofmt, `dart format`, and
   cspell on the staged files and names the fix (`make fix`, or the file to format). The full `make check` stays
-  the gate humans and schmeide run, and GitHub Actions runs it on the pull request. In a fresh worktree, run
+  the gate humans and the factory run, and GitHub Actions runs it on the pull request. In a fresh worktree, run
   `flutter pub get` before that gate, or `dart format` rewrites files under `packages/`.
 
 Every target stays available to humans, and the full `make check` or a single `make test/...` target is the
@@ -292,34 +292,44 @@ them as build args. The only duplicated commands are the four `go install` lines
 `setup/gotools/golangci-lint`, `setup/govulncheck`, `setup/sqlc`, and `setup/swag`. If those are unified, the
 image calls those Makefile targets. Nothing else moves.
 
-### The schmeide factory
+### The factory
 
-[schmeide](https://github.com/autobutler-org/schmeide) is the org's software factory. Given an assigned issue
-carrying the `schmeide:ready` label, it runs a fresh Claude Code or Grok CLI session in a worktree, runs the
-gate, opens a PR as the schmeide GitHub App, and reviews it. `.schmeide/config.toml` sets the gate to
-`flutter pub get` and then `make check test` (through `gmake` where it exists), the same targets CI runs on
-every PR, with the packages resolved first because the factory's worktree starts without them,
-and turns on factory merge: a PR that passes review goes into the merge queue once its checks are green, with
-no person in the loop. It replaces saddle: the `saddle:` labels, `saddle/...` branches and `Saddle-Task:`
-trailers in older history are the predecessor's, and new work goes through schmeide.
+The [factory](https://github.com/autobutler-org/factory) is the org's software factory. Given a work item, it
+runs a Claude Code session in a Kubernetes Job, runs the gate, opens a PR, and reviews it. It replaces schmeide,
+which replaced saddle: the `schmeide:` and `saddle:` labels, `<N>_` and `saddle/...` branches,
+`.schmeide/config.toml` and `Saddle-Task:` trailers in older history are theirs.
 
-- **Handing an issue over.** Assign it and add `schmeide:ready`. The factory takes whatever carries the label,
-  so only a maintainer's issue gets it (see "Only a maintainer's issue is yours to pick up"). The session works
-  from the title and body stored when the label or assignment landed and never fetches the issue, so a ready
-  issue is self-contained: acceptance criteria, `file:line` pointers, decisions already made. Edits after
-  that are not seen, and re-labeling does not refresh the job.
-- **One issue, one reviewable PR.** The factory's reviewer rounds are the review and the merge needs nobody,
-  so work too big for one review is split into several issues before any of them is labeled.
-- **Stacks are "blocked by".** Express a dependency as GitHub's blocked-by relationship, not a `Parent:` line.
-  The PR is based on the blocker's open factory PR; a blocker with no open PR yet does not count, and several
-  open blockers must form one linear stack or the job fails.
-- **Branch names differ.** schmeide names its branch `<N>_<short-description>`. An agent working by hand keeps
-  `fix/N-...` / `feat/N-...` (see Pull request and commit conventions). A PR on a `<N>_` branch, open or
-  closed, stops the factory from opening another for issue N.
-- **Running under schmeide.** A session the factory started works exactly its one issue: it opens no second
-  PR, changes no labels, and picks up no other issue. It does move its issue on the Autobutler project, as
-  any agent working an issue does. `.schmeide/review.md` is the reviewer's verdict file; the
-  runner deletes it, and it is never committed.
+- **Handing work over.** There is no label trigger yet: adding a label to an issue does nothing. A maintainer
+  enqueues the issue through the factory's API (`POST /api/v1/work`, with `source: github`, the issue as
+  `external_id` and `repos: ["autobutler-org/quark"]`), so only a maintainer's issue gets in (see "Only a
+  maintainer's issue is yours to pick up"). The session works from the title and body sent then and never
+  fetches the issue, so the body is self-contained: acceptance criteria, `file:line` pointers, decisions already
+  made.
+- **`.factory/config.toml`** sets the gate, its timeout and the review. The factory reads it from `main`, so a
+  change to it takes effect once it merges, and a session cannot weaken its own gate. The gate runs with only
+  `PATH`, the locale and an empty scratch `HOME`, so it resolves the packages first and fetches what it needs
+  (the hosts are listed in the file). The factory merges nothing here: `[automate] merge = "off"` and
+  `require_approval` leave every factory PR to a person and the merge queue.
+- **One item, one reviewable PR.** Work too big for one review is split into several items. A dependency is
+  the item's `blocked_by`; the PR is based on the blocker's open factory PR.
+- **Branch names differ.** The factory names its branch `<short id>_<title words>`. An agent working by hand keeps
+  `fix/N-...` / `feat/N-...` (see Pull request and commit conventions).
+- **Running under the factory.** A session the factory started works exactly its one item: it opens no second
+  PR, changes no labels, and picks up no other issue. It does move its issue on the Autobutler project, as any
+  agent working an issue does. It leaves its PR text in `.factory/pr.md`, a review verdict in
+  `.factory/review.md`, or a reason it cannot go on in `.factory/blocked.md`; the worker removes them, and they
+  are never committed.
+- **The image.** The Job runs `ghcr.io/autobutler-org/quark-factory-worker`, built from
+  `ci/factory-worker.Dockerfile`: the factory's `factory-worker` image (Debian, uid 1000, Go, Node, gh, Claude
+  Code) plus Flutter at the `pubspec.yaml` version and sqlc, swag, golangci-lint and govulncheck at the
+  Makefile's pins, installed by the same `ci/common.sh` functions as the CI images. Flutter lives only here,
+  never in the factory's base. `make build/docker/factory-worker` builds it locally. `ci-image.yml` builds it
+  for amd64 and arm64 on a pull request that touches it, `ci/common.sh`, `pubspec.yaml` or the Makefile, and on
+  `main` publishes it tagged `<Flutter version>-<short sha>` and `latest`.
+- **Moving to a new Flutter or factory base.** A Flutter bump in `pubspec.yaml`, or a new `FROM` tag in
+  `ci/factory-worker.Dockerfile` (Renovate moves it), publishes a new tag once it merges. Then set the
+  `image` line in `.factory/config.toml` to that tag in a PR of its own, so the image the factory runs only
+  moves on purpose. Until the factory reads `image`, the cluster's default worker image is the one that runs.
 
 ### Generated code (never hand-edit)
 
