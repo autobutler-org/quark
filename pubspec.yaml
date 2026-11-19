@@ -44,6 +44,9 @@ dependencies:
   open_file: ^4.0.0
   path_provider: ^2.1.6
   video_player: ^2.6.0
+  # Keeps the screen on during an in-app slideshow (#4179). Already in the
+  # resolution through video_player_media_kit.
+  wakelock_plus: ^1.8.0
   web: ^1.1.1
   photo_manager: ^3.12.0
   desktop_drop: ^0.9.0

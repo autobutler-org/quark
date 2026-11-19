@@ -9,6 +9,7 @@ import 'package:quark/controllers/photos_controller.dart';
 import 'package:quark/controllers/sidebar_controller.dart';
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/pages/image_viewer_page.dart';
+import 'package:quark/pages/slideshow_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
@@ -816,6 +817,11 @@ class PhotosPageState extends State<PhotosPage>
     );
   }
 
+  /// Plays the selection, or else the photos the grid shows, full screen
+  /// (#4179).
+  Future<void> _playSlideshow() =>
+      SlideshowPage.open(context, photos: _controller.slideshowPhotos);
+
   @override
   Widget build(BuildContext context) {
     // The split view owns the breakpoint. The page asks which layout it is
@@ -908,6 +914,18 @@ class PhotosPageState extends State<PhotosPage>
                     onPressed: () => _addPhotosTo(album.toAlbumItem()),
                   )
                 : null;
+            // An album plays as a slideshow from its bar (#4179), or on a
+            // phone from the second row's tools; a selection plays from the
+            // selection bar.
+            final canSlideshow = album != null && photos.isNotEmpty;
+            final slideshow = canSlideshow && !phone
+                ? QuarkBarIconButton(
+                    key: const ValueKey('photos_slideshow'),
+                    icon: QuarkIcons.play_arrow,
+                    tooltip: 'Slideshow',
+                    onPressed: _playSlideshow,
+                  )
+                : null;
             final sort = PhotoSortButton(
               sortField: c.sortField,
               sortOrder: c.sortOrder,
@@ -920,6 +938,7 @@ class PhotosPageState extends State<PhotosPage>
                 ? [search, ?selectOrAdd]
                 : [
                     if (!secondRow) ...[upload, search],
+                    ?slideshow,
                     ?albumSelect,
                     ?selectOrAdd,
                     sort,
@@ -977,6 +996,9 @@ class PhotosPageState extends State<PhotosPage>
                             ? null
                             : () => context.go(AppRoutes.photoDuplicates),
                         onExport: _demo ? null : _exportPhotos,
+                        onSlideshow: phone && canSlideshow
+                            ? _playSlideshow
+                            : null,
                         onPickLibrary: compact ? _openLibraryPicker : null,
                         onGridSize: compact ? _openGridSize : null,
                       ),
@@ -1008,6 +1030,7 @@ class PhotosPageState extends State<PhotosPage>
                           ? null
                           : _shareSelection,
                       onCopy: _demo ? null : _copySelection,
+                      onSlideshow: _playSlideshow,
                       onRemoveFromAlbum: showingFavorites
                           ? () => _favoriteSelection(favorite: false)
                           : album != null && !album.isSystemAlbum

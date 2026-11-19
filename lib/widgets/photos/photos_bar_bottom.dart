@@ -25,10 +25,15 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// [onExport] adds "Export", which copies albums or the whole library out of
 /// Quark as plain files (#3501).
 ///
+/// [onSlideshow] adds "Slideshow", which plays what the grid shows (#4179).
+/// A phone's bar has no room for it beside Sort and Select, so it sits here
+/// with the tools.
+///
 /// Key prefixes: `photos_library_picker` on the title chip,
-/// `photos_duplicates`, `photos_export` and `photos_grid_size` on the tool
-/// chips, `app_bar_bottom_menu` on the menu, and `photos_menu_duplicates`,
-/// `photos_menu_export`, `photos_menu_grid_size` and
+/// `photos_duplicates`, `photos_export`, `photos_slideshow` and
+/// `photos_grid_size` on the tool chips, `app_bar_bottom_menu` on the menu,
+/// and `photos_menu_duplicates`, `photos_menu_export`,
+/// `photos_menu_slideshow`, `photos_menu_grid_size` and
 /// `photos_menu_upload_to_device` on its items.
 class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
   /// Creates the row reading [title].
@@ -36,6 +41,7 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
     required this.title,
     this.onDuplicates,
     this.onExport,
+    this.onSlideshow,
     this.onPickLibrary,
     this.onGridSize,
     this.onUploadToDevice,
@@ -53,6 +59,9 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
   /// Opens the export dialog. Null leaves Export out, for a library the
   /// Quark does not hold, such as Demo mode's.
   final VoidCallback? onExport;
+
+  /// Plays what the grid shows as a slideshow. Null leaves Slideshow out.
+  final VoidCallback? onSlideshow;
 
   /// Opens the library picker: All photos, the categories and the albums.
   /// Null renders [title] as plain text.
@@ -80,6 +89,7 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
     final tokens = QuarkTokens.of(context);
     final onDuplicates = this.onDuplicates;
     final onExport = this.onExport;
+    final onSlideshow = this.onSlideshow;
     final onPickLibrary = this.onPickLibrary;
     final onGridSize = this.onGridSize;
     final onUploadToDevice = this.onUploadToDevice;
@@ -106,6 +116,14 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
       ),
       pinnedActions: pinnedActions,
       actions: [
+        if (onSlideshow != null)
+          QuarkBarChip(
+            key: const ValueKey('photos_slideshow'),
+            icon: QuarkIcons.play_arrow,
+            label: 'Slideshow',
+            keepLabel: true,
+            onPressed: onSlideshow,
+          ),
         if (onGridSize != null)
           QuarkBarIconButton(
             key: const ValueKey('photos_grid_size'),
@@ -134,6 +152,15 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
       ],
       menuLabel: 'Tools',
       menuChildren: [
+        if (onSlideshow != null)
+          MenuItemButton(
+            key: const ValueKey('photos_menu_slideshow'),
+            onPressed: onSlideshow,
+            child: quarkMenuLabel(
+              leading: const Icon(QuarkIcons.play_arrow),
+              label: const Text('Slideshow'),
+            ),
+          ),
         if (onUploadToDevice != null)
           MenuItemButton(
             key: const ValueKey('photos_menu_upload_to_device'),

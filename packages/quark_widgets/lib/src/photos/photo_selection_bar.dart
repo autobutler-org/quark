@@ -25,10 +25,10 @@ import '../theme/quark_tokens.dart';
 /// At [collapseBelow] and narrower, only the count and Add to album stay in
 /// the row and the rest move into a menu labeled More.
 ///
-/// Key prefixes: `photo_selection_add_to_album`, `photo_selection_favorite`,
-/// `photo_selection_download`, `photo_selection_share`,
-/// `photo_selection_copy`, `photo_selection_remove_from_album`,
-/// `photo_selection_delete`, and `photo_selection_more` on the More menu.
+/// Key prefixes: `photo_selection_add_to_album`, `photo_selection_slideshow`,
+/// `photo_selection_favorite`, `photo_selection_download`,
+/// `photo_selection_share`, `photo_selection_copy`,
+/// `photo_selection_remove_from_album`, `photo_selection_delete`, and `photo_selection_more` on the More menu.
 ///
 /// ```dart
 /// PhotoSelectionBar(
@@ -45,6 +45,7 @@ class PhotoSelectionBar extends StatelessWidget {
     required this.selectedCount,
     required this.onAddToAlbum,
     this.allFavorites = false,
+    this.onSlideshow,
     this.onFavorite,
     this.onDownload,
     this.onShare,
@@ -69,6 +70,9 @@ class PhotoSelectionBar extends StatelessWidget {
   /// Whether every selected photo is already a favorite, which words the
   /// favorite action Unfavorite.
   final bool allFavorites;
+
+  /// Plays the selection as a slideshow. Null leaves the action out.
+  final VoidCallback? onSlideshow;
 
   /// Favorites the selection, or takes it out of Favorites when [allFavorites]. Null
   /// leaves the action out.
@@ -107,6 +111,13 @@ class PhotoSelectionBar extends StatelessWidget {
 
     final actions =
         <({String key, IconData icon, String label, VoidCallback? onPressed})>[
+          if (onSlideshow case final onSlideshow?)
+            (
+              key: 'photo_selection_slideshow',
+              icon: QuarkIcons.play_arrow,
+              label: 'Slideshow',
+              onPressed: onSlideshow,
+            ),
           if (onFavorite case final onFavorite?)
             (
               key: 'photo_selection_favorite',

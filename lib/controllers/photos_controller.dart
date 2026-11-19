@@ -13,6 +13,7 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/models/paginated_photos_response.dart' as wire;
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/models/photo_sort.dart';
+import 'package:quark/models/slideshow_photo.dart';
 import 'package:quark/services/album_service.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/demo_photos_service.dart';
@@ -705,6 +706,19 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
 
   /// The [PhotoItem.id]s in the selection.
   Set<String> get selectedIds => Set.unmodifiable(_selectedIds);
+
+  /// What a slideshow plays (#4179), in the grid's order: the selection
+  /// while photos are selected, else every photo the grid shows.
+  List<SlideshowPhoto> get slideshowPhotos => [
+    for (final photo in _visible())
+      if (!_selectionMode || _selectedIds.contains(photo.id))
+        SlideshowPhoto(
+          id: photo.id,
+          name: photo.name,
+          relPath: photo.relPath,
+          serial: photo.serial,
+        ),
+  ];
 
   /// Whether the selection holds a photo only the phone has, which the
   /// actions that need a Quark cannot take (#4154).

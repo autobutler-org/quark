@@ -716,6 +716,44 @@ results (JN-PH-023).
 
 ---
 
+### JN-PH-030: Play photos as a slideshow in the app
+
+**Preconditions:** JN-PH-001, with an album that has photos (JN-PH-012).
+
+**Steps:**
+
+1. Open the album and tap **Slideshow** in the bar.
+2. Move the mouse or tap the photo, then tap the interval button until it reads **10s**, and tap **Shuffle**.
+3. Tap **Music** and pick an album.
+4. Press Escape, or tap **Exit**.
+
+**Expected result:**
+
+- After step 1 the album's photos play full screen in the grid's order, each shown whole on black, a new one every
+  five seconds, fading from one to the next. The next photo is already loaded, so the change is instant.
+- The controls show on a tap or a mouse move and hide after three seconds. They are pause, previous, next, the
+  interval (3, 5, 10 or 15 seconds), shuffle, music and exit, with the photo's place ("3 / 24") at the top.
+- After step 2 each photo shows for ten seconds, and the rest of the album plays in a shuffled order, every photo
+  once a round, starting from the one showing.
+- After step 3 the music album plays behind the photos, pauses with the slideshow, and stops when it ends.
+- After step 4 the album is back where it was, at the same scroll position.
+
+**Notes:**
+
+- With photos selected, **Slideshow** in the selection bar plays only the selection, in the grid's order.
+- **Slideshow** from the library, a category, search results and the photo viewer is #4358.
+- On a desktop, the arrow keys step, space pauses and Escape exits.
+- Videos are skipped. Photos show as their screen-sized preview (#4220); RAW shows as JPEG and HEIC as its stored
+  preview, as in the viewer.
+- After the last photo it starts over.
+- The music button is hidden when the Quark has no music. It lists the music library's albums.
+- The screen stays on during the slideshow on a phone.
+- With reduced motion on (Android's "Remove animations", iOS Reduce Motion, or the browser's setting), the photos
+  change at once, with no fade, and the controls appear without fading.
+- `/frame` (JN-PH-026) is the slideshow for a dedicated screen; this one runs inside the app.
+
+---
+
 ### JN-PH-031: Export albums or the library
 
 **Preconditions:** Quark photos are visible (JN-PH-001), at least one user album exists (JN-PH-010), Demo mode is

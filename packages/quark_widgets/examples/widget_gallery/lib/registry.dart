@@ -1,5 +1,7 @@
 // @dart=3.11
 // cspell:words reallocated
+import 'dart:typed_data';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -2129,6 +2131,7 @@ final List<GalleryEntry> registry = [
           onAddToAlbum: () => log('PhotoSelectionBar.onAddToAlbum'),
           onFavorite: () => log('PhotoSelectionBar.onFavorite'),
           onDownload: () => log('PhotoSelectionBar.onDownload'),
+          onSlideshow: () => log('PhotoSelectionBar.onSlideshow'),
           onCopy: () => log('PhotoSelectionBar.onCopy'),
           onDelete: () => log('PhotoSelectionBar.onDelete'),
         ),
@@ -4681,6 +4684,87 @@ final List<GalleryEntry> registry = [
       ],
     ),
   ),
+
+  GalleryEntry(
+    name: 'SlideshowView',
+    group: 'Slideshow',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 320,
+          child: SlideshowView(
+            image: MemoryImage(_gallerySlide),
+            slideId: 'beach',
+            isPlaying: true,
+            intervalSeconds: 5,
+            shuffle: false,
+            position: 2,
+            count: 24,
+            controlsVisible: true,
+            musicTitle: 'Blue',
+            onActivity: () => log('SlideshowView.onActivity'),
+            onPlayPause: () => log('SlideshowView.onPlayPause'),
+            onPrevious: () => log('SlideshowView.onPrevious'),
+            onNext: () => log('SlideshowView.onNext'),
+            onIntervalChanged: (s) => log('SlideshowView.onIntervalChanged $s'),
+            onShuffleChanged: (on) => log('SlideshowView.onShuffleChanged $on'),
+            onMusic: () => log('SlideshowView.onMusic'),
+            onExit: () => log('SlideshowView.onExit'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // The reduced-motion variant, paused and shuffled, with no music on
+        // the Quark: photos change at once, with no cross-fade.
+        SizedBox(
+          height: 320,
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: SlideshowView(
+              image: MemoryImage(_gallerySlide),
+              slideId: 'beach',
+              isPlaying: false,
+              intervalSeconds: 10,
+              shuffle: true,
+              position: 0,
+              count: 3,
+              controlsVisible: true,
+              onActivity: () => log('SlideshowView.onActivity'),
+              onPlayPause: () => log('SlideshowView.onPlayPause'),
+              onPrevious: () => log('SlideshowView.onPrevious'),
+              onNext: () => log('SlideshowView.onNext'),
+              onIntervalChanged: (s) =>
+                  log('SlideshowView.onIntervalChanged $s'),
+              onShuffleChanged: (on) =>
+                  log('SlideshowView.onShuffleChanged $on'),
+              onExit: () => log('SlideshowView.onExit'),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+
+  GalleryEntry(
+    name: 'SlideshowMusicPicker',
+    group: 'Slideshow',
+    build: (context, log) => SlideshowMusicPicker(
+      options: const [
+        SlideshowMusicOption(
+          id: 'blue',
+          title: 'Blue',
+          subtitle: 'Joni Mitchell',
+        ),
+        SlideshowMusicOption(
+          id: 'kind-of-blue',
+          title: 'Kind of Blue',
+          subtitle: 'Miles Davis',
+        ),
+      ],
+      selectedId: 'blue',
+      onSelected: (id) => log('SlideshowMusicPicker.onSelected $id'),
+    ),
+  ),
 ];
 
 /// Fake endpoints for the API explorer entries: one per marker.
@@ -5036,3 +5120,15 @@ const List<QuarkHelpTopic> _galleryHelpTopics = [
         'press a tag to see the full name.',
   ),
 ];
+
+/// A 4x3 photo of colored squares for the slideshow entries.
+final Uint8List _gallerySlide = Uint8List.fromList(const [
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, //
+  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x03,
+  0x08, 0x02, 0x00, 0x00, 0x00, 0x3B, 0x96, 0x39, 0x91, 0x00, 0x00, 0x00,
+  0x1F, 0x49, 0x44, 0x41, 0x54, 0x78, 0xDA, 0x63, 0x70, 0xCB, 0x5B, 0x50,
+  0xB1, 0xE0, 0xC4, 0x89, 0x55, 0x15, 0x51, 0x3D, 0x51, 0x0C, 0x70, 0x16,
+  0x50, 0x94, 0x01, 0xCE, 0x02, 0x8A, 0x02, 0x00, 0x77, 0x72, 0x13, 0x1B,
+  0x55, 0x4D, 0x65, 0x42, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44,
+  0xAE, 0x42, 0x60, 0x82,
+]);
