@@ -1209,6 +1209,90 @@ const List<ApiEndpoint> apiEndpoints = [
     callers: ['AlbumService.createAlbum'],
   ),
   ApiEndpoint(
+    method: 'POST',
+    path: '/api/v0/albums/exports',
+    inSwagger: true,
+    tags: ['albums'],
+    summary: 'Export albums, or the photo library, as copied files',
+    description: 'Queues a photo-export job that copies the caller\'s chosen albums, or their whole photo library, into a new folder inside the folder given: each album becomes a folder of real copies, a photo in several albums is copied into each, and a manifest.csv names every copy\'s original, capture date and albums (#3501). The library, its folders and the albums are left untouched. The new folder is named after the album, or after the library, and never replaces one already there.',
+    parameters: [
+      ApiParameter(
+        name: 'body',
+        location: ApiParameterLocation.body,
+        required: true,
+        type: 'object',
+        description: 'Albums to export, or library, and the folder to export into',
+      ),
+    ],
+    requestSchema: '{"type":"object","properties":{"albumIds":{"description":"AlbumIDs are the caller\'s albums to export, each with its sub-albums.","type":"array","items":{"type":"integer"}},"deviceSerial":{"description":"DeviceSerial and Folder are the folder the export folder is made in;\\n\\"\\" is the internal drive.","type":"string"},"folder":{"type":"string"},"library":{"description":"Library exports every album and every photo in none, and ignores\\nAlbumIDs.","type":"boolean"}}}',
+    responses: [
+      ApiResponse(
+        status: '202',
+        description: 'Accepted',
+        schema: '{"type":"object","properties":{"deviceSerial":{"type":"string"},"jobId":{"type":"integer"},"relPath":{"type":"string"}}}',
+      ),
+      ApiResponse(
+        status: '400',
+        description: 'Bad Request: no album chosen and not the library',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '403',
+        description: 'Forbidden: the caller cannot add files to that folder',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '404',
+        description: 'Not Found: an album is not the caller\'s, or the folder does not exist',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '500',
+        description: 'Internal Server Error',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+    ],
+  ),
+  ApiEndpoint(
+    method: 'GET',
+    path: '/api/v0/albums/exports/{jobId}',
+    inSwagger: true,
+    tags: ['albums'],
+    summary: 'Summarize a photo export',
+    description: 'Reports what a photo-export job has copied, read from its manifest, and names the photos it could not copy, so a partial export lists its failures (#3501). An export that has not written its manifest yet reports none of either.',
+    parameters: [
+      ApiParameter(
+        name: 'jobId',
+        location: ApiParameterLocation.path,
+        required: true,
+        type: 'integer',
+        description: 'The export\'s job ID',
+      ),
+    ],
+    responses: [
+      ApiResponse(
+        status: '200',
+        description: 'OK',
+        schema: '{"type":"object","properties":{"copied":{"description":"Copied counts the files copied.","type":"integer"},"deviceSerial":{"type":"string"},"failures":{"description":"Failures names the photos not copied, at most 500; MoreFailures counts\\nthe rest.","type":"array","items":{"type":"object","properties":{"name":{"description":"Name is the original\'s file name.","type":"string"},"path":{"description":"Path is where the copy would have gone, inside the export folder.","type":"string"},"reason":{"description":"Reason is [ReasonMissing] or [ReasonNotCopied].","type":"string"}}}},"jobId":{"type":"integer"},"moreFailures":{"type":"integer"},"relPath":{"type":"string"},"status":{"description":"Status is the job\'s: pending, running, completed, failed or canceled.\\nA failed export with Copied above zero is a partial one.","type":"string","enum":["pending","running","completed","failed","canceled"]}}}',
+      ),
+      ApiResponse(
+        status: '400',
+        description: 'Bad Request: invalid job id',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '404',
+        description: 'Not Found: no export of the caller\'s has that id',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '500',
+        description: 'Internal Server Error',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+    ],
+  ),
+  ApiEndpoint(
     method: 'GET',
     path: '/api/v0/albums/{id}',
     inSwagger: true,

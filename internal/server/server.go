@@ -20,6 +20,7 @@ import (
 	"github.com/autobutler-org/quark/internal/server/middleware"
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/albumexportutil"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
@@ -92,6 +93,16 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	jobs.Register(jobutil.RegisterParams{
 		Kind: backup.RestoreKind,
 		Handler: backup.NewRestoreHandler(backup.NewRestoreHandlerParams{
+			Registry:    deps.VFSRegistry(),
+			EventBus:    deps.EventBus(),
+			IOSemaphore: deps.IOSemaphore().For(iosemutil.Copy),
+		}),
+	})
+	jobs.Register(jobutil.RegisterParams{
+		Kind: albumexportutil.Kind,
+		Handler: albumexportutil.NewHandler(albumexportutil.NewHandlerParams{
+			Database:    deps.Database(),
+			Storage:     deps.StorageService(),
 			Registry:    deps.VFSRegistry(),
 			EventBus:    deps.EventBus(),
 			IOSemaphore: deps.IOSemaphore().For(iosemutil.Copy),
