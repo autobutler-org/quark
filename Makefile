@@ -75,7 +75,7 @@ SWAG_VERSION := v1.16.6
 # renovate: datasource=go depName=github.com/golangci/golangci-lint/v2
 GOLANGCI_LINT_VERSION := v2.15.0
 # renovate: datasource=go depName=golang.org/x/vuln
-GOVULNCHECK_VERSION := v1.9.0
+GOVULNCHECK_VERSION := v1.10.0
 # The CI images install these. ci-image.yml reads them and passes them as build args.
 # renovate: datasource=github-tags depName=docker/cli extractVersion=^v(?<version>.+)$
 DOCKER_VERSION := 29.10.0
