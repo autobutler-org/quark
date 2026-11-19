@@ -32,6 +32,7 @@ void main() {
               bottom: PhotosBarBottom(
                 title: 'Library',
                 onDuplicates: () => taps.add('duplicates'),
+                onExport: () => taps.add('export'),
                 onPickLibrary: phoneTools ? () => taps.add('picker') : null,
                 onGridSize: phoneTools ? () => taps.add('grid size') : null,
               ),
@@ -132,5 +133,26 @@ void main() {
 
     expect(find.byKey(const ValueKey('photos_library_picker')), findsNothing);
     expect(find.text('Library'), findsOneWidget);
+  });
+
+  testWidgets('Export is a labeled chip wide and a menu item on a phone', (
+    tester,
+  ) async {
+    var taps = await pump(tester, wideViewport);
+    final chip = find.byKey(const ValueKey('photos_export'));
+    expect(
+      find.descendant(of: chip, matching: find.text('Export')),
+      findsOneWidget,
+    );
+    await tester.tap(chip);
+    expect(taps, ['export']);
+
+    taps = await pump(tester, narrowViewport);
+    expect(chip, findsNothing);
+    await tester.tap(find.byKey(const ValueKey('app_bar_bottom_menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('photos_menu_export')));
+    await tester.pumpAndSettle();
+    expect(taps, ['export']);
   });
 }

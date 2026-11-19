@@ -1252,6 +1252,7 @@ const List<ApiEndpoint> apiEndpoints = [
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],
+    callers: ['AlbumService.startExport'],
   ),
   ApiEndpoint(
     method: 'GET',
@@ -1291,6 +1292,7 @@ const List<ApiEndpoint> apiEndpoints = [
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],
+    callers: ['AlbumService.exportSummary'],
   ),
   ApiEndpoint(
     method: 'GET',

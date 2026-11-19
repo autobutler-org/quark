@@ -1,14 +1,15 @@
 import 'dart:convert';
 
 import 'package:quark/controllers/albums_cache.dart';
+import 'package:quark/models/album_export.dart';
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/models/photo_sort.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
-/// Calls `/api/v0/albums`: listing, creating, renaming, moving and deleting photo albums, and adding photos to
-/// them or removing them.
+/// Calls `/api/v0/albums`: listing, creating, renaming, moving and deleting photo albums, adding photos to
+/// them or removing them, and exporting albums or the library as copied files.
 ///
 /// Every change that goes through drops what it made wrong in [AlbumsCache], so no caller has to (#1779).
 class AlbumService with AuthenticatedService {
@@ -153,5 +154,54 @@ class AlbumService with AuthenticatedService {
     AlbumsCache.instance
       ..dropAlbums()
       ..dropItems(albumId);
+  }
+
+  /// Queues an export of [albumIds], each with its sub-albums, or of the
+  /// whole library when [library] is true, into a new folder the Quark makes
+  /// inside [folder] on the drive [deviceSerial] (empty is the internal
+  /// drive). Nothing in the library or the albums changes (#3501).
+  ///
+  /// Throws an [ApiException] when the Quark refuses: 400 when nothing was
+  /// chosen, 403 when the account can't add files to [folder], 404 when an
+  /// album or the folder is not there.
+  ///
+  /// api: POST /api/v0/albums/exports
+  static Future<QueuedAlbumExport> startExport({
+    List<int> albumIds = const [],
+    bool library = false,
+    required String deviceSerial,
+    required String folder,
+  }) async {
+    final response = await instance.authenticatedPost(
+      _apiUri('/albums/exports'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'albumIds': library ? const <int>[] : albumIds,
+        'library': library,
+        'deviceSerial': deviceSerial,
+        'folder': folder,
+      }),
+    );
+    if (response.statusCode != 202) {
+      throw ApiException(response.statusCode, 'Failed to start photo export');
+    }
+    return QueuedAlbumExport.fromJson(
+      json.decode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// What export job [jobId] has copied and which photos it could not.
+  ///
+  /// api: GET /api/v0/albums/exports/{jobId}
+  static Future<AlbumExportSummary> exportSummary(int jobId) async {
+    final response = await instance.authenticatedGet(
+      _apiUri('/albums/exports/$jobId'),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(response.statusCode, 'Failed to load photo export');
+    }
+    return AlbumExportSummary.fromJson(
+      json.decode(response.body) as Map<String, dynamic>,
+    );
   }
 }

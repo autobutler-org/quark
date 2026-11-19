@@ -16,6 +16,7 @@ void main() {
   final rename = find.byKey(const ValueKey('album_action_rename'));
   final subAlbum = find.byKey(const ValueKey('album_action_new_sub_album'));
   final delete = find.byKey(const ValueKey('album_action_delete'));
+  final export = find.byKey(const ValueKey('album_action_export'));
 
   /// A tile wired the way the photos page wires a user album.
   Future<void> pumpTile(
@@ -43,6 +44,7 @@ void main() {
                     onRename: () => events.add('rename'),
                     onCreateSubAlbum: () => events.add('sub'),
                     onDelete: () => events.add('delete'),
+                    onExport: () => events.add('export'),
                   ).showAt(context, position),
                 ),
               ),
@@ -69,6 +71,7 @@ void main() {
       expect(rename, findsOneWidget);
       expect(subAlbum, findsOneWidget);
       expect(delete, findsOneWidget);
+      expect(export, findsOneWidget);
       // A menu next to the album, not a sheet along the bottom edge.
       expect(find.byType(BottomSheet), findsNothing);
 
@@ -110,4 +113,37 @@ void main() {
       expect(events, ['sub']);
     });
   }
+
+  testWidgets('Export runs the export and is left out without a handler', (
+    tester,
+  ) async {
+    final events = <String>[];
+    await pumpTile(tester, size: wideViewport, events: events);
+    await tester.tap(find.byKey(const ValueKey('album_menu_7')));
+    await tester.pumpAndSettle();
+    await tester.tap(export);
+    await tester.pumpAndSettle();
+    expect(events, ['export']);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => AlbumActionsMenu(
+                onRename: () {},
+                onCreateSubAlbum: () {},
+                onDelete: () {},
+              ).showAt(context, Offset.zero),
+              child: const Text('menu'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('menu'));
+    await tester.pumpAndSettle();
+    expect(rename, findsOneWidget);
+    expect(export, findsNothing);
+  });
 }

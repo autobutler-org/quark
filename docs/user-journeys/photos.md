@@ -713,3 +713,41 @@ results (JN-PH-023).
 - On a phone the library stays in the bar's picker (JN-PH-001 is unchanged there).
 - The photo viewer's details sidebar, at 600 pixels and wider, resizes from its inner edge the same way, and dragging
   it below 100 pixels hides it as the info button does. Its width is remembered per device too.
+
+---
+
+### JN-PH-031: Export albums or the library
+
+**Preconditions:** Quark photos are visible (JN-PH-001), at least one user album exists (JN-PH-010), Demo mode is
+off, and a drive to export to is connected, such as a USB stick.
+
+**Steps:**
+
+1. Open an album's menu (its `more_vert` button, a long press or a right-click) and choose **Export…**. Or, to
+   export the library, choose **Export** in the Photos bar (under **Tools** on a phone).
+2. Read the three points at the top of the dialog.
+3. Choose **Albums I choose** and tick one or more albums, or choose **The whole photo library**.
+4. Under **Where it goes**, choose a drive, then **Choose folder**, open a folder and tap **Save here**.
+5. Tap **Export**.
+6. Wait for the export to finish, or close the dialog and follow it under **Jobs** (System).
+
+**Expected result:**
+
+- Step 2 says plainly that the export makes real copies, not links, so they open anywhere; that a photo in several
+  albums is copied into each album's folder; and that it is not a backup of the Quark, because the photos and
+  albums stay as they are and only the copies leave.
+- After step 5 the dialog says which folder on which drive the export is going to, shows its progress, and says it
+  can be followed in Jobs, where it is listed while it runs.
+- The new folder holds one folder per album, with a sub-album's folder inside its parent's, and a `manifest.csv`
+  naming, for each copy, the drive and path it came from, when it was taken, and every album holding it. A library
+  export also has a "Not in an album" folder for the photos in none.
+- When every photo was copied, the dialog says the export is finished and where it went. When some were not, it
+  says how many were not copied and lists them by name with why; it never says the export finished.
+- Nothing in Photos changes: the albums, the original photos and their folders are as they were, and the copies
+  do not appear in the Photos library.
+
+**Notes:**
+
+- A folder the account can't add files to is refused before anything is copied, and the dialog says so.
+- An export goes into a new folder named after the album ("Photo albums export" for several, "Photo library
+  export" for the library), never into one that is already there.

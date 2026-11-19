@@ -369,6 +369,49 @@ abstract final class Errors {
       ? albumNameTaken
       : message(error, action);
 
+  /// An export the Quark refused because the account can't add files to the
+  /// chosen folder (403, #3501).
+  static const String exportFolderNotWritable =
+      "You can't add files to that folder. Choose another one.";
+
+  /// An export the Quark refused because the chosen folder, or one of the
+  /// chosen albums, is no longer there (404, #3501).
+  static const String exportSomethingGone =
+      'That folder or one of those albums is no longer there. Choose again.';
+
+  /// A photo export that didn't start. [exportFolderNotWritable] for a 403
+  /// and [exportSomethingGone] for a 404 name the choice to change.
+  static String exportStart(Object? error) => switch (error) {
+    ApiException(statusCode: 403) => exportFolderNotWritable,
+    ApiException(statusCode: 404) => exportSomethingGone,
+    _ => message(error, 'start the export'),
+  };
+
+  /// A photo export that ended with [failed] photos not copied and [copied]
+  /// files copied (#3501). Never reads as success: a partial export says
+  /// plainly that some photos are missing from it.
+  static String exportPartial({required int failed, required int copied}) {
+    final photos = failed == 1 ? '1 photo was' : '$failed photos were';
+    final done = copied == 1 ? '1 file was' : '$copied files were';
+    return "The export didn't finish: $photos not copied. $done copied.";
+  }
+
+  /// A photo export that stopped without naming a photo it couldn't copy:
+  /// the job failed outright or was canceled (#3501).
+  static const String exportStopped =
+      "The export stopped before it finished, so some photos weren't copied. "
+      'You can try again from Jobs.';
+
+  /// Why one photo was left out of an export: [missing] when its original
+  /// wasn't in its folder, otherwise it was there but couldn't be copied.
+  static String exportFailureReason({required bool missing}) => missing
+      ? 'The original is missing from its folder.'
+      : "The original couldn't be copied.";
+
+  /// An export whose result couldn't be read back (#3501).
+  static String exportSummary(Object? error) =>
+      message(error, 'check how the export went');
+
   /// An upload the Quark refused with a 409: something in that folder
   /// already has the name. The user answers it by keeping both or replacing.
   static const String fileNameTaken =
