@@ -1,5 +1,7 @@
 package org.autobutler
 
+import android.content.Context
+import android.net.ConnectivityManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -15,6 +17,18 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 if (call.method == "localTimeZone") {
                     result.success(TimeZone.getDefault().id)
+                } else {
+                    result.notImplemented()
+                }
+            }
+        // Whether the active network may cost the user money, such as mobile
+        // data, so a kept album waits for Wi-Fi unless they allow otherwise
+        // (#4222). No network at all reads as metered.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "org.autobutler.quark/network")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "isMetered") {
+                    val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                    result.success(manager.activeNetwork == null || manager.isActiveNetworkMetered)
                 } else {
                     result.notImplemented()
                 }

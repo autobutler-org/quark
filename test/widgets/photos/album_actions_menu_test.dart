@@ -17,12 +17,15 @@ void main() {
   final subAlbum = find.byKey(const ValueKey('album_action_new_sub_album'));
   final delete = find.byKey(const ValueKey('album_action_delete'));
   final export = find.byKey(const ValueKey('album_action_export'));
+  final keep = find.byKey(const ValueKey('album_action_keep_on_phone'));
 
   /// A tile wired the way the photos page wires a user album.
   Future<void> pumpTile(
     WidgetTester tester, {
     required Size size,
     required List<String> events,
+    bool canKeep = false,
+    bool isKept = false,
   }) async {
     setViewport(tester, size);
 
@@ -45,6 +48,8 @@ void main() {
                     onCreateSubAlbum: () => events.add('sub'),
                     onDelete: () => events.add('delete'),
                     onExport: () => events.add('export'),
+                    onKeepOnPhone: canKeep ? () => events.add('keep') : null,
+                    isKeptOnPhone: isKept,
                   ).showAt(context, position),
                 ),
               ),
@@ -145,5 +150,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(rename, findsOneWidget);
     expect(export, findsNothing);
+  });
+
+  group('keep on this phone (#4222)', () {
+    testWidgets('the entry is left out where there is no keeping', (
+      tester,
+    ) async {
+      await pumpTile(tester, size: narrowViewport, events: []);
+      await tester.tap(find.byKey(const ValueKey('album_menu_7')));
+      await tester.pumpAndSettle();
+
+      expect(keep, findsNothing);
+    });
+
+    testWidgets('it offers to keep an album and runs the keep', (tester) async {
+      final events = <String>[];
+      await pumpTile(
+        tester,
+        size: narrowViewport,
+        events: events,
+        canKeep: true,
+      );
+      await tester.tap(find.byKey(const ValueKey('album_menu_7')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Keep on this phone'), findsOneWidget);
+      await tester.tap(keep);
+      await tester.pumpAndSettle();
+      expect(events, ['keep']);
+    });
+
+    testWidgets('a kept album offers to stop keeping it', (tester) async {
+      await pumpTile(
+        tester,
+        size: narrowViewport,
+        events: [],
+        canKeep: true,
+        isKept: true,
+      );
+      await tester.tap(find.byKey(const ValueKey('album_menu_7')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Stop keeping on this phone'), findsOneWidget);
+    });
   });
 }
