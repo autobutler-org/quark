@@ -125,6 +125,10 @@ Future<Uint8List?> _renderVideo(web.Blob blob) async {
 /// Renders the frame of the video at [src], an object URL or a streamed one.
 Future<Uint8List?> _renderVideoFrom(String src) async {
   final video = web.HTMLVideoElement()
+    // A Quark on another origin than the app (a dev server) would taint the
+    // canvas and fail the export. Its CORS allows any origin, and the token
+    // rides in the URL, so an anonymous request reads it.
+    ..crossOrigin = 'anonymous'
     ..muted = true
     ..preload = 'auto'
     ..playsInline = true;
