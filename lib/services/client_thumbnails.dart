@@ -11,7 +11,8 @@
 /// The web renders with the browser (`createImageBitmap` for photos, a
 /// `<video>` element for video). iOS and Android render with the platform
 /// decoders through `fc_native_video_thumbnail` and `flutter_image_compress`,
-/// which only the native build imports. Desktop renders nothing.
+/// which only the native build imports. Linux renders video with libmpv, the
+/// player the app plays video with (#3421); other desktop files render nothing.
 library;
 
 import 'dart:typed_data';

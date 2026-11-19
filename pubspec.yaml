@@ -103,6 +103,8 @@ dependencies:
   # their own video_player backends.
   video_player_media_kit: ^2.0.0
   media_kit_libs_linux: ^1.2.1
+  # Reads a video's frame for its upload thumbnail on Linux (#3421).
+  media_kit: ^1.2.6
 
 # desktop_drop pinned to upstream's merge commit of MixinNetwork/flutter-plugins#503
 # (the #1831 fix): upstream's web handler called webkitGetAsEntry()! on every
