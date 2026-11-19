@@ -22,15 +22,20 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// the page passes [onUploadToDevice] there and "Upload to a device" joins
 /// the tools: the chip's second half, which picks the drive.
 ///
+/// [onExport] adds "Export", which copies albums or the whole library out of
+/// Quark as plain files (#3501).
+///
 /// Key prefixes: `photos_library_picker` on the title chip,
-/// `photos_duplicates` and `photos_grid_size` on the tool chips,
-/// `app_bar_bottom_menu` on the menu, and `photos_menu_duplicates` and
-/// `photos_menu_grid_size` and `photos_menu_upload_to_device` on its items.
+/// `photos_duplicates`, `photos_export` and `photos_grid_size` on the tool
+/// chips, `app_bar_bottom_menu` on the menu, and `photos_menu_duplicates`,
+/// `photos_menu_export`, `photos_menu_grid_size` and
+/// `photos_menu_upload_to_device` on its items.
 class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
   /// Creates the row reading [title].
   const PhotosBarBottom({
     required this.title,
     this.onDuplicates,
+    this.onExport,
     this.onPickLibrary,
     this.onGridSize,
     this.onUploadToDevice,
@@ -44,6 +49,10 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
   /// Opens the duplicates review. Null leaves Duplicates out, for a library
   /// the Quark does not hold, such as Demo mode's.
   final VoidCallback? onDuplicates;
+
+  /// Opens the export dialog. Null leaves Export out, for a library the
+  /// Quark does not hold, such as Demo mode's.
+  final VoidCallback? onExport;
 
   /// Opens the library picker: All photos, the categories and the albums.
   /// Null renders [title] as plain text.
@@ -61,6 +70,7 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
   final List<Widget> pinnedActions;
 
   static const _duplicatesTooltip = 'Find photos saved more than once';
+  static const _exportTooltip = 'Copy albums or the library out as files';
 
   @override
   Size get preferredSize => const Size.fromHeight(QuarkAppBarBottom.height);
@@ -69,6 +79,7 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final onDuplicates = this.onDuplicates;
+    final onExport = this.onExport;
     final onPickLibrary = this.onPickLibrary;
     final onGridSize = this.onGridSize;
     final onUploadToDevice = this.onUploadToDevice;
@@ -111,6 +122,15 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
             keepLabel: true,
             onPressed: onDuplicates,
           ),
+        if (onExport != null)
+          QuarkBarChip(
+            key: const ValueKey('photos_export'),
+            icon: QuarkIcons.download_outlined,
+            label: 'Export',
+            tooltip: _exportTooltip,
+            keepLabel: true,
+            onPressed: onExport,
+          ),
       ],
       menuLabel: 'Tools',
       menuChildren: [
@@ -139,6 +159,15 @@ class PhotosBarBottom extends StatelessWidget implements PreferredSizeWidget {
             child: quarkMenuLabel(
               leading: const Icon(QuarkIcons.content_copy),
               label: const Text('Duplicates'),
+            ),
+          ),
+        if (onExport != null)
+          MenuItemButton(
+            key: const ValueKey('photos_menu_export'),
+            onPressed: onExport,
+            child: quarkMenuLabel(
+              leading: const Icon(QuarkIcons.download_outlined),
+              label: const Text('Export'),
             ),
           ),
       ],

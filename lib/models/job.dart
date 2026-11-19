@@ -11,11 +11,16 @@ abstract final class JobKinds {
   /// Copying a snapshot drive's files back onto the Quark (#4009).
   static const String snapshotRestore = 'snapshot-restore';
 
+  /// Copying albums, or the whole photo library, into a folder as plain
+  /// files with a manifest (#3501).
+  static const String photoExport = 'photo-export';
+
   /// Every kind above, for a listing that shows them all.
   static const List<String> all = [
     videoTranscode,
     snapshotBackup,
     snapshotRestore,
+    photoExport,
   ];
 }
 

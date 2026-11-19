@@ -29,6 +29,7 @@ import 'package:quark/widgets/device_upload_picker.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/photos/add_to_album_sheet.dart';
 import 'package:quark/widgets/photos/album_actions_menu.dart';
+import 'package:quark/widgets/photos/export/export_photos_dialog.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/photos/library_photo_menu.dart';
@@ -772,8 +773,26 @@ class PhotosPageState extends State<PhotosPage>
     AlbumActionsMenu(
       onRename: () => _renameAlbum(album),
       onCreateSubAlbum: () => _createAlbum(parentId: album.id),
+      onExport: () => _exportPhotos(albumId: album.id),
       onDelete: () => _deleteAlbum(album),
     ).showAt(context, position);
+  }
+
+  /// Copies albums or the library out as plain files (#3501). [albumId]
+  /// starts on that album; without one, the user album showing, else the
+  /// whole library.
+  Future<void> _exportPhotos({int? albumId}) {
+    final showing = _controller.selectedAlbum;
+    final start =
+        albumId ??
+        (showing == null || showing.isSystemAlbum ? null : showing.id);
+    return ExportPhotosDialog.show(
+      context,
+      albums: _controller.albums,
+      initialAlbumIds: {?start},
+      library: start == null,
+      onOpenJobs: () => context.go(AppRoutes.systemTab(SystemTab.jobs)),
+    );
   }
 
   @override
@@ -936,6 +955,7 @@ class PhotosPageState extends State<PhotosPage>
                         onDuplicates: _demo
                             ? null
                             : () => context.go(AppRoutes.photoDuplicates),
+                        onExport: _demo ? null : _exportPhotos,
                         onPickLibrary: compact ? _openLibraryPicker : null,
                         onGridSize: compact ? _openGridSize : null,
                       ),

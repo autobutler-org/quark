@@ -404,6 +404,10 @@ title is the chip that opens the Library picker, and its Tools menu holds
 Grid size, since the sidebar is not stacked above the grid there (#4149). `device_upload_picker.dart` likewise only holds the choice for
 the package `UploadTargetPicker`. Selecting wears the package
 `FileSelectionBar`, the same bar Files and the trash use.
+`photos/export/` is the export dialog (#3501): `ExportPhotosController` in
+`lib/controllers/` makes the calls, and the dialog's views are app-side because
+they read that controller and `Errors`; its folder step wraps the package
+`QuarkFolderPicker`.
 
 Settings is split into tabs (#2350), one widget each under `settings/`:
 `settings_general_tab.dart` (which also carries the left-handed switch, #1812), `settings_account_tab.dart`,
