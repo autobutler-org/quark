@@ -1,4 +1,4 @@
-# cspell:words autobutlerci InstallAzureCLIDeb imagetools
+# cspell:words autobutlerci InstallAzureCLIDeb imagetools buildx passwordless
 name: CI image
 
 permissions:
@@ -41,6 +41,7 @@ jobs:
       pull-requests: read
     outputs:
       ci_image: ${{ steps.filter.outputs.ci_image }}
+      factory_worker: ${{ steps.filter.outputs.factory_worker }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Filter paths
@@ -193,7 +194,7 @@ jobs:
   # reports under its unexpanded name, so the per-leg names would never arrive on a
   # skipped run; this job carries the name and fails when any leg did.
   ci-image:
-    needs: [changes, build]
+    needs: [changes, build, factory-worker]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
@@ -201,6 +202,78 @@ jobs:
         run: |
           [[ "${{ needs.changes.result }}" == success ]]
           [[ "${{ needs.build.result }}" =~ ^(success|skipped)$ ]]
+          [[ "${{ needs.factory-worker.result }}" =~ ^(success|skipped)$ ]]
+
+  # The image the factory runs quark's sessions and gate in (AGENTS.md, The factory).
+  # It goes to GitHub's registry, where the factory pulls from, tagged
+  # <Flutter version>-<short sha> for .factory/config.toml to pin, and latest.
+  factory-worker:
+    name: build factory-worker ${{ matrix.arch }}
+    needs: changes
+    # Skipped in the merge queue and for forks, as the build job above is.
+    if: >-
+      github.event_name != 'merge_group' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      needs.changes.outputs.factory_worker != 'false'
+    runs-on: ${{ matrix.label }}
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 60
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            label: ubuntu-latest
+          # The factory's worker nodes are arm64.
+          - arch: arm64
+            label: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Name the tag
+        id: tag
+        run: |
+          set -euo pipefail
+          flutter_version=$(awk '/^  flutter:/{print $2; exit}' pubspec.yaml)
+          echo "tag=${flutter_version}-${GITHUB_SHA::7}" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: |
+          make build/docker/factory-worker FACTORY_WORKER_TAG="${{ steps.tag.outputs.tag }}-${{ matrix.arch }}"
+
+      - name: Push
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "${GH_TOKEN}" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+          docker push "ghcr.io/autobutler-org/quark-factory-worker:${{ steps.tag.outputs.tag }}-${{ matrix.arch }}"
+
+  factory-worker-publish:
+    name: publish factory-worker
+    needs: factory-worker
+    if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    timeout-minutes: 20
+    steps:
+      - name: Point the tag and latest at both architectures
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ghcr.io/autobutler-org/quark-factory-worker
+          TAG: ${{ needs.factory-worker.outputs.tag }}
+        run: |
+          set -euo pipefail
+          echo "${GH_TOKEN}" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+          docker buildx imagetools create --tag "${IMAGE}:${TAG}" --tag "${IMAGE}:latest" \
+            "${IMAGE}:${TAG}-amd64" \
+            "${IMAGE}:${TAG}-arm64"
 
   publish:
     name: publish latest

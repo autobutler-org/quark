@@ -2,7 +2,7 @@
 # cspell:words ACMRT toplevel
 
 # Fast checks for the pre-commit hook. `make check` stays the full gate that
-# CI and schmeide run. This one only looks at what the commit will contain.
+# CI and the factory gate run. This one only looks at what the commit will contain.
 
 set -euo pipefail
 

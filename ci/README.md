@@ -35,3 +35,16 @@ The workflow runs on every pull request. The builds skip when those files did
 not change, and the `ci-image` job is the required check, so a skip still
 passes and a failure does not merge. Push uses `CI_IMAGE_AZURE_CLIENT_ID` and only
 runs from `main`.
+
+## The factory worker
+
+`factory-worker.Dockerfile` is not a runner. It is the image the
+[factory](https://github.com/autobutler-org/factory) runs quark's agent sessions
+and gate in: `ghcr.io/autobutler-org/factory-worker` plus Flutter at the
+`pubspec.yaml` version and the Go tools at the Makefile's pins, installed by the
+same `common.sh` functions as the images above. `make build/docker/factory-worker`
+builds it for this machine. `ci-image.yml` builds it for amd64 and arm64 on a pull
+request that touches it, `common.sh`, `pubspec.yaml` or the Makefile, and on
+`main` publishes `ghcr.io/autobutler-org/quark-factory-worker` tagged
+`<Flutter version>-<short sha>` and `latest`. `AGENTS.md` (The factory) says how to
+move quark onto a new tag.

@@ -1006,6 +1006,23 @@ build/docker: check/build-name check/docker ## Build the container image for a r
 	echo "Building $(DOCKER_IMAGE):$(BUILD_NAME)"
 	docker build --build-arg VERSION=$(BUILD_NAME) -t $(DOCKER_IMAGE):$(BUILD_NAME) .
 
+# The image the factory runs quark's sessions and gate in (AGENTS.md, The factory).
+# ci-image.yml builds it with this target and publishes it from main.
+FACTORY_WORKER_IMAGE ?= ghcr.io/autobutler-org/quark-factory-worker
+FACTORY_WORKER_TAG ?= dev
+
+.PHONY: build/docker/factory-worker
+build/docker/factory-worker: check/docker ## Build the factory worker image for this machine (FACTORY_WORKER_TAG=dev)
+	echo "Building $(FACTORY_WORKER_IMAGE):$(FACTORY_WORKER_TAG) with Flutter $(FLUTTER_VERSION)"
+	docker build --file ci/factory-worker.Dockerfile \
+		--build-arg FLUTTER_VERSION=$(FLUTTER_VERSION) \
+		--build-arg GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) \
+		--build-arg GOVULNCHECK_VERSION=$(GOVULNCHECK_VERSION) \
+		--build-arg SQLC_VERSION=$(SQLC_VERSION) \
+		--build-arg SWAG_VERSION=$(SWAG_VERSION) \
+		--tag $(FACTORY_WORKER_IMAGE):$(FACTORY_WORKER_TAG) \
+		ci
+
 .PHONY: emulate
 emulate: ## Emulate mobile device
 ifeq ($(UNAME_S),Linux)

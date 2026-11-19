@@ -87,3 +87,11 @@ ci_image:
   - android/app/build.gradle.kts
   - .github/path-filters.yml
   - .github/workflows/ci-image.yml
+# ci-image.yml's factory-worker image, the files it is built from, and the versions it reads.
+factory_worker:
+  - ci/factory-worker.Dockerfile
+  - ci/common.sh
+  - pubspec.yaml
+  - Makefile
+  - .github/path-filters.yml
+  - .github/workflows/ci-image.yml
