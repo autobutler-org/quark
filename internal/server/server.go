@@ -63,6 +63,7 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 		return nil, nil, err
 	}
 	repairHomes(deps)
+	tagAnonymousPollAnswers(deps)
 	go func() {
 		if err := deps.Worker().Process(); err != nil {
 			log.Printf("[server] worker stopped: %v", err)
@@ -346,6 +347,23 @@ func importLegacyState(deps deputil.Dependencies) error {
 		return fmt.Errorf("failed to import state from the data directory: %w", err)
 	}
 	return nil
+}
+
+// tagAnonymousPollAnswers swaps the account id on every anonymous poll answer
+// stored before migration 052 for its voter tag (#3942). The key is in the
+// data directory, so no migration can. Once done, each later start finds
+// nothing; one that fails is logged and tried again on the next start.
+func tagAnonymousPollAnswers(deps deputil.Dependencies) {
+	result, err := chatutil.TagAnonymousPollAnswers(chatutil.TagAnonymousPollAnswersParams{
+		Ctx: context.Background(), Queries: deps.Database().Queries, DataDir: storageutil.GetDataDir(),
+	})
+	if result.Tagged+result.Dropped > 0 {
+		log.Printf("[chat] gave %d anonymous poll answer(s) voter tags in place of account ids, and dropped %d superseded",
+			result.Tagged, result.Dropped)
+	}
+	if err != nil {
+		log.Printf("[chat] anonymous poll answers still name accounts: %v", err)
+	}
 }
 
 // clearDataTmp empties <DataDir>/tmp and logs what it freed, so an orphan

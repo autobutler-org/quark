@@ -204,6 +204,12 @@ shares: a file name, a schema, the tables to copy, and the restore's steps.
 `chat_attachments` names each attachment's ciphertext file. The file itself lives under `chat-attachments` in
 the data directory, which this export does not copy.
 
+An anonymous poll's answer carries a voter tag and no `user_id` (#3942). The key the tags are made with is
+`secrets/chat-poll-voter.key` in the data directory, which no snapshot copies, so the backup alone does not
+tie an anonymous answer to an account. A restore onto the Quark that wrote it finds each account's own answer
+again; anywhere else the answers count but belong to nobody. See
+[`docs/chat-security.md`](../chat-security.md#voter-tags).
+
 ## Restoring chat
 
 `ImportChat` restores `chat_backup.db` in one transaction. A restore that is refused or fails changes nothing.

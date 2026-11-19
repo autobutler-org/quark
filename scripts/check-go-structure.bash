@@ -134,6 +134,8 @@ OS_FILE_ALLOWED=(
     "pkg/util/avatarutil/"
     # Chat attachment ciphertext lives in the data directory, not in the user's files (#2425).
     "pkg/util/chatutil/attachments.go"
+    # The poll voter key lives in the data directory, outside the database and every backup (#3942).
+    "pkg/util/chatutil/poll_voters.go"
     # Per-user settings and the account request history are in the database;
     # each imports, then retires, the files an older Quark kept in the data directory.
     "pkg/util/usersettingsutil/"

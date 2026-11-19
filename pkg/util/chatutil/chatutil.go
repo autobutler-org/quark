@@ -1805,6 +1805,8 @@ type PostMessageParams struct {
 	// AttachmentIDs names files already uploaded to the channel by the caller
 	// and not yet bound to a message. Empty leaves the post unchanged.
 	AttachmentIDs []string
+	// DataDir holds the poll voter key an anonymous poll's answers need.
+	DataDir string
 }
 
 // PostMessageResult is the message as stored.
@@ -1920,13 +1922,13 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 		if err := repeatedAttachments(params.Ctx, queries, params, result.Message); err != nil {
 			return PostMessageResult{}, err
 		}
-		result.Message, err = withPoll(params.Ctx, queries, params.Principal.UserID, result.Message)
+		result.Message, err = withPoll(params.Ctx, queries, params.DataDir, params.Principal.UserID, result.Message)
 		return result, err
 	}
 	if err != nil {
 		return PostMessageResult{}, err
 	}
-	message, err := withPoll(params.Ctx, queries, params.Principal.UserID, messageFromRow(row))
+	message, err := withPoll(params.Ctx, queries, params.DataDir, params.Principal.UserID, messageFromRow(row))
 	if err != nil {
 		return PostMessageResult{}, err
 	}
@@ -1948,6 +1950,8 @@ type ListMessagesParams struct {
 	Forward   bool
 	// Limit is capped at MaxMessagesPage; 0 means DefaultMessagesPage.
 	Limit int64
+	// DataDir holds the poll voter key an anonymous poll's answers need.
+	DataDir string
 }
 
 // ListMessagesResult is a page of messages, oldest first, tombstones
@@ -1998,7 +2002,7 @@ func ListMessages(params ListMessagesParams) (ListMessagesResult, error) {
 	if err := attachReactions(params.Ctx, queries, params.ChannelID, messages); err != nil {
 		return ListMessagesResult{}, err
 	}
-	if err := attachPolls(params.Ctx, queries, params.ChannelID, params.Principal.UserID, messages); err != nil {
+	if err := attachPolls(params.Ctx, queries, params.DataDir, params.ChannelID, params.Principal.UserID, messages); err != nil {
 		return ListMessagesResult{}, err
 	}
 	return ListMessagesResult{Messages: messages}, nil
@@ -2547,8 +2551,10 @@ type Poll struct {
 var AnonymousResultsWindow = time.Minute
 
 // PollAnswer is one stored answer. The Quark sees who answered which poll
-// and when, never what. Byte fields travel as base64. On an anonymous poll
-// the id is not the row id, and createdAt and updatedAt are left out.
+// and when, never what; on an anonymous poll its database holds a voter tag
+// in place of the account (#3942). Byte fields travel as base64. On an
+// anonymous poll the id is not the row id, and createdAt and updatedAt are
+// left out.
 type PollAnswer struct {
 	// ID is the stored row on a poll that names who answered. On an anonymous
 	// poll it is an opaque id, stable when that account changes its answer,
@@ -2581,6 +2587,9 @@ type AnswerPollParams struct {
 	MessageID  int64
 	KeyVersion int64
 	Ciphertext []byte
+	// DataDir holds the poll voter key an anonymous poll's answer is stored
+	// under.
+	DataDir string
 }
 
 // AnswerPollResult is the caller's answer as stored.
@@ -2620,10 +2629,9 @@ func AnswerPoll(params AnswerPollParams) (AnswerPollResult, error) {
 	if pollClosed(poll, now) {
 		return AnswerPollResult{}, ErrPollClosed
 	}
-	var installID string
+	var key []byte
 	if poll.Anonymous {
-		installID, err = queries.GetInstallID(params.Ctx)
-		if err != nil {
+		if key, err = voterKey(params.DataDir); err != nil {
 			return AnswerPollResult{}, err
 		}
 	}
@@ -2634,13 +2642,22 @@ func AnswerPoll(params AnswerPollParams) (AnswerPollResult, error) {
 	if !slices.ContainsFunc(versions, func(k db.ChatChannelKey) bool { return k.Version == params.KeyVersion }) {
 		return AnswerPollResult{}, ErrInvalidPollAnswer
 	}
+	// An anonymous poll's row holds the voter tag, never the account (#3942).
 	write := db.SetChatPollAnswerParams{
 		MessageID: params.MessageID, UserID: userID, KeyVersion: params.KeyVersion, Ciphertext: params.Ciphertext,
 	}
+	anonymous := db.SetChatPollAnonymousAnswerParams{
+		MessageID: params.MessageID, VoterTag: voterTag(key, params.MessageID, userID), KeyVersion: params.KeyVersion, Ciphertext: params.Ciphertext,
+	}
 	var row db.ChatPollAnswer
-	if poll.AllowChange {
+	switch {
+	case poll.Anonymous && poll.AllowChange:
+		row, err = queries.SetChatPollAnonymousAnswer(params.Ctx, anonymous)
+	case poll.Anonymous:
+		row, err = queries.CreateChatPollAnonymousAnswer(params.Ctx, db.CreateChatPollAnonymousAnswerParams(anonymous))
+	case poll.AllowChange:
 		row, err = queries.SetChatPollAnswer(params.Ctx, write)
-	} else {
+	default:
 		row, err = queries.CreateChatPollAnswer(params.Ctx, db.CreateChatPollAnswerParams(write))
 	}
 	switch {
@@ -2652,10 +2669,10 @@ func AnswerPoll(params AnswerPollParams) (AnswerPollResult, error) {
 	case err != nil:
 		return AnswerPollResult{}, err
 	}
-	if err := publishPollAnswer(params.Ctx, queries, params.EventBus, message, poll, row, now, installID); err != nil {
+	if err := publishPollAnswer(params.Ctx, queries, params.EventBus, message, poll, row, userID, now); err != nil {
 		log.Printf("chat: poll answer %d stored but not announced: %v", row.ID, err)
 	}
-	return AnswerPollResult{Answer: answerFor(poll, row, userID, installID)}, nil
+	return AnswerPollResult{Answer: answerFor(poll, row, userID, key)}, nil
 }
 
 // ListPollAnswersParams reads a poll's answers.
@@ -2664,6 +2681,8 @@ type ListPollAnswersParams struct {
 	Database  *db.DatabaseSqlc
 	Principal accessutil.Principal
 	MessageID int64
+	// DataDir holds the poll voter key an anonymous poll's answers need.
+	DataDir string
 }
 
 // ListPollAnswersResult is the answers the caller may see, oldest first, or
@@ -2696,15 +2715,14 @@ func ListPollAnswers(params ListPollAnswersParams) (ListPollAnswersResult, error
 	if err != nil {
 		return ListPollAnswersResult{}, err
 	}
-	var installID string
+	var key []byte
 	if poll.Anonymous {
-		installID, err = queries.GetInstallID(params.Ctx)
-		if err != nil {
+		if key, err = voterKey(params.DataDir); err != nil {
 			return ListPollAnswersResult{}, err
 		}
 	}
 	return ListPollAnswersResult{
-		Answers: visibleAnswers(poll, message.AuthorID.Int64, params.Principal.UserID, rows, time.Now(), installID),
+		Answers: visibleAnswers(poll, message.AuthorID.Int64, params.Principal.UserID, rows, time.Now(), key),
 	}, nil
 }
 

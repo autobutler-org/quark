@@ -30,7 +30,8 @@ The database is a SQLite file whichever engine the source runs on: one file, no 
 vault, the chat and the install id are all rows in it.
 
 Nothing else in the data directory is carried: `cache/` and `tmp/` are rebuilt or staging, `certs/` and
-`mounts/` belong to the machine, and the files an older Quark kept its settings in are rows in the database
+`mounts/` belong to the machine, `secrets/` holds the poll voter key, which stays off every copy of the data so
+the new install's anonymous polls keep their answers but not whose they are (#3942), and the files an older Quark kept its settings in are rows in the database
 now. A USB drive's files are on the drive, which moves with it.
 
 ## Taking a bundle

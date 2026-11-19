@@ -90,8 +90,12 @@ type Querier interface {
 	// Chat polls (#3893). The Quark enforces a poll's settings and stores its
 	// answers as ciphertext it never opens.
 	CreateChatPoll(ctx context.Context, arg CreateChatPollParams) error
-	// CreateChatPollAnswer stores an account's first answer to a poll, and
-	// returns no row when it already answered or the poll is gone.
+	// CreateChatPollAnonymousAnswer is CreateChatPollAnswer for an anonymous
+	// poll: the row holds the account's voter tag and no user_id (#3942).
+	CreateChatPollAnonymousAnswer(ctx context.Context, arg CreateChatPollAnonymousAnswerParams) (ChatPollAnswer, error)
+	// CreateChatPollAnswer stores an account's first answer to a poll that names
+	// who answered, and returns no row when it already answered or the poll is
+	// gone.
 	CreateChatPollAnswer(ctx context.Context, arg CreateChatPollAnswerParams) (ChatPollAnswer, error)
 	// Chat reactions (#2426). The Quark stores ciphertext and never opens it.
 	// CreateChatReaction stores a reaction on a message that isn't deleted, and
@@ -129,6 +133,8 @@ type Querier interface {
 	// DeleteChatKeyGrant drops one account's grant of one version, for when the
 	// recipient can't open or verify it (#2486).
 	DeleteChatKeyGrant(ctx context.Context, arg DeleteChatKeyGrantParams) (int64, error)
+	DeleteChatPollAnswer(ctx context.Context, id int64) error
+	DeleteChatPollAnswerByVoterTag(ctx context.Context, arg DeleteChatPollAnswerByVoterTagParams) error
 	DeleteChatReaction(ctx context.Context, id int64) error
 	DeleteConnectedDevice(ctx context.Context, id int64) error
 	DeleteDeviceRole(ctx context.Context, deviceSerial string) error
@@ -335,6 +341,9 @@ type Querier interface {
 	// ListChatChannelsForUser. Direct messages are left out: they are for their
 	// members alone, admins included (#2423).
 	ListAllChatChannels(ctx context.Context) ([]ListAllChatChannelsRow, error)
+	// ListAnonymousChatPollIDs is every anonymous poll, for removing a deleted
+	// account's answers by their voter tags.
+	ListAnonymousChatPollIDs(ctx context.Context) ([]int64, error)
 	// Every event of a calendar, for the iCalendar export and import (#1151).
 	ListCalendarEvents(ctx context.Context, calendarID int64) ([]ListCalendarEventsRow, error)
 	// A one-off event is listed when it overlaps [range_start, range_end). A
@@ -492,6 +501,10 @@ type Querier interface {
 	// were stored before created_at, so a sweep can remove their files and then
 	// delete the rows. The cutoff is passed from Go.
 	ListUnboundChatAttachmentsBefore(ctx context.Context, createdAt time.Time) ([]ListUnboundChatAttachmentsBeforeRow, error)
+	// ListUntaggedAnonymousChatPollAnswers is the answers to anonymous polls that
+	// still name their account: stored before migration 052, and converted once
+	// at start (#3942).
+	ListUntaggedAnonymousChatPollAnswers(ctx context.Context) ([]ListUntaggedAnonymousChatPollAnswersRow, error)
 	// ListJobs for one account, so a non-admin's listing never loads every other
 	// account's jobs (#2756).
 	ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]Job, error)
@@ -615,8 +628,12 @@ type Querier interface {
 	// SetChatChannelUserMember gives an account a set on a channel, replacing the
 	// set any earlier row for it carried.
 	SetChatChannelUserMember(ctx context.Context, arg SetChatChannelUserMemberParams) error
+	// SetChatPollAnonymousAnswer is SetChatPollAnswer for an anonymous poll: the
+	// row holds the account's voter tag and no user_id (#3942).
+	SetChatPollAnonymousAnswer(ctx context.Context, arg SetChatPollAnonymousAnswerParams) (ChatPollAnswer, error)
 	// SetChatPollAnswer stores or replaces an account's answer to a poll that
-	// still exists, and returns no row once the poll went with its message.
+	// names who answered and still exists, and returns no row once the poll went
+	// with its message.
 	SetChatPollAnswer(ctx context.Context, arg SetChatPollAnswerParams) (ChatPollAnswer, error)
 	// Chat read markers (#2424): how far each account has read in each channel.
 	// SetChatReadMarker moves an account's marker in a channel forward, never
@@ -653,6 +670,8 @@ type Querier interface {
 	// with what is under it, so zero means the index holds no such folder.
 	SumIndexedFolder(ctx context.Context, arg SumIndexedFolderParams) (SumIndexedFolderRow, error)
 	SumIndexedSerial(ctx context.Context, serial string) (SumIndexedSerialRow, error)
+	// TagChatPollAnswer swaps an anonymous answer's user_id for its voter tag.
+	TagChatPollAnswer(ctx context.Context, arg TagChatPollAnswerParams) error
 	// TombstoneChatMessage wipes a message's ciphertext and marks it deleted,
 	// keeping the first deletion time when it is deleted twice.
 	TombstoneChatMessage(ctx context.Context, id int64) (ChatMessage, error)

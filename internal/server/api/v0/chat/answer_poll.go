@@ -5,6 +5,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -42,7 +43,7 @@ func answerPoll(c *gin.Context) *serverutil.Response {
 	}
 	result, err := chatutil.AnswerPoll(chatutil.AnswerPollParams{
 		Ctx: c.Request.Context(), Database: deps.Database(), EventBus: deps.EventBus(), Principal: principal,
-		MessageID: id, KeyVersion: body.KeyVersion, Ciphertext: body.Ciphertext,
+		MessageID: id, KeyVersion: body.KeyVersion, Ciphertext: body.Ciphertext, DataDir: storageutil.GetDataDir(),
 	})
 	if err != nil {
 		return chatError(err)

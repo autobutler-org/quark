@@ -3,6 +3,7 @@ package v0_chat
 import (
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,6 +31,7 @@ func listPollAnswers(c *gin.Context) *serverutil.Response {
 	}
 	result, err := chatutil.ListPollAnswers(chatutil.ListPollAnswersParams{
 		Ctx: c.Request.Context(), Database: deps.Database(), Principal: principal, MessageID: id,
+		DataDir: storageutil.GetDataDir(),
 	})
 	if err != nil {
 		return chatError(err)

@@ -52,13 +52,52 @@ func (q *Queries) CreateChatPoll(ctx context.Context, arg CreateChatPollParams) 
 	return err
 }
 
-const createChatPollAnswer = `-- name: CreateChatPollAnswer :one
-INSERT INTO chat_poll_answers (message_id, user_id, key_version, ciphertext)
+const createChatPollAnonymousAnswer = `-- name: CreateChatPollAnonymousAnswer :one
+INSERT INTO chat_poll_answers (message_id, voter_tag, key_version, ciphertext)
 SELECT message_id, ?1, ?2, ?3
 FROM chat_polls
 WHERE chat_polls.message_id = ?4
+ON CONFLICT (message_id, voter_tag) DO NOTHING
+RETURNING id, message_id, user_id, key_version, ciphertext, created_at, updated_at, voter_tag
+`
+
+type CreateChatPollAnonymousAnswerParams struct {
+	VoterTag   []byte
+	KeyVersion int64
+	Ciphertext []byte
+	MessageID  int64
+}
+
+// CreateChatPollAnonymousAnswer is CreateChatPollAnswer for an anonymous
+// poll: the row holds the account's voter tag and no user_id (#3942).
+func (q *Queries) CreateChatPollAnonymousAnswer(ctx context.Context, arg CreateChatPollAnonymousAnswerParams) (ChatPollAnswer, error) {
+	row := q.db.QueryRowContext(ctx, createChatPollAnonymousAnswer,
+		arg.VoterTag,
+		arg.KeyVersion,
+		arg.Ciphertext,
+		arg.MessageID,
+	)
+	var i ChatPollAnswer
+	err := row.Scan(
+		&i.ID,
+		&i.MessageID,
+		&i.UserID,
+		&i.KeyVersion,
+		&i.Ciphertext,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.VoterTag,
+	)
+	return i, err
+}
+
+const createChatPollAnswer = `-- name: CreateChatPollAnswer :one
+INSERT INTO chat_poll_answers (message_id, user_id, key_version, ciphertext)
+SELECT message_id, CAST(?1 AS BIGINT), ?2, ?3
+FROM chat_polls
+WHERE chat_polls.message_id = ?4
 ON CONFLICT (message_id, user_id) DO NOTHING
-RETURNING id, message_id, user_id, key_version, ciphertext, created_at, updated_at
+RETURNING id, message_id, user_id, key_version, ciphertext, created_at, updated_at, voter_tag
 `
 
 type CreateChatPollAnswerParams struct {
@@ -68,8 +107,9 @@ type CreateChatPollAnswerParams struct {
 	MessageID  int64
 }
 
-// CreateChatPollAnswer stores an account's first answer to a poll, and
-// returns no row when it already answered or the poll is gone.
+// CreateChatPollAnswer stores an account's first answer to a poll that names
+// who answered, and returns no row when it already answered or the poll is
+// gone.
 func (q *Queries) CreateChatPollAnswer(ctx context.Context, arg CreateChatPollAnswerParams) (ChatPollAnswer, error) {
 	row := q.db.QueryRowContext(ctx, createChatPollAnswer,
 		arg.UserID,
@@ -86,8 +126,33 @@ func (q *Queries) CreateChatPollAnswer(ctx context.Context, arg CreateChatPollAn
 		&i.Ciphertext,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.VoterTag,
 	)
 	return i, err
+}
+
+const deleteChatPollAnswer = `-- name: DeleteChatPollAnswer :exec
+DELETE FROM chat_poll_answers WHERE id = ?1
+`
+
+func (q *Queries) DeleteChatPollAnswer(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteChatPollAnswer, id)
+	return err
+}
+
+const deleteChatPollAnswerByVoterTag = `-- name: DeleteChatPollAnswerByVoterTag :exec
+DELETE FROM chat_poll_answers
+WHERE message_id = ?1 AND voter_tag = ?2
+`
+
+type DeleteChatPollAnswerByVoterTagParams struct {
+	MessageID int64
+	VoterTag  []byte
+}
+
+func (q *Queries) DeleteChatPollAnswerByVoterTag(ctx context.Context, arg DeleteChatPollAnswerByVoterTagParams) error {
+	_, err := q.db.ExecContext(ctx, deleteChatPollAnswerByVoterTag, arg.MessageID, arg.VoterTag)
+	return err
 }
 
 const getChatPoll = `-- name: GetChatPoll :one
@@ -108,8 +173,37 @@ func (q *Queries) GetChatPoll(ctx context.Context, messageID int64) (ChatPoll, e
 	return i, err
 }
 
+const listAnonymousChatPollIDs = `-- name: ListAnonymousChatPollIDs :many
+SELECT message_id FROM chat_polls WHERE anonymous = TRUE ORDER BY message_id
+`
+
+// ListAnonymousChatPollIDs is every anonymous poll, for removing a deleted
+// account's answers by their voter tags.
+func (q *Queries) ListAnonymousChatPollIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listAnonymousChatPollIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var message_id int64
+		if err := rows.Scan(&message_id); err != nil {
+			return nil, err
+		}
+		items = append(items, message_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChatPollAnswers = `-- name: ListChatPollAnswers :many
-SELECT id, message_id, user_id, key_version, ciphertext, created_at, updated_at FROM chat_poll_answers WHERE message_id = ?1 ORDER BY id
+SELECT id, message_id, user_id, key_version, ciphertext, created_at, updated_at, voter_tag FROM chat_poll_answers WHERE message_id = ?1 ORDER BY id
 `
 
 func (q *Queries) ListChatPollAnswers(ctx context.Context, messageID int64) ([]ChatPollAnswer, error) {
@@ -129,6 +223,7 @@ func (q *Queries) ListChatPollAnswers(ctx context.Context, messageID int64) ([]C
 			&i.Ciphertext,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.VoterTag,
 		); err != nil {
 			return nil, err
 		}
@@ -144,7 +239,7 @@ func (q *Queries) ListChatPollAnswers(ctx context.Context, messageID int64) ([]C
 }
 
 const listChatPollAnswersBetween = `-- name: ListChatPollAnswersBetween :many
-SELECT chat_poll_answers.id, chat_poll_answers.message_id, chat_poll_answers.user_id, chat_poll_answers.key_version, chat_poll_answers.ciphertext, chat_poll_answers.created_at, chat_poll_answers.updated_at
+SELECT chat_poll_answers.id, chat_poll_answers.message_id, chat_poll_answers.user_id, chat_poll_answers.key_version, chat_poll_answers.ciphertext, chat_poll_answers.created_at, chat_poll_answers.updated_at, chat_poll_answers.voter_tag
 FROM chat_poll_answers
 JOIN chat_messages ON chat_messages.id = chat_poll_answers.message_id
 WHERE chat_messages.channel_id = ?1
@@ -178,6 +273,7 @@ func (q *Queries) ListChatPollAnswersBetween(ctx context.Context, arg ListChatPo
 			&i.Ciphertext,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.VoterTag,
 		); err != nil {
 			return nil, err
 		}
@@ -240,16 +336,98 @@ func (q *Queries) ListChatPollsBetween(ctx context.Context, arg ListChatPollsBet
 	return items, nil
 }
 
+const listUntaggedAnonymousChatPollAnswers = `-- name: ListUntaggedAnonymousChatPollAnswers :many
+SELECT chat_poll_answers.id, chat_poll_answers.message_id, chat_poll_answers.user_id
+FROM chat_poll_answers
+JOIN chat_polls ON chat_polls.message_id = chat_poll_answers.message_id
+WHERE chat_polls.anonymous = TRUE AND chat_poll_answers.user_id IS NOT NULL
+ORDER BY chat_poll_answers.id
+`
+
+type ListUntaggedAnonymousChatPollAnswersRow struct {
+	ID        int64
+	MessageID int64
+	UserID    sql.NullInt64
+}
+
+// ListUntaggedAnonymousChatPollAnswers is the answers to anonymous polls that
+// still name their account: stored before migration 052, and converted once
+// at start (#3942).
+func (q *Queries) ListUntaggedAnonymousChatPollAnswers(ctx context.Context) ([]ListUntaggedAnonymousChatPollAnswersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUntaggedAnonymousChatPollAnswers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUntaggedAnonymousChatPollAnswersRow
+	for rows.Next() {
+		var i ListUntaggedAnonymousChatPollAnswersRow
+		if err := rows.Scan(&i.ID, &i.MessageID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setChatPollAnonymousAnswer = `-- name: SetChatPollAnonymousAnswer :one
+INSERT INTO chat_poll_answers (message_id, voter_tag, key_version, ciphertext)
+SELECT message_id, ?1, ?2, ?3
+FROM chat_polls
+WHERE chat_polls.message_id = ?4
+ON CONFLICT (message_id, voter_tag) DO UPDATE SET
+    key_version = excluded.key_version,
+    ciphertext = excluded.ciphertext,
+    updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+RETURNING id, message_id, user_id, key_version, ciphertext, created_at, updated_at, voter_tag
+`
+
+type SetChatPollAnonymousAnswerParams struct {
+	VoterTag   []byte
+	KeyVersion int64
+	Ciphertext []byte
+	MessageID  int64
+}
+
+// SetChatPollAnonymousAnswer is SetChatPollAnswer for an anonymous poll: the
+// row holds the account's voter tag and no user_id (#3942).
+func (q *Queries) SetChatPollAnonymousAnswer(ctx context.Context, arg SetChatPollAnonymousAnswerParams) (ChatPollAnswer, error) {
+	row := q.db.QueryRowContext(ctx, setChatPollAnonymousAnswer,
+		arg.VoterTag,
+		arg.KeyVersion,
+		arg.Ciphertext,
+		arg.MessageID,
+	)
+	var i ChatPollAnswer
+	err := row.Scan(
+		&i.ID,
+		&i.MessageID,
+		&i.UserID,
+		&i.KeyVersion,
+		&i.Ciphertext,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.VoterTag,
+	)
+	return i, err
+}
+
 const setChatPollAnswer = `-- name: SetChatPollAnswer :one
 INSERT INTO chat_poll_answers (message_id, user_id, key_version, ciphertext)
-SELECT message_id, ?1, ?2, ?3
+SELECT message_id, CAST(?1 AS BIGINT), ?2, ?3
 FROM chat_polls
 WHERE chat_polls.message_id = ?4
 ON CONFLICT (message_id, user_id) DO UPDATE SET
     key_version = excluded.key_version,
     ciphertext = excluded.ciphertext,
     updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
-RETURNING id, message_id, user_id, key_version, ciphertext, created_at, updated_at
+RETURNING id, message_id, user_id, key_version, ciphertext, created_at, updated_at, voter_tag
 `
 
 type SetChatPollAnswerParams struct {
@@ -260,7 +438,8 @@ type SetChatPollAnswerParams struct {
 }
 
 // SetChatPollAnswer stores or replaces an account's answer to a poll that
-// still exists, and returns no row once the poll went with its message.
+// names who answered and still exists, and returns no row once the poll went
+// with its message.
 func (q *Queries) SetChatPollAnswer(ctx context.Context, arg SetChatPollAnswerParams) (ChatPollAnswer, error) {
 	row := q.db.QueryRowContext(ctx, setChatPollAnswer,
 		arg.UserID,
@@ -277,6 +456,23 @@ func (q *Queries) SetChatPollAnswer(ctx context.Context, arg SetChatPollAnswerPa
 		&i.Ciphertext,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.VoterTag,
 	)
 	return i, err
+}
+
+const tagChatPollAnswer = `-- name: TagChatPollAnswer :exec
+UPDATE chat_poll_answers SET voter_tag = ?1, user_id = NULL
+WHERE id = ?2
+`
+
+type TagChatPollAnswerParams struct {
+	VoterTag []byte
+	ID       int64
+}
+
+// TagChatPollAnswer swaps an anonymous answer's user_id for its voter tag.
+func (q *Queries) TagChatPollAnswer(ctx context.Context, arg TagChatPollAnswerParams) error {
+	_, err := q.db.ExecContext(ctx, tagChatPollAnswer, arg.VoterTag, arg.ID)
+	return err
 }

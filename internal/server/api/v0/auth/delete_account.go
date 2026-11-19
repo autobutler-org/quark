@@ -7,6 +7,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/avatarutil"
+	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
@@ -143,6 +144,13 @@ func deleteAccount(c *gin.Context) *serverutil.Response {
 		err = avatarutil.RemoveAll(avatarutil.RemoveAllParams{DataDir: dataDir})
 	} else if result.AccountDeleted {
 		_, err = avatarutil.Remove(avatarutil.RemoveParams{DataDir: dataDir, UserID: user.ID})
+		if err == nil {
+			// Anonymous poll answers name no account, so no cascade finds
+			// them (#3942).
+			err = chatutil.DeleteAnonymousPollAnswers(chatutil.DeleteAnonymousPollAnswersParams{
+				Ctx: c.Request.Context(), Queries: database.Queries, DataDir: dataDir, UserID: user.ID,
+			})
+		}
 	}
 	if err != nil {
 		return serverutil.InternalServerError(err)

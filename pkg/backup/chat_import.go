@@ -171,11 +171,16 @@ var chatRestoreSteps = []restoreStep{
 		FROM chat_backup.chat_reactions AS r
 		JOIN temp.restore_users AS u ON u.backup_id = r.user_id`},
 	{"chat_polls", `INSERT INTO main.chat_polls SELECT * FROM chat_backup.chat_polls`},
+	// An anonymous poll's answer names no account, only its voter tag
+	// (#3942), and comes back as it is. The tag only matches its account on
+	// a Quark holding the same poll voter key: anywhere else the answer still
+	// counts, but is nobody's own, and that account may answer again.
 	{"chat_poll_answers", `
-		INSERT INTO main.chat_poll_answers (id, message_id, user_id, key_version, ciphertext, created_at, updated_at)
-		SELECT a.id, a.message_id, u.live_id, a.key_version, a.ciphertext, a.created_at, a.updated_at
+		INSERT INTO main.chat_poll_answers (id, message_id, user_id, key_version, ciphertext, created_at, updated_at, voter_tag)
+		SELECT a.id, a.message_id, u.live_id, a.key_version, a.ciphertext, a.created_at, a.updated_at, a.voter_tag
 		FROM chat_backup.chat_poll_answers AS a
-		JOIN temp.restore_users AS u ON u.backup_id = a.user_id`},
+		LEFT JOIN temp.restore_users AS u ON u.backup_id = a.user_id
+		WHERE u.live_id IS NOT NULL OR a.voter_tag IS NOT NULL`},
 	// Channel and message ids come back unchanged, the same as chat_messages.
 	// An uploader who is not on this Quark is left out, the same as a reaction.
 	{"chat_attachments", `

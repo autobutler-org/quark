@@ -154,6 +154,11 @@ func (a *postgresQueries) CreateChatPoll(ctx context.Context, arg CreateChatPoll
 	return a.q.CreateChatPoll(ctx, pgdb.CreateChatPollParams(arg))
 }
 
+func (a *postgresQueries) CreateChatPollAnonymousAnswer(ctx context.Context, arg CreateChatPollAnonymousAnswerParams) (ChatPollAnswer, error) {
+	row, err := a.q.CreateChatPollAnonymousAnswer(ctx, pgdb.CreateChatPollAnonymousAnswerParams(arg))
+	return ChatPollAnswer(row), err
+}
+
 func (a *postgresQueries) CreateChatPollAnswer(ctx context.Context, arg CreateChatPollAnswerParams) (ChatPollAnswer, error) {
 	row, err := a.q.CreateChatPollAnswer(ctx, pgdb.CreateChatPollAnswerParams(arg))
 	return ChatPollAnswer(row), err
@@ -239,6 +244,14 @@ func (a *postgresQueries) DeleteChatChannelUserMember(ctx context.Context, arg D
 
 func (a *postgresQueries) DeleteChatKeyGrant(ctx context.Context, arg DeleteChatKeyGrantParams) (int64, error) {
 	return a.q.DeleteChatKeyGrant(ctx, pgdb.DeleteChatKeyGrantParams(arg))
+}
+
+func (a *postgresQueries) DeleteChatPollAnswer(ctx context.Context, id int64) error {
+	return a.q.DeleteChatPollAnswer(ctx, id)
+}
+
+func (a *postgresQueries) DeleteChatPollAnswerByVoterTag(ctx context.Context, arg DeleteChatPollAnswerByVoterTagParams) error {
+	return a.q.DeleteChatPollAnswerByVoterTag(ctx, pgdb.DeleteChatPollAnswerByVoterTagParams(arg))
 }
 
 func (a *postgresQueries) DeleteChatReaction(ctx context.Context, id int64) error {
@@ -744,6 +757,10 @@ func (a *postgresQueries) ListAllChatChannels(ctx context.Context) ([]ListAllCha
 		items[i] = ListAllChatChannelsRow(row)
 	}
 	return items, nil
+}
+
+func (a *postgresQueries) ListAnonymousChatPollIDs(ctx context.Context) ([]int64, error) {
+	return a.q.ListAnonymousChatPollIDs(ctx)
 }
 
 func (a *postgresQueries) ListCalendarEvents(ctx context.Context, calendarID int64) ([]ListCalendarEventsRow, error) {
@@ -1278,6 +1295,18 @@ func (a *postgresQueries) ListUnboundChatAttachmentsBefore(ctx context.Context, 
 	return items, nil
 }
 
+func (a *postgresQueries) ListUntaggedAnonymousChatPollAnswers(ctx context.Context) ([]ListUntaggedAnonymousChatPollAnswersRow, error) {
+	rows, err := a.q.ListUntaggedAnonymousChatPollAnswers(ctx)
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListUntaggedAnonymousChatPollAnswersRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListUntaggedAnonymousChatPollAnswersRow(row)
+	}
+	return items, nil
+}
+
 func (a *postgresQueries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]Job, error) {
 	rows, err := a.q.ListUserJobs(ctx, pgdb.ListUserJobsParams(arg))
 	if err != nil || rows == nil {
@@ -1460,6 +1489,11 @@ func (a *postgresQueries) SetChatChannelUserMember(ctx context.Context, arg SetC
 	return a.q.SetChatChannelUserMember(ctx, pgdb.SetChatChannelUserMemberParams(arg))
 }
 
+func (a *postgresQueries) SetChatPollAnonymousAnswer(ctx context.Context, arg SetChatPollAnonymousAnswerParams) (ChatPollAnswer, error) {
+	row, err := a.q.SetChatPollAnonymousAnswer(ctx, pgdb.SetChatPollAnonymousAnswerParams(arg))
+	return ChatPollAnswer(row), err
+}
+
 func (a *postgresQueries) SetChatPollAnswer(ctx context.Context, arg SetChatPollAnswerParams) (ChatPollAnswer, error) {
 	row, err := a.q.SetChatPollAnswer(ctx, pgdb.SetChatPollAnswerParams(arg))
 	return ChatPollAnswer(row), err
@@ -1521,6 +1555,10 @@ func (a *postgresQueries) SumIndexedFolder(ctx context.Context, arg SumIndexedFo
 func (a *postgresQueries) SumIndexedSerial(ctx context.Context, serial string) (SumIndexedSerialRow, error) {
 	row, err := a.q.SumIndexedSerial(ctx, serial)
 	return SumIndexedSerialRow(row), err
+}
+
+func (a *postgresQueries) TagChatPollAnswer(ctx context.Context, arg TagChatPollAnswerParams) error {
+	return a.q.TagChatPollAnswer(ctx, pgdb.TagChatPollAnswerParams(arg))
 }
 
 func (a *postgresQueries) TombstoneChatMessage(ctx context.Context, id int64) (ChatMessage, error) {

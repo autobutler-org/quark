@@ -3,7 +3,7 @@ package db
 // ChatBackupVersion is the format of the chat backup file, stored in its
 // user_version. It moves when ChatBackupSchemaDDL does, and a restore refuses
 // a version it does not know rather than guess at its columns.
-const ChatBackupVersion = 3
+const ChatBackupVersion = 4
 
 // ChatBackupSchemaDDL is the schema of the chat backup file pkg/backup writes
 // beside a snapshot (#2428). It is a transport format, not a database anyone
@@ -25,10 +25,12 @@ const ChatBackupVersion = 3
 // exported but never restored, as client_message_id is: it names accounts by
 // their ids, which a restore renumbers, so the restore works it out again
 // from the members it restored. chat_channels.forked is exported and not
-// restored either, so a version 3 file without it still reads: a restored
+// restored either, so a file without it still reads: a restored
 // conversation loses the line saying it was started from an earlier one.
+// Version 4 gave chat_poll_answers its voter_tag: an anonymous poll's answer
+// carries the tag and no user_id (#3942).
 const ChatBackupSchemaDDL = `
-PRAGMA user_version = 3;
+PRAGMA user_version = 4;
 
 CREATE TABLE users (
     id       INTEGER PRIMARY KEY,
@@ -145,11 +147,12 @@ CREATE TABLE chat_polls (
 CREATE TABLE chat_poll_answers (
     id          INTEGER PRIMARY KEY,
     message_id  INTEGER NOT NULL,
-    user_id     INTEGER NOT NULL,
+    user_id     INTEGER,
     key_version INTEGER NOT NULL,
     ciphertext  BLOB NOT NULL,
     created_at  DATETIME NOT NULL,
-    updated_at  DATETIME NOT NULL
+    updated_at  DATETIME NOT NULL,
+    voter_tag   BLOB
 );
 
 CREATE TABLE chat_attachments (

@@ -269,6 +269,19 @@ func TestChatPolls_AnonymousHidesUserIDs(t *testing.T) {
 		slices.ContainsFunc(carols.Answers[mine+1:], func(a chatutil.PollAnswer) bool { return a.Mine }) {
 		t.Errorf("carol's own isn't marked once: %+v", carols.Answers)
 	}
+
+	// The rows name no account (#3942), and the voter tag still holds each
+	// account to one answer.
+	h.expect(t, http.StatusConflict, http.MethodPut, pollPath(poll.ID, "/answer"), "carol", answerBody('b'), nil)
+	var named, untagged int
+	if err := h.deps.Database().Db.QueryRow(`
+		SELECT COUNT(*) FILTER (WHERE user_id IS NOT NULL), COUNT(*) FILTER (WHERE voter_tag IS NULL)
+		FROM chat_poll_answers WHERE message_id = ?`, poll.ID).Scan(&named, &untagged); err != nil {
+		t.Fatal(err)
+	}
+	if named != 0 || untagged != 0 {
+		t.Errorf("%d anonymous answers name an account and %d carry no voter tag, want 0 and 0", named, untagged)
+	}
 }
 
 // TestChatPolls_ResultsAfterClose shows a non-author only their own answer,

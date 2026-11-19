@@ -5,6 +5,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/avatarutil"
+	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
@@ -53,7 +54,14 @@ func deleteUser(c *gin.Context) *serverutil.Response {
 	}
 	// After the account: SQLite can hand its id out again, and the next
 	// account must not inherit its picture. Its settings went with its row.
+	// Its anonymous poll answers name no account, so no cascade finds them
+	// (#3942), and the next account given its id would inherit them.
 	if _, err := avatarutil.Remove(avatarutil.RemoveParams{DataDir: storageutil.GetDataDir(), UserID: result.UserID}); err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if err := chatutil.DeleteAnonymousPollAnswers(chatutil.DeleteAnonymousPollAnswersParams{
+		Ctx: c.Request.Context(), Queries: database.Queries, DataDir: storageutil.GetDataDir(), UserID: result.UserID,
+	}); err != nil {
 		return serverutil.InternalServerError(err)
 	}
 	if bus := deps.EventBus(); bus != nil {

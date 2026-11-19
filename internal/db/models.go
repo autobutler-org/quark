@@ -129,11 +129,12 @@ type ChatPoll struct {
 type ChatPollAnswer struct {
 	ID         int64
 	MessageID  int64
-	UserID     int64
+	UserID     sql.NullInt64
 	KeyVersion int64
 	Ciphertext []byte
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	VoterTag   []byte
 }
 
 type ChatReaction struct {
