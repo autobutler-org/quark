@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-/// One photo as the widgets need it: an id, a name, and the flags that change
-/// how its tile is drawn.
+/// One photo or video as the widgets need it: an id, a name, and the flags
+/// that change how its tile is drawn.
 ///
 /// The package's own view of a photo, so no widget has to know where it is
 /// stored. Controllers map their photo types into this at the edge and map
@@ -17,6 +17,8 @@ class PhotoItem {
     this.isRemote = true,
     this.hasLiveVideo = false,
     this.isFavorite = false,
+    this.isVideo = false,
+    this.duration,
   });
 
   /// The photo's stable identifier, unique across every source, and what
@@ -36,6 +38,14 @@ class PhotoItem {
   /// Whether the photo is a favorite, which earns it a star.
   final bool isFavorite;
 
+  /// Whether this item is a video rather than a photo, which earns it a
+  /// video badge.
+  final bool isVideo;
+
+  /// A video's length, shown on its badge. Null for a photo, and for a video
+  /// whose length is unknown.
+  final Duration? duration;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -44,8 +54,18 @@ class PhotoItem {
           other.name == name &&
           other.isRemote == isRemote &&
           other.hasLiveVideo == hasLiveVideo &&
-          other.isFavorite == isFavorite;
+          other.isFavorite == isFavorite &&
+          other.isVideo == isVideo &&
+          other.duration == duration;
 
   @override
-  int get hashCode => Object.hash(id, name, isRemote, hasLiveVideo, isFavorite);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    isRemote,
+    hasLiveVideo,
+    isFavorite,
+    isVideo,
+    duration,
+  );
 }

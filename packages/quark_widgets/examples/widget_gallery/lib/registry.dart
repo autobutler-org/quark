@@ -2187,6 +2187,28 @@ final List<GalleryEntry> registry = [
   ),
 
   GalleryEntry(
+    name: 'VideoBadge',
+    group: 'Photos',
+    build: (context, log) => Container(
+      width: 240,
+      height: 120,
+      color: const Color(0xFF7C8AA0),
+      alignment: Alignment.bottomLeft,
+      padding: const EdgeInsets.all(4),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 12,
+        children: [
+          // Under an hour, past one, and a length the Quark could not read.
+          VideoBadge(duration: Duration(seconds: 42)),
+          VideoBadge(duration: Duration(hours: 1, minutes: 2, seconds: 3)),
+          VideoBadge(),
+        ],
+      ),
+    ),
+  ),
+
+  GalleryEntry(
     name: 'PhotoGridTile',
     group: 'Photos',
     build: (context, log) => Wrap(
@@ -2202,6 +2224,17 @@ final List<GalleryEntry> registry = [
               name: 'wave.heic',
               isFavorite: true,
               hasLiveVideo: true,
+            ),
+            false,
+            false,
+          ),
+          (
+            'video',
+            PhotoItem(
+              id: 'p5',
+              name: 'surf.mp4',
+              isVideo: true,
+              duration: Duration(seconds: 42),
             ),
             false,
             false,

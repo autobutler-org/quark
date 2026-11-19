@@ -29,6 +29,7 @@ void main() {
     bool isFavorite = false,
     String? copyUnavailableReason,
     bool heic = false,
+    bool video = false,
   }) async {
     setViewport(tester, size);
 
@@ -56,9 +57,9 @@ void main() {
                     onToggleFavorite: () => events.add('favorite'),
                     onDownload: () => events.add('download'),
                     onShare: () => events.add('share'),
-                    onCopy: () => events.add('copy'),
+                    onCopy: video ? null : () => events.add('copy'),
                     copyUnavailableReason: copyUnavailableReason,
-                    onDuplicate: () => events.add('duplicate'),
+                    onDuplicate: video ? null : () => events.add('duplicate'),
                     onDelete: () => events.add('delete'),
                     onDownloadAsJpeg: heic
                         ? () => events.add('download_jpeg')
@@ -122,6 +123,20 @@ void main() {
       expect(action('download'), findsNothing);
     });
   }
+
+  testWidgets('a video leaves out Copy and Duplicate (#3428)', (tester) async {
+    final events = <String>[];
+    await pumpTile(tester, size: wideViewport, events: events, video: true);
+
+    await tester.tap(find.byKey(const ValueKey('photo_tile_menu_p1')));
+    await tester.pumpAndSettle();
+
+    expect(action('copy'), findsNothing);
+    expect(action('duplicate'), findsNothing);
+    for (final id in ['add_to_album', 'favorite', 'download', 'delete']) {
+      expect(action(id), findsOneWidget, reason: id);
+    }
+  });
 
   testWidgets('a favorite offers Unfavorite', (tester) async {
     await pumpTile(

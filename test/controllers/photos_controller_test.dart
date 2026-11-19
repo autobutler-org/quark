@@ -25,14 +25,17 @@ wire.PhotoItem _wirePhoto(
   String serial = 'sd1',
   int mtime = 0,
   int? takenAt,
+  bool isVideo = false,
 }) => wire.PhotoItem(
-  relPath: 'camera/$i.jpg',
-  fileName: '$i.jpg',
+  relPath: isVideo ? 'camera/$i.mp4' : 'camera/$i.jpg',
+  fileName: isVideo ? '$i.mp4' : '$i.jpg',
   size: 1,
   mtime: mtime,
   serial: serial,
   hasLiveVideo: i == 0,
   takenAt: takenAt,
+  isVideo: isVideo,
+  duration: isVideo ? const Duration(seconds: 42) : null,
 );
 
 PhotoAlbum _album(int id, String name, {String? smartType, int count = 0}) =>
@@ -138,6 +141,9 @@ class _FakeQuark {
   /// The storage device the Quark reports photo i on.
   String Function(int i) serialOf = (_) => 'sd1';
 
+  /// Which listed items are videos (#3428).
+  bool Function(int i) videoOf = (_) => false;
+
   /// Paths whose favorite, download, copy or album removal the Quark
   /// refuses (#4154).
   final Set<String> failing = {};
@@ -241,6 +247,7 @@ class _FakeQuark {
                   serial: serialOf(i),
                   mtime: mtimeOf(i),
                   takenAt: takenOf(i),
+                  isVideo: videoOf(i),
                 ),
             ],
             total: ids.length,
@@ -942,6 +949,47 @@ void main() {
         'getPhotos(0)',
         'getPhotos(200)',
       ]);
+    });
+  });
+
+  group('videos (#3428)', () {
+    Future<(_FakeQuark, PhotosController, int)> loaded() async {
+      final quark = _FakeQuark()..videoOf = (i) => i == 1;
+      final controller = quark.controller();
+      await controller.refresh();
+      quark.calls.clear();
+      final index = controller.photos.indexWhere((p) => p.id.endsWith('.mp4'));
+      return (quark, controller, index);
+    }
+
+    test('a listed video is a video tile with its length', () async {
+      final (_, controller, index) = await loaded();
+
+      final video = controller.photos[index];
+      expect(video.isVideo, isTrue);
+      expect(video.duration, const Duration(seconds: 42));
+      expect(controller.photos.where((p) => p.isVideo), hasLength(1));
+    });
+
+    test('opening, loading or prefetching a video downloads nothing', () async {
+      final (quark, controller, index) = await loaded();
+
+      expect(await controller.openPhotoAt(index), isNull);
+      final (bytes, _, _, _) = await controller.loadPhotoAt(index);
+      expect(bytes, isNull);
+      await controller.prefetchPhotoAt(index);
+
+      expect(quark.calls.where((c) => c.startsWith('download')), isEmpty);
+    });
+
+    test('names where a video streams from, and nothing for a photo', () async {
+      final (_, controller, index) = await loaded();
+
+      final video = controller.videoAt(index);
+      expect(video?.name, '1.mp4');
+      expect(video?.url.queryParameters['filePath'], 'camera/1.mp4');
+      expect(video?.url.queryParameters['serial'], 'sd1');
+      expect(controller.videoAt(index == 0 ? 1 : 0), isNull);
     });
   });
 

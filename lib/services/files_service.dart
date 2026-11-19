@@ -132,6 +132,9 @@ class FilesService with AuthenticatedService {
   /// limit. [q] is a file-name substring; a blank one lists the library. The
   /// total is the match count either way (#3523).
   ///
+  /// Videos come back beside the photos, flagged `isVideo` (#3428): the Photos
+  /// library is the only caller, and it shows them.
+  ///
   /// api: GET /api/v0/photos
   static Future<PaginatedPhotosResponse> getPhotos({
     int offset = 0,
@@ -146,6 +149,7 @@ class FilesService with AuthenticatedService {
       'limit=$limit',
       'sort=${sort.apiValue}',
       'order=${order.apiValue}',
+      'includeVideos=true',
     ];
     final serialValue = serial?.trim() ?? '';
     if (serialValue.isNotEmpty) {

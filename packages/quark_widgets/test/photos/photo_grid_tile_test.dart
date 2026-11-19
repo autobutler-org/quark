@@ -150,6 +150,37 @@ void main() {
     expect(find.byKey(const ValueKey('photo_tile_check_p1')), findsNothing);
   });
 
+  testWidgets('a video carries its length and says it is a video (#3428)', (
+    tester,
+  ) async {
+    await pumpTile(
+      tester,
+      item: const PhotoItem(
+        id: 'p1',
+        name: 'clip.mp4',
+        isVideo: true,
+        duration: Duration(seconds: 42),
+      ),
+    );
+    final handle = tester.ensureSemantics();
+
+    expect(find.byType(VideoBadge), findsOneWidget);
+    expect(find.text('0:42'), findsOneWidget);
+    expect(find.byType(LiveBadge), findsNothing);
+    final node = tester.getSemantics(
+      find.byKey(const ValueKey('photo_tile_p1')),
+    );
+    expect(node.label, contains('clip.mp4'));
+    expect(node.label, contains('Video'));
+    handle.dispose();
+  });
+
+  testWidgets('a photo has no video badge', (tester) async {
+    await pumpTile(tester);
+
+    expect(find.byType(VideoBadge), findsNothing);
+  });
+
   testWidgets('selection mode hides the star and shows a checkbox', (
     tester,
   ) async {

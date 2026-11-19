@@ -4,9 +4,11 @@ import 'package:quark_icons/quark_icons.dart';
 import '../core/quark_tappable.dart';
 import '../models/photo_item.dart';
 import 'live_badge.dart';
+import 'video_badge.dart';
 
-/// One square of a photo grid: the thumbnail, a live badge, a favorite star,
-/// and the selection chrome while photos are being selected.
+/// One square of a photo grid: the thumbnail, a live badge, a video's
+/// [VideoBadge], a favorite star, and the selection chrome while photos are
+/// being selected.
 ///
 /// The tile only reports gestures. What a tap means — opening the photo or
 /// toggling it in the selection — is the caller's decision, so [onTap],
@@ -29,8 +31,9 @@ import 'live_badge.dart';
 /// right-click still open the menu. On the web the browser shows its own menu on a right-click
 /// too, unless the caller has turned it off with `BrowserContextMenu`.
 ///
-/// A screen reader hears the tile as a button named for [PhotoItem.name], and
-/// while selecting, whether it is selected (#2603). A keyboard reaches it with
+/// A screen reader hears the tile as a button named for [PhotoItem.name],
+/// prefixed "Video" for a video (#3428), and while selecting, whether it is
+/// selected (#2603). A keyboard reaches it with
 /// Tab and opens it with Enter or Space, as a [QuarkTappable] (#2604).
 ///
 /// Key prefixes: `photo_tile_<id>` on the tile, `photo_tile_check_<id>` on
@@ -114,7 +117,7 @@ class PhotoGridTile extends StatelessWidget {
     return Semantics(
       container: true,
       button: true,
-      label: item.name,
+      label: item.isVideo ? 'Video, ${item.name}' : item.name,
       selected: selectionMode ? isSelected : null,
       // The pointer gestures below stay out of the semantics tree: their
       // secondary tap reads as a second tap action, which split the tile into
@@ -150,6 +153,12 @@ class PhotoGridTile extends StatelessWidget {
               ),
               if (item.hasLiveVideo)
                 const Positioned(top: 4, left: 4, child: LiveBadge()),
+              if (item.isVideo)
+                Positioned(
+                  bottom: 4,
+                  left: 4,
+                  child: VideoBadge(duration: item.duration),
+                ),
               if (item.isFavorite && !selectionMode)
                 const Positioned(
                   bottom: 4,
