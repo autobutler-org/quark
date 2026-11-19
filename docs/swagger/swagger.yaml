@@ -98,6 +98,18 @@ definitions:
       relPath:
         type: string
     type: object
+  albumexportutil.Failure:
+    properties:
+      name:
+        description: Name is the original's file name.
+        type: string
+      path:
+        description: Path is where the copy would have gone, inside the export folder.
+        type: string
+      reason:
+        description: Reason is [ReasonMissing] or [ReasonNotCopied].
+        type: string
+    type: object
   authutil.SessionInfo:
     properties:
       createdAt:
@@ -1768,6 +1780,47 @@ definitions:
       username:
         type: string
     type: object
+  v0_albums.AlbumExportJSON:
+    properties:
+      deviceSerial:
+        type: string
+      jobId:
+        type: integer
+      relPath:
+        type: string
+    type: object
+  v0_albums.AlbumExportSummaryJSON:
+    properties:
+      copied:
+        description: Copied counts the files copied.
+        type: integer
+      deviceSerial:
+        type: string
+      failures:
+        description: |-
+          Failures names the photos not copied, at most 500; MoreFailures counts
+          the rest.
+        items:
+          $ref: '#/definitions/albumexportutil.Failure'
+        type: array
+      jobId:
+        type: integer
+      moreFailures:
+        type: integer
+      relPath:
+        type: string
+      status:
+        description: |-
+          Status is the job's: pending, running, completed, failed or canceled.
+          A failed export with Copied above zero is a partial one.
+        enum:
+        - pending
+        - running
+        - completed
+        - failed
+        - canceled
+        type: string
+    type: object
   v0_albums.AlbumItemJSON:
     properties:
       addedAt:
@@ -1822,6 +1875,26 @@ definitions:
         type: integer
     required:
     - name
+    type: object
+  v0_albums.exportAlbumsRequest:
+    properties:
+      albumIds:
+        description: AlbumIDs are the caller's albums to export, each with its sub-albums.
+        items:
+          type: integer
+        type: array
+      deviceSerial:
+        description: |-
+          DeviceSerial and Folder are the folder the export folder is made in;
+          "" is the internal drive.
+        type: string
+      folder:
+        type: string
+      library:
+        description: |-
+          Library exports every album and every photo in none, and ignores
+          AlbumIDs.
+        type: boolean
     type: object
   v0_albums.moveAlbumRequest:
     properties:
@@ -5052,6 +5125,88 @@ paths:
       security:
       - BearerAuth: []
       summary: Rename a photo album
+      tags:
+      - albums
+  /albums/exports:
+    post:
+      consumes:
+      - application/json
+      description: 'Queues a photo-export job that copies the caller''s chosen albums,
+        or their whole photo library, into a new folder inside the folder given: each
+        album becomes a folder of real copies, a photo in several albums is copied
+        into each, and a manifest.csv names every copy''s original, capture date and
+        albums (#3501). The library, its folders and the albums are left untouched.
+        The new folder is named after the album, or after the library, and never replaces
+        one already there.'
+      parameters:
+      - description: Albums to export, or library, and the folder to export into
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_albums.exportAlbumsRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/v0_albums.AlbumExportJSON'
+        "400":
+          description: 'Bad Request: no album chosen and not the library'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: 'Forbidden: the caller cannot add files to that folder'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: 'Not Found: an album is not the caller''s, or the folder does
+            not exist'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Export albums, or the photo library, as copied files
+      tags:
+      - albums
+  /albums/exports/{jobId}:
+    get:
+      description: Reports what a photo-export job has copied, read from its manifest,
+        and names the photos it could not copy, so a partial export lists its failures
+        (#3501). An export that has not written its manifest yet reports none of either.
+      parameters:
+      - description: The export's job ID
+        in: path
+        name: jobId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_albums.AlbumExportSummaryJSON'
+        "400":
+          description: 'Bad Request: invalid job id'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: 'Not Found: no export of the caller''s has that id'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Summarize a photo export
       tags:
       - albums
   /auth/account:

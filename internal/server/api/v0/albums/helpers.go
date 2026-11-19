@@ -10,6 +10,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/albumexportutil"
 	"github.com/autobutler-org/quark/pkg/util/albumutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -158,4 +159,22 @@ func inAlbum(q db.Querier, album db.PhotoAlbum, serial, relPath string) (bool, e
 		return false, err
 	}
 	return slices.ContainsFunc(holding, func(a db.PhotoAlbum) bool { return a.ID == album.ID }), nil
+}
+
+// errExportNotFound is what a caller hears about an export job that does not
+// exist, is not an export, or is not theirs to see.
+var errExportNotFound = errors.New("export not found")
+
+// exportError maps an albumexportutil.StartExport error onto its status.
+func exportError(err error) *serverutil.Response {
+	switch {
+	case errors.Is(err, albumexportutil.ErrNothingToExport):
+		return serverutil.BadRequest(err)
+	case errors.Is(err, albumexportutil.ErrDestinationForbidden):
+		return serverutil.Forbidden(err)
+	case errors.Is(err, albumexportutil.ErrAlbumNotFound), errors.Is(err, albumexportutil.ErrFolderNotFound):
+		return serverutil.NotFound(err)
+	default:
+		return serverutil.InternalServerError(err)
+	}
 }

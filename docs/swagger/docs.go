@@ -1532,6 +1532,121 @@ const docTemplate = `{
                 }
             }
         },
+        "/albums/exports": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Queues a photo-export job that copies the caller's chosen albums, or their whole photo library, into a new folder inside the folder given: each album becomes a folder of real copies, a photo in several albums is copied into each, and a manifest.csv names every copy's original, capture date and albums (#3501). The library, its folders and the albums are left untouched. The new folder is named after the album, or after the library, and never replaces one already there.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "albums"
+                ],
+                "summary": "Export albums, or the photo library, as copied files",
+                "parameters": [
+                    {
+                        "description": "Albums to export, or library, and the folder to export into",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_albums.exportAlbumsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/v0_albums.AlbumExportJSON"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request: no album chosen and not the library",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: the caller cannot add files to that folder",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found: an album is not the caller's, or the folder does not exist",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/albums/exports/{jobId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reports what a photo-export job has copied, read from its manifest, and names the photos it could not copy, so a partial export lists its failures (#3501). An export that has not written its manifest yet reports none of either.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "albums"
+                ],
+                "summary": "Summarize a photo export",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "The export's job ID",
+                        "name": "jobId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_albums.AlbumExportSummaryJSON"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request: invalid job id",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found: no export of the caller's has that id",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/albums/{id}": {
             "get": {
                 "security": [
@@ -13287,6 +13402,23 @@ const docTemplate = `{
                 }
             }
         },
+        "albumexportutil.Failure": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name is the original's file name.",
+                    "type": "string"
+                },
+                "path": {
+                    "description": "Path is where the copy would have gone, inside the export folder.",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "Reason is [ReasonMissing] or [ReasonNotCopied].",
+                    "type": "string"
+                }
+            }
+        },
         "authutil.SessionInfo": {
             "type": "object",
             "properties": {
@@ -15385,6 +15517,59 @@ const docTemplate = `{
                 }
             }
         },
+        "v0_albums.AlbumExportJSON": {
+            "type": "object",
+            "properties": {
+                "deviceSerial": {
+                    "type": "string"
+                },
+                "jobId": {
+                    "type": "integer"
+                },
+                "relPath": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_albums.AlbumExportSummaryJSON": {
+            "type": "object",
+            "properties": {
+                "copied": {
+                    "description": "Copied counts the files copied.",
+                    "type": "integer"
+                },
+                "deviceSerial": {
+                    "type": "string"
+                },
+                "failures": {
+                    "description": "Failures names the photos not copied, at most 500; MoreFailures counts\nthe rest.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/albumexportutil.Failure"
+                    }
+                },
+                "jobId": {
+                    "type": "integer"
+                },
+                "moreFailures": {
+                    "type": "integer"
+                },
+                "relPath": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status is the job's: pending, running, completed, failed or canceled.\nA failed export with Copied above zero is a partial one.",
+                    "type": "string",
+                    "enum": [
+                        "pending",
+                        "running",
+                        "completed",
+                        "failed",
+                        "canceled"
+                    ]
+                }
+            }
+        },
         "v0_albums.AlbumItemJSON": {
             "type": "object",
             "properties": {
@@ -15463,6 +15648,29 @@ const docTemplate = `{
                 },
                 "parentId": {
                     "type": "integer"
+                }
+            }
+        },
+        "v0_albums.exportAlbumsRequest": {
+            "type": "object",
+            "properties": {
+                "albumIds": {
+                    "description": "AlbumIDs are the caller's albums to export, each with its sub-albums.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "deviceSerial": {
+                    "description": "DeviceSerial and Folder are the folder the export folder is made in;\n\"\" is the internal drive.",
+                    "type": "string"
+                },
+                "folder": {
+                    "type": "string"
+                },
+                "library": {
+                    "description": "Library exports every album and every photo in none, and ignores\nAlbumIDs.",
+                    "type": "boolean"
                 }
             }
         },
