@@ -850,6 +850,80 @@ void main() {
     }
   });
 
+  // #3283: Music's tabs each have a URL, and an album or artist deep-links.
+  group('music routes', () {
+    const details = ['/music/albums/:albumKey', '/music/artists/:name'];
+
+    test('the app declares the tabs and both detail pages', () {
+      final paths = router.configuration.routes.whereType<GoRoute>().map(
+        (route) => route.path,
+      );
+      expect(paths, containsAll([AppRoutes.music, '/music/:tab', ...details]));
+      expect(MusicTab.values.map(AppRoutes.musicTab), [
+        '/music/songs',
+        '/music/albums',
+        '/music/artists',
+        '/music/genres',
+      ]);
+    });
+
+    /// The app's music route paths, each building a stand-in naming its
+    /// parameters.
+    Future<GoRouter> pumpMusic(WidgetTester tester, String location) async {
+      final r = GoRouter(
+        initialLocation: location,
+        routes: [
+          for (final path in details)
+            GoRoute(
+              path: path,
+              builder: (_, state) => Text(
+                'detail ${state.pathParameters.values.single}',
+                textDirection: TextDirection.ltr,
+              ),
+            ),
+          ...tabbedRoutes(
+            path: AppRoutes.music,
+            tabs: MusicTab.values,
+            builder: (tab, _) =>
+                Text('music ${tab.slug}', textDirection: TextDirection.ltr),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      return r;
+    }
+
+    String at(GoRouter r) =>
+        r.routerDelegate.currentConfiguration.uri.toString();
+
+    testWidgets('/music opens Songs', (tester) async {
+      final r = await pumpMusic(tester, AppRoutes.music);
+      expect(at(r), '/music/songs');
+      expect(find.text('music songs'), findsOneWidget);
+    });
+
+    testWidgets('/music/albums is the tab, not an album', (tester) async {
+      await pumpMusic(tester, AppRoutes.musicTab(MusicTab.albums));
+      expect(find.text('music albums'), findsOneWidget);
+    });
+
+    testWidgets('an album link opens the album', (tester) async {
+      final r = await pumpMusic(tester, AppRoutes.musicAlbum('3f2a'));
+      expect(at(r), '/music/albums/3f2a');
+      expect(find.text('detail 3f2a'), findsOneWidget);
+    });
+
+    testWidgets('an artist name arrives decoded, slash and all', (
+      tester,
+    ) async {
+      final r = await pumpMusic(tester, AppRoutes.musicArtist('AC/DC & Co'));
+      expect(at(r), '/music/artists/AC%2FDC%20%26%20Co');
+      expect(find.text('detail AC/DC & Co'), findsOneWidget);
+    });
+  });
+
   // #2350: Settings' tabs each have a URL, and General comes first.
   group('Settings tabs', () {
     test('the app mounts every Settings tab under one route', () {

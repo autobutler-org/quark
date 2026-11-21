@@ -95,6 +95,7 @@ class _AppDrawerState extends State<AppDrawer> {
         onSelectHost: selectHost,
         onTapFiles: goTo(QuarkDrawerSection.files, AppRoutes.files),
         onTapPhotos: goTo(QuarkDrawerSection.photos, AppRoutes.photos),
+        onTapMusic: goTo(QuarkDrawerSection.music, AppRoutes.music),
         onTapCalendar: goTo(QuarkDrawerSection.calendar, AppRoutes.calendar),
         onTapTrash: goTo(QuarkDrawerSection.trash, AppRoutes.trash),
         onTapDocs: goTo(QuarkDrawerSection.docs, AppRoutes.docs),

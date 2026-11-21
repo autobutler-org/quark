@@ -16,6 +16,9 @@ import 'package:quark/pages/file_viewer_page.dart';
 import 'package:quark/pages/login_page.dart';
 import 'package:quark/pages/markdown_viewer_page.dart';
 import 'package:quark/pages/model_viewer_page.dart';
+import 'package:quark/pages/music_album_page.dart';
+import 'package:quark/pages/music_artist_page.dart';
+import 'package:quark/pages/music_page.dart';
 import 'package:quark/pages/photo_duplicates_page.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/pages/plaintext_editor_page.dart';
@@ -66,6 +69,24 @@ class AppRoutes {
 
   /// The query parameter naming the album the Photos page shows.
   static const photosAlbumParam = 'album';
+
+  /// The music library (#3283). Its tabs have their own URLs, see
+  /// [musicTab]; this bare path redirects to the first one.
+  static const music = '/music';
+
+  /// One tab of the Music page, e.g. musicTab(MusicTab.albums) →
+  /// '/music/albums'.
+  static String musicTab(MusicTab tab) => '$music/${tab.slug}';
+
+  /// One album's page, by its key, e.g. '/music/albums/3f2a…'. A drill-down
+  /// reached with `context.go`, so it deep-links.
+  static String musicAlbum(String albumKey) =>
+      '$music/albums/${Uri.encodeComponent(albumKey)}';
+
+  /// One album artist's page, e.g. musicArtist('Nina Simone') →
+  /// '/music/artists/Nina%20Simone'.
+  static String musicArtist(String name) =>
+      '$music/artists/${Uri.encodeComponent(name)}';
 
   /// The household calendar (#1144). Its views have their own URLs, see
   /// [calendarView]; this bare path redirects to the one chosen in Settings,
@@ -443,6 +464,20 @@ abstract interface class RouteTab {
   String get slug;
 }
 
+/// The Music page's tabs (#3283). Songs is the whole library, so it comes
+/// first.
+enum MusicTab implements RouteTab {
+  songs('songs'),
+  albums('albums'),
+  artists('artists'),
+  genres('genres');
+
+  const MusicTab(this.slug);
+
+  @override
+  final String slug;
+}
+
 /// The Users page's tabs (#2349).
 enum UsersTab implements RouteTab {
   accounts('accounts'),
@@ -708,6 +743,23 @@ final router = GoRouter(
           builder: (context, state) => const PhotoDuplicatesPage(),
         ),
       ],
+    ),
+    // Three segments, so neither detail page is taken for a tab.
+    GoRoute(
+      path: '${AppRoutes.music}/albums/:albumKey',
+      builder: (context, state) =>
+          MusicAlbumPage(albumKey: state.pathParameters['albumKey']!),
+    ),
+    GoRoute(
+      path: '${AppRoutes.music}/artists/:name',
+      builder: (context, state) =>
+          MusicArtistPage(name: state.pathParameters['name']!),
+    ),
+    ...tabbedRoutes(
+      path: AppRoutes.music,
+      tabs: MusicTab.values,
+      builder: (tab, onTabSelected) =>
+          MusicPage(tab: tab, onTabSelected: onTabSelected),
     ),
     GoRoute(
       path: AppRoutes.trash,
