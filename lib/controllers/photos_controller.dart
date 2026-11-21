@@ -147,6 +147,8 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
         FilesService.downloadFileBytes,
     Uri Function(String filePath, {String? serial, String? size}) thumbnailUrl =
         FilesService.constructThumbnailUrl,
+    Uri Function(String filePath, {String? serial}) mediaUrl =
+        FilesService.constructMediaUrl,
     Future<List<PhotoAlbum>> Function({bool tree}) listAlbums =
         AlbumService.listAlbums,
     Future<PhotoAlbum> Function(String name, {int? parentId}) createAlbum =
@@ -236,6 +238,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
        _toggleFavorite = toggleFavorite,
        _downloadFileBytes = downloadFileBytes,
        _thumbnailUrl = thumbnailUrl,
+       _mediaUrl = mediaUrl,
        _listAlbums = listAlbums,
        _createAlbum = createAlbum,
        _renameAlbum = renameAlbum,
@@ -353,6 +356,7 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   _downloadFileBytes;
   final Uri Function(String filePath, {String? serial, String? size})
   _thumbnailUrl;
+  final Uri Function(String filePath, {String? serial}) _mediaUrl;
   final Future<List<PhotoAlbum>> Function({bool tree}) _listAlbums;
   final Future<PhotoAlbum> Function(String name, {int? parentId}) _createAlbum;
   final Future<PhotoAlbum> Function(int id, String name) _renameAlbum;
@@ -536,6 +540,8 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
         isRemote: photo.isRemote,
         hasLiveVideo: photo.hasLiveVideo,
         isFavorite: _favoriteKeys.contains(photo.id),
+        isVideo: photo.isVideo,
+        duration: photo.duration,
       ),
   ];
 
@@ -2205,12 +2211,26 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   /// The device asset behind [id], or null for a Quark photo.
   AssetEntity? assetFor(String id) => _byId(id)?.asset;
 
+  /// Where the video at [index] of the grid streams from, and its name, or
+  /// null when that item is a photo (#3428). A video is played from this
+  /// URL, never downloaded whole.
+  ({Uri url, String name})? videoAt(int index) {
+    final photos = _visible();
+    if (index < 0 || index >= photos.length) return null;
+    final photo = photos[index];
+    final relPath = photo.relPath;
+    if (!photo.isVideo || relPath == null) return null;
+    return (url: _mediaUrl(relPath, serial: photo.serial), name: photo.name);
+  }
+
   /// Downloads the photo at [index] of the grid to open the viewer on, or
-  /// null when there are no bytes to show.
+  /// null when there are no bytes to show. A video has none: it opens in the
+  /// video player from [videoAt], so its bytes are never fetched (#3428).
   Future<LoadedPhoto?> openPhotoAt(int index) async {
     final photos = _visible();
     if (index < 0 || index >= photos.length) return null;
     final photo = photos[index];
+    if (photo.isVideo) return null;
     final relPath = photo.relPath;
     final Uint8List? bytes;
     if (relPath == null) {
@@ -2225,12 +2245,14 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   /// Loads the photo at [index] for an open viewer, through the photo cache.
   ///
   /// Failures propagate unchanged so the viewer can offer a retry and the
-  /// page can tell a 404 from a dropped request (#1708).
+  /// page can tell a 404 from a dropped request (#1708). A video loads no
+  /// bytes: the viewer shows it from [videoAt] instead (#3428).
   Future<LoadedPhoto> loadPhotoAt(int index) async {
     final photos = _visible();
     if (index < 0 || index >= photos.length) return (null, '', null, null);
     final photo = photos[index];
     final relPath = photo.relPath;
+    if (photo.isVideo) return (null, photo.name, relPath, photo.serial);
     if (relPath == null) {
       return (await photo.asset!.originBytes, photo.name, null, null);
     }
@@ -2238,12 +2260,13 @@ class PhotosController extends ChangeNotifier with SafeNotifier {
   }
 
   /// Downloads the photo at [index] into the cache so the viewer's next step
-  /// is instant (#1710). Device photos come off disk and are skipped.
+  /// is instant (#1710). Device photos come off disk and are skipped, and so
+  /// are videos, which stream rather than download (#3428).
   Future<void> prefetchPhotoAt(int index) async {
     final photos = _visible();
     if (index < 0 || index >= photos.length) return;
     final photo = photos[index];
-    if (photo.relPath == null) return;
+    if (photo.relPath == null || photo.isVideo) return;
     await _cachedBytes(photo);
   }
 
@@ -2270,6 +2293,8 @@ class _Photo {
     this.serial,
     this.asset,
     this.hasLiveVideo = false,
+    this.isVideo = false,
+    this.duration,
     this.date,
     this.takenDate,
     this.thumbVersion,
@@ -2292,6 +2317,8 @@ class _Photo {
       relPath: node.apiPath,
       serial: node.deviceSerial,
       hasLiveVideo: photo.hasLiveVideo,
+      isVideo: photo.isVideo,
+      duration: photo.duration,
       date: photo.mtime > 0
           ? DateTime.fromMillisecondsSinceEpoch(photo.mtime * 1000)
           : null,
@@ -2304,9 +2331,11 @@ class _Photo {
 
   /// A Quark-stored photo in an album, keyed the way [_Photo.fromWire] keys
   /// the same photo in the library.
+  /// An album item carries no media flag, so a video is known by its name.
   factory _Photo.fromAlbumItem(PhotoAlbumItem item) => _Photo(
     id: '${item.deviceSerial}:${item.relPath}',
     name: item.relPath.split('/').last,
+    isVideo: fileKindForName(item.relPath) == FileKind.video,
     relPath: item.relPath,
     serial: item.deviceSerial,
     date: item.addedAt,
@@ -2333,6 +2362,11 @@ class _Photo {
   /// The device asset, or null for a Quark photo.
   final AssetEntity? asset;
   final bool hasLiveVideo;
+
+  /// Whether this is a video the library lists beside its photos (#3428),
+  /// and its length when the Quark could read one.
+  final bool isVideo;
+  final Duration? duration;
 
   /// When the photo was added, as the date-added sort sees it: the file's
   /// modified time on the Quark, the time it joined an album, or a device

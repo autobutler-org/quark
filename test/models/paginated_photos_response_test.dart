@@ -17,4 +17,27 @@ void main() {
     });
     expect(page.photos.map((p) => p.rotationQuarters), [0, 2]);
   });
+
+  test('a video carries isVideo and its length; a photo carries neither '
+      '(#3428)', () {
+    final page = PaginatedPhotosResponse.fromJson({
+      'photos': [
+        {'relPath': 'a.jpg', 'fileName': 'a.jpg'},
+        {
+          'relPath': 'clip.mp4',
+          'fileName': 'clip.mp4',
+          'isVideo': true,
+          'durationMs': 42500,
+        },
+        {'relPath': 'odd.mkv', 'fileName': 'odd.mkv', 'isVideo': true},
+      ],
+      'total': 3,
+    });
+    expect(page.photos.map((p) => p.isVideo), [false, true, true]);
+    expect(page.photos.map((p) => p.duration), [
+      null,
+      const Duration(milliseconds: 42500),
+      null,
+    ]);
+  });
 }

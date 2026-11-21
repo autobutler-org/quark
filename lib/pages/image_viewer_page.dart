@@ -30,6 +30,8 @@ import 'package:quark/widgets/image_viewer/image_viewer_more_menu.dart';
 import 'package:quark/widgets/image_viewer/mobile_body.dart';
 import 'package:quark/widgets/image_viewer/photo_area.dart';
 import 'package:quark/widgets/image_viewer/shortcut_row.dart';
+import 'package:quark/widgets/image_viewer/video_page_card.dart';
+import 'package:quark/pages/video_viewer_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:quark/widgets/photos/album_picker_sheet.dart';
@@ -66,6 +68,11 @@ const _kPageAnimDuration = Duration(milliseconds: 250);
 ///
 /// Touch: a swipe sideways turns the page, a double-tap zooms in around the
 /// tap and back out, and a swipe down closes the viewer (#3358).
+///
+/// Videos: a caller whose list holds videos beside its photos (Photos, #3428)
+/// passes [videoAt]. A step onto a video loads no bytes: its page is a play
+/// card, and Play hands its URL to [playVideo]. A photo's own actions —
+/// rotate, favorite, metadata, the menu — are off on a video's page.
 ///
 /// Preview first: a caller whose loaders hand over a screen-sized preview
 /// rather than the original passes [loadOriginal]. The viewer then fetches
@@ -133,6 +140,14 @@ class ImageViewerPage extends StatefulWidget {
   /// "Remove from [Album]" instead of "Add to Album."
   final PhotoAlbum? sourceAlbum;
 
+  /// Where the item at an index streams from when it is a video, or null for
+  /// a photo. A video's page is never loaded through [onLoadImage].
+  final ({Uri url, String name})? Function(int index)? videoAt;
+
+  /// Plays a video from [videoAt]; by default, pushes the video player.
+  final Future<void> Function(BuildContext context, Uri url, String name)
+  playVideo;
+
   /// Closes the viewer: its close button, Escape, a system back, and a
   /// delete. Null pops the route this viewer was pushed on with whether the
   /// list behind it changed.
@@ -155,8 +170,21 @@ class ImageViewerPage extends StatefulWidget {
     this.relPath,
     this.serial,
     this.sourceAlbum,
+    this.videoAt,
+    this.playVideo = pushVideoPlayer,
     this.onClose,
   });
+
+  /// Pushes the video player for [url] over the viewer.
+  static Future<void> pushVideoPlayer(
+    BuildContext context,
+    Uri url,
+    String name,
+  ) => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => VideoViewerPage(url: url, name: name),
+    ),
+  );
 
   @override
   State<ImageViewerPage> createState() => _ImageViewerPageState();
@@ -176,6 +204,9 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   late String _currentName;
   late String? _currentRelPath;
   late String? _currentSerial;
+
+  // The video on screen, when the page is one (#3428); null for a photo.
+  ({Uri url, String name})? _currentVideo;
   bool _loading = false;
   late int _liveImageCount;
 
@@ -515,6 +546,11 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       // A step past the loaded page waits for the next one to arrive.
       if (newIndex >= _liveImageCount) await _loadMore();
       if (!mounted || _targetIndex != newIndex) return;
+      final video = widget.videoAt?.call(newIndex);
+      if (video != null) {
+        _showVideo(newIndex, video);
+        return;
+      }
       final (bytes, name, relPath, serial) = await widget.onLoadImage!(
         newIndex,
       );
@@ -537,6 +573,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       // will apply server-persisted values once metadata arrives.
       setState(() {
         _currentIndex = newIndex;
+        _currentVideo = null;
         _currentBytes = bytes;
         _showingOriginal = widget.loadOriginal == null;
         _loadingOriginal = null;
@@ -560,6 +597,30 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       setState(() => _loading = false);
       _showLoadFailure(e, newIndex);
     }
+  }
+
+  /// Puts the video at [index] on screen as its play card. Nothing is
+  /// downloaded, and with no Quark path on the page, the photo's actions and
+  /// metadata stay off (#3428).
+  void _showVideo(int index, ({Uri url, String name}) video) {
+    _disposeLiveVideo();
+    _zoomController.value = Matrix4.identity();
+    setState(() {
+      _currentIndex = index;
+      _currentVideo = video;
+      _currentBytes = null;
+      _loadError = null;
+      _currentName = video.name;
+      _currentRelPath = null;
+      _currentSerial = null;
+      _loading = false;
+      _metadata = null;
+      _isFavorite = false;
+      _rotationQuarters = 0;
+      _rotationValue = Tween<double>(begin: 0, end: 0).animate(_rotationAnim);
+    });
+    _prefetchNeighbors();
+    widget.onImageShown?.call(index);
   }
 
   /// Tells the user a photo wouldn't load, and offers another go at it.
@@ -705,6 +766,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       _rotationAnim.forward(from: reduceMotionOf(context) ? 1 : 0);
 
   Future<void> _rotate() async {
+    if (_currentVideo != null) return;
     if (!_isQuarkPhoto) {
       showMessage(context, 'Rotation is only supported for Quark photos');
       return;
@@ -1014,8 +1076,14 @@ class _ImageViewerPageState extends State<ImageViewerPage>
           ? _downloadAsJpeg
           : null,
     );
+    final video = _currentVideo;
     final photoArea = PhotoArea(
-      currentPhoto: bytes != null
+      currentPhoto: video != null
+          ? VideoPageCard(
+              name: video.name,
+              onPlay: () => widget.playVideo(context, video.url, video.name),
+            )
+          : bytes != null
           ? CurrentPhoto(
               bytes: bytes,
               rotation: _rotationValue,

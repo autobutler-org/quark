@@ -25,9 +25,9 @@ class LibraryPhotoMenu {
     required this.onToggleFavorite,
     required this.onDownload,
     required this.onShare,
-    required this.onCopy,
+    this.onCopy,
     required this.copyUnavailableReason,
-    required this.onDuplicate,
+    this.onDuplicate,
     required this.onDelete,
     this.onDownloadAsJpeg,
   });
@@ -43,15 +43,17 @@ class LibraryPhotoMenu {
   final VoidCallback? onDownloadAsJpeg;
   final VoidCallback onShare;
 
-  /// Copies the photo to the system clipboard (#3436).
-  final VoidCallback onCopy;
+  /// Copies the photo to the system clipboard (#3436), or null to leave the
+  /// entry out, as for a video (#3428).
+  final VoidCallback? onCopy;
 
   /// Why the clipboard cannot take a photo here, or null when it can. While
   /// set, the Copy entry is disabled.
   final String? copyUnavailableReason;
 
-  /// Duplicates the photo on the Quark, beside the original.
-  final VoidCallback onDuplicate;
+  /// Duplicates the photo on the Quark, beside the original, or null to
+  /// leave the entry out, as for a video (#3428).
+  final VoidCallback? onDuplicate;
   final VoidCallback onDelete;
 
   /// Opens the menu at [globalPosition].
@@ -91,18 +93,20 @@ class LibraryPhotoMenu {
             icon: QuarkIcons.share_outlined,
             onSelected: onShare,
           ),
-          QuarkMenuEntry(
-            key: const ValueKey('library_photo_action_copy'),
-            label: 'Copy',
-            icon: QuarkIcons.content_copy,
-            onSelected: copyUnavailableReason == null ? onCopy : null,
-          ),
-          QuarkMenuEntry(
-            key: const ValueKey('library_photo_action_duplicate'),
-            label: 'Duplicate',
-            icon: QuarkIcons.duplicate,
-            onSelected: onDuplicate,
-          ),
+          if (onCopy != null)
+            QuarkMenuEntry(
+              key: const ValueKey('library_photo_action_copy'),
+              label: 'Copy',
+              icon: QuarkIcons.content_copy,
+              onSelected: copyUnavailableReason == null ? onCopy : null,
+            ),
+          if (onDuplicate != null)
+            QuarkMenuEntry(
+              key: const ValueKey('library_photo_action_duplicate'),
+              label: 'Duplicate',
+              icon: QuarkIcons.duplicate,
+              onSelected: onDuplicate,
+            ),
           const QuarkMenuEntry.divider(),
           QuarkMenuEntry(
             key: const ValueKey('library_photo_action_delete'),

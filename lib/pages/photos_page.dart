@@ -52,7 +52,17 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The Photos page: the photo library as a grid, filtered by album and by a
 /// search for a file name, with upload.
 class PhotosPage extends StatefulWidget {
-  const PhotosPage({this.album, this.controller, super.key});
+  const PhotosPage({
+    this.album,
+    this.controller,
+    this.playVideo = ImageViewerPage.pushVideoPlayer,
+    super.key,
+  });
+
+  /// Plays a video tapped in the grid or reached in the viewer (#3428); by
+  /// default, pushes the video player. A test passes a recorder.
+  final Future<void> Function(BuildContext context, Uri url, String name)
+  playVideo;
 
   /// A controller to show instead of the page's own, so a test can count the
   /// refreshes it asks for. The page disposes it either way.
@@ -216,9 +226,15 @@ class PhotosPageState extends State<PhotosPage>
     }
   }
 
-  /// Opens the photo at [index] of the grid in the image viewer.
+  /// Opens the photo at [index] of the grid in the image viewer, or a video
+  /// in the video player, streamed rather than downloaded (#3428).
   Future<void> _openPhoto(int index) async {
     if (_isOpeningPhoto) return;
+    final video = _controller.videoAt(index);
+    if (video != null) {
+      await widget.playVideo(context, video.url, video.name);
+      return;
+    }
     _isOpeningPhoto = true;
     try {
       final album = _controller.selectedAlbum;
@@ -241,6 +257,9 @@ class PhotosPageState extends State<PhotosPage>
             getImageCount: () async => _controller.photoCount,
             onLoadImage: _loadPhotoAt,
             onPrefetchImage: _controller.prefetchPhotoAt,
+            // Videos sit in the grid too, so a swipe reaches them (#3428).
+            videoAt: _controller.videoAt,
+            playVideo: widget.playVideo,
             // Only a user album offers "remove from this album" in the viewer;
             // the Quark fills system albums itself (#992).
             sourceAlbum: _demo || (album?.isSystemAlbum ?? true) ? null : album,
@@ -282,7 +301,7 @@ class PhotosPageState extends State<PhotosPage>
   Future<void> _uploadPhotos({bool chooseDevice = false}) async {
     if (_controller.isUploading) return;
     try {
-      final picked = await FilePicker.pickFiles(type: FileType.image);
+      final picked = await FilePicker.pickFiles(type: FileType.media);
       if (picked.isEmpty || !mounted) return;
 
       // A user album showing takes the upload too (#2240). System albums and
@@ -640,9 +659,11 @@ class PhotosPageState extends State<PhotosPage>
         relPath: path.relPath,
         name: photo.name,
       ),
-      onCopy: () => _copyToClipboard(photo.id),
+      // A video is no picture for the clipboard, and duplicating is a
+      // photo's (#3428).
+      onCopy: photo.isVideo ? null : () => _copyToClipboard(photo.id),
       copyUnavailableReason: imageClipboardUnavailableReason,
-      onDuplicate: () => _duplicatePhoto(photo.id),
+      onDuplicate: photo.isVideo ? null : () => _duplicatePhoto(photo.id),
       onDelete: () => _deletePhoto(photo),
       onDownloadAsJpeg: canConvertImageToJpeg && offersJpegDownload(photo.name)
           ? () => downloadViewedPhotoAsJpeg(

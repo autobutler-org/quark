@@ -54,6 +54,15 @@ class PhotoItem {
   /// so a rotated photo gets a new URL (#4217).
   final int rotationQuarters;
 
+  /// Whether this is a video, which the library lists beside its photos
+  /// (#3428). A Live Photo's companion video is never listed on its own; it
+  /// sets its photo's [hasLiveVideo] instead.
+  final bool isVideo;
+
+  /// A video's length, from its headers. Null for a photo, and for a video
+  /// whose container the Quark cannot read.
+  final Duration? duration;
+
   const PhotoItem({
     required this.relPath,
     required this.fileName,
@@ -63,6 +72,8 @@ class PhotoItem {
     this.hasLiveVideo = false,
     this.takenAt,
     this.rotationQuarters = 0,
+    this.isVideo = false,
+    this.duration,
   });
 
   factory PhotoItem.fromJson(Map<String, dynamic> json) {
@@ -75,6 +86,11 @@ class PhotoItem {
       hasLiveVideo: json['hasLiveVideo'] as bool? ?? false,
       takenAt: json['takenAt'] as int?,
       rotationQuarters: json['rotationQuarters'] as int? ?? 0,
+      isVideo: json['isVideo'] as bool? ?? false,
+      duration: switch (json['durationMs']) {
+        final int ms when ms > 0 => Duration(milliseconds: ms),
+        _ => null,
+      },
     );
   }
 }
