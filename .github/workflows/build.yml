@@ -251,7 +251,8 @@ jobs:
     # macOS runners bill at a multiple of Linux minutes, so this job is deliberately
     # narrow: build the App Store IPA and let check/frontend/ios/ipa verify it is a real
     # release build. No upload -- nothing here consumes an App Store build number.
-    runs-on: macos-26
+    # xcode-27, not macos-26: macos-26 has no Xcode 27 (see setup-xcode).
+    runs-on: xcode-27
     timeout-minutes: 45
     # Fork pull requests are skipped outright rather than built unsigned: a macOS runner
     # is the most expensive thing in this repository to start, and a fork's head is code
@@ -270,6 +271,8 @@ jobs:
           # shallow with no tags, so git describe would find nothing.
           fetch-tags: true
           fetch-depth: 0
+      - name: Setup Xcode
+        uses: ./.github/actions/setup-xcode
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
       - name: Setup GNU make

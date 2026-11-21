@@ -86,7 +86,8 @@ The build appears in TestFlight after processing, usually 5–30 minutes.
 
 ## Continuous integration
 
-`.github/workflows/release-ios.yml` builds and uploads from a `macos-26` runner. It runs
+`.github/workflows/release-ios.yml` builds and uploads from an `xcode-27` runner
+with the Xcode `.github/actions/setup-xcode` selects. It runs
 automatically as a job in `release.yml` on any `v*.*.*` tag push, after the GoReleaser
 job succeeds, and can also be triggered by hand from the Actions tab (uncheck **upload**
 to build and verify without publishing).
@@ -259,10 +260,13 @@ Validation failed (409) SDK version issue. This app was built with the iOS 18.5 
 All iOS and iPadOS apps must be built with the iOS 26 SDK or later.
 ```
 
-The runner's Xcode is too old. `macos-15` images ship Xcode 16.x; `macos-26` ships
-Xcode 26. Both iOS jobs run on `macos-26` for that reason, and they must stay in step: if
-`build-ios` builds against an older SDK than `release-ios`, CI goes green on an artifact the
-release path cannot upload.
+The runner's Xcode is too old. From April 2027 App Store Connect also refuses the iOS 26
+SDK (ITMS-90725), and `macos-26` ships only Xcode 26, so both iOS jobs run on `xcode-27`
+and `.github/actions/setup-xcode` selects one exact Xcode for both. They must stay in step:
+if `build-ios` builds against an older SDK than `release-ios`, CI goes green on an artifact
+the release path cannot upload. To move to a newer Xcode, change `XCODE_APP` in that action
+(and `runs-on:` in both jobs if the new Xcode needs another image); each job logs
+`xcodebuild -version` and the iOS SDK it selected.
 
 ### `MinimumOSVersion too low (90068)`
 

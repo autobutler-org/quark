@@ -1,0 +1,25 @@
+name: Setup Xcode
+description: >
+  Select the Xcode both iOS jobs build with, so the iOS SDK changes only when this file
+  does and build-ios never goes green on an SDK release-ios cannot upload. App Store
+  Connect refuses uploads built with the iOS 26 SDK from April 2027 (ITMS-90725, #4373).
+  27.1 rather than 27.2: Flutter has an open code-signing failure on 27.2
+  (flutter/flutter#195866). The runner image has to carry this Xcode; both jobs run on
+  `xcode-27`, because `macos-26` ships only Xcode 26.
+runs:
+  using: composite
+  steps:
+    - name: Select Xcode
+      shell: bash
+      env:
+        XCODE_APP: /Applications/Xcode_27.1.app
+      run: |
+        if [[ ! -d "${XCODE_APP}" ]]; then
+          echo "Error: ${XCODE_APP} is not on this runner. Installed:"
+          ls -d /Applications/Xcode*.app
+          echo "  Move the job to a runner image that ships it, or pick one listed above here."
+          exit 1
+        fi
+        sudo xcode-select -s "${XCODE_APP}/Contents/Developer"
+        xcodebuild -version
+        echo "iOS SDK $(xcrun --sdk iphoneos --show-sdk-version)"
