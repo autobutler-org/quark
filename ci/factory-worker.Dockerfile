@@ -6,7 +6,7 @@
 # here works with nothing else set. Flutter stays out of the shared base image.
 
 # Renovate's Dockerfile manager moves this tag. Keep the base's entrypoint.
-FROM ghcr.io/autobutler-org/factory-worker:v0.1.0
+FROM ghcr.io/autobutler-org/factory-worker:v0.1.2
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 USER root
