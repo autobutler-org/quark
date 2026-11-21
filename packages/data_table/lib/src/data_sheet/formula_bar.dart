@@ -202,11 +202,11 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
         _syncing = true;
         _controller.activeCellEditingController.text = value;
         _syncing = false;
+        // The caret stays where the tap put it. A tap sets the selection
+        // before it requests focus, so moving it here would undo the click;
+        // focus without a tap finds no valid selection, and EditableText
+        // then puts the caret at the end.
         _controller.selection.setActive(r, c);
-        // Move cursor to end of text in the bar.
-        _barCtrl.selection = TextSelection.collapsed(
-          offset: _barCtrl.text.length,
-        );
       } else if (sel.hasActiveCell) {
         // Cell was already active — snapshot the current raw value for Escape.
         final r = sel.activeRow;

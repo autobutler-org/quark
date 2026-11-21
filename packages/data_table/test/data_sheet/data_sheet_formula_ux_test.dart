@@ -97,6 +97,21 @@ Future<void> _mouseDrag(
   await tester.pumpAndSettle();
 }
 
+/// Taps the formula bar between the characters on either side of [offset].
+Future<void> _tapBarAt(WidgetTester tester, int offset) async {
+  final editable = tester
+      .state<EditableTextState>(
+        find.descendant(of: _bar, matching: find.byType(EditableText)),
+      )
+      .renderEditable;
+  final caret = editable.getLocalRectForCaret(TextPosition(offset: offset));
+  await tester.tapAt(editable.localToGlobal(caret.center));
+  await tester.pumpAndSettle();
+}
+
+int _barCaret(WidgetTester tester) =>
+    tester.widget<TextField>(_bar).controller!.selection.baseOffset;
+
 void main() {
   for (final (name, size) in [('narrow', narrow), ('wide', wide)]) {
     group('function autocomplete ($name)', () {
@@ -284,6 +299,67 @@ void main() {
         await _key(tester, LogicalKeyboardKey.enter);
         expect(controller.cellAt(0, 2).value, '=A1*B3');
         expect(controller.displayValueAt(0, 2), '0');
+      });
+    });
+
+    group('formula bar caret ($name)', () {
+      const formula = '=SUM(A1,B2)';
+
+      testWidgets('clicking from the grid puts the caret at the click', (
+        tester,
+      ) async {
+        final controller = await _pumpSheet(
+          tester,
+          size,
+          cells: {(0, 2): formula},
+        );
+        await tester.tap(_cell(0, 2));
+        await tester.pumpAndSettle();
+
+        await _tapBarAt(tester, 5);
+
+        expect(controller.selection.activeRow, 0);
+        expect(_barCaret(tester), 5);
+      });
+
+      testWidgets('clicking within the bar while editing moves the caret', (
+        tester,
+      ) async {
+        await _pumpSheet(tester, size, cells: {(0, 2): formula});
+        await tester.tap(_cell(0, 2));
+        await tester.pumpAndSettle();
+        await _tapBarAt(tester, 5);
+
+        await _tapBarAt(tester, 8);
+
+        expect(_barCaret(tester), 8);
+      });
+
+      testWidgets('clicking from the cell editor puts the caret at the click', (
+        tester,
+      ) async {
+        await _pumpSheet(tester, size, cells: {(0, 2): formula});
+        await tester.tap(_cell(0, 2));
+        await tester.pump();
+        await tester.tap(_cell(0, 2));
+        await tester.pumpAndSettle();
+
+        await _tapBarAt(tester, 3);
+
+        expect(_barCaret(tester), 3);
+      });
+
+      testWidgets('clicking past the end puts the caret at the end', (
+        tester,
+      ) async {
+        await _pumpSheet(tester, size, cells: {(0, 2): formula});
+        await tester.tap(_cell(0, 2));
+        await tester.pumpAndSettle();
+
+        await tester.tapAt(tester.getTopRight(_bar) + const Offset(-8, 8));
+        await tester.pumpAndSettle();
+
+        expect(_barCaret(tester), formula.length);
       });
     });
 
