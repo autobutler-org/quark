@@ -5,9 +5,11 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:quark/services/photo_disk_store.dart';
 import 'package:quark/utils/backup_exclusion.dart';
+import 'package:quark/utils/photo_disk_cache_config.dart';
 
 /// iOS, Android and desktop: opens the [PhotoDiskStore] named [storeKey], or
-/// null when the platform gives the app no cache directory.
+/// null when the platform gives the app no cache directory. Entries nobody
+/// opens for [stalePeriod] go, a year when it is null.
 ///
 /// Everything it keeps, bytes and index alike, sits in one folder in the
 /// app's private cache directory: the app's own `Library/Caches` on iOS,
@@ -17,6 +19,7 @@ import 'package:quark/utils/backup_exclusion.dart';
 Future<PhotoDiskStore?> openPhotoDiskStorePlatform(
   String storeKey, {
   required int Function() budgetBytes,
+  Duration? stalePeriod,
 }) {
   // Under `flutter test` there is no platform to ask for a folder, and a test
   // must not write photos into the developer's own cache; a test that wants
@@ -27,12 +30,13 @@ Future<PhotoDiskStore?> openPhotoDiskStorePlatform(
   if (Platform.environment.containsKey('FLUTTER_TEST')) {
     return SynchronousFuture(null);
   }
-  return _open(storeKey, budgetBytes: budgetBytes);
+  return _open(storeKey, budgetBytes: budgetBytes, stalePeriod: stalePeriod);
 }
 
 Future<PhotoDiskStore?> _open(
   String storeKey, {
   required int Function() budgetBytes,
+  Duration? stalePeriod,
 }) async {
   try {
     // flutter_cache_manager's IOFileSystem keeps the bytes in the same
@@ -52,6 +56,7 @@ Future<PhotoDiskStore?> _open(
       repo: repo,
       fileSystem: IOFileSystem(storeKey),
       budgetBytes: budgetBytes,
+      stalePeriod: stalePeriod ?? PhotoDiskCacheConfig.stalePeriod,
     );
   } catch (_) {
     // Best effort: with no folder, photos are fetched every time as before.

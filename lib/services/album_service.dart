@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:quark/controllers/albums_cache.dart';
@@ -6,22 +7,70 @@ import 'package:quark/models/photo_album.dart';
 import 'package:quark/models/photo_sort.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/services/kept_albums_store.dart';
 import 'package:quark/utils/error_text.dart';
 
 /// Calls `/api/v0/albums`: listing, creating, renaming, moving and deleting photo albums, adding photos to
 /// them or removing them, and exporting albums or the library as copied files.
 ///
-/// Every change that goes through drops what it made wrong in [AlbumsCache], so no caller has to (#1779).
+/// Every change that goes through drops what it made wrong in [AlbumsCache], so no caller has to (#1779), and is
+/// announced on [changes].
+///
+/// With no connection to the Quark, the albums kept on this phone (#4222) still list, from what their last sync
+/// saved, so a kept album opens offline.
 class AlbumService with AuthenticatedService {
   static final AlbumService _instance = AlbumService._();
   AlbumService._();
   static AlbumService get instance => _instance;
 
+  static final _changes = StreamController<int>.broadcast();
+
+  /// The id of each album whose photos this app just changed: one joined or
+  /// left it, or it was deleted. The Quark sends no event for these, so a
+  /// kept album listens here to keep up with this phone's own edits.
+  static Stream<int> get changes => _changes.stream;
+
+  /// Whether [error] means the Quark could not be reached, rather than that
+  /// it answered with a refusal.
+  static bool _unreachable(Object error) =>
+      error is! ApiException && error is Exception;
+
   /// api: none
   static Uri _apiUri(String path) => apiBaseUri.replace(path: '/api/v0$path');
 
+  /// The albums on the Quark, as a tree when [tree]. With the Quark out of
+  /// reach, the albums kept on this phone instead, all at the top level;
+  /// with none kept, the error.
+  ///
   /// api: GET /api/v0/albums
   static Future<List<PhotoAlbum>> listAlbums({bool tree = false}) async {
+    try {
+      return await _fetchAlbums(tree: tree);
+    } catch (e) {
+      if (!_unreachable(e)) rethrow;
+      final kept = KeptAlbumsStore.loaded.where(
+        (album) => album.belongsTo(
+          AppSettings.instance.activeHost,
+          AppSettings.instance.username,
+        ),
+      );
+      if (kept.isEmpty) rethrow;
+      final now = DateTime.now();
+      return [
+        for (final album in kept)
+          PhotoAlbum(
+            id: album.albumId,
+            name: album.name,
+            createdAt: now,
+            updatedAt: now,
+            itemCount: album.items.length,
+          ),
+      ];
+    }
+  }
+
+  /// api: GET /api/v0/albums
+  static Future<List<PhotoAlbum>> _fetchAlbums({required bool tree}) async {
     final uri = _apiUri(
       '/albums',
     ).replace(queryParameters: tree ? {'tree': 'true'} : null);
@@ -86,10 +135,38 @@ class AlbumService with AuthenticatedService {
     AlbumsCache.instance
       ..dropAlbums()
       ..dropItems(id);
+    _changes.add(id);
   }
 
+  /// The photos in [albumId], in [sort] and [order]. With the Quark out of
+  /// reach, a kept album's photos as its last sync listed them; any other
+  /// album's, the error.
+  ///
   /// api: GET /api/v0/albums/{id}/items
   static Future<List<PhotoAlbumItem>> listAlbumItems(
+    int albumId, {
+    PhotoSortField sort = PhotoSortField.added,
+    PhotoSortOrder order = PhotoSortOrder.desc,
+  }) async {
+    try {
+      return await fetchAlbumItems(albumId, sort: sort, order: order);
+    } catch (e) {
+      if (!_unreachable(e)) rethrow;
+      final kept = KeptAlbumsStore.find(
+        albumId,
+        host: AppSettings.instance.activeHost,
+        account: AppSettings.instance.username,
+      );
+      if (kept == null) rethrow;
+      return kept.items;
+    }
+  }
+
+  /// The photos in [albumId] from the Quark, with no offline fallback: what
+  /// a kept album syncs from.
+  ///
+  /// api: GET /api/v0/albums/{id}/items
+  static Future<List<PhotoAlbumItem>> fetchAlbumItems(
     int albumId, {
     PhotoSortField sort = PhotoSortField.added,
     PhotoSortOrder order = PhotoSortOrder.desc,
@@ -131,6 +208,7 @@ class AlbumService with AuthenticatedService {
     AlbumsCache.instance
       ..dropAlbums()
       ..dropItems(albumId);
+    _changes.add(albumId);
     return true;
   }
 
@@ -154,6 +232,7 @@ class AlbumService with AuthenticatedService {
     AlbumsCache.instance
       ..dropAlbums()
       ..dropItems(albumId);
+    _changes.add(albumId);
   }
 
   /// Queues an export of [albumIds], each with its sub-albums, or of the

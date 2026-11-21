@@ -18,19 +18,22 @@ import 'package:quark/utils/photo_disk_cache_config.dart';
 /// writes as a no-op, so the cache can only ever make a photo faster.
 class PhotoDiskStore {
   /// A store kept in [repo] and [fileSystem], trimmed to [budgetBytes], which
-  /// is read on every write so a new budget applies at once.
+  /// is read on every write so a new budget applies at once. An entry nobody
+  /// opens for [stalePeriod] goes.
   PhotoDiskStore({
     required String storeKey,
     required CacheInfoRepository repo,
     required FileSystem fileSystem,
     required int Function() budgetBytes,
+    Duration stalePeriod = PhotoDiskCacheConfig.stalePeriod,
   }) : _repo = repo,
        _fileSystem = fileSystem,
        _budgetBytes = budgetBytes,
+       _stalePeriod = stalePeriod,
        _manager = CacheManager(
          Config(
            storeKey,
-           stalePeriod: PhotoDiskCacheConfig.stalePeriod,
+           stalePeriod: stalePeriod,
            maxNrOfCacheObjects: PhotoDiskCacheConfig.maxObjects,
            repo: repo,
            fileSystem: fileSystem,
@@ -41,6 +44,7 @@ class PhotoDiskStore {
   final CacheInfoRepository _repo;
   final FileSystem _fileSystem;
   final int Function() _budgetBytes;
+  final Duration _stalePeriod;
 
   /// The index, opened once alongside the manager's own connection to it.
   late final Future<CacheInfoRepository> _index = _repo.open().then(
@@ -71,12 +75,7 @@ class PhotoDiskStore {
     try {
       // The key stands in for the URL: the store never fetches, and a URL
       // would carry the session token onto the disk.
-      await _manager.putFile(
-        key,
-        bytes,
-        key: key,
-        maxAge: PhotoDiskCacheConfig.stalePeriod,
-      );
+      await _manager.putFile(key, bytes, key: key, maxAge: _stalePeriod);
       // putFile leaves the length unset; record it so a trim need not read
       // the size of every file it holds.
       final index = await _index;
@@ -88,6 +87,20 @@ class PhotoDiskStore {
       return;
     }
     await trim();
+  }
+
+  /// How many bytes [key] holds, or null when the store has nothing under
+  /// it. Reads the index, never the bytes.
+  Future<int?> lengthOf(String key) async {
+    try {
+      final entry = await (await _index).get(key);
+      if (entry == null) return null;
+      final file = await _fileSystem.createFile(entry.relativePath);
+      if (!await file.exists()) return null;
+      return entry.length ?? await file.length();
+    } on Exception {
+      return null;
+    }
   }
 
   /// Drops [key].

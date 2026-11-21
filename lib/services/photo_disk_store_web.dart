@@ -4,4 +4,5 @@ import 'package:quark/services/photo_disk_store.dart';
 Future<PhotoDiskStore?> openPhotoDiskStorePlatform(
   String storeKey, {
   required int Function() budgetBytes,
+  Duration? stalePeriod,
 }) async => null;

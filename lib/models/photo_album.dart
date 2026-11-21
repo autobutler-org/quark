@@ -74,4 +74,15 @@ class PhotoAlbumItem {
           : DateTime.parse(json['takenAt'] as String),
     );
   }
+
+  /// The item as [PhotoAlbumItem.fromJson] reads it, for a kept album's
+  /// copy of its listing (#4222).
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'albumId': albumId,
+    'deviceSerial': deviceSerial,
+    'relPath': relPath,
+    'addedAt': addedAt.toIso8601String(),
+    if (takenAt != null) 'takenAt': takenAt!.toIso8601String(),
+  };
 }
