@@ -1,14 +1,15 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:quark/widgets/settings/repair_installation_section.dart';
 import 'package:quark/widgets/settings/reset_quark_section.dart';
+import 'package:quark/widgets/settings/rescan_music_section.dart';
 import 'package:quark/widgets/settings/restart_quark_section.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The Updates tab of Settings (#2350): the Quark's installed version, and,
 /// for an admin, updating it and a **Maintenance** group: repairing the
-/// installation, restarting it and, last in a danger-tinted box, resetting it
-/// (#4151).
+/// installation, restarting it, scanning the music library again (#3283) and,
+/// last in a danger-tinted box, resetting it (#4151).
 /// Updates are manual and the tab says so: the automatic updates switch it had
 /// stored a setting nothing read (#2792).
 ///
@@ -226,6 +227,8 @@ class SettingsUpdatesTab extends StatelessWidget {
                 RepairInstallationSection(),
                 // Renders nothing unless something starts Quark again (#4019).
                 RestartQuarkSection(),
+                // Queues a scan of every drive's music (#3283).
+                RescanMusicSection(),
                 // Wipes the household's whole device, so it lives here with
                 // the device's upkeep, not under one account (#4151).
                 ResetQuarkSection(),

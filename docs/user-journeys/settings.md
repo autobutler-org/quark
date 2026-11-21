@@ -10,7 +10,7 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 | **General** | `/settings/general` | Backend hosts, theme, left-handed mode, theme color, the view Calendar opens on ([JN-CA-011](calendar.md)), auto-refresh interval, demo mode, a link to the drives |
 | **Account** | `/settings/account` | Sign out, your sessions, then an **Account and data** row at the bottom that leads to Delete account and (admins) Reset this Quark |
 | **Network** | `/settings/network` | Remote access, connected devices, SSH access (admins), and on a phone that phone's own remote access |
-| **Updates** | `/settings/updates` | The Quark's version, a note that updates are manual, updates (admins), Repair installation (admins), Restart Quark (admins) |
+| **Updates** | `/settings/updates` | The Quark's version, a note that updates are manual, updates (admins), Repair installation (admins), Restart Quark (admins), Rescan music library (admins) |
 | **About** | `/settings/about` | The app's version, Help & Support, Terms of Service, the software bill of materials |
 | **Features** | `/settings/features` | A switch per beta feature (admins, only while a beta exists) |
 
@@ -483,7 +483,7 @@ The password travels in the request body, never the URL, and attempts share the 
 
 **Expected result:**
 
-- The entry sits after **Repair installation** and **Restart Quark**, not beside **Delete account** under Account
+- The entry sits after **Repair installation**, **Restart Quark** and **Music library** (JN-MU-008), not beside **Delete account** under Account
   and data: it wipes the household's whole device, not one account (#4151). Other accounts don't see it.
 - Each entry says how far it reaches before it is tapped: **Delete account** removes only your account and leaves
   your files and other accounts; **Reset this Quark** erases every account, and names the **Quark data on attached

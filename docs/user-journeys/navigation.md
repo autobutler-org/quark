@@ -18,7 +18,7 @@ order, and which ones a given account sees.
 **Expected result:**
 
 - Under the header that names the Quark, the everyday pages come first, in this order: **Files**, **Photos**,
-  **Calendar**, **Docs**, **Sheets**, **Slides**, **Books**, **Chat**, **Vault**.
+  **Music**, **Calendar**, **Docs**, **Sheets**, **Slides**, **Books**, **Chat**, **Vault**.
 - A hairline and a **Manage** heading follow, then the pages for looking after the Quark: **Trash**, **System**,
   **Users**, **Settings**.
 - **Manage** is a heading, not a row: tapping it does nothing, and a screen reader announces it as a heading.
@@ -44,7 +44,7 @@ order, and which ones a given account sees.
 
 **Expected result:**
 
-- The everyday pages are **Files**, **Photos**, **Calendar**, **Docs**, **Sheets**, **Slides**, **Books**, **Chat**,
+- The everyday pages are **Files**, **Photos**, **Music**, **Calendar**, **Docs**, **Sheets**, **Slides**, **Books**, **Chat**,
   **Vault**. **Vault** opens the account's own vault (JN-VT-000).
 - The **Manage** heading is still there, with **Trash**, **System** and **Settings** under it. There is no **Users**
   row (JN-USR-002).
