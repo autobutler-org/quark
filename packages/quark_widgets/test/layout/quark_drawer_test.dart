@@ -22,6 +22,7 @@ void main() {
     activeSection: active,
     onTapFiles: callbacks[QuarkDrawerSection.files],
     onTapPhotos: callbacks[QuarkDrawerSection.photos],
+    onTapMusic: callbacks[QuarkDrawerSection.music],
     onTapCalendar: callbacks[QuarkDrawerSection.calendar],
     onTapTrash: callbacks[QuarkDrawerSection.trash],
     onTapDocs: callbacks[QuarkDrawerSection.docs],
@@ -59,6 +60,7 @@ void main() {
     for (final label in [
       'Files',
       'Photos',
+      'Music',
       'Calendar',
       'Docs',
       'Sheets',
@@ -144,6 +146,7 @@ void main() {
     'drawer_group_household',
     'drawer_files',
     'drawer_photos',
+    'drawer_music',
     'drawer_calendar',
     'drawer_docs',
     'drawer_sheets',

@@ -368,6 +368,10 @@ lib/widgets/
                                 and Sheets bodies apart
   doc_sheet_tile.dart           one doc, sheet or slides row, shared by filename and
                                 content matches so they look alike (#2272)
+  music/                        the Music pages' parts (#3283): the library
+                                body, its tab lists over the package's music
+                                tiles, the genre filter, the load state, and
+                                MusicCover (ThumbnailCacheManager.image)
   file_type_search_bar.dart     the Docs, Sheets and Slides filter field, keyed
                                 by its keyPrefix; a package candidate, it only
                                 needs QuarkTokens
