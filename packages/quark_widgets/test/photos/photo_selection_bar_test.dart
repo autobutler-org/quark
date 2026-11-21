@@ -71,6 +71,7 @@ void main() {
 
   group('actions on the selection (#4154)', () {
     const keys = [
+      'photo_selection_slideshow',
       'photo_selection_favorite',
       'photo_selection_download',
       'photo_selection_share',
@@ -88,6 +89,7 @@ void main() {
       selectedCount: count,
       onAddToAlbum: () => events.add('add'),
       allFavorites: allFavorites,
+      onSlideshow: () => events.add('slideshow'),
       onFavorite: () => events.add('favorite'),
       onDownload: () => events.add('download'),
       onShare: () => events.add('share'),
@@ -120,6 +122,7 @@ void main() {
       }
 
       expect(events, [
+        'slideshow',
         'favorite',
         'download',
         'share',

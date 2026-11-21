@@ -14,6 +14,7 @@ void main() {
     Size size, {
     double textScale = 1,
     bool phoneTools = false,
+    bool slideshow = false,
   }) async {
     final taps = <String>[];
     setViewport(tester, size);
@@ -33,6 +34,7 @@ void main() {
                 title: 'Library',
                 onDuplicates: () => taps.add('duplicates'),
                 onExport: () => taps.add('export'),
+                onSlideshow: slideshow ? () => taps.add('slideshow') : null,
                 onPickLibrary: phoneTools ? () => taps.add('picker') : null,
                 onGridSize: phoneTools ? () => taps.add('grid size') : null,
               ),
@@ -154,5 +156,26 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('photos_menu_export')));
     await tester.pumpAndSettle();
     expect(taps, ['export']);
+  });
+
+  testWidgets('Slideshow is a labeled chip wide and a Tools item on a phone '
+      '(#4179)', (tester) async {
+    var taps = await pump(tester, wideViewport, slideshow: true);
+    final chip = find.byKey(const ValueKey('photos_slideshow'));
+    expect(
+      find.descendant(of: chip, matching: find.text('Slideshow')),
+      findsOneWidget,
+    );
+    await tester.tap(chip);
+    expect(taps, ['slideshow']);
+
+    taps = await pump(tester, narrowViewport, slideshow: true);
+    expect(chip, findsNothing);
+    await tester.tap(find.byKey(const ValueKey('app_bar_bottom_menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('photos_menu_slideshow')));
+    await tester.pumpAndSettle();
+    expect(taps, ['slideshow']);
+    expect(tester.takeException(), isNull);
   });
 }

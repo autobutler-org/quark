@@ -570,6 +570,9 @@ class QuarkIcons {
   static const IconData replay_10 = Icons.replay_10;
   static const IconData volume_up = Icons.volume_up;
   static const IconData volume_off = Icons.volume_off;
+  static const IconData skip_next = Icons.skip_next;
+  static const IconData skip_previous = Icons.skip_previous;
+  static const IconData shuffle = Icons.shuffle;
 
   /// A music note. Rounded.
   static const IconData music_note = Icons.music_note_rounded;
