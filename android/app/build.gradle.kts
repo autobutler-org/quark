@@ -101,6 +101,12 @@ flutter {
     source = "../.."
 }
 
+dependencies {
+    // Phone backup's background jobs (#4165): the hourly job, the new-photo
+    // trigger, and the dataSync foreground service for a long run.
+    implementation("androidx.work:work-runtime-ktx:2.11.0")
+}
+
 // Pins every Maven dependency the app resolves to android/app/gradle.lockfile; a module
 // not in it fails the build. Regenerate with `make generate/frontend/android/lockfile`
 // after a Flutter SDK, AGP, Kotlin or plugin bump. Only :app is locked: the Flutter plugin
