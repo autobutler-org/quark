@@ -329,7 +329,7 @@ which replaced saddle: the `schmeide:` and `saddle:` labels, `<N>_` and `saddle/
 - **Moving to a new Flutter or factory base.** A Flutter bump in `pubspec.yaml`, or a new `FROM` tag in
   `ci/factory-worker.Dockerfile` (Renovate moves it), publishes a new tag once it merges. Then set the
   `image` line in `.factory/config.toml` to that tag in a PR of its own, so the image the factory runs only
-  moves on purpose. Until the factory reads `image`, the cluster's default worker image is the one that runs.
+  moves on purpose. The factory reads `image` from v0.1.1.
 
 ### Generated code (never hand-edit)
 
