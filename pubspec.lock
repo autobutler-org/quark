@@ -886,6 +886,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.0"
+  native_toolchain_c:
+    dependency: transitive
+    description:
+      name: native_toolchain_c
+      sha256: "90eaad8059ebc2004a63810a4696ea9acdb02473e47ed3b6b3bafb100ac77e31"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.19.5"
   node_preamble:
     dependency: transitive
     description:
@@ -1082,34 +1090,34 @@ packages:
     dependency: transitive
     description:
       name: pdfium_dart
-      sha256: e296a26c030e6e0fb34b32ce7481a3cfa0c2d35ce80f6269551c685759f4c91f
+      sha256: "7d09706ebac2acb4ad8e3ebf6030281a36be14f86ee2deaad9bd81d5c30d2e85"
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.1"
+    version: "0.4.3"
   pdfium_flutter:
     dependency: transitive
     description:
       name: pdfium_flutter
-      sha256: "59897274513984b347fc98e7bf71ba457678daea8b5568cd7c688979aeb77765"
+      sha256: "98c310ea9bef76d4b08700784f3863098d3739c9ed340e99c61d448a25406d9c"
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.1"
+    version: "0.4.3"
   pdfrx:
     dependency: "direct main"
     description:
       name: pdfrx
-      sha256: "52e78d84a706e5d63d2502689fe8e800d823bc780ac4341b2d3683a4d726505a"
+      sha256: "27ae6b9df86b6c0e091d00633acd699957a589bda9983cd5a74ddb47290fe9df"
       url: "https://pub.dev"
     source: hosted
-    version: "2.6.5"
+    version: "3.0.0"
   pdfrx_engine:
     dependency: transitive
     description:
       name: pdfrx_engine
-      sha256: f74ca9ea4ec722545f054a1d6ee1bf01222409ecd9458e5945c0cc5feaa3d2c6
+      sha256: "001090d220b2773747ce396f2bcda3d6ac9389d87f937ef12d64ed3a9e80e8b0"
       url: "https://pub.dev"
     source: hosted
-    version: "0.6.1"
+    version: "0.9.3"
   petitparser:
     dependency: transitive
     description:
@@ -1166,6 +1174,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.15.1"
+  process:
+    dependency: transitive
+    description:
+      name: process
+      sha256: "4242ba3508d37e01808bdf71ad1d5bb93a8d671bf2e7450e6b1b353fb0808891"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.0.6"
   pub_semver:
     dependency: transitive
     description:
