@@ -39,6 +39,14 @@ void main() {
       await pumpTab(tester);
 
       expect(find.text('Maintenance'), findsOneWidget);
+      // #3283: a rescan of the music library is maintenance too.
+      expect(
+        find.descendant(
+          of: find.byKey(maintenance),
+          matching: find.byKey(const ValueKey('rescan_music_button')),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.descendant(
           of: find.byKey(maintenance),
@@ -65,6 +73,7 @@ void main() {
     expect(find.byKey(maintenance), findsNothing);
     expect(find.byKey(reset), findsNothing);
     expect(find.text('Reset this Quark'), findsNothing);
+    expect(find.byKey(const ValueKey('rescan_music_button')), findsNothing);
   });
 
   // #2479: the entry names the box in the dialog that decides about attached
