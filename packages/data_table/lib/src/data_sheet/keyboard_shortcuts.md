@@ -33,7 +33,7 @@ The entire key binding map is customizable — developers can supply their own
 
 | Keys                           | Action                                     | Status |
 | ------------------------------ | ------------------------------------------ | ------ |
-| Any printable key              | Open cell for editing (start typing)       | ✅     |
+| Any printable key              | Replace the cell with the typed text       | ✅     |
 | F2                             | Enter edit mode for the highlighted cell   | ✅     |
 | Escape                         | Cancel active edit, restore previous value | ✅     |
 | Delete / Backspace             | Clear every cell in the selection          | ✅     |
