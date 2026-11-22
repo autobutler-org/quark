@@ -17,8 +17,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// A [ChatMessagesController] that never touches the network or crypto: its
 /// timeline is [fakeEntries], and [send] records what it was given.
 class FakeChatMessages extends ChatMessagesController {
-  /// A fake timeline for [channelId].
-  FakeChatMessages(int channelId)
+  /// A fake timeline for [channelId], or for the side conversation of
+  /// message [rootId] in it.
+  FakeChatMessages(int channelId, {super.rootId})
     : super(
         channelId: channelId,
         keys: ChatChannelKeysController(),
@@ -84,11 +85,28 @@ class FakeChatMessages extends ChatMessagesController {
     notifyListeners();
   }
 
-  @override
-  Future<void> open() async => opens++;
+  /// What [open] leaves in [root] for a side conversation; null makes its
+  /// root missing.
+  ChatTimelineMessage? fakeRoot;
 
   @override
-  Future<void> catchUp() async {}
+  bool holds(int messageId) => fakeEntries.any(
+    (e) => e is ChatTimelineMessage && e.message.id == messageId,
+  );
+
+  @override
+  Future<void> open() async {
+    opens++;
+    if (rootId == null) return;
+    root = fakeRoot;
+    isRootMissing = fakeRoot == null;
+  }
+
+  /// How many times [catchUp] ran.
+  int catchUps = 0;
+
+  @override
+  Future<void> catchUp() async => catchUps++;
 
   @override
   Future<void> loadOlder() async {}
@@ -282,6 +300,10 @@ class FakeChat {
       messagesFor: (id) =>
           opened[id] = FakeChatMessages(id)
             ..fakeEntries = entries[id] ?? const [],
+      branchFor: (id, rootId) =>
+          branches[rootId] = FakeChatMessages(id, rootId: rootId)
+            ..fakeRoot = roots[rootId]
+            ..fakeEntries = replies[rootId] ?? const [],
       isUnlocked: () => unlocked,
       unlock: (password) async {
         if (password != 'right') throw Exception('wrong');
@@ -430,4 +452,14 @@ class FakeChat {
 
   /// The newest timeline made for each channel.
   final Map<int, FakeChatMessages> opened = {};
+
+  /// The root each side conversation's fake reads, by root id; one not
+  /// here is missing.
+  final Map<int, ChatTimelineMessage> roots = {};
+
+  /// The replies each side conversation's fake starts with, by root id.
+  final Map<int, List<ChatTimelineEntry>> replies = {};
+
+  /// The newest side conversation made for each root.
+  final Map<int, FakeChatMessages> branches = {};
 }
