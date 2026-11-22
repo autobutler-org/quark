@@ -523,14 +523,29 @@ class _DataSheetViewState extends State<_DataSheetView> {
         if (modifierKeys.contains(event.logicalKey)) {
           return KeyEventResult.ignored;
         }
-        if (highlightedRow >= 0 && highlightedCol >= 0) {
-          _activateCell(
-            controller.cellAt(highlightedRow, highlightedCol),
-            highlightedRow,
-            highlightedCol,
-          );
+        if (highlightedRow < 0 || highlightedCol < 0) {
+          return KeyEventResult.ignored;
         }
-        return KeyEventResult.ignored;
+        _activateCell(
+          controller.cellAt(highlightedRow, highlightedCol),
+          highlightedRow,
+          highlightedCol,
+        );
+        // The editor is not focused until the next frame, so a typed
+        // character would be lost: it replaces the cell's text here instead.
+        final typed = event.character;
+        if (typed == null ||
+            typed.codeUnitAt(0) < 0x20 ||
+            typed.codeUnitAt(0) == 0x7f ||
+            HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed) {
+          return KeyEventResult.ignored;
+        }
+        controller.activeCellEditingController.value = TextEditingValue(
+          text: typed,
+          selection: TextSelection.collapsed(offset: typed.length),
+        );
+        return KeyEventResult.handled;
       },
       child: ListenableBuilder(
         listenable: controller,
