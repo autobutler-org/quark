@@ -24,7 +24,7 @@ import 'package:sodium/sodium_sumo.dart';
 ///   member's X25519 key, and [sign] and [verify] for Ed25519.
 /// - Messages (#2418): [newChannelKey], [channelKeyFromBytes], [encrypt] and
 ///   [decrypt], XChaCha20-Poly1305 with a random nonce, bound to
-///   [messageAad].
+///   [messageAad], which binds a side conversation's reply to its root too.
 /// - Reactions (#2426): the same [encrypt] and [decrypt] over [padReaction],
 ///   bound to [reactionAad].
 /// - Poll answers (#3894): the same over [padPollAnswer], bound to
@@ -248,16 +248,27 @@ class ChatCrypto {
   ///
   /// `"quark-chat-msg-v1" 0x00 || be64(channelId) || be64(keyVersion)`
   ///
+  /// A reply in a side conversation (#4345), with [rootId] set, is bound to
+  /// its root as well:
+  ///
+  /// `"quark-chat-msg-v2" 0x00 || be64(channelId) || be64(keyVersion) ||
+  /// be64(rootId)`
+  ///
   /// Pass it to both [encrypt] and [decrypt], so the Quark can't move a
-  /// message to another channel or relabel its key version without it failing
-  /// to open.
-  Uint8List messageAad({required int channelId, required int keyVersion}) =>
-      Uint8List.fromList([
-        ...utf8.encode('quark-chat-msg-v1'),
-        0,
-        ..._be64(channelId),
-        ..._be64(keyVersion),
-      ]);
+  /// message to another channel, relabel its key version, or move a reply to
+  /// another branch or into the channel without it failing to open. An edit
+  /// of a reply passes the same [rootId] again.
+  Uint8List messageAad({
+    required int channelId,
+    required int keyVersion,
+    int? rootId,
+  }) => Uint8List.fromList([
+    ...utf8.encode(rootId == null ? 'quark-chat-msg-v1' : 'quark-chat-msg-v2'),
+    0,
+    ..._be64(channelId),
+    ..._be64(keyVersion),
+    if (rootId != null) ..._be64(rootId),
+  ]);
 
   /// The additional data a reaction's ciphertext is bound to (#2426):
   ///

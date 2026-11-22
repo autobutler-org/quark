@@ -376,6 +376,56 @@ void main() {
     }
   });
 
+  test('a reply opens only under the root it was sealed to (#4345)', () {
+    final key = crypto.newChannelKey();
+    final message = Uint8List.fromList(utf8.encode('in the branch'));
+    final sealed = crypto.encrypt(
+      message,
+      key,
+      additionalData: crypto.messageAad(
+        channelId: 7,
+        keyVersion: 2,
+        rootId: 40,
+      ),
+    );
+
+    expect(
+      crypto.decrypt(
+        sealed,
+        key,
+        additionalData: crypto.messageAad(
+          channelId: 7,
+          keyVersion: 2,
+          rootId: 40,
+        ),
+      ),
+      message,
+    );
+    // The Quark changing root_id moves the reply to another branch, or, with
+    // none, into the channel: either way it no longer opens.
+    for (final rootId in [41, null]) {
+      expect(
+        () => crypto.decrypt(
+          sealed,
+          key,
+          additionalData: crypto.messageAad(
+            channelId: 7,
+            keyVersion: 2,
+            rootId: rootId,
+          ),
+        ),
+        throwsA(anything),
+      );
+    }
+    final v2 = crypto.messageAad(channelId: 7, keyVersion: 2, rootId: 40);
+    expect(utf8.decode(v2.sublist(0, 17)), 'quark-chat-msg-v2');
+    expect(v2.sublist(18), [
+      ...[0, 0, 0, 0, 0, 0, 0, 7],
+      ...[0, 0, 0, 0, 0, 0, 0, 2],
+      ...[0, 0, 0, 0, 0, 0, 0, 40],
+    ]);
+  });
+
   test('a reaction is padded to one length and opens only where it was '
       'made', () {
     for (final emoji in ['👍', '❤️', '👩‍👩‍👧‍👦']) {

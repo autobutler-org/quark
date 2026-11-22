@@ -278,6 +278,34 @@ that knows nothing of replies still shows the text. Each reader quotes the origi
 so nothing of it is copied into the reply, and a quote of a message that was deleted, is waiting for its key, or
 isn't in this channel reads as unavailable. The Quark can't tell a reply from any other message.
 
+### Side conversations
+
+A side conversation (#4345) is a set of replies to one channel message, its root. Unlike a quote-reply, a branch
+reply names its root in the clear: `root_id` on the stored row, `rootId` on the post, the message and its events.
+
+- **What the Quark learns:** which messages branch from which, how many replies each root has, and who posted
+  them and when. Never what they say. It is the metadata a reply count or a branch's unread count needs, and
+  nothing more.
+- **What the additional data binds.** A branch reply is sealed under its own tag, with the root as well:
+
+  ```text
+  "quark-chat-msg-v2" 0x00 || be64(channelId) || be64(keyVersion) || be64(rootId)
+  ```
+
+  A channel message keeps the v1 tag. The reader rebuilds the additional data from the `rootId` the Quark
+  reports, so a Quark that moves a reply to another branch, or into the channel by clearing its root, makes it
+  fail to open. An edit of a reply is sealed under the same root again. The tag binds no account, so a reply in
+  an anonymous channel is sealed the same way, under that channel's key, and is served with its author's
+  pseudonym as `authorId`, as every message there is.
+- **One level deep.** A root has to be a message in the same channel (404 otherwise, as any message the caller
+  can't read), and it can't itself be a reply (409). A poll can't be posted in a branch (400).
+- **Deleting the root keeps the branch.** The root becomes a tombstone like any deleted message, and its replies
+  stay readable and open to new ones.
+- **Older clients never see a branch.** The channel's message list, its live `chat_message_created` events as the
+  app reads them, and its unread count all leave branch replies out. `GET /api/v0/chat/messages/:id/replies`
+  pages a branch, with the channel route's `before`, `after` and `limit`, and only for holders of
+  `read_messages`.
+
 ### Editing
 
 Its author may replace a message's text (#2426). The app encrypts the new text afresh, under the channel's
@@ -350,9 +378,11 @@ that isn't loaded and every channel at once. It isn't built yet.
 
 All need `read_messages`: anyone else gets 404, delegated managers and admins included.
 
-- `POST /api/v0/chat/channels/:id/messages` takes `{ciphertext, keyVersion}` and needs `send_messages`. A reader
-  without it gets 403.
+- `POST /api/v0/chat/channels/:id/messages` takes `{ciphertext, keyVersion}`, and `rootId` for a branch reply,
+  and needs `send_messages`. A reader without it gets 403.
 - `GET /api/v0/chat/channels/:id/messages?before=<id>&limit=50` pages backward, and `?after=<id>` pages forward.
+  Branch replies are left out.
+- `GET /api/v0/chat/messages/:id/replies` pages the replies to a message the same way.
 - `PUT /api/v0/chat/messages/:id` takes `{ciphertext, keyVersion}` and is allowed for the author alone, while
   they hold `read_messages`. Another reader gets 403.
 - `DELETE /api/v0/chat/messages/:id` is allowed for the author or a holder of `delete_messages`, while they hold
@@ -690,7 +720,8 @@ poll answer:  ... be64(messageId) || be64(pseudonym)  additional data, when the 
 event:        ... be64(eventId) || be64(actorPseudonym) || kind 0x00 || payload
 ```
 
-The constructions themselves are unchanged; only the id in them is the pseudonym. A member event's payload is
+The constructions themselves are unchanged; only the id in them is the pseudonym. A message's additional data,
+a side conversation's reply's included, binds no account, so it is the same in an anonymous channel. A member event's payload is
 written with the pseudonym as `userId` and the alias at that time as `name`, so the signed bytes never hold an
 account. Creating a key version checks the caller's own grant against their pseudonym, and uploading grants checks
 each against the recipient pseudonym it names. A pseudonym never changes, even when its account leaves and comes

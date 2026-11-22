@@ -37,15 +37,45 @@ class ChatMessagesService with AuthenticatedService {
     int? before,
     int? after,
     int? limit,
-  }) async {
-    final response = await instance.authenticatedGet(
-      _channelUri(channelId, {
+  }) => _fetchPage(
+    _channelUri(channelId, _pageQuery(before, after, limit)),
+    'fetch messages of channel $channelId',
+  );
+
+  /// A page of the replies in message [rootId]'s side conversation (#4345),
+  /// oldest first, with [before], [after] and [limit] as in [fetchMessages].
+  ///
+  /// api: GET /api/v0/chat/messages/{id}/replies
+  static Future<List<ChatMessage>> fetchReplies(
+    int rootId, {
+    int? before,
+    int? after,
+    int? limit,
+  }) {
+    final query = _pageQuery(before, after, limit);
+    return _fetchPage(
+      _messageUri(
+        rootId,
+        'replies',
+      ).replace(queryParameters: query.isEmpty ? null : query),
+      'fetch replies to message $rootId',
+    );
+  }
+
+  /// The query of a page of messages.
+  static Map<String, String> _pageQuery(int? before, int? after, int? limit) =>
+      {
         if (before != null) 'before': '$before',
         if (after != null) 'after': '$after',
         if (limit != null) 'limit': '$limit',
-      }),
-    );
-    throwUnlessOk(response, 'fetch messages of channel $channelId');
+      };
+
+  /// The messages of the page at [uri].
+  ///
+  /// api: none
+  static Future<List<ChatMessage>> _fetchPage(Uri uri, String context) async {
+    final response = await instance.authenticatedGet(uri);
+    throwUnlessOk(response, context);
     return [
       for (final m in _json(response)['messages'] as List? ?? const [])
         ChatMessage.fromJson(m as Map<String, dynamic>),
@@ -58,7 +88,8 @@ class ChatMessagesService with AuthenticatedService {
   /// [poll], the message is a poll with its settings. [attachmentIds], when
   /// passed, names files already uploaded to this channel; the Quark binds
   /// them to the message. The name, the media type and the key stay inside
-  /// [ciphertext].
+  /// [ciphertext]. With [rootId], the message is a reply in that message's
+  /// side conversation (#4345), sealed under `ChatCrypto.messageAad`'s v2 tag.
   ///
   /// api: POST /api/v0/chat/channels/{id}/messages
   static Future<ChatMessage> postMessage(
@@ -68,6 +99,7 @@ class ChatMessagesService with AuthenticatedService {
     String? clientMessageId,
     List<String>? attachmentIds,
     ChatPoll? poll,
+    int? rootId,
   }) async {
     final response = await instance.authenticatedPost(
       _channelUri(channelId),
@@ -79,6 +111,7 @@ class ChatMessagesService with AuthenticatedService {
           clientMessageId: clientMessageId,
           attachmentIds: attachmentIds,
           poll: poll,
+          rootId: rootId,
         ),
       ),
     );
@@ -98,12 +131,14 @@ class ChatMessagesService with AuthenticatedService {
     String? clientMessageId,
     List<String>? attachmentIds,
     ChatPoll? poll,
+    int? rootId,
   }) => {
     'keyVersion': keyVersion,
     'ciphertext': base64Encode(ciphertext),
     'clientMessageId': ?clientMessageId,
     'attachmentIds': ?attachmentIds,
     'poll': ?poll?.settingsJson(),
+    'rootId': ?rootId,
   };
 
   /// Uploads [body] as attachment [id] on channel [channelId].
