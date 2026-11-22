@@ -5,8 +5,8 @@ end-to-end encrypted messages, unlocking chat on web after a reload, waiting
 for a channel key, and creating, sharing, renaming, leaving and deleting
 channels (#2422), reacting to messages (#2426), a message's menu (#2631),
 searching a channel on the device (#2429), mentioning a member (#2623) or everyone (#4293), polls (#3894),
-attaching a file and saving it (#2425), resizing or hiding the channel and member panes (#4294), and anonymous
-channels (#2949).
+attaching a file and saving it (#2425), resizing or hiding the channel and member panes (#4294), anonymous
+channels (#2949), and side conversations branched from one message (#3561).
 
 ---
 
@@ -1008,3 +1008,103 @@ All three have opened chat once.
 - The alias follows the same rules as a manager's rename (JN-CHAT-038): unique in the channel in any case, and
   never a username.
 - A member may pick a name that hints at who they are, even their real name. That is their choice.
+
+---
+
+### JN-CHAT-040: Start a side conversation
+
+**Preconditions:** `bob` and `carol` are **Member**s of a channel, each with it open. `carol` wrote "The sink is
+leaking".
+
+**Steps:**
+
+1. As `bob`, open the menu on `carol`'s message (JN-CHAT-017) and choose **Start side conversation**.
+2. Close it without writing anything.
+3. Open it again, write "Under the kitchen one?" and send.
+
+**Expected result:**
+
+- After step 1 a panel opens beside the channel, in the members' place, or as a sheet over the channel on a
+  phone. Its header reads "The sink is leaking", `carol`'s message sits at its top, and its composer says
+  **Reply**. The address bar gains `?branch=<the message's id>`.
+- After step 2 the panel and the `?branch=` are gone, and nothing changed for `carol`: a side conversation exists
+  only once it has a reply.
+- After step 3 the reply shows in the panel, not in the channel.
+
+**Notes:**
+
+- Only text messages offer it, and only to someone who can send there. A **Viewer** can still read one.
+- Side conversations are one level deep: a reply in one offers no **Start side conversation**.
+- Deleting the message a side conversation branches from keeps its replies. The panel then reads "Original
+  message unavailable" at its top.
+
+---
+
+### JN-CHAT-041: Reply in a side conversation
+
+**Preconditions:** JN-CHAT-040, with `bob`'s side conversation open for both `bob` and `carol`.
+
+**Steps:**
+
+1. As `carol`, reply "Yes, that one".
+2. As `bob`, edit his reply, then react to `carol`'s.
+3. As `bob`, with the network off, send another reply, then turn it back on and tap **Retry**.
+4. As `carol`, delete her reply.
+
+**Expected result:**
+
+- After step 1 `bob` sees `carol`'s reply in his panel as it arrives. Neither channel timeline shows it.
+- Edits and reactions in step 2 show for both, as in the channel.
+- In step 3 the reply waits above the panel's composer with **Retry** and **Discard**, and sends once, however
+  many times it is retried.
+- After step 4 the reply is a tombstone in both panels.
+
+**Notes:**
+
+- Replies are encrypted under the channel's key, bound to the message they branch from, so the Quark can't move
+  one to another side conversation ([`docs/chat-security.md`](../chat-security.md)).
+- After the connection drops and comes back, the panel reads its replies again and catches up on what it missed.
+- Search, files and polls stay in the channel. Unread counts and mentions inside a side conversation come later
+  (#4349), as does posting a reply to the channel too (#4350).
+
+---
+
+### JN-CHAT-042: Open a side conversation from its chip
+
+**Preconditions:** A message in the channel has a side conversation with replies (JN-CHAT-041).
+
+**Steps:**
+
+1. Look under the message.
+2. Tap the line under it.
+
+**Expected result:**
+
+- Step 1 shows "2 replies, last 5m ago" under the message.
+- Step 2 opens the side conversation as in JN-CHAT-040.
+
+**Notes:**
+
+- The reply count and last reply come from the Quark (#4346); until it reports them no chip shows, and
+  **Start side conversation** in the message's menu opens the one that exists.
+
+---
+
+### JN-CHAT-043: Open a side conversation from a link
+
+**Preconditions:** `bob` has a side conversation open (JN-CHAT-040).
+
+**Steps:**
+
+1. Copy the address bar and open it in another tab, or reload.
+2. Change the `?branch=` number to one that is not a message in this channel, and open it.
+
+**Expected result:**
+
+- Step 1 opens the channel with the same side conversation beside it.
+- Step 2 opens the channel alone, and the address bar drops `?branch=`.
+
+**Notes:**
+
+- A link works in a direct message as in a channel.
+

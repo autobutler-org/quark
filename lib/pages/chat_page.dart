@@ -22,6 +22,7 @@ import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/folder_picker.dart';
 import 'package:quark/widgets/chat/chat_attachment_preview.dart';
+import 'package:quark/widgets/chat/chat_branch_pane.dart';
 import 'package:quark/widgets/chat/chat_channel_header.dart';
 import 'package:quark/widgets/chat/chat_channel_not_found.dart';
 import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
@@ -101,12 +102,28 @@ import 'package:url_launcher/url_launcher.dart';
 /// so it runs on this device over the messages already loaded and decrypted;
 /// the bar says so, counts the matches, and loads older messages to reach
 /// further back. Nothing typed there goes to the Quark.
+///
+/// A side conversation (#4348) opens beside the channel, or over it as a
+/// sheet on a phone, from "Start side conversation" on a message or the
+/// chip under one that has replies. It is [branchId] in the URL, moved with
+/// `context.go`, so a reload or a shared link reopens it; one that is no
+/// message of this channel opens the channel alone. Opening one and closing
+/// it again leaves nothing behind: the first reply is what starts it.
 class ChatPage extends StatefulWidget {
   /// Creates the page on channel [channelId].
-  const ChatPage({required this.channelId, this.controller, super.key});
+  const ChatPage({
+    required this.channelId,
+    this.branchId,
+    this.controller,
+    super.key,
+  });
 
   /// The channel in the URL: an id, or `general`.
   final String channelId;
+
+  /// The side conversation in the URL, by its parent's message id; null
+  /// for none.
+  final String? branchId;
 
   /// A controller to use instead of the real one; the page disposes it.
   @visibleForTesting
@@ -119,7 +136,8 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage>
     with WidgetsBindingObserver, AutoRefreshMixin {
   late final ChatController _controller =
-      (widget.controller ?? ChatController())..select(widget.channelId);
+      (widget.controller ?? ChatController())
+        ..select(widget.channelId, branchId: widget.branchId);
 
   /// The wide layout's channel and member panes, kept per device (#4294).
   final _channelPane = SidebarController(
@@ -130,6 +148,14 @@ class _ChatPageState extends State<ChatPage>
     'chat_members',
     defaultWidth: QuarkChatLayout.memberListWidth,
   );
+  final _branchPane = SidebarController(
+    'chat_branch',
+    defaultWidth: QuarkChatLayout.branchWidth,
+  );
+
+  /// Whether a URL change is waiting to reach the controller, which the
+  /// URL is not followed back to meanwhile.
+  bool _selecting = false;
 
   /// Whether this window is focused on the page. An unfocused window keeps
   /// the open channel's unread badge; a focused one does not (#3255).
@@ -167,11 +193,16 @@ class _ChatPageState extends State<ChatPage>
   @override
   void didUpdateWidget(covariant ChatPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.channelId != oldWidget.channelId) {
+    if (widget.channelId != oldWidget.channelId ||
+        widget.branchId != oldWidget.branchId) {
       // After the frame: selecting notifies, and a listener outside this
       // page, such as a closing dialog, can't be marked dirty mid-build.
+      _selecting = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _controller.select(widget.channelId);
+        _selecting = false;
+        if (mounted) {
+          _controller.select(widget.channelId, branchId: widget.branchId);
+        }
       });
     }
   }
@@ -184,6 +215,7 @@ class _ChatPageState extends State<ChatPage>
     ChatUnreadController.instance.setViewing(null, focused: false);
     _channelPane.dispose();
     _memberPane.dispose();
+    _branchPane.dispose();
     super.dispose();
   }
 
@@ -191,17 +223,43 @@ class _ChatPageState extends State<ChatPage>
   Future<void> refresh() => _controller.refresh();
 
   /// Puts the URL on the channel actually open, when the one asked for fell
-  /// back to the default. After the frame: this can run from
+  /// back to the default, and on the side conversation actually open, when
+  /// the one asked for wasn't one. After the frame: this can run from
   /// [didUpdateWidget], mid-build.
   void _followController() {
     _syncViewing();
-    final id = _controller.selectedChannel?.id;
-    if (id == null || '$id' == widget.channelId) return;
+    bool behind() {
+      final id = _controller.selectedChannel?.id;
+      return !_selecting &&
+          id != null &&
+          ('$id' != widget.channelId ||
+              _controller.branchId != widget.branchId);
+    }
+
+    if (!behind()) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && '$id' != widget.channelId) {
-        context.go(AppRoutes.chatChannel('$id'));
-      }
+      if (!mounted || !behind()) return;
+      context.go(
+        AppRoutes.chatChannel(
+          '${_controller.selectedChannel!.id}',
+          branch: _controller.branchId,
+        ),
+      );
     });
+  }
+
+  /// Opens the side conversation of message [id] beside the open channel.
+  void _openBranch(String id) {
+    final channel = _controller.selectedChannel;
+    if (channel == null) return;
+    context.go(AppRoutes.chatChannel('${channel.id}', branch: id));
+  }
+
+  /// Closes the open side conversation.
+  void _closeBranch() {
+    final channel = _controller.selectedChannel;
+    if (channel == null) return;
+    context.go(AppRoutes.chatChannel('${channel.id}'));
   }
 
   Future<void> _deleteMessage(String id) async {
@@ -352,7 +410,10 @@ class _ChatPageState extends State<ChatPage>
   }
 
   void _copyMessage(String id) {
-    for (final message in _controller.messageItems) {
+    for (final message in [
+      ..._controller.messageItems,
+      ..._controller.branchItems,
+    ]) {
       if (message.id == id) copyToClipboard(context, message.body);
     }
   }
@@ -395,6 +456,20 @@ class _ChatPageState extends State<ChatPage>
       if (!mounted) return;
       showMessage(context, Errors.message(e, 'export the results'));
     }
+  }
+
+  void _openLink(Uri uri) =>
+      unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
+
+  /// An author's avatar in a message list, by account id.
+  Widget _messageAvatar(BuildContext context, String userId) {
+    final id = int.tryParse(userId) ?? 0;
+    return UserAvatar(
+      userId: id,
+      name: _controller.nameOf(id),
+      version: _controller.avatarVersionOf(id),
+      size: QuarkMessageList.avatarSize,
+    );
   }
 
   void _openChannel(String id) {
@@ -690,7 +765,12 @@ class _ChatPageState extends State<ChatPage>
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([_controller, _channelPane, _memberPane]),
+      listenable: Listenable.merge([
+        _controller,
+        _channelPane,
+        _memberPane,
+        _branchPane,
+      ]),
       builder: (context, _) {
         final c = _controller;
         final channel = c.selectedChannel;
@@ -707,7 +787,8 @@ class _ChatPageState extends State<ChatPage>
         final openId = _windowFocused && channel != null
             ? '${channel.id}'
             : null;
-        final editing = c.editingMessageId;
+        // A reply being edited is in the side conversation's composer.
+        final editing = c.isEditingInBranch ? null : c.editingMessageId;
         final replying = c.replyingTo;
         // ponytail: a reply is text; attaching while replying waits until
         // the attachment format carries the quote too.
@@ -837,6 +918,7 @@ class _ChatPageState extends State<ChatPage>
                                 currentUserName: c.currentUserName,
                                 onCopy: _copyMessage,
                                 onReply: c.startReply,
+                                onOpenBranch: _openBranch,
                                 onEdit: c.startEdit,
                                 onDelete: _deleteMessage,
                                 onReact: _react,
@@ -844,10 +926,7 @@ class _ChatPageState extends State<ChatPage>
                                 onClosePoll: _closePoll,
                                 onExportPoll: _exportPoll,
                                 onEncryptionHelp: _explainEncryption,
-                                onOpenLink: (uri) => launchUrl(
-                                  uri,
-                                  mode: LaunchMode.externalApplication,
-                                ),
+                                onOpenLink: _openLink,
                                 onOpenAttachment: (_, item) =>
                                     unawaited(_openAttachment(item)),
                                 onPlayAttachment: (_, item) =>
@@ -888,15 +967,7 @@ class _ChatPageState extends State<ChatPage>
                                   }
                                   return null;
                                 },
-                                avatarBuilder: (context, userId) {
-                                  final id = int.tryParse(userId) ?? 0;
-                                  return UserAvatar(
-                                    userId: id,
-                                    name: c.nameOf(id),
-                                    version: c.avatarVersionOf(id),
-                                    size: QuarkMessageList.avatarSize,
-                                  );
-                                },
+                                avatarBuilder: _messageAvatar,
                               ),
                       ),
                       if (encryption != null)
@@ -1034,6 +1105,23 @@ class _ChatPageState extends State<ChatPage>
                       );
                     },
                   ),
+                  branch: !c.isBranchOpen
+                      ? null
+                      : ChatBranchPane(
+                          chat: c,
+                          onClose: _closeBranch,
+                          onCopy: _copyMessage,
+                          onDelete: _deleteMessage,
+                          onReact: _react,
+                          onSubmitEdit: _submitEdit,
+                          onOpenLink: _openLink,
+                          avatarBuilder: _messageAvatar,
+                          composerEpoch: _composerEpoch,
+                        ),
+                  branchTitle: QuarkBranchPanel.titleFor(c.branchParent),
+                  onCloseBranch: _closeBranch,
+                  branchPaneWidth: _branchPane.width,
+                  onBranchPaneWidthChanged: _branchPane.setWidth,
                   isChannelListOpen: c.isChannelListOpen,
                   isMemberListOpen: c.isMemberListOpen,
                   onToggleChannelList: c.toggleChannelList,

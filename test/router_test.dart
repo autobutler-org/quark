@@ -1204,6 +1204,8 @@ void main() {
       );
       expect(paths, containsAll([AppRoutes.chat, '/chat/:channelId']));
       expect(AppRoutes.chatChannel('12'), '/chat/12');
+      // #4348: the open side conversation rides in the query.
+      expect(AppRoutes.chatChannel('12', branch: '40'), '/chat/12?branch=40');
     });
 
     testWidgets('/chat opens general', (tester) async {
@@ -1219,6 +1221,19 @@ void main() {
       final r = await pumpGated(tester, '/chat/12');
 
       expect(at(r), '/chat/12');
+    });
+
+    testWidgets('a side conversation link is kept through /chat (#4348)', (
+      tester,
+    ) async {
+      await signIn();
+      for (final (location, lands) in [
+        ('/chat/12?branch=40', '/chat/12?branch=40'),
+        ('/chat?branch=40', '/chat/general?branch=40'),
+      ]) {
+        final r = await pumpGated(tester, location);
+        expect(at(r), lands, reason: location);
+      }
     });
 
     for (final (name, signInStale, visits) in [

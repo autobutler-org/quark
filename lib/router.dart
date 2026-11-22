@@ -134,9 +134,17 @@ class AppRoutes {
 
   /// One chat channel by id, e.g. chatChannel('12') → '/chat/12'. `general`
   /// names the default channel; an id the account can't open falls back to
-  /// it rather than to an error page.
-  static String chatChannel(String channelId) =>
-      '$chat/${Uri.encodeComponent(channelId)}';
+  /// it rather than to an error page. [branch] opens the side conversation
+  /// of that message beside it (#4348): chatChannel('12', branch: '40') →
+  /// '/chat/12?branch=40'.
+  static String chatChannel(String channelId, {String? branch}) => Uri(
+    path: '$chat/${Uri.encodeComponent(channelId)}',
+    queryParameters: branch == null ? null : {chatBranchParam: branch},
+  ).toString();
+
+  /// The query parameter naming the open side conversation on a chat
+  /// channel's URL.
+  static const chatBranchParam = 'branch';
   static const docs = '/docs';
   static const sheets = '/sheets';
   static const slides = '/slides';
@@ -792,8 +800,10 @@ final router = GoRouter(
       // One route for every channel, so switching channels hands the new id
       // to the page already on screen rather than building it again.
       path: '${AppRoutes.chat}/:channelId',
-      builder: (context, state) =>
-          ChatPage(channelId: state.pathParameters['channelId']!),
+      builder: (context, state) => ChatPage(
+        channelId: state.pathParameters['channelId']!,
+        branchId: state.uri.queryParameters[AppRoutes.chatBranchParam],
+      ),
     ),
     GoRoute(
       path: AppRoutes.docs,

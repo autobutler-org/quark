@@ -43,6 +43,7 @@ void main() {
           path: '${AppRoutes.chat}/:channelId',
           builder: (context, state) => ChatPage(
             channelId: state.pathParameters['channelId']!,
+            branchId: state.uri.queryParameters[AppRoutes.chatBranchParam],
             controller: fake.controller,
           ),
         ),
@@ -1617,6 +1618,143 @@ void main() {
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
+    });
+  });
+
+  group('side conversations (#4348)', () {
+    ChatTimelineMessage entry(
+      int id,
+      String text, {
+      int author = 8,
+      int? rootId,
+    }) => ChatTimelineMessage(
+      message: ChatMessage(
+        id: id,
+        channelId: 1,
+        authorId: author,
+        keyVersion: 1,
+        ciphertext: null,
+        createdAt: DateTime.utc(2026, 9, 25, 10, id),
+        rootId: rootId,
+      ),
+      state: ChatMessageState.ready,
+      text: text,
+    );
+
+    FakeChat withRoot() {
+      final chat = FakeChat();
+      chat.entries[1] = [entry(5, 'the sink is leaking')];
+      chat.roots[5] = entry(5, 'the sink is leaking');
+      return chat;
+    }
+
+    Finder inBranch(Finder matching) => find.descendant(
+      of: find.byKey(const ValueKey('chat_layout_branch')),
+      matching: matching,
+    );
+
+    for (final (label, size) in [('narrow', narrow), ('wide', wide)]) {
+      testWidgets('start one, reply, edit and delete the reply, close '
+          '($label)', (tester) async {
+        final (r, chat) = await pumpChat(tester, size, chat: withRoot());
+
+        await tester.longPress(find.byKey(const ValueKey('message_body_5')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('message_start_branch_5')));
+        await tester.pumpAndSettle();
+
+        expect(at(r), '/chat/1?branch=5');
+        expect(find.byKey(const ValueKey('chat_layout_branch')), findsOne);
+        expect(inBranch(find.text('the sink is leaking')), findsWidgets);
+        final branch = chat.branches[5]!;
+
+        await tester.enterText(inBranch(find.byKey(field)), 'plumber at 3');
+        await tester.pump();
+        await tester.tap(
+          inBranch(find.byKey(const ValueKey('message_composer_send'))),
+        );
+        await tester.pumpAndSettle();
+        expect(branch.sent, ['plumber at 3']);
+        expect(chat.opened[1]!.sent, isEmpty);
+
+        // The Quark stored it.
+        branch.setEntries([entry(6, 'plumber at 3', author: 7, rootId: 5)]);
+        await tester.pumpAndSettle();
+
+        await tester.longPress(
+          inBranch(find.byKey(const ValueKey('message_body_6'))),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('message_edit_6')));
+        await tester.pumpAndSettle();
+        expect(inBranch(find.text('Editing message')), findsOneWidget);
+        expect(find.text('Editing message'), findsOneWidget);
+        await tester.enterText(inBranch(find.byKey(field)), 'plumber at 4');
+        await tester.pump();
+        await tester.tap(
+          inBranch(find.byKey(const ValueKey('message_composer_send'))),
+        );
+        await tester.pumpAndSettle();
+        expect(branch.edited, ['6 plumber at 4']);
+
+        await tester.longPress(
+          inBranch(find.byKey(const ValueKey('message_body_6'))),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('message_delete_6')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('delete_message_confirm')));
+        await tester.pumpAndSettle();
+        expect(branch.deleted, [6]);
+
+        await tester.tap(
+          find.byKey(
+            ValueKey(
+              size == narrow ? 'quark_sheet_close' : 'branch_panel_close',
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(at(r), '/chat/1');
+        expect(find.byKey(const ValueKey('chat_layout_branch')), findsNothing);
+        expect(branch.disposed, isTrue);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('the URL reopens a side conversation after a rebuild', (
+      tester,
+    ) async {
+      for (var load = 0; load < 2; load++) {
+        final (r, chat) = await pumpChat(
+          tester,
+          wide,
+          location: '/chat/1?branch=5',
+          chat: withRoot(),
+        );
+        expect(at(r), '/chat/1?branch=5', reason: 'load $load');
+        expect(chat.branches[5]!.opens, 1);
+        expect(
+          find.byKey(const ValueKey('branch_panel_parent')),
+          findsOneWidget,
+        );
+        await tester.pumpWidget(const SizedBox());
+      }
+    });
+
+    testWidgets('an id that is no parent here opens the channel alone', (
+      tester,
+    ) async {
+      final (r, _) = await pumpChat(
+        tester,
+        wide,
+        location: '/chat/1?branch=99',
+        chat: withRoot(),
+      );
+
+      expect(at(r), '/chat/1');
+      expect(find.byKey(const ValueKey('chat_layout_branch')), findsNothing);
+      expect(find.text('the sink is leaking'), findsOneWidget);
     });
   });
 }
