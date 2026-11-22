@@ -23,7 +23,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/mholt/archiver/v4 v4.0.0-alpha.9
 	github.com/nwaples/rardecode/v2 v2.4.6
-	github.com/richardlehane/mscfb v1.0.9
+	github.com/richardlehane/mscfb v1.0.10
 	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
@@ -36,7 +36,7 @@ require (
 	golang.org/x/term v0.48.0
 	golang.org/x/time v0.16.0
 	howett.net/plist v1.0.1
-	modernc.org/sqlite v1.62.0
+	modernc.org/sqlite v1.63.0
 	tailscale.com v1.104.7
 )
 
