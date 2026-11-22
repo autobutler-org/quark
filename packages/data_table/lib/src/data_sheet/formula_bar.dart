@@ -203,10 +203,8 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
         _controller.activeCellEditingController.text = value;
         _syncing = false;
         _controller.selection.setActive(r, c);
-        // Move cursor to end of text in the bar.
-        _barCtrl.selection = TextSelection.collapsed(
-          offset: _barCtrl.text.length,
-        );
+        // The caret stays where the click put it; the field itself puts it
+        // at the end when focus arrives some other way.
       } else if (sel.hasActiveCell) {
         // Cell was already active — snapshot the current raw value for Escape.
         final r = sel.activeRow;
