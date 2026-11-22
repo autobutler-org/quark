@@ -12,6 +12,10 @@ import 'package:quark/widgets/image_viewer/metadata_content.dart';
 class MetadataDrawer extends StatelessWidget {
   final ScrollController scrollController;
   final String name;
+
+  /// The file's size in bytes when known, for a photo without metadata.
+  final int? fileSize;
+
   final PhotoMetadata? metadata;
   final bool loading;
   final void Function(AlbumRef album) onAlbumTap;
@@ -28,6 +32,7 @@ class MetadataDrawer extends StatelessWidget {
     super.key,
     required this.scrollController,
     required this.name,
+    this.fileSize,
     required this.metadata,
     required this.loading,
     required this.onAlbumTap,
@@ -78,6 +83,7 @@ class MetadataDrawer extends StatelessWidget {
                 children: MetadataContent.sections(
                   context: context,
                   name: name,
+                  fileSize: fileSize,
                   metadata: metadata,
                   loading: loading,
                   onAlbumTap: onAlbumTap,

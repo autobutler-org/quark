@@ -2,11 +2,13 @@ import 'package:material_ui/material_ui.dart';
 import 'package:quark/models/photo_metadata.dart';
 import 'package:quark/widgets/image_viewer/metadata_drawer.dart';
 
-/// The photo viewer at phone widths: the photo, with the metadata drawer
-/// dragged up over it.
+/// The photo viewer at phone widths: the photo, full screen, with the
+/// metadata drawer dragged up over it only while [sidebarOpen].
 ///
-/// The drawer peeks at the date and place and opens, by its handle or its
-/// rows, far enough to reach every section (#3359).
+/// The page keeps [sidebarOpen] false until the Info action asks for the
+/// details, so the photo opens with nothing over it (#4235). The drawer then
+/// peeks at the date and place and opens, by its handle or its rows, far
+/// enough to reach every section (#3359).
 class MobileBody extends StatelessWidget {
   static const _minSize = 0.08;
   static const _peekSize = 0.28;
@@ -21,6 +23,10 @@ class MobileBody extends StatelessWidget {
   final bool sidebarOpen;
   final DraggableScrollableController drawerController;
   final String name;
+
+  /// The file's size in bytes when known, for a photo without metadata.
+  final int? fileSize;
+
   final PhotoMetadata? metadata;
   final bool loading;
   final void Function(AlbumRef album) onAlbumTap;
@@ -31,6 +37,7 @@ class MobileBody extends StatelessWidget {
     required this.sidebarOpen,
     required this.drawerController,
     required this.name,
+    this.fileSize,
     required this.metadata,
     required this.loading,
     required this.onAlbumTap,
@@ -52,6 +59,7 @@ class MobileBody extends StatelessWidget {
             builder: (context, scrollController) => MetadataDrawer(
               scrollController: scrollController,
               name: name,
+              fileSize: fileSize,
               metadata: metadata,
               loading: loading,
               onAlbumTap: onAlbumTap,

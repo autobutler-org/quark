@@ -6,12 +6,22 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The photo viewer's top bar.
 ///
-/// The bar carries the close button, the counter and the prev/next
-/// chevrons at every width. Narrow screens have no room for the rest, so
-/// favorite, rotate, download and info fold into the more menu instead of
-/// crowding the close button (#1709).
+/// Wide, it carries the close button, the "N / M" counter, the prev/next
+/// chevrons and every photo action. On a phone it is the close button, the
+/// file [name] with "3 of 12 · Nov 10" under it, and More (#4235): a swipe
+/// turns the page, the row under the photo holds favorite and info, and
+/// rotate and download fold into the more menu rather than crowd the close
+/// button (#1709). The counter shows only with more than one photo, and the
+/// date only when [date] is known.
 class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isDesktop;
+
+  /// The photo's file name, the title on a phone.
+  final String name;
+
+  /// When the photo was taken, or its file date; null when neither is known.
+  final DateTime? date;
+
   final int currentIndex;
   final int imageCount;
   final bool hasPrev;
@@ -40,6 +50,8 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
   const ImageViewerAppBar({
     super.key,
     required this.isDesktop,
+    required this.name,
+    required this.date,
     required this.currentIndex,
     required this.imageCount,
     required this.hasPrev,
@@ -65,7 +77,16 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     // The title is built here, above the bar's QuarkChrome.
     final tokens = QuarkTokens.of(context).onChrome;
+    final textTheme = Theme.of(context).textTheme;
     final showNav = imageCount > 1;
+    final date = this.date;
+    final counter = isDesktop
+        ? '${currentIndex + 1} / $imageCount'
+        : '${currentIndex + 1} of $imageCount';
+    final subtitle = [
+      if (showNav) counter,
+      if (date != null) '${CalendarLabels.monthShort(date.month)} ${date.day}',
+    ].join(' · ');
     return ChromeAppBar(
       leading: Center(
         child: QuarkBarIconButton(
@@ -75,34 +96,60 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
           onPressed: onClose,
         ),
       ),
-      title: showNav
-          ? Text(
-              '${currentIndex + 1} / $imageCount',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: tokens.secondaryForeground,
-              ),
-            )
-          : null,
+      title: isDesktop
+          ? (showNav
+                ? Text(
+                    counter,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: tokens.secondaryForeground,
+                    ),
+                  )
+                : null)
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  key: const ValueKey('image_viewer_title'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.titleSmall?.copyWith(
+                    color: tokens.foreground,
+                  ),
+                ),
+                if (subtitle.isNotEmpty)
+                  Text(
+                    subtitle,
+                    key: const ValueKey('image_viewer_subtitle'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: tokens.secondaryForeground,
+                    ),
+                  ),
+              ],
+            ),
       actions: [
         Row(
           mainAxisSize: MainAxisSize.min,
           spacing: QuarkTokens.of(context).spacingSm,
           children: [
-            if (showNav) ...[
-              QuarkBarIconButton(
-                key: const ValueKey('image_viewer_previous'),
-                icon: QuarkIcons.chevron_left,
-                tooltip: 'Previous (←)',
-                onPressed: hasPrev ? onPrevious : null,
-              ),
-              QuarkBarIconButton(
-                key: const ValueKey('image_viewer_next'),
-                icon: QuarkIcons.chevron_right,
-                tooltip: 'Next (→)',
-                onPressed: hasNext ? onNext : null,
-              ),
-            ],
             if (isDesktop) ...[
+              if (showNav) ...[
+                QuarkBarIconButton(
+                  key: const ValueKey('image_viewer_previous'),
+                  icon: QuarkIcons.chevron_left,
+                  tooltip: 'Previous (←)',
+                  onPressed: hasPrev ? onPrevious : null,
+                ),
+                QuarkBarIconButton(
+                  key: const ValueKey('image_viewer_next'),
+                  icon: QuarkIcons.chevron_right,
+                  tooltip: 'Next (→)',
+                  onPressed: hasNext ? onNext : null,
+                ),
+              ],
               QuarkBarIconButton(
                 key: const ValueKey('image_viewer_favorite'),
                 icon: isFavorite ? QuarkIcons.star : QuarkIcons.star_border,

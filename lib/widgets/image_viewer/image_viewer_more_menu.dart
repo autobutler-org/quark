@@ -5,8 +5,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The photo viewer's "More options" menu, opened at the pointer from the
 /// bar's `more_vert` button the way every item's menu opens (#2267).
 ///
-/// With [includeBarActions] it also offers favorite, rotate, download and
-/// info, which a narrow bar has no room for (#1709). The server actions only
+/// With [includeBarActions] it also offers rotate and download, which a
+/// narrow bar has no room for (#1709); a phone's favorite and info sit in the
+/// row under the photo instead (#4235). The server actions only
 /// exist for a photo on the Quark, which is when [relPath] is set. A HEIC
 /// photo there also offers "Download as JPEG" (#4188).
 ///
@@ -16,14 +17,10 @@ class ImageViewerMoreMenu {
   /// Creates the menu.
   const ImageViewerMoreMenu({
     required this.includeBarActions,
-    required this.isFavorite,
-    required this.sidebarOpen,
     required this.relPath,
     required this.sourceAlbum,
-    required this.onToggleFavorite,
     required this.onRotate,
     required this.onDownload,
-    required this.onToggleSidebar,
     required this.onAddToAlbum,
     required this.onRemoveFromAlbum,
     required this.onCopy,
@@ -34,10 +31,8 @@ class ImageViewerMoreMenu {
     this.onDownloadAsJpeg,
   });
 
-  /// Whether to offer the actions a wide bar shows as buttons.
+  /// Whether to offer rotate and download, which a wide bar shows as buttons.
   final bool includeBarActions;
-  final bool isFavorite;
-  final bool sidebarOpen;
 
   /// Path of the photo on the Quark, or null for a local device asset.
   final String? relPath;
@@ -45,10 +40,8 @@ class ImageViewerMoreMenu {
   /// Album the user navigated from, which turns "Add to Album" into
   /// "Remove from [PhotoAlbum.name]".
   final PhotoAlbum? sourceAlbum;
-  final VoidCallback onToggleFavorite;
   final VoidCallback onRotate;
   final VoidCallback onDownload;
-  final VoidCallback onToggleSidebar;
   final VoidCallback onAddToAlbum;
   final VoidCallback onRemoveFromAlbum;
 
@@ -88,14 +81,8 @@ class ImageViewerMoreMenu {
 
     return [
       if (includeBarActions) ...[
-        entry(
-          'favorite',
-          isFavorite ? 'Unfavorite' : 'Favorite',
-          onToggleFavorite,
-        ),
         entry('rotate', 'Rotate 90° CW', onRotate),
         if (relPath != null) entry('download', 'Download', onDownload),
-        entry('info', sidebarOpen ? 'Hide info' : 'Show info', onToggleSidebar),
       ],
       if (relPath != null) ...[
         if (includeBarActions) const QuarkMenuEntry.divider(),

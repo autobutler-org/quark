@@ -25,6 +25,13 @@ void main() {
 
   /// Pushes the viewer on image 1 of 3 over a host page, at a Pixel 7's
   /// width, and returns the indexes it asks to load.
+  /// Opens the info sheet, which a phone starts without (#4235).
+  Future<void> openInfo(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('photo_viewer_action_info')));
+    await tester.pumpAndSettle();
+    expect(find.byType(MetadataDrawer), findsOneWidget);
+  }
+
   Future<List<int>> pushViewer(WidgetTester tester) async {
     tester.view.physicalSize = const Size(412, 915);
     tester.view.devicePixelRatio = 1.0;
@@ -126,7 +133,7 @@ void main() {
       tester,
     ) async {
       await pushViewer(tester);
-      expect(find.byType(MetadataDrawer), findsOneWidget);
+      await openInfo(tester);
 
       final photo = tester.getRect(find.byType(InteractiveViewer));
       final at = photo.topLeft + Offset(photo.width / 4, photo.height / 4);
@@ -153,6 +160,7 @@ void main() {
 
     testWidgets('a single tap still closes the info sheet', (tester) async {
       await pushViewer(tester);
+      await openInfo(tester);
       await tester.tap(find.byType(InteractiveViewer));
       // A tap waits out the double-tap window before it counts as one.
       await tester.pump(kDoubleTapTimeout);
