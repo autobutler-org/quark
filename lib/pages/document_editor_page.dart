@@ -185,7 +185,13 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   void _enterEditMode() {
     _controller.readOnly = false;
     setState(() => _isReadOnly = false);
-    _focusEditor();
+    // Focus now, while the click or tap that asked for editing is still being
+    // handled. Deferred to a later frame, as [_focusEditor] does, it came too
+    // late on web: with the semantics tree on, a tap on the read-only page
+    // reaches the app as a semantics tap, so only this request focuses the
+    // editor, and the browser never attached its text field to it. Flutter
+    // drew a caret, and typing did nothing until a second click (#4380).
+    _editorFocus.requestFocus();
   }
 
   Future<void> _exitEditMode() async {
