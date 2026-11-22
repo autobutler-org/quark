@@ -6,7 +6,7 @@
 # here works with nothing else set. Flutter stays out of the shared base image.
 
 # Renovate's Dockerfile manager moves this tag. Keep the base's entrypoint.
-FROM ghcr.io/autobutler-org/factory-worker:v0.1.3
+FROM ghcr.io/autobutler-org/factory-worker:v0.1.4
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 USER root
@@ -21,12 +21,15 @@ ARG GOVULNCHECK_VERSION
 ARG SQLC_VERSION
 ARG SWAG_VERSION
 # The same Flutter clone and go install lines as the CI images. Flutter unpacks
-# its Dart SDK and engine artifacts with unzip and xz, which the base lacks. It
+# its Dart SDK and engine artifacts with unzip and xz, which the base lacks.
+# Native assets build hooks (pdfium_dart's) compile C with native_toolchain_c,
+# which on Linux takes only clang, the package linux/apt-packages.txt gives
+# the CI images; the base's gcc does not count. Flutter
 # writes to its own cache at run time, so uid 1000 owns it. HOME is root's here,
 # so nothing root writes lands in the factory user's home.
 RUN export HOME=/root \
     && source /tmp/common.sh \
-    && install_packages unzip xz-utils zip \
+    && install_packages clang unzip xz-utils zip \
     && cleanup_packages \
     && install_flutter \
     && install_go_tools \
@@ -41,6 +44,7 @@ USER 1000:1000
 RUN flutter --disable-analytics \
     && dart --disable-analytics \
     && flutter config --no-cli-animations \
+    && clang --version \
     && flutter --version \
     && dart --version \
     && golangci-lint version \
