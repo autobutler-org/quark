@@ -2165,6 +2165,33 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'PhotoViewerActionBar',
+    group: 'Photos',
+    build: (context, log) => Column(
+      children: [
+        PhotoViewerActionBar(
+          onShare: () => log('PhotoViewerActionBar.onShare'),
+          onFavorite: () => log('PhotoViewerActionBar.onFavorite'),
+          onInfo: () => log('PhotoViewerActionBar.onInfo'),
+          onDelete: () => log('PhotoViewerActionBar.onDelete'),
+        ),
+        const SizedBox(height: 16),
+        // A favorite with its details open.
+        PhotoViewerActionBar(
+          isFavorite: true,
+          infoOpen: true,
+          onShare: () => log('PhotoViewerActionBar.onShare'),
+          onFavorite: () => log('PhotoViewerActionBar.onFavorite (unfavorite)'),
+          onInfo: () => log('PhotoViewerActionBar.onInfo (close)'),
+          onDelete: () => log('PhotoViewerActionBar.onDelete'),
+        ),
+        const SizedBox(height: 16),
+        // A photo only the phone has: Info alone.
+        PhotoViewerActionBar(onInfo: () => log('PhotoViewerActionBar.onInfo')),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'LiveBadge',
     group: 'Photos',
     build: (context, log) => Container(

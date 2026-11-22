@@ -16,6 +16,8 @@ void main() {
     WidgetTester tester, {
     required bool isDesktop,
     String? relPath,
+    int imageCount = 1,
+    DateTime? date,
   }) async {
     final events = <String>[];
     setViewport(
@@ -28,8 +30,10 @@ void main() {
         home: Scaffold(
           appBar: ImageViewerAppBar(
             isDesktop: isDesktop,
-            currentIndex: 0,
-            imageCount: 1,
+            name: 'beach.jpg',
+            date: date,
+            currentIndex: 2,
+            imageCount: imageCount,
             hasPrev: false,
             hasNext: false,
             onPrevious: () {},
@@ -45,14 +49,10 @@ void main() {
             onShowShortcuts: () {},
             moreMenu: ImageViewerMoreMenu(
               includeBarActions: !isDesktop,
-              isFavorite: false,
-              sidebarOpen: false,
               relPath: relPath,
               sourceAlbum: null,
-              onToggleFavorite: () {},
               onRotate: () {},
               onDownload: () {},
-              onToggleSidebar: () {},
               onAddToAlbum: () {},
               onRemoveFromAlbum: () {},
               onCopy: () {},
@@ -96,5 +96,40 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Share…'), findsNothing);
+  });
+
+  // #4235: a phone's bar is close, the name over "3 of 12 · Nov 10", and More.
+  testWidgets('a phone titles the photo and drops the chevrons', (
+    tester,
+  ) async {
+    await pumpBar(
+      tester,
+      isDesktop: false,
+      relPath: 'Photos/beach.jpg',
+      imageCount: 12,
+      date: DateTime(2025, 11, 10),
+    );
+
+    expect(find.text('beach.jpg'), findsOneWidget);
+    expect(find.text('3 of 12 · Nov 10'), findsOneWidget);
+    expect(find.byKey(const ValueKey('image_viewer_close')), findsOneWidget);
+    expect(find.byKey(const ValueKey('image_viewer_more')), findsOneWidget);
+    expect(find.byKey(const ValueKey('image_viewer_previous')), findsNothing);
+    expect(find.byKey(const ValueKey('image_viewer_next')), findsNothing);
+  });
+
+  testWidgets('a phone leaves out what it does not know', (tester) async {
+    await pumpBar(tester, isDesktop: false);
+
+    expect(find.text('beach.jpg'), findsOneWidget);
+    expect(find.byKey(const ValueKey('image_viewer_subtitle')), findsNothing);
+  });
+
+  testWidgets('a wide bar keeps its counter and chevrons', (tester) async {
+    await pumpBar(tester, isDesktop: true, imageCount: 12);
+
+    expect(find.text('3 / 12'), findsOneWidget);
+    expect(find.byKey(const ValueKey('image_viewer_previous')), findsOneWidget);
+    expect(find.text('beach.jpg'), findsNothing);
   });
 }

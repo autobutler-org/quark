@@ -213,6 +213,7 @@ export 'src/photos/photo_grid_tile.dart';
 export 'src/photos/photo_index_status_panel.dart';
 export 'src/photos/photo_library_sidebar.dart';
 export 'src/photos/photo_selection_bar.dart';
+export 'src/photos/photo_viewer_action_bar.dart';
 export 'src/photos/video_badge.dart';
 export 'src/settings/discovered_quark_list.dart';
 export 'src/settings/feature_flag_tile.dart';

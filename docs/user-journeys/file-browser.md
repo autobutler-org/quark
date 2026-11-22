@@ -312,7 +312,8 @@ JN-FB-013).
 
 1. Navigate to the folder containing the image.
 2. Tap the image file.
-3. Press the previous and next arrows, or the left and right arrow keys.
+3. Press the previous and next arrows, or the left and right arrow keys. On a phone, swipe left or right.
+4. On a phone, tap **Info**.
 
 **Expected result:**
 
@@ -322,6 +323,10 @@ JN-FB-013).
 - The arrows then step through that folder's images by file name. They do not follow a custom column sort
   (JN-FB-044).
 - Image is displayed correctly.
+- On a phone (narrower than 600) the image fills the screen on black with no details sheet (#4235). The top bar
+  holds close, the file name with "3 of 12 · Nov 10" under it, and More. Share, Favorite, Info and Delete sit
+  in a row under the image, and **Info** opens the details sheet: the file name, size and date, even for an
+  image with no metadata. A swipe down closes the viewer.
 - User can navigate back to the file browser.
 
 **Notes:** An archive preview (JN-FB-020) and the versions sheet (JN-FB-046) stay a single image.

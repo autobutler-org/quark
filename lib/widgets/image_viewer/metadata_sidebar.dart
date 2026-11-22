@@ -5,6 +5,10 @@ import 'package:quark/widgets/image_viewer/metadata_content.dart';
 /// The photo viewer's metadata panel on desktop.
 class MetadataSidebar extends StatelessWidget {
   final String name;
+
+  /// The file's size in bytes when known, for a photo without metadata.
+  final int? fileSize;
+
   final PhotoMetadata? metadata;
   final bool loading;
   final void Function(AlbumRef album) onAlbumTap;
@@ -12,6 +16,7 @@ class MetadataSidebar extends StatelessWidget {
   const MetadataSidebar({
     super.key,
     required this.name,
+    this.fileSize,
     required this.metadata,
     required this.loading,
     required this.onAlbumTap,
@@ -31,6 +36,7 @@ class MetadataSidebar extends StatelessWidget {
   List<Widget> _buildSections(BuildContext context) => MetadataContent.sections(
     context: context,
     name: name,
+    fileSize: fileSize,
     metadata: metadata,
     loading: loading,
     onAlbumTap: onAlbumTap,

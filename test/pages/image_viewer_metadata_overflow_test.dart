@@ -76,10 +76,11 @@ void main() {
       });
       await pumpFrames(tester, const Duration(milliseconds: 600));
       await tester.pumpAndSettle();
-      expect(find.byType(MetadataDrawer), findsOneWidget);
+      // A phone opens on the photo alone (#4235).
+      expect(find.byType(MetadataDrawer), findsNothing);
 
-      // Hide the info sheet and show it again.
-      for (var i = 0; i < 2; i++) {
+      // Show the info sheet, hide it, and show it again.
+      for (var i = 0; i < 3; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.keyI);
         await pumpFrames(tester, const Duration(milliseconds: 400));
       }

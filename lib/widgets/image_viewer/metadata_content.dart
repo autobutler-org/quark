@@ -13,10 +13,17 @@ import 'package:url_launcher/url_launcher.dart';
 ///
 /// A photo with a GPS position gets an "Open in Maps" row
 /// (`photo_info_open_in_maps`) under its coordinates.
+///
+/// File Info always shows. Without [PhotoMetadata] it falls back to [name]
+/// and, when the caller knows it, the file's size, so a photo with no
+/// metadata never opens on an empty sheet (#4235).
 class MetadataContent {
+  /// The sections for the photo named [name]. [fileSize] is its size in
+  /// bytes when the caller knows it, used only while [metadata] is null.
   static List<Widget> sections({
     required BuildContext context,
     required String name,
+    int? fileSize,
     required PhotoMetadata? metadata,
     required bool loading,
     required void Function(AlbumRef) onAlbumTap,
@@ -125,33 +132,32 @@ class MetadataContent {
       }
     }
 
-    if (metadata != null) {
-      final m = metadata;
-      final ext = m.fileName.contains('.')
-          ? m.fileName.split('.').last.toUpperCase()
-          : 'FILE';
-      sections.add(
-        Section(
-          title: 'File Info',
-          children: [
-            InfoRow(
-              icon: QuarkIcons.insert_drive_file_outlined,
-              value: m.fileName,
-            ),
-            InfoRow(icon: QuarkIcons.image_outlined, value: ext),
+    // Without metadata (a local asset, or a failed fetch) the section still
+    // says what the viewer knows, rather than leaving the sheet empty (#4235).
+    final fileName = metadata?.fileName ?? name;
+    final size = metadata?.fileSize ?? fileSize;
+    final ext = fileName.contains('.')
+        ? fileName.split('.').last.toUpperCase()
+        : 'FILE';
+    sections.add(
+      Section(
+        title: 'File Info',
+        children: [
+          InfoRow(icon: QuarkIcons.insert_drive_file_outlined, value: fileName),
+          InfoRow(icon: QuarkIcons.image_outlined, value: ext),
+          if (size != null)
             InfoRow(
               icon: QuarkIcons.storage,
-              value: StorageDevice.formatBytes(m.fileSize),
+              value: StorageDevice.formatBytes(size),
             ),
-            if (m.width > 0 && m.height > 0)
-              InfoRow(
-                icon: QuarkIcons.photo_size_select_large_outlined,
-                value: '${m.width} × ${m.height}',
-              ),
-          ],
-        ),
-      );
-    }
+          if (metadata != null && metadata.width > 0 && metadata.height > 0)
+            InfoRow(
+              icon: QuarkIcons.photo_size_select_large_outlined,
+              value: '${metadata.width} × ${metadata.height}',
+            ),
+        ],
+      ),
+    );
 
     if (metadata != null && metadata.albums.isNotEmpty) {
       sections.add(
@@ -169,19 +175,6 @@ class MetadataContent {
                 ),
               )
               .toList(),
-        ),
-      );
-    }
-
-    if (sections.isEmpty && !loading) {
-      sections.add(
-        const Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'No metadata available',
-            style: TextStyle(color: Colors.white70),
-            textAlign: TextAlign.center,
-          ),
         ),
       );
     }

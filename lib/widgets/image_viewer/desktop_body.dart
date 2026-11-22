@@ -30,6 +30,10 @@ class DesktopBody extends StatelessWidget {
   final ValueChanged<bool> onSidebarOpenChanged;
 
   final String name;
+
+  /// The file's size in bytes when known, for a photo without metadata.
+  final int? fileSize;
+
   final PhotoMetadata? metadata;
   final bool loading;
   final void Function(AlbumRef album) onAlbumTap;
@@ -42,6 +46,7 @@ class DesktopBody extends StatelessWidget {
     required this.onSidebarWidthChanged,
     required this.onSidebarOpenChanged,
     required this.name,
+    this.fileSize,
     required this.metadata,
     required this.loading,
     required this.onAlbumTap,
@@ -63,6 +68,7 @@ class DesktopBody extends StatelessWidget {
           onCollapsedChanged: (collapsed) => onSidebarOpenChanged(!collapsed),
           child: MetadataSidebar(
             name: name,
+            fileSize: fileSize,
             metadata: metadata,
             loading: loading,
             onAlbumTap: onAlbumTap,

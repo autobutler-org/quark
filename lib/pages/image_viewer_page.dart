@@ -47,6 +47,11 @@ const _kPageAnimDuration = Duration(milliseconds: 250);
 /// A full-screen photo viewer with metadata sidebar (desktop) / bottom drawer
 /// (mobile), action toolbar, and keyboard shortcuts.
 ///
+/// On a phone the photo opens full screen on black with the drawer closed;
+/// Share, Favorite, Info and Delete sit in a [PhotoViewerActionBar] under
+/// it, and Info opens the drawer (#4235). The desktop sidebar remembers
+/// whether it was open; the phone's drawer always starts closed.
+///
 /// Required: [name]. Pass [bytes] when they are already in hand; leave them
 /// null with a [relPath] and the viewer opens at once and downloads the photo
 /// itself, so the user is not left staring at the page they came from (#1564).
@@ -62,7 +67,7 @@ const _kPageAnimDuration = Duration(milliseconds: 250);
 /// A caller that learns the list only after opening (Files, listing the
 /// photo's folder) rebuilds the viewer with the new [imageCount] and
 /// [initialIndex]; the photo on screen stays and moves to that place (#3379).
-/// Keyboard: ← → navigate, Escape closes, i toggles sidebar, f toggles
+/// Keyboard: ← → navigate, Escape closes, i toggles the info, f toggles
 /// favorite, r rotates 90° CW. The viewer takes the keyboard focus once its
 /// route is in, whatever it was opened from (#3360).
 ///
@@ -214,7 +219,10 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   // matches this has been superseded by a later swipe and drops its result.
   late int _targetIndex;
 
+  // The desktop sidebar, remembered across visits.
   bool _sidebarOpen = true;
+  // The phone's details drawer, closed on every open until Info asks (#4235).
+  bool _infoOpen = false;
   double _sidebarWidth = DesktopBody.defaultSidebarWidth;
   bool _isFavorite = false;
   int _rotationQuarters = 0; // 0/1/2/3 × 90°
@@ -721,7 +729,13 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     if (mounted) setState(() => _liveVideoPlaying = false);
   }
 
-  void _toggleSidebar() => _setSidebarOpen(!_sidebarOpen);
+  bool get _isDesktop => MediaQuery.sizeOf(context).width >= 600;
+
+  /// Shows or hides the photo's details: the sidebar on a desktop, the
+  /// drawer on a phone.
+  void _toggleInfo() => _isDesktop
+      ? _setSidebarOpen(!_sidebarOpen)
+      : setState(() => _infoOpen = !_infoOpen);
 
   void _setSidebarOpen(bool open) {
     setState(() => _sidebarOpen = open);
@@ -1032,7 +1046,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
         _close();
         return KeyEventResult.handled;
       case LogicalKeyboardKey.keyI:
-        _toggleSidebar();
+        _toggleInfo();
         return KeyEventResult.handled;
       case LogicalKeyboardKey.keyF:
         _toggleFavorite();
@@ -1049,21 +1063,20 @@ class _ImageViewerPageState extends State<ImageViewerPage>
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width >= 600;
-    final isLive = _metadata?.isLivePhoto ?? false;
+    final isDesktop = _isDesktop;
+    final metadata = _metadata;
+    // The bytes on screen are the file itself only once they are the original.
+    final fileSize = _showingOriginal ? _currentBytes?.length : null;
+    final isLive = metadata?.isLivePhoto ?? false;
     final bytes = _currentBytes;
     final loadError = _loadError;
     // One menu for the bar's `more_vert` and a right-click on the photo.
     final moreMenu = ImageViewerMoreMenu(
       includeBarActions: !isDesktop,
-      isFavorite: _isFavorite,
-      sidebarOpen: _sidebarOpen,
       relPath: _currentRelPath,
       sourceAlbum: widget.sourceAlbum,
-      onToggleFavorite: _toggleFavorite,
       onRotate: _rotate,
       onDownload: _download,
-      onToggleSidebar: _toggleSidebar,
       onAddToAlbum: _addToAlbum,
       onRemoveFromAlbum: () => _removeFromAlbum(widget.sourceAlbum!),
       onCopy: _copyToClipboard,
@@ -1120,8 +1133,8 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       liveVideoPlaying: _liveVideoPlaying,
       onStartLivePlayback: _startLivePlayback,
       onStopLivePlayback: _stopLivePlayback,
-      onTapDismissSidebar: !isDesktop && _sidebarOpen
-          ? () => setState(() => _sidebarOpen = false)
+      onTapDismissSidebar: !isDesktop && _infoOpen
+          ? () => setState(() => _infoOpen = false)
           : null,
       onSwipeDown: _zoomedIn ? null : _close,
     );
@@ -1155,6 +1168,8 @@ class _ImageViewerPageState extends State<ImageViewerPage>
           backgroundColor: Colors.black,
           appBar: ImageViewerAppBar(
             isDesktop: isDesktop,
+            name: _currentName,
+            date: (metadata?.exif?.dateTaken ?? metadata?.mtime)?.toLocal(),
             currentIndex: _currentIndex,
             imageCount: _pageCount,
             hasPrev: _hasPrev,
@@ -1168,10 +1183,20 @@ class _ImageViewerPageState extends State<ImageViewerPage>
             onToggleFavorite: _toggleFavorite,
             onRotate: _rotate,
             onDownload: _download,
-            onToggleSidebar: _toggleSidebar,
+            onToggleSidebar: _toggleInfo,
             onShowShortcuts: () => _showShortcutsDialog(context),
             moreMenu: moreMenu,
           ),
+          bottomNavigationBar: isDesktop
+              ? null
+              : PhotoViewerActionBar(
+                  isFavorite: _isFavorite,
+                  infoOpen: _infoOpen,
+                  onShare: _isQuarkPhoto ? _share : null,
+                  onFavorite: _isQuarkPhoto ? _toggleFavorite : null,
+                  onInfo: _toggleInfo,
+                  onDelete: _isQuarkPhoto ? _confirmDelete : null,
+                ),
           body: isDesktop
               ? DesktopBody(
                   photoArea: clickablePhoto,
@@ -1180,16 +1205,18 @@ class _ImageViewerPageState extends State<ImageViewerPage>
                   onSidebarWidthChanged: _setSidebarWidth,
                   onSidebarOpenChanged: _setSidebarOpen,
                   name: _currentName,
-                  metadata: _metadata,
+                  fileSize: fileSize,
+                  metadata: metadata,
                   loading: _metadataLoading,
                   onAlbumTap: _navigateToAlbum,
                 )
               : MobileBody(
                   photoArea: clickablePhoto,
-                  sidebarOpen: _sidebarOpen,
+                  sidebarOpen: _infoOpen,
                   drawerController: _drawerController,
                   name: _currentName,
-                  metadata: _metadata,
+                  fileSize: fileSize,
+                  metadata: metadata,
                   loading: _metadataLoading,
                   onAlbumTap: _navigateToAlbum,
                 ),

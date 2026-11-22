@@ -1,10 +1,11 @@
 import 'package:flutter/gestures.dart';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/image_viewer_page.dart';
+import 'package:quark/widgets/image_viewer/metadata_drawer.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,7 +13,8 @@ import '../support/tap_target_guidelines.dart' show setViewport;
 
 /// #1709: the app bar carried a close button plus eight more icons, so on a
 /// phone the close X sat on top of the prev chevron. Narrow layouts now fold
-/// the secondary actions into the more menu.
+/// the secondary actions into the more menu, and since #4235 put favorite and
+/// info in a row under a full-screen photo.
 void main() {
   // 64x64 solid PNG — the viewer needs real bytes to decode.
   final bytes = Uint8List.fromList(
@@ -47,57 +49,108 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('a phone bar keeps only close, the chevrons and more', (
+  // #4235: a phone shows the photo full screen, with its name in the bar and
+  // its actions in a row under it.
+  testWidgets('a phone bar keeps only close, the title and more', (
     tester,
   ) async {
     await pumpViewer(tester, phoneSize);
 
     expect(find.byIcon(QuarkIcons.close), findsOneWidget);
-    expect(find.byIcon(QuarkIcons.chevron_left), findsOneWidget);
-    expect(find.byIcon(QuarkIcons.chevron_right), findsOneWidget);
     expect(find.byIcon(QuarkIcons.more_vert), findsOneWidget);
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('first.jpg'), findsOneWidget);
+    expect(find.text('1 of 3'), findsOneWidget);
 
-    // Everything else moved into the menu.
-    expect(find.byIcon(QuarkIcons.star_border), findsNothing);
+    // A swipe turns the page, so the chevrons are gone.
+    expect(find.byIcon(QuarkIcons.chevron_left), findsNothing);
+    expect(find.byIcon(QuarkIcons.chevron_right), findsNothing);
     expect(find.byIcon(QuarkIcons.rotate_90_degrees_cw_outlined), findsNothing);
-    expect(find.byIcon(QuarkIcons.info_outline), findsNothing);
     expect(find.byIcon(QuarkIcons.keyboard_outlined), findsNothing);
+    expect(find.byType(IconButton), findsNWidgets(2));
 
-    // Five hit targets on a 390px bar leaves the close button room to breathe.
-    expect(find.byType(IconButton), findsNWidgets(4)); // + the popup button
+    // relPath is null, so the row under the photo offers Info alone.
+    expect(find.byKey(const ValueKey('photo_viewer_action_info')), findsOne);
+    expect(
+      find.byKey(const ValueKey('photo_viewer_action_share')),
+      findsNothing,
+    );
   });
 
-  testWidgets('the phone more menu carries the collapsed actions', (
-    tester,
-  ) async {
+  testWidgets('the phone more menu carries rotate', (tester) async {
     await pumpViewer(tester, phoneSize);
 
     await tester.tap(find.byIcon(QuarkIcons.more_vert));
     await tester.pumpAndSettle();
 
-    expect(find.text('Favorite'), findsOneWidget);
     expect(find.text('Rotate 90° CW'), findsOneWidget);
-    // The sidebar starts open, so the menu offers to hide it.
-    expect(find.text('Hide info'), findsOneWidget);
+    // Favorite and info live in the row under the photo.
+    expect(find.text('Favorite'), findsNothing);
+    expect(find.text('Show info'), findsNothing);
     // relPath is null, so the server-side actions stay out.
     expect(find.text('Download'), findsNothing);
     expect(find.text('Delete photo'), findsNothing);
   });
 
-  testWidgets('the phone menu toggles the info sidebar', (tester) async {
-    await pumpViewer(tester, phoneSize);
+  group('at a narrow viewport (#4235)', () {
+    const narrowViewport = Size(360, 640);
 
-    await tester.tap(find.byIcon(QuarkIcons.more_vert));
-    await tester.pumpAndSettle();
-    expect(find.text('Hide info'), findsOneWidget);
+    testWidgets('the photo opens tall, with no sheet until Info', (
+      tester,
+    ) async {
+      await pumpViewer(tester, narrowViewport);
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Hide info'));
-    await tester.pumpAndSettle();
+      // The space the photo is fitted into; the test image never decodes.
+      expect(
+        tester.getSize(find.byKey(const ValueKey('image_viewer_photo'))).height,
+        greaterThan(280),
+      );
+      expect(find.byType(MetadataDrawer), findsNothing);
+      expect(find.byType(DraggableScrollableSheet), findsNothing);
 
-    await tester.tap(find.byIcon(QuarkIcons.more_vert));
-    await tester.pumpAndSettle();
-    expect(find.text('Show info'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('photo_viewer_action_info')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MetadataDrawer), findsOneWidget);
+      // No metadata, so the sheet says what the viewer knows.
+      expect(find.text('No metadata available'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(MetadataDrawer),
+          matching: find.text('first.jpg'),
+        ),
+        findsOneWidget,
+      );
+
+      // Info again, or a tap on the photo, closes it.
+      await tester.tap(find.byKey(const ValueKey('photo_viewer_action_info')));
+      await tester.pumpAndSettle();
+      expect(find.byType(MetadataDrawer), findsNothing);
+    });
+
+    testWidgets('i toggles the sheet', (tester) async {
+      await pumpViewer(tester, narrowViewport);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyI);
+      await tester.pumpAndSettle();
+      expect(find.byType(MetadataDrawer), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyI);
+      await tester.pumpAndSettle();
+      expect(find.byType(MetadataDrawer), findsNothing);
+    });
+
+    testWidgets('the sheet starts closed even when the sidebar was open', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        'photo_viewer_sidebar_open': true,
+      });
+      await pumpViewer(tester, narrowViewport);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MetadataDrawer), findsNothing);
+    });
   });
 
   testWidgets('a wide bar still shows every action inline', (tester) async {

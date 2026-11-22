@@ -25,7 +25,11 @@ void main() {
         .setMockMethodCallHandler(channel, null),
   );
 
-  Future<void> pumpContent(WidgetTester tester, PhotoExif exif) async {
+  Future<void> pumpContent(
+    WidgetTester tester,
+    PhotoExif? exif, {
+    int? fileSize,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -34,15 +38,19 @@ void main() {
               children: MetadataContent.sections(
                 context: context,
                 name: 'a.jpg',
-                metadata: PhotoMetadata(
-                  fileName: 'a.jpg',
-                  fileSize: 1024,
-                  mtime: DateTime(2022, 9, 22),
-                  width: 10,
-                  height: 10,
-                  exif: exif,
-                  albums: const [],
-                ),
+                fileSize: fileSize,
+                // A null exif stands for a photo with no metadata at all.
+                metadata: exif == null
+                    ? null
+                    : PhotoMetadata(
+                        fileName: 'a.jpg',
+                        fileSize: 1024,
+                        mtime: DateTime(2022, 9, 22),
+                        width: 10,
+                        height: 10,
+                        exif: exif,
+                        albums: const [],
+                      ),
                 loading: false,
                 onAlbumTap: (_) {},
               ),
@@ -75,5 +83,19 @@ void main() {
     await pumpContent(tester, const PhotoExif(make: 'Google'));
     expect(find.text('LOCATION'), findsNothing);
     expect(openInMaps, findsNothing);
+  });
+
+  // #4235: a photo without metadata opened Info on "No metadata available".
+  testWidgets('a photo without metadata still shows its file', (tester) async {
+    await pumpContent(tester, null, fileSize: 2048);
+    expect(find.text('No metadata available'), findsNothing);
+    expect(find.text('a.jpg'), findsOneWidget);
+    expect(find.text('2.0 KB'), findsOneWidget);
+  });
+
+  testWidgets('leaves out a size nobody knows', (tester) async {
+    await pumpContent(tester, null);
+    expect(find.text('a.jpg'), findsOneWidget);
+    expect(find.textContaining('KB'), findsNothing);
   });
 }
