@@ -97,6 +97,8 @@ func seedChat(t *testing.T, d *sql.DB) {
 		[]byte("nonce-2|edited"), at, at, []byte("nonce-2"),
 		at, at, []byte("nonce-3"),
 		[]byte("nonce-4|dm"), at, []byte("nonce-4"))
+	// Message 2 is a reply in message 1's side conversation (#4345).
+	chatExec(t, d, `UPDATE chat_messages SET root_id = 1 WHERE id = 2`)
 	chatExec(t, d, `INSERT INTO chat_reactions (message_id, user_id, key_version, ciphertext, created_at) VALUES (1, 2, 1, ?, ?), (1, 3, 1, ?, ?)`,
 		[]byte("react-bob"), at, []byte("react-carol"), at)
 	chatExec(t, d, `
@@ -236,6 +238,9 @@ func TestChatBackup_RoundTrip(t *testing.T) {
 			t.Errorf("%s after restore\n got %v\nwant %v", table, got[table], want[table])
 		}
 	}
+
+	// A branch comes back as a branch (#4345).
+	assertRows(t, database.Db, `SELECT id, root_id FROM chat_messages WHERE root_id IS NOT NULL`, "[2 1]")
 
 	sumAfter := fileChecksum(t, backupPath)
 	if sumAfter != sumBefore {

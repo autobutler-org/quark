@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -707,7 +708,58 @@ func messageFromRow(row db.ChatMessage) Message {
 	if row.DeletedAt.Valid {
 		message.DeletedAt = &row.DeletedAt.Time
 	}
+	message.RootID = row.RootID.Int64
 	return message
+}
+
+// checkRoot refuses a reply's root (#4345): ErrRootNotFound when it is missing
+// or in another channel, ErrNestedReply when it is itself a reply. A rootID
+// of 0 is a channel message and passes. A deleted root passes too.
+func checkRoot(ctx context.Context, queries db.Querier, channelID, rootID int64) error {
+	if rootID == 0 {
+		return nil
+	}
+	root, err := queries.GetChatMessage(ctx, rootID)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && root.ChannelID != channelID) {
+		return ErrRootNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if root.RootID.Valid {
+		return ErrNestedReply
+	}
+	return nil
+}
+
+// pageMessages reads one page of messages, oldest first: forward from after
+// through newer, or backward from before through older, from the newest when
+// before is 0. limit is capped at MaxMessagesPage; 0 means
+// DefaultMessagesPage.
+func pageMessages(forward bool, before, after, limit int64, older, newer func(id, limit int64) ([]db.ChatMessage, error)) ([]Message, error) {
+	if limit <= 0 {
+		limit = DefaultMessagesPage
+	}
+	limit = min(limit, MaxMessagesPage)
+	var rows []db.ChatMessage
+	var err error
+	if forward {
+		rows, err = newer(after, limit)
+	} else {
+		if before <= 0 {
+			before = math.MaxInt64
+		}
+		rows, err = older(before, limit)
+		slices.Reverse(rows)
+	}
+	if err != nil {
+		return nil, err
+	}
+	messages := make([]Message, 0, len(rows))
+	for _, row := range rows {
+		messages = append(messages, messageFromRow(row))
+	}
+	return messages, nil
 }
 
 // publishMessage tells a channel's readers about a message: the whole row
@@ -720,7 +772,7 @@ func publishMessage(ctx context.Context, queries db.Querier, bus *eventbus.Bus, 
 	if err != nil {
 		return err
 	}
-	data := eventbus.ChatMessageChanged{ChannelID: message.ChannelID, MessageID: message.ID, Audience: audience}
+	data := eventbus.ChatMessageChanged{ChannelID: message.ChannelID, MessageID: message.ID, RootID: message.RootID, Audience: audience}
 	if kind != eventbus.EventChatMessageDeleted {
 		data.Message = message
 	}

@@ -191,6 +191,10 @@ type ChatChannelChanged struct {
 type ChatMessageChanged struct {
 	ChannelID int64 `json:"channelId"`
 	MessageID int64 `json:"messageId"`
+	// RootID is the root of the side conversation the message is a reply in
+	// (#4345), absent on a channel message, so a client keeps a reply out of
+	// the channel's timeline even when the event carries no message.
+	RootID int64 `json:"rootId,omitempty"`
 	// Message is the stored row, a chatutil.Message, on chat_message_created
 	// and chat_message_edited.
 	// It is ciphertext and capped at 16 KiB, so it rides the event whole.

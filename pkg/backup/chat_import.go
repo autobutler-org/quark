@@ -166,11 +166,13 @@ var chatRestoreSteps = []restoreStep{
 		LEFT JOIN temp.restore_users AS u ON u.backup_id = e.actor_id`},
 	// client_message_id only answers a retry of a send still in flight
 	// (#3531), so it stays behind, and a file from before it restores too.
+	// root_id comes back as it is (#4345): message ids are unchanged, so a
+	// reply names the same root, and the one statement loads both.
 	{"chat_messages", `
 		INSERT INTO main.chat_messages (id, channel_id, author_id, key_version, ciphertext,
-			created_at, edited_at, deleted_at, nonce)
+			created_at, edited_at, deleted_at, nonce, root_id)
 		SELECT m.id, m.channel_id, u.live_id, m.key_version, m.ciphertext,
-			m.created_at, m.edited_at, m.deleted_at, m.nonce
+			m.created_at, m.edited_at, m.deleted_at, m.nonce, m.root_id
 		FROM chat_backup.chat_messages AS m
 		LEFT JOIN temp.restore_users AS u ON u.backup_id = m.author_id`},
 	{"chat_reactions", `

@@ -61,6 +61,7 @@ func bindPostMessage(r io.Reader, body *postMessageBody) error {
 		KeyVersion      int64           `json:"keyVersion"`
 		ClientMessageID string          `json:"clientMessageId"`
 		AttachmentIDs   []string        `json:"attachmentIds"`
+		RootID          int64           `json:"rootId"`
 		Poll            json.RawMessage `json:"poll"`
 	}
 	if err := dec.Decode(&raw); err != nil {
@@ -76,6 +77,7 @@ func bindPostMessage(r io.Reader, body *postMessageBody) error {
 	body.KeyVersion = raw.KeyVersion
 	body.ClientMessageID = raw.ClientMessageID
 	body.AttachmentIDs = raw.AttachmentIDs
+	body.RootID = raw.RootID
 	pollJSON := bytes.TrimSpace(raw.Poll)
 	if len(pollJSON) == 0 || bytes.Equal(pollJSON, []byte("null")) {
 		return nil
@@ -121,7 +123,8 @@ func chatError(err error) *serverutil.Response {
 		return serverutil.NotFound(err)
 	case errors.Is(err, chatutil.ErrEventNotFound), errors.Is(err, chatutil.ErrMessageNotFound),
 		errors.Is(err, chatutil.ErrReactionNotFound), errors.Is(err, chatutil.ErrGrantNotFound),
-		errors.Is(err, chatutil.ErrNotPoll), errors.Is(err, chatutil.ErrAttachmentNotFound):
+		errors.Is(err, chatutil.ErrNotPoll), errors.Is(err, chatutil.ErrAttachmentNotFound),
+		errors.Is(err, chatutil.ErrRootNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, chatutil.ErrForbidden), errors.Is(err, chatutil.ErrNotHeld),
 		errors.Is(err, chatutil.ErrNotSubset), errors.Is(err, chatutil.ErrCreatorRow),
@@ -142,7 +145,8 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, chatutil.ErrDuplicateMessage),
 		errors.Is(err, chatutil.ErrPollClosed), errors.Is(err, chatutil.ErrAlreadyAnswered),
 		errors.Is(err, chatutil.ErrAttachmentExists), errors.Is(err, chatutil.ErrPollNotEditable),
-		errors.Is(err, chatutil.ErrAliasTaken), errors.Is(err, chatutil.ErrChannelKeysSet):
+		errors.Is(err, chatutil.ErrAliasTaken), errors.Is(err, chatutil.ErrChannelKeysSet),
+		errors.Is(err, chatutil.ErrNestedReply):
 		return serverutil.Conflict(err)
 	case errors.Is(err, chatutil.ErrInvalidName), errors.Is(err, chatutil.ErrInvalidTopic),
 		errors.Is(err, chatutil.ErrDefaultChannel), errors.Is(err, chatutil.ErrDefaultEveryone), errors.Is(err, chatutil.ErrLastOwner),
@@ -154,7 +158,8 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, chatutil.ErrInvalidClientMessageID), errors.Is(err, chatutil.ErrInvalidPollAnswer),
 		errors.Is(err, chatutil.ErrMalformedPoll), errors.Is(err, chatutil.ErrPollClosesAt),
 		errors.Is(err, chatutil.ErrInvalidAttachment), errors.Is(err, chatutil.ErrTooManyAttachments),
-		errors.Is(err, chatutil.ErrInvalidAlias), errors.Is(err, chatutil.ErrNotAnonymous):
+		errors.Is(err, chatutil.ErrInvalidAlias), errors.Is(err, chatutil.ErrNotAnonymous),
+		errors.Is(err, chatutil.ErrPollReply):
 		return serverutil.BadRequest(err)
 	default:
 		log.Printf("[chat] %v", err)

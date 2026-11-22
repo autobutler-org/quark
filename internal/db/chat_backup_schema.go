@@ -3,7 +3,7 @@ package db
 // ChatBackupVersion is the format of the chat backup file, stored in its
 // user_version. It moves when ChatBackupSchemaDDL does, and a restore refuses
 // a version it does not know rather than guess at its columns.
-const ChatBackupVersion = 5
+const ChatBackupVersion = 6
 
 // ChatBackupSchemaDDL is the schema of the chat backup file pkg/backup writes
 // beside a snapshot (#2428). It is a transport format, not a database anyone
@@ -34,8 +34,11 @@ const ChatBackupVersion = 5
 // travel with it, and a restore that dropped the flag would show every member
 // by account. A pseudonym carries the public keys its account published for
 // the channel, which its grants and events there are checked against.
+// Version 6 gave chat_messages its root_id: a side conversation's reply
+// restores as a reply (#4345), so a file without the column cannot restore
+// its branches.
 const ChatBackupSchemaDDL = `
-PRAGMA user_version = 5;
+PRAGMA user_version = 6;
 
 CREATE TABLE users (
     id       INTEGER PRIMARY KEY,
@@ -139,7 +142,8 @@ CREATE TABLE chat_messages (
     edited_at         DATETIME,
     deleted_at        DATETIME,
     nonce             BLOB,
-    client_message_id TEXT
+    client_message_id TEXT,
+    root_id           INTEGER
 );
 
 CREATE TABLE chat_reactions (
