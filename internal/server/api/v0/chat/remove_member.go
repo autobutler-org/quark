@@ -11,7 +11,7 @@ import (
 
 // removeMember godoc
 // @Summary Remove a chat channel member
-// @Description Removes one account's or group's row from a channel and returns the channel's members as they now stand. Any member may remove their own account's row, which is leaving. Removing anyone else needs manage_members and a target whose effective set is a strict subset of the caller's, unless the caller holds manage_channel; only an admin may remove the channel's creator or skip those rules. everyone can't be removed from general. Publishes chat_channel_changed to everyone who was or now is a member.
+// @Description Removes one account's or group's row from a channel and returns the channel's members as they now stand, shown by the set the caller holds after the change. Any member may remove their own account's row, which is leaving. Removing anyone else needs manage_members and a target whose effective set is a strict subset of the caller's, unless the caller holds manage_channel; only an admin may remove the channel's creator or skip those rules. everyone can't be removed from general. Publishes chat_channel_changed to everyone who was or now is a member.
 // @Tags chat
 // @Accept json
 // @Produce json

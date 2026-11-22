@@ -75,6 +75,7 @@ package chatutil
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/binary"
@@ -319,6 +320,14 @@ type Channel struct {
 	// Forked marks a direct message started by adding people to an earlier
 	// one, whose messages stay there; false for anything else.
 	Forked bool `json:"forked,omitempty"`
+	// Anonymous marks a channel whose members see each other only by
+	// pseudonym (#2949). It is set when the channel is created and never
+	// changes; a direct message is never anonymous.
+	Anonymous bool `json:"anonymous"`
+	// SelfID is the caller's own pseudonym in an anonymous channel they are
+	// in, the id the app binds in place of its account id wherever a channel
+	// signs or encrypts one. Absent otherwise.
+	SelfID int64 `json:"selfId,omitempty"`
 }
 
 // Member is one row on a channel: an account or a group.
@@ -337,8 +346,19 @@ type Member struct {
 	// milliseconds, absent when it has none.
 	AvatarUpdatedAt int64 `json:"avatarUpdatedAt,omitempty"`
 	// Users are the active accounts in a group, everyone's being every active
-	// account. Absent for an account or an empty group.
+	// account. Absent for an account or an empty group, and in an anonymous
+	// channel for a caller who is neither an admin nor a holder of
+	// manage_members, who gets each account a group reaches as an account
+	// row instead.
 	Users []MemberUser `json:"users,omitempty"`
+	// PseudonymID and Alias are an account's pseudonym and the name it goes
+	// by in an anonymous channel (#2949), absent in any other. To a caller
+	// who is neither an admin nor a holder of manage_members, UserID and Name
+	// are those too, AvatarUpdatedAt is absent, and Permissions is the
+	// account's effective set: every active account the rows reach has one
+	// such row, whether or not it has a row of its own.
+	PseudonymID int64  `json:"pseudonymId,omitempty"`
+	Alias       string `json:"alias,omitempty"`
 }
 
 // MemberUser is an account inside a group row.
@@ -348,6 +368,10 @@ type MemberUser struct {
 	// AvatarUpdatedAt is the profile picture version in Unix milliseconds,
 	// absent when it has none.
 	AvatarUpdatedAt int64 `json:"avatarUpdatedAt,omitempty"`
+	// PseudonymID and Alias are as on Member: in an anonymous channel, a
+	// caller who isn't privileged gets them as ID and Username too.
+	PseudonymID int64  `json:"pseudonymId,omitempty"`
+	Alias       string `json:"alias,omitempty"`
 }
 
 // ResolvedUser is an active account a channel's rows reach, with its
@@ -436,6 +460,7 @@ func ListChannels(params ListChannelsParams) (ListChannelsResult, error) {
 			CreatedBy:   row.CreatedBy.Int64,
 			CreatedAt:   row.CreatedAt,
 			Forked:      row.Forked != 0,
+			Anonymous:   row.Anonymous != 0,
 		})
 	}
 	for i := range channels {
@@ -450,7 +475,7 @@ func ListChannels(params ListChannelsParams) (ListChannelsResult, error) {
 		return ListChannelsResult{}, err
 	}
 	if !params.All {
-		return ListChannelsResult{Channels: channels}, nil
+		return ListChannelsResult{Channels: channels}, viewChannels(params.Ctx, params.Database.Queries, params.Principal, channels)
 	}
 	all, err := params.Database.Queries.ListAllChatChannels(params.Ctx)
 	if err != nil {
@@ -470,9 +495,10 @@ func ListChannels(params ListChannelsParams) (ListChannelsResult, error) {
 			IsPrivate: row.IsPrivate != 0,
 			CreatedBy: row.CreatedBy.Int64,
 			CreatedAt: row.CreatedAt,
+			Anonymous: row.Anonymous != 0,
 		})
 	}
-	return ListChannelsResult{Channels: channels}, nil
+	return ListChannelsResult{Channels: channels}, viewChannels(params.Ctx, params.Database.Queries, params.Principal, channels)
 }
 
 // CreateChannelParams creates a channel owned by the caller.
@@ -484,6 +510,8 @@ type CreateChannelParams struct {
 	Principal accessutil.Principal
 	Name      string
 	Topic     string
+	// Anonymous makes the channel anonymous (#2949), for good.
+	Anonymous bool
 }
 
 // CreateChannelResult is the new channel.
@@ -493,7 +521,8 @@ type CreateChannelResult struct {
 
 // CreateChannel creates a private channel on the Quark's server and gives the
 // caller every permission on it. The name is trimmed and must be unique
-// ignoring case (ErrNameTaken).
+// ignoring case (ErrNameTaken). An anonymous channel stays anonymous: nothing
+// changes that later.
 func CreateChannel(params CreateChannelParams) (CreateChannelResult, error) {
 	name, topic, err := validate(params.Name, params.Topic)
 	if err != nil {
@@ -509,7 +538,11 @@ func CreateChannel(params CreateChannelParams) (CreateChannelResult, error) {
 	var row db.ChatChannel
 	err = db.InTx(params.Ctx, params.Database.Db, func(q db.Querier) error {
 		var err error
-		row, err = q.CreateChatChannel(params.Ctx, db.CreateChatChannelParams{Name: name, Topic: topic, CreatedBy: creator})
+		var anonymous int64
+		if params.Anonymous {
+			anonymous = 1
+		}
+		row, err = q.CreateChatChannel(params.Ctx, db.CreateChatChannelParams{Name: name, Topic: topic, CreatedBy: creator, Anonymous: anonymous})
 		if err != nil {
 			return err
 		}
@@ -524,7 +557,9 @@ func CreateChannel(params CreateChannelParams) (CreateChannelResult, error) {
 		return CreateChannelResult{}, err
 	}
 	publish(params.EventBus, row.ID, []int64{params.Principal.UserID})
-	return CreateChannelResult{Channel: channelFromRow(row, PermsAll, true)}, nil
+	channel := channelFromRow(row, PermsAll, true)
+	err = viewChannel(params.Ctx, params.Database.Queries, params.Principal, &channel)
+	return CreateChannelResult{Channel: channel}, err
 }
 
 // UpdateChannelParams renames a channel or changes its topic. A nil field is
@@ -586,7 +621,9 @@ func UpdateChannel(params UpdateChannelParams) (UpdateChannelResult, error) {
 		return UpdateChannelResult{}, err
 	}
 	publish(params.EventBus, row.ID, audience)
-	return UpdateChannelResult{Channel: channelFromRow(row, perms, private)}, nil
+	channel := channelFromRow(row, perms, private)
+	err = viewChannel(params.Ctx, queries, params.Principal, &channel)
+	return UpdateChannelResult{Channel: channel}, err
 }
 
 // DeleteChannelParams deletes a channel.
@@ -673,15 +710,29 @@ type ListMembersResult struct {
 
 // ListMembers lists a channel's rows, each group with the active accounts in
 // it, for anyone with a non-empty set on the channel, delegated managers
-// included, or an admin. Anyone else gets ErrChannelNotFound.
+// included, or an admin. Anyone else gets ErrChannelNotFound. In an anonymous
+// channel each account carries its pseudonym and alias, and a caller who is
+// neither an admin nor a holder of manage_members sees only those, with no
+// group's accounts: every account the rows reach is its own row.
 func ListMembers(params ListMembersParams) (ListMembersResult, error) {
 	if params.Database == nil {
 		return ListMembersResult{}, accessutil.ErrNoDatabase
 	}
-	if _, _, err := authorize(params.Ctx, params.Database.Queries, params.Principal, params.ChannelID, 0); err != nil {
+	queries := params.Database.Queries
+	channel, perms, err := authorize(params.Ctx, queries, params.Principal, params.ChannelID, 0)
+	if err != nil {
 		return ListMembersResult{}, err
 	}
-	return listMembers(params.Ctx, params.Database.Queries, params.ChannelID, params.DataDir)
+	p, err := pseudonymsOf(params.Ctx, queries, channel)
+	if err != nil {
+		return ListMembersResult{}, err
+	}
+	result, err := listMembers(params.Ctx, queries, params.ChannelID, params.DataDir)
+	if err != nil {
+		return ListMembersResult{}, err
+	}
+	p.members(&result, privileged(params.Principal, perms))
+	return result, p.done()
 }
 
 // SetMemberParams gives one account or group a set on a channel. Exactly one
@@ -729,6 +780,11 @@ func SetMember(params SetMemberParams) (ListMembersResult, error) {
 	if err != nil {
 		return ListMembersResult{}, err
 	}
+	p, err := pseudonymsOf(params.Ctx, queries, channel)
+	if err != nil {
+		return ListMembersResult{}, err
+	}
+	params.UserID = p.user(params.UserID)
 	if err := ensurePrincipal(params.Ctx, queries, params.UserID, params.GroupID); err != nil {
 		return ListMembersResult{}, err
 	}
@@ -776,12 +832,12 @@ func SetMember(params SetMemberParams) (ListMembersResult, error) {
 	if err != nil {
 		return ListMembersResult{}, err
 	}
-	payload, err := memberPayload(params.Ctx, queries, params.UserID, params.GroupID, params.Permissions)
+	payload, err := memberPayload(params.Ctx, queries, p, params.UserID, params.GroupID, params.Permissions)
 	if err != nil {
 		return ListMembersResult{}, err
 	}
 	return afterMembershipChange(params.Ctx, queries, params.EventBus, params.ChannelID, before, params.DataDir,
-		EventMemberSet, params.Principal.UserID, payload)
+		EventMemberSet, params.Principal, payload, p)
 }
 
 // RemoveMemberParams removes one account's or group's row from a channel.
@@ -815,6 +871,13 @@ func RemoveMember(params RemoveMemberParams) (ListMembersResult, error) {
 		return ListMembersResult{}, accessutil.ErrNoDatabase
 	}
 	queries := params.Database.Queries
+	// A pseudonym is mapped before anything is checked, and one nobody holds
+	// stays a negative id, so the answer is the one any stranger's id gets.
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return ListMembersResult{}, err
+	}
+	params.UserID = p.user(params.UserID)
 	leaving := params.UserID != 0 && params.UserID == params.Principal.UserID
 	required := PermManageMembers
 	if leaving {
@@ -853,7 +916,7 @@ func RemoveMember(params RemoveMemberParams) (ListMembersResult, error) {
 	if err != nil {
 		return ListMembersResult{}, err
 	}
-	payload, err := memberPayload(params.Ctx, queries, params.UserID, params.GroupID, 0)
+	payload, err := memberPayload(params.Ctx, queries, p, params.UserID, params.GroupID, 0)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ListMembersResult{}, ErrMemberNotFound
 	}
@@ -883,7 +946,7 @@ func RemoveMember(params RemoveMemberParams) (ListMembersResult, error) {
 		return ListMembersResult{}, err
 	}
 	return afterMembershipChange(params.Ctx, queries, params.EventBus, params.ChannelID, before, params.DataDir,
-		EventMemberRemoved, params.Principal.UserID, payload)
+		EventMemberRemoved, params.Principal, payload, p)
 }
 
 // Sizes a stored chat identity must have (#2416). The public keys are X25519
@@ -1170,9 +1233,13 @@ type ChannelEvent struct {
 	// Kind is member_set, member_removed or key_created.
 	Kind string `json:"kind"`
 	// ActorID is who made the change; absent once that account is deleted.
+	// In an anonymous channel it is the actor's pseudonym, which is also what
+	// the signature covers.
 	ActorID int64 `json:"actorId,omitempty"`
 	// Payload is the JSON the signature covers, byte for byte: for a member
 	// change {"userId"|"groupId", "name", "permissions"}, for a key {"version"}.
+	// In an anonymous channel an account's userId and name are its pseudonym
+	// and its alias at the time.
 	Payload string `json:"payload"`
 	// Signature and SignerSignKey are both absent until the actor signs.
 	Signature     []byte    `json:"signature,omitempty"`
@@ -1227,12 +1294,17 @@ func GetChannelKeys(params GetChannelKeysParams) (GetChannelKeysResult, error) {
 	for _, row := range rows {
 		grants = append(grants, grantFromRow(row))
 	}
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return GetChannelKeysResult{}, err
+	}
+	p.keys(state.versions, grants)
 	return GetChannelKeysResult{
 		CurrentVersion: state.current,
 		Versions:       state.versions,
 		Grants:         grants,
 		RotationNeeded: state.rotationNeeded(),
-	}, nil
+	}, p.done()
 }
 
 // ListPendingGrantsParams asks what grants the caller could fill.
@@ -1266,13 +1338,22 @@ func ListPendingGrants(params ListPendingGrantsParams) (ListPendingGrantsResult,
 	if err != nil {
 		return ListPendingGrantsResult{}, err
 	}
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return ListPendingGrantsResult{}, err
+	}
 	pending := []PendingGrant{}
-	for _, p := range state.pending() {
-		if state.holders[p.Version][params.Principal.UserID] {
-			pending = append(pending, p)
+	for _, grant := range state.pending() {
+		if state.holders[grant.Version][params.Principal.UserID] {
+			grant.UserID = p.id(grant.UserID)
+			pending = append(pending, grant)
 		}
 	}
-	return ListPendingGrantsResult{Pending: pending, CurrentVersion: state.current, RotationNeeded: state.rotationNeeded()}, nil
+	// By version then pseudonym, so the order says nothing of account ids.
+	slices.SortFunc(pending, func(a, b PendingGrant) int {
+		return cmp.Or(cmp.Compare(a.Version, b.Version), cmp.Compare(a.UserID, b.UserID))
+	})
+	return ListPendingGrantsResult{Pending: pending, CurrentVersion: state.current, RotationNeeded: state.rotationNeeded()}, p.done()
 }
 
 // UploadGrantsParams stores grants the caller sealed and signed.
@@ -1295,7 +1376,9 @@ type UploadGrantsResult struct {
 // UploadGrants stores grants from a member who holds each version, to members
 // with published chat keys. The first grant for a member and version wins and
 // later ones are ignored. The caller's published signing key is recorded with
-// each grant. Publishes chat_key_granted to the recipients.
+// each grant. Publishes chat_key_granted to the recipients. In an anonymous
+// channel a grant names, and its signature covers, the recipient's pseudonym;
+// an account id there is ErrInvalidGrant.
 func UploadGrants(params UploadGrantsParams) (UploadGrantsResult, error) {
 	if len(params.Grants) == 0 || len(params.Grants) > MaxGrantsPerUpload {
 		return UploadGrantsResult{}, ErrInvalidGrant
@@ -1315,29 +1398,36 @@ func UploadGrants(params UploadGrantsParams) (UploadGrantsResult, error) {
 	if err != nil {
 		return UploadGrantsResult{}, err
 	}
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return UploadGrantsResult{}, err
+	}
+	recipients := make([]int64, 0, len(params.Grants))
 	for _, g := range params.Grants {
+		recipient := p.user(g.UserID)
 		if !state.holders[g.Version][params.Principal.UserID] {
 			return UploadGrantsResult{}, ErrNotHolder
 		}
-		if !validGrant(g.SealedKey, g.Signature) || state.boxKeys[g.UserID] == nil {
+		if !validGrant(g.SealedKey, g.Signature) || state.boxKeys[recipient] == nil || (p != nil && g.UserID > 0) {
 			return UploadGrantsResult{}, ErrInvalidGrant
 		}
 		if !grantSigned(signKey, params.ChannelID, g) {
 			return UploadGrantsResult{}, ErrGrantSignature
 		}
+		recipients = append(recipients, recipient)
 	}
 	stored := make([]KeyGrant, 0, len(params.Grants))
-	recipients := make([]int64, 0, len(params.Grants))
-	for _, g := range params.Grants {
+	for i, g := range params.Grants {
+		g.UserID = recipients[i]
 		row, err := insertGrant(params.Ctx, queries, params.ChannelID, g, params.Principal.UserID, signKey)
 		if err != nil {
 			return UploadGrantsResult{}, err
 		}
 		stored = append(stored, grantFromRow(row))
-		recipients = append(recipients, g.UserID)
 	}
+	p.keys(nil, stored)
 	publishTo(params.EventBus, eventbus.EventChatKeyGranted, params.ChannelID, recipients)
-	return UploadGrantsResult{Grants: stored}, nil
+	return UploadGrantsResult{Grants: stored}, p.done()
 }
 
 // RejectGrantParams drops the caller's own grant of one key version.
@@ -1438,10 +1528,20 @@ func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, er
 	if err != nil {
 		return CreateKeyVersionResult{}, err
 	}
-	own := GrantUpload{Version: params.Version, UserID: params.Principal.UserID, SealedKey: params.SealedKey, Signature: params.Signature}
+	// In an anonymous channel the caller's own grant is signed over their
+	// pseudonym, made here, before the transaction, if it is their first.
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return CreateKeyVersionResult{}, err
+	}
+	own := GrantUpload{Version: params.Version, UserID: p.id(params.Principal.UserID), SealedKey: params.SealedKey, Signature: params.Signature}
+	if err := p.done(); err != nil {
+		return CreateKeyVersionResult{}, err
+	}
 	if !grantSigned(signKey, params.ChannelID, own) {
 		return CreateKeyVersionResult{}, ErrGrantSignature
 	}
+	own.UserID = params.Principal.UserID
 	// A non-member already failed requireMember. A member who isn't an
 	// admin cannot use Regenerate; the ordinary route leaves it false.
 	if params.Regenerate && !params.Principal.IsAdmin {
@@ -1496,7 +1596,10 @@ func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, er
 	if _, err := notifyChannel(params.Ctx, queries, params.EventBus, params.ChannelID); err != nil {
 		return CreateKeyVersionResult{}, err
 	}
-	return result, nil
+	result.Version.CreatedBy = p.id(result.Version.CreatedBy)
+	result.Grant.UserID, result.Grant.GrantedBy = p.id(result.Grant.UserID), p.id(result.Grant.GrantedBy)
+	result.Event.ActorID = p.id(result.Event.ActorID)
+	return result, p.done()
 }
 
 // ListEventsParams pages a channel's system events.
@@ -1536,11 +1639,17 @@ func ListEvents(params ListEventsParams) (ListEventsResult, error) {
 	if err != nil {
 		return ListEventsResult{}, err
 	}
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return ListEventsResult{}, err
+	}
 	events := make([]ChannelEvent, 0, len(rows))
 	for _, row := range rows {
-		events = append(events, eventFromRow(row))
+		event := eventFromRow(row)
+		event.ActorID = p.id(event.ActorID)
+		events = append(events, event)
 	}
-	return ListEventsResult{Events: events}, nil
+	return ListEventsResult{Events: events}, p.done()
 }
 
 // SignEventParams attaches the actor's signature to an event.
@@ -1604,7 +1713,13 @@ func SignEvent(params SignEventParams) (SignEventResult, error) {
 		log.Printf("chat: event %d signed but not announced: %v", params.EventID, err)
 	}
 	announce(params.Ctx, queries, params.EventBus, params.ChannelID, members)
-	return SignEventResult{Event: eventFromRow(row)}, nil
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return SignEventResult{}, err
+	}
+	event := eventFromRow(row)
+	event.ActorID = p.id(event.ActorID)
+	return SignEventResult{Event: event}, p.done()
 }
 
 // NotifyKeyNeededParams asks the Quark to look for grants that need filling.
@@ -1922,7 +2037,10 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 		if err := repeatedAttachments(params.Ctx, queries, params, result.Message); err != nil {
 			return PostMessageResult{}, err
 		}
-		result.Message, err = withPoll(params.Ctx, queries, params.DataDir, params.Principal.UserID, result.Message)
+		if result.Message, err = withPoll(params.Ctx, queries, params.DataDir, params.Principal.UserID, result.Message); err != nil {
+			return PostMessageResult{}, err
+		}
+		result.Message, err = viewMessage(params.Ctx, queries, result.Message)
 		return result, err
 	}
 	if err != nil {
@@ -1930,6 +2048,9 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 	}
 	message, err := withPoll(params.Ctx, queries, params.DataDir, params.Principal.UserID, messageFromRow(row))
 	if err != nil {
+		return PostMessageResult{}, err
+	}
+	if message, err = viewMessage(params.Ctx, queries, message); err != nil {
 		return PostMessageResult{}, err
 	}
 	if err := publishMessage(params.Ctx, queries, params.EventBus, eventbus.EventChatMessageCreated, message); err != nil {
@@ -2005,7 +2126,14 @@ func ListMessages(params ListMessagesParams) (ListMessagesResult, error) {
 	if err := attachPolls(params.Ctx, queries, params.DataDir, params.ChannelID, params.Principal.UserID, messages); err != nil {
 		return ListMessagesResult{}, err
 	}
-	return ListMessagesResult{Messages: messages}, nil
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return ListMessagesResult{}, err
+	}
+	for i := range messages {
+		p.message(&messages[i])
+	}
+	return ListMessagesResult{Messages: messages}, p.done()
 }
 
 // MaxMarkReadRequestBytes caps a mark-read request's body.
@@ -2113,9 +2241,17 @@ func Typing(params TypingParams) (TypingResult, error) {
 	if err != nil {
 		return TypingResult{}, err
 	}
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return TypingResult{}, err
+	}
+	typist := p.id(params.Principal.UserID)
+	if err := p.done(); err != nil {
+		return TypingResult{}, err
+	}
 	params.EventBus.Publish(eventbus.Event{Kind: eventbus.EventChatTyping, Data: eventbus.ChatTyping{
 		ChannelID: params.ChannelID,
-		UserID:    params.Principal.UserID,
+		UserID:    typist,
 		Audience:  slices.DeleteFunc(audience, func(id int64) bool { return id == params.Principal.UserID }),
 	}})
 	return TypingResult{}, nil
@@ -2198,7 +2334,10 @@ func DeleteMessage(params DeleteMessageParams) (DeleteMessageResult, error) {
 			log.Printf("chat: remove attachments for message %d: %v", params.MessageID, err)
 		}
 	}
-	message := messageFromRow(row)
+	message, err := viewMessage(params.Ctx, queries, messageFromRow(row))
+	if err != nil {
+		return DeleteMessageResult{}, err
+	}
 	if err := publishMessage(params.Ctx, queries, params.EventBus, eventbus.EventChatMessageDeleted, message); err != nil {
 		log.Printf("chat: message %d deleted but not announced: %v", row.ID, err)
 	}
@@ -2285,7 +2424,10 @@ func EditMessage(params EditMessageParams) (EditMessageResult, error) {
 	case err != nil:
 		return EditMessageResult{}, err
 	}
-	message := messageFromRow(row)
+	message, err := viewMessage(params.Ctx, queries, messageFromRow(row))
+	if err != nil {
+		return EditMessageResult{}, err
+	}
 	if err := publishMessage(params.Ctx, queries, params.EventBus, eventbus.EventChatMessageEdited, message); err != nil {
 		log.Printf("chat: message %d edited but not announced: %v", row.ID, err)
 	}
@@ -2410,7 +2552,10 @@ func AddReaction(params AddReactionParams) (AddReactionResult, error) {
 	if err != nil {
 		return AddReactionResult{}, err
 	}
-	reaction := reactionFromRow(row)
+	reaction, err := viewReaction(params.Ctx, queries, message.ChannelID, reactionFromRow(row))
+	if err != nil {
+		return AddReactionResult{}, err
+	}
 	if err := publishReaction(params.Ctx, queries, params.EventBus, message.ChannelID, reaction.MessageID, reaction.ID, &reaction); err != nil {
 		log.Printf("chat: reaction %d stored but not announced: %v", row.ID, err)
 	}
@@ -2468,7 +2613,8 @@ func RemoveReaction(params RemoveReactionParams) (RemoveReactionResult, error) {
 	if err := publishReaction(params.Ctx, queries, params.EventBus, message.ChannelID, row.MessageID, row.ID, nil); err != nil {
 		log.Printf("chat: reaction %d removed but not announced: %v", row.ID, err)
 	}
-	return RemoveReactionResult{Reaction: reactionFromRow(row)}, nil
+	reaction, err := viewReaction(params.Ctx, queries, message.ChannelID, reactionFromRow(row))
+	return RemoveReactionResult{Reaction: reaction}, err
 }
 
 // Poll limits (#3893). An answer's plaintext is padded to
@@ -2669,10 +2815,16 @@ func AnswerPoll(params AnswerPollParams) (AnswerPollResult, error) {
 	case err != nil:
 		return AnswerPollResult{}, err
 	}
-	if err := publishPollAnswer(params.Ctx, queries, params.EventBus, message, poll, row, userID, now); err != nil {
+	p, err := loadPseudonyms(params.Ctx, queries, message.ChannelID)
+	if err != nil {
+		return AnswerPollResult{}, err
+	}
+	if err := publishPollAnswer(params.Ctx, queries, params.EventBus, p, message, poll, row, userID, now); err != nil {
 		log.Printf("chat: poll answer %d stored but not announced: %v", row.ID, err)
 	}
-	return AnswerPollResult{Answer: answerFor(poll, row, userID, key)}, nil
+	answer := answerFor(poll, row, userID, key)
+	answer.UserID = p.id(answer.UserID)
+	return AnswerPollResult{Answer: answer}, p.done()
 }
 
 // ListPollAnswersParams reads a poll's answers.
@@ -2721,9 +2873,15 @@ func ListPollAnswers(params ListPollAnswersParams) (ListPollAnswersResult, error
 			return ListPollAnswersResult{}, err
 		}
 	}
-	return ListPollAnswersResult{
-		Answers: visibleAnswers(poll, message.AuthorID.Int64, params.Principal.UserID, rows, time.Now(), key),
-	}, nil
+	p, err := loadPseudonyms(params.Ctx, queries, message.ChannelID)
+	if err != nil {
+		return ListPollAnswersResult{}, err
+	}
+	answers := visibleAnswers(poll, message.AuthorID.Int64, params.Principal.UserID, rows, time.Now(), key)
+	for i := range answers {
+		answers[i].UserID = p.id(answers[i].UserID)
+	}
+	return ListPollAnswersResult{Answers: answers}, p.done()
 }
 
 // ClosePollParams closes a poll by hand.

@@ -3544,7 +3544,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a private channel and gives the caller every permission on it. Any signed-in account may. The name is trimmed, has 1 to 64 characters and no line breaks or tabs, and is unique ignoring case; the topic has at most 512 characters. Publishes chat_channel_changed.",
+                "description": "Creates a private channel and gives the caller every permission on it. Any signed-in account may. With anonymous set the channel is anonymous for good (#2949): its members see each other only by per-channel pseudonym and alias, and the result carries the caller's own pseudonym as selfId. The name is trimmed, has 1 to 64 characters and no line breaks or tabs, and is unique ignoring case; the topic has at most 512 characters. Publishes chat_channel_changed.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4469,7 +4469,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns a channel's rows, groups first and then accounts, each by name. A group carries the active accounts in it, everyone's being every active account. Each account carries avatarUpdatedAt (Unix milliseconds) when it has a profile picture, the v parameter for /users/{id}/avatar. Each row carries its own permissions. Anyone with a non-empty set on the channel, a delegated manager included, or an admin may list them.",
+                "description": "Returns a channel's rows, groups first and then accounts, each by name. A group carries the active accounts in it, everyone's being every active account. Each account carries avatarUpdatedAt (Unix milliseconds) when it has a profile picture, the v parameter for /users/{id}/avatar. Each row carries its own permissions. Anyone with a non-empty set on the channel, a delegated manager included, or an admin may list them. In an anonymous channel (#2949) every account carries pseudonymId and alias; to a caller who is neither an admin nor a holder of manage_members those replace the account's id and username, no account carries avatarUpdatedAt, no group carries users, and every active account the rows reach is an account row with its effective set, ordered by alias.",
                 "produces": [
                     "application/json"
                 ],
@@ -4519,7 +4519,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Gives one active account or existing group a set of permissions on a channel, replacing the set its row had, and returns the channel's members as they now stand. Needs manage_members, or an admin. A caller may grant only permissions they hold, and may take permissions away only from a principal whose effective set is a strict subset of theirs unless they hold manage_channel; only an admin may demote the channel's creator. everyone keeps read_messages on general. Publishes chat_channel_changed to everyone who was or now is a member.",
+                "description": "Gives one active account or existing group a set of permissions on a channel, replacing the set its row had, and returns the channel's members as they now stand, shown by the set the caller holds after the change. Needs manage_members, or an admin. A caller may grant only permissions they hold, and may take permissions away only from a principal whose effective set is a strict subset of theirs unless they hold manage_channel; only an admin may demote the channel's creator. everyone keeps read_messages on general. Publishes chat_channel_changed to everyone who was or now is a member.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4599,7 +4599,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Removes one account's or group's row from a channel and returns the channel's members as they now stand. Any member may remove their own account's row, which is leaving. Removing anyone else needs manage_members and a target whose effective set is a strict subset of the caller's, unless the caller holds manage_channel; only an admin may remove the channel's creator or skip those rules. everyone can't be removed from general. Publishes chat_channel_changed to everyone who was or now is a member.",
+                "description": "Removes one account's or group's row from a channel and returns the channel's members as they now stand, shown by the set the caller holds after the change. Any member may remove their own account's row, which is leaving. Removing anyone else needs manage_members and a target whose effective set is a strict subset of the caller's, unless the caller holds manage_channel; only an admin may remove the channel's creator or skip those rules. everyone can't be removed from general. Publishes chat_channel_changed to everyone who was or now is a member.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4655,6 +4655,88 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "no such channel, the caller's set on it is empty and they aren't an admin, or the account or group has no row",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/channels/{id}/members/alias": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Renames the pseudonym one account goes by in an anonymous channel (#2949) and returns the channel's members as they now stand, as the member list shows them to the caller: real accounts included for a holder of manage_members or an admin. The account is named by its id or its pseudonym, and must be one the channel's rows reach or one that already has a pseudonym there. Any member may rename themselves; renaming anyone else needs manage_members, or an admin. The alias is trimmed, has 1 to 32 characters and no line breaks or tabs, and is unique in the channel and no account's username, in any case. Publishes chat_channel_changed to the channel's members.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Set a member's alias in an anonymous chat channel",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The account, by id or pseudonym, and its new alias",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.setMemberAliasBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ListMembersResult"
+                        }
+                    },
+                    "400": {
+                        "description": "an invalid alias, a channel that isn't anonymous, or a direct message",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller names someone other than themselves and lacks manage_members",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, the caller's set on it is empty and they aren't an admin, or the account isn't in the channel",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "someone else in the channel goes by that alias, or it is an account's username, in any case",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -13809,6 +13891,10 @@ const docTemplate = `{
         "chatutil.Channel": {
             "type": "object",
             "properties": {
+                "anonymous": {
+                    "description": "Anonymous marks a channel whose members see each other only by\npseudonym (#2949). It is set when the channel is created and never\nchanges; a direct message is never anonymous.",
+                    "type": "boolean"
+                },
                 "createdAt": {
                     "type": "string"
                 },
@@ -13871,6 +13957,10 @@ const docTemplate = `{
                         ]
                     }
                 },
+                "selfId": {
+                    "description": "SelfID is the caller's own pseudonym in an anonymous channel they are\nin, the id the app binds in place of its account id wherever a channel\nsigns or encrypts one. Absent otherwise.",
+                    "type": "integer"
+                },
                 "serverId": {
                     "type": "integer"
                 },
@@ -13887,7 +13977,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "actorId": {
-                    "description": "ActorID is who made the change; absent once that account is deleted.",
+                    "description": "ActorID is who made the change; absent once that account is deleted.\nIn an anonymous channel it is the actor's pseudonym, which is also what\nthe signature covers.",
                     "type": "integer"
                 },
                 "channelId": {
@@ -13904,7 +13994,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payload": {
-                    "description": "Payload is the JSON the signature covers, byte for byte: for a member\nchange {\"userId\"|\"groupId\", \"name\", \"permissions\"}, for a key {\"version\"}.",
+                    "description": "Payload is the JSON the signature covers, byte for byte: for a member\nchange {\"userId\"|\"groupId\", \"name\", \"permissions\"}, for a key {\"version\"}.\nIn an anonymous channel an account's userId and name are its pseudonym\nand its alias at the time.",
                     "type": "string"
                 },
                 "signature": {
@@ -14188,6 +14278,9 @@ const docTemplate = `{
         "chatutil.Member": {
             "type": "object",
             "properties": {
+                "alias": {
+                    "type": "string"
+                },
                 "avatarUpdatedAt": {
                     "description": "AvatarUpdatedAt is an account's profile picture version in Unix\nmilliseconds, absent when it has none.",
                     "type": "integer"
@@ -14222,12 +14315,16 @@ const docTemplate = `{
                         ]
                     }
                 },
+                "pseudonymId": {
+                    "description": "PseudonymID and Alias are an account's pseudonym and the name it goes\nby in an anonymous channel (#2949), absent in any other. To a caller\nwho is neither an admin nor a holder of manage_members, UserID and Name\nare those too, AvatarUpdatedAt is absent, and Permissions is the\naccount's effective set: every active account the rows reach has one\nsuch row, whether or not it has a row of its own.",
+                    "type": "integer"
+                },
                 "userId": {
                     "description": "UserID is set for an account.",
                     "type": "integer"
                 },
                 "users": {
-                    "description": "Users are the active accounts in a group, everyone's being every active\naccount. Absent for an account or an empty group.",
+                    "description": "Users are the active accounts in a group, everyone's being every active\naccount. Absent for an account or an empty group, and in an anonymous\nchannel for a caller who is neither an admin nor a holder of\nmanage_members, who gets each account a group reaches as an account\nrow instead.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/chatutil.MemberUser"
@@ -14238,11 +14335,18 @@ const docTemplate = `{
         "chatutil.MemberUser": {
             "type": "object",
             "properties": {
+                "alias": {
+                    "type": "string"
+                },
                 "avatarUpdatedAt": {
                     "description": "AvatarUpdatedAt is the profile picture version in Unix milliseconds,\nabsent when it has none.",
                     "type": "integer"
                 },
                 "id": {
+                    "type": "integer"
+                },
+                "pseudonymId": {
+                    "description": "PseudonymID and Alias are as on Member: in an anonymous channel, a\ncaller who isn't privileged gets them as ID and Username too.",
                     "type": "integer"
                 },
                 "username": {
@@ -16135,6 +16239,9 @@ const docTemplate = `{
         "v0_chat.createChannelBody": {
             "type": "object",
             "properties": {
+                "anonymous": {
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -16259,6 +16366,17 @@ const docTemplate = `{
             "properties": {
                 "groupId": {
                     "type": "integer"
+                },
+                "userId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v0_chat.setMemberAliasBody": {
+            "type": "object",
+            "properties": {
+                "alias": {
+                    "type": "string"
                 },
                 "userId": {
                     "type": "integer"

@@ -22,6 +22,7 @@ func (r *router) Routes() []*serverutil.Route {
 		deleteChannelRoute,
 		listMembersRoute,
 		setMemberRoute,
+		setMemberAliasRoute,
 		removeMemberRoute,
 		getMyKeysRoute,
 		putMyKeysRoute,
@@ -50,10 +51,12 @@ func (r *router) Routes() []*serverutil.Route {
 	}
 }
 
-// createChannelBody names a new channel.
+// createChannelBody names a new channel. Anonymous makes it an anonymous
+// channel (#2949), which it stays.
 type createChannelBody struct {
-	Name  string `json:"name"`
-	Topic string `json:"topic"`
+	Name      string `json:"name"`
+	Topic     string `json:"topic"`
+	Anonymous bool   `json:"anonymous,omitempty"`
 }
 
 // openDirectMessageBody names the other accounts in a direct message.
@@ -78,6 +81,13 @@ type setMemberBody struct {
 	GroupID int64 `json:"groupId,omitempty"`
 	// Permissions is the whole set the row carries, by name.
 	Permissions []string `json:"permissions" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions,attach_files,mention_everyone"`
+}
+
+// setMemberAliasBody renames one account's pseudonym in an anonymous
+// channel. userId is the account's id or its pseudonym.
+type setMemberAliasBody struct {
+	UserID int64  `json:"userId"`
+	Alias  string `json:"alias"`
 }
 
 // removeMemberBody removes one account's or group's row from a channel.

@@ -49,6 +49,10 @@ func (a *postgresQueries) CancelJob(ctx context.Context, id int64) (Job, error) 
 	return Job(row), err
 }
 
+func (a *postgresQueries) ChatAliasIsUsername(ctx context.Context, alias string) (int64, error) {
+	return a.q.ChatAliasIsUsername(ctx, alias)
+}
+
 func (a *postgresQueries) ClaimJob(ctx context.Context, arg ClaimJobParams) (Job, error) {
 	row, err := a.q.ClaimJob(ctx, pgdb.ClaimJobParams(arg))
 	return Job(row), err
@@ -138,6 +142,10 @@ func (a *postgresQueries) CreateChatChannelEvent(ctx context.Context, arg Create
 func (a *postgresQueries) CreateChatChannelKey(ctx context.Context, arg CreateChatChannelKeyParams) (ChatChannelKey, error) {
 	row, err := a.q.CreateChatChannelKey(ctx, pgdb.CreateChatChannelKeyParams(arg))
 	return ChatChannelKey(row), err
+}
+
+func (a *postgresQueries) CreateChatChannelPseudonym(ctx context.Context, arg CreateChatChannelPseudonymParams) (int64, error) {
+	return a.q.CreateChatChannelPseudonym(ctx, pgdb.CreateChatChannelPseudonymParams(arg))
 }
 
 func (a *postgresQueries) CreateChatDirectMessage(ctx context.Context, arg CreateChatDirectMessageParams) (ChatChannel, error) {
@@ -863,6 +871,18 @@ func (a *postgresQueries) ListChatChannelPermsForUser(ctx context.Context, arg L
 	return a.q.ListChatChannelPermsForUser(ctx, pgdb.ListChatChannelPermsForUserParams(arg))
 }
 
+func (a *postgresQueries) ListChatChannelPseudonyms(ctx context.Context, channelID int64) ([]ChatChannelPseudonym, error) {
+	rows, err := a.q.ListChatChannelPseudonyms(ctx, channelID)
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ChatChannelPseudonym, len(rows))
+	for i, row := range rows {
+		items[i] = ChatChannelPseudonym(row)
+	}
+	return items, nil
+}
+
 func (a *postgresQueries) ListChatChannelsForUser(ctx context.Context, userID sql.NullInt64) ([]ListChatChannelsForUserRow, error) {
 	rows, err := a.q.ListChatChannelsForUser(ctx, userID)
 	if err != nil || rows == nil {
@@ -1483,6 +1503,10 @@ func (a *postgresQueries) RotateInstallID(ctx context.Context, installID string)
 
 func (a *postgresQueries) SetChatChannelGroupMember(ctx context.Context, arg SetChatChannelGroupMemberParams) error {
 	return a.q.SetChatChannelGroupMember(ctx, pgdb.SetChatChannelGroupMemberParams(arg))
+}
+
+func (a *postgresQueries) SetChatChannelPseudonymAlias(ctx context.Context, arg SetChatChannelPseudonymAliasParams) (int64, error) {
+	return a.q.SetChatChannelPseudonymAlias(ctx, pgdb.SetChatChannelPseudonymAliasParams(arg))
 }
 
 func (a *postgresQueries) SetChatChannelUserMember(ctx context.Context, arg SetChatChannelUserMemberParams) error {

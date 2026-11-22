@@ -183,6 +183,7 @@ func channelFromRow(row db.ChatChannel, perms Perms, private bool) Channel {
 		CreatedBy:   row.CreatedBy.Int64,
 		CreatedAt:   row.CreatedAt,
 		Forked:      row.Forked != 0,
+		Anonymous:   row.Anonymous != 0,
 	}
 }
 
@@ -221,13 +222,16 @@ func memberIDs(ctx context.Context, queries db.Querier, channelID int64) ([]int6
 // or rotate, and returns the members as they now stand. The ask goes out here
 // rather than waiting on WatchKeyNeeds (#2624), which stays as the fallback
 // for changes that don't come through SetMember or RemoveMember.
+//
+// p shows the result to principal as ListMembers would, by the set principal
+// holds after the change.
 func afterMembershipChange(ctx context.Context, queries db.Querier, bus *eventbus.Bus, channelID int64, before []int64, dataDir string,
-	kind string, actor int64, payload memberEventPayload) (ListMembersResult, error) {
+	kind string, principal accessutil.Principal, payload memberEventPayload, p *pseudonyms) (ListMembersResult, error) {
 	after, err := memberIDs(ctx, queries, channelID)
 	if err != nil {
 		return ListMembersResult{}, err
 	}
-	event, err := recordEvent(ctx, queries, channelID, kind, actor, payload)
+	event, err := recordEvent(ctx, queries, channelID, kind, principal.UserID, payload)
 	if err != nil {
 		return ListMembersResult{}, err
 	}
@@ -238,8 +242,16 @@ func afterMembershipChange(ctx context.Context, queries db.Querier, bus *eventbu
 		log.Printf("[chatutil] key needs for channel %d: %v", channelID, err)
 	}
 	result, err := listMembers(ctx, queries, channelID, dataDir)
+	if err != nil {
+		return ListMembersResult{}, err
+	}
 	result.Event = &event
-	return result, err
+	perms, err := resolvePerms(ctx, queries, channelID, principal.UserID)
+	if err != nil {
+		return ListMembersResult{}, err
+	}
+	p.members(&result, privileged(principal, perms))
+	return result, p.done()
 }
 
 // dmKey is a direct message's dm_key: its accounts' ids, sorted, joined by
@@ -593,8 +605,10 @@ func recordEvent(ctx context.Context, queries db.Querier, channelID int64, kind 
 	return eventFromRow(row), nil
 }
 
-// memberPayload describes the account or group a member event is about.
-func memberPayload(ctx context.Context, queries db.Querier, userID, groupID int64, perms Perms) (memberEventPayload, error) {
+// memberPayload describes the account or group a member event is about. In
+// an anonymous channel an account is its pseudonym and alias, since every
+// member reads the payload and it is signed as it is.
+func memberPayload(ctx context.Context, queries db.Querier, p *pseudonyms, userID, groupID int64, perms Perms) (memberEventPayload, error) {
 	payload := memberEventPayload{UserID: userID, GroupID: groupID, Permissions: perms}
 	if userID != 0 {
 		user, err := queries.GetUserByID(ctx, userID)
@@ -602,7 +616,10 @@ func memberPayload(ctx context.Context, queries db.Querier, userID, groupID int6
 			return payload, err
 		}
 		payload.Name = user.Username
-		return payload, nil
+		if p != nil {
+			payload.UserID, payload.Name = p.id(userID), p.alias(userID)
+		}
+		return payload, p.done()
 	}
 	group, err := queries.GetGroup(ctx, groupID)
 	if err != nil {
@@ -1015,8 +1032,9 @@ func attachPolls(ctx context.Context, queries db.Querier, dataDir string, channe
 // clients refetch. While a results-after-close anonymous poll is open, the
 // person who answered hears that note at once and the author hears one note
 // on a later clock boundary, so the arrival second is not the note's time.
-// userID is who answered, which an anonymous poll's row does not hold.
-func publishPollAnswer(ctx context.Context, queries db.Querier, bus *eventbus.Bus, message db.ChatMessage, poll db.ChatPoll, row db.ChatPollAnswer, userID int64, now time.Time) error {
+// userID is who answered, which an anonymous poll's row does not hold. p is
+// the channel's pseudonyms, which the answer is shown under.
+func publishPollAnswer(ctx context.Context, queries db.Querier, bus *eventbus.Bus, p *pseudonyms, message db.ChatMessage, poll db.ChatPoll, row db.ChatPollAnswer, userID int64, now time.Time) error {
 	if bus == nil {
 		return nil
 	}
@@ -1031,10 +1049,12 @@ func publishPollAnswer(ctx context.Context, queries db.Querier, bus *eventbus.Bu
 	if poll.ResultsAfterClose && !pollClosed(poll, now) {
 		audience = slices.DeleteFunc(audience, func(id int64) bool { return id != message.AuthorID.Int64 && id != userID })
 	}
+	answer := answerFor(poll, row, 0, nil)
+	answer.UserID = p.id(answer.UserID)
 	bus.Publish(eventbus.Event{Kind: eventbus.EventChatPollAnswerChanged, Data: eventbus.ChatPollAnswerChanged{
-		ChannelID: message.ChannelID, MessageID: message.ID, Answer: answerFor(poll, row, 0, nil), Audience: audience,
+		ChannelID: message.ChannelID, MessageID: message.ID, Answer: answer, Audience: audience,
 	}})
-	return nil
+	return p.done()
 }
 
 // publishAnonymousPollNote sends chat_poll_answers_changed for one anonymous

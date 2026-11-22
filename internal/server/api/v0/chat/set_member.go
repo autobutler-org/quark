@@ -11,7 +11,7 @@ import (
 
 // setMember godoc
 // @Summary Add a chat channel member or change its permissions
-// @Description Gives one active account or existing group a set of permissions on a channel, replacing the set its row had, and returns the channel's members as they now stand. Needs manage_members, or an admin. A caller may grant only permissions they hold, and may take permissions away only from a principal whose effective set is a strict subset of theirs unless they hold manage_channel; only an admin may demote the channel's creator. everyone keeps read_messages on general. Publishes chat_channel_changed to everyone who was or now is a member.
+// @Description Gives one active account or existing group a set of permissions on a channel, replacing the set its row had, and returns the channel's members as they now stand, shown by the set the caller holds after the change. Needs manage_members, or an admin. A caller may grant only permissions they hold, and may take permissions away only from a principal whose effective set is a strict subset of theirs unless they hold manage_channel; only an admin may demote the channel's creator. everyone keeps read_messages on general. Publishes chat_channel_changed to everyone who was or now is a member.
 // @Tags chat
 // @Accept json
 // @Produce json
