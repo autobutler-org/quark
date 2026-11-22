@@ -146,6 +146,11 @@ Map<String, List<PendingUpload>> groupByRelativeDir(
 /// [DropItemFile] rather than a subtype — both extend [DropItem]. Filtering on
 /// `is! DropItemFile` therefore discards the whole folder even though its
 /// contents are sitting in `.children` (#1614).
+///
+/// A file listed twice at the same place uploads once. A drag from the
+/// browser's downloads menu can reach the app with the one file listed twice
+/// (#4381), and two files of one name in one directory would land on the same
+/// server path anyway.
 DropFlattenResult flattenDroppedItems(
   List<DropItem> items, {
   int maxDepth = kMaxUploadDepth,
@@ -156,6 +161,7 @@ DropFlattenResult flattenDroppedItems(
   Future<Uint8List?> Function(DropItemFile file)? renderThumbnail,
 }) {
   final uploads = <PendingUpload>[];
+  final seen = <String>{};
   var truncated = false;
   var skippedTooDeep = 0;
 
@@ -184,7 +190,7 @@ DropFlattenResult flattenDroppedItems(
       }
 
       final name = item.name.trim();
-      if (name.isEmpty) {
+      if (name.isEmpty || !seen.add('$relativeDir/$name')) {
         continue;
       }
       uploads.add(

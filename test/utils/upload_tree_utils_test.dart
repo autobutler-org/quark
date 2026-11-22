@@ -113,6 +113,22 @@ void main() {
       expect(result.skippedTooDeep, 0);
     });
 
+    test('a drop that lists the same file twice uploads it once', () {
+      // The #4381 repro: a drag from the browser's downloads menu reached the
+      // app with the one file listed twice, so it uploaded twice and a name
+      // clash raised two conflict dialogs.
+      final result = flatten([
+        file('report.pdf'),
+        file('report.pdf'),
+        dir('photos', [file('a.jpg'), file('a.jpg')]),
+      ]);
+
+      expect(result.uploads.map((u) => '${u.relativeDir}|${u.name}'), [
+        '|report.pdf',
+        'photos|a.jpg',
+      ]);
+    });
+
     test('still handles loose files at the drop root', () {
       final result = flatten([file('notes.txt')]);
 
