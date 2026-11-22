@@ -13,6 +13,7 @@ import '../chat_attachment_tile.dart';
 import '../chat_mentions.dart';
 import '../quark_poll_card.dart';
 import 'chat_emoji_picker.dart';
+import 'chat_message_row/chat_branch_chip.dart';
 import 'chat_message_row/chat_message_body.dart';
 import 'chat_message_row/chat_message_context_menu.dart';
 import 'chat_message_row/chat_message_quote.dart';
@@ -37,9 +38,12 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// one.
 ///
 /// A text message's actions are "Copy text" with [onCopy], "Reply" with
-/// [onReply], "Add reaction" with [onReact], "Edit" with [onEdit], and
-/// "Delete" with [onDelete]. A null callback leaves its action out, and with
-/// all of them null there are none. An edited message says "(edited)" under
+/// [onReply], "Start side conversation" with [onStartBranch] ("Open side
+/// conversation" once it has one), "Add reaction" with [onReact], "Edit"
+/// with [onEdit], and "Delete" with [onDelete]. A null callback leaves its
+/// action out, and with all of them null there are none. A message with a
+/// side conversation ([ChatMessageItem.branch]) draws a `ChatBranchChip`
+/// under its body, whose tap fires [onOpenBranch]. An edited message says "(edited)" under
 /// its body. A reply draws the message it quotes above its body as a
 /// `ChatMessageQuote`, and a tap on that fires [onOpenQuote]. [highlighted]
 /// tints the row the way an open menu does, for a message just gone to. They come in one of
@@ -80,8 +84,10 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// null when no menu is open), `message_mention_<id>` on the highlight of a message that
 /// mentions the reader, `message_body_<id>` on a text message's body,
 /// `message_menu_<id>` on the menu button, `message_copy_<id>`,
-/// `message_reply_<id>`, `message_menu_react_<id>`, `message_edit_<id>` and
-/// `message_delete_<id>` on the menu's entries, those of `ChatMessageQuote`, `message_edited_<id>` on the "(edited)" marker
+/// `message_reply_<id>`, `message_start_branch_<id>`,
+/// `message_menu_react_<id>`, `message_edit_<id>` and
+/// `message_delete_<id>` on the menu's entries, those of `ChatMessageQuote`
+/// and `ChatBranchChip`, `message_edited_<id>` on the "(edited)" marker
 /// (the touch menu has no `message_menu_react_<id>`: its bar replaces it),
 /// `message_menu_react_<id>_<emoji>` on each emoji "Add reaction" or the
 /// touch menu's bar offers, `message_menu_react_<id>_more` on their "More
@@ -99,6 +105,8 @@ class ChatMessageRow extends StatefulWidget {
     this.onCopy,
     this.onReply,
     this.onOpenQuote,
+    this.onStartBranch,
+    this.onOpenBranch,
     this.highlighted = false,
     this.onEdit,
     this.onDelete,
@@ -138,6 +146,15 @@ class ChatMessageRow extends StatefulWidget {
 
   /// Goes to the message this one quotes. Null leaves the quote inert.
   final VoidCallback? onOpenQuote;
+
+  /// Opens the side conversation branched from the message, starting it
+  /// when there is none (#3561). Null leaves "Start side conversation" out
+  /// of the menu.
+  final VoidCallback? onStartBranch;
+
+  /// Opens the side conversation branched from the message from its chip.
+  /// Null leaves the chip out.
+  final VoidCallback? onOpenBranch;
 
   /// Whether the row stands on the tint an open menu gives it, as a message
   /// just gone to from a quote does.
@@ -219,6 +236,7 @@ class ChatMessageRow extends StatefulWidget {
   }) {
     final onCopy = this.onCopy;
     final onReply = this.onReply;
+    final onStartBranch = this.onStartBranch;
     final onEdit = this.onEdit;
     final onDelete = this.onDelete;
     final onReact = this.onReact;
@@ -238,6 +256,15 @@ class ChatMessageRow extends StatefulWidget {
           label: 'Reply',
           icon: QuarkIcons.reply,
           onSelected: onReply,
+        ),
+      if (onStartBranch != null)
+        QuarkMenuEntry(
+          key: ValueKey('message_start_branch_${message.id}'),
+          label: message.branch == null
+              ? 'Start side conversation'
+              : 'Open side conversation',
+          icon: QuarkIcons.side_conversation,
+          onSelected: onStartBranch,
         ),
       if (onReact != null && reactionMenuAt != null)
         QuarkMenuEntry(
@@ -377,6 +404,9 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
     final avatarSize = widget.avatarSize;
     final onCopy = widget.onCopy;
     final onReply = widget.onReply;
+    final onStartBranch = widget.onStartBranch;
+    final onOpenBranch = widget.onOpenBranch;
+    final branch = message.branch;
     final onEdit = widget.onEdit;
     final onDelete = widget.onDelete;
     final onOpenLink = widget.onOpenLink;
@@ -395,6 +425,7 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
         reacts &&
         (onCopy != null ||
             onReply != null ||
+            onStartBranch != null ||
             onReact != null ||
             onEdit != null ||
             onDelete != null);
@@ -606,6 +637,12 @@ class _ChatMessageRowState extends State<ChatMessageRow> {
                                         messageId: message.id,
                                         reactions: message.reactions,
                                         onToggle: onReact,
+                                      ),
+                                    if (branch != null && onOpenBranch != null)
+                                      ChatBranchChip(
+                                        messageId: message.id,
+                                        branch: branch,
+                                        onOpen: onOpenBranch,
                                       ),
                                     if (message.isUnverified)
                                       Row(

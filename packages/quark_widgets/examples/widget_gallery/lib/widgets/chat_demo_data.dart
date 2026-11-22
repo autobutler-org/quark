@@ -61,7 +61,8 @@ const ChatPollItem galleryPoll = ChatPollItem(
 
 /// The fake messages the chat entries share, newest first: two days, a poll,
 /// a run from one author, a system line, an unverified one, a message waiting
-/// for its key, a deleted one, and one with reactions.
+/// for its key, a deleted one, one with reactions, and one with a side
+/// conversation.
 final List<ChatMessageItem> galleryChatMessages = [
   ChatMessageItem(
     id: 'm10',
@@ -123,6 +124,10 @@ final List<ChatMessageItem> galleryChatMessages = [
     body:
         'Morning @everyone! Is anyone bringing the projector? The manual is at '
         'https://example.com/projector/manual (page 4), or www.example.org.',
+    branch: ChatBranchItem(
+      replyCount: 3,
+      lastReplyAt: DateTime(2026, 9, 24, 9, 45),
+    ),
   ),
   ChatMessageItem(
     id: 'm5',

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark_widgets/src/chat/quark_message_list/chat_message_row.dart';
+import 'package:quark_widgets/src/chat/quark_message_list/chat_message_row/chat_branch_chip.dart';
 import 'package:quark_widgets/src/chat/quark_message_list/chat_message_row/chat_message_body.dart';
 import 'package:quark_widgets/src/chat/quark_message_list/chat_message_row/chat_message_context_menu.dart';
 import 'package:quark_widgets/src/chat/quark_message_list/chat_message_row/chat_reaction_picker.dart';
@@ -2257,5 +2258,144 @@ void main() {
     await tester.pump();
 
     expect(focus.hasFocus, isFalse);
+  });
+
+  group('side conversations (#4347)', () {
+    Finder key(String value) => find.byKey(ValueKey(value));
+
+    final branched = [
+      ChatMessageItem(
+        id: 'b1',
+        authorId: 'ada',
+        authorName: 'Ada',
+        sentAt: day2,
+        body: 'The sink is leaking',
+        branch: ChatBranchItem(
+          replyCount: 3,
+          lastReplyAt: DateTime.now().subtract(const Duration(hours: 2)),
+        ),
+      ),
+      ...messages,
+    ];
+
+    testBothViewports('a branched message draws its chip under it', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkMessageList(messages: branched, onOpenBranch: (_) {}),
+        size: size,
+      );
+
+      expect(key('message_branch_b1'), findsOneWidget);
+      expect(find.text('3 replies, last 2h ago'), findsOneWidget);
+      expect(
+        tester.getTopLeft(key('message_branch_b1')).dy,
+        greaterThan(tester.getBottomLeft(key('message_body_b1')).dy - 1),
+      );
+      // Only the branched message has one.
+      expect(key('message_branch_m4'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a tap on the chip opens the side conversation', (
+      tester,
+    ) async {
+      final opened = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(messages: branched, onOpenBranch: opened.add),
+      );
+
+      await tester.tap(key('message_branch_b1'));
+      expect(opened, ['b1']);
+    });
+
+    testWidgets('the chip reads one reply, minutes, days and just now', (
+      tester,
+    ) async {
+      final now = DateTime(2026, 11, 22, 12);
+      String label(int count, Duration ago) => ChatBranchChip.labelFor(
+        ChatBranchItem(replyCount: count, lastReplyAt: now.subtract(ago)),
+        now,
+      );
+      expect(label(1, const Duration(seconds: 5)), '1 reply, last just now');
+      expect(label(2, const Duration(minutes: 7)), '2 replies, last 7m ago');
+      expect(label(9, const Duration(days: 3)), '9 replies, last 3d ago');
+    });
+
+    testWidgets('Start side conversation needs send_messages and calls back', (
+      tester,
+    ) async {
+      final opened = <String>[];
+      Future<bool> offersStart(
+        Set<ChatPermission> permissions,
+        String id,
+      ) async {
+        await pumpAt(
+          tester,
+          QuarkMessageList(
+            messages: branched,
+            permissions: permissions,
+            onCopy: (_) {},
+            onOpenBranch: opened.add,
+          ),
+        );
+        await tester.longPress(key('message_body_$id'));
+        await tester.pumpAndSettle();
+        final offered = key('message_start_branch_$id').evaluate().isNotEmpty;
+        if (offered) {
+          await tester.tap(key('message_start_branch_$id'));
+        } else {
+          await tester.tapAt(const Offset(1, 1));
+        }
+        await tester.pumpAndSettle();
+        return offered;
+      }
+
+      const reads = {ChatPermission.readMessages};
+      const sends = {ChatPermission.readMessages, ChatPermission.sendMessages};
+      expect(await offersStart(reads, 'm4'), isFalse);
+      expect(await offersStart(sends, 'm4'), isTrue);
+      expect(find.text('Start side conversation'), findsNothing);
+      expect(opened, ['m4']);
+
+      // A message that has one offers to open it instead.
+      await tester.longPress(key('message_body_b1'));
+      await tester.pumpAndSettle();
+      expect(find.text('Open side conversation'), findsOneWidget);
+      await tester.tapAt(const Offset(1, 1));
+      await tester.pumpAndSettle();
+
+      // A reader still opens one from its chip.
+      await offersStart(reads, 'm4');
+      await tester.tap(key('message_branch_b1'));
+      expect(opened, ['m4', 'b1']);
+    });
+
+    testBothViewports('a side conversation draws no chip and no entry', (
+      tester,
+      size,
+    ) async {
+      final opened = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: branched,
+          isBranch: true,
+          onCopy: (_) {},
+          onOpenBranch: opened.add,
+        ),
+        size: size,
+      );
+
+      expect(key('message_branch_b1'), findsNothing);
+      await tester.longPress(key('message_body_m4'));
+      await tester.pumpAndSettle();
+      expect(find.text('Copy text'), findsOneWidget);
+      expect(key('message_start_branch_m4'), findsNothing);
+      expect(opened, isEmpty);
+    });
   });
 }
