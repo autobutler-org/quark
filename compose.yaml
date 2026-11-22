@@ -14,7 +14,7 @@ services:
     # the pin, and the only place the tag is written. Set POSTGRES_IMAGE (environment, .env
     # or the make command line) to run another one. pg_trgm ships in this image; the migration
     # that adds filename search enables it, so there is no init script to keep in step.
-    image: ${POSTGRES_IMAGE:-postgres:18}
+    image: ${POSTGRES_IMAGE:-postgres:19}
     environment:
       POSTGRES_USER: quark
       POSTGRES_PASSWORD: quark

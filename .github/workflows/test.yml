@@ -127,7 +127,7 @@ jobs:
       # The image major, user, password, database and port compose.yaml gives a developer,
       # so the URL the Makefile builds reaches this one too. Keep the two in step.
       postgres:
-        image: postgres:18
+        image: postgres:19
         env:
           POSTGRES_USER: quark
           POSTGRES_PASSWORD: quark
@@ -178,7 +178,7 @@ jobs:
     services:
       # The same database test-postgres gets; keep the two in step with compose.yaml.
       postgres:
-        image: postgres:18
+        image: postgres:19
         env:
           POSTGRES_USER: quark
           POSTGRES_PASSWORD: quark
