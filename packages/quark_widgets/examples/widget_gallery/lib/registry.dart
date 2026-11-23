@@ -2790,6 +2790,8 @@ final List<GalleryEntry> registry = [
       topicMaxLength: 512,
       onPrivacyChanged: (isPrivate) =>
           log('QuarkChannelDialog.onPrivacyChanged($isPrivate)'),
+      onAnonymousChanged: (anonymous) =>
+          log('QuarkChannelDialog.onAnonymousChanged($anonymous)'),
       onSubmit: (name, topic) =>
           log('QuarkChannelDialog.onSubmit($name, $topic)'),
       onCancel: () => log('QuarkChannelDialog.onCancel'),
@@ -3209,6 +3211,31 @@ final List<GalleryEntry> registry = [
                 log('QuarkMemberList.onToggleExpanded($id)'),
             onAddMembers: () => log('QuarkMemberList.onAddMembers'),
             onRemove: (id) => log('QuarkMemberList.onRemove($id)'),
+          ),
+        ),
+        // An anonymous channel as a member manager sees it: aliases, with
+        // the account behind each and a button to rename it.
+        SizedBox(
+          width: 280,
+          height: 360,
+          child: QuarkMemberList(
+            members: const [
+              ChatMemberItem(
+                id: '7',
+                name: 'Anonymous 4821',
+                accountName: 'ada',
+                permissions: {ChatPermission.manageMembers},
+              ),
+              ChatMemberItem(
+                id: '8',
+                name: 'Fox',
+                accountName: 'bob',
+                permissions: {ChatPermission.readMessages},
+              ),
+            ],
+            permissions: ChatPermissionPreset.moderator.permissions,
+            onRemove: (id) => log('QuarkMemberList.onRemove($id)'),
+            onEditAlias: (id) => log('QuarkMemberList.onEditAlias($id)'),
           ),
         ),
       ],

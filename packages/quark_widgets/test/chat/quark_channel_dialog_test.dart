@@ -174,4 +174,39 @@ void main() {
       expect(key('channel_dialog_public'), findsNothing);
     });
   });
+
+  // #2949: a new channel can be made anonymous, and an edit can't change it.
+  group('anonymous', () {
+    testBothViewports('a switch says what it means and reports a flip', (
+      tester,
+      size,
+    ) async {
+      final changes = <bool>[];
+      await pumpAt(
+        tester,
+        QuarkChannelDialog(
+          title: 'New channel',
+          submitLabel: 'Create',
+          onAnonymousChanged: changes.add,
+          onSubmit: (_, _) {},
+          onCancel: () {},
+        ),
+        size: size,
+      );
+
+      expect(find.textContaining('only by an alias'), findsOneWidget);
+      await tester.ensureVisible(key('channel_dialog_anonymous'));
+      await tester.tap(key('channel_dialog_anonymous'));
+      expect(changes, [true]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an edit without the callback offers no switch', (
+      tester,
+    ) async {
+      await pumpDialog(tester, initialName: 'design');
+
+      expect(key('channel_dialog_anonymous'), findsNothing);
+    });
+  });
 }

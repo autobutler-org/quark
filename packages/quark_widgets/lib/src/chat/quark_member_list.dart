@@ -25,11 +25,18 @@ import 'quark_member_list/chat_member_row.dart';
 /// [onMessage] puts a Message button on every account but [selfId], in a
 /// group or not, whatever the caller may manage (#2423).
 ///
+/// In an anonymous channel (#2949) each account's name is its alias, and a
+/// viewer allowed to see the account behind it gets the username beside it
+/// as [ChatMemberItem.accountName]. [onEditAlias] puts a button on every
+/// account, in a group or not, for a caller holding
+/// [ChatPermission.manageMembers], and on [selfId]'s own row for anyone.
+///
 /// Key prefixes: `member_row_<id>` on each top-level row, where tapping a
 /// group's row expands or collapses it, `member_row_<groupId>_<id>` on an
 /// account listed under an expanded group, `member_list_add` on the add
-/// button, `member_remove_<id>` on each row's remove button, and
-/// `member_message_<id>` on an account's Message button.
+/// button, `member_remove_<id>` on each row's remove button,
+/// `member_message_<id>` on an account's Message button, and
+/// `member_alias_<id>` on an account's alias button.
 ///
 /// ```dart
 /// QuarkMemberList(
@@ -54,6 +61,7 @@ class QuarkMemberList extends StatelessWidget {
     this.onAddMembers,
     this.onRemove,
     this.onMessage,
+    this.onEditAlias,
     this.selfId,
     this.avatarBuilder,
     this.isLoading = false,
@@ -92,8 +100,13 @@ class QuarkMemberList extends StatelessWidget {
   /// out.
   final ValueChanged<String>? onMessage;
 
-  /// The signed-in account's id, whose row gets no Message button. Null
-  /// when unknown.
+  /// Called with an account's id to rename its alias in an anonymous
+  /// channel. Null leaves the buttons out; a caller without
+  /// [ChatPermission.manageMembers] gets one only on [selfId]'s row.
+  final ValueChanged<String>? onEditAlias;
+
+  /// The signed-in account's id, whose row gets no Message button and
+  /// always an alias button. Null when unknown.
   final String? selfId;
 
   /// Builds the avatar for an account's id, [avatarSize] across. Null draws
@@ -118,6 +131,13 @@ class QuarkMemberList extends StatelessWidget {
     final onAddMembers = manages ? this.onAddMembers : null;
     final onRemove = manages ? this.onRemove : null;
     final onMessage = this.onMessage;
+    final onEditAlias = this.onEditAlias;
+    VoidCallback? renaming(ChatMemberItem member) =>
+        onEditAlias == null ||
+            member.isGroup ||
+            !(manages || member.id == selfId)
+        ? null
+        : () => onEditAlias(member.id);
     VoidCallback? messaging(ChatMemberItem member) =>
         onMessage == null || member.isGroup || member.id == selfId
         ? null
@@ -177,6 +197,7 @@ class QuarkMemberList extends StatelessWidget {
                   : null,
               onRemove: onRemove == null ? null : () => onRemove(member.id),
               onMessage: messaging(member),
+              onEditAlias: renaming(member),
             ),
             if (member.isGroup && expandedIds.contains(member.id))
               for (final inner in member.members)
@@ -187,6 +208,7 @@ class QuarkMemberList extends StatelessWidget {
                   avatarSize: avatarSize,
                   indent: tokens.spacingLg,
                   onMessage: messaging(inner),
+                  onEditAlias: renaming(inner),
                 ),
           ],
       ],

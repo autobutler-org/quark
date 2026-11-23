@@ -20,6 +20,8 @@ class ChatChannel {
     this.members = const [],
     this.forked = false,
     this.createdAt,
+    this.anonymous = false,
+    this.selfId,
   });
 
   /// [kind] of a named channel.
@@ -75,6 +77,17 @@ class ChatChannel {
   /// When the channel was made; null from a Quark that sends none.
   final DateTime? createdAt;
 
+  /// Whether its members see each other only by per-channel pseudonym and
+  /// alias (#2949). Set when the channel is made and never changed; a direct
+  /// message never is.
+  final bool anonymous;
+
+  /// The caller's own pseudonym in an anonymous channel it is in: the id it
+  /// binds and signs wherever it would bind its account id elsewhere, and
+  /// the one its messages, reactions and answers carry. Null in any other
+  /// channel.
+  final int? selfId;
+
   /// Whether this is a direct message.
   bool get isDirect => kind == directKind;
 
@@ -112,6 +125,8 @@ class ChatChannel {
     kind: json['kind'] as String? ?? channelKind,
     forked: json['forked'] as bool? ?? false,
     createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+    anonymous: json['anonymous'] as bool? ?? false,
+    selfId: (json['selfId'] as num?)?.toInt(),
     members: [
       for (final m in json['members'] as List? ?? const [])
         ChatMemberUser.fromJson(m as Map<String, dynamic>),
@@ -155,7 +170,10 @@ Set<ChatPermission> chatPermissionsFromJson(Object? names) => {
 };
 
 /// One row of a channel's members: an account, or a group with its accounts,
-/// as `GET /api/v0/chat/channels/:id/members` lists it.
+/// as `GET /api/v0/chat/channels/:id/members` lists it. In an anonymous
+/// channel (#2949) a caller without `manage_members` who isn't an admin gets
+/// groups without [users], then one account row per person any row reaches,
+/// carrying that account's effective permissions.
 class ChatMember {
   /// Builds a member explicitly; tests use it.
   const ChatMember({
@@ -166,16 +184,55 @@ class ChatMember {
     this.builtin = false,
     this.avatarUpdatedAt,
     this.users = const [],
+    this.pseudonymId,
+    this.alias,
   });
 
-  /// The account's id, null for a group.
+  /// The account's id, null for a group. In an anonymous channel (#2949),
+  /// a caller who is neither an admin nor a holder of `manage_members` gets
+  /// [pseudonymId] here instead.
   final int? userId;
 
   /// The group's id, null for an account.
   final int? groupId;
 
-  /// The username or group name.
+  /// The username or group name; the [alias] to a caller who only sees
+  /// pseudonyms.
   final String name;
+
+  /// The account's pseudonym in an anonymous channel (#2949): the id its
+  /// messages, reactions and events carry there. Null for a group and in any
+  /// other channel.
+  final int? pseudonymId;
+
+  /// The name the account goes by in an anonymous channel, null elsewhere.
+  final String? alias;
+
+  /// Whether this row is account [id], by account id or pseudonym. A
+  /// pseudonym is negative, so the two never collide.
+  bool isAccount(int? id) => id != null && (userId == id || pseudonymId == id);
+
+  /// The name this row is shown and mentioned by: its [alias] in an
+  /// anonymous channel, [name] elsewhere.
+  String get shownName => alias ?? name;
+
+  /// The username behind [alias], for a caller who sees the real account in
+  /// an anonymous channel; null for anyone else and elsewhere.
+  String? get accountName =>
+      pseudonymId != null && userId != pseudonymId ? name : null;
+
+  /// Every account this row reaches, alone or as a group's.
+  List<ChatMemberUser> get accounts => userId != null
+      ? [
+          ChatMemberUser(
+            id: userId!,
+            username: name,
+            avatarUpdatedAt: avatarUpdatedAt,
+            pseudonymId: pseudonymId,
+            alias: alias,
+          ),
+        ]
+      : users;
 
   /// Whether this is the Quark's own `everyone` group.
   final bool builtin;
@@ -186,7 +243,8 @@ class ChatMember {
   /// The account's profile picture version, null without one.
   final int? avatarUpdatedAt;
 
-  /// A group's accounts; empty for an account.
+  /// A group's accounts; empty for an account, and for every group to a
+  /// caller who only sees pseudonyms, whose account rows list them instead.
   final List<ChatMemberUser> users;
 
   /// Reads one member row.
@@ -201,43 +259,56 @@ class ChatMember {
       for (final u in json['users'] as List? ?? const [])
         ChatMemberUser.fromJson(u as Map<String, dynamic>),
     ],
+    pseudonymId: (json['pseudonymId'] as num?)?.toInt(),
+    alias: json['alias'] as String?,
   );
 }
 
-/// What a channel's member rows say about its accounts.
+/// What a channel's member rows say about its accounts. In an anonymous
+/// channel (#2949) accounts are named by alias and carry their pseudonym,
+/// which is what messages and events there name. A caller who only sees
+/// pseudonyms gets every account as a row of its own and no
+/// [ChatMember.users], so each person counts once, by their effective
+/// permissions.
 extension ChatMemberNames on List<ChatMember> {
   /// The names an `@mention` in the channel resolves to (#2623): every
   /// account that reads it, alone or through a group, in alphabetical order.
   /// A mention is only the text `@name` inside the encrypted message, so
-  /// this list is all that decides what counts as one.
+  /// this list is all that decides what counts as one. Aliases in an
+  /// anonymous channel.
   List<String> get mentionNames => {
     for (final m in this)
       if (m.permissions.contains(ChatPermission.readMessages))
-        ...m.userId != null ? [m.name] : m.users.map((u) => u.username),
+        for (final u in m.accounts) u.shownName,
   }.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
   /// The accounts holding [permission] on the channel, through their own
-  /// row or a group's, such as the authors whose `@everyone` counts (#4293).
+  /// row or a group's, such as the authors whose `@everyone` counts (#4293),
+  /// by the id messages carry: the pseudonym in an anonymous channel.
   Set<int> userIdsHolding(ChatPermission permission) => {
     for (final m in this)
       if (m.permissions.contains(permission))
-        ...m.userId != null ? [m.userId!] : m.users.map((u) => u.id),
+        for (final u in m.accounts) u.pseudonymId ?? u.id,
   };
 
-  /// Account [userId]'s name as it is in [mentionNames], or null when it is
-  /// not among the members.
-  String? nameOfUser(int? userId) {
+  /// The account [userId] names, by account id or pseudonym, or null when
+  /// it is not among the members.
+  ChatMemberUser? accountOf(int? userId) {
     for (final m in this) {
-      if (m.userId != null) {
-        if (m.userId == userId) return m.name;
-        continue;
-      }
-      for (final u in m.users) {
-        if (u.id == userId) return u.username;
+      for (final u in m.accounts) {
+        if (u.isAccount(userId)) return u;
       }
     }
     return null;
   }
+
+  /// Account [userId]'s name as it is in [mentionNames], or null when it is
+  /// not among the members.
+  String? nameOfUser(int? userId) => accountOf(userId)?.shownName;
+
+  /// The id a channel event names account [userId] by: its pseudonym in an
+  /// anonymous channel, the id itself elsewhere or when it isn't listed.
+  int boundIdOf(int userId) => accountOf(userId)?.pseudonymId ?? userId;
 }
 
 /// An account listed under a group in [ChatMember.users].
@@ -247,21 +318,42 @@ class ChatMemberUser {
     required this.id,
     required this.username,
     this.avatarUpdatedAt,
+    this.pseudonymId,
+    this.alias,
   });
 
-  /// The account's id.
+  /// The account's id; its [pseudonymId] to a caller who only sees
+  /// pseudonyms in an anonymous channel (#2949).
   final int id;
 
-  /// The account's username.
+  /// The account's username; its [alias] to that caller.
   final String username;
 
   /// The account's profile picture version, null without one.
   final int? avatarUpdatedAt;
+
+  /// As [ChatMember.pseudonymId].
+  final int? pseudonymId;
+
+  /// As [ChatMember.alias].
+  final String? alias;
+
+  /// As [ChatMember.isAccount].
+  bool isAccount(int? id) => id != null && (this.id == id || pseudonymId == id);
+
+  /// As [ChatMember.shownName].
+  String get shownName => alias ?? username;
+
+  /// As [ChatMember.accountName].
+  String? get accountName =>
+      pseudonymId != null && id != pseudonymId ? username : null;
 
   /// Reads one.
   factory ChatMemberUser.fromJson(Map<String, dynamic> json) => ChatMemberUser(
     id: (json['id'] as num).toInt(),
     username: json['username'] as String? ?? '',
     avatarUpdatedAt: (json['avatarUpdatedAt'] as num?)?.toInt(),
+    pseudonymId: (json['pseudonymId'] as num?)?.toInt(),
+    alias: json['alias'] as String?,
   );
 }

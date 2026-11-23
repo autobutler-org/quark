@@ -211,6 +211,41 @@ void main() {
     expect(calls.skip(1), ['remove 2 user=8 group=null', 'sign 5 user=8 none']);
   });
 
+  // #2949: an anonymous channel's event names the account's pseudonym, so
+  // the change is checked against that, not the account id it was made by.
+  test('removing in an anonymous channel signs by pseudonym', () async {
+    final c = controller(
+      ChatChannel(
+        id: 2,
+        name: 'design',
+        permissions: owner,
+        anonymous: true,
+        selfId: -70,
+      ),
+      members: [
+        adaOwner,
+        const ChatMember(
+          userId: 8,
+          name: 'bob',
+          pseudonymId: -80,
+          alias: 'Fox',
+          permissions: member,
+        ),
+      ],
+      event: memberEvent(ChatChannelEvent.memberRemoved, {
+        'userId': -80,
+        'name': 'Fox',
+      }),
+    );
+    await c.load();
+
+    expect(await c.revoke(bob), isNull);
+    expect(calls.skip(1), [
+      'remove 2 user=8 group=null',
+      'sign 5 user=-80 none',
+    ]);
+  });
+
   test('an event is only signed when it says what was asked', () {
     final removed = memberEvent(ChatChannelEvent.memberRemoved, {
       'userId': 8,

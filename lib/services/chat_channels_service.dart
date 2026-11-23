@@ -36,13 +36,22 @@ class ChatChannelsService with AuthenticatedService {
   static Future<List<ChatChannel>> listAllChannels() => _list(all: true);
 
   /// Creates channel [name] with [topic], owned by the signed-in account.
+  /// [anonymous] makes it an anonymous channel for good (#2949).
   ///
   /// api: POST /api/v0/chat/channels
-  static Future<ChatChannel> createChannel(String name, String topic) async {
+  static Future<ChatChannel> createChannel(
+    String name,
+    String topic, {
+    bool anonymous = false,
+  }) async {
     final response = await instance.authenticatedPost(
       _uri(''),
       headers: _jsonHeaders,
-      body: jsonEncode({'name': name, 'topic': topic}),
+      body: jsonEncode({
+        'name': name,
+        'topic': topic,
+        if (anonymous) 'anonymous': true,
+      }),
     );
     _checkName(response, 'create a chat channel');
     return ChatChannel.fromJson(_json(response));
@@ -147,6 +156,27 @@ class ChatChannelsService with AuthenticatedService {
     return _members(response);
   }
 
+  /// Renames the pseudonym account [userId], an account id or a pseudonym,
+  /// goes by in anonymous channel [channelId] to [alias] (#2949), and returns
+  /// the members as they now stand. Needs `manage_members` or an admin. An
+  /// alias someone else in the channel has is thrown as its bare 409, for
+  /// `Errors.chatAlias` to phrase.
+  ///
+  /// api: PUT /api/v0/chat/channels/{id}/members/alias
+  static Future<List<ChatMember>> setAlias(
+    int channelId, {
+    required int userId,
+    required String alias,
+  }) async {
+    final response = await instance.authenticatedPut(
+      _uri('/$channelId/members/alias'),
+      headers: _jsonHeaders,
+      body: jsonEncode({'userId': userId, 'alias': alias}),
+    );
+    _checkName(response, 'set an alias in channel $channelId');
+    return _members(response).members;
+  }
+
   /// Moves the signed-in account's read marker in channel [channelId] up to
   /// message [messageId]. The Quark never moves it backward: an id at or
   /// before the marker answers with the marker as it stands.
@@ -198,8 +228,8 @@ class ChatChannelsService with AuthenticatedService {
     );
   }
 
-  /// [_check], but a 409 stays a bare [ApiException] so the name-taken copy
-  /// comes from `Errors`.
+  /// [throwUnlessOk], but a 409 stays a bare [ApiException] so the
+  /// name-taken copy comes from `Errors`.
   static void _checkName(http.Response response, String context) {
     if (response.statusCode == 409) throw ApiException(409, context);
     throwUnlessOk(response, context);

@@ -45,7 +45,8 @@ typedef RemoveChatMemberFn =
 /// or an admin, and `general`'s `everyone` row for everyone. A change the
 /// Quark answers carries an event, which is signed when it says what was
 /// asked, and taking `read_messages` away makes the Quark ask the members who
-/// keep it to rotate the key. The calls default to [ChatChannelsService] and
+/// keep it to rotate the key. In an anonymous channel (#2949) that event
+/// names the account by its pseudonym, so the check does too. The calls default to [ChatChannelsService] and
 /// [ChatChannelKeysController.instance]; tests pass fakes.
 class ChatChannelShareTarget extends ShareTarget {
   /// Shares [channel]; [isAdmin] lets an admin manage one they aren't in, and
@@ -80,6 +81,10 @@ class ChatChannelShareTarget extends ShareTarget {
   final RemoveChatMemberFn _removeMember;
   final SignMemberChangeFn _sign;
 
+  /// The members as last loaded or changed, which name a removed account's
+  /// pseudonym.
+  List<ChatMember> _members = const [];
+
   @override
   Set<ChatPermission> get heldPermissions =>
       isAdmin ? ChatPermission.values.toSet() : channel.permissions;
@@ -109,7 +114,7 @@ class ChatChannelShareTarget extends ShareTarget {
     );
     await _sign(
       change.event,
-      userId: userId,
+      userId: userId == null ? null : change.members.boundIdOf(userId),
       groupId: groupId,
       permissions: permissions,
     );
@@ -123,7 +128,11 @@ class ChatChannelShareTarget extends ShareTarget {
       userId: userId,
       groupId: groupId,
     );
-    await _sign(change.event, userId: userId, groupId: groupId);
+    await _sign(
+      change.event,
+      userId: userId == null ? null : _members.boundIdOf(userId),
+      groupId: groupId,
+    );
     return _access(change.members);
   }
 
@@ -146,6 +155,7 @@ class ChatChannelShareTarget extends ShareTarget {
   }
 
   PathAccess _access(List<ChatMember> members) {
+    _members = members;
     final canManage =
         isAdmin || channel.permissions.contains(ChatPermission.manageMembers);
     return PathAccess(

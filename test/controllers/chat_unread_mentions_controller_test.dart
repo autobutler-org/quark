@@ -70,7 +70,7 @@ void main() {
         : utf8.decode(m.ciphertext ?? const []),
     isUnlocked: () => unlocked,
     keyChanges: keys,
-    currentUserId: () => 7,
+    selfIdIn: (_) => 7,
   );
 
   void setUnread(Map<int, int> counts) => unread.setChannels([

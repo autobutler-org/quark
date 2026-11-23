@@ -8,12 +8,14 @@ import '../../theme/quark_tokens.dart';
 
 /// One row of a `QuarkMemberList`: an account with its avatar, or a group
 /// with a chevron that shows whether its accounts are listed under it, and
-/// under the name, the row's permission preset or Custom.
+/// under the name, the account behind an alias when the viewer may see it,
+/// and the row's permission preset or Custom.
 ///
 /// A part of `QuarkMemberList`, tested through it.
 ///
-/// Key prefixes: `member_remove_<id>` on the remove button and
-/// `member_message_<id>` on the Message button.
+/// Key prefixes: `member_remove_<id>` on the remove button,
+/// `member_message_<id>` on the Message button and `member_alias_<id>` on
+/// the alias button.
 class ChatMemberRow extends StatelessWidget {
   /// Creates the row for [member].
   const ChatMemberRow({
@@ -25,6 +27,7 @@ class ChatMemberRow extends StatelessWidget {
     this.onTap,
     this.onRemove,
     this.onMessage,
+    this.onEditAlias,
     super.key,
   });
 
@@ -53,6 +56,10 @@ class ChatMemberRow extends StatelessWidget {
   /// Messages the account. Null leaves the button out.
   final VoidCallback? onMessage;
 
+  /// Asks to rename the account's alias in an anonymous channel. Null
+  /// leaves the button out.
+  final VoidCallback? onEditAlias;
+
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
@@ -60,6 +67,11 @@ class ChatMemberRow extends StatelessWidget {
     final avatarBuilder = this.avatarBuilder;
     final onRemove = this.onRemove;
     final onMessage = this.onMessage;
+    final onEditAlias = this.onEditAlias;
+    final details = [
+      ?member.accountName,
+      if (permissions != null) ChatPermissionPreset.labelOf(permissions),
+    ];
     final chevron = member.isGroup
         ? Icon(
             isExpanded ? QuarkIcons.expand_less : QuarkIcons.expand_more,
@@ -88,19 +100,30 @@ class ChatMemberRow extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: tokens.foreground),
       ),
-      subtitle: permissions == null
+      subtitle: details.isEmpty
           ? null
           : Text(
-              ChatPermissionPreset.labelOf(permissions),
+              details.join(' · '),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: tokens.mutedForeground),
             ),
-      trailing: onRemove == null && onMessage == null
+      trailing: onRemove == null && onMessage == null && onEditAlias == null
           ? chevron
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (onEditAlias != null)
+                  IconButton(
+                    key: ValueKey('member_alias_${member.id}'),
+                    tooltip: 'Change alias of ${member.name}',
+                    icon: Icon(
+                      QuarkIcons.edit_outlined,
+                      size: 18,
+                      color: tokens.mutedForeground,
+                    ),
+                    onPressed: onEditAlias,
+                  ),
                 if (onMessage != null)
                   IconButton(
                     key: ValueKey('member_message_${member.id}'),

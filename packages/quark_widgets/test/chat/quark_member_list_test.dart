@@ -169,6 +169,65 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // #2949: an anonymous channel names accounts by alias; a manager also
+  // sees the username behind each and may rename the alias.
+  testBothViewports('shows a manager the account behind each alias', (
+    tester,
+    size,
+  ) async {
+    const anonymous = [
+      ChatMemberItem(
+        id: '8',
+        name: 'Fox',
+        accountName: 'bob',
+        permissions: {ChatPermission.readMessages},
+      ),
+      ChatMemberItem(
+        id: 'group_3',
+        name: 'mods',
+        isGroup: true,
+        permissions: {ChatPermission.readMessages},
+        members: [ChatMemberItem(id: '9', name: 'Owl', accountName: 'cy')],
+      ),
+    ];
+    final renamed = <String>[];
+    await pumpAt(
+      tester,
+      QuarkMemberList(
+        members: anonymous,
+        permissions: ChatPermissionPreset.moderator.permissions,
+        expandedIds: const {'group_3'},
+        onEditAlias: renamed.add,
+      ),
+      size: size,
+    );
+
+    Finder alias(String id) => find.byKey(ValueKey('member_alias_$id'));
+    expect(find.text('Fox'), findsOneWidget);
+    expect(find.textContaining('bob'), findsOneWidget);
+    expect(alias('group_3'), findsNothing, reason: 'a group has no alias');
+    await tester.tap(alias('8'));
+    await tester.tap(alias('9'));
+    expect(renamed, ['8', '9']);
+    expect(tester.takeException(), isNull);
+
+    await pumpAt(
+      tester,
+      QuarkMemberList(
+        members: anonymous,
+        permissions: ChatPermissionPreset.member.permissions,
+        expandedIds: const {'group_3'},
+        selfId: '9',
+        onEditAlias: renamed.add,
+      ),
+      size: size,
+    );
+    expect(alias('8'), findsNothing, reason: 'only a manager renames others');
+    await tester.tap(alias('9'));
+    expect(renamed, ['8', '9', '9'], reason: 'anyone renames themselves');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('shows a viewer no member-management buttons', (tester) async {
     await pumpAt(
       tester,

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/chat_channel_keys_controller.dart';
 import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/controllers/chat_messages_controller.dart';
+import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
 import 'package:quark/models/chat_poll.dart';
@@ -99,6 +100,7 @@ class _FakeQuark {
     _FakeKeys keys,
     ChatCrypto crypto, {
     int userId = 2,
+    bool selfFromKeys = false,
     SaveChatAttachmentFn? saveAttachmentFile,
     UploadChatAttachmentFn? uploadAttachmentFile,
     Future<Uint8List?> Function(String name, Uint8List bytes)?
@@ -179,7 +181,7 @@ class _FakeQuark {
       attachmentDownloads++;
       return Stream<List<int>>.value(attachmentBodies[id] ?? const <int>[]);
     },
-    currentUserId: () => userId,
+    currentUserId: selfFromKeys ? null : () => userId,
     fetchEvents: (channelId, {after = 0}) async =>
         events.where((e) => e.id > after).toList(),
     events: live.stream.where((e) => audience[e]?.contains(userId) ?? true),
@@ -1050,6 +1052,50 @@ void main() {
         expect(quark.reactions[messageId]!.map((r) => r.userId), [2, 2]);
       },
     );
+
+    // #2949: in an anonymous channel the Quark names reactors by pseudonym,
+    // so the reaction's additional data binds the channel's selfId, which
+    // the keys controller holds, not the account id.
+    test('an anonymous channel binds reactions to the pseudonym', () async {
+      _FakeKeys keysAs(int selfId, SecureKey key) => _FakeKeys()
+        ..rememberChannels([
+          ChatChannel(id: _channel, name: 'c', anonymous: true, selfId: selfId),
+        ])
+        ..grant(1, key);
+      final key = crypto.newChannelKey();
+      final alice = quark.client(
+        keysAs(-2, key),
+        crypto,
+        userId: -2,
+        selfFromKeys: true,
+      );
+      final bob = quark.client(
+        keysAs(-3, crypto.channelKeyFromBytes(key.extractBytes())),
+        crypto,
+        userId: -3,
+        selfFromKeys: true,
+      );
+      await alice.open();
+      await bob.open();
+      await alice.send('lunch?');
+      await pumpEventQueue();
+      final messageId = quark.messages.single.id;
+
+      await alice.toggleReaction(messageId, '👍');
+      await bob.toggleReaction(messageId, '👍');
+      await pumpEventQueue();
+
+      expect(quark.reactions[messageId]!.map((r) => r.userId), [-2, -3]);
+      expect(reactionsOf(bob, -3), const [
+        ChatReactionItem(emoji: '👍', count: 2, reactedByMe: true),
+      ]);
+
+      await alice.toggleReaction(messageId, '👍');
+      await pumpEventQueue();
+      expect(quark.reactions[messageId]!.map((r) => r.userId), [
+        -3,
+      ], reason: 'alice finds her own reaction by her pseudonym');
+    });
 
     test('a reconnect catches up on dropped reactions and deletions', () async {
       final key = crypto.newChannelKey();

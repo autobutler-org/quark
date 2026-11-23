@@ -7,7 +7,6 @@ import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/controllers/chat_unread_controller.dart';
 import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_message.dart';
-import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_channels_service.dart';
 import 'package:quark/services/chat_messages_service.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
@@ -33,6 +32,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///   channel is read again once one of them opens.
 /// - A channel that fails to load keeps the count it had until its unread
 ///   count next changes.
+/// - In an anonymous channel (#2949) the account is its pseudonym and its
+///   alias: what the members and messages there name it by.
 class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
   /// Builds a controller following [unread]. Every other collaborator has a
   /// real default; tests pass fakes. [openMessage] is a message's text, or
@@ -48,7 +49,7 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
     String? Function(ChatMessage message)? openMessage,
     bool Function()? isUnlocked,
     Listenable? keyChanges,
-    int? Function()? currentUserId,
+    int? Function(int channelId)? selfIdIn,
   }) : _unread = unread,
        _ensureKeys =
            ensureKeys ?? ChatChannelKeysController.instance.ensureKeys,
@@ -63,8 +64,7 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
              ChatKeysController.instance,
              ChatChannelKeysController.instance,
            ]),
-       _currentUserId =
-           currentUserId ?? (() => AppSettings.instance.userId.value) {
+       _selfIdIn = selfIdIn ?? ChatChannelKeysController.instance.selfIdIn {
     _unread.addListener(_sync);
     _keyChanges.addListener(_sync);
     _sync();
@@ -78,7 +78,10 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
   final String? Function(ChatMessage message) _openMessage;
   final bool Function() _isUnlocked;
   final Listenable _keyChanges;
-  final int? Function() _currentUserId;
+
+  /// The id this account goes by in a channel: its pseudonym in an
+  /// anonymous one (#2949), where messages and members name it that way.
+  final int? Function(int channelId) _selfIdIn;
 
   Map<int, int> _mentions = const {};
 
@@ -138,7 +141,7 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
         _fetchMessages(channelId, limit: ChatMessagesService.maxPage),
       ).wait;
       if (isDisposed || _readAt[channelId] != count) return;
-      final me = _currentUserId();
+      final me = _selfIdIn(channelId);
       final name = members.nameOfUser(me);
       final names = members.mentionNames;
       final everyone = members.userIdsHolding(ChatPermission.mentionEveryone);

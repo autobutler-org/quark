@@ -168,8 +168,8 @@ class FakeChat {
         return [...this.channels, ...otherChannels];
       },
       isAdmin: () => isAdmin,
-      createChannel: (name, topic) async {
-        calls.add('create $name "$topic"');
+      createChannel: (name, topic, {anonymous = false}) async {
+        calls.add('create $name "$topic"${anonymous ? ' anonymous' : ''}');
         _fail();
         final channel = ChatChannel(
           id: 10 + this.channels.length,
@@ -177,6 +177,8 @@ class FakeChat {
           topic: topic,
           isPrivate: true,
           permissions: ownerSet,
+          anonymous: anonymous,
+          selfId: anonymous ? -700 : null,
         );
         this.channels.add(channel);
         return channel;
@@ -266,6 +268,11 @@ class FakeChat {
         if (error != null) throw error;
         return (members: this.members, event: setEvent);
       },
+      setAlias: (id, {required userId, required alias}) async {
+        calls.add('alias $id user=$userId "$alias"');
+        _fail();
+        return this.members;
+      },
       loadPrincipals: () async {
         calls.add('principals');
         _fail();
@@ -305,7 +312,7 @@ class FakeChat {
         openMessage: (message) => utf8.decode(message.ciphertext ?? const []),
         isUnlocked: () => unlocked,
         keyChanges: keys,
-        currentUserId: () => 7,
+        selfIdIn: (_) => 7,
       ),
     );
   }

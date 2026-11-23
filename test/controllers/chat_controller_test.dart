@@ -1814,4 +1814,225 @@ void main() {
     );
     chat.controller.dispose();
   });
+
+  group('anonymous channels (#2949)', () {
+    const whispers = ChatChannel(
+      id: 5,
+      name: 'whispers',
+      anonymous: true,
+      selfId: -70,
+      permissions: memberSet,
+    );
+
+    test('a member sees aliases and is known by its pseudonym', () async {
+      final chat = FakeChat(
+        channels: [...fakeChannels, whispers],
+        members: const [
+          ChatMember(
+            userId: -70,
+            name: 'Anonymous 1',
+            pseudonymId: -70,
+            alias: 'Anonymous 1',
+            permissions: memberSet,
+          ),
+          ChatMember(
+            userId: -80,
+            name: 'Fox',
+            pseudonymId: -80,
+            alias: 'Fox',
+            permissions: {...memberSet, ChatPermission.mentionEveryone},
+          ),
+        ],
+      );
+      chat.entries[5] = [
+        ChatTimelineMessage(
+          message: message(1, author: -80),
+          state: ChatMessageState.ready,
+          text: 'hi @Anonymous 1',
+        ),
+        ChatTimelineMessage(
+          message: message(2, author: -70),
+          state: ChatMessageState.ready,
+          text: 'hello',
+        ),
+      ];
+      chat.controller.select('5');
+      await chat.controller.refresh();
+      final c = chat.controller;
+
+      expect(c.isSelectedAnonymous, isTrue);
+      expect(c.currentUserKey, '-70');
+      expect(c.currentUserName, 'Anonymous 1');
+      expect(c.mentionNames, ['Anonymous 1', 'Fox']);
+      expect(c.mentionEveryoneAuthorIds, {'-80'});
+      expect(c.nameOf(-80), 'Fox');
+      expect(
+        c.avatarVersionOf(-80),
+        isNull,
+        reason: 'no picture is fetched for a pseudonym',
+      );
+      expect(c.messageItems.map((i) => (i.authorId, i.authorName)), [
+        ('-70', 'Anonymous 1'),
+        ('-80', 'Fox'),
+      ]);
+      expect(c.memberItems.map((i) => i.accountName), [null, null]);
+      expect(c.canLeaveSelected, isTrue);
+      expect(c.canMessageMembers, isFalse);
+      expect(c.canEditAliases, isTrue, reason: 'everyone renames themselves');
+
+      await c.leaveChannel();
+      expect(chat.calls, [
+        'remove 5 user=7 group=null',
+        'sign 42 user=-70 null',
+      ], reason: 'the leave event names the pseudonym');
+      c.dispose();
+    });
+
+    test('a member resolves everyone from the account rows the Quark '
+        'sends in place of group users', () async {
+      // The exact shape `GET .../members` gives a viewer without
+      // manage_members: groups without `users`, then one account row per
+      // person carrying its effective set.
+      final json =
+          jsonDecode('''
+{"members":[
+  {"groupId":1,"name":"everyone","builtin":true,"permissions":["read_messages"]},
+  {"userId":-7719917998658680,"name":"Anonymous 3628","builtin":false,
+   "permissions":["read_messages","send_messages"],
+   "pseudonymId":-7719917998658680,"alias":"Anonymous 3628"}
+]}''')
+              as Map<String, dynamic>;
+      const self = -7719917998658680;
+      final chat = FakeChat(
+        channels: [
+          ...fakeChannels,
+          const ChatChannel(
+            id: 5,
+            name: 'whispers',
+            anonymous: true,
+            selfId: self,
+            permissions: memberSet,
+          ),
+        ],
+        members: [
+          for (final m in json['members'] as List)
+            ChatMember.fromJson(m as Map<String, dynamic>),
+        ],
+      );
+      chat.controller.select('5');
+      await chat.controller.refresh();
+      final c = chat.controller;
+
+      expect(
+        c.memberItems.map((i) => (i.id, i.name, i.isGroup, i.members.length)),
+        [
+          ('group_1', 'everyone', true, 0),
+          ('$self', 'Anonymous 3628', false, 0),
+        ],
+      );
+      expect(c.memberItems.last.accountName, isNull);
+      expect(c.mentionNames, ['Anonymous 3628'], reason: 'counted once');
+      expect(c.members.userIdsHolding(ChatPermission.readMessages), {self});
+      expect(c.members.userIdsHolding(ChatPermission.sendMessages), {
+        self,
+      }, reason: 'the account row carries the effective set');
+      expect(c.currentUserName, 'Anonymous 3628');
+      expect(c.nameOf(self), 'Anonymous 3628');
+      expect(c.aliasOf('$self'), 'Anonymous 3628');
+      expect(
+        c.canManageMembers,
+        isFalse,
+        reason: 'the member list offers no remove on any row',
+      );
+      expect(
+        c.canEditAliases,
+        isTrue,
+        reason: 'a member renames themselves, the list offering only their row',
+      );
+      expect(c.currentUserKey, '$self', reason: 'the row the list offers');
+      expect(await c.setAlias('$self', 'Wren'), isTrue);
+      expect(chat.calls.last, 'alias 5 user=$self "Wren"');
+      c.dispose();
+    });
+
+    test('a manager sees who is who and renames an alias', () async {
+      final chat = FakeChat(
+        channels: [
+          ...fakeChannels,
+          ChatChannel(
+            id: 5,
+            name: 'whispers',
+            anonymous: true,
+            selfId: -70,
+            permissions: ownerSet,
+          ),
+        ],
+        members: [
+          ChatMember(
+            userId: 7,
+            name: 'ada',
+            pseudonymId: -70,
+            alias: 'Anonymous 1',
+            avatarUpdatedAt: 3,
+            permissions: ownerSet,
+          ),
+          const ChatMember(
+            userId: 8,
+            name: 'bob',
+            pseudonymId: -80,
+            alias: 'Fox',
+            avatarUpdatedAt: 5,
+            permissions: memberSet,
+          ),
+        ],
+      );
+      chat.controller.select('5');
+      await chat.controller.refresh();
+      final c = chat.controller;
+
+      expect(c.memberItems.map((i) => (i.id, i.name, i.accountName)), [
+        ('7', 'Anonymous 1', 'ada'),
+        ('8', 'Fox', 'bob'),
+      ]);
+      expect(c.nameOf(-80), 'Fox');
+      expect(c.nameOf(8), 'Fox');
+      expect(c.avatarVersionOf(-80), isNull);
+      expect(c.avatarVersionOf(8), isNull);
+      expect(c.currentUserName, 'Anonymous 1');
+      expect(c.canEditAliases, isTrue);
+      expect(c.aliasOf('8'), 'Fox');
+
+      expect(await c.setAlias('8', 'Wolf'), isTrue);
+      chat.failWith = const ApiException(409);
+      expect(await c.setAlias('8', 'Anonymous 1'), isFalse);
+      expect(
+        Errors.chatAlias(c.saveError, 'change the alias'),
+        Errors.chatAliasTaken,
+      );
+
+      expect(await c.removeMember('8'), isNull);
+      expect(chat.calls, [
+        'alias 5 user=8 "Wolf"',
+        'alias 5 user=8 "Anonymous 1"',
+        'remove 5 user=8 group=null',
+        'sign 42 user=-80 null',
+      ]);
+      c.dispose();
+    });
+
+    test('a new channel can be made anonymous', () async {
+      final chat = FakeChat();
+      await chat.controller.refresh();
+
+      final created = await chat.controller.createChannel(
+        'whispers',
+        '',
+        anonymous: true,
+      );
+
+      expect(created?.anonymous, isTrue);
+      expect(chat.calls, ['create whispers "" anonymous', 'ensure keys 12']);
+      chat.controller.dispose();
+    });
+  });
 }

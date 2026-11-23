@@ -826,6 +826,17 @@ abstract final class Errors {
       ? chatChannelNameTaken
       : message(error, action);
 
+  /// An alias someone else in the anonymous channel already goes by (#2949).
+  static const String chatAliasTaken =
+      'Someone in this channel already goes by that name. Pick another one.';
+
+  /// A failed alias change in an anonymous channel. A 409 gets
+  /// [chatAliasTaken]; anything else is as [message] words it for [action].
+  static String chatAlias(Object? error, String action) =>
+      error is ApiException && error.statusCode == 409
+      ? chatAliasTaken
+      : message(error, action);
+
   /// A chat message too long to fit the Quark's 16 KiB cap once encrypted.
   static const String chatMessageTooLong =
       'That message is too long. Split it into shorter ones.';

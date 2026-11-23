@@ -153,6 +153,28 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // #2949: an anonymous channel says so beside its name.
+    testWidgets('an anonymous channel is marked at $size', (tester) async {
+      await pumpHeader(
+        tester,
+        size,
+        const ChatChannelHeader(
+          name: 'whispers',
+          isPrivate: true,
+          isAnonymous: true,
+        ),
+      );
+      expect(key('chat_channel_anonymous'), findsOneWidget);
+      expect(
+        find.byTooltip(ChatChannelHeader.anonymousTooltip),
+        findsOneWidget,
+      );
+
+      await pumpHeader(tester, size, const ChatChannelHeader(name: 'design'));
+      expect(key('chat_channel_anonymous'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     // #2423: the lock says to add people from Members, which a direct
     // message doesn't have.
     testWidgets('a direct message has no channel lock at $size', (
