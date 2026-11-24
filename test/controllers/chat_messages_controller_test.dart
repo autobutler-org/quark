@@ -146,6 +146,37 @@ class _FakeQuark {
             m,
       ];
     },
+    fetchBranches: (channelId, {before}) async {
+      // Each root with a live reply, newest last reply first, two a page.
+      final newest = <int, ChatMessage>{};
+      for (final m in messages) {
+        final root = m.rootId;
+        if (root == null || m.isDeleted) continue;
+        if ((newest[root]?.id ?? 0) < m.id) newest[root] = m;
+      }
+      final order =
+          newest.entries
+              .where((e) => before == null || e.value.id < before)
+              .toList()
+            ..sort((a, b) => b.value.id.compareTo(a.value.id));
+      final page = order.take(2).toList();
+      return (
+        messages: [
+          for (final e in page)
+            messages
+                .firstWhere((m) => m.id == e.key)
+                .copyWith(
+                  branch: ChatBranch(
+                    replyCount: messages
+                        .where((m) => m.rootId == e.key && !m.isDeleted)
+                        .length,
+                    lastReplyAt: e.value.createdAt,
+                  ),
+                ),
+        ],
+        nextBefore: page.length == 2 ? page.last.value.id : null,
+      );
+    },
     postMessage:
         (
           channelId,
@@ -1627,6 +1658,68 @@ void main() {
       );
       await pumpEventQueue();
       expect(reader.entries, hasLength(1), reason: 'a root not loaded');
+      reader.dispose();
+    });
+  });
+
+  group('listing side conversations (#4351)', () {
+    test('pages them newest first, opens the roots, and a live reply moves a '
+        'quiet one back to the top', () async {
+      final key = crypto.newChannelKey();
+      Uint8List seal(String text, {int? rootId}) => crypto.encrypt(
+        Uint8List.fromList(utf8.encode(text)),
+        key,
+        additionalData: crypto.messageAad(
+          channelId: _channel,
+          keyVersion: 1,
+          rootId: rootId,
+        ),
+      );
+      final reader = quark.client(_FakeKeys()..grant(1, key), crypto);
+      await reader.open();
+      final roots = [
+        for (final text in ['sink', 'holiday', 'projector'])
+          quark.post(_channel, 1, seal(text)).id,
+      ];
+      for (final root in roots) {
+        quark.post(_channel, 1, seal('re', rootId: root), rootId: root);
+      }
+      List<String?> listed() => [for (final b in reader.branches) b.text];
+
+      // Nothing listed until asked, so an event reads nothing.
+      expect(reader.branches, isEmpty);
+      await reader.loadBranches();
+      expect(listed(), ['projector', 'holiday']);
+      expect(reader.hasMoreBranches, isTrue);
+      await reader.loadBranches(more: true);
+      expect(listed(), ['projector', 'holiday', 'sink']);
+      expect(reader.hasMoreBranches, isFalse);
+      expect(reader.branches.first.message.branch?.replyCount, 1);
+
+      final reply = quark.post(
+        _channel,
+        1,
+        seal('plumber booked', rootId: roots.first),
+        rootId: roots.first,
+      );
+      await pumpEventQueue();
+      expect(listed(), ['sink', 'projector', 'holiday']);
+      expect(reader.branches.first.message.branch?.replyCount, 2);
+      expect(
+        reader.branches.first.message.branch?.lastReplyAt,
+        reply.createdAt,
+      );
+
+      // Every reply deleted: the event says 0, and it leaves the list.
+      quark.live.add(
+        FileEvent(
+          kind: 'chat_branch_changed',
+          path: '',
+          data: {'channelId': _channel, 'messageId': roots[1], 'replyCount': 0},
+        ),
+      );
+      await pumpEventQueue();
+      expect(listed(), ['sink', 'projector']);
       reader.dispose();
     });
   });

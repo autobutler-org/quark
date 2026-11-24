@@ -63,6 +63,32 @@ class ChatMessagesService with AuthenticatedService {
     );
   }
 
+  /// A page of channel [channelId]'s side conversations (#4351): each message
+  /// with at least one live reply, with its `branch`, newest last reply
+  /// first, from [before], the `nextBefore` of the page above. `nextBefore`
+  /// is null on the last page.
+  ///
+  /// api: GET /api/v0/chat/channels/{id}/branches
+  static Future<({List<ChatMessage> messages, int? nextBefore})> fetchBranches(
+    int channelId, {
+    int? before,
+  }) async {
+    final response = await instance.authenticatedGet(
+      _channelUri(channelId, {
+        if (before != null) 'before': '$before',
+      }, 'branches'),
+    );
+    throwUnlessOk(response, 'fetch side conversations of channel $channelId');
+    final body = _json(response);
+    return (
+      messages: [
+        for (final m in body['messages'] as List? ?? const [])
+          ChatMessage.fromJson(m as Map<String, dynamic>),
+      ],
+      nextBefore: (body['nextBefore'] as num?)?.toInt(),
+    );
+  }
+
   /// The query of a page of messages.
   static Map<String, String> _pageQuery(int? before, int? after, int? limit) =>
       {
@@ -358,12 +384,13 @@ class ChatMessagesService with AuthenticatedService {
       apiBaseUri.resolve('/api/v0/chat/messages/$messageId/$action');
 
   /// api: none
-  static Uri _channelUri(int channelId, [Map<String, String>? query]) =>
-      apiBaseUri
-          .resolve('/api/v0/chat/channels/$channelId/messages')
-          .replace(
-            queryParameters: query == null || query.isEmpty ? null : query,
-          );
+  static Uri _channelUri(
+    int channelId, [
+    Map<String, String>? query,
+    String path = 'messages',
+  ]) => apiBaseUri
+      .resolve('/api/v0/chat/channels/$channelId/$path')
+      .replace(queryParameters: query == null || query.isEmpty ? null : query);
 
   /// api: none
   static Uri _attachmentUri(int channelId, String id) =>

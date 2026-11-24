@@ -1,4 +1,5 @@
-/// Limits the chat composer applies before a message is encrypted (#2503).
+/// Limits the chat composer applies before a message is encrypted (#2503),
+/// and chat's other tuning values.
 abstract final class ChatConfig {
   /// The most a message's ciphertext may be, mirroring
   /// `chatutil.MaxCiphertextBytes`: past it the Quark refuses the post.
@@ -22,4 +23,8 @@ abstract final class ChatConfig {
   /// How long someone shows as typing after the last word of it: two
   /// intervals, so one lost on the way doesn't make them flicker.
   static const Duration typingTimeout = Duration(seconds: 6);
+
+  /// How long after its last reply a side conversation folds under Quiet in
+  /// the channel's list of them (#4351). Folding only hides it there.
+  static const Duration quietBranchAfter = Duration(days: 7);
 }

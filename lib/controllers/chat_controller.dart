@@ -1099,6 +1099,47 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     await _deliver(pending);
   }
 
+  /// The open channel's side conversations (#4351), newest last reply
+  /// first, once [loadBranchList] has read them. Live replies keep them in
+  /// order.
+  List<ChatMessageItem> get branchListItems {
+    final me = _selfId;
+    return [
+      for (final branch in _messages?.branches ?? const <ChatTimelineMessage>[])
+        itemFor(
+          branch,
+          nameOf,
+          me: me,
+          mentionsMeIn: (rootId) =>
+              _unreadMentions.mentionsInBranch(rootId) > 0,
+        ),
+    ];
+  }
+
+  /// Whether a page of [branchListItems] is loading.
+  bool get isLoadingBranchList => _messages?.isLoadingBranches ?? false;
+
+  /// Why [branchListItems] last failed to load, or null.
+  Object? get branchListError => _messages?.branchesError;
+
+  /// Whether [branchListItems] has older side conversations to load.
+  bool get hasMoreBranchList => _messages?.hasMoreBranches ?? false;
+
+  /// Reads the open channel's side conversations again from the newest, or
+  /// with [more] the page after those listed.
+  Future<void> loadBranchList({bool more = false}) async =>
+      _messages?.loadBranches(more: more);
+
+  /// Whether the quiet side conversations are unfolded in the list.
+  bool get isQuietBranchesExpanded => _isQuietBranchesExpanded;
+  bool _isQuietBranchesExpanded = false;
+
+  /// Folds or unfolds the quiet side conversations.
+  void setQuietBranchesExpanded(bool value) {
+    _isQuietBranchesExpanded = value;
+    notifyListeners();
+  }
+
   /// Loads the replies before the oldest shown in the open side
   /// conversation, or the first page again when that failed. Repeats while
   /// one is out are ignored.

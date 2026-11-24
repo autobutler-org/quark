@@ -139,6 +139,31 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('side conversations shows only with a handler, before '
+        'search, at $size (#4351)', (tester) async {
+      var opens = 0;
+      await pumpHeader(
+        tester,
+        size,
+        ChatChannelHeader(
+          name: 'design',
+          onBranches: () => opens++,
+          onSearch: () {},
+        ),
+      );
+      expect(find.byTooltip('Side conversations'), findsOneWidget);
+      expect(
+        tester.getCenter(key('chat_channel_branches')).dx,
+        lessThan(tester.getCenter(key('chat_channel_search')).dx),
+      );
+      await tester.tap(key('chat_channel_branches'));
+      expect(opens, 1);
+
+      await pumpHeader(tester, size, const ChatChannelHeader(name: 'design'));
+      expect(key('chat_channel_branches'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a private channel explains its lock at $size', (tester) async {
       await pumpHeader(
         tester,

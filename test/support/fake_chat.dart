@@ -94,6 +94,19 @@ class FakeChatMessages extends ChatMessagesController {
     (e) => e is ChatTimelineMessage && e.message.id == messageId,
   );
 
+  /// What [loadBranches] lists, as the Quark would page them.
+  List<ChatTimelineMessage> fakeBranches = const [];
+
+  /// How many times [loadBranches] ran.
+  int branchLoads = 0;
+
+  @override
+  Future<void> loadBranches({bool more = false}) async {
+    branchLoads++;
+    branches = fakeBranches;
+    notifyListeners();
+  }
+
   @override
   Future<void> open() async {
     opens++;
@@ -297,9 +310,9 @@ class FakeChat {
         _fail();
         return principals;
       },
-      messagesFor: (id) =>
-          opened[id] = FakeChatMessages(id)
-            ..fakeEntries = entries[id] ?? const [],
+      messagesFor: (id) => opened[id] = FakeChatMessages(id)
+        ..fakeEntries = entries[id] ?? const []
+        ..fakeBranches = branchLists[id] ?? const [],
       branchFor: (id, rootId) =>
           branches[rootId] = FakeChatMessages(id, rootId: rootId)
             ..fakeRoot = roots[rootId]
@@ -475,6 +488,9 @@ class FakeChat {
 
   /// The replies each side conversation's fake starts with, by root id.
   final Map<int, List<ChatTimelineEntry>> replies = {};
+
+  /// The side conversations each channel's fake lists (#4351), by channel id.
+  final Map<int, List<ChatTimelineMessage>> branchLists = {};
 
   /// The newest side conversation made for each root.
   final Map<int, FakeChatMessages> branches = {};
