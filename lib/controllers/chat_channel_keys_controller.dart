@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_channel_keys.dart';
+import 'package:quark/models/chat_keys.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_channels_service.dart';
 import 'package:quark/services/chat_channel_keys_service.dart';
@@ -42,6 +43,15 @@ import 'package:sodium/sodium_sumo.dart';
 /// recipient its own grants are signed over and checked against, and the
 /// actor of the events it signs. [selfIdIn] is that id; the channel list
 /// supplies it, read once for a channel this controller hasn't seen.
+///
+/// There it also seals, opens and signs with keys of its own for that channel
+/// alone, [ChatCrypto.channelIdentity], never the account's, which would tie
+/// the pseudonym to the account. It publishes their public halves once per
+/// session, for every anonymous channel as soon as a channel list names it,
+/// so a new member is granted the key whenever any holder is online. A
+/// channel the list leaves out, as one an admin manages without being in it,
+/// is asked about by publishing: the Quark answers the pseudonym, or that the
+/// channel isn't anonymous.
 class ChatChannelKeysController extends ChangeNotifier {
   /// Builds a controller. Every collaborator has a real default; tests pass
   /// fakes.
@@ -71,6 +81,7 @@ class ChatChannelKeysController extends ChangeNotifier {
     signEvent,
     Future<void> Function(int channelId, int version)? rejectGrant,
     Future<List<ChatChannel>> Function()? listChannels,
+    Future<int?> Function(int channelId, ChatPublicKeys keys)? putChannelKeys,
   }) : _identity = identity ?? (() => ChatKeysController.instance.identity),
        _crypto = crypto ?? (() => ChatKeysController.instance.crypto),
        _userId = userId ?? (() => AppSettings.instance.userId.value),
@@ -82,7 +93,9 @@ class ChatChannelKeysController extends ChangeNotifier {
        _uploadGrants = uploadGrants ?? ChatChannelKeysService.uploadGrants,
        _signEvent = signEvent ?? ChatChannelKeysService.signEvent,
        _rejectGrant = rejectGrant ?? ChatChannelKeysService.rejectGrant,
-       _listChannels = listChannels ?? ChatChannelsService.listChannels;
+       _listChannels = listChannels ?? ChatChannelsService.listChannels,
+       _putChannelKeys =
+           putChannelKeys ?? ChatChannelKeysService.putChannelKeys;
 
   /// The app's controller.
   static final ChatChannelKeysController instance = ChatChannelKeysController();
@@ -115,10 +128,16 @@ class ChatChannelKeysController extends ChangeNotifier {
   _signEvent;
   final Future<void> Function(int channelId, int version) _rejectGrant;
   final Future<List<ChatChannel>> Function() _listChannels;
+  final Future<int?> Function(int channelId, ChatPublicKeys keys)
+  _putChannelKeys;
 
   /// Each channel seen in a channel list: this account's pseudonym in an
   /// anonymous one, null in any other.
   final Map<int, int?> _selves = {};
+
+  /// This account's identity in each anonymous channel, once its public keys
+  /// are published.
+  final Map<int, Future<ChatIdentity>> _channelIdentities = {};
 
   final Map<int, Map<int, SecureKey>> _keys = {};
   final Map<int, int> _current = {};
@@ -141,10 +160,31 @@ class ChatChannelKeysController extends ChangeNotifier {
   int? selfIdIn(int channelId) => _selves[channelId] ?? _userId();
 
   /// Notes which of [channels] are anonymous and this account's pseudonym in
-  /// each, from a channel list just loaded.
+  /// each, from a channel list just loaded, and publishes this account's
+  /// keys for each anonymous one it is in while chat is unlocked. An
+  /// anonymous channel listed without a pseudonym, one an admin is not in,
+  /// stays unknown.
   void rememberChannels(Iterable<ChatChannel> channels) {
+    final identity = _identity();
+    final crypto = _crypto();
     for (final c in channels) {
-      _selves[c.id] = c.anonymous ? c.selfId : null;
+      if (!c.anonymous) {
+        _selves[c.id] = null;
+        continue;
+      }
+      final self = c.selfId;
+      if (self == null) continue;
+      _selves[c.id] = self;
+      if (identity == null || crypto == null) continue;
+      unawaited(
+        _channelIdentity(c.id, identity, crypto).then<void>(
+          (_) {},
+          onError: (Object e) => debugPrint(
+            '[chat_channel_keys_controller.dart] keys for channel ${c.id} '
+            'not published: $e',
+          ),
+        ),
+      );
     }
   }
 
@@ -175,8 +215,13 @@ class ChatChannelKeysController extends ChangeNotifier {
   /// with the event a member change returned. Check [event]'s payload says
   /// what you did before signing it.
   Future<void> signEvent(ChatChannelEvent event) async {
-    final (identity, crypto, account) = _unlocked();
-    final me = await _selfIn(event.channelId, account);
+    final (account, crypto, userId) = _unlocked();
+    final (me, identity) = await _selfIn(
+      event.channelId,
+      account,
+      crypto,
+      userId,
+    );
     if (event.actorId != me) {
       throw ArgumentError('event ${event.id} is not this account\'s');
     }
@@ -240,8 +285,12 @@ class ChatChannelKeysController extends ChangeNotifier {
     return crypto.verify(_eventMessage(crypto, event), signature, signKey);
   }
 
-  /// Forgets every opened key.
+  /// Forgets every opened key and channel identity.
   void forget() {
+    for (final identity in _channelIdentities.values) {
+      identity.then((i) => i.dispose(), onError: (_) {});
+    }
+    _channelIdentities.clear();
     for (final versions in _keys.values) {
       for (final key in versions.values) {
         key.dispose();
@@ -263,8 +312,8 @@ class ChatChannelKeysController extends ChangeNotifier {
   }
 
   Future<bool> _ensure(int channelId) async {
-    final (identity, crypto, account) = _unlocked();
-    final me = await _selfIn(channelId, account);
+    final (account, crypto, userId) = _unlocked();
+    final (me, identity) = await _selfIn(channelId, account, crypto, userId);
     var state = await _fetchKeys(channelId);
     await _reject(
       channelId,
@@ -304,8 +353,8 @@ class ChatChannelKeysController extends ChangeNotifier {
   /// previous version stay unreadable until a holder of that version shares
   /// it. A race to the same version falls through to [ensureKeys].
   Future<void> regenerate(int channelId) async {
-    final (identity, crypto, account) = _unlocked();
-    final me = await _selfIn(channelId, account);
+    final (account, crypto, userId) = _unlocked();
+    final (me, identity) = await _selfIn(channelId, account, crypto, userId);
     final state = await _fetchKeys(channelId);
     final version = state.currentVersion + 1;
     if (!await _create(
@@ -495,6 +544,8 @@ class ChatChannelKeysController extends ChangeNotifier {
         payload: event.payload,
       );
 
+  /// The account identity, the crypto and the account id, or [StateError]
+  /// while chat is locked.
   (ChatIdentity, ChatCrypto, int) _unlocked() {
     final identity = _identity();
     final crypto = _crypto();
@@ -505,24 +556,67 @@ class ChatChannelKeysController extends ChangeNotifier {
     return (identity, crypto, me);
   }
 
-  /// [selfIdIn], reading the channel list first when [channelId] is not in
-  /// one seen yet. A channel the list leaves out counts as not anonymous,
-  /// and one whose list won't load is looked up again next time. Either
-  /// way, an anonymous channel's grants then fail to verify and wait, and
-  /// the Quark refuses a grant signed over the account id.
-  Future<int> _selfIn(int channelId, int account) async {
+  /// The id this account binds in [channelId] and the identity it seals,
+  /// opens and signs with there: its pseudonym and channel identity in an
+  /// anonymous channel, its account id and [account] in any other. A channel
+  /// not in a list seen yet reads the channel list first; one the list
+  /// leaves out, as one an admin manages without being in it, is asked
+  /// about by publishing keys for it. A channel list that won't load is
+  /// read again next time.
+  Future<(int, ChatIdentity)> _selfIn(
+    int channelId,
+    ChatIdentity account,
+    ChatCrypto crypto,
+    int userId,
+  ) async {
     if (!_selves.containsKey(channelId)) {
       try {
         rememberChannels(await _listChannels());
-        _selves.putIfAbsent(channelId, () => null);
       } on Object catch (e) {
         debugPrint(
           '[chat_channel_keys_controller.dart] channel list not loaded: $e',
         );
       }
     }
-    return _selves[channelId] ?? account;
+    if (!_selves.containsKey(channelId)) {
+      final derived = crypto.channelIdentity(account, channelId);
+      final int? self;
+      try {
+        self = await _putChannelKeys(channelId, derived.publicKeys);
+      } catch (_) {
+        derived.dispose();
+        rethrow;
+      }
+      _selves[channelId] = self;
+      if (self == null || _channelIdentities.containsKey(channelId)) {
+        derived.dispose();
+      } else {
+        _channelIdentities[channelId] = Future.value(derived);
+      }
+    }
+    final self = _selves[channelId];
+    if (self == null) return (userId, account);
+    return (self, await _channelIdentity(channelId, account, crypto));
   }
+
+  /// This account's identity in anonymous channel [channelId], derived and
+  /// its public keys published the first time this session.
+  Future<ChatIdentity> _channelIdentity(
+    int channelId,
+    ChatIdentity account,
+    ChatCrypto crypto,
+  ) => _channelIdentities[channelId] ??= () async {
+    final derived = crypto.channelIdentity(account, channelId);
+    try {
+      final self = await _putChannelKeys(channelId, derived.publicKeys);
+      if (self != null) _selves[channelId] = self;
+      return derived;
+    } catch (_) {
+      derived.dispose();
+      _channelIdentities.remove(channelId);
+      rethrow;
+    }
+  }();
 
   void _onEvent(FileEvent event) {
     if (event.kind != 'chat_key_needed' && event.kind != 'chat_key_granted') {
@@ -541,6 +635,9 @@ class ChatChannelKeysController extends ChangeNotifier {
   }
 
   void _onLockChanged() {
-    if (_identity() == null && _keys.isNotEmpty) forget();
+    if (_identity() == null &&
+        (_keys.isNotEmpty || _channelIdentities.isNotEmpty)) {
+      forget();
+    }
   }
 }
