@@ -1627,6 +1627,7 @@ void main() {
       String text, {
       int author = 8,
       int? rootId,
+      ChatBranch? branch,
     }) => ChatTimelineMessage(
       message: ChatMessage(
         id: id,
@@ -1636,6 +1637,7 @@ void main() {
         ciphertext: null,
         createdAt: DateTime.utc(2026, 9, 25, 10, id),
         rootId: rootId,
+        branch: branch,
       ),
       state: ChatMessageState.ready,
       text: text,
@@ -1718,6 +1720,37 @@ void main() {
         expect(at(r), '/chat/1');
         expect(find.byKey(const ValueKey('chat_layout_branch')), findsNothing);
         expect(branch.disposed, isTrue);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    for (final (label, size) in [('narrow', narrow), ('wide', wide)]) {
+      testWidgets('the chip the Quark reports opens the side conversation '
+          '($label)', (tester) async {
+        final chat = withRoot();
+        chat.entries[1] = [
+          entry(
+            5,
+            'the sink is leaking',
+            branch: ChatBranch(
+              replyCount: 2,
+              lastReplyAt: DateTime.utc(2026, 9, 25, 10, 7),
+            ),
+          ),
+        ];
+        final (r, _) = await pumpChat(tester, size, chat: chat);
+
+        final chip = find.byKey(const ValueKey('message_branch_5'));
+        expect(chip, findsOneWidget);
+        expect(
+          find.descendant(of: chip, matching: find.textContaining('2 replies')),
+          findsOneWidget,
+        );
+        await tester.tap(chip);
+        await tester.pumpAndSettle();
+
+        expect(at(r), '/chat/1?branch=5');
+        expect(find.byKey(const ValueKey('chat_layout_branch')), findsOne);
         expect(tester.takeException(), isNull);
       });
     }

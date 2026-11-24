@@ -1085,8 +1085,9 @@ leaking".
 
 **Notes:**
 
-- The reply count and last reply come from the Quark (#4346); until it reports them no chip shows, and
-  **Start side conversation** in the message's menu opens the one that exists.
+- The reply count and last reply come from the Quark with the channel's messages (#4346), and move live as
+  anyone posts or deletes a reply, whether or not the side conversation is open. Deleted replies are not counted,
+  and a message whose replies are all deleted shows no chip.
 
 ---
 

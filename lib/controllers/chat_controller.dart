@@ -1657,6 +1657,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
         poll: question == null
             ? null
             : ChatMessagesController.pollItemFor(entry, me: me, now: now),
+        branch: _branchItemFor(message.branch),
       ),
     ChatTimelineSystem(:final event, :final isUnverified) => ChatMessageItem(
       id: 'event_${event.id}',
@@ -1669,6 +1670,17 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       isEncryptionEvent: event.kind == ChatChannelEvent.keyCreated,
     ),
   };
+
+  /// The chip of a message's side conversation [branch], or null when it has
+  /// no live reply (#4346). Unread replies are #4349's, so none is marked.
+  static ChatBranchItem? _branchItemFor(ChatBranch? branch) {
+    final at = branch?.lastReplyAt;
+    if (branch == null || branch.replyCount == 0 || at == null) return null;
+    return ChatBranchItem(
+      replyCount: branch.replyCount,
+      lastReplyAt: at.toLocal(),
+    );
+  }
 
   /// The quote of message [id], [found] in the timeline or not: its author
   /// and its text, a poll's question, or a caption-less file's name. A
