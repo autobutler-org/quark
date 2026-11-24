@@ -10,7 +10,7 @@ import (
 
 // deleteMessage godoc
 // @Summary Delete a chat message
-// @Description Wipes the message's ciphertext, deletes the attachment files bound to it, and sets deletedAt, leaving a tombstone so paging stays contiguous, and tells the channel's readers with chat_message_deleted. Allowed for the message's author or a holder of delete_messages, either of whom must hold read_messages now; another reader gets 403 and anyone without read_messages 404, delegated managers, demoted authors and admins included.
+// @Description Wipes the message's ciphertext, deletes the attachment files bound to it, and sets deletedAt, leaving a tombstone so paging stays contiguous, and tells the channel's readers with chat_message_deleted, and with chat_branch_changed when it was a reply in a side conversation. Allowed for the message's author or a holder of delete_messages, either of whom must hold read_messages now; another reader gets 403 and anyone without read_messages 404, delegated managers, demoted authors and admins included.
 // @Tags chat
 // @Produce json
 // @Param id path int true "Message id"

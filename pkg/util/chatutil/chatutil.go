@@ -1931,6 +1931,17 @@ type Message struct {
 	// it is closed, and in a ListMessages page the answers the caller may
 	// see. A deleted poll has none of it.
 	Poll *Poll `json:"poll,omitempty"`
+	// Branch summarizes the message's side conversation in a ListMessages
+	// page (#4346). It is absent when no reply to it is live.
+	Branch *Branch `json:"branch,omitempty"`
+}
+
+// Branch is a channel message's side conversation as the channel sees it
+// (#4346): how many of its replies are live and when the newest of them was
+// posted. Both follow from root_id, so they say nothing it did not.
+type Branch struct {
+	ReplyCount  int64     `json:"replyCount"`
+	LastReplyAt time.Time `json:"lastReplyAt"`
 }
 
 // PostMessageParams posts ciphertext to a channel.
@@ -2122,8 +2133,8 @@ type ListMessagesParams struct {
 }
 
 // ListMessagesResult is a page of messages, oldest first, tombstones
-// included, each with its reactions and, for a poll, the answers the caller
-// may see.
+// included, each with its reactions, its side conversation's Branch when it
+// has live replies, and, for a poll, the answers the caller may see.
 type ListMessagesResult struct {
 	Messages []Message `json:"messages"`
 }
@@ -2152,6 +2163,9 @@ func ListMessages(params ListMessagesParams) (ListMessagesResult, error) {
 		return ListMessagesResult{}, err
 	}
 	if err := attachPolls(params.Ctx, queries, params.DataDir, params.ChannelID, params.Principal.UserID, messages); err != nil {
+		return ListMessagesResult{}, err
+	}
+	if err := attachBranches(params.Ctx, queries, params.ChannelID, messages); err != nil {
 		return ListMessagesResult{}, err
 	}
 	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)

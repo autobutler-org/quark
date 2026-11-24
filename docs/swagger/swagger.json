@@ -4826,7 +4826,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns messages oldest first. With after, the page starts after that id (after=0 is the beginning), which is how a client catches up on anything the events socket dropped. Otherwise it ends before before, or at the newest message when before is left out. Deleted messages come back as tombstones with deletedAt and no ciphertext. A side conversation's replies are left out: GET /chat/messages/{id}/replies pages them. Needs read_messages; anyone else gets 404, delegated managers and admins included.",
+                "description": "Returns messages oldest first. With after, the page starts after that id (after=0 is the beginning), which is how a client catches up on anything the events socket dropped. Otherwise it ends before before, or at the newest message when before is left out. Deleted messages come back as tombstones with deletedAt and no ciphertext. A side conversation's replies are left out: GET /chat/messages/{id}/replies pages them. A message with at least one reply that is not deleted carries branch, its reply count and when the newest reply was posted. Needs read_messages; anyone else gets 404, delegated managers and admins included.",
                 "produces": [
                     "application/json"
                 ],
@@ -4894,7 +4894,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Stores ciphertext, base64, that the caller's client encrypted under the channel key of keyVersion, and sends the stored row to the channel's readers as chat_message_created. The Quark never sees the text. A ciphertext's 24-byte nonce is taken once per channel and key version: repeating your own live post byte for byte returns it with 200 and stores nothing, and any other reuse is 409. clientMessageId, up to 64 bytes, names the send: a retry encrypts again under a fresh nonce, so it carries the same clientMessageId, and one the caller already sent to this channel returns that message with 200 and stores nothing, whatever the ciphertext. attachmentIds, when set, names up to 10 attachments the caller already uploaded to this channel and has not bound to a message. Each id is 64 lowercase hex characters, sent in the clear so the Quark can delete the files with the message; the name, the media type and the key stay in the ciphertext. They are bound to this message in the same transaction. A retry of this clientMessageId or ciphertext still returns the stored message when those ids are already bound to it. More than 10, or an id that is not 64 lowercase hex characters, is 400. An id the caller cannot bind is 404 and the message is not stored. Ciphertext is at most 16 KiB. poll, when set, makes the message a poll whose question and options are in the ciphertext: closesAt, when set, is when it stops taking answers and has to be in the future and at most a year after the post; allowChange lets an account replace its answer; anonymous serves answers without who gave them, to everyone; resultsAfterClose shows answers only to the author until it closes. A poll field of the wrong type, or one the Quark does not know, is refused. rootId, when set, posts the message as a reply in the side conversation of that channel message, which the channel's message list leaves out and GET /chat/messages/{id}/replies pages: a root that does not exist or is in another channel is 404, a root that is itself a reply is 409, and a poll is 400. A deleted root is fine. Needs send_messages, and attach_files when attachmentIds is set; a reader without the one it needs gets 403, and anyone without read_messages 404, delegated managers and admins included.",
+                "description": "Stores ciphertext, base64, that the caller's client encrypted under the channel key of keyVersion, and sends the stored row to the channel's readers as chat_message_created. The Quark never sees the text. A ciphertext's 24-byte nonce is taken once per channel and key version: repeating your own live post byte for byte returns it with 200 and stores nothing, and any other reuse is 409. clientMessageId, up to 64 bytes, names the send: a retry encrypts again under a fresh nonce, so it carries the same clientMessageId, and one the caller already sent to this channel returns that message with 200 and stores nothing, whatever the ciphertext. attachmentIds, when set, names up to 10 attachments the caller already uploaded to this channel and has not bound to a message. Each id is 64 lowercase hex characters, sent in the clear so the Quark can delete the files with the message; the name, the media type and the key stay in the ciphertext. They are bound to this message in the same transaction. A retry of this clientMessageId or ciphertext still returns the stored message when those ids are already bound to it. More than 10, or an id that is not 64 lowercase hex characters, is 400. An id the caller cannot bind is 404 and the message is not stored. Ciphertext is at most 16 KiB. poll, when set, makes the message a poll whose question and options are in the ciphertext: closesAt, when set, is when it stops taking answers and has to be in the future and at most a year after the post; allowChange lets an account replace its answer; anonymous serves answers without who gave them, to everyone; resultsAfterClose shows answers only to the author until it closes. A poll field of the wrong type, or one the Quark does not know, is refused. rootId, when set, posts the message as a reply in the side conversation of that channel message, which the channel's message list leaves out and GET /chat/messages/{id}/replies pages, and tells the readers the root's new count with chat_branch_changed: a root that does not exist or is in another channel is 404, a root that is itself a reply is 409, and a poll is 400. A deleted root is fine. Needs send_messages, and attach_files when attachmentIds is set; a reader without the one it needs gets 403, and anyone without read_messages 404, delegated managers and admins included.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5439,7 +5439,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Wipes the message's ciphertext, deletes the attachment files bound to it, and sets deletedAt, leaving a tombstone so paging stays contiguous, and tells the channel's readers with chat_message_deleted. Allowed for the message's author or a holder of delete_messages, either of whom must hold read_messages now; another reader gets 403 and anyone without read_messages 404, delegated managers, demoted authors and admins included.",
+                "description": "Wipes the message's ciphertext, deletes the attachment files bound to it, and sets deletedAt, leaving a tombstone so paging stays contiguous, and tells the channel's readers with chat_message_deleted, and with chat_branch_changed when it was a reply in a side conversation. Allowed for the message's author or a holder of delete_messages, either of whom must hold read_messages now; another reader gets 403 and anyone without read_messages 404, delegated managers, demoted authors and admins included.",
                 "produces": [
                     "application/json"
                 ],
@@ -14027,6 +14027,17 @@
                 }
             }
         },
+        "chatutil.Branch": {
+            "type": "object",
+            "properties": {
+                "lastReplyAt": {
+                    "type": "string"
+                },
+                "replyCount": {
+                    "type": "integer"
+                }
+            }
+        },
         "chatutil.Channel": {
             "type": "object",
             "properties": {
@@ -14499,6 +14510,14 @@
                 "authorId": {
                     "description": "AuthorID is absent once the author's account is deleted.",
                     "type": "integer"
+                },
+                "branch": {
+                    "description": "Branch summarizes the message's side conversation in a ListMessages\npage (#4346). It is absent when no reply to it is live.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/chatutil.Branch"
+                        }
+                    ]
                 },
                 "channelId": {
                     "type": "integer"

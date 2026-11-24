@@ -116,6 +116,9 @@ const (
 	// EventChatReactionChanged fires when a reaction is added to or removed
 	// from a chat message (#2426). Data is a ChatReactionChanged.
 	EventChatReactionChanged EventKind = "chat_reaction_changed"
+	// EventChatBranchChanged fires when a reply in a message's side
+	// conversation is posted or deleted (#4346). Data is a ChatBranchChanged.
+	EventChatBranchChanged EventKind = "chat_branch_changed"
 	// EventChatPollAnswerChanged fires when an account answers a chat poll that
 	// names who answered, or changes its answer (#3893). Data is a
 	// ChatPollAnswerChanged. An anonymous poll fires EventChatPollAnswersChanged
@@ -213,6 +216,23 @@ type ChatReactionChanged struct {
 	// Reaction is the stored row, a chatutil.Reaction, when it was added, and
 	// absent when it was removed.
 	Reaction any `json:"reaction,omitempty"`
+	// Audience is the channel's readers, the accounts holding read_messages.
+	// It is never sent.
+	Audience []int64 `json:"-"`
+}
+
+// ChatBranchChanged is the data of a chat_branch_changed event: a channel
+// message's side conversation as the channel shows it now (#4346). Like a
+// message event it reaches only the channel's readers.
+type ChatBranchChanged struct {
+	ChannelID int64 `json:"channelId"`
+	// MessageID is the side conversation's root.
+	MessageID int64 `json:"messageId"`
+	// ReplyCount is how many of its replies are live; 0 when none is left.
+	ReplyCount int64 `json:"replyCount"`
+	// LastReplyAt is when the newest live reply was posted, absent when none
+	// is left.
+	LastReplyAt *time.Time `json:"lastReplyAt,omitempty"`
 	// Audience is the channel's readers, the accounts holding read_messages.
 	// It is never sent.
 	Audience []int64 `json:"-"`

@@ -305,6 +305,11 @@ reply names its root in the clear: `root_id` on the stored row, `rootId` on the 
   app reads them, and its unread count all leave branch replies out. `GET /api/v0/chat/messages/:id/replies`
   pages a branch, with the channel route's `before`, `after` and `limit`, and only for holders of
   `read_messages`.
+- **The parent shows a summary.** Each message in a channel page carries `branch`, `{replyCount, lastReplyAt}`,
+  when it has at least one reply that is not deleted (#4346). Posting or deleting a reply sends
+  `chat_branch_changed` (`channelId`, `messageId` of the root, `replyCount`, and `lastReplyAt` unless the count is
+  0) to the channel's readers, and, like every message event, never to an admin who is not one. The count and the
+  time follow from `root_id` and `created_at`, so they reveal nothing the `root_id` column did not.
 
 ### Editing
 

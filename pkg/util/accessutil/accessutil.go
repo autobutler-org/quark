@@ -524,8 +524,8 @@ type FilterEventResult struct {
 // FilterEvent decides whether a subscriber hears an event, and in what form.
 // It reads only the snapshots it is given, never the database.
 //
-//   - chat_message_created, chat_message_deleted, chat_reaction_changed and
-//     chat_poll_closed pass only to their audience, the channel's readers:
+//   - chat_message_created, chat_message_deleted, chat_reaction_changed,
+//     chat_branch_changed and chat_poll_closed pass only to their audience, the channel's readers:
 //     holders of read_messages, never a delegated manager.
 //     chat_poll_answer_changed and chat_poll_answers_changed pass only to the
 //     readers who may see that answer under the poll's settings. Admins get
@@ -575,6 +575,10 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 	}
 	if evt.Kind == eventbus.EventChatReactionChanged {
 		changed, ok := evt.Data.(eventbus.ChatReactionChanged)
+		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
+	}
+	if evt.Kind == eventbus.EventChatBranchChanged {
+		changed, ok := evt.Data.(eventbus.ChatBranchChanged)
 		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
 	}
 	if evt.Kind == eventbus.EventChatPollAnswerChanged {

@@ -45,6 +45,9 @@ func TestChatReplies_PostAndPage(t *testing.T) {
 	if got := ids(page); len(got) != 1 || got[0] != root.ID {
 		t.Errorf("channel page = %v, want only the root %d", got, root.ID)
 	}
+	if got := page.Messages[0].Branch; got == nil || got.ReplyCount != 1 || !got.LastReplyAt.Equal(reply.CreatedAt) {
+		t.Errorf("root's branch = %+v, want 1 reply at %v (#4346)", got, reply.CreatedAt)
+	}
 	replies := "/chat/messages/" + strconv.FormatInt(root.ID, 10) + "/replies"
 	h.expect(t, http.StatusOK, http.MethodGet, replies, "bob", "", &page)
 	if got := ids(page); len(got) != 1 || got[0] != reply.ID {
@@ -55,7 +58,8 @@ func TestChatReplies_PostAndPage(t *testing.T) {
 
 // TestChatReplies_DirectMessageKeepsAdminOut checks a non-member admin gets
 // 404 on the replies route of a direct message, and that the event for a
-// reply there never reaches the admin's stream (#4345).
+// reply there, and the root's chat_branch_changed, never reach the admin's
+// stream (#4345, #4346).
 func TestChatReplies_DirectMessageKeepsAdminOut(t *testing.T) {
 	h := newHarness(t)
 	h.expect(t, http.StatusOK, http.MethodPut, "/chat/keys/me", "bob", keysBody('b', false), nil)
@@ -76,8 +80,15 @@ func TestChatReplies_DirectMessageKeepsAdminOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	heard := 0
+	heard, branched := 0, 0
 	for _, evt := range h.drain() {
+		if evt.Kind == eventbus.EventChatBranchChanged {
+			branched++
+			if accessutil.FilterEvent(accessutil.FilterEventParams{Access: admin.Access, Event: evt}).Deliver {
+				t.Errorf("the admin's event stream delivers a direct message's branch: %+v", evt.Data)
+			}
+			continue
+		}
 		changed, ok := evt.Data.(eventbus.ChatMessageChanged)
 		if !ok || evt.Kind != eventbus.EventChatMessageCreated {
 			continue
@@ -90,7 +101,7 @@ func TestChatReplies_DirectMessageKeepsAdminOut(t *testing.T) {
 			t.Errorf("the admin's event stream delivers a reply in a direct message: %+v", changed)
 		}
 	}
-	if heard != 1 {
-		t.Errorf("heard %d chat_message_created events for the reply, want 1", heard)
+	if heard != 1 || branched != 1 {
+		t.Errorf("heard %d chat_message_created and %d chat_branch_changed for the reply, want 1 each", heard, branched)
 	}
 }

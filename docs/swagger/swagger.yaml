@@ -436,6 +436,13 @@ definitions:
         description: Run is the run that was verified, a folder under backups/.
         type: string
     type: object
+  chatutil.Branch:
+    properties:
+      lastReplyAt:
+        type: string
+      replyCount:
+        type: integer
+    type: object
   chatutil.Channel:
     properties:
       anonymous:
@@ -820,6 +827,12 @@ definitions:
       authorId:
         description: AuthorID is absent once the author's account is deleted.
         type: integer
+      branch:
+        allOf:
+        - $ref: '#/definitions/chatutil.Branch'
+        description: |-
+          Branch summarizes the message's side conversation in a ListMessages
+          page (#4346). It is absent when no reply to it is live.
       channelId:
         type: integer
       ciphertext:
@@ -7381,8 +7394,10 @@ paths:
         the events socket dropped. Otherwise it ends before before, or at the newest
         message when before is left out. Deleted messages come back as tombstones
         with deletedAt and no ciphertext. A side conversation''s replies are left
-        out: GET /chat/messages/{id}/replies pages them. Needs read_messages; anyone
-        else gets 404, delegated managers and admins included.'
+        out: GET /chat/messages/{id}/replies pages them. A message with at least one
+        reply that is not deleted carries branch, its reply count and when the newest
+        reply was posted. Needs read_messages; anyone else gets 404, delegated managers
+        and admins included.'
       parameters:
       - description: Channel id
         in: path
@@ -7453,11 +7468,12 @@ paths:
         type, or one the Quark does not know, is refused. rootId, when set, posts
         the message as a reply in the side conversation of that channel message, which
         the channel''s message list leaves out and GET /chat/messages/{id}/replies
-        pages: a root that does not exist or is in another channel is 404, a root
-        that is itself a reply is 409, and a poll is 400. A deleted root is fine.
-        Needs send_messages, and attach_files when attachmentIds is set; a reader
-        without the one it needs gets 403, and anyone without read_messages 404, delegated
-        managers and admins included.'
+        pages, and tells the readers the root''s new count with chat_branch_changed:
+        a root that does not exist or is in another channel is 404, a root that is
+        itself a reply is 409, and a poll is 400. A deleted root is fine. Needs send_messages,
+        and attach_files when attachmentIds is set; a reader without the one it needs
+        gets 403, and anyone without read_messages 404, delegated managers and admins
+        included.'
       parameters:
       - description: Channel id
         in: path
@@ -7795,10 +7811,11 @@ paths:
     delete:
       description: Wipes the message's ciphertext, deletes the attachment files bound
         to it, and sets deletedAt, leaving a tombstone so paging stays contiguous,
-        and tells the channel's readers with chat_message_deleted. Allowed for the
-        message's author or a holder of delete_messages, either of whom must hold
-        read_messages now; another reader gets 403 and anyone without read_messages
-        404, delegated managers, demoted authors and admins included.
+        and tells the channel's readers with chat_message_deleted, and with chat_branch_changed
+        when it was a reply in a side conversation. Allowed for the message's author
+        or a holder of delete_messages, either of whom must hold read_messages now;
+        another reader gets 403 and anyone without read_messages 404, delegated managers,
+        demoted authors and admins included.
       parameters:
       - description: Message id
         in: path
