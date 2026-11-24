@@ -132,8 +132,8 @@ const (
 	// fires nothing.
 	EventChatPollClosed EventKind = "chat_poll_closed"
 	// EventChatReadMarkerChanged fires when an account's read marker in a
-	// channel moves forward (#2424), so its other sessions clear their unread
-	// count. Data is a ChatReadMarkerChanged.
+	// channel, or in a side conversation (#4349), moves forward (#2424), so
+	// its other sessions clear their unread count. Data is a ChatReadMarkerChanged.
 	EventChatReadMarkerChanged EventKind = "chat_read_marker_changed"
 	// EventChatTyping fires when a member says they are typing in a channel
 	// (#2426). Data is a ChatTyping. Nothing about it is stored or logged.
@@ -267,9 +267,13 @@ type ChatPollAnswersChanged struct {
 // member hears it, and neither does an admin.
 type ChatReadMarkerChanged struct {
 	ChannelID int64 `json:"channelId"`
+	// RootID names the side conversation whose marker moved (#4349); absent
+	// for a channel's marker.
+	RootID int64 `json:"rootId,omitempty"`
 	// LastReadMessageID is where the marker stands now.
 	LastReadMessageID int64 `json:"lastReadMessageId"`
-	// UnreadCount is the account's unread count in the channel after the move.
+	// UnreadCount is the account's unread count in the channel, or in the
+	// side conversation of RootID, after the move.
 	UnreadCount int64 `json:"unreadCount"`
 	// UserID is the account whose marker moved. It is never sent.
 	UserID int64 `json:"-"`

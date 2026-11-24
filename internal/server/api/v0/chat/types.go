@@ -44,6 +44,7 @@ func (r *router) Routes() []*serverutil.Route {
 		editMessageRoute,
 		deleteMessageRoute,
 		markReadRoute,
+		markBranchReadRoute,
 		postTypingRoute,
 		addReactionRoute,
 		deleteReactionRoute,

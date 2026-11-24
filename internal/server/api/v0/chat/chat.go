@@ -5,7 +5,7 @@
 // members' grants, POST /keys/regenerate for an admin who already holds read_messages to mint the next version
 // when the channel is stuck, and DELETE /keys/grants/:version for rejecting the caller's own, /chat/channels/:id/events its signed membership and key events, and /chat/channels/:id/messages
 // its encrypted messages, which PUT /chat/messages/:id lets their author edit and DELETE deletes, GET
-// /chat/messages/:id/replies pages the replies in a message's side conversation, and /chat/channels/:id/read moves the caller's read
+// /chat/messages/:id/replies pages the replies in a message's side conversation and PUT /chat/messages/:id/read the caller's read marker there, and /chat/channels/:id/read moves the caller's read
 // marker, which the unread counts in the channel list are counted from. POST /chat/channels/:id/typing tells the
 // other readers the caller is typing, and stores nothing. /chat/messages/:id/reactions adds an encrypted reaction
 // to a message and /chat/reactions/:id removes one. PUT /chat/messages/:id/answer answers a poll message,

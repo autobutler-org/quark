@@ -188,21 +188,36 @@ func (q *Queries) GetChatMessageByNonce(ctx context.Context, arg GetChatMessageB
 }
 
 const listChatBranchSummariesBetween = `-- name: ListChatBranchSummariesBetween :many
-SELECT summary.root_id, summary.reply_count, newest.created_at AS last_reply_at
+SELECT
+    summary.root_id,
+    summary.reply_count,
+    newest.created_at AS last_reply_at,
+    summary.unread_count,
+    CAST(COALESCE(root.author_id, 0) = CAST(?1 AS BIGINT) OR summary.mine > 0 AS BOOLEAN) AS involved
 FROM (
-    SELECT CAST(reply.root_id AS BIGINT) AS root_id, COUNT(*) AS reply_count, MAX(reply.id) AS newest_id
+    SELECT
+        CAST(reply.root_id AS BIGINT) AS root_id,
+        COUNT(*) AS reply_count,
+        MAX(reply.id) AS newest_id,
+        COUNT(CASE WHEN reply.id > COALESCE(marker.last_read_message_id, 0)
+            AND COALESCE(reply.author_id, 0) <> ?1 THEN 1 END) AS unread_count,
+        COUNT(CASE WHEN reply.author_id = ?1 THEN 1 END) AS mine
     FROM chat_messages AS reply
-    WHERE reply.channel_id = ?1
-      AND reply.root_id >= CAST(?2 AS BIGINT)
-      AND reply.root_id <= CAST(?3 AS BIGINT)
+    LEFT JOIN chat_branch_read_markers AS marker ON marker.root_id = reply.root_id
+        AND marker.user_id = ?1
+    WHERE reply.channel_id = ?2
+      AND reply.root_id >= CAST(?3 AS BIGINT)
+      AND reply.root_id <= CAST(?4 AS BIGINT)
       AND reply.deleted_at IS NULL
     GROUP BY reply.root_id
 ) AS summary
 JOIN chat_messages AS newest ON newest.id = summary.newest_id
+JOIN chat_messages AS root ON root.id = summary.root_id
 ORDER BY summary.root_id
 `
 
 type ListChatBranchSummariesBetweenParams struct {
+	UserID    int64
 	ChannelID int64
 	FirstID   int64
 	LastID    int64
@@ -212,14 +227,24 @@ type ListChatBranchSummariesBetweenRow struct {
 	RootID      int64
 	ReplyCount  int64
 	LastReplyAt time.Time
+	UnreadCount int64
+	Involved    bool
 }
 
 // ListChatBranchSummariesBetween counts the live replies of each channel
 // message whose id falls in [first_id, last_id], one page of
 // ListChatMessages*, with when the newest of them arrived (#4346), sorted by root. A message
-// with no live reply has no row. It reads the (root_id, id) index.
+// with no live reply has no row. It reads the (root_id, id) index. For
+// user_id it also counts the live replies after that account's marker in the
+// branch that someone else wrote, and says whether the account is involved:
+// it wrote the root or has a live reply there (#4349).
 func (q *Queries) ListChatBranchSummariesBetween(ctx context.Context, arg ListChatBranchSummariesBetweenParams) ([]ListChatBranchSummariesBetweenRow, error) {
-	rows, err := q.db.QueryContext(ctx, listChatBranchSummariesBetween, arg.ChannelID, arg.FirstID, arg.LastID)
+	rows, err := q.db.QueryContext(ctx, listChatBranchSummariesBetween,
+		arg.UserID,
+		arg.ChannelID,
+		arg.FirstID,
+		arg.LastID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +252,13 @@ func (q *Queries) ListChatBranchSummariesBetween(ctx context.Context, arg ListCh
 	var items []ListChatBranchSummariesBetweenRow
 	for rows.Next() {
 		var i ListChatBranchSummariesBetweenRow
-		if err := rows.Scan(&i.RootID, &i.ReplyCount, &i.LastReplyAt); err != nil {
+		if err := rows.Scan(
+			&i.RootID,
+			&i.ReplyCount,
+			&i.LastReplyAt,
+			&i.UnreadCount,
+			&i.Involved,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

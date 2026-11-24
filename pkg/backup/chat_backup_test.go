@@ -461,7 +461,7 @@ func TestChatBackupSchema_MatchesLiveTables(t *testing.T) {
 	// markers, which a backup leaves out (see chatBackupTables).
 	assertRows(t, live, `
 		SELECT COUNT(*) FROM sqlite_master
-		WHERE type = 'table' AND name <> 'chat_read_markers'
+		WHERE type = 'table' AND name NOT IN ('chat_read_markers', 'chat_branch_read_markers')
 		  AND (name LIKE 'chat\_%' ESCAPE '\' OR name = 'user_chat_keys')`,
 		fmt.Sprintf("[%d]", len(chatBackupTables)))
 }

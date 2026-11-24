@@ -310,6 +310,10 @@ reply names its root in the clear: `root_id` on the stored row, `rootId` on the 
   `chat_branch_changed` (`channelId`, `messageId` of the root, `replyCount`, and `lastReplyAt` unless the count is
   0) to the channel's readers, and, like every message event, never to an admin who is not one. The count and the
   time follow from `root_id` and `created_at`, so they reveal nothing the `root_id` column did not.
+- **A branch has its own read marker** (#4349), and its replies are unread for the caller only past it. The
+  summary also carries, for the caller, `unreadCount` and `involved`: whether they wrote the root or have a live
+  reply there. Unread replies count toward the channel's badge only in a branch the caller is involved in, or one
+  that mentions them, which only their device can tell (see [Read markers](#read-markers)).
 
 ### Editing
 
@@ -613,7 +617,12 @@ on, how many messages after their marker someone else wrote and nobody deleted.
 - **Which message each account has read up to in each channel.** That is new metadata: roughly when someone last
   looked at a channel, never what they read.
 - Counting needs ids, authors and tombstones, all of which the Quark already holds. It opens no ciphertext.
-- A chat backup (#2428) leaves read markers out, so a restored Quark starts with everything unread.
+- **Which reply each account has read up to in each side conversation** (#4349), in
+  `chat_branch_read_markers`, one row per account and root. Like a channel's marker, it says roughly when someone
+  last looked at a branch, and with it, which branches an account has opened at all.
+- **Who is involved in a branch** is computed, not stored: the root's author and whoever has a live reply there,
+  both of which `author_id` and `root_id` already said.
+- A chat backup (#2428) leaves read markers out, both kinds, so a restored Quark starts with everything unread.
 
 ### Delivery
 
@@ -621,6 +630,7 @@ on, how many messages after their marker someone else wrote and nobody deleted.
 the sessions of the account whose marker moved and to no one else, admins included, so reading on a phone clears
 the count on the web without telling the channel who has read what. A message arriving or being deleted changes
 a count too; the app hears those through the message events and adjusts, or reads the channel list again.
+A branch's marker moving sends the same event with `rootId`, and `unreadCount` is then the branch's.
 
 ### Mentions
 
@@ -647,7 +657,10 @@ nothing until a channel is fetched and decrypted. Which of the two is an open de
 
 - `PUT /api/v0/chat/channels/:id/read` takes `{messageId}` and needs `read_messages`: anyone else gets 404,
   delegated managers and admins included, and so does an id that names no message in the channel.
-- `GET /api/v0/chat/channels` carries `unreadCount` on each channel.
+- `PUT /api/v0/chat/messages/:id/read` takes `{messageId}`, a reply in the side conversation of message `:id`,
+  under the same rules (#4349).
+- `GET /api/v0/chat/channels` carries `unreadCount`, `branchUnreadCount` (involved branches) and
+  `otherBranchUnreadCount` (every other branch) on each channel.
 
 ## Direct messages
 
