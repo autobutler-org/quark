@@ -2716,6 +2716,62 @@ final List<GalleryEntry> registry = [
     build: (context, log) => ChatLayoutDemo(log: log),
   ),
   GalleryEntry(
+    name: 'QuarkBranchList',
+    group: 'Chat',
+    build: (context, log) {
+      final now = DateTime.now();
+      ChatMessageItem branch(
+        String id,
+        String body,
+        Duration ago, {
+        ChatMessageKind kind = ChatMessageKind.text,
+        bool unread = false,
+      }) => ChatMessageItem(
+        id: id,
+        authorId: 'bob',
+        authorName: 'Bob Byron',
+        sentAt: now.subtract(const Duration(days: 40)),
+        body: body,
+        kind: kind,
+        branch: ChatBranchItem(
+          replyCount: 4,
+          lastReplyAt: now.subtract(ago),
+          hasUnread: unread,
+        ),
+      );
+      final branches = [
+        branch('b1', 'The sink is leaking', Duration.zero, unread: true),
+        branch(
+          'b2',
+          '',
+          const Duration(hours: 5),
+          kind: ChatMessageKind.deleted,
+        ),
+        branch('b3', 'Holiday plans', const Duration(days: 12)),
+        branch('b4', 'Who has the projector?', const Duration(days: 30)),
+      ];
+      var expanded = false;
+      return StatefulBuilder(
+        builder: (context, setInner) => SizedBox(
+          width: 360,
+          height: 420,
+          child: QuarkBranchList(
+            branches: branches,
+            quietBefore: now.subtract(const Duration(days: 7)),
+            isQuietExpanded: expanded,
+            onQuietExpandedChanged: (value) {
+              log('QuarkBranchList.onQuietExpandedChanged($value)');
+              setInner(() => expanded = value);
+            },
+            hasMore: true,
+            onLoadMore: () => log('QuarkBranchList.onLoadMore'),
+            onOpen: (id) => log('QuarkBranchList.onOpen($id)'),
+          ),
+        ),
+      );
+    },
+  ),
+  GalleryEntry(
     name: 'QuarkBranchPanel',
     group: 'Chat',
     build: (context, log) {
