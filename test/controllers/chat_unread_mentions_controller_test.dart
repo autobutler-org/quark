@@ -16,6 +16,7 @@ void main() {
   late ChatUnreadController unread;
   late ChangeNotifier keys;
   late Map<int, List<ChatMessage>> messages;
+  late Map<int, List<ChatMessage>> replies;
   late Set<int> keyless;
   late List<String> calls;
   late bool unlocked;
@@ -28,6 +29,8 @@ void main() {
     int author = 8,
     int version = 1,
     bool deleted = false,
+    int? rootId,
+    ChatBranch? branch,
   }) => ChatMessage(
     id: nextId++,
     channelId: channel,
@@ -36,6 +39,8 @@ void main() {
     ciphertext: deleted ? null : utf8.encode(text),
     createdAt: DateTime.utc(2026, 10, 11),
     deletedAt: deleted ? DateTime.utc(2026, 10, 11) : null,
+    rootId: rootId,
+    branch: branch,
   );
 
   ChatUnreadMentionsController build() => ChatUnreadMentionsController(
@@ -65,6 +70,10 @@ void main() {
       if (error != null) throw error;
       return messages[channelId] ?? const [];
     },
+    fetchReplies: (rootId, {limit}) async {
+      calls.add('replies $rootId');
+      return replies[rootId] ?? const [];
+    },
     openMessage: (m) => keyless.contains(m.keyVersion)
         ? null
         : utf8.decode(m.ciphertext ?? const []),
@@ -91,6 +100,7 @@ void main() {
     );
     keys = ChangeNotifier();
     messages = {};
+    replies = {};
     keyless = {};
     calls = [];
     unlocked = true;
@@ -214,6 +224,68 @@ void main() {
     await pumpEventQueue();
 
     expect(mentions.countOf(1), 1);
+    mentions.dispose();
+  });
+
+  // #4349: a branch's unread replies are read too, one page per branch.
+  test('counts mentions in side conversations, and the ones outside the '
+      'account\'s own branches toward the badge', () async {
+    final involved = message(
+      'mine',
+      author: 7,
+      branch: const ChatBranch(replyCount: 2, unreadCount: 1, involved: true),
+    );
+    final other = message(
+      'not mine',
+      branch: const ChatBranch(replyCount: 3, unreadCount: 2),
+    );
+    final quiet = message(
+      'read already',
+      branch: const ChatBranch(replyCount: 1),
+    );
+    messages[1] = [involved, other, quiet];
+    replies[involved.id] = [
+      message('@ada read already', rootId: involved.id),
+      message('@ada in mine', rootId: involved.id),
+    ];
+    replies[other.id] = [
+      message('@ada read already', rootId: other.id),
+      message('@ada in theirs', rootId: other.id),
+      message('@ada mine', author: 7, rootId: other.id),
+      message('no mention', rootId: other.id),
+    ];
+    final mentions = build();
+    unread.setChannels([
+      const ChatChannel(
+        id: 1,
+        name: 'c1',
+        branchUnreadCount: 1,
+        otherBranchUnreadCount: 2,
+      ),
+    ]);
+    await pumpEventQueue();
+
+    expect(calls, [
+      'keys 1',
+      'messages 1',
+      'replies ${involved.id}',
+      'replies ${other.id}',
+    ]);
+    expect(mentions.countOf(1), 2);
+    expect(mentions.extraUnreadOf(1), 1);
+    expect(mentions.mentionsInBranch(involved.id), 1);
+    expect(mentions.mentionsInBranch(other.id), 1);
+    expect(mentions.mentionsInBranch(quiet.id), 0);
+
+    // On screen, the badge numbers read zero; the chips keep theirs.
+    unread.setViewing(1, focused: true);
+    expect(mentions.countOf(1), 0);
+    expect(mentions.extraUnreadOf(1), 0);
+    expect(mentions.mentionsInBranch(other.id), 1);
+
+    // Read everywhere: it all goes.
+    unread.setChannels([const ChatChannel(id: 1, name: 'c1')]);
+    expect(mentions.mentionsInBranch(other.id), 0);
     mentions.dispose();
   });
 }

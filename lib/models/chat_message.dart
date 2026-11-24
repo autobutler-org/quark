@@ -147,7 +147,12 @@ class ChatMessage {
 /// how many replies to it are live, and when the newest was posted.
 class ChatBranch {
   /// Builds a summary explicitly; tests use it.
-  const ChatBranch({required this.replyCount, this.lastReplyAt});
+  const ChatBranch({
+    required this.replyCount,
+    this.lastReplyAt,
+    this.unreadCount = 0,
+    this.involved = false,
+  });
 
   /// Live replies; 0 once every one was deleted.
   final int replyCount;
@@ -155,15 +160,38 @@ class ChatBranch {
   /// When the newest live reply was posted, null when there is none.
   final DateTime? lastReplyAt;
 
+  /// Live replies after the signed-in account's marker in the branch that
+  /// someone else wrote (#4349).
+  final int unreadCount;
+
+  /// Whether the signed-in account wrote the root or has a live reply here,
+  /// which is when [unreadCount] counts toward the channel's badge (#4349).
+  final bool involved;
+
   /// Reads a message's `branch`, or a `chat_branch_changed` event's data,
-  /// which carries the same two fields.
+  /// which carries only [replyCount] and [lastReplyAt].
   factory ChatBranch.fromJson(Map<dynamic, dynamic> json) {
     final at = json['lastReplyAt'] as String?;
     return ChatBranch(
       replyCount: (json['replyCount'] as num?)?.toInt() ?? 0,
       lastReplyAt: at == null ? null : DateTime.parse(at),
+      unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
+      involved: json['involved'] as bool? ?? false,
     );
   }
+
+  /// This summary with the given fields replaced.
+  ChatBranch copyWith({
+    int? replyCount,
+    DateTime? lastReplyAt,
+    int? unreadCount,
+    bool? involved,
+  }) => ChatBranch(
+    replyCount: replyCount ?? this.replyCount,
+    lastReplyAt: lastReplyAt ?? this.lastReplyAt,
+    unreadCount: unreadCount ?? this.unreadCount,
+    involved: involved ?? this.involved,
+  );
 }
 
 /// One reaction as the Quark stores it (#2426): who reacted to which message

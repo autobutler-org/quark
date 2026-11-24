@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_message.dart';
 import 'package:quark/models/chat_poll.dart';
 import 'package:quark/services/app_settings.dart';
@@ -239,6 +240,25 @@ class ChatMessagesService with AuthenticatedService {
     );
     throwUnlessOk(response, 'edit message $messageId');
     return ChatMessage.fromJson(_json(response));
+  }
+
+  /// Moves the signed-in account's read marker in the side conversation of
+  /// message [rootId] up to reply [messageId] (#4349). The Quark never moves
+  /// it backward: an id at or before the marker answers with the marker as
+  /// it stands.
+  ///
+  /// api: PUT /api/v0/chat/messages/{id}/read
+  static Future<ChatReadMarker> markBranchRead(
+    int rootId,
+    int messageId,
+  ) async {
+    final response = await instance.authenticatedPut(
+      _messageUri(rootId, 'read'),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({'messageId': messageId}),
+    );
+    throwUnlessOk(response, 'mark side conversation $rootId read');
+    return ChatReadMarker.fromJson(_json(response));
   }
 
   /// Deletes message [messageId] and returns its tombstone.

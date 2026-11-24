@@ -1631,6 +1631,87 @@ void main() {
     });
   });
 
+  group('side conversation unread replies (#4349)', () {
+    test('a reply from someone else raises a root\'s unread count, one of '
+        'this account\'s involves it, and a branch marker sets it', () async {
+      final key = crypto.newChannelKey();
+      final lastAt = DateTime.utc(2026, 9, 25, 10, 7);
+      quark.messages.add(
+        ChatMessage.fromJson({
+          'id': 4,
+          'channelId': _channel,
+          'authorId': 4,
+          'keyVersion': 1,
+          'ciphertext': base64Encode(
+            crypto.encrypt(
+              Uint8List.fromList(utf8.encode('the sink is leaking')),
+              key,
+              additionalData: crypto.messageAad(
+                channelId: _channel,
+                keyVersion: 1,
+              ),
+            ),
+          ),
+          'createdAt': _epoch.toIso8601String(),
+          'branch': {
+            'replyCount': 1,
+            'lastReplyAt': lastAt.toIso8601String(),
+            'unreadCount': 1,
+          },
+        }),
+      );
+      final reader = quark.client(_FakeKeys()..grant(1, key), crypto);
+      await reader.open();
+      ChatBranch? branch() =>
+          reader.entries.whereType<ChatTimelineMessage>().single.message.branch;
+      expect(branch()?.unreadCount, 1);
+      expect(branch()?.involved, isFalse);
+
+      void emit(String kind, Map<String, Object?> data) => quark.live.add(
+        FileEvent(kind: kind, path: '', data: {'channelId': _channel, ...data}),
+      );
+      Map<String, Object?> reply(int id, int author) => {
+        'rootId': 4,
+        'message': {
+          'id': id,
+          'channelId': _channel,
+          'authorId': author,
+          'keyVersion': 1,
+          'rootId': 4,
+          'createdAt': lastAt.toIso8601String(),
+        },
+      };
+      emit('chat_message_created', reply(5, 3));
+      emit('chat_branch_changed', {
+        'messageId': 4,
+        'replyCount': 2,
+        'lastReplyAt': lastAt.toIso8601String(),
+      });
+      await pumpEventQueue();
+      expect(branch()?.replyCount, 2);
+      expect(branch()?.unreadCount, 2, reason: 'the event is everyone\'s');
+      expect(texts(reader), ['the sink is leaking'], reason: 'no reply shown');
+
+      emit('chat_message_created', reply(6, 2));
+      await pumpEventQueue();
+      expect(branch()?.unreadCount, 2);
+      expect(branch()?.involved, isTrue);
+
+      emit('chat_read_marker_changed', {
+        'rootId': 4,
+        'lastReadMessageId': 6,
+        'unreadCount': 0,
+      });
+      emit('chat_read_marker_changed', {
+        'lastReadMessageId': 6,
+        'unreadCount': 0,
+      });
+      await pumpEventQueue();
+      expect(branch()?.unreadCount, 0);
+      reader.dispose();
+    });
+  });
+
   group('a side conversation (#4348)', () {
     Uint8List seal(SecureKey key, String text, {int? rootId}) => crypto.encrypt(
       Uint8List.fromList(utf8.encode(text)),

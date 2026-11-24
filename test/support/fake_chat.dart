@@ -332,6 +332,8 @@ class FakeChat {
         listMembers: (_) async => this.members,
         fetchMessages: (channelId, {limit}) async =>
             unreadMessages[channelId] ?? const [],
+        fetchReplies: (rootId, {limit}) async =>
+            unreadReplies[rootId] ?? const [],
         openMessage: (message) => utf8.decode(message.ciphertext ?? const []),
         isUnlocked: () => unlocked,
         keyChanges: keys,
@@ -344,10 +346,15 @@ class FakeChat {
   /// ciphertext, which the unread mentions are counted from.
   final Map<int, List<ChatMessage>> unreadMessages = {};
 
+  /// The newest replies of each side conversation, by root, as
+  /// [unreadMessages] (#4349).
+  final Map<int, List<ChatMessage>> unreadReplies = {};
+
   /// The text of the last poll export, downloaded or uploaded.
   String? exported;
 
-  /// Every `channelId messageId` the read marker was moved to.
+  /// Every `channelId messageId` the read marker was moved to, and every
+  /// `branch rootId messageId` a side conversation's was (#4349).
   final List<String> marked = [];
 
   /// The unread counts the controller reads, fed by the same [events].
@@ -357,6 +364,15 @@ class FakeChat {
       marked.add('$channelId $messageId');
       return ChatReadMarker(
         channelId: channelId,
+        lastReadMessageId: messageId,
+        unreadCount: 0,
+      );
+    },
+    markBranchRead: (rootId, messageId) async {
+      marked.add('branch $rootId $messageId');
+      return ChatReadMarker(
+        channelId: 1,
+        rootId: rootId,
         lastReadMessageId: messageId,
         unreadCount: 0,
       );

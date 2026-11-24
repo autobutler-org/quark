@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart';
 /// The side conversation branched from a message (#3561), as the message
 /// draws it: how many replies it has and when the last one came.
 ///
-/// A message with no replies has none. [hasUnread] stays false until the
-/// caller tracks a side conversation's unread replies.
+/// A message with no replies has none. [hasUnread] is the caller's to
+/// decide, for unread replies that concern the reader.
 @immutable
 class ChatBranchItem {
   /// Creates the summary of a side conversation with [replyCount] replies.

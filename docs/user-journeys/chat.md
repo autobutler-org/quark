@@ -1064,8 +1064,8 @@ leaking".
 - Replies are encrypted under the channel's key, bound to the message they branch from, so the Quark can't move
   one to another side conversation ([`docs/chat-security.md`](../chat-security.md)).
 - After the connection drops and comes back, the panel reads its replies again and catches up on what it missed.
-- Search, files and polls stay in the channel. Unread counts and mentions inside a side conversation come later
-  (#4349), as does posting a reply to the channel too (#4350).
+- Search, files and polls stay in the channel. Posting a reply to the channel too comes later (#4350). Unread
+  replies are JN-CHAT-044.
 
 ---
 
@@ -1109,3 +1109,40 @@ leaking".
 
 - A link works in a direct message as in a channel.
 
+---
+
+### JN-CHAT-044: See unread replies in a side conversation and clear them by reading
+
+**Preconditions:** `bob`, `carol` and `dave` are **Member**s of `family`. `bob` started a side conversation on
+his message there (JN-CHAT-040). `bob` is signed in on two devices, both on `general`; `dave` has never opened
+it.
+
+**Steps:**
+
+1. As `carol`, reply "Yes, that one" in `bob`'s side conversation.
+2. As `carol`, reply "@dave can you check?" there too.
+3. As `bob`, on one device, open `family`, then tap the line under his message.
+4. As `bob`, look at the other device.
+
+**Expected result:**
+
+- After step 1, `bob`'s devices list `family` in bold with a "1", and the line under his message in `family` has
+  a dot before it. `dave` sees no count and no dot: he is not in that side conversation.
+- After step 2, `bob`'s count is "2". `dave` sees `family` in bold with "1" and "@1", and a dot on the line.
+- After step 3, once the side conversation shows its newest reply, the dot and the count go away.
+- After step 4, the other device has cleared them too, without a reload.
+
+**Edge cases:**
+
+- A side conversation counts toward your badge once you have written the message it branches from or replied in
+  it. Your own replies are never unread.
+- Reading the channel does not read its side conversations, and reading a side conversation does not read the
+  channel.
+- As in JN-CHAT-019, a mention is found on the device: it looks at the newest page of each side conversation with
+  unread replies, among the side conversations of the channel's newest messages, and not while chat is locked.
+
+**Notes:**
+
+- The Quark keeps a read marker per side conversation and counts from message ids alone
+  ([`docs/chat-security.md`](../chat-security.md)). The drawer's **Chat** dot does not yet light for a mention in a
+  side conversation you are not in.

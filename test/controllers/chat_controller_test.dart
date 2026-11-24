@@ -2190,6 +2190,128 @@ void main() {
       c.dispose();
     });
 
+    test('the side conversation in view at its newest reply is marked read '
+        '(#4349)', () async {
+      final chat = await open();
+      final c = chat.controller;
+      expect(chat.marked, isEmpty, reason: 'nothing is in view yet');
+
+      c.setBranchAtBottom(true);
+      c.setBranchAtBottom(true);
+      await pumpEventQueue();
+      expect(chat.marked, ['branch 5 6']);
+
+      c.setBranchAtBottom(false);
+      chat.branches[5]!.fakeEntries = [
+        ...chat.branches[5]!.fakeEntries,
+        entry(7, 'there soon', author: 8, rootId: 5),
+      ];
+      chat.branches[5]!.notifyListeners();
+      await pumpEventQueue();
+      expect(chat.marked, ['branch 5 6'], reason: 'scrolled away');
+      c.setBranchAtBottom(true);
+      await pumpEventQueue();
+      expect(chat.marked, ['branch 5 6', 'branch 5 7']);
+      c.dispose();
+    });
+
+    test('a chip is unread for a branch this account is in, or one that '
+        'mentions it (#4349)', () async {
+      ChatTimelineMessage root(int id, ChatBranch branch) =>
+          ChatTimelineMessage(
+            message: ChatMessage(
+              id: id,
+              channelId: 1,
+              authorId: 8,
+              keyVersion: 1,
+              ciphertext: null,
+              createdAt: DateTime.utc(2026, 9, 25, 10, id),
+              branch: branch,
+            ),
+            state: ChatMessageState.ready,
+            text: 'root $id',
+          );
+      final at = DateTime.utc(2026, 9, 25, 11);
+      final chat = FakeChat(
+        channels: [
+          ChatChannel(
+            id: 1,
+            name: 'general',
+            isDefault: true,
+            permissions: memberSet,
+            branchUnreadCount: 1,
+            otherBranchUnreadCount: 2,
+          ),
+          ChatChannel(
+            id: 2,
+            name: 'random',
+            permissions: memberSet,
+            branchUnreadCount: 1,
+            otherBranchUnreadCount: 1,
+          ),
+        ],
+      );
+      chat.entries[1] = [
+        root(
+          5,
+          ChatBranch(
+            replyCount: 1,
+            lastReplyAt: at,
+            unreadCount: 1,
+            involved: true,
+          ),
+        ),
+        root(6, ChatBranch(replyCount: 1, lastReplyAt: at, unreadCount: 1)),
+        root(7, ChatBranch(replyCount: 1, lastReplyAt: at, unreadCount: 1)),
+        root(8, ChatBranch(replyCount: 1, lastReplyAt: at, involved: true)),
+      ];
+      ChatMessage reply(int id, int rootId, String text) => ChatMessage(
+        id: id,
+        channelId: 1,
+        authorId: 8,
+        keyVersion: 1,
+        ciphertext: utf8.encode(text),
+        createdAt: at,
+        rootId: rootId,
+      );
+      chat.unreadMessages[1] = [
+        for (final e in chat.entries[1]!.cast<ChatTimelineMessage>()) e.message,
+      ];
+      chat.unreadReplies[7] = [reply(70, 7, 'hey @ada')];
+      // Channel 2: one involved reply and one other that mentions ada.
+      chat.unreadMessages[2] = [
+        ChatMessage(
+          id: 20,
+          channelId: 2,
+          authorId: 8,
+          keyVersion: 1,
+          ciphertext: utf8.encode('root'),
+          createdAt: at,
+          branch: ChatBranch(replyCount: 1, lastReplyAt: at, unreadCount: 1),
+        ),
+      ];
+      chat.unreadReplies[20] = [reply(21, 20, '@ada look')];
+      chat.controller.select('general');
+      await chat.controller.refresh();
+      await pumpEventQueue();
+
+      bool? unreadChip(String id) => chat.controller.messageItems
+          .firstWhere((m) => m.id == id)
+          .branch
+          ?.hasUnread;
+      expect(unreadChip('5'), isTrue, reason: 'involved');
+      expect(unreadChip('6'), isFalse, reason: 'not involved, no mention');
+      expect(unreadChip('7'), isTrue, reason: 'mentions ada');
+      expect(unreadChip('8'), isFalse, reason: 'involved, all read');
+
+      final random = chat.controller.channelItems.firstWhere(
+        (c) => c.id == '2',
+      );
+      expect(random.unreadCount, 2, reason: 'involved, plus the mention');
+      expect(random.mentionCount, 1);
+      chat.controller.dispose();
+    });
+
     test('refreshing catches the side conversation up too', () async {
       final chat = await open();
       final branch = chat.branches[5]!;
