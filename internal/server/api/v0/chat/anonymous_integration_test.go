@@ -1,6 +1,8 @@
 package v0_chat_test
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -57,6 +59,13 @@ func leakedIDs(t *testing.T, body string, accounts map[int64]string) []string {
 	return leaks
 }
 
+// channelKeysBody is a PUT /keys/me body for an anonymous channel: a box key
+// filled with fill and signer(fill)'s signing key.
+func channelKeysBody(fill byte) string {
+	return `{"boxPublicKey":"` + b64(fill, 32) + `","signPublicKey":"` +
+		base64.StdEncoding.EncodeToString(signer(fill).Public().(ed25519.PublicKey)) + `"}`
+}
+
 // TestChatAnonymous_MembersSeeOnlyPseudonyms has bob run an anonymous channel
 // (#2949) with carol and dave in it, and checks that carol, who holds no
 // manage_members, never gets an account id or username in anything she reads
@@ -80,13 +89,38 @@ func TestChatAnonymous_MembersSeeOnlyPseudonyms(t *testing.T) {
 		t.Fatalf("created %+v, want anonymous with a negative selfId and bob as creator to bob", room)
 	}
 	path := "/chat/channels/" + strconv.FormatInt(room.ID, 10)
-	// The own grant of a new version is signed over the pseudonym; an account
-	// id is refused.
-	h.expect(t, http.StatusBadRequest, http.MethodPost, path+"/keys", "bob", createKeyBody('b', room.ID, 1, h.users["bob"]), nil)
-	h.expect(t, http.StatusOK, http.MethodPost, path+"/keys", "bob", createKeyBody('b', room.ID, 1, room.SelfID), nil)
+	// Each member's app publishes keys for this channel alone, which every
+	// grant and event there is sealed to and signed with: bob's are 'B'.
+	var self chatutil.PutChannelKeysResult
+	h.expect(t, http.StatusOK, http.MethodPut, path+"/keys/me", "bob", channelKeysBody('B'), &self)
+	if self.SelfID != room.SelfID {
+		t.Errorf("bob's selfId from publishing = %d, want %d", self.SelfID, room.SelfID)
+	}
+	h.expect(t, http.StatusOK, http.MethodPut, path+"/keys/me", "bob", channelKeysBody('B'), nil)
+	h.expect(t, http.StatusConflict, http.MethodPut, path+"/keys/me", "bob", channelKeysBody('X'), nil)
+	h.expect(t, http.StatusNotFound, http.MethodPut, path+"/keys/me", "dave", channelKeysBody('D'), nil)
+	var adminSelf chatutil.PutChannelKeysResult
+	h.expect(t, http.StatusOK, http.MethodPut, path+"/keys/me", "admin", channelKeysBody('A'), &adminSelf)
+	if adminSelf.SelfID >= 0 {
+		t.Errorf("an admin outside the channel publishes as %d, want a pseudonym", adminSelf.SelfID)
+	}
+	// The own grant of a new version is signed over the pseudonym with the
+	// channel key; an account id or the account key is refused.
+	h.expect(t, http.StatusBadRequest, http.MethodPost, path+"/keys", "bob", createKeyBody('B', room.ID, 1, h.users["bob"]), nil)
+	h.expect(t, http.StatusBadRequest, http.MethodPost, path+"/keys", "bob", createKeyBody('b', room.ID, 1, room.SelfID), nil)
+	h.expect(t, http.StatusOK, http.MethodPost, path+"/keys", "bob", createKeyBody('B', room.ID, 1, room.SelfID), nil)
 	for _, who := range []string{"carol", "dave"} {
 		h.expect(t, http.StatusOK, http.MethodPut, path+"/members", "bob", userBody(h.users[who], member...), nil)
 	}
+	// carol and dave have account keys, but are pending only once they have
+	// published channel keys.
+	var none chatutil.ListPendingGrantsResult
+	h.expect(t, http.StatusOK, http.MethodGet, path+"/keys/pending", "bob", "", &none)
+	if len(none.Pending) != 0 {
+		t.Errorf("pending before carol and dave publish = %+v, want none", none.Pending)
+	}
+	h.expect(t, http.StatusOK, http.MethodPut, path+"/keys/me", "carol", channelKeysBody('C'), nil)
+	h.expect(t, http.StatusOK, http.MethodPut, path+"/keys/me", "dave", channelKeysBody('D'), nil)
 
 	// bob fills the grants by pseudonym; an account id is refused.
 	var pending chatutil.ListPendingGrantsResult
@@ -95,13 +129,15 @@ func TestChatAnonymous_MembersSeeOnlyPseudonyms(t *testing.T) {
 		t.Fatalf("pending = %+v, want carol and dave", pending)
 	}
 	h.expect(t, http.StatusBadRequest, http.MethodPost, path+"/keys/grants", "bob",
-		`{"grants":[`+grantBody('b', room.ID, 1, h.users["carol"], 'x')+`]}`, nil)
+		`{"grants":[`+grantBody('B', room.ID, 1, h.users["carol"], 'x')+`]}`, nil)
 	grants := []string{}
 	for _, p := range pending.Pending {
 		if p.UserID >= 0 {
 			t.Fatalf("pending names an account: %+v", p)
 		}
-		grants = append(grants, grantBody('b', room.ID, 1, p.UserID, 'x'))
+		h.expect(t, http.StatusBadRequest, http.MethodPost, path+"/keys/grants", "bob",
+			`{"grants":[`+grantBody('b', room.ID, 1, p.UserID, 'x')+`]}`, nil)
+		grants = append(grants, grantBody('B', room.ID, 1, p.UserID, 'x'))
 	}
 	h.expect(t, http.StatusOK, http.MethodPost, path+"/keys/grants", "bob", `{"grants":[`+strings.Join(grants, ",")+`]}`, nil)
 
@@ -185,6 +221,7 @@ func TestChatAnonymous_MembersSeeOnlyPseudonyms(t *testing.T) {
 	h.expect(t, http.StatusCreated, http.MethodPost, "/chat/channels", "bob", `{"name":"plain"}`, &plain)
 	h.expect(t, http.StatusBadRequest, http.MethodPut, "/chat/channels/"+strconv.FormatInt(plain.ID, 10)+"/members/alias", "bob",
 		`{"userId":`+strconv.FormatInt(h.users["bob"], 10)+`,"alias":"Fox"}`, nil)
+	h.expect(t, http.StatusBadRequest, http.MethodPut, "/chat/channels/"+strconv.FormatInt(plain.ID, 10)+"/keys/me", "bob", channelKeysBody('B'), nil)
 
 	var members chatutil.ListMembersResult
 	h.expect(t, http.StatusOK, http.MethodGet, path+"/members", "carol", "", &members)

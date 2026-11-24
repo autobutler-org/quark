@@ -44,6 +44,10 @@ type Querier interface {
 	// is on both sides of the comparison, so instances need not agree on the
 	// time.
 	ClaimMaintenanceRun(ctx context.Context, arg ClaimMaintenanceRunParams) (int64, error)
+	// ClearChatChannelPseudonymKeysForUser forgets an account's per-channel keys
+	// in every anonymous channel, once its chat identity, which they are derived
+	// from, has changed.
+	ClearChatChannelPseudonymKeysForUser(ctx context.Context, userID int64) error
 	ClearDefaultStorageRole(ctx context.Context) error
 	// CloseChatPoll closes a poll by hand, once: a poll already closed keeps its
 	// first closed_at and the count is 0.
@@ -641,6 +645,10 @@ type Querier interface {
 	// An alias another account in the channel holds, whatever its case, is a
 	// unique violation.
 	SetChatChannelPseudonymAlias(ctx context.Context, arg SetChatChannelPseudonymAliasParams) (int64, error)
+	// SetChatChannelPseudonymKeys stores the public keys an account's app derived
+	// for one anonymous channel, unless it already published some, which is 0
+	// rows.
+	SetChatChannelPseudonymKeys(ctx context.Context, arg SetChatChannelPseudonymKeysParams) (int64, error)
 	// SetChatChannelUserMember gives an account a set on a channel, replacing the
 	// set any earlier row for it carried.
 	SetChatChannelUserMember(ctx context.Context, arg SetChatChannelUserMemberParams) error

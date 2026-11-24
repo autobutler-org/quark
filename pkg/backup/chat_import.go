@@ -105,11 +105,11 @@ var chatRestoreSteps = []restoreStep{
 		LEFT JOIN temp.restore_groups AS g ON g.backup_id = m.group_id
 		WHERE u.live_id IS NOT NULL OR g.live_id IS NOT NULL`},
 	// A pseudonym (#2949) keeps its id, which reactions, answers, grants and
-	// events in its channel bind, and follows its account to the account's
-	// live id. One whose account is not here goes, as a reaction does.
+	// events in its channel bind, and its channel keys, and follows its
+	// account to the account's live id. One whose account is not here goes, as a reaction does.
 	{"chat_channel_pseudonyms", `
-		INSERT INTO main.chat_channel_pseudonyms (channel_id, user_id, pseudonym_id, alias)
-		SELECT p.channel_id, u.live_id, p.pseudonym_id, p.alias
+		INSERT INTO main.chat_channel_pseudonyms (channel_id, user_id, pseudonym_id, alias, box_public_key, sign_public_key)
+		SELECT p.channel_id, u.live_id, p.pseudonym_id, p.alias, p.box_public_key, p.sign_public_key
 		FROM chat_backup.chat_channel_pseudonyms AS p
 		JOIN temp.restore_users AS u ON u.backup_id = p.user_id`},
 	// A direct message's dm_key (#2423) is its accounts' live ids, sorted and

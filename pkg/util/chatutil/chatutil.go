@@ -1053,7 +1053,9 @@ type PutKeysResult struct {
 
 // PutKeys validates and stores an account's chat identity, replacing any it
 // had. A new X25519 key drops the account's key grants, which were sealed to
-// the old one; call NotifyKeyNeeded afterward so members refill them.
+// the old one; call NotifyKeyNeeded afterward so members refill them. A new
+// identity also clears the keys the account published for each anonymous
+// channel, which were derived from the old one.
 func PutKeys(params PutKeysParams) (PutKeysResult, error) {
 	if err := ValidateKeys(params.Keys); err != nil {
 		return PutKeysResult{}, err
@@ -1069,6 +1071,14 @@ func PutKeys(params PutKeysParams) (PutKeysResult, error) {
 	if err == nil && !bytes.Equal(existing.BoxPublicKey, k.BoxPublicKey) {
 		if err := params.Queries.DeleteUserChatKeyGrants(params.Ctx, sql.NullInt64{Int64: params.UserID, Valid: true}); err != nil {
 			return PutKeysResult{}, fmt.Errorf("drop chat key grants: %w", err)
+		}
+	}
+	// The keys published for each anonymous channel are derived from the
+	// identity (#2949), so a new one makes them stale: the app publishes them
+	// again, derived from the new one.
+	if err != nil || !bytes.Equal(existing.BoxPublicKey, k.BoxPublicKey) || !bytes.Equal(existing.SignPublicKey, k.SignPublicKey) {
+		if err := params.Queries.ClearChatChannelPseudonymKeysForUser(params.Ctx, params.UserID); err != nil {
+			return PutKeysResult{}, fmt.Errorf("clear channel keys: %w", err)
 		}
 	}
 	row, err := params.Queries.UpsertUserChatKeys(params.Ctx, db.UpsertUserChatKeysParams{
@@ -1378,7 +1388,9 @@ type UploadGrantsResult struct {
 // later ones are ignored. The caller's published signing key is recorded with
 // each grant. Publishes chat_key_granted to the recipients. In an anonymous
 // channel a grant names, and its signature covers, the recipient's pseudonym;
-// an account id there is ErrInvalidGrant.
+// an account id there is ErrInvalidGrant. There the signing key is the one the
+// caller published for the channel, and a grant is sealed to the recipient's
+// channel key (#2949).
 func UploadGrants(params UploadGrantsParams) (UploadGrantsResult, error) {
 	if len(params.Grants) == 0 || len(params.Grants) > MaxGrantsPerUpload {
 		return UploadGrantsResult{}, ErrInvalidGrant
@@ -1390,15 +1402,15 @@ func UploadGrants(params UploadGrantsParams) (UploadGrantsResult, error) {
 	if err := requireMember(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
 		return UploadGrantsResult{}, err
 	}
-	signKey, err := callerSignKey(params.Ctx, queries, params.Principal)
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return UploadGrantsResult{}, err
+	}
+	signKey, err := callerSignKey(params.Ctx, queries, params.Principal, p)
 	if err != nil {
 		return UploadGrantsResult{}, err
 	}
 	state, err := loadKeyState(params.Ctx, queries, params.ChannelID)
-	if err != nil {
-		return UploadGrantsResult{}, err
-	}
-	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
 	if err != nil {
 		return UploadGrantsResult{}, err
 	}
@@ -1524,18 +1536,19 @@ func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, er
 	if err := requireMember(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
 		return CreateKeyVersionResult{}, err
 	}
-	signKey, err := callerSignKey(params.Ctx, queries, params.Principal)
-	if err != nil {
-		return CreateKeyVersionResult{}, err
-	}
 	// In an anonymous channel the caller's own grant is signed over their
-	// pseudonym, made here, before the transaction, if it is their first.
+	// pseudonym, made here, before the transaction, if it is their first,
+	// with the key they published for the channel.
 	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
 	if err != nil {
 		return CreateKeyVersionResult{}, err
 	}
 	own := GrantUpload{Version: params.Version, UserID: p.id(params.Principal.UserID), SealedKey: params.SealedKey, Signature: params.Signature}
 	if err := p.done(); err != nil {
+		return CreateKeyVersionResult{}, err
+	}
+	signKey, err := callerSignKey(params.Ctx, queries, params.Principal, p)
+	if err != nil {
 		return CreateKeyVersionResult{}, err
 	}
 	if !grantSigned(signKey, params.ChannelID, own) {
@@ -1672,7 +1685,8 @@ type SignEventResult struct {
 
 // SignEvent stores the caller's signature on an event the caller made, once,
 // with the caller's published signing key beside it, and tells the members with
-// chat_channel_changed. An event that isn't the caller's is ErrEventNotFound,
+// chat_channel_changed. In an anonymous channel that key is the one the caller
+// published for the channel (#2949). An event that isn't the caller's is ErrEventNotFound,
 // and one already signed ErrEventSigned. The actor needn't be a member any
 // more: leaving, or an admin managing a channel they are not in, makes an event
 // its actor can only sign from outside (#2422). Anyone else learns nothing,
@@ -1688,7 +1702,18 @@ func SignEvent(params SignEventParams) (SignEventResult, error) {
 	if params.Principal.UserID == 0 {
 		return SignEventResult{}, ErrEventNotFound
 	}
-	signKey, err := callerSignKey(params.Ctx, queries, params.Principal)
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return SignEventResult{}, err
+	}
+	// Someone with no pseudonym in an anonymous channel made none of its
+	// events, and learns no more than anyone else.
+	if p != nil {
+		if _, held := p.byUser[params.Principal.UserID]; !held {
+			return SignEventResult{}, ErrEventNotFound
+		}
+	}
+	signKey, err := callerSignKey(params.Ctx, queries, params.Principal, p)
 	if err != nil {
 		return SignEventResult{}, err
 	}
@@ -1713,10 +1738,6 @@ func SignEvent(params SignEventParams) (SignEventResult, error) {
 		log.Printf("chat: event %d signed but not announced: %v", params.EventID, err)
 	}
 	announce(params.Ctx, queries, params.EventBus, params.ChannelID, members)
-	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
-	if err != nil {
-		return SignEventResult{}, err
-	}
 	event := eventFromRow(row)
 	event.ActorID = p.id(event.ActorID)
 	return SignEventResult{Event: event}, p.done()

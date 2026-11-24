@@ -62,6 +62,10 @@ func (a *postgresQueries) ClaimMaintenanceRun(ctx context.Context, arg ClaimMain
 	return a.q.ClaimMaintenanceRun(ctx, pgdb.ClaimMaintenanceRunParams(arg))
 }
 
+func (a *postgresQueries) ClearChatChannelPseudonymKeysForUser(ctx context.Context, userID int64) error {
+	return a.q.ClearChatChannelPseudonymKeysForUser(ctx, userID)
+}
+
 func (a *postgresQueries) ClearDefaultStorageRole(ctx context.Context) error {
 	return a.q.ClearDefaultStorageRole(ctx)
 }
@@ -1507,6 +1511,10 @@ func (a *postgresQueries) SetChatChannelGroupMember(ctx context.Context, arg Set
 
 func (a *postgresQueries) SetChatChannelPseudonymAlias(ctx context.Context, arg SetChatChannelPseudonymAliasParams) (int64, error) {
 	return a.q.SetChatChannelPseudonymAlias(ctx, pgdb.SetChatChannelPseudonymAliasParams(arg))
+}
+
+func (a *postgresQueries) SetChatChannelPseudonymKeys(ctx context.Context, arg SetChatChannelPseudonymKeysParams) (int64, error) {
+	return a.q.SetChatChannelPseudonymKeys(ctx, pgdb.SetChatChannelPseudonymKeysParams(arg))
 }
 
 func (a *postgresQueries) SetChatChannelUserMember(ctx context.Context, arg SetChatChannelUserMemberParams) error {

@@ -4322,6 +4322,82 @@ const docTemplate = `{
                 }
             }
         },
+        "/chat/channels/{id}/keys/me": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores the X25519 and Ed25519 public keys (32 bytes each, base64) the caller's app derived for one anonymous channel (#2949), against the caller's pseudonym there, made if they have none, and returns that pseudonym. In an anonymous channel grants are sealed to these keys and grants and events are checked against them, never the account's. Publishing the keys already stored does nothing; other keys are refused until the caller's chat identity changes, which clears them. Anyone the channel's rows give a set may publish, and an admin in any channel but a direct message. Publishes chat_key_needed to the channel's key holders.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Publish the caller's keys for an anonymous chat channel",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The caller's public keys for this channel",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.putMyChannelKeysBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.PutChannelKeysResult"
+                        }
+                    },
+                    "400": {
+                        "description": "keys of the wrong size, or a channel that isn't anonymous",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller's set on it is empty and they aren't an admin",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the caller already published other keys for this channel",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/chat/channels/{id}/keys/pending": {
             "get": {
                 "security": [
@@ -14546,6 +14622,14 @@ const docTemplate = `{
                 }
             }
         },
+        "chatutil.PutChannelKeysResult": {
+            "type": "object",
+            "properties": {
+                "selfId": {
+                    "type": "integer"
+                }
+            }
+        },
         "chatutil.Reaction": {
             "type": "object",
             "properties": {
@@ -16344,6 +16428,23 @@ const docTemplate = `{
                 },
                 "poll": {
                     "$ref": "#/definitions/chatutil.PollSettings"
+                }
+            }
+        },
+        "v0_chat.putMyChannelKeysBody": {
+            "type": "object",
+            "properties": {
+                "boxPublicKey": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "signPublicKey": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },

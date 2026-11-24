@@ -1,7 +1,9 @@
 package chatutil_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"testing"
 
@@ -289,5 +291,141 @@ func TestAnonymousMembersRenameOnlyThemselves(t *testing.T) {
 		if _, err := rename(target, "Mask"); !errors.Is(err, chatutil.ErrForbidden) {
 			t.Errorf("carol renaming %d = %v, want ErrForbidden", target, err)
 		}
+	}
+}
+
+// putChannelKeys publishes keys for as in an anonymous channel: a box key
+// filled with fill and signer(fill)'s signing key.
+func (f fixture) putChannelKeys(as string, channelID int64, fill byte) (chatutil.PutChannelKeysResult, error) {
+	return chatutil.PutChannelKeys(chatutil.PutChannelKeysParams{
+		Ctx: context.Background(), Database: f.database, EventBus: f.bus, Principal: f.as(as), ChannelID: channelID,
+		BoxPublicKey: sealed(fill, chatutil.PublicKeyBytes), SignPublicKey: signer(fill).Public().(ed25519.PublicKey),
+	})
+}
+
+// anonGrant is a grant of version to the pseudonym `to`, signed by signer(by).
+func anonGrant(by byte, channelID, version, to int64, fill byte) chatutil.GrantUpload {
+	key := sealed(fill, chatutil.SealedKeyBytes)
+	return chatutil.GrantUpload{
+		Version: version, UserID: to, SealedKey: key,
+		Signature: ed25519.Sign(signer(by), chatutil.GrantMessage(channelID, version, to, key)),
+	}
+}
+
+// TestAnonymousChannelKeys checks that an anonymous channel (#2949) seals to
+// and checks signatures against the keys each member published for that
+// channel alone, never their account keys: a member is pending only once
+// they have published, a grant or own grant signed with an account key is
+// refused, and what is stored carries the channel keys. It also checks who
+// may publish, that keys once published don't change, and that a new account
+// identity clears them.
+func TestAnonymousChannelKeys(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.publishKeys(t, "bob", "carol", "dave", "admin")
+	created, err := chatutil.CreateChannel(chatutil.CreateChannelParams{
+		Ctx: ctx, Database: f.database, EventBus: f.bus, Principal: f.as("bob"), Name: "masks", Anonymous: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	room := created.Channel
+	if err := f.set(t, "bob", room.ID, f.users["carol"], 0, chatutil.PresetMember); err != nil {
+		t.Fatal(err)
+	}
+	const bobKey, carolKey = 'B', 'C'
+
+	// Who may publish: a member, an admin who isn't one; not a stranger,
+	// and not in a channel that isn't anonymous.
+	if _, err := f.createVersion("bob", room.ID, 1); !errors.Is(err, chatutil.ErrKeysNotFound) {
+		t.Errorf("creating a version before publishing channel keys = %v, want ErrKeysNotFound", err)
+	}
+	bob, err := f.putChannelKeys("bob", room.ID, bobKey)
+	if err != nil || bob.SelfID != room.SelfID {
+		t.Fatalf("bob publishes = %+v, %v; want his selfId %d", bob, err, room.SelfID)
+	}
+	if again, err := f.putChannelKeys("bob", room.ID, bobKey); err != nil || again.SelfID != room.SelfID {
+		t.Errorf("publishing the same keys again = %+v, %v; want a no-op", again, err)
+	}
+	if _, err := f.putChannelKeys("bob", room.ID, 'X'); !errors.Is(err, chatutil.ErrChannelKeysSet) {
+		t.Errorf("publishing other keys = %v, want ErrChannelKeysSet", err)
+	}
+	if admin, err := f.putChannelKeys("admin", room.ID, 'A'); err != nil || admin.SelfID >= 0 {
+		t.Errorf("an admin outside the channel publishes = %+v, %v; want a pseudonym", admin, err)
+	}
+	if _, err := f.putChannelKeys("dave", room.ID, 'D'); !errors.Is(err, chatutil.ErrChannelNotFound) {
+		t.Errorf("a stranger publishes = %v, want ErrChannelNotFound", err)
+	}
+	plain := f.create(t, "bob", "plain")
+	if _, err := f.putChannelKeys("bob", plain.ID, bobKey); !errors.Is(err, chatutil.ErrNotAnonymous) {
+		t.Errorf("publishing in a plain channel = %v, want ErrNotAnonymous", err)
+	}
+
+	// bob's own grant: the account key is refused, the channel key stored.
+	ownAccount := anonGrant(f.fills["bob"], room.ID, 1, room.SelfID, 9)
+	create := func(g chatutil.GrantUpload) (chatutil.CreateKeyVersionResult, error) {
+		return chatutil.CreateKeyVersion(chatutil.CreateKeyVersionParams{
+			Ctx: ctx, Database: f.database, EventBus: f.bus, Principal: f.as("bob"), ChannelID: room.ID,
+			Version: 1, SealedKey: g.SealedKey, Signature: g.Signature,
+		})
+	}
+	if _, err := create(ownAccount); !errors.Is(err, chatutil.ErrGrantSignature) {
+		t.Errorf("an own grant signed with the account key = %v, want ErrGrantSignature", err)
+	}
+	version, err := create(anonGrant(bobKey, room.ID, 1, room.SelfID, 9))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bobSign := signer(bobKey).Public().(ed25519.PublicKey)
+	if !bytes.Equal(version.Grant.GranterSignKey, bobSign) {
+		t.Errorf("own grant's granterSignKey = %x, want bob's channel key", version.Grant.GranterSignKey)
+	}
+	signed, err := chatutil.SignEvent(chatutil.SignEventParams{
+		Ctx: ctx, Database: f.database, Principal: f.as("bob"), ChannelID: room.ID, EventID: version.Event.ID, Signature: sealed(1, chatutil.SignatureBytes),
+	})
+	if err != nil || !bytes.Equal(signed.Event.SignerSignKey, bobSign) {
+		t.Errorf("signed event = %+v, %v; want bob's channel key as signerSignKey", signed.Event, err)
+	}
+
+	// carol has account keys but no channel keys, so she isn't pending.
+	pending := func() []chatutil.PendingGrant {
+		t.Helper()
+		result, err := chatutil.ListPendingGrants(chatutil.ListPendingGrantsParams{Ctx: ctx, Database: f.database, Principal: f.as("bob"), ChannelID: room.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result.Pending
+	}
+	if got := pending(); len(got) != 0 {
+		t.Errorf("pending before carol publishes = %+v, want none", got)
+	}
+	carol, err := f.putChannelKeys("carol", room.ID, carolKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := pending()
+	if len(got) != 1 || got[0].UserID != carol.SelfID || !bytes.Equal(got[0].BoxPublicKey, sealed(carolKey, chatutil.PublicKeyBytes)) {
+		t.Fatalf("pending = %+v, want carol's pseudonym with her channel box key", got)
+	}
+	upload := func(g chatutil.GrantUpload) (chatutil.UploadGrantsResult, error) {
+		return chatutil.UploadGrants(chatutil.UploadGrantsParams{
+			Ctx: ctx, Database: f.database, EventBus: f.bus, Principal: f.as("bob"), ChannelID: room.ID, Grants: []chatutil.GrantUpload{g},
+		})
+	}
+	if _, err := upload(anonGrant(f.fills["bob"], room.ID, 1, carol.SelfID, 7)); !errors.Is(err, chatutil.ErrGrantSignature) {
+		t.Errorf("a grant signed with the account key = %v, want ErrGrantSignature", err)
+	}
+	stored, err := upload(anonGrant(bobKey, room.ID, 1, carol.SelfID, 7))
+	if err != nil || len(stored.Grants) != 1 || !bytes.Equal(stored.Grants[0].GranterSignKey, bobSign) {
+		t.Fatalf("grant = %+v, %v; want one with bob's channel key", stored, err)
+	}
+
+	// A new identity clears carol's channel keys: she must publish again,
+	// and may publish different ones.
+	if _, err := chatutil.PutKeys(chatutil.PutKeysParams{Ctx: ctx, Queries: f.database.Queries, UserID: f.users["carol"], Keys: sampleKeys(42)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.putChannelKeys("carol", room.ID, 'Z'); err != nil {
+		t.Errorf("carol republishes after a new identity = %v, want her new keys stored", err)
 	}
 }

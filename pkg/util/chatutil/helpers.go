@@ -469,8 +469,16 @@ func memberPerms(ctx context.Context, queries db.Querier, principal accessutil.P
 	return perms, nil
 }
 
-// callerSignKey is the caller's published Ed25519 key, or ErrKeysNotFound.
-func callerSignKey(ctx context.Context, queries db.Querier, principal accessutil.Principal) ([]byte, error) {
+// callerSignKey is the caller's published Ed25519 key, or ErrKeysNotFound. In
+// an anonymous channel, whose pseudonyms p holds, it is the key the caller
+// published for that channel alone (#2949).
+func callerSignKey(ctx context.Context, queries db.Querier, principal accessutil.Principal, p *pseudonyms) ([]byte, error) {
+	if p != nil {
+		if key := p.byUser[principal.UserID].SignPublicKey; key != nil {
+			return key, nil
+		}
+		return nil, ErrKeysNotFound
+	}
 	row, err := queries.GetUserChatPublicKeys(ctx, principal.UserID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrKeysNotFound
@@ -506,7 +514,7 @@ func loadKeyState(ctx context.Context, queries db.Querier, channelID int64) (key
 	if err != nil {
 		return keyState{}, err
 	}
-	published, err := queries.ListActiveUserChatPublicKeys(ctx)
+	p, err := loadPseudonyms(ctx, queries, channelID)
 	if err != nil {
 		return keyState{}, err
 	}
@@ -533,9 +541,23 @@ func loadKeyState(ctx context.Context, queries db.Querier, channelID int64) (key
 			state.members[user.UserID] = true
 		}
 	}
-	for _, row := range published {
-		if state.members[row.UserID] {
-			state.boxKeys[row.UserID] = row.BoxPublicKey
+	// In an anonymous channel (#2949) a member is sealed to by the key their
+	// app published for that channel, and is pending only once it has.
+	if p != nil {
+		for userID, row := range p.byUser {
+			if state.members[userID] && row.BoxPublicKey != nil {
+				state.boxKeys[userID] = row.BoxPublicKey
+			}
+		}
+	} else {
+		published, err := queries.ListActiveUserChatPublicKeys(ctx)
+		if err != nil {
+			return keyState{}, err
+		}
+		for _, row := range published {
+			if state.members[row.UserID] {
+				state.boxKeys[row.UserID] = row.BoxPublicKey
+			}
 		}
 	}
 	for _, row := range recipients {

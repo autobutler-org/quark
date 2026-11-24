@@ -32,7 +32,8 @@ const ChatBackupVersion = 5
 // chat_channels.anonymous and chat_channel_pseudonyms (#2949): an anonymous
 // channel's reactions, answers, grants and events bind its pseudonyms, so they
 // travel with it, and a restore that dropped the flag would show every member
-// by account.
+// by account. A pseudonym carries the public keys its account published for
+// the channel, which its grants and events there are checked against.
 const ChatBackupSchemaDDL = `
 PRAGMA user_version = 5;
 
@@ -71,6 +72,8 @@ CREATE TABLE chat_channel_pseudonyms (
     user_id      INTEGER NOT NULL,
     pseudonym_id INTEGER NOT NULL,
     alias        TEXT NOT NULL,
+    box_public_key  BLOB,
+    sign_public_key BLOB,
     PRIMARY KEY (channel_id, user_id)
 );
 

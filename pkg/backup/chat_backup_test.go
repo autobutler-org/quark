@@ -64,7 +64,8 @@ func seedChat(t *testing.T, d *sql.DB) {
 	chatExec(t, d, `INSERT INTO chat_channel_members (channel_id, group_id, permissions) SELECT 2, id, 7 FROM groups WHERE name = 'family'`)
 	// plans is anonymous (#2949): its pseudonyms come back with it.
 	chatExec(t, d, `UPDATE chat_channels SET anonymous = 1 WHERE id = 2`)
-	chatExec(t, d, `INSERT INTO chat_channel_pseudonyms (channel_id, user_id, pseudonym_id, alias) VALUES (2, 1, -11, 'Anonymous 1011'), (2, 3, -33, 'Owl')`)
+	chatExec(t, d, `INSERT INTO chat_channel_pseudonyms (channel_id, user_id, pseudonym_id, alias, box_public_key, sign_public_key) VALUES (2, 1, -11, 'Anonymous 1011', ?, ?), (2, 3, -33, 'Owl', NULL, NULL)`,
+		[]byte("alice-anon-box"), []byte("alice-anon-sign"))
 
 	addChatKeys(t, d, "alice", "alice")
 	addChatKeys(t, d, "bob", "bob")

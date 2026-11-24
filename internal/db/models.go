@@ -94,10 +94,12 @@ type ChatChannelMember struct {
 }
 
 type ChatChannelPseudonym struct {
-	ChannelID   int64
-	UserID      int64
-	PseudonymID int64
-	Alias       string
+	ChannelID     int64
+	UserID        int64
+	PseudonymID   int64
+	Alias         string
+	BoxPublicKey  []byte
+	SignPublicKey []byte
 }
 
 type ChatKeyGrant struct {

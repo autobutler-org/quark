@@ -18,7 +18,8 @@ type keyState struct {
 	// members are the active accounts the channel's rows reach with
 	// read_messages, the only ones entitled to the key.
 	members map[int64]bool
-	// boxKeys are the members with published chat keys, by account.
+	// boxKeys are the members with published chat keys, by account: in an
+	// anonymous channel the X25519 key each published for that channel.
 	boxKeys map[int64][]byte
 	// holders maps a version to the accounts holding a grant of it.
 	holders map[int64]map[int64]bool

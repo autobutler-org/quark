@@ -3340,6 +3340,63 @@ const List<ApiEndpoint> apiEndpoints = [
     callers: ['ChatChannelKeysService.rejectGrant'],
   ),
   ApiEndpoint(
+    method: 'PUT',
+    path: '/api/v0/chat/channels/{id}/keys/me',
+    inSwagger: true,
+    tags: ['chat'],
+    summary: 'Publish the caller\'s keys for an anonymous chat channel',
+    description: 'Stores the X25519 and Ed25519 public keys (32 bytes each, base64) the caller\'s app derived for one anonymous channel (#2949), against the caller\'s pseudonym there, made if they have none, and returns that pseudonym. In an anonymous channel grants are sealed to these keys and grants and events are checked against them, never the account\'s. Publishing the keys already stored does nothing; other keys are refused until the caller\'s chat identity changes, which clears them. Anyone the channel\'s rows give a set may publish, and an admin in any channel but a direct message. Publishes chat_key_needed to the channel\'s key holders.',
+    parameters: [
+      ApiParameter(
+        name: 'id',
+        location: ApiParameterLocation.path,
+        required: true,
+        type: 'integer',
+        description: 'Channel id',
+      ),
+      ApiParameter(
+        name: 'body',
+        location: ApiParameterLocation.body,
+        required: true,
+        type: 'object',
+        description: 'The caller\'s public keys for this channel',
+      ),
+    ],
+    requestSchema: '{"type":"object","properties":{"boxPublicKey":{"type":"array","items":{"type":"integer"}},"signPublicKey":{"type":"array","items":{"type":"integer"}}}}',
+    responses: [
+      ApiResponse(
+        status: '200',
+        description: 'OK',
+        schema: '{"type":"object","properties":{"selfId":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '400',
+        description: 'keys of the wrong size, or a channel that isn\'t anonymous',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '401',
+        description: 'Unauthorized',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '404',
+        description: 'no such channel, or the caller\'s set on it is empty and they aren\'t an admin',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '409',
+        description: 'the caller already published other keys for this channel',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '500',
+        description: 'Internal Server Error',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+    ],
+  ),
+  ApiEndpoint(
     method: 'GET',
     path: '/api/v0/chat/channels/{id}/keys/pending',
     inSwagger: true,

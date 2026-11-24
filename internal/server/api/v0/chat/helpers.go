@@ -142,7 +142,7 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, chatutil.ErrDuplicateMessage),
 		errors.Is(err, chatutil.ErrPollClosed), errors.Is(err, chatutil.ErrAlreadyAnswered),
 		errors.Is(err, chatutil.ErrAttachmentExists), errors.Is(err, chatutil.ErrPollNotEditable),
-		errors.Is(err, chatutil.ErrAliasTaken):
+		errors.Is(err, chatutil.ErrAliasTaken), errors.Is(err, chatutil.ErrChannelKeysSet):
 		return serverutil.Conflict(err)
 	case errors.Is(err, chatutil.ErrInvalidName), errors.Is(err, chatutil.ErrInvalidTopic),
 		errors.Is(err, chatutil.ErrDefaultChannel), errors.Is(err, chatutil.ErrDefaultEveryone), errors.Is(err, chatutil.ErrLastOwner),
