@@ -89,8 +89,9 @@ mismatch review sends back.
 the staged files) and names the fix when one fails (`make fix`, or the file to format). It also installs a
 commit-msg hook that rejects AI attribution in a commit message — a `Co-authored-by:` trailer naming Claude or
 an `anthropic.com` address, a "Generated with Claude Code" footer, or a `claude.ai/code` session link. That
-hook never sees a pull request, so CI's `check-misc` job runs `make check/attribution PR=<number>`, which fails
-when the title, the description or a commit message carries that footer. `.github/workflows/check.yml` runs the
+hook never sees a pull request, so CI's `pr-text.yml` workflow runs `make check/attribution PR=<number>`, which fails
+when the title, the description or a commit message carries that footer. It also runs when a pull request is
+edited, so correcting the text re-runs it. `.github/workflows/check.yml` runs the
 full `make check`, so the rest of the gate is not advisory.
 
 - **Formatting and lint** — `gofmt`, golangci-lint, `scripts/check-go-structure.bash`, `sqlc vet`,
