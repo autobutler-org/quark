@@ -72,6 +72,7 @@ class ChatPendingSend {
     required this.clientMessageId,
     this.replyTo,
     this.rootId,
+    this.alsoToChannel = false,
     this.error,
   });
 
@@ -99,6 +100,10 @@ class ChatPendingSend {
   /// for the channel.
   final int? rootId;
 
+  /// Whether a reply in a side conversation is also posted to the channel
+  /// once it is stored (#4350), as its own send quoting [rootId].
+  final bool alsoToChannel;
+
   /// Why the last attempt failed, for `Errors.message`; null while sending.
   final Object? error;
 
@@ -114,6 +119,7 @@ class ChatPendingSend {
     clientMessageId: clientMessageId,
     replyTo: replyTo,
     rootId: rootId,
+    alsoToChannel: alsoToChannel,
     error: error,
   );
 }
@@ -1031,33 +1037,62 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     final channel = _selected;
     if (channel == null) return;
     setDraft(channel.id, '');
-    final pending = ChatPendingSend(
-      id: 'pending_${_nextPending++}',
-      channelId: channel.id,
-      text: text,
-      sentAt: _now(),
-      clientMessageId: _newClientMessageId(),
-      replyTo: int.tryParse(_replyingTo?.id ?? ''),
-    );
+    final replyTo = int.tryParse(_replyingTo?.id ?? '');
     _replyingTo = null;
-    _pending = [..._pending, pending];
+    await _queue(channel.id, text, replyTo: replyTo);
+  }
+
+  /// Whether the open side conversation's next reply also goes to the
+  /// channel (#4350). Off by default, and off again after each reply and
+  /// whenever the side conversation closes.
+  bool get branchAlsoToChannel => _branchAlsoToChannel;
+  bool _branchAlsoToChannel = false;
+
+  /// Ticks or clears [branchAlsoToChannel].
+  void setBranchAlsoToChannel(bool value) {
+    _branchAlsoToChannel = value;
     notifyListeners();
-    await _deliver(pending);
   }
 
   /// Sends [text] as a reply in the open side conversation (#4348), the first
   /// of which starts it, through the same pending sends as [send].
+  ///
+  /// With [branchAlsoToChannel] on, the stored reply is followed by an
+  /// ordinary channel message with the same text quoting the root (#4350): a
+  /// send of its own, with its own client message id, so a failure there
+  /// waits in [outboundSends] for retry or discard and never sends the reply
+  /// twice.
   Future<void> sendInBranch(String text) async {
     final channel = _selected;
     final rootId = _branch?.rootId;
     if (channel == null || rootId == null) return;
+    final alsoToChannel = _branchAlsoToChannel;
+    _branchAlsoToChannel = false;
+    await _queue(
+      channel.id,
+      text,
+      rootId: rootId,
+      alsoToChannel: alsoToChannel,
+    );
+  }
+
+  /// Adds [text] to the pending sends, shows it, and delivers it.
+  Future<void> _queue(
+    int channelId,
+    String text, {
+    int? replyTo,
+    int? rootId,
+    bool alsoToChannel = false,
+  }) async {
     final pending = ChatPendingSend(
       id: 'pending_${_nextPending++}',
-      channelId: channel.id,
+      channelId: channelId,
       text: text,
       sentAt: _now(),
       clientMessageId: _newClientMessageId(),
+      replyTo: replyTo,
       rootId: rootId,
+      alsoToChannel: alsoToChannel,
     );
     _pending = [..._pending, pending];
     notifyListeners();
@@ -1935,6 +1970,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     _branch = null;
     _isLoadingOlderInBranch = false;
     _isBranchAtBottom = false;
+    _branchAlsoToChannel = false;
     if (_editingInBranch) _editing = null;
     _editingInBranch = false;
   }
@@ -2068,7 +2104,6 @@ class ChatController extends ChangeNotifier with SafeNotifier {
         clientMessageId: pending.clientMessageId,
         replyTo: pending.replyTo,
       );
-      discard(pending.id);
     } catch (e) {
       if (isDisposed) {
         _keepAsDraft(pending);
@@ -2076,6 +2111,11 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       }
       _replacePending(pending.id, pending.withError(e));
       notifyListeners();
+      return;
+    }
+    discard(pending.id);
+    if (pending.alsoToChannel && !isDisposed) {
+      await _queue(pending.channelId, pending.text, replyTo: pending.rootId);
     }
   }
 

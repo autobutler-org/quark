@@ -299,6 +299,12 @@ reply names its root in the clear: `root_id` on the stored row, `rootId` on the 
   pseudonym as `authorId`, as every message there is.
 - **One level deep.** A root has to be a message in the same channel (404 otherwise, as any message the caller
   can't read), and it can't itself be a reply (409). A poll can't be posted in a branch (400).
+- **Also sending to the channel is two messages** (#4350). Ticking "Also send to channel" posts the reply, sealed
+  under the v2 tag, and once it is stored an ordinary channel message with the same text, sealed under the v1 tag
+  and quoting the root through `replyTo` inside its ciphertext, as any quote-reply does. Each has its own client
+  message id, so a retry of either never stores the other twice. The Quark sees a branch reply and a channel
+  message from the same author moments apart, and nothing that ties them together; no reply is ever re-sealed
+  for the channel, and editing or deleting one leaves the other as it is.
 - **Deleting the root keeps the branch.** The root becomes a tombstone like any deleted message, and its replies
   stay readable and open to new ones.
 - **Older clients never see a branch.** The channel's message list, its live `chat_message_created` events as the

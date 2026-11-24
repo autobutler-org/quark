@@ -2147,6 +2147,78 @@ void main() {
       c.dispose();
     });
 
+    test('also to channel posts the reply, then a channel message quoting '
+        'the parent (#4350)', () async {
+      final chat = await open();
+      final c = chat.controller;
+      final branch = chat.branches[5]!;
+      final channel = chat.opened[1]!;
+
+      c.setBranchAlsoToChannel(true);
+      await c.sendInBranch('plumber booked for Tuesday');
+
+      expect(branch.sent, ['plumber booked for Tuesday']);
+      expect(channel.sent, ['plumber booked for Tuesday']);
+      expect(channel.sentReplyTo, [5]);
+      expect(channel.sentClientIds.single, isNot(branch.sentClientIds.single));
+      expect(c.branchAlsoToChannel, isFalse, reason: 'reset after a send');
+      expect(c.outboundSends, isEmpty);
+      expect(c.branchOutboundSends, isEmpty);
+
+      await c.sendInBranch('thanks');
+      expect(channel.sent, hasLength(1), reason: 'off again by default');
+      c.dispose();
+    });
+
+    test('a failed channel copy waits alone for retry; the reply is not '
+        'sent twice (#4350)', () async {
+      final chat = await open();
+      final c = chat.controller;
+      final branch = chat.branches[5]!;
+      final channel = chat.opened[1]!;
+      channel.onSend = (_) async => throw Exception('offline');
+
+      c.setBranchAlsoToChannel(true);
+      await c.sendInBranch('plumber booked');
+
+      expect(branch.sent, ['plumber booked']);
+      expect(c.branchOutboundSends, isEmpty);
+      final failed = c.outboundSends.single;
+      expect(failed.failed, isTrue);
+      expect(failed.replyTo, 5);
+
+      channel.onSend = null;
+      await c.retry(failed.id);
+      expect(branch.sent, ['plumber booked']);
+      expect(channel.sentClientIds, [
+        failed.clientMessageId,
+        failed.clientMessageId,
+      ]);
+      expect(c.outboundSends, isEmpty);
+      c.dispose();
+    });
+
+    test(
+      'a failed reply keeps its channel copy for the retry (#4350)',
+      () async {
+        final chat = await open();
+        final c = chat.controller;
+        final branch = chat.branches[5]!;
+        final channel = chat.opened[1]!;
+        branch.onSend = (_) async => throw Exception('offline');
+
+        c.setBranchAlsoToChannel(true);
+        await c.sendInBranch('plumber booked');
+        expect(channel.sent, isEmpty);
+
+        branch.onSend = null;
+        await c.retry(c.branchOutboundSends.single.id);
+        expect(channel.sent, ['plumber booked']);
+        expect(channel.sentReplyTo, [5]);
+        c.dispose();
+      },
+    );
+
     test(
       'edit, delete and react reach the reply in the side conversation',
       () async {
