@@ -742,4 +742,54 @@ void main() {
     expect(lost, isEmpty);
     expect(focus.hasFocus, isTrue);
   });
+
+  group('also send to channel (#4350)', () {
+    const box = ValueKey('message_composer_also_channel');
+
+    testBothViewports('is left out unless the caller offers it', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkMessageComposer(onSend: (_) {}, onAttach: () {}),
+        size: size,
+      );
+
+      expect(find.byKey(box), findsNothing);
+      expect(find.text(QuarkMessageComposer.alsoToChannelLabel), findsNothing);
+    });
+
+    testBothViewports('shows the caller\'s value and reports a tick', (
+      tester,
+      size,
+    ) async {
+      final changes = <bool>[];
+      await pumpAt(
+        tester,
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: QuarkMessageComposer(
+            onSend: (_) {},
+            alsoToChannel: false,
+            onAlsoToChannelChanged: changes.add,
+          ),
+        ),
+        size: size,
+      );
+
+      expect(
+        find.text(QuarkMessageComposer.alsoToChannelLabel),
+        findsOneWidget,
+      );
+      expect(tester.widget<CheckboxListTile>(find.byKey(box)).value, isFalse);
+      await tester.tap(find.byKey(box));
+      await tester.pump();
+
+      expect(changes, [true]);
+      // The value is the caller's: nothing changes until it passes a new one.
+      expect(tester.widget<CheckboxListTile>(find.byKey(box)).value, isFalse);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

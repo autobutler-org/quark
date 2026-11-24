@@ -48,6 +48,12 @@ import 'quark_mention_suggestions.dart';
 /// `@everyone` is drawn as a mention too (#4293); readers decide for
 /// themselves whether to honor it, so leaving it out is a convenience.
 ///
+/// With [alsoToChannel] and [onAlsoToChannelChanged] both set, a checkbox
+/// under the field reads "Also send to channel" (#4350). It is the caller's
+/// value: ticking it calls [onAlsoToChannelChanged] and changes nothing here,
+/// and the caller decides what a send with it on means and when it resets.
+/// A side conversation's composer offers it; a channel's never does.
+///
 /// The text controller and focus node are [State] because Flutter needs them
 /// to live across rebuilds, as is where the keyboard is in the suggestions;
 /// the outcome leaves through [onSend].
@@ -59,6 +65,7 @@ import 'quark_mention_suggestions.dart';
 /// `message_composer_attach_media` on its menu's entries when
 /// [onAttachMedia] is set,
 /// `message_composer_send` on the send button,
+/// `message_composer_also_channel` on the "Also send to channel" checkbox,
 /// `message_composer_disabled` on the disabled sentence, and those of
 /// `QuarkMentionSuggestions`.
 ///
@@ -86,6 +93,8 @@ class QuarkMessageComposer extends StatefulWidget {
     this.mentionNames = const [],
     this.onAttach,
     this.onAttachMedia,
+    this.alsoToChannel,
+    this.onAlsoToChannelChanged,
     super.key,
   });
 
@@ -161,6 +170,16 @@ class QuarkMessageComposer extends StatefulWidget {
   /// Shown only where [onAttach] would show the button. Like [onAttach], it
   /// picks nothing itself.
   final VoidCallback? onAttachMedia;
+
+  /// Whether the "Also send to channel" checkbox is ticked. Null, or a null
+  /// [onAlsoToChannelChanged], leaves the checkbox out.
+  final bool? alsoToChannel;
+
+  /// Called with the checkbox's new value when it is ticked or cleared.
+  final ValueChanged<bool>? onAlsoToChannelChanged;
+
+  /// The label of the "Also send to channel" checkbox.
+  static const String alsoToChannelLabel = 'Also send to channel';
 
   /// Said when Enter is pressed on a blank message, under the field with key
   /// `message_composer_hint`, and as the turned-off send button's tooltip.
@@ -416,6 +435,8 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
           });
 
           final onAttachMedia = widget.onAttachMedia;
+          final alsoToChannel = widget.alsoToChannel;
+          final onAlsoToChannelChanged = widget.onAlsoToChannelChanged;
           final canAttach =
               widget.onAttach != null &&
               (permissions == null ||
@@ -583,6 +604,16 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
                     ),
                   ],
                 ),
+                if (alsoToChannel != null && onAlsoToChannelChanged != null)
+                  CheckboxListTile(
+                    key: const ValueKey('message_composer_also_channel'),
+                    value: alsoToChannel,
+                    onChanged: (value) => onAlsoToChannelChanged(value!),
+                    title: const Text(QuarkMessageComposer.alsoToChannelLabel),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
               ],
             ),
           );
