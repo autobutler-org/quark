@@ -73,6 +73,42 @@ JOIN chat_messages AS newest ON newest.id = summary.newest_id
 JOIN chat_messages AS root ON root.id = summary.root_id
 ORDER BY summary.root_id;
 
+-- ListChatBranchesBefore pages a channel's side conversations (#4351): each
+-- root with at least one live reply, deleted roots included, with its summary
+-- as ListChatBranchSummariesBetween counts it, newest last reply first. The
+-- cursor is the newest live reply's id, unique to its branch, so a page ends
+-- where the next begins. ponytail: it groups every reply in the channel to
+-- page them; a (channel_id, root_id) index if a channel's replies grow large.
+-- name: ListChatBranchesBefore :many
+SELECT
+    sqlc.embed(root),
+    summary.reply_count,
+    summary.newest_id,
+    newest.created_at AS last_reply_at,
+    summary.unread_count,
+    CAST(COALESCE(root.author_id, 0) = CAST(sqlc.arg(user_id) AS BIGINT) OR summary.mine > 0 AS BOOLEAN) AS involved
+FROM (
+    SELECT
+        CAST(reply.root_id AS BIGINT) AS root_id,
+        COUNT(*) AS reply_count,
+        CAST(MAX(reply.id) AS BIGINT) AS newest_id,
+        COUNT(CASE WHEN reply.id > COALESCE(marker.last_read_message_id, 0)
+            AND COALESCE(reply.author_id, 0) <> sqlc.arg(user_id) THEN 1 END) AS unread_count,
+        COUNT(CASE WHEN reply.author_id = sqlc.arg(user_id) THEN 1 END) AS mine
+    FROM chat_messages AS reply
+    LEFT JOIN chat_branch_read_markers AS marker ON marker.root_id = reply.root_id
+        AND marker.user_id = sqlc.arg(user_id)
+    WHERE reply.channel_id = sqlc.arg(channel_id)
+      AND reply.root_id IS NOT NULL
+      AND reply.deleted_at IS NULL
+    GROUP BY reply.root_id
+    HAVING MAX(reply.id) < CAST(sqlc.arg(before) AS BIGINT)
+) AS summary
+JOIN chat_messages AS newest ON newest.id = summary.newest_id
+JOIN chat_messages AS root ON root.id = summary.root_id
+ORDER BY summary.newest_id DESC
+LIMIT CAST(sqlc.arg('limit') AS BIGINT);
+
 -- name: GetChatMessage :one
 SELECT * FROM chat_messages WHERE id = sqlc.arg(id);
 

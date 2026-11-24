@@ -835,6 +835,18 @@ func (a *postgresQueries) ListChatBranchSummariesBetween(ctx context.Context, ar
 	return items, nil
 }
 
+func (a *postgresQueries) ListChatBranchesBefore(ctx context.Context, arg ListChatBranchesBeforeParams) ([]ListChatBranchesBeforeRow, error) {
+	rows, err := a.q.ListChatBranchesBefore(ctx, pgdb.ListChatBranchesBeforeParams(arg))
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListChatBranchesBeforeRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListChatBranchesBeforeRow{ChatMessage: ChatMessage(row.ChatMessage), ReplyCount: row.ReplyCount, NewestID: row.NewestID, LastReplyAt: row.LastReplyAt, UnreadCount: row.UnreadCount, Involved: row.Involved}
+	}
+	return items, nil
+}
+
 func (a *postgresQueries) ListChatChannelEvents(ctx context.Context, arg ListChatChannelEventsParams) ([]ChatChannelEvent, error) {
 	rows, err := a.q.ListChatChannelEvents(ctx, pgdb.ListChatChannelEventsParams(arg))
 	if err != nil || rows == nil {

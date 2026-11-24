@@ -2,8 +2,12 @@ package chatutil_test
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"testing"
 
+	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 )
@@ -99,4 +103,112 @@ func TestBranchSummary(t *testing.T) {
 	if evt := nextBranchEvent(t, events); evt.MessageID != root.Message.ID || evt.ReplyCount != 0 || evt.LastReplyAt != nil {
 		t.Errorf("event after deleting every reply = %+v, want 0 replies and no lastReplyAt", evt)
 	}
+}
+
+// TestListBranches pages a channel's side conversations on both engines
+// (#4351): newest last reply first across a page boundary, a deleted root
+// still listed, a branch whose replies are all deleted gone, and a quiet
+// branch back on top once it gets a reply. A non-member admin of a direct
+// message can't list its branches.
+func TestListBranches(t *testing.T) {
+	run := func(t *testing.T, database *db.DatabaseSqlc) {
+		ctx := context.Background()
+		f := newFixtureOn(t, database)
+		room := f.keyedRoom(t, "room")
+		fill := byte(0)
+		post := func(as string, rootID int64) int64 {
+			t.Helper()
+			fill++
+			var posted chatutil.PostMessageResult
+			var err error
+			if rootID == 0 {
+				posted, err = f.post(as, room, sealedMessage(fill, fill))
+			} else {
+				posted, err = f.reply(as, room, rootID, sealedMessage(fill, fill))
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			return posted.Message.ID
+		}
+		del := func(id int64) {
+			t.Helper()
+			if _, err := chatutil.DeleteMessage(chatutil.DeleteMessageParams{
+				Ctx: ctx, Database: f.database, EventBus: f.bus, Principal: f.as("bob"), MessageID: id,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		list := func(as string, before, limit int64) (chatutil.ListBranchesResult, error) {
+			return chatutil.ListBranches(chatutil.ListBranchesParams{
+				Ctx: ctx, Database: f.database, Principal: f.as(as), ChannelID: room, Before: before, Limit: limit,
+			})
+		}
+		// pages lists every branch a page of two at a time.
+		pages := func() []int64 {
+			t.Helper()
+			ids := []int64{}
+			for before := int64(0); ; {
+				page, err := list("carol", before, 2)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, m := range page.Messages {
+					if m.Branch == nil || m.Branch.ReplyCount == 0 {
+						t.Errorf("branch %d listed without a summary: %+v", m.ID, m.Branch)
+					}
+				}
+				ids = append(ids, messageIDs(page.Messages)...)
+				if page.NextBefore == 0 {
+					return ids
+				}
+				before = page.NextBefore
+			}
+		}
+
+		// A root with no reply is never listed.
+		quiet, gone, deletedRoot, busy, _ := post("bob", 0), post("bob", 0), post("bob", 0), post("bob", 0), post("bob", 0)
+		post("carol", quiet)
+		del(post("carol", gone))
+		post("carol", deletedRoot)
+		del(deletedRoot)
+		post("carol", busy)
+		post("bob", busy)
+
+		if got, want := pages(), []int64{busy, deletedRoot, quiet}; !slices.Equal(got, want) {
+			t.Errorf("branches = %v, want %v", got, want)
+		}
+		page, err := list("carol", 0, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b := page.Messages[0].Branch; b.ReplyCount != 2 || !b.Involved || b.UnreadCount != 1 {
+			t.Errorf("busy branch for carol = %+v, want 2 replies, involved, 1 unread", b)
+		}
+		if root := page.Messages[1]; root.DeletedAt == nil {
+			t.Errorf("deleted root = %+v, want a tombstone", root)
+		}
+
+		post("bob", quiet)
+		if got, want := pages(), []int64{quiet, busy, deletedRoot}; !slices.Equal(got, want) {
+			t.Errorf("branches after a new reply = %v, want %v", got, want)
+		}
+
+		dm := f.dm(t, "bob", "carol").Channel
+		if _, err := chatutil.ListBranches(chatutil.ListBranchesParams{
+			Ctx: ctx, Database: f.database, Principal: f.as("admin"), ChannelID: dm.ID,
+		}); !errors.Is(err, chatutil.ErrChannelNotFound) {
+			t.Errorf("a non-member admin listing a direct message's branches = %v, want ErrChannelNotFound", err)
+		}
+	}
+
+	t.Run("sqlite", func(t *testing.T) { run(t, dbtest.NewDB(t)) })
+	t.Run("postgres", func(t *testing.T) {
+		database, err := db.ConnectToPostgres(dbtest.PostgresURL(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { database.Db.Close() })
+		run(t, database)
+	})
 }

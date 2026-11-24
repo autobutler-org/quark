@@ -3011,6 +3011,57 @@ const List<ApiEndpoint> apiEndpoints = [
   ),
   ApiEndpoint(
     method: 'GET',
+    path: '/api/v0/chat/channels/{id}/branches',
+    inSwagger: true,
+    tags: ['chat'],
+    summary: 'Page a chat channel\'s side conversations',
+    description: 'Returns the channel\'s messages that have at least one reply that is not deleted, each with its branch summary as GET /chat/channels/{id}/messages gives it, newest last reply first. A deleted message with live replies comes back as a tombstone. Reactions and poll answers are left out. nextBefore, present on a full page, is the before of the next. Needs read_messages; anyone else gets 404, delegated managers and admins included.',
+    parameters: [
+      ApiParameter(
+        name: 'id',
+        location: ApiParameterLocation.path,
+        required: true,
+        type: 'integer',
+        description: 'Channel id',
+      ),
+      ApiParameter(
+        name: 'before',
+        location: ApiParameterLocation.query,
+        type: 'integer',
+        description: 'Page from the branches whose newest reply is older than this message id',
+      ),
+      ApiParameter(
+        name: 'limit',
+        location: ApiParameterLocation.query,
+        type: 'integer',
+        description: 'At most this many, 50 by default, capped at 200',
+      ),
+    ],
+    responses: [
+      ApiResponse(
+        status: '200',
+        description: 'OK',
+        schema: '{"type":"object","properties":{"messages":{"type":"array","items":{"type":"object","properties":{"authorId":{"description":"AuthorID is absent once the author\'s account is deleted.","type":"integer"},"branch":{"description":"Branch summarizes the message\'s side conversation in a ListMessages\\npage (#4346). It is absent when no reply to it is live.","allOf":[{"type":"object","properties":{"involved":{"description":"Involved is whether the caller wrote the root or has a live reply in\\nthe branch, which is when its unread replies count toward the channel\'s\\nbadge (#4349).","type":"boolean"},"lastReplyAt":{"type":"string"},"replyCount":{"type":"integer"},"unreadCount":{"description":"UnreadCount is how many live replies after the caller\'s marker in the\\nbranch someone else wrote (#4349).","type":"integer"}}}]},"channelId":{"type":"integer"},"ciphertext":{"description":"Ciphertext is nonce || XChaCha20-Poly1305 output under the channel key\\nof KeyVersion, with the channel id and key version as additional data\\n(docs/chat-security.md). Absent once deleted.","type":"array","items":{"type":"integer"}},"createdAt":{"type":"string"},"deletedAt":{"type":"string"},"editedAt":{"type":"string"},"id":{"type":"integer"},"keyVersion":{"type":"integer"},"poll":{"description":"Poll is set when the message is a poll (#3893): its settings, whether\\nit is closed, and in a ListMessages page the answers the caller may\\nsee. A deleted poll has none of it.","allOf":[{"type":"object","properties":{"allowChange":{"description":"AllowChange lets an account replace its answer; without it a second\\nanswer is refused.","type":"boolean"},"anonymous":{"description":"Anonymous serves answers without the account that gave them, and without\\nthe time they arrived, to everyone, the author included. The Quark\\nstill knows.","type":"boolean"},"answers":{"description":"Answers are the answers the caller may see in a ListMessages page, oldest\\nfirst, or by ciphertext when the poll is anonymous.","type":"array","items":{"type":"object","properties":{"ciphertext":{"description":"Ciphertext is nonce || XChaCha20-Poly1305 output over the answer\\npadded to PollAnswerPlaintextBytes, under the channel key of\\nKeyVersion (docs/chat-security.md).","type":"array","items":{"type":"integer"}},"createdAt":{"description":"CreatedAt is when the answer was stored, omitted on an anonymous poll.","type":"string"},"id":{"description":"ID is the stored row on a poll that names who answered. On an anonymous\\npoll it is an opaque id, stable when that account changes its answer,\\nthat does not follow arrival order.","type":"integer"},"keyVersion":{"type":"integer"},"messageId":{"type":"integer"},"mine":{"description":"Mine is whether the caller gave this answer. It is false on an event.","type":"boolean"},"updatedAt":{"description":"UpdatedAt is when the answer last changed, omitted on an anonymous poll.","type":"string"},"userId":{"description":"UserID is who answered, absent when the poll is anonymous.","type":"integer"}}}},"closed":{"description":"Closed is whether the poll has stopped taking answers: ClosedAt is set\\nor ClosesAt has passed.","type":"boolean"},"closedAt":{"description":"ClosedAt is when the author closed the poll by hand.","type":"string"},"closesAt":{"description":"ClosesAt, when set, is when the poll stops taking answers. Posting\\nrefuses a time in the past or more than a year ahead.","type":"string"},"resultsAfterClose":{"description":"ResultsAfterClose shows the answers only to the author until the poll\\ncloses; everyone else sees only their own.","type":"boolean"}}}]},"reactions":{"description":"Reactions are the message\'s reactions, oldest first, in a\\nListMessages page. A deleted message has none: they go with its\\nciphertext.","type":"array","items":{"type":"object","properties":{"ciphertext":{"description":"Ciphertext is nonce || XChaCha20-Poly1305 output under the channel key\\nof KeyVersion, with the channel, key version, message and reacting\\naccount as additional data (docs/chat-security.md).","type":"array","items":{"type":"integer"}},"createdAt":{"type":"string"},"id":{"type":"integer"},"keyVersion":{"description":"KeyVersion is the channel key the reaction was encrypted under, which\\nneedn\'t be its message\'s.","type":"integer"},"messageId":{"type":"integer"},"userId":{"type":"integer"}}}},"rootId":{"description":"RootID is the channel message a side conversation\'s reply belongs to\\n(#4345), absent on a channel message. Ciphertext of a reply carries it\\nin its additional data too.","type":"integer"}}}},"nextBefore":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '401',
+        description: 'Unauthorized',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '404',
+        description: 'no such channel, or the caller lacks read_messages',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '500',
+        description: 'Internal Server Error',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+    ],
+  ),
+  ApiEndpoint(
+    method: 'GET',
     path: '/api/v0/chat/channels/{id}/events',
     inSwagger: true,
     tags: ['chat'],

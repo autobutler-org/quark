@@ -3895,6 +3895,70 @@
                 }
             }
         },
+        "/chat/channels/{id}/branches": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the channel's messages that have at least one reply that is not deleted, each with its branch summary as GET /chat/channels/{id}/messages gives it, newest last reply first. A deleted message with live replies comes back as a tombstone. Reactions and poll answers are left out. nextBefore, present on a full page, is the before of the next. Needs read_messages; anyone else gets 404, delegated managers and admins included.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Page a chat channel's side conversations",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page from the branches whose newest reply is older than this message id",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "At most this many, 50 by default, capped at 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ListBranchesResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller lacks read_messages",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/chat/channels/{id}/events": {
             "get": {
                 "security": [
@@ -14420,6 +14484,20 @@
                     "items": {
                         "type": "integer"
                     }
+                }
+            }
+        },
+        "chatutil.ListBranchesResult": {
+            "type": "object",
+            "properties": {
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.Message"
+                    }
+                },
+                "nextBefore": {
+                    "type": "integer"
                 }
             }
         },

@@ -710,6 +710,15 @@ definitions:
           type: integer
         type: array
     type: object
+  chatutil.ListBranchesResult:
+    properties:
+      messages:
+        items:
+          $ref: '#/definitions/chatutil.Message'
+        type: array
+      nextBefore:
+        type: integer
+    type: object
   chatutil.ListChannelsResult:
     properties:
       channels:
@@ -6716,6 +6725,53 @@ paths:
       security:
       - BearerAuth: []
       summary: Upload a chat attachment's ciphertext
+      tags:
+      - chat
+  /chat/channels/{id}/branches:
+    get:
+      description: Returns the channel's messages that have at least one reply that
+        is not deleted, each with its branch summary as GET /chat/channels/{id}/messages
+        gives it, newest last reply first. A deleted message with live replies comes
+        back as a tombstone. Reactions and poll answers are left out. nextBefore,
+        present on a full page, is the before of the next. Needs read_messages; anyone
+        else gets 404, delegated managers and admins included.
+      parameters:
+      - description: Channel id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Page from the branches whose newest reply is older than this
+          message id
+        in: query
+        name: before
+        type: integer
+      - description: At most this many, 50 by default, capped at 200
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chatutil.ListBranchesResult'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no such channel, or the caller lacks read_messages
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Page a chat channel's side conversations
       tags:
       - chat
   /chat/channels/{id}/events:

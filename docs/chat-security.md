@@ -316,6 +316,11 @@ reply names its root in the clear: `root_id` on the stored row, `rootId` on the 
   `chat_branch_changed` (`channelId`, `messageId` of the root, `replyCount`, and `lastReplyAt` unless the count is
   0) to the channel's readers, and, like every message event, never to an admin who is not one. The count and the
   time follow from `root_id` and `created_at`, so they reveal nothing the `root_id` column did not.
+- **A channel's branches are listed** (#4351). `GET /api/v0/chat/channels/:id/branches` pages the roots with at
+  least one live reply, each with its summary, newest last reply first, by a `before` cursor on that reply's id. It
+  needs `read_messages`, as the channel's messages do, so a non-member admin of a direct message gets 404. It
+  says nothing the summaries on the channel's pages did not. A quiet branch folding away is the app's drawing: no
+  job, column or setting hides or deletes one on the Quark.
 - **A branch has its own read marker** (#4349), and its replies are unread for the caller only past it. The
   summary also carries, for the caller, `unreadCount` and `involved`: whether they wrote the root or have a live
   reply there. Unread replies count toward the channel's badge only in a branch the caller is involved in, or one
