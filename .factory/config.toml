@@ -4,7 +4,7 @@
 
 # The image every step runs in: ci/factory-worker.Dockerfile, as ci-image.yml
 # published it from main. Moved by hand, in a PR of its own.
-image = "ghcr.io/autobutler-org/quark-factory-worker:3.50.1-bd5e0bd"
+image = "ghcr.io/autobutler-org/quark-factory-worker:3.50.1-73310ed"
 
 # What CI's check and test workflows run, short of the PostgreSQL, integration,
 # race and chaos jobs: the whole `make check`, the unit tests, and the generated
