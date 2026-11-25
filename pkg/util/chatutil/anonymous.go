@@ -1,6 +1,7 @@
 package chatutil
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -44,7 +45,86 @@ var (
 	// ErrNotAnonymous reports setting an alias in a channel that isn't
 	// anonymous.
 	ErrNotAnonymous = errors.New("only an anonymous channel has aliases")
+	// ErrChannelKeysSet reports publishing channel keys other than the ones
+	// the caller already published in that anonymous channel.
+	ErrChannelKeysSet = errors.New("you already published other keys for this channel")
 )
+
+// PutChannelKeysParams publishes the public keys the caller's app derived for
+// one anonymous channel.
+type PutChannelKeysParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_key_needed, so the key holders grant the caller.
+	// Nil skips it.
+	EventBus      *eventbus.Bus
+	Principal     accessutil.Principal
+	ChannelID     int64
+	BoxPublicKey  []byte
+	SignPublicKey []byte
+}
+
+// PutChannelKeysResult is the caller's pseudonym in the channel.
+type PutChannelKeysResult struct {
+	SelfID int64 `json:"selfId"`
+}
+
+// PutChannelKeys stores the X25519 and Ed25519 public keys the caller's app
+// derived for one anonymous channel (#2949), against the caller's pseudonym
+// there, made if they have none. In an anonymous channel these, not the
+// account's keys, are what grants are sealed to and what grants and events
+// are checked against, so nothing a member seals or signs there links the
+// pseudonym to an account. The server holds the binding, as it holds the
+// account's. Publishing the keys already stored does nothing; other keys are
+// ErrChannelKeysSet until the account's chat identity changes, which clears
+// them. Keys of the wrong size are ErrInvalidKeys, and a channel that isn't
+// anonymous ErrNotAnonymous. Anyone the channel's rows give a set may
+// publish, and an admin in any channel but a direct message; anyone else
+// gets ErrChannelNotFound. The key holders hear chat_key_needed.
+func PutChannelKeys(params PutChannelKeysParams) (PutChannelKeysResult, error) {
+	if len(params.BoxPublicKey) != PublicKeyBytes || len(params.SignPublicKey) != PublicKeyBytes {
+		return PutChannelKeysResult{}, ErrInvalidKeys
+	}
+	if params.Database == nil {
+		return PutChannelKeysResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	channel, _, err := authorize(params.Ctx, queries, params.Principal, params.ChannelID, 0)
+	if err != nil {
+		return PutChannelKeysResult{}, err
+	}
+	p, err := pseudonymsOf(params.Ctx, queries, channel)
+	if err != nil {
+		return PutChannelKeysResult{}, err
+	}
+	if p == nil {
+		return PutChannelKeysResult{}, ErrNotAnonymous
+	}
+	self := p.id(params.Principal.UserID)
+	if err := p.done(); err != nil {
+		return PutChannelKeysResult{}, err
+	}
+	stored, err := queries.SetChatChannelPseudonymKeys(params.Ctx, db.SetChatChannelPseudonymKeysParams{
+		BoxPublicKey: params.BoxPublicKey, SignPublicKey: params.SignPublicKey,
+		ChannelID: params.ChannelID, UserID: params.Principal.UserID,
+	})
+	if err != nil {
+		return PutChannelKeysResult{}, err
+	}
+	if stored == 0 {
+		if err := p.reload(); err != nil {
+			return PutChannelKeysResult{}, err
+		}
+		row := p.byUser[params.Principal.UserID]
+		if !bytes.Equal(row.BoxPublicKey, params.BoxPublicKey) || !bytes.Equal(row.SignPublicKey, params.SignPublicKey) {
+			return PutChannelKeysResult{}, ErrChannelKeysSet
+		}
+	}
+	if _, err := notifyChannel(params.Ctx, queries, params.EventBus, params.ChannelID); err != nil {
+		return PutChannelKeysResult{}, err
+	}
+	return PutChannelKeysResult{SelfID: self}, nil
+}
 
 // SetAliasParams renames one account's pseudonym in an anonymous channel.
 type SetAliasParams struct {
@@ -190,7 +270,9 @@ func newPseudonym(ctx context.Context, queries db.Querier, channelID, userID int
 			err = errNoFreePseudonym
 			continue
 		}
-		rows, err = queries.CreateChatChannelPseudonym(ctx, db.CreateChatChannelPseudonymParams(row))
+		rows, err = queries.CreateChatChannelPseudonym(ctx, db.CreateChatChannelPseudonymParams{
+			ChannelID: row.ChannelID, UserID: row.UserID, PseudonymID: row.PseudonymID, Alias: row.Alias,
+		})
 		if !sqlutil.IsUniqueConstraintErr(err) {
 			return row, rows > 0, err
 		}

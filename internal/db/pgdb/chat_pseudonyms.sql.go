@@ -35,6 +35,23 @@ func (q *Queries) ChatAliasIsUsername(ctx context.Context, alias string) (int64,
 	return taken, err
 }
 
+const clearChatChannelPseudonymKeysForUser = `-- name: ClearChatChannelPseudonymKeysForUser :exec
+UPDATE chat_channel_pseudonyms
+SET
+    box_public_key = NULL,
+    sign_public_key = NULL
+WHERE
+    user_id = $1
+`
+
+// ClearChatChannelPseudonymKeysForUser forgets an account's per-channel keys
+// in every anonymous channel, once its chat identity, which they are derived
+// from, has changed.
+func (q *Queries) ClearChatChannelPseudonymKeysForUser(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, clearChatChannelPseudonymKeysForUser, userID)
+	return err
+}
+
 const createChatChannelPseudonym = `-- name: CreateChatChannelPseudonym :execrows
 INSERT INTO
     chat_channel_pseudonyms (channel_id, user_id, pseudonym_id, alias)
@@ -68,7 +85,7 @@ func (q *Queries) CreateChatChannelPseudonym(ctx context.Context, arg CreateChat
 
 const listChatChannelPseudonyms = `-- name: ListChatChannelPseudonyms :many
 SELECT
-    channel_id, user_id, pseudonym_id, alias
+    channel_id, user_id, pseudonym_id, alias, box_public_key, sign_public_key
 FROM
     chat_channel_pseudonyms
 WHERE
@@ -93,6 +110,8 @@ func (q *Queries) ListChatChannelPseudonyms(ctx context.Context, channelID int64
 			&i.UserID,
 			&i.PseudonymID,
 			&i.Alias,
+			&i.BoxPublicKey,
+			&i.SignPublicKey,
 		); err != nil {
 			return nil, err
 		}
@@ -127,6 +146,40 @@ type SetChatChannelPseudonymAliasParams struct {
 // unique violation.
 func (q *Queries) SetChatChannelPseudonymAlias(ctx context.Context, arg SetChatChannelPseudonymAliasParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, setChatChannelPseudonymAlias, arg.Alias, arg.ChannelID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setChatChannelPseudonymKeys = `-- name: SetChatChannelPseudonymKeys :execrows
+UPDATE chat_channel_pseudonyms
+SET
+    box_public_key = $1,
+    sign_public_key = $2
+WHERE
+    channel_id = $3
+    AND user_id = $4
+    AND box_public_key IS NULL
+`
+
+type SetChatChannelPseudonymKeysParams struct {
+	BoxPublicKey  []byte
+	SignPublicKey []byte
+	ChannelID     int64
+	UserID        int64
+}
+
+// SetChatChannelPseudonymKeys stores the public keys an account's app derived
+// for one anonymous channel, unless it already published some, which is 0
+// rows.
+func (q *Queries) SetChatChannelPseudonymKeys(ctx context.Context, arg SetChatChannelPseudonymKeysParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setChatChannelPseudonymKeys,
+		arg.BoxPublicKey,
+		arg.SignPublicKey,
+		arg.ChannelID,
+		arg.UserID,
+	)
 	if err != nil {
 		return 0, err
 	}

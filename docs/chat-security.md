@@ -704,15 +704,51 @@ to verify, and the Quark refuses its own grant of a new key version. Channels th
 Mentions are `@username` inside the ciphertext, which the Quark never reads; in an anonymous channel the app
 mentions by alias.
 
+### Per-channel keys
+
+Identity keys are per account, so in an anonymous channel the app never uses them. It derives a second identity
+for each anonymous channel from the account's seeds, keyed on the channel id, with HKDF-SHA256:
+
+```text
+prk      = HKDF-Extract(boxSeed || signSeed)
+boxSeed' = HKDF-Expand(prk, "quark-chat-anon-box-v1:<channelId>", 32)
+signSeed' = HKDF-Expand(prk, "quark-chat-anon-sign-v1:<channelId>", 32)
+```
+
+`ChatCrypto.channelIdentity` is the construction. Every device holding the account's seeds derives the same keys,
+so nothing new is stored, wrapped or synced. Channel ids are never reused, so no two channels share keys.
+
+The app publishes the public halves with `PUT /api/v0/chat/channels/:id/keys/me`
+(`{boxPublicKey, signPublicKey}`, 32 bytes each, base64), which answers the caller's `selfId` and makes the
+pseudonym if it is the first. It publishes for every anonymous channel it lists, once per session, and for a
+channel it manages without being listed in it, as an admin outside a channel does. The Quark keeps the keys on the
+pseudonym's row, `box_public_key` and `sign_public_key` in `chat_channel_pseudonyms`. Publishing the same keys again
+does nothing; other keys are 409 until the account's identity changes, which clears them on every channel and the
+app publishes again. A channel that isn't anonymous is 400. Anyone the channel's rows give a set may publish, and an
+admin in any channel but a direct message; anyone else gets 404.
+
+In an anonymous channel the Quark then reads those keys wherever it would read the account's: a pending grant's
+`boxPublicKey` is the recipient's channel box key, and a member is pending only once they have published one. A
+grant, an own grant of a new version, and an event are checked against, and stored with, the caller's channel
+signing key as `granterSignKey` or `signerSignKey`. A caller who has not published gets 404, and a signature made
+with the account key is 400. `GET /api/v0/chat/keys/:userId` is unchanged and serves account keys only, which
+nothing in an anonymous channel matches.
+
+The app trusts the Quark for this binding exactly as it does for account keys: a grant or event verifies against
+the key the Quark copied in beside it, and nothing proves that key is the actor's.
+
 ### What it does not hide
 
 - **The Quark knows everything.** It maps every pseudonym to its account and sees who posts, reacts and answers,
   as in any channel. Anonymity is from the other members, not from the server or its operator, nor from anyone
   with the database or a backup, which carry `chat_channel_pseudonyms`.
-- **Public keys link accounts across channels.** Identity keys are per account, not per channel: a pending grant
-  carries the recipient's box key, a grant the granter's signing key, and a signed event `signerSignKey`. Anyone
-  who also sees that key next to an account id, in another channel, in `GET /chat/keys/:userId`, or in a direct
-  message, learns which account is behind the pseudonym. Per-channel keys would close this and are not built.
+- **The Quark still knows each pseudonym's account.** Per-channel keys keep public keys from linking a pseudonym to
+  an account for the members; the Quark holds the pseudonym's row, keys included, beside its account.
+- **The account's seeds unlock every channel key.** Anyone holding an account's seeds, its unlocked app or its
+  password, can derive the keys for every anonymous channel it is in and match them against what those channels
+  show.
+- **A member is granted the key only once their app has published channel keys.** Someone added while every
+  device of theirs is offline, or running an app from before per-channel keys, stays pending and reads nothing.
 - **Privileged members see through it.** Whoever holds `manage_members`, and every admin, can read the mapping.
   Being given `manage_members` reveals every member to you.
 - **Sets and later accounts.** Each account's effective set is visible, so a set only one group gives can still

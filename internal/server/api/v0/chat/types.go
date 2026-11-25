@@ -28,6 +28,7 @@ func (r *router) Routes() []*serverutil.Route {
 		putMyKeysRoute,
 		getUserKeysRoute,
 		getChannelKeysRoute,
+		putMyChannelKeysRoute,
 		createKeyVersionRoute,
 		regenerateKeyVersionRoute,
 		listPendingGrantsRoute,
@@ -88,6 +89,13 @@ type setMemberBody struct {
 type setMemberAliasBody struct {
 	UserID int64  `json:"userId"`
 	Alias  string `json:"alias"`
+}
+
+// putMyChannelKeysBody is the public keys the caller's app derived for one
+// anonymous channel. Byte fields are base64.
+type putMyChannelKeysBody struct {
+	BoxPublicKey  []byte `json:"boxPublicKey"`
+	SignPublicKey []byte `json:"signPublicKey"`
 }
 
 // removeMemberBody removes one account's or group's row from a channel.

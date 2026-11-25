@@ -1,5 +1,5 @@
 // Package v0_chat serves /api/v0/chat: the chat channels the caller belongs to, creating, renaming and deleting
-// channels, POST /chat/dms opening a direct message (#2423), which no admin outside it can see or manage, listing and changing a channel's members, PUT /chat/channels/:id/members/alias renaming a member's pseudonym in an anonymous channel (#2949), any member their own and a holder of manage_members or an admin anyone's, and each account's chat keys, where /chat/keys/me holds the
+// channels, POST /chat/dms opening a direct message (#2423), which no admin outside it can see or manage, listing and changing a channel's members, PUT /chat/channels/:id/members/alias renaming a member's pseudonym in an anonymous channel (#2949), any member their own and a holder of manage_members or an admin anyone's, PUT /chat/channels/:id/keys/me publishing the caller's keys for one, and each account's chat keys, where /chat/keys/me holds the
 // caller's wrapped identity and /chat/keys/:userId serves any account's public keys. /chat/channels/:id/keys serves
 // a channel's key versions and the caller's key grants, with /keys/pending and /keys/grants for filling other
 // members' grants, POST /keys/regenerate for an admin who already holds read_messages to mint the next version

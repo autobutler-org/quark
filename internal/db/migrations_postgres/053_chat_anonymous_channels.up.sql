@@ -7,6 +7,8 @@ CREATE TABLE chat_channel_pseudonyms (
     user_id      BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     pseudonym_id BIGINT NOT NULL CHECK (pseudonym_id < 0),
     alias        TEXT NOT NULL,
+    box_public_key  BYTEA,
+    sign_public_key BYTEA,
     PRIMARY KEY (channel_id, user_id),
     UNIQUE (channel_id, pseudonym_id)
 );
