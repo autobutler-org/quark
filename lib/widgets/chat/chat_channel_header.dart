@@ -15,10 +15,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// without the `#` (#3257) or the lock, whose tooltip speaks of Members it
 /// doesn't have (#2423).
 ///
+/// An anonymous channel, [isAnonymous], carries a crossed-out eye whose
+/// tooltip says its members see each other only by alias (#2949).
+///
 /// With [onSearch] set, a search button sits before the settings (#2429).
 ///
 /// Keys: `chat_channel_search` on the search button; `chat_channel_settings`
 /// on the settings button; `chat_channel_private` on the lock;
+/// `chat_channel_anonymous` on the anonymous mark;
 /// `chat_channel_edit`, `chat_channel_members`, `chat_channel_add_people`,
 /// `chat_channel_menu_divider`, `chat_channel_leave` and
 /// `chat_channel_delete` on the menu's items.
@@ -29,6 +33,7 @@ class ChatChannelHeader extends StatelessWidget {
     this.topic = '',
     this.isPrivate = false,
     this.isDirect = false,
+    this.isAnonymous = false,
     this.onSearch,
     this.onEdit,
     this.onMembers,
@@ -49,6 +54,14 @@ class ChatChannelHeader extends StatelessWidget {
   /// What the lock beside a private channel's name says.
   static const privateTooltip =
       'Private: only its members can see it. Add people from Members.';
+
+  /// What the mark beside an anonymous channel's name says.
+  static const anonymousTooltip =
+      'Anonymous: members see each other only by an alias. Admins and '
+      'people who manage members can see who is who.';
+
+  /// Whether the channel's members see each other only by alias.
+  final bool isAnonymous;
 
   /// What the channel is for; empty shows nothing.
   final String topic;
@@ -159,6 +172,18 @@ class ChatChannelHeader extends StatelessWidget {
                       message: privateTooltip,
                       child: Icon(
                         QuarkIcons.lock_outline,
+                        size: 14,
+                        color: tokens.mutedForeground,
+                      ),
+                    ),
+                  ],
+                  if (isAnonymous) ...[
+                    SizedBox(width: tokens.spacingXs),
+                    Tooltip(
+                      key: const ValueKey('chat_channel_anonymous'),
+                      message: anonymousTooltip,
+                      child: Icon(
+                        QuarkIcons.visibility_off,
                         size: 14,
                         color: tokens.mutedForeground,
                       ),

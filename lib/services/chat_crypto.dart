@@ -313,11 +313,14 @@ class ChatCrypto {
     );
   }
 
-  /// Big-endian 64 bits without `ByteData.setInt64`, which the web lacks. Ids
-  /// are positive and below 2^53.
+  /// Big-endian 64 bits without `ByteData.setInt64`, which the web lacks, in
+  /// two's complement as Go's `uint64(n)` writes it. Ids are below 2^53 in
+  /// magnitude; a pseudonym (#2949) is negative, so the high half rounds
+  /// down, which `~/` (toward zero) alone does not.
   static List<int> _be64(int value) {
-    final high = value ~/ 0x100000000;
     final low = value % 0x100000000;
+    final high =
+        (value ~/ 0x100000000 - (value < 0 && low != 0 ? 1 : 0)) % 0x100000000;
     return [
       for (final part in [high, low])
         for (var shift = 24; shift >= 0; shift -= 8) (part >> shift) & 0xff,

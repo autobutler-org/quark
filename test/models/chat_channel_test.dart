@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/chat_channel.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The channel list's wire shape, with the unread count #2424 added.
 void main() {
@@ -47,6 +48,48 @@ void main() {
       'Only you',
     );
     expect(ChatChannel.fromJson({'id': 4, 'name': 'family'}).isDirect, isFalse);
+  });
+
+  // #2949: an anonymous channel carries the caller's pseudonym, and each
+  // member its pseudonym and alias, real account or not.
+  test('reads an anonymous channel and its members', () {
+    final channel = ChatChannel.fromJson({
+      'id': 5,
+      'name': 'whispers',
+      'anonymous': true,
+      'selfId': -70,
+    });
+    expect(channel.anonymous, isTrue);
+    expect(channel.selfId, -70);
+    final plain = ChatChannel.fromJson({'id': 4, 'name': 'family'});
+    expect(plain.anonymous, isFalse);
+    expect(plain.selfId, isNull);
+
+    final members = [
+      ChatMember.fromJson({
+        'userId': 7,
+        'name': 'ada',
+        'pseudonymId': -70,
+        'alias': 'Anonymous 1',
+        'permissions': ['read_messages', 'mention_everyone'],
+      }),
+      ChatMember.fromJson({
+        'groupId': 3,
+        'name': 'mods',
+        'permissions': ['read_messages'],
+        'users': [
+          {'id': -80, 'username': 'Fox', 'pseudonymId': -80, 'alias': 'Fox'},
+        ],
+      }),
+    ];
+    expect(members[0].accountName, 'ada', reason: 'a privileged view');
+    expect(members[1].users.single.accountName, isNull);
+    expect(members.mentionNames, ['Anonymous 1', 'Fox']);
+    expect(members.nameOfUser(-70), 'Anonymous 1');
+    expect(members.nameOfUser(7), 'Anonymous 1');
+    expect(members.boundIdOf(7), -70);
+    expect(members.boundIdOf(9), 9);
+    expect(members.userIdsHolding(ChatPermission.mentionEveryone), {-70});
   });
 
   test('reads a read marker', () {

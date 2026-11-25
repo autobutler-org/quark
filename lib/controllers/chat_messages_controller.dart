@@ -9,7 +9,6 @@ import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
 import 'package:quark/models/chat_poll.dart';
-import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_attachment_message.dart';
 import 'package:quark/services/chat_attachment_save.dart';
 import 'package:quark/services/chat_video_thumbnail.dart';
@@ -75,6 +74,9 @@ typedef UploadChatAttachmentFn =
 ///   `ChatConfig.typingTimeout` without another, at once when their message
 ///   arrives, and all of them when chat locks. None of it is kept.
 /// - [entries] is the merged timeline, oldest first.
+/// - In an anonymous channel (#2949) "this account" is its pseudonym, the
+///   keys controller's `selfIdIn`: what its reactions and named answers are
+///   bound to, and what marks a message, reaction or answer as its own.
 ///
 /// Plaintext stays in memory, and [dispose] drops it, except when an
 /// attachment is saved. That writes the file to a temporary file and deletes
@@ -159,7 +161,10 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
        _putAttachment = putAttachment ?? ChatMessagesService.putAttachment,
        _getAttachment = getAttachment ?? ChatMessagesService.getAttachment,
        _currentUserId =
-           currentUserId ?? (() => AppSettings.instance.userId.value),
+           currentUserId ??
+           (() => (keys ?? ChatChannelKeysController.instance).selfIdIn(
+             channelId,
+           )),
        _fetchEvents = fetchEvents ?? ChatChannelKeysService.fetchEvents,
        _eventStream = events ?? EventsService.instance.events,
        _reconnectStream = reconnects ?? EventsService.instance.reconnects,

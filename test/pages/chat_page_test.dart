@@ -1403,6 +1403,117 @@ void main() {
     expect(find.byKey(const ValueKey('member_remove_7')), findsNothing);
   });
 
+  // #2949: an anonymous channel is marked, offers nobody a Message button,
+  // and lets a member manager rename an alias, saying so when it's taken.
+  testWidgets('a manager renames an alias in an anonymous channel', (
+    tester,
+  ) async {
+    final fake = FakeChat(
+      channels: [
+        ...fakeChannels,
+        ChatChannel(
+          id: 5,
+          name: 'whispers',
+          anonymous: true,
+          selfId: -70,
+          permissions: ownerSet,
+        ),
+      ],
+      members: [
+        ChatMember(
+          userId: 7,
+          name: 'ada',
+          pseudonymId: -70,
+          alias: 'Anonymous 1',
+          permissions: ownerSet,
+        ),
+        const ChatMember(
+          userId: 8,
+          name: 'bob',
+          pseudonymId: -80,
+          alias: 'Fox',
+          permissions: memberSet,
+        ),
+      ],
+    );
+    await pumpChat(tester, wide, chat: fake, location: '/chat/5');
+
+    expect(
+      find.byKey(const ValueKey('chat_channel_anonymous')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('member_message_8')), findsNothing);
+    expect(find.textContaining('bob'), findsOneWidget);
+
+    Future<void> rename(String alias) async {
+      await tester.tap(find.byKey(const ValueKey('member_alias_8')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('name_dialog_field')),
+        alias,
+      );
+      await tester.tap(find.byKey(const ValueKey('name_dialog_submit')));
+      await tester.pumpAndSettle();
+    }
+
+    await rename('Wolf');
+    expect(fake.calls.last, 'alias 5 user=8 "Wolf"');
+    expect(find.byKey(const ValueKey('name_dialog_field')), findsNothing);
+
+    fake.failWith = const ApiException(409);
+    await rename('Anonymous 1');
+    expect(find.text(Errors.chatAliasTaken), findsOneWidget);
+    expect(find.byKey(const ValueKey('name_dialog_field')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // #2949: a member without manage_members renames only themselves.
+  testWidgets('a member renames their own alias and no one else\'s', (
+    tester,
+  ) async {
+    final fake = FakeChat(
+      channels: [
+        ...fakeChannels,
+        const ChatChannel(
+          id: 5,
+          name: 'whispers',
+          anonymous: true,
+          selfId: -70,
+          permissions: memberSet,
+        ),
+      ],
+      members: const [
+        ChatMember(
+          userId: -70,
+          name: 'Anonymous 1',
+          pseudonymId: -70,
+          alias: 'Anonymous 1',
+          permissions: memberSet,
+        ),
+        ChatMember(
+          userId: -80,
+          name: 'Fox',
+          pseudonymId: -80,
+          alias: 'Fox',
+          permissions: memberSet,
+        ),
+      ],
+    );
+    await pumpChat(tester, wide, chat: fake, location: '/chat/5');
+
+    expect(find.byKey(const ValueKey('member_alias_-80')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('member_alias_-70')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('name_dialog_field')),
+      'Wren',
+    );
+    await tester.tap(find.byKey(const ValueKey('name_dialog_submit')));
+    await tester.pumpAndSettle();
+    expect(fake.calls.last, 'alias 5 user=-70 "Wren"');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('picking a channel goes to its URL and closes the drawer', (
     tester,
   ) async {

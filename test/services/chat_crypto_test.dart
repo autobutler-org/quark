@@ -19,6 +19,28 @@ void main() {
 
   setUpAll(() async => crypto = await ChatCrypto.load());
 
+  test('a grant message carries a negative pseudonym as Go writes it', () {
+    // Go's chatutil.GrantMessage writes uint64(n): two's complement (#2949).
+    final message = crypto.grantMessage(
+      channelId: 5,
+      version: 1,
+      userId: -7606701978878848,
+      sealedKey: Uint8List(0),
+    );
+    final at = utf8.encode('quark-chat-grant-v1').length + 1 + 16;
+
+    expect(message.sublist(at, at + 8), [
+      0xff,
+      0xe4,
+      0xf9,
+      0xbe,
+      0xae,
+      0xa2,
+      0xfc,
+      0x80,
+    ]);
+  });
+
   test('wrap and unwrap round-trip the identity', () {
     final identity = crypto.generateIdentity();
     final wrapped = crypto.wrap(identity, 'hunter22-password', _cheap);

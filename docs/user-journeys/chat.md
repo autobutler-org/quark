@@ -5,7 +5,8 @@ end-to-end encrypted messages, unlocking chat on web after a reload, waiting
 for a channel key, and creating, sharing, renaming, leaving and deleting
 channels (#2422), reacting to messages (#2426), a message's menu (#2631),
 searching a channel on the device (#2429), mentioning a member (#2623) or everyone (#4293), polls (#3894),
-attaching a file and saving it (#2425), and resizing or hiding the channel and member panes (#4294).
+attaching a file and saving it (#2425), resizing or hiding the channel and member panes (#4294), and anonymous
+channels (#2949).
 
 ---
 
@@ -901,3 +902,106 @@ open.
   there is no one to pick.
 - Private channels named for two people, the way people messaged each other before this, stay as they are:
   they are ordinary private channels.
+
+---
+
+### JN-CHAT-036: Create an anonymous channel
+
+**Preconditions:** Signed in as `ada` (JN-AUTH-002), chat unlocked.
+
+**Steps:**
+
+1. Open Chat and tap **New channel**.
+2. Name it `whispers`, leave it **Private**, and turn on **Anonymous**.
+3. Tap **Create**.
+4. Open `whispers`' settings and tap **Edit name and topic**.
+
+**Expected result:**
+
+- After step 2, the switch says members see each other only by an alias, that admins and people who manage
+  members still see who is who, and that it can't be changed later.
+- After step 3, chat opens `# whispers`, with a crossed-out eye beside its name whose tooltip says it is
+  anonymous. Its first key is set up as in any new channel.
+- In step 4, **Edit name and topic** has no **Anonymous** switch: a channel stays anonymous, or not, for good.
+
+**Notes:**
+
+- A direct message is never anonymous; **Message someone** has no switch.
+- Anonymity is from the other members, not from the Quark or its admins
+  ([`docs/chat-security.md`](../chat-security.md#anonymous-channels)).
+
+---
+
+### JN-CHAT-037: See aliases as a member of an anonymous channel
+
+**Preconditions:** `ada` made `whispers` anonymous (JN-CHAT-036) and gave `bob` and `carol` the **Member** set.
+All three have opened chat once.
+
+**Steps:**
+
+1. As `bob`, open `whispers` and send `hi`.
+2. As `carol`, open `whispers`, look at the member list, and react to `bob`'s message.
+3. As `carol`, start typing `@` in the composer.
+4. As `bob`, look at the reaction on `hi`.
+
+**Expected result:**
+
+- After step 2, `carol` sees every member by an alias, such as `Anonymous 4821`, and never a username. Nobody
+  has a profile picture, only initials, and no one has a **Message** button. `hi` shows `bob`'s alias as its author.
+- In step 3, the mention suggestions are aliases.
+- After step 4, `bob` sees `carol`'s reaction counted, and his own messages and reactions are marked as his.
+
+**Notes:**
+
+- Members are listed by alias, so their order says nothing about who they are.
+- A line about someone joining or leaving names them by the alias they had when it happened.
+
+---
+
+### JN-CHAT-038: Change an alias as a member manager
+
+**Preconditions:** `whispers` as in JN-CHAT-037. `ada` created it, so she holds `manage_members`.
+
+**Steps:**
+
+1. As `ada`, open `whispers` and look at the member list.
+2. Tap the pencil on `bob`'s row, type `Fox`, and tap **Save**.
+3. Tap the pencil on `carol`'s row, type `Fox`, and tap **Save**.
+4. As `carol`, look at `whispers`' member list and at `bob`'s message.
+
+**Expected result:**
+
+- After step 1, each row shows its alias with the username behind it beside the permission set.
+- After step 2, the dialog closes and `bob`'s row reads `Fox`.
+- After step 3, the dialog stays open and says someone in the channel already goes by that name.
+- After step 4, `carol` sees `bob` as `Fox` everywhere, and still never sees `bob`.
+
+**Notes:**
+
+- An admin can change aliases in any anonymous channel, member or not. A member without `manage_members` sees the
+  pencil only on their own row (JN-CHAT-039).
+- An alias has 1 to 32 characters and no line breaks.
+
+---
+
+### JN-CHAT-039: Change your own alias
+
+**Preconditions:** `whispers` as in JN-CHAT-037. `carol` holds the **Member** set, without `manage_members`.
+
+**Steps:**
+
+1. As `carol`, open `whispers` and look at the member list.
+2. Tap the pencil on her own row, type `Wren`, and tap **Save**.
+3. As `bob`, look at `whispers`' member list.
+
+**Expected result:**
+
+- After step 1, only `carol`'s own row has a pencil.
+- After step 2, the dialog closes and her row reads `Wren`.
+- After step 3, `bob` sees `carol` as `Wren`, and still never sees `carol`.
+
+**Notes:**
+
+- The alias follows the same rules as a manager's rename (JN-CHAT-038): unique in the channel in any case, and
+  never a username.
+- A member may pick a name that hints at who they are, even their real name. That is their choice.

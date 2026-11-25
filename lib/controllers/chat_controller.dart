@@ -31,9 +31,18 @@ typedef ListChatChannelsFn = Future<List<ChatChannel>> Function();
 /// Lists one channel's members.
 typedef ListChatMembersFn = Future<List<ChatMember>> Function(int channelId);
 
-/// Creates a channel with a name and a topic.
+/// Creates a channel with a name and a topic, anonymous or not (#2949).
 typedef CreateChatChannelFn =
-    Future<ChatChannel> Function(String name, String topic);
+    Future<ChatChannel> Function(String name, String topic, {bool anonymous});
+
+/// Renames the alias an account goes by in an anonymous channel, returning
+/// the members as they now stand.
+typedef SetChatAliasFn =
+    Future<List<ChatMember>> Function(
+      int channelId, {
+      required int userId,
+      required String alias,
+    });
 
 /// Opens the direct message with a set of accounts.
 typedef OpenChatDirectMessageFn =
@@ -156,6 +165,12 @@ class ChatPendingSend {
 /// - Each also carries how many of those unread messages mention the
 ///   account (#3157), which a [ChatUnreadMentionsController] this controller
 ///   owns reads on the device, so a channel never opened shows them.
+/// - In an anonymous channel (#2949) this account is its pseudonym, the
+///   channel's `selfId`: that is what marks a message, reaction or answer
+///   as its own and what it is mentioned as. Accounts are named by alias,
+///   pictures are never fetched for a pseudonym, and nobody is messaged
+///   from the member list. A privileged viewer sees each alias's account and
+///   may rename it with [setAlias].
 ///
 /// Every collaborator has a real default; tests pass fakes.
 class ChatController extends ChangeNotifier with SafeNotifier {
@@ -173,6 +188,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
         ChatChannelsService.deleteChannel,
     RemoveChatMemberFn removeMember = ChatChannelsService.removeMember,
     SetChatMemberFn setMember = ChatChannelsService.setMember,
+    SetChatAliasFn setAlias = ChatChannelsService.setAlias,
     Future<SharePrincipals> Function() loadPrincipals =
         SharingService.principals,
     Future<bool> Function(int channelId)? ensureKeys,
@@ -209,6 +225,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
        _deleteChannel = deleteChannel,
        _removeMember = removeMember,
        _setMember = setMember,
+       _setAlias = setAlias,
        _loadPrincipals = loadPrincipals,
        _ensureKeys =
            ensureKeys ?? ChatChannelKeysController.instance.ensureKeys,
@@ -254,6 +271,9 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   /// The most characters the Quark takes in a channel's topic.
   static const maxTopicLength = 512;
 
+  /// The most characters the Quark takes in an alias (#2949).
+  static const maxAliasLength = 32;
+
   /// The URL segment that means the default channel, as `/chat` redirects to.
   static const defaultChannelSlug = 'general';
 
@@ -276,6 +296,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   final Future<void> Function(int channelId) _deleteChannel;
   final RemoveChatMemberFn _removeMember;
   final SetChatMemberFn _setMember;
+  final SetChatAliasFn _setAlias;
   final Future<SharePrincipals> Function() _loadPrincipals;
   final Future<bool> Function(int channelId) _ensureKeys;
   final Future<void> Function(int channelId) _regenerateKeys;
@@ -444,14 +465,33 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   /// through a group has nothing to remove.
   bool get canLeaveSelected {
     final channel = _selected;
-    final me = _currentUserId();
+    final me = _selfId;
     return channel != null &&
         channel.isMember &&
         !channel.isDefault &&
         !channel.isDirect &&
-        me != null &&
-        _members.any((m) => m.userId == me);
+        _members.any((m) => m.isAccount(me));
   }
+
+  /// Whether the open channel is anonymous (#2949).
+  bool get isSelectedAnonymous => _selected?.anonymous ?? false;
+
+  /// Whether the member list offers to rename aliases: in an anonymous
+  /// channel, every member's own, and everyone's to whoever manages its
+  /// members. The list picks the rows from `managingPermissions` and
+  /// [currentUserKey].
+  bool get canEditAliases => isSelectedAnonymous;
+
+  /// Whether the member list offers to message someone: never in an
+  /// anonymous channel, whose members a member knows only by pseudonym.
+  bool get canMessageMembers => !isSelectedAnonymous;
+
+  /// The signed-in account's id, never a pseudonym.
+  int? get accountId => _currentUserId();
+
+  /// The id this account goes by in the open channel: its pseudonym in an
+  /// anonymous one, its account id elsewhere.
+  int? get _selfId => _selected?.selfId ?? _currentUserId();
 
   /// Whether the open channel's messages are loading, first page or older.
   bool get isLoadingMessages =>
@@ -590,8 +630,9 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   Set<ChatPermission> get selectedPermissions =>
       _selected?.permissions ?? const {};
 
-  /// The signed-in account's id as the message list carries authors.
-  String? get currentUserKey => _currentUserId()?.toString();
+  /// The signed-in account's id as the message list carries authors: its
+  /// pseudonym in an anonymous channel.
+  String? get currentUserKey => _selfId?.toString();
 
   /// Why the composer is closed beyond what `QuarkMessageComposer` works out
   /// from [selectedPermissions] and [isWaitingForKey]: no channel open.
@@ -606,7 +647,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     final channel = _selected;
     final messages = _messages;
     if (channel == null || messages == null) return const [];
-    final me = _currentUserId();
+    final me = _selfId;
     final entries = messages.entries;
     final byId = {
       for (final e in entries.whereType<ChatTimelineMessage>()) e.message.id: e,
@@ -694,17 +735,24 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   ];
 
   /// The members for `QuarkMemberList`: accounts by their id, groups as
-  /// `group_<id>` with their accounts under them.
+  /// `group_<id>` with their accounts under them. In an anonymous channel
+  /// accounts are named by alias, with the username beside it for a viewer
+  /// who sees it.
   List<ChatMemberItem> get memberItems => [
     for (final m in _members)
       ChatMemberItem(
         id: m.userId != null ? '${m.userId}' : 'group_${m.groupId}',
-        name: m.name,
+        name: m.shownName,
+        accountName: m.accountName,
         isGroup: m.groupId != null,
         permissions: m.permissions,
         members: [
           for (final u in m.users)
-            ChatMemberItem(id: '${u.id}', name: u.username),
+            ChatMemberItem(
+              id: '${u.id}',
+              name: u.shownName,
+              accountName: u.accountName,
+            ),
         ],
       ),
   ];
@@ -726,18 +774,14 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   /// The signed-in account's name as it is in [mentionNames], which a
   /// message has to mention to be highlighted. Null when the account is not
   /// among the open channel's members.
-  String? get currentUserName => _members.nameOfUser(_currentUserId());
+  String? get currentUserName => _members.nameOfUser(_selfId);
 
-  /// The name to show for account [userId]: from the members, or a stand-in
-  /// for an account no longer in the channel.
+  /// The name to show for account [userId], an account id or, in an
+  /// anonymous channel, a pseudonym: from the members, its alias there, or
+  /// a stand-in for an account no longer in the channel.
   String nameOf(int userId) {
     if (userId == 0) return 'Deleted account';
-    for (final m in _members) {
-      if (m.userId == userId) return m.name;
-      for (final u in m.users) {
-        if (u.id == userId) return u.username;
-      }
-    }
+    if (_members.nameOfUser(userId) case final name?) return name;
     if (userId == _currentUserId()) {
       return AppSettings.instance.username ?? 'You';
     }
@@ -745,13 +789,12 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   }
 
   /// Account [userId]'s profile picture version, from the members; null when
-  /// it has none or isn't listed.
+  /// it has none or isn't listed, and always in an anonymous channel, whose
+  /// ids are pseudonyms no picture is fetched for (#2949).
   int? avatarVersionOf(int userId) {
-    for (final m in _members) {
-      if (m.userId == userId) return m.avatarUpdatedAt;
-      for (final u in m.users) {
-        if (u.id == userId) return u.avatarUpdatedAt;
-      }
+    if (isSelectedAnonymous) return null;
+    if (_members.accountOf(userId) case final account?) {
+      return account.avatarUpdatedAt;
     }
     return userId == _currentUserId()
         ? AppSettings.instance.avatarUpdatedAt.value
@@ -1185,10 +1228,13 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     String name,
     String topic, {
     bool isPrivate = true,
+    bool anonymous = false,
   }) async {
     Object? openError;
     final created = await _save(() async {
-      final channel = await _newChannel(name, topic);
+      final channel = await _withFirstKey(
+        _createChannel(name, topic, anonymous: anonymous),
+      );
       if (!isPrivate) {
         try {
           final principals = await _loadPrincipals();
@@ -1315,7 +1361,11 @@ class ChatController extends ChangeNotifier with SafeNotifier {
         userId: userId,
         groupId: groupId,
       );
-      await _signMemberChange(change.event, userId: userId, groupId: groupId);
+      await _signMemberChange(
+        change.event,
+        userId: userId == null ? null : _members.boundIdOf(userId),
+        groupId: groupId,
+      );
       await Future.wait([_loadChannels(), _loadMembers()]);
       return null;
     } catch (e) {
@@ -1343,11 +1393,34 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     if (channel == null || me == null) return false;
     final left = await _save(() async {
       final change = await _removeMember(channel.id, userId: me);
-      await _signMemberChange(change.event, userId: me);
+      await _signMemberChange(change.event, userId: channel.selfId ?? me);
       await _loadChannels();
       return true;
     });
     return left ?? false;
+  }
+
+  /// The alias member [memberId], an id from [memberItems] or an account
+  /// under a group there, goes by in the open anonymous channel; empty when
+  /// it has none.
+  String aliasOf(String memberId) =>
+      _members.accountOf(int.tryParse(memberId))?.alias ?? '';
+
+  /// Renames the alias member [memberId] goes by in the open anonymous
+  /// channel to [alias] (#2949), and shows the members as the Quark answers.
+  /// Whether it worked; otherwise [saveError] says why, for
+  /// `Errors.chatAlias`.
+  Future<bool> setAlias(String memberId, String alias) async {
+    final channel = _selected;
+    final userId = int.tryParse(memberId);
+    if (channel == null || userId == null) return false;
+    final members = await _save(
+      () => _setAlias(channel.id, userId: userId, alias: alias),
+    );
+    if (members == null || _selected?.id != channel.id) return false;
+    _members = members;
+    notifyListeners();
+    return true;
   }
 
   /// Forgets [saveError], as a dialog opening afresh does.
@@ -1558,10 +1631,6 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     super.dispose();
   }
 
-  /// Creates channel [name] and sets up its first key.
-  Future<ChatChannel> _newChannel(String name, String topic) =>
-      _withFirstKey(_createChannel(name, topic));
-
   /// The channel [made] gives, with its first key set up when it has none.
   Future<ChatChannel> _withFirstKey(Future<ChatChannel> made) async {
     final channel = await made;
@@ -1586,7 +1655,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     );
     await _signMemberChange(
       change.event,
-      userId: userId,
+      userId: userId == null ? null : change.members.boundIdOf(userId),
       groupId: groupId,
       permissions: permissions,
     );

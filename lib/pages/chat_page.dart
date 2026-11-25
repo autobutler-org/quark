@@ -440,10 +440,11 @@ class _ChatPageState extends State<ChatPage>
     // Not disposed: the dialog still rebuilds from it while it animates out
     // after showDialog returns, and once it's gone nothing listens.
     final isPrivate = ValueNotifier(true);
+    final anonymous = ValueNotifier(false);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => ListenableBuilder(
-        listenable: Listenable.merge([_controller, isPrivate]),
+        listenable: Listenable.merge([_controller, isPrivate, anonymous]),
         builder: (dialogContext, _) => QuarkChannelDialog(
           title: 'New channel',
           submitLabel: 'Create',
@@ -453,11 +454,14 @@ class _ChatPageState extends State<ChatPage>
           error: _saveError('create the channel'),
           isPrivate: isPrivate.value,
           onPrivacyChanged: (value) => isPrivate.value = value,
+          isAnonymous: anonymous.value,
+          onAnonymousChanged: (value) => anonymous.value = value,
           onSubmit: (name, topic) async {
             final channel = await _controller.createChannel(
               name,
               topic,
               isPrivate: isPrivate.value,
+              anonymous: anonymous.value,
             );
             if (channel == null || !dialogContext.mounted) return;
             Navigator.of(dialogContext).pop();
@@ -582,9 +586,39 @@ class _ChatPageState extends State<ChatPage>
       target: ChatChannelShareTarget(
         channel: channel,
         isAdmin: _controller.isAdmin,
-        selfUserId: int.tryParse(_controller.currentUserKey ?? ''),
+        selfUserId: _controller.accountId,
       ),
       name: _controller.titleOf(channel),
+    );
+  }
+
+  /// Asks for member [id]'s new alias in the open anonymous channel and
+  /// saves it; the dialog stays open with the reason when the Quark refuses.
+  Future<void> _editAlias(String id) async {
+    _controller.clearSaveError();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => ListenableBuilder(
+        listenable: _controller,
+        builder: (dialogContext, _) => QuarkNameDialog(
+          title: 'Change alias',
+          label: 'Alias',
+          submitLabel: 'Save',
+          initialName: _controller.aliasOf(id),
+          maxLength: ChatController.maxAliasLength,
+          isSubmitting: _controller.isSaving,
+          error: _controller.saveError == null
+              ? null
+              : Errors.chatAlias(_controller.saveError, 'change the alias'),
+          onSubmit: (alias) async {
+            final saved = await _controller.setAlias(id, alias);
+            if (saved && dialogContext.mounted) {
+              Navigator.of(dialogContext).pop();
+            }
+          },
+          onCancel: () => Navigator.of(dialogContext).pop(),
+        ),
+      ),
     );
   }
 
@@ -719,6 +753,7 @@ class _ChatPageState extends State<ChatPage>
                           isDirect: channel.isDirect,
                           topic: channel.topic,
                           isPrivate: channel.isPrivate,
+                          isAnonymous: channel.anonymous,
                           onSearch: c.canSearch ? c.toggleSearch : null,
                           onEdit: c.canManageSelected ? _editChannel : null,
                           onMembers: c.canManageMembers ? _openMembers : null,
@@ -978,7 +1013,10 @@ class _ChatPageState extends State<ChatPage>
                     permissions: c.managingPermissions,
                     onAddMembers: _openMembers,
                     onRemove: _removeMember,
-                    onMessage: c.isLocked ? null : _messageMember,
+                    onMessage: c.isLocked || !c.canMessageMembers
+                        ? null
+                        : _messageMember,
+                    onEditAlias: c.canEditAliases ? _editAlias : null,
                     selfId: c.currentUserKey,
                     expandedIds: c.expandedGroupIds,
                     onToggleExpanded: c.toggleGroup,

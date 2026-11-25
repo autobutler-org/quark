@@ -16,14 +16,20 @@ class ChatMemberItem {
     this.isGroup = false,
     this.permissions,
     this.members = const [],
+    this.accountName,
   });
 
   /// The member's id, unique across accounts and groups in one list, and what
   /// callbacks and the avatar builder carry.
   final String id;
 
-  /// The account or group name.
+  /// The account or group name; in an anonymous channel, the account's
+  /// alias.
   final String name;
+
+  /// The username behind an anonymous channel's alias, for a viewer allowed
+  /// to see it, shown beside the alias. Null shows nothing.
+  final String? accountName;
 
   /// Whether this is a group, whose [members] can be expanded under it.
   final bool isGroup;
@@ -43,6 +49,7 @@ class ChatMemberItem {
       other is ChatMemberItem &&
           other.id == id &&
           other.name == name &&
+          other.accountName == accountName &&
           other.isGroup == isGroup &&
           setEquals(other.permissions, permissions) &&
           listEquals(other.members, members);
@@ -51,6 +58,7 @@ class ChatMemberItem {
   int get hashCode => Object.hash(
     id,
     name,
+    accountName,
     isGroup,
     Object.hashAllUnordered(permissions ?? const <ChatPermission>{}),
     Object.hashAll(members),

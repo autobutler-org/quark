@@ -21,12 +21,18 @@ import 'quark_channel_dialog/channel_privacy_option.dart';
 /// people added from its members, or every account on the Quark (#2501).
 /// Which is picked is the caller's: [isPrivate] in, [onPrivacyChanged] out.
 ///
+/// With [onAnonymousChanged] set, as for a new channel, a switch asks
+/// whether its members see each other only by alias (#2949), which can't be
+/// changed later. Whether it is on is the caller's: [isAnonymous] in,
+/// [onAnonymousChanged] out.
+///
 /// The typed text is [State] because it is the form's own transient input,
 /// thrown away when the dialog closes.
 ///
 /// Key prefixes: `channel_dialog_name`, `channel_dialog_topic`,
-/// `channel_dialog_private`, `channel_dialog_public`, `channel_dialog_cancel`,
-/// and `channel_dialog_submit`.
+/// `channel_dialog_private`, `channel_dialog_public`,
+/// `channel_dialog_anonymous`, `channel_dialog_cancel`, and
+/// `channel_dialog_submit`.
 ///
 /// ```dart
 /// showDialog<void>(
@@ -59,6 +65,8 @@ class QuarkChannelDialog extends StatefulWidget {
     this.error,
     this.isPrivate = true,
     this.onPrivacyChanged,
+    this.isAnonymous = false,
+    this.onAnonymousChanged,
     super.key,
   });
 
@@ -104,6 +112,15 @@ class QuarkChannelDialog extends StatefulWidget {
   /// is tapped. Null offers no choice, as when editing a channel.
   final ValueChanged<bool>? onPrivacyChanged;
 
+  /// Whether the channel's members see each other only by alias. Shown only
+  /// with [onAnonymousChanged].
+  final bool isAnonymous;
+
+  /// Called with whether the channel should be anonymous when the switch is
+  /// flipped. Null offers no choice, as when editing a channel, which can't
+  /// change it.
+  final ValueChanged<bool>? onAnonymousChanged;
+
   @override
   State<QuarkChannelDialog> createState() => _QuarkChannelDialogState();
 }
@@ -134,6 +151,7 @@ class _QuarkChannelDialogState extends State<QuarkChannelDialog> {
     final tokens = QuarkTokens.of(context);
     final error = widget.error;
     final onPrivacyChanged = widget.onPrivacyChanged;
+    final onAnonymousChanged = widget.onAnonymousChanged;
 
     return AlertDialog(
       scrollable: true,
@@ -196,6 +214,22 @@ class _QuarkChannelDialogState extends State<QuarkChannelDialog> {
                     'Every account on this Quark can read and post in it.',
                 isSelected: !widget.isPrivate,
                 onTap: () => onPrivacyChanged(false),
+              ),
+            ],
+            if (onAnonymousChanged != null) ...[
+              SizedBox(height: tokens.spacingSm),
+              SwitchListTile(
+                key: const ValueKey('channel_dialog_anonymous'),
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(QuarkIcons.visibility_off),
+                title: const Text('Anonymous'),
+                subtitle: const Text(
+                  'Members see each other only by an alias. Admins and '
+                  'people who manage members still see who is who. This '
+                  "can't be changed later.",
+                ),
+                value: widget.isAnonymous,
+                onChanged: onAnonymousChanged,
               ),
             ],
             if (error != null) ...[
