@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/chat_channel_keys_controller.dart';
 import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_channel_keys.dart';
+import 'package:quark/models/chat_keys.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -19,8 +20,18 @@ class _FakeQuark {
 
   final ChatCrypto crypto;
 
-  /// Members with published keys, by account.
+  /// The identity each client holds, by the id the channel knows it by.
   final Map<int, ChatIdentity> members = {};
+
+  /// The public keys the Quark serves for each id: account keys, or in an
+  /// anonymous channel (#2949) the keys a client published for it.
+  final Map<int, ChatPublicKeys> published = {};
+
+  /// Ids the channel list leaves out, as it does an admin not in the channel.
+  final Set<int> unlisted = {};
+
+  /// How many times each id published channel keys.
+  final Map<int, int> puts = {};
   int current = 0;
   bool rotationNeeded = false;
   final Map<(int, int), ChatKeyGrant> grants = {};
@@ -29,7 +40,7 @@ class _FakeQuark {
   /// Grants handed back, as (version, account).
   final List<(int, int)> rejected = [];
 
-  Uint8List signKeyOf(int user) => members[user]!.sign.publicKey;
+  Uint8List signKeyOf(int user) => published[user]!.signPublicKey;
 
   /// A client for [me], the id the channel knows it by. In an anonymous
   /// channel (#2949) that is a pseudonym, and [account] is the account id
@@ -69,13 +80,20 @@ class _FakeQuark {
       crypto: () => crypto,
       userId: () => account ?? me,
       listChannels: () async => [
-        ChatChannel(
-          id: _channel,
-          name: 'c',
-          anonymous: account != null,
-          selfId: account == null ? null : me,
-        ),
+        if (!unlisted.contains(me))
+          ChatChannel(
+            id: _channel,
+            name: 'c',
+            anonymous: account != null,
+            selfId: account == null ? null : me,
+          ),
       ],
+      putChannelKeys: (channelId, keys) async {
+        if (account == null) return null;
+        puts[me] = (puts[me] ?? 0) + 1;
+        published[me] = keys;
+        return me;
+      },
       fetchKeys: (channelId) async => ChatChannelKeys(
         currentVersion: current,
         versions: [for (var v = 1; v <= current; v++) v],
@@ -95,12 +113,12 @@ class _FakeQuark {
         pending: [
           for (var v = 1; v <= current; v++)
             if (grants.containsKey((v, me)))
-              for (final entry in members.entries)
+              for (final entry in published.entries)
                 if (!grants.containsKey((v, entry.key)))
                   ChatPendingGrant(
                     version: v,
                     userId: entry.key,
-                    boxPublicKey: entry.value.box.publicKey,
+                    boxPublicKey: entry.value.boxPublicKey,
                   ),
         ],
         currentVersion: current,
@@ -154,7 +172,16 @@ void main() {
   setUpAll(() async => crypto = await ChatCrypto.load());
   setUp(() => quark = _FakeQuark(crypto));
 
-  void publish(int user) => quark.members[user] = crypto.generateIdentity();
+  /// Gives [user] an identity and publishes its account keys.
+  void publish(int user) {
+    final identity = crypto.generateIdentity();
+    quark.members[user] = identity;
+    quark.published[user] = identity.publicKeys;
+  }
+
+  /// Gives [user] an account identity the Quark serves nowhere: in an
+  /// anonymous channel only the keys its client publishes count.
+  void enroll(int user) => quark.members[user] = crypto.generateIdentity();
 
   /// Whether [a] and [b] opened the same key for [version].
   void sameKey(
@@ -380,6 +407,7 @@ void main() {
       crypto: () => crypto,
       userId: () => 2,
       listChannels: () async => const [],
+      putChannelKeys: (_, _) async => null,
       fetchKeys: (_) async {
         fetches++;
         throw StateError('bob is no longer a member');
@@ -460,38 +488,69 @@ void main() {
   );
 
   // #2949: in an anonymous channel the Quark names everyone by pseudonym,
-  // so a client binds its selfId where it would bind its account id.
+  // so a client binds its selfId where it would bind its account id, and
+  // seals and signs with its channel identity, never its account's.
   test('an anonymous channel binds and signs the pseudonym', () async {
     const alicePseudonym = -11, bobPseudonym = -12;
-    publish(alicePseudonym);
-    publish(bobPseudonym);
+    enroll(alicePseudonym);
+    enroll(bobPseudonym);
     final alice = quark.client(alicePseudonym, account: 1);
+    final aliceAccount = quark.members[alicePseudonym]!;
+    final aliceHere = crypto.channelIdentity(aliceAccount, _channel);
 
     expect(await alice.ensureKeys(_channel), isFalse);
     expect(alice.selfIdIn(_channel), alicePseudonym);
-    final own = quark.grants[(1, alicePseudonym)]!;
     expect(
-      crypto.verify(
-        crypto.grantMessage(
-          channelId: _channel,
-          version: 1,
-          userId: alicePseudonym,
-          sealedKey: own.sealedKey,
-        ),
-        own.signature,
-        quark.signKeyOf(alicePseudonym),
-      ),
-      isTrue,
-      reason: 'her own grant is signed over her pseudonym',
+      quark.published[alicePseudonym]!.signPublicKey,
+      aliceHere.sign.publicKey,
+      reason: 'she published her channel keys, not her account keys',
     );
+    final own = quark.grants[(1, alicePseudonym)]!;
+    final ownMessage = crypto.grantMessage(
+      channelId: _channel,
+      version: 1,
+      userId: alicePseudonym,
+      sealedKey: own.sealedKey,
+    );
+    expect(
+      crypto.verify(ownMessage, own.signature, aliceHere.sign.publicKey),
+      isTrue,
+      reason: 'her own grant is signed over her pseudonym with her channel key',
+    );
+    expect(
+      crypto.verify(ownMessage, own.signature, aliceAccount.sign.publicKey),
+      isFalse,
+    );
+    expect(crypto.openSealed(own.sealedKey, aliceHere), hasLength(32));
     final created = quark.events.single;
     expect(created.actorId, alicePseudonym);
+    expect(created.signerSignKey, aliceHere.sign.publicKey);
     expect(alice.verifyEvent(created), isTrue);
-    expect(quark.grants.containsKey((1, bobPseudonym)), isTrue);
+    expect(
+      quark.grants.containsKey((1, bobPseudonym)),
+      isFalse,
+      reason: 'bob is not pending until his app publishes channel keys',
+    );
 
     final bob = quark.client(bobPseudonym, account: 2);
+    expect(await bob.ensureKeys(_channel), isTrue);
+    await alice.ensureKeys(_channel);
+    final bobHere = crypto.channelIdentity(
+      quark.members[bobPseudonym]!,
+      _channel,
+    );
+    final toBob = quark.grants[(1, bobPseudonym)]!;
+    expect(crypto.openSealed(toBob.sealedKey, bobHere), hasLength(32));
+    expect(
+      () => crypto.openSealed(toBob.sealedKey, quark.members[bobPseudonym]!),
+      throwsA(anything),
+      reason: 'the grant is sealed to his channel key',
+    );
     expect(await bob.ensureKeys(_channel), isFalse);
     sameKey(alice, bob, 1);
+
+    await alice.signEvent(memberEvent(bobPseudonym, {}, actor: alicePseudonym));
+    expect(quark.puts, {alicePseudonym: 1, bobPseudonym: 1});
 
     await expectLater(
       alice.signEvent(
@@ -507,6 +566,77 @@ void main() {
       throwsArgumentError,
       reason: 'an event naming her account id is not hers here',
     );
+  });
+
+  test('a channel list publishes keys for its anonymous channels', () async {
+    const alicePseudonym = -11;
+    enroll(alicePseudonym);
+    final alice = quark.client(alicePseudonym, account: 1);
+
+    alice.rememberChannels([
+      const ChatChannel(
+        id: _channel,
+        name: 'c',
+        anonymous: true,
+        selfId: alicePseudonym,
+      ),
+    ]);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(quark.puts, {alicePseudonym: 1});
+    await alice.ensureKeys(_channel);
+    expect(quark.puts, {alicePseudonym: 1}, reason: 'once per session');
+  });
+
+  test('an admin outside an anonymous channel signs its member change, '
+      'and regenerates over its pseudonym once in it', () async {
+    const alicePseudonym = -11, adminPseudonym = -13;
+    enroll(alicePseudonym);
+    enroll(adminPseudonym);
+    final alice = quark.client(alicePseudonym, account: 1);
+    await alice.ensureKeys(_channel);
+    quark.unlisted.add(adminPseudonym);
+    final admin = quark.client(adminPseudonym, account: 3);
+    final adminHere = crypto.channelIdentity(
+      quark.members[adminPseudonym]!,
+      _channel,
+    );
+    final permissions = ChatPermissionPreset.member.permissions;
+
+    // The admin adds itself: the Quark's member_set names its pseudonym as
+    // actor and target, which only publishing keys tells it.
+    await admin.signMemberChange(
+      memberEvent(adminPseudonym, permissions, actor: adminPseudonym),
+      userId: adminPseudonym,
+      permissions: permissions,
+    );
+    final added = quark.events.last;
+    expect(added.signature, isNotNull);
+    expect(added.signerSignKey, adminHere.sign.publicKey);
+    expect(admin.verifyEvent(added), isTrue);
+    expect(admin.selfIdIn(_channel), adminPseudonym);
+
+    quark.unlisted.remove(adminPseudonym);
+    await admin.regenerate(_channel);
+
+    final own = quark.grants[(2, adminPseudonym)]!;
+    expect(
+      crypto.verify(
+        crypto.grantMessage(
+          channelId: _channel,
+          version: 2,
+          userId: adminPseudonym,
+          sealedKey: own.sealedKey,
+        ),
+        own.signature,
+        adminHere.sign.publicKey,
+      ),
+      isTrue,
+      reason: 'the regenerated grant is signed over the pseudonym',
+    );
+    expect(quark.events.last.actorId, adminPseudonym);
+    expect(admin.verifyEvent(quark.events.last), isTrue);
+    expect(quark.puts[adminPseudonym], 1);
   });
 
   test('a locked chat refuses to fetch keys', () async {

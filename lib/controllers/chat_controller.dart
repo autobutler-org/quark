@@ -194,6 +194,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     Future<bool> Function(int channelId)? ensureKeys,
     Future<void> Function(int channelId)? regenerateKeys,
     SignMemberChangeFn? signMemberChange,
+    void Function(List<ChatChannel> channels)? rememberChannels,
     bool Function()? isAdmin,
     ChatMessagesController Function(int channelId)? messagesFor,
     bool Function()? isUnlocked,
@@ -234,6 +235,9 @@ class ChatController extends ChangeNotifier with SafeNotifier {
        _signMemberChange =
            signMemberChange ??
            ChatChannelKeysController.instance.signMemberChange,
+       _rememberChannels =
+           rememberChannels ??
+           ChatChannelKeysController.instance.rememberChannels,
        _isAdmin = isAdmin ?? (() => AppSettings.instance.isAdmin.value),
        _messagesFor =
            messagesFor ??
@@ -301,6 +305,10 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   final Future<bool> Function(int channelId) _ensureKeys;
   final Future<void> Function(int channelId) _regenerateKeys;
   final SignMemberChangeFn _signMemberChange;
+
+  /// Hands each channel list to the keys controller, which publishes this
+  /// account's keys for every anonymous channel in it (#2949).
+  final void Function(List<ChatChannel> channels) _rememberChannels;
   final bool Function() _isAdmin;
   final ChatMessagesController Function(int channelId) _messagesFor;
   final bool Function() _isUnlocked;
@@ -1686,6 +1694,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       final channels = await (_isAdmin() ? _listAllChannels : _listChannels)();
       if (isDisposed) return;
       _channels = channels;
+      _rememberChannels(channels);
       _unread.setChannels(channels);
       _channelsLoaded = true;
       _channelsError = null;

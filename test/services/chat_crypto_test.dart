@@ -41,6 +41,44 @@ void main() {
     ]);
   });
 
+  // #2949: a fixed vector, worked out independently with Go's x/crypto
+  // (HKDF-SHA256, X25519 over SHA-512 of the box seed as libsodium's
+  // crypto_box_seed_keypair does, Ed25519 from the sign seed).
+  test('a channel identity is derived from the seeds and the channel id', () {
+    final account = crypto.identityFromSeeds(
+      Uint8List.fromList(List.generate(64, (i) => i)),
+    );
+    String hex(Uint8List bytes) =>
+        bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
+    final in42 = crypto.channelIdentity(account, 42);
+    final in43 = crypto.channelIdentity(account, 43);
+
+    expect(
+      hex(in42.box.publicKey),
+      '0596a2c36ef66b8e3cd21fbdd3c215ac16a3ff13e5bf6d14c642dbcaa91bac55',
+    );
+    expect(
+      hex(in42.sign.publicKey),
+      '63033a29b5978c998de3c0e644c131575a29a632ac9a24f659476e08e96fa11b',
+    );
+    expect(
+      hex(in43.box.publicKey),
+      '24fd243eb3ade8dff72575a797dd8d4339c8874398e3bb1cf8ab1a66b09ad97e',
+    );
+    expect(
+      hex(in43.sign.publicKey),
+      'ffa6d50753d651d99a25d87c4445e4582c55df5c034c6ed782016066124c9112',
+    );
+    expect(in42.box.publicKey, isNot(account.box.publicKey));
+    expect(in42.sign.publicKey, isNot(account.sign.publicKey));
+    expect(
+      crypto.channelIdentity(account, 42).seeds,
+      in42.seeds,
+      reason: 'every device derives the same keys',
+    );
+  });
+
   test('wrap and unwrap round-trip the identity', () {
     final identity = crypto.generateIdentity();
     final wrapped = crypto.wrap(identity, 'hunter22-password', _cheap);

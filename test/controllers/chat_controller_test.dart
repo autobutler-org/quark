@@ -1824,6 +1824,16 @@ void main() {
       permissions: memberSet,
     );
 
+    test('the channel list goes to the keys controller', () async {
+      // It publishes this account's keys for every anonymous channel in it,
+      // so a holder can grant the key before the channel is opened.
+      final chat = FakeChat(channels: [...fakeChannels, whispers]);
+
+      await chat.controller.refresh();
+
+      expect(chat.remembered?.map((c) => c.id), [1, 2, 5]);
+    });
+
     test('a member sees aliases and is known by its pseudonym', () async {
       final chat = FakeChat(
         channels: [...fakeChannels, whispers],

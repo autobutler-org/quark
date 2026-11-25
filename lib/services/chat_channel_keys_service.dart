@@ -3,13 +3,15 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:quark/models/chat_channel_keys.dart';
+import 'package:quark/models/chat_keys.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 
 /// The channel key and event routes under `/api/v0/chat/channels/:id` (#2417):
 /// key versions and this account's grants, the grants it can fill, uploading
-/// them, rejecting its own, creating a version, and the channel's signed system
-/// events.
+/// them, rejecting its own, creating a version, the channel's signed system
+/// events, and publishing this account's keys for an anonymous channel
+/// (#2949).
 ///
 /// Everything here is sealed keys, signatures and public keys;
 /// `ChatChannelKeysController` does the crypto. Regenerating a version is
@@ -88,6 +90,26 @@ class ChatChannelKeysService with AuthenticatedService {
     return ChatChannelEvent.fromJson(
       _json(response)['event'] as Map<String, dynamic>,
     );
+  }
+
+  /// Publishes [keys], the public keys this account derived for anonymous
+  /// channel [channelId] (#2949), and returns its pseudonym there, made if it
+  /// had none. Null when the channel isn't anonymous, which the Quark answers
+  /// with 400. Publishing the keys already stored does nothing.
+  ///
+  /// api: PUT /api/v0/chat/channels/{id}/keys/me
+  static Future<int?> putChannelKeys(int channelId, ChatPublicKeys keys) async {
+    final response = await instance.authenticatedPut(
+      _uri(channelId, '/keys/me'),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'boxPublicKey': base64Encode(keys.boxPublicKey),
+        'signPublicKey': base64Encode(keys.signPublicKey),
+      }),
+    );
+    if (response.statusCode == 400) return null;
+    throwUnlessOk(response, 'publish keys for channel $channelId');
+    return (_json(response)['selfId'] as num).toInt();
   }
 
   /// The grants this account holds the key to fill.

@@ -16,7 +16,8 @@ import 'package:sodium/sodium_sumo.dart';
 /// sumo-only there. The Quark never runs any of this: it stores what [wrap]
 /// produces and hands it back.
 ///
-/// - Identity: [generateIdentity], [wrap] and [unwrap], and for the split
+/// - Identity: [generateIdentity], [wrap] and [unwrap], [channelIdentity]
+///   for an anonymous channel (#2949), and for the split
 ///   wraps [deriveAuthKeys], [deriveRecoveryKeys], [wrapWithKey] and
 ///   [unwrapWithKey] (#2430). [generateRecoveryPhrase] makes the phrase.
 /// - Key grants (#2417): [seal] and [openSealed] for `crypto_box_seal` to a
@@ -67,6 +68,33 @@ class ChatCrypto {
       sodium.secureCopy(Uint8List.sublistView(seeds, 0, boxSeedBytes)),
       sodium.secureCopy(Uint8List.sublistView(seeds, boxSeedBytes)),
     );
+  }
+
+  /// The identity [account] goes by in anonymous channel [channelId] (#2949),
+  /// so nothing it seals or signs there matches its account keys. Both seeds
+  /// are HKDF-SHA256 expands, keyed on the channel id, of one extract over
+  /// [account]'s seeds, so every device holding the account derives the
+  /// same keys and nothing new is stored. Channel ids are never reused. The
+  /// caller disposes the result.
+  ChatIdentity channelIdentity(ChatIdentity account, int channelId) {
+    final hkdf = sodium.crypto.kdfHkdfSha256;
+    final prk = hkdf.extract(ikm: account.seeds);
+    try {
+      return _identityFromSeeds(
+        hkdf.expand(
+          masterKey: prk,
+          context: 'quark-chat-anon-box-v1:$channelId',
+          outLen: sodium.crypto.box.seedBytes,
+        ),
+        hkdf.expand(
+          masterKey: prk,
+          context: 'quark-chat-anon-sign-v1:$channelId',
+          outLen: sodium.crypto.sign.seedBytes,
+        ),
+      );
+    } finally {
+      prk.dispose();
+    }
   }
 
   ChatIdentity _identityFromSeeds(SecureKey boxSeed, SecureKey signSeed) {

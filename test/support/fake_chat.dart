@@ -255,6 +255,7 @@ class FakeChat {
       },
       signMemberChange: (event, {userId, groupId, permissions}) async =>
           calls.add('sign ${event?.id} user=$userId $permissions'),
+      rememberChannels: (channels) => remembered = channels,
       listMembers: (_) async {
         memberLoads++;
         return this.members;
@@ -355,6 +356,10 @@ class FakeChat {
 
   /// How many times the members were listed.
   int memberLoads = 0;
+
+  /// The channel list last handed to the keys controller, which publishes
+  /// keys for its anonymous channels (#2949).
+  List<ChatChannel>? remembered;
 
   /// Who the Quark offers to share with: `everyone` and ada (7), bob (8) and
   /// cy (9).

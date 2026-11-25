@@ -955,6 +955,9 @@ All three have opened chat once.
 
 - Members are listed by alias, so their order says nothing about who they are.
 - A line about someone joining or leaving names them by the alias they had when it happened.
+- Each member's app seals and signs in `whispers` with keys of its own for that channel, which it publishes once
+  it sees the channel in its list. A member is shared the channel's key only after that, by a member who holds it
+  and is online; until then `whispers` waits for a member to share the key.
 
 ---
 
