@@ -91,8 +91,8 @@ var chatRestoreSteps = []restoreStep{
 
 	{"chat_servers", `INSERT INTO main.chat_servers SELECT * FROM chat_backup.chat_servers`},
 	{"chat_channels", `
-		INSERT INTO main.chat_channels (id, server_id, kind, name, topic, is_default, created_by, created_at)
-		SELECT c.id, c.server_id, c.kind, c.name, c.topic, c.is_default, u.live_id, c.created_at
+		INSERT INTO main.chat_channels (id, server_id, kind, name, topic, is_default, created_by, created_at, anonymous)
+		SELECT c.id, c.server_id, c.kind, c.name, c.topic, c.is_default, u.live_id, c.created_at, c.anonymous
 		FROM chat_backup.chat_channels AS c
 		LEFT JOIN temp.restore_users AS u ON u.backup_id = c.created_by`},
 	// A member row names an account or a group, never both, so a row whose
@@ -104,6 +104,14 @@ var chatRestoreSteps = []restoreStep{
 		LEFT JOIN temp.restore_users AS u ON u.backup_id = m.user_id
 		LEFT JOIN temp.restore_groups AS g ON g.backup_id = m.group_id
 		WHERE u.live_id IS NOT NULL OR g.live_id IS NOT NULL`},
+	// A pseudonym (#2949) keeps its id, which reactions, answers, grants and
+	// events in its channel bind, and follows its account to the account's
+	// live id. One whose account is not here goes, as a reaction does.
+	{"chat_channel_pseudonyms", `
+		INSERT INTO main.chat_channel_pseudonyms (channel_id, user_id, pseudonym_id, alias)
+		SELECT p.channel_id, u.live_id, p.pseudonym_id, p.alias
+		FROM chat_backup.chat_channel_pseudonyms AS p
+		JOIN temp.restore_users AS u ON u.backup_id = p.user_id`},
 	// A direct message's dm_key (#2423) is its accounts' live ids, sorted and
 	// joined by commas, as chatutil writes it. One that lost an account the
 	// backup knew and this Quark doesn't keeps none: the people left could

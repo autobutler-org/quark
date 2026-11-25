@@ -3,7 +3,7 @@ package db
 // ChatBackupVersion is the format of the chat backup file, stored in its
 // user_version. It moves when ChatBackupSchemaDDL does, and a restore refuses
 // a version it does not know rather than guess at its columns.
-const ChatBackupVersion = 4
+const ChatBackupVersion = 5
 
 // ChatBackupSchemaDDL is the schema of the chat backup file pkg/backup writes
 // beside a snapshot (#2428). It is a transport format, not a database anyone
@@ -28,9 +28,13 @@ const ChatBackupVersion = 4
 // restored either, so a file without it still reads: a restored
 // conversation loses the line saying it was started from an earlier one.
 // Version 4 gave chat_poll_answers its voter_tag: an anonymous poll's answer
-// carries the tag and no user_id (#3942).
+// carries the tag and no user_id (#3942). Version 5 added
+// chat_channels.anonymous and chat_channel_pseudonyms (#2949): an anonymous
+// channel's reactions, answers, grants and events bind its pseudonyms, so they
+// travel with it, and a restore that dropped the flag would show every member
+// by account.
 const ChatBackupSchemaDDL = `
-PRAGMA user_version = 4;
+PRAGMA user_version = 5;
 
 CREATE TABLE users (
     id       INTEGER PRIMARY KEY,
@@ -58,7 +62,16 @@ CREATE TABLE chat_channels (
     created_by INTEGER,
     created_at DATETIME NOT NULL,
     dm_key     TEXT,
-    forked     INTEGER NOT NULL
+    forked     INTEGER NOT NULL,
+    anonymous  INTEGER NOT NULL
+);
+
+CREATE TABLE chat_channel_pseudonyms (
+    channel_id   INTEGER NOT NULL,
+    user_id      INTEGER NOT NULL,
+    pseudonym_id INTEGER NOT NULL,
+    alias        TEXT NOT NULL,
+    PRIMARY KEY (channel_id, user_id)
 );
 
 CREATE TABLE chat_channel_members (

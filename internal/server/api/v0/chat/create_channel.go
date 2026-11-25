@@ -11,7 +11,7 @@ import (
 
 // createChannel godoc
 // @Summary Create a chat channel
-// @Description Creates a private channel and gives the caller every permission on it. Any signed-in account may. The name is trimmed, has 1 to 64 characters and no line breaks or tabs, and is unique ignoring case; the topic has at most 512 characters. Publishes chat_channel_changed.
+// @Description Creates a private channel and gives the caller every permission on it. Any signed-in account may. With anonymous set the channel is anonymous for good (#2949): its members see each other only by per-channel pseudonym and alias, and the result carries the caller's own pseudonym as selfId. The name is trimmed, has 1 to 64 characters and no line breaks or tabs, and is unique ignoring case; the topic has at most 512 characters. Publishes chat_channel_changed.
 // @Tags chat
 // @Accept json
 // @Produce json
@@ -39,6 +39,7 @@ func createChannel(c *gin.Context) *serverutil.Response {
 		Principal: principal,
 		Name:      body.Name,
 		Topic:     body.Topic,
+		Anonymous: body.Anonymous,
 	})
 	if err != nil {
 		return chatError(err)

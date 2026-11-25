@@ -17,6 +17,7 @@ var chatBackupTables = []string{
 	"chat_servers",
 	"chat_channels",
 	"chat_channel_members",
+	"chat_channel_pseudonyms",
 	"user_chat_keys",
 	"chat_channel_keys",
 	"chat_key_grants",

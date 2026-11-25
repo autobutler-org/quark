@@ -13,20 +13,27 @@ import (
 
 const createChatChannel = `-- name: CreateChatChannel :one
 INSERT INTO
-    chat_channels (server_id, name, topic, created_by)
+    chat_channels (server_id, name, topic, created_by, anonymous)
 VALUES
-    ((SELECT MIN(id) FROM chat_servers), $1, $2, $3) RETURNING id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key, forked
+    ((SELECT MIN(id) FROM chat_servers), $1, $2, $3, $4) RETURNING id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key, forked, anonymous
 `
 
 type CreateChatChannelParams struct {
 	Name      string
 	Topic     string
 	CreatedBy sql.NullInt64
+	Anonymous int64
 }
 
-// CreateChatChannel adds a channel to the Quark's one server.
+// CreateChatChannel adds a channel to the Quark's one server. anonymous is 1
+// for an anonymous channel (#2949), and never changes afterward.
 func (q *Queries) CreateChatChannel(ctx context.Context, arg CreateChatChannelParams) (ChatChannel, error) {
-	row := q.db.QueryRowContext(ctx, createChatChannel, arg.Name, arg.Topic, arg.CreatedBy)
+	row := q.db.QueryRowContext(ctx, createChatChannel,
+		arg.Name,
+		arg.Topic,
+		arg.CreatedBy,
+		arg.Anonymous,
+	)
 	var i ChatChannel
 	err := row.Scan(
 		&i.ID,
@@ -39,6 +46,7 @@ func (q *Queries) CreateChatChannel(ctx context.Context, arg CreateChatChannelPa
 		&i.CreatedAt,
 		&i.DmKey,
 		&i.Forked,
+		&i.Anonymous,
 	)
 	return i, err
 }
@@ -47,7 +55,7 @@ const createChatDirectMessage = `-- name: CreateChatDirectMessage :one
 INSERT INTO
     chat_channels (server_id, kind, created_by, dm_key, forked)
 VALUES
-    ((SELECT MIN(id) FROM chat_servers), 'dm', $1, $2, $3) ON CONFLICT (dm_key) DO NOTHING RETURNING id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key, forked
+    ((SELECT MIN(id) FROM chat_servers), 'dm', $1, $2, $3) ON CONFLICT (dm_key) DO NOTHING RETURNING id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key, forked, anonymous
 `
 
 type CreateChatDirectMessageParams struct {
@@ -74,6 +82,7 @@ func (q *Queries) CreateChatDirectMessage(ctx context.Context, arg CreateChatDir
 		&i.CreatedAt,
 		&i.DmKey,
 		&i.Forked,
+		&i.Anonymous,
 	)
 	return i, err
 }
@@ -127,7 +136,7 @@ func (q *Queries) DeleteChatChannelUserMember(ctx context.Context, arg DeleteCha
 }
 
 const getChatChannel = `-- name: GetChatChannel :one
-SELECT id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key, forked FROM chat_channels WHERE id = $1 LIMIT 1
+SELECT id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key, forked, anonymous FROM chat_channels WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetChatChannel(ctx context.Context, id int64) (ChatChannel, error) {
@@ -144,12 +153,13 @@ func (q *Queries) GetChatChannel(ctx context.Context, id int64) (ChatChannel, er
 		&i.CreatedAt,
 		&i.DmKey,
 		&i.Forked,
+		&i.Anonymous,
 	)
 	return i, err
 }
 
 const getChatDirectMessage = `-- name: GetChatDirectMessage :one
-SELECT id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key, forked FROM chat_channels WHERE dm_key = $1 LIMIT 1
+SELECT id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key, forked, anonymous FROM chat_channels WHERE dm_key = $1 LIMIT 1
 `
 
 func (q *Queries) GetChatDirectMessage(ctx context.Context, dmKey sql.NullString) (ChatChannel, error) {
@@ -166,6 +176,7 @@ func (q *Queries) GetChatDirectMessage(ctx context.Context, dmKey sql.NullString
 		&i.CreatedAt,
 		&i.DmKey,
 		&i.Forked,
+		&i.Anonymous,
 	)
 	return i, err
 }
@@ -180,6 +191,7 @@ SELECT
     chat_channels.is_default,
     chat_channels.created_by,
     chat_channels.created_at,
+    chat_channels.anonymous,
     CAST(CASE WHEN NOT EXISTS (
         SELECT
             1
@@ -210,6 +222,7 @@ type ListAllChatChannelsRow struct {
 	IsDefault int64
 	CreatedBy sql.NullInt64
 	CreatedAt time.Time
+	Anonymous int64
 	IsPrivate int64
 }
 
@@ -235,6 +248,7 @@ func (q *Queries) ListAllChatChannels(ctx context.Context) ([]ListAllChatChannel
 			&i.IsDefault,
 			&i.CreatedBy,
 			&i.CreatedAt,
+			&i.Anonymous,
 			&i.IsPrivate,
 		); err != nil {
 			return nil, err
@@ -500,6 +514,7 @@ SELECT
     chat_channels.created_by,
     chat_channels.created_at,
     chat_channels.forked,
+    chat_channels.anonymous,
     chat_channel_members.permissions,
     CAST(CASE WHEN NOT EXISTS (
         SELECT
@@ -550,6 +565,7 @@ type ListChatChannelsForUserRow struct {
 	CreatedBy   sql.NullInt64
 	CreatedAt   time.Time
 	Forked      int64
+	Anonymous   int64
 	Permissions int64
 	IsPrivate   int64
 }
@@ -578,6 +594,7 @@ func (q *Queries) ListChatChannelsForUser(ctx context.Context, userID sql.NullIn
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.Forked,
+			&i.Anonymous,
 			&i.Permissions,
 			&i.IsPrivate,
 		); err != nil {
@@ -664,7 +681,7 @@ func (q *Queries) SetChatChannelUserMember(ctx context.Context, arg SetChatChann
 }
 
 const updateChatChannel = `-- name: UpdateChatChannel :one
-UPDATE chat_channels SET name = $1, topic = $2 WHERE id = $3 RETURNING id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key, forked
+UPDATE chat_channels SET name = $1, topic = $2 WHERE id = $3 RETURNING id, server_id, kind, name, topic, is_default, created_by, created_at, dm_key, forked, anonymous
 `
 
 type UpdateChatChannelParams struct {
@@ -687,6 +704,7 @@ func (q *Queries) UpdateChatChannel(ctx context.Context, arg UpdateChatChannelPa
 		&i.CreatedAt,
 		&i.DmKey,
 		&i.Forked,
+		&i.Anonymous,
 	)
 	return i, err
 }

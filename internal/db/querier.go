@@ -28,6 +28,9 @@ type Querier interface {
 	// another channel, uploaded by someone else, or already bound.
 	BindChatAttachment(ctx context.Context, arg BindChatAttachmentParams) (int64, error)
 	CancelJob(ctx context.Context, id int64) (Job, error)
+	// ChatAliasIsUsername is whether an alias is some account's username in any
+	// case, which an alias may never be, so it can't pass for an account.
+	ChatAliasIsUsername(ctx context.Context, alias string) (int64, error)
 	// Claims a pending job for an instance (#2966). The status guard makes a job
 	// canceled or claimed by another instance since it was picked match no row,
 	// and so does the lane count, which is what holds a lane's limit across
@@ -73,10 +76,16 @@ type Querier interface {
 	// CreateChatAttachment stores one. created_at is the database clock, at
 	// millisecond resolution (rule 3). The caller has already checked id.
 	CreateChatAttachment(ctx context.Context, arg CreateChatAttachmentParams) (ChatAttachment, error)
-	// CreateChatChannel adds a channel to the Quark's one server.
+	// CreateChatChannel adds a channel to the Quark's one server. anonymous is 1
+	// for an anonymous channel (#2949), and never changes afterward.
 	CreateChatChannel(ctx context.Context, arg CreateChatChannelParams) (ChatChannel, error)
 	CreateChatChannelEvent(ctx context.Context, arg CreateChatChannelEventParams) (ChatChannelEvent, error)
 	CreateChatChannelKey(ctx context.Context, arg CreateChatChannelKeyParams) (ChatChannelKey, error)
+	// CreateChatChannelPseudonym gives an account its pseudonym in a channel
+	// unless it already has one, which is 0 rows. A pseudonym id or alias another
+	// account in the channel holds, whatever its case, is a unique violation, and
+	// the caller draws again.
+	CreateChatChannelPseudonym(ctx context.Context, arg CreateChatChannelPseudonymParams) (int64, error)
 	// CreateChatDirectMessage adds a direct message (#2423) unless one with the
 	// same dm_key already exists, in which case it returns no row: the unique
 	// index on dm_key settles two openers racing, on either engine. forked is 1
@@ -377,6 +386,9 @@ type Querier interface {
 	// ListChatChannelPermsForUser is the set on every row of one channel that
 	// reaches an account, for chatutil.ResolvePerms to union.
 	ListChatChannelPermsForUser(ctx context.Context, arg ListChatChannelPermsForUserParams) ([]int64, error)
+	// ListChatChannelPseudonyms is every pseudonym an anonymous channel has handed
+	// out (#2949), for chatutil to show its members by.
+	ListChatChannelPseudonyms(ctx context.Context, channelID int64) ([]ChatChannelPseudonym, error)
 	// ListChatChannelsForUser lists the channels an account has a row on,
 	// directly, through a group, or through everyone: one result row per
 	// membership row, adjacent per channel, since SQLite has no bitwise-OR
@@ -628,6 +640,10 @@ type Querier interface {
 	// SetChatChannelGroupMember gives a group a set on a channel, replacing the
 	// set any earlier row for it carried.
 	SetChatChannelGroupMember(ctx context.Context, arg SetChatChannelGroupMemberParams) error
+	// SetChatChannelPseudonymAlias renames an account's pseudonym in a channel.
+	// An alias another account in the channel holds, whatever its case, is a
+	// unique violation.
+	SetChatChannelPseudonymAlias(ctx context.Context, arg SetChatChannelPseudonymAliasParams) (int64, error)
 	// SetChatChannelUserMember gives an account a set on a channel, replacing the
 	// set any earlier row for it carried.
 	SetChatChannelUserMember(ctx context.Context, arg SetChatChannelUserMemberParams) error

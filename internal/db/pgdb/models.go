@@ -64,6 +64,7 @@ type ChatChannel struct {
 	CreatedAt time.Time
 	DmKey     sql.NullString
 	Forked    int64
+	Anonymous int64
 }
 
 type ChatChannelEvent struct {
@@ -90,6 +91,13 @@ type ChatChannelMember struct {
 	UserID      sql.NullInt64
 	GroupID     sql.NullInt64
 	Permissions int64
+}
+
+type ChatChannelPseudonym struct {
+	ChannelID   int64
+	UserID      int64
+	PseudonymID int64
+	Alias       string
 }
 
 type ChatKeyGrant struct {

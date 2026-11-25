@@ -141,7 +141,8 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, chatutil.ErrMessageDeleted), errors.Is(err, chatutil.ErrTooManyReactions),
 		errors.Is(err, chatutil.ErrDuplicateMessage),
 		errors.Is(err, chatutil.ErrPollClosed), errors.Is(err, chatutil.ErrAlreadyAnswered),
-		errors.Is(err, chatutil.ErrAttachmentExists), errors.Is(err, chatutil.ErrPollNotEditable):
+		errors.Is(err, chatutil.ErrAttachmentExists), errors.Is(err, chatutil.ErrPollNotEditable),
+		errors.Is(err, chatutil.ErrAliasTaken):
 		return serverutil.Conflict(err)
 	case errors.Is(err, chatutil.ErrInvalidName), errors.Is(err, chatutil.ErrInvalidTopic),
 		errors.Is(err, chatutil.ErrDefaultChannel), errors.Is(err, chatutil.ErrDefaultEveryone), errors.Is(err, chatutil.ErrLastOwner),
@@ -152,7 +153,8 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, chatutil.ErrInvalidMessage), errors.Is(err, chatutil.ErrInvalidReaction),
 		errors.Is(err, chatutil.ErrInvalidClientMessageID), errors.Is(err, chatutil.ErrInvalidPollAnswer),
 		errors.Is(err, chatutil.ErrMalformedPoll), errors.Is(err, chatutil.ErrPollClosesAt),
-		errors.Is(err, chatutil.ErrInvalidAttachment), errors.Is(err, chatutil.ErrTooManyAttachments):
+		errors.Is(err, chatutil.ErrInvalidAttachment), errors.Is(err, chatutil.ErrTooManyAttachments),
+		errors.Is(err, chatutil.ErrInvalidAlias), errors.Is(err, chatutil.ErrNotAnonymous):
 		return serverutil.BadRequest(err)
 	default:
 		log.Printf("[chat] %v", err)

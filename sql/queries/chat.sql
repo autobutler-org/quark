@@ -14,6 +14,7 @@ SELECT
     chat_channels.created_by,
     chat_channels.created_at,
     chat_channels.forked,
+    chat_channels.anonymous,
     chat_channel_members.permissions,
     CAST(CASE WHEN NOT EXISTS (
         SELECT
@@ -67,6 +68,7 @@ SELECT
     chat_channels.is_default,
     chat_channels.created_by,
     chat_channels.created_at,
+    chat_channels.anonymous,
     CAST(CASE WHEN NOT EXISTS (
         SELECT
             1
@@ -133,12 +135,13 @@ SELECT * FROM chat_channels WHERE id = sqlc.arg(id) LIMIT 1;
 -- name: LockChatChannel :exec
 UPDATE chat_channels SET name = name WHERE id = sqlc.arg(id);
 
--- CreateChatChannel adds a channel to the Quark's one server.
+-- CreateChatChannel adds a channel to the Quark's one server. anonymous is 1
+-- for an anonymous channel (#2949), and never changes afterward.
 -- name: CreateChatChannel :one
 INSERT INTO
-    chat_channels (server_id, name, topic, created_by)
+    chat_channels (server_id, name, topic, created_by, anonymous)
 VALUES
-    ((SELECT MIN(id) FROM chat_servers), sqlc.arg(name), sqlc.arg(topic), sqlc.arg(created_by)) RETURNING *;
+    ((SELECT MIN(id) FROM chat_servers), sqlc.arg(name), sqlc.arg(topic), sqlc.arg(created_by), sqlc.arg(anonymous)) RETURNING *;
 
 -- CreateChatDirectMessage adds a direct message (#2423) unless one with the
 -- same dm_key already exists, in which case it returns no row: the unique

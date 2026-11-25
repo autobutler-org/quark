@@ -10,7 +10,7 @@ import (
 
 // listMembers godoc
 // @Summary List a chat channel's members
-// @Description Returns a channel's rows, groups first and then accounts, each by name. A group carries the active accounts in it, everyone's being every active account. Each account carries avatarUpdatedAt (Unix milliseconds) when it has a profile picture, the v parameter for /users/{id}/avatar. Each row carries its own permissions. Anyone with a non-empty set on the channel, a delegated manager included, or an admin may list them.
+// @Description Returns a channel's rows, groups first and then accounts, each by name. A group carries the active accounts in it, everyone's being every active account. Each account carries avatarUpdatedAt (Unix milliseconds) when it has a profile picture, the v parameter for /users/{id}/avatar. Each row carries its own permissions. Anyone with a non-empty set on the channel, a delegated manager included, or an admin may list them. In an anonymous channel (#2949) every account carries pseudonymId and alias; to a caller who is neither an admin nor a holder of manage_members those replace the account's id and username, no account carries avatarUpdatedAt, no group carries users, and every active account the rows reach is an account row with its effective set, ordered by alias.
 // @Tags chat
 // @Produce json
 // @Param id path int true "Channel id"

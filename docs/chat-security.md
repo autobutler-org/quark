@@ -646,6 +646,84 @@ of accounts, or makes it.
 - **A restore** leaves `forked` out, so a restored conversation loses that line. It works `dm_key` out again from the restored members' new ids. A direct message that lost an account
   the restoring Quark doesn't have keeps no key: its people keep its history but can't reopen it by picking them.
 
+## Anonymous channels
+
+A channel created with `anonymous: true` (#2949) shows its members to each other only by pseudonym. Each account
+that appears in it gets a per-channel pseudonym the first time the Quark needs one: an opaque id, random and
+negative so it never names an account, and an alias, `Anonymous 4821` until someone renames it. Both live in
+`chat_channel_pseudonyms`. The flag is set when the channel is created and never changes, so nothing written under
+an account is ever served under a pseudonym, or the other way round. A direct message is never anonymous.
+
+### Who sees what
+
+- **A member without `manage_members`** never gets another account's id or username from the channel. The member
+  list gives each account its pseudonym as `userId`/`id` and its alias as `name`/`username`, with no
+  `avatarUpdatedAt`, ordered by alias. A group row carries no `users`: every active account the rows reach is
+  its own account row instead, with its effective set, so a group of one, or the groups a pseudonym is in, never
+  points at an account listed by its id in a channel that isn't anonymous. The channel list gives `createdBy` as
+  the creator's pseudonym and the caller's own pseudonym as `selfId`.
+- **An admin, and a holder of `manage_members`,** see the account beside its `pseudonymId` and `alias` in the
+  member list, and may rename any alias with `PUT /api/v0/chat/channels/:id/members/alias`, by account id or
+  pseudonym.
+- **Every member may rename themselves** on the same route, naming their own `selfId` (or account id). Naming
+  anyone else without `manage_members` is 403, whether or not the id is someone's, so it says nothing about who
+  is in the channel. Aliases are unique in a channel whatever their case, and are never an account's username in
+  any case, drawn ones included; a rename sends `chat_channel_changed`.
+- **Everything else carries the pseudonym, for every viewer, privileged ones included:** a message's `authorId`,
+  a reaction's and a poll answer's `userId`, a key version's `createdBy`, a grant's `userId` and `grantedBy`, a
+  pending grant's `userId`, an event's `actorId` and payload, and `chat_typing`'s `userId`, on the routes and on
+  the socket alike. One value per field is what lets a signature or additional data verify for everyone. A
+  privileged viewer reads who is behind it off the member list.
+- **Ids the Quark takes back** (a grant's recipient, the account to set, remove or rename) may be a pseudonym. A
+  pseudonym nobody holds names no one and is answered like a stranger's id; a member renaming anyone but
+  themselves gets the same 403 for both. A grant must name the pseudonym: an
+  account id there is 400, so a member cannot probe account ids through grants.
+
+### What changes on the wire
+
+In an anonymous channel the app puts its `selfId` wherever it would put its own account id:
+
+```text
+grant:        ... be64(recipientPseudonym) ...       signed by the granter, verified by the recipient
+reaction:     ... be64(messageId) || be64(pseudonym)  additional data
+poll answer:  ... be64(messageId) || be64(pseudonym)  additional data, when the poll isn't anonymous
+event:        ... be64(eventId) || be64(actorPseudonym) || kind 0x00 || payload
+```
+
+The constructions themselves are unchanged; only the id in them is the pseudonym. A member event's payload is
+written with the pseudonym as `userId` and the alias at that time as `name`, so the signed bytes never hold an
+account. Creating a key version checks the caller's own grant against their pseudonym, and uploading grants checks
+each against the recipient pseudonym it names. A pseudonym never changes, even when its account leaves and comes
+back, so what it bound stays verifiable; renaming changes only the alias, so an event keeps the alias it was
+signed with.
+
+This is a break, which Quark takes because it is pre-release: an app from before #2949 binds its account id in an
+anonymous channel, so its reactions and answers there fail to open for everyone else, its grants and events fail
+to verify, and the Quark refuses its own grant of a new key version. Channels that aren't anonymous are unchanged.
+
+Mentions are `@username` inside the ciphertext, which the Quark never reads; in an anonymous channel the app
+mentions by alias.
+
+### What it does not hide
+
+- **The Quark knows everything.** It maps every pseudonym to its account and sees who posts, reacts and answers,
+  as in any channel. Anonymity is from the other members, not from the server or its operator, nor from anyone
+  with the database or a backup, which carry `chat_channel_pseudonyms`.
+- **Public keys link accounts across channels.** Identity keys are per account, not per channel: a pending grant
+  carries the recipient's box key, a grant the granter's signing key, and a signed event `signerSignKey`. Anyone
+  who also sees that key next to an account id, in another channel, in `GET /chat/keys/:userId`, or in a direct
+  message, learns which account is behind the pseudonym. Per-channel keys would close this and are not built.
+- **Privileged members see through it.** Whoever holds `manage_members`, and every admin, can read the mapping.
+  Being given `manage_members` reveals every member to you.
+- **Sets and later accounts.** Each account's effective set is visible, so a set only one group gives can still
+  hint which group an account is in. An alias is checked against usernames when it is set or drawn; an account
+  created afterwards may take a username an alias already is.
+- **The names people pick.** A member may rename themselves to anything unique that isn't a username, including
+  a name that hints at who they are, or their real name. That is their choice; the Quark only stops an alias from
+  being an account's username.
+- **What people write.** How someone writes, when they are online, or what they know can give them away. The
+  Quark hides ids, not behavior.
+
 ## The vault
 
 The password vault (#3456) is end-to-end encrypted with the same two secrets, one vault per account. The app makes
