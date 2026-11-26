@@ -678,6 +678,9 @@ class QuarkIcons {
   /// Quote a message in a reply. Rounded, like send.
   static const IconData reply = Icons.reply_rounded;
 
+  /// Start or open a side conversation on a message (#3561). Outlined.
+  static const IconData side_conversation = Icons.mode_comment_outlined;
+
   /// Open the sidebar. Sharp.
   static const IconData menu = Icons.menu;
 

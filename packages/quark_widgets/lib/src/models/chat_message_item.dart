@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'chat_attachment_item.dart';
+import 'chat_branch_item.dart';
 import 'chat_poll_item.dart';
 import 'chat_quote_item.dart';
 import 'chat_reaction_item.dart';
@@ -51,6 +52,7 @@ class ChatMessageItem {
     this.poll,
     this.isEdited = false,
     this.quote,
+    this.branch,
   });
 
   /// The message's id on the Quark, and what keys and callbacks carry.
@@ -102,6 +104,10 @@ class ChatMessageItem {
   /// (#2426), drawn above its body; null when it quotes none.
   final ChatQuoteItem? quote;
 
+  /// The side conversation branched from this message (#3561), drawn under
+  /// it as a chip; null while it has no replies.
+  final ChatBranchItem? branch;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -118,7 +124,8 @@ class ChatMessageItem {
           listEquals(other.attachments, attachments) &&
           other.poll == poll &&
           other.isEdited == isEdited &&
-          other.quote == quote;
+          other.quote == quote &&
+          other.branch == branch;
 
   @override
   int get hashCode => Object.hash(
@@ -135,5 +142,6 @@ class ChatMessageItem {
     poll,
     isEdited,
     quote,
+    branch,
   );
 }

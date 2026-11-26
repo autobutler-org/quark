@@ -157,6 +157,7 @@ export 'src/models/calendar_event_draft.dart';
 export 'src/models/calendar_event_item.dart';
 export 'src/models/calendar_repeat.dart';
 export 'src/models/chat_attachment_item.dart';
+export 'src/models/chat_branch_item.dart';
 export 'src/models/chat_channel_item.dart';
 export 'src/models/chat_encryption_status.dart';
 export 'src/models/chat_member_item.dart';

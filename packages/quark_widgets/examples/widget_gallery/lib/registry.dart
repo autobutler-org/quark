@@ -2865,6 +2865,7 @@ final List<GalleryEntry> registry = [
         mentionEveryoneAuthorIds: const {'bob'},
         currentUserName: galleryChatUserId,
         onCopy: (id) => log('QuarkMessageList.onCopy($id)'),
+        onOpenBranch: (id) => log('QuarkMessageList.onOpenBranch($id)'),
         onDelete: (id) => log('QuarkMessageList.onDelete($id)'),
         onReact: (id, emoji) => log('QuarkMessageList.onReact($id, $emoji)'),
         onOpenLink: (uri) => log('QuarkMessageList.onOpenLink($uri)'),

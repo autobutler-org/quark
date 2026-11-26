@@ -59,6 +59,14 @@ import 'quark_message_list/chat_system_line.dart';
 /// (#2426), and never on one that didn't open. An edited message says
 /// "(edited)" under its body.
 ///
+/// A message with a side conversation (#3561), [ChatMessageItem.branch],
+/// draws a chip under its body reading its reply count and last reply, and a
+/// text message's menu offers "Start side conversation" where [permissions]
+/// holds [ChatPermission.sendMessages] (or is null). Both fire
+/// [onOpenBranch]; the first reply is what starts one, and that is the
+/// caller's. A side conversation is one level deep, so a list with
+/// [isBranch] set, one showing a side conversation's replies, draws neither.
+///
 /// A reply quotes its [ChatMessageItem.quote] above its body (#2426). A tap
 /// on the quote scrolls to the quoted message, without animating, and tints
 /// it for [highlightDuration]. One older than what is loaded is asked for
@@ -129,9 +137,11 @@ import 'quark_message_list/chat_system_line.dart';
 /// the highlight of one that mentions the user, `message_body_<id>` on a
 /// text message's body (a link is reached by its text inside it),
 /// `message_menu_<id>` on its menu button, `message_copy_<id>`,
-/// `message_reply_<id>`, `message_menu_react_<id>`, `message_edit_<id>` and
+/// `message_reply_<id>`, `message_start_branch_<id>`,
+/// `message_menu_react_<id>`, `message_edit_<id>` and
 /// `message_delete_<id>` on the menu's entries, `message_edited_<id>` on the
 /// "(edited)" marker, `message_quote_<id>` on a reply's quote,
+/// `message_branch_<id>` on a side conversation's chip,
 /// `message_menu_open_<id>` on a row's tint
 /// (on a touch platform there is no `message_menu_react_<id>`; the bar takes
 /// its place), `message_menu_react_<id>_<emoji>` on each emoji the menu or
@@ -191,6 +201,8 @@ class QuarkMessageList extends StatefulWidget {
     this.mentionEveryoneAuthorIds = const {},
     this.onCopy,
     this.onReply,
+    this.onOpenBranch,
+    this.isBranch = false,
     this.onEdit,
     this.onDelete,
     this.onReact,
@@ -282,6 +294,16 @@ class QuarkMessageList extends StatefulWidget {
   /// the caller's. Null, or [permissions] without
   /// [ChatPermission.sendMessages], leaves "Reply" out of every menu.
   final ValueChanged<String>? onReply;
+
+  /// Called with a message's id to open the side conversation branched from
+  /// it (#3561), from its chip or from "Start side conversation". Null, or
+  /// [isBranch], leaves both out; [permissions] without
+  /// [ChatPermission.sendMessages] leaves only the menu entry out.
+  final ValueChanged<String>? onOpenBranch;
+
+  /// Whether this list is a side conversation's replies, which can't branch
+  /// again: no chip and no "Start side conversation".
+  final bool isBranch;
 
   /// Called with the id of one of the user's own text messages to edit it;
   /// the editing is the caller's. Null leaves "Edit" out of every menu.
@@ -548,10 +570,11 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
     final onEdit = widget.onEdit;
     final onDelete = widget.onDelete;
     final permissions = widget.permissions;
-    final onReply =
-        permissions == null || permissions.contains(ChatPermission.sendMessages)
-        ? widget.onReply
-        : null;
+    final sends =
+        permissions == null ||
+        permissions.contains(ChatPermission.sendMessages);
+    final onReply = sends ? widget.onReply : null;
+    final onOpenBranch = widget.isBranch ? null : widget.onOpenBranch;
     final deletesAny =
         permissions?.contains(ChatPermission.deleteMessages) ?? false;
     final reacts =
@@ -690,6 +713,16 @@ class _QuarkMessageListState extends State<QuarkMessageList> {
                             message.isUnverified
                         ? null
                         : () => onReply(message.id),
+                    onStartBranch:
+                        onOpenBranch == null ||
+                            !sends ||
+                            message.kind != ChatMessageKind.text ||
+                            message.isUnverified
+                        ? null
+                        : () => onOpenBranch(message.id),
+                    onOpenBranch: onOpenBranch == null
+                        ? null
+                        : () => onOpenBranch(message.id),
                     onOpenQuote: quote == null
                         ? null
                         : () => _goTo(quote.messageId),
