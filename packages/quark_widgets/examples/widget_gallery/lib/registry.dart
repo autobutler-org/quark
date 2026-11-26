@@ -2730,6 +2730,9 @@ final List<GalleryEntry> registry = [
         composer: QuarkMessageComposer(
           hintText: 'Reply',
           onSend: (text) => log('QuarkMessageComposer.onSend($text)'),
+          alsoToChannel: false,
+          onAlsoToChannelChanged: (value) =>
+              log('QuarkMessageComposer.onAlsoToChannelChanged($value)'),
         ),
       );
       return Wrap(
