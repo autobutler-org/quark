@@ -38,6 +38,24 @@ SELECT * FROM chat_messages WHERE root_id = sqlc.arg(root_id) AND id < sqlc.arg(
 -- name: ListChatRepliesAfter :many
 SELECT * FROM chat_messages WHERE root_id = sqlc.arg(root_id) AND id > sqlc.arg(id) ORDER BY id LIMIT CAST(sqlc.arg('limit') AS BIGINT);
 
+-- ListChatBranchSummariesBetween counts the live replies of each channel
+-- message whose id falls in [first_id, last_id], one page of
+-- ListChatMessages*, with when the newest of them arrived (#4346), sorted by root. A message
+-- with no live reply has no row. It reads the (root_id, id) index.
+-- name: ListChatBranchSummariesBetween :many
+SELECT summary.root_id, summary.reply_count, newest.created_at AS last_reply_at
+FROM (
+    SELECT CAST(reply.root_id AS BIGINT) AS root_id, COUNT(*) AS reply_count, MAX(reply.id) AS newest_id
+    FROM chat_messages AS reply
+    WHERE reply.channel_id = sqlc.arg(channel_id)
+      AND reply.root_id >= CAST(sqlc.arg(first_id) AS BIGINT)
+      AND reply.root_id <= CAST(sqlc.arg(last_id) AS BIGINT)
+      AND reply.deleted_at IS NULL
+    GROUP BY reply.root_id
+) AS summary
+JOIN chat_messages AS newest ON newest.id = summary.newest_id
+ORDER BY summary.root_id;
+
 -- name: GetChatMessage :one
 SELECT * FROM chat_messages WHERE id = sqlc.arg(id);
 

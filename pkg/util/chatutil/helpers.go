@@ -777,6 +777,25 @@ func publishMessage(ctx context.Context, queries db.Querier, bus *eventbus.Bus, 
 		data.Message = message
 	}
 	bus.Publish(eventbus.Event{Kind: kind, Data: data})
+	if message.RootID == 0 || kind == eventbus.EventChatMessageEdited {
+		return nil
+	}
+	return publishBranch(ctx, queries, bus, message.ChannelID, message.RootID, audience)
+}
+
+// publishBranch tells a channel's readers what a root's side conversation
+// looks like now that a reply to it was posted or deleted (#4346). A branch
+// with no live reply left has a count of 0 and no lastReplyAt.
+func publishBranch(ctx context.Context, queries db.Querier, bus *eventbus.Bus, channelID, rootID int64, audience []int64) error {
+	root := []Message{{ID: rootID}}
+	if err := attachBranches(ctx, queries, channelID, root); err != nil {
+		return err
+	}
+	data := eventbus.ChatBranchChanged{ChannelID: channelID, MessageID: rootID, Audience: audience}
+	if branch := root[0].Branch; branch != nil {
+		data.ReplyCount, data.LastReplyAt = branch.ReplyCount, &branch.LastReplyAt
+	}
+	bus.Publish(eventbus.Event{Kind: eventbus.EventChatBranchChanged, Data: data})
 	return nil
 }
 
@@ -877,6 +896,28 @@ func attachReactions(ctx context.Context, queries db.Querier, channelID int64, m
 		i, found := slices.BinarySearchFunc(messages, row.MessageID, func(m Message, id int64) int { return cmp.Compare(m.ID, id) })
 		if found {
 			messages[i].Reactions = append(messages[i].Reactions, reactionFromRow(row))
+		}
+	}
+	return nil
+}
+
+// attachBranches fills in the Branch of each of messages, one page of a
+// channel's messages sorted by id, that has a live reply (#4346), with one
+// query for the whole page.
+func attachBranches(ctx context.Context, queries db.Querier, channelID int64, messages []Message) error {
+	if len(messages) == 0 {
+		return nil
+	}
+	rows, err := queries.ListChatBranchSummariesBetween(ctx, db.ListChatBranchSummariesBetweenParams{
+		ChannelID: channelID, FirstID: messages[0].ID, LastID: messages[len(messages)-1].ID,
+	})
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		i, found := slices.BinarySearchFunc(messages, row.RootID, func(m Message, id int64) int { return cmp.Compare(m.ID, id) })
+		if found {
+			messages[i].Branch = &Branch{ReplyCount: row.ReplyCount, LastReplyAt: row.LastReplyAt}
 		}
 	}
 	return nil

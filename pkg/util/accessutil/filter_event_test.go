@@ -444,3 +444,41 @@ func TestFilterEventUploadSessionChanged(t *testing.T) {
 		t.Errorf("event JSON = %s, want %s", body, want)
 	}
 }
+
+// TestFilterEventChatBranch passes chat_branch_changed only to the channel's
+// readers: a non-member admin of a direct message hears nothing (#4346).
+func TestFilterEventChatBranch(t *testing.T) {
+	f := newFixture(t)
+	stranger := f.load(t, accessutil.Principal{UserID: createUser(t, f.database, "carol")})
+	admin := f.load(t, accessutil.Principal{UserID: createUser(t, f.database, "root"), IsAdmin: true})
+	member := f.load(t, accessutil.Principal{UserID: f.userID})
+	emptied := eventbus.Event{
+		Kind: eventbus.EventChatBranchChanged,
+		Data: eventbus.ChatBranchChanged{ChannelID: 7, MessageID: 3, Audience: []int64{f.userID}},
+	}
+	for _, tc := range []struct {
+		name   string
+		access accessutil.Access
+		event  eventbus.Event
+		want   bool
+	}{
+		{name: "reader", access: member, event: emptied, want: true},
+		{name: "non-member admin", access: admin, event: emptied},
+		{name: "non-member", access: stranger, event: emptied},
+		{name: "no data", access: member, event: eventbus.Event{Kind: eventbus.EventChatBranchChanged}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := accessutil.FilterEvent(accessutil.FilterEventParams{Access: tc.access, Event: tc.event}); got.Deliver != tc.want {
+				t.Errorf("Deliver = %v, want %v", got.Deliver, tc.want)
+			}
+		})
+	}
+
+	body, err := json.Marshal(emptied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"kind":"chat_branch_changed","data":{"channelId":7,"messageId":3,"replyCount":0}}`; string(body) != want {
+		t.Errorf("event JSON = %s, want %s", body, want)
+	}
+}

@@ -8,6 +8,7 @@ package pgdb
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 const createChatMessage = `-- name: CreateChatMessage :one
@@ -184,6 +185,60 @@ func (q *Queries) GetChatMessageByNonce(ctx context.Context, arg GetChatMessageB
 		&i.RootID,
 	)
 	return i, err
+}
+
+const listChatBranchSummariesBetween = `-- name: ListChatBranchSummariesBetween :many
+SELECT summary.root_id, summary.reply_count, newest.created_at AS last_reply_at
+FROM (
+    SELECT CAST(reply.root_id AS BIGINT) AS root_id, COUNT(*) AS reply_count, MAX(reply.id) AS newest_id
+    FROM chat_messages AS reply
+    WHERE reply.channel_id = $1
+      AND reply.root_id >= CAST($2 AS BIGINT)
+      AND reply.root_id <= CAST($3 AS BIGINT)
+      AND reply.deleted_at IS NULL
+    GROUP BY reply.root_id
+) AS summary
+JOIN chat_messages AS newest ON newest.id = summary.newest_id
+ORDER BY summary.root_id
+`
+
+type ListChatBranchSummariesBetweenParams struct {
+	ChannelID int64
+	FirstID   int64
+	LastID    int64
+}
+
+type ListChatBranchSummariesBetweenRow struct {
+	RootID      int64
+	ReplyCount  int64
+	LastReplyAt time.Time
+}
+
+// ListChatBranchSummariesBetween counts the live replies of each channel
+// message whose id falls in [first_id, last_id], one page of
+// ListChatMessages*, with when the newest of them arrived (#4346), sorted by root. A message
+// with no live reply has no row. It reads the (root_id, id) index.
+func (q *Queries) ListChatBranchSummariesBetween(ctx context.Context, arg ListChatBranchSummariesBetweenParams) ([]ListChatBranchSummariesBetweenRow, error) {
+	rows, err := q.db.QueryContext(ctx, listChatBranchSummariesBetween, arg.ChannelID, arg.FirstID, arg.LastID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChatBranchSummariesBetweenRow
+	for rows.Next() {
+		var i ListChatBranchSummariesBetweenRow
+		if err := rows.Scan(&i.RootID, &i.ReplyCount, &i.LastReplyAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listChatMessagesAfter = `-- name: ListChatMessagesAfter :many

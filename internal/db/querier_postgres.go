@@ -807,6 +807,18 @@ func (a *postgresQueries) ListChatAttachmentIDsByMessage(ctx context.Context, me
 	return a.q.ListChatAttachmentIDsByMessage(ctx, messageID)
 }
 
+func (a *postgresQueries) ListChatBranchSummariesBetween(ctx context.Context, arg ListChatBranchSummariesBetweenParams) ([]ListChatBranchSummariesBetweenRow, error) {
+	rows, err := a.q.ListChatBranchSummariesBetween(ctx, pgdb.ListChatBranchSummariesBetweenParams(arg))
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ListChatBranchSummariesBetweenRow, len(rows))
+	for i, row := range rows {
+		items[i] = ListChatBranchSummariesBetweenRow(row)
+	}
+	return items, nil
+}
+
 func (a *postgresQueries) ListChatChannelEvents(ctx context.Context, arg ListChatChannelEventsParams) ([]ChatChannelEvent, error) {
 	rows, err := a.q.ListChatChannelEvents(ctx, pgdb.ListChatChannelEventsParams(arg))
 	if err != nil || rows == nil {

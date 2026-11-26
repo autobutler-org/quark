@@ -373,6 +373,11 @@ type Querier interface {
 	// deleting the message can remove the files. A tombstone does not fire the
 	// foreign key's ON DELETE CASCADE.
 	ListChatAttachmentIDsByMessage(ctx context.Context, messageID sql.NullInt64) ([]string, error)
+	// ListChatBranchSummariesBetween counts the live replies of each channel
+	// message whose id falls in [first_id, last_id], one page of
+	// ListChatMessages*, with when the newest of them arrived (#4346), sorted by root. A message
+	// with no live reply has no row. It reads the (root_id, id) index.
+	ListChatBranchSummariesBetween(ctx context.Context, arg ListChatBranchSummariesBetweenParams) ([]ListChatBranchSummariesBetweenRow, error)
 	// ListChatChannelEvents pages a channel's events oldest first, after an id.
 	ListChatChannelEvents(ctx context.Context, arg ListChatChannelEventsParams) ([]ChatChannelEvent, error)
 	// ListChatChannelGroupUsers expands each group row on a channel into the

@@ -217,6 +217,9 @@ func TestReplyEventsCarryRoot(t *testing.T) {
 	}
 	for _, kind := range []eventbus.EventKind{eventbus.EventChatMessageCreated, eventbus.EventChatMessageEdited, eventbus.EventChatMessageDeleted} {
 		evt := <-events
+		if evt.Kind == eventbus.EventChatBranchChanged {
+			evt = <-events // a post and a delete also send the root's branch (#4346)
+		}
 		changed, ok := evt.Data.(eventbus.ChatMessageChanged)
 		if evt.Kind != kind || !ok || changed.MessageID != reply.Message.ID || changed.RootID != root.Message.ID {
 			t.Errorf("event = %s %+v, want %s for %d under root %d", evt.Kind, evt.Data, kind, reply.Message.ID, root.Message.ID)
