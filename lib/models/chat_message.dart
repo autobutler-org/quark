@@ -8,8 +8,8 @@ import 'package:quark/models/chat_poll.dart';
 /// which channel key version, and ciphertext the Quark can't open.
 ///
 /// [ciphertext] is `nonce || XChaCha20-Poly1305 output`, with the channel id
-/// and key version bound as additional data (`ChatCrypto.messageAad`). A
-/// deleted message is a tombstone: [deletedAt] set, no ciphertext, no
+/// and key version bound as additional data (`ChatCrypto.messageAad`), and
+/// [rootId] too on a side conversation's reply. A deleted message is a tombstone: [deletedAt] set, no ciphertext, no
 /// [reactions] and no [poll].
 class ChatMessage {
   /// Builds a message explicitly; tests use it.
@@ -24,6 +24,7 @@ class ChatMessage {
     this.deletedAt,
     this.reactions = const [],
     this.poll,
+    this.rootId,
   });
 
   /// Increasing within the Quark, across every channel.
@@ -56,6 +57,10 @@ class ChatMessage {
   /// Its settings, state and visible answers when it is a poll (#3893).
   final ChatPoll? poll;
 
+  /// The channel message whose side conversation this is a reply in
+  /// (#4345), null on a channel message.
+  final int? rootId;
+
   /// Whether this is a tombstone.
   bool get isDeleted => deletedAt != null;
 
@@ -70,6 +75,7 @@ class ChatMessage {
     createdAt: createdAt,
     editedAt: editedAt,
     deletedAt: deletedAt ?? at,
+    rootId: rootId,
   );
 
   /// This message with [reactions] or [poll] in place of its own.
@@ -87,6 +93,7 @@ class ChatMessage {
             ? this.reactions
             : List.unmodifiable(reactions),
         poll: poll ?? this.poll,
+        rootId: rootId,
       );
 
   /// This message with [reactions] in place of its own.
@@ -117,6 +124,7 @@ class ChatMessage {
       poll: json['poll'] is Map<String, dynamic>
           ? ChatPoll.fromJson(json['poll'] as Map<String, dynamic>)
           : null,
+      rootId: (json['rootId'] as num?)?.toInt(),
     );
   }
 }

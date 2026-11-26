@@ -345,6 +345,7 @@ class _FakeQuark {
       ciphertext: ciphertext,
       createdAt: old.createdAt,
       editedAt: _epoch.add(const Duration(days: 1)),
+      rootId: old.rootId,
     );
     _emit('chat_message_edited', {
       'channelId': old.channelId,
@@ -357,6 +358,7 @@ class _FakeQuark {
         'ciphertext': base64Encode(ciphertext),
         'createdAt': old.createdAt.toIso8601String(),
         'editedAt': edited.editedAt!.toIso8601String(),
+        'rootId': ?old.rootId,
       },
     });
     return edited;
@@ -1379,6 +1381,107 @@ void main() {
         for (final e in alice.entries)
           ChatController.itemFor(e, (_) => '', me: 2).kind,
       ], everyElement(ChatMessageKind.text));
+    });
+  });
+
+  group('side conversations (#4345)', () {
+    test('a live reply with a rootId stays out of the timeline', () async {
+      final key = crypto.newChannelKey();
+      final reader = quark.client(_FakeKeys()..grant(1, key), crypto);
+      await reader.open();
+      final root = quark.post(
+        _channel,
+        1,
+        crypto.encrypt(
+          Uint8List.fromList(utf8.encode('root')),
+          key,
+          additionalData: crypto.messageAad(channelId: _channel, keyVersion: 1),
+        ),
+      );
+      await pumpEventQueue();
+
+      final reply = crypto.encrypt(
+        Uint8List.fromList(utf8.encode('in the branch')),
+        key,
+        additionalData: crypto.messageAad(
+          channelId: _channel,
+          keyVersion: 1,
+          rootId: root.id,
+        ),
+      );
+      quark.live.add(
+        FileEvent(
+          kind: 'chat_message_created',
+          path: '',
+          data: jsonDecode(
+            jsonEncode({
+              'channelId': _channel,
+              'messageId': 99,
+              'rootId': root.id,
+              'message': {
+                'id': 99,
+                'channelId': _channel,
+                'authorId': 3,
+                'keyVersion': 1,
+                'ciphertext': base64Encode(reply),
+                'createdAt': _epoch.toIso8601String(),
+                'rootId': root.id,
+              },
+            }),
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(texts(reader), ['root']);
+      reader.dispose();
+    });
+
+    test('a reply opens under its root, and an edit seals it under the same '
+        'root again', () async {
+      final key = crypto.newChannelKey();
+      Uint8List aad({int? rootId}) =>
+          crypto.messageAad(channelId: _channel, keyVersion: 1, rootId: rootId);
+      quark.messages.add(
+        ChatMessage(
+          id: 5,
+          channelId: _channel,
+          authorId: 2,
+          keyVersion: 1,
+          ciphertext: crypto.encrypt(
+            Uint8List.fromList(utf8.encode('first')),
+            key,
+            additionalData: aad(rootId: 4),
+          ),
+          createdAt: _epoch,
+          rootId: 4,
+        ),
+      );
+      final author = quark.client(_FakeKeys()..grant(1, key), crypto);
+      await author.open();
+      expect(texts(author), ['first']);
+
+      await author.edit(5, 'second');
+      await pumpEventQueue();
+      expect(texts(author), ['second']);
+
+      final stored = quark.messages.single;
+      expect(stored.rootId, 4);
+      expect(
+        utf8.decode(
+          crypto.decrypt(
+            stored.ciphertext!,
+            key,
+            additionalData: aad(rootId: 4),
+          ),
+        ),
+        'second',
+      );
+      expect(
+        () => crypto.decrypt(stored.ciphertext!, key, additionalData: aad()),
+        throwsA(anything),
+      );
+      author.dispose();
     });
   });
 }

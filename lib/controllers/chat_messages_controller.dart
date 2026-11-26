@@ -43,7 +43,8 @@ typedef UploadChatAttachmentFn =
 /// - [open] loads the newest page and the channel's events, and follows the
 ///   events socket: `chat_message_created` and `chat_message_deleted` for
 ///   messages, `chat_channel_changed` for events (a new one, or one its actor
-///   just signed).
+///   just signed). A `chat_message_created` carrying a `rootId` is a side
+///   conversation's reply (#4345) and stays out of the timeline.
 /// - The socket drops events when a client falls behind and has no replay.
 ///   [open] fetches `?after=` the newest id held, and [catchUp], on every
 ///   reconnect and refresh, reads the whole loaded window again from the
@@ -771,6 +772,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     final (ciphertext, version) = await _encrypt(
       _plaintext(text, attachments: held.attachments, replyTo: held.replyTo),
       Errors.chatMessageTooLong,
+      rootId: held.message.rootId,
     );
     _putEdited(await _editMessage(messageId, version, ciphertext));
     notifyListeners();
@@ -799,8 +801,13 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
         ], replyTo: replyTo);
 
   /// [plaintext] encrypted under the channel's current key, with that key's
-  /// version. Throws [tooLong] past the Quark's cap, and like [send].
-  Future<(Uint8List, int)> _encrypt(Uint8List plaintext, String tooLong) async {
+  /// version, and bound to [rootId] when it is a side conversation's reply
+  /// (#4345). Throws [tooLong] past the Quark's cap, and like [send].
+  Future<(Uint8List, int)> _encrypt(
+    Uint8List plaintext,
+    String tooLong, {
+    int? rootId,
+  }) async {
     final (crypto, version, key) = await _currentKey();
     final ciphertext = crypto.encrypt(
       plaintext,
@@ -808,6 +815,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       additionalData: crypto.messageAad(
         channelId: channelId,
         keyVersion: version,
+        rootId: rootId,
       ),
     );
     if (ciphertext.length > ChatMessagesService.maxCiphertextBytes) {
@@ -1156,6 +1164,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
         additionalData: crypto.messageAad(
           channelId: channelId,
           keyVersion: message.keyVersion,
+          rootId: message.rootId,
         ),
       );
       final decoded = decodeAttachmentMessage(plain);
@@ -1224,6 +1233,8 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     }
     switch (event.kind) {
       case 'chat_message_created':
+        // A side conversation's reply never lands in the channel (#4345).
+        if (data['rootId'] != null) return;
         final message = data['message'];
         if (message is! Map<String, dynamic>) return;
         final created = ChatMessage.fromJson(message);
