@@ -10,7 +10,8 @@ import 'package:quark/models/chat_poll.dart';
 /// [ciphertext] is `nonce || XChaCha20-Poly1305 output`, with the channel id
 /// and key version bound as additional data (`ChatCrypto.messageAad`), and
 /// [rootId] too on a side conversation's reply. A deleted message is a tombstone: [deletedAt] set, no ciphertext, no
-/// [reactions] and no [poll].
+/// [reactions] and no [poll]. [branch] summarizes the side conversation
+/// branched from it, a deleted one's too.
 class ChatMessage {
   /// Builds a message explicitly; tests use it.
   const ChatMessage({
@@ -25,6 +26,7 @@ class ChatMessage {
     this.reactions = const [],
     this.poll,
     this.rootId,
+    this.branch,
   });
 
   /// Increasing within the Quark, across every channel.
@@ -61,6 +63,10 @@ class ChatMessage {
   /// (#4345), null on a channel message.
   final int? rootId;
 
+  /// Its side conversation as the channel page or `chat_branch_changed`
+  /// last reported it (#4346), null when it never had a live reply.
+  final ChatBranch? branch;
+
   /// Whether this is a tombstone.
   bool get isDeleted => deletedAt != null;
 
@@ -76,25 +82,30 @@ class ChatMessage {
     editedAt: editedAt,
     deletedAt: deletedAt ?? at,
     rootId: rootId,
+    branch: branch,
   );
 
-  /// This message with [reactions] or [poll] in place of its own.
-  ChatMessage copyWith({List<ChatReaction>? reactions, ChatPoll? poll}) =>
-      ChatMessage(
-        id: id,
-        channelId: channelId,
-        authorId: authorId,
-        keyVersion: keyVersion,
-        ciphertext: ciphertext,
-        createdAt: createdAt,
-        editedAt: editedAt,
-        deletedAt: deletedAt,
-        reactions: reactions == null
-            ? this.reactions
-            : List.unmodifiable(reactions),
-        poll: poll ?? this.poll,
-        rootId: rootId,
-      );
+  /// This message with [reactions], [poll] or [branch] in place of its own.
+  ChatMessage copyWith({
+    List<ChatReaction>? reactions,
+    ChatPoll? poll,
+    ChatBranch? branch,
+  }) => ChatMessage(
+    id: id,
+    channelId: channelId,
+    authorId: authorId,
+    keyVersion: keyVersion,
+    ciphertext: ciphertext,
+    createdAt: createdAt,
+    editedAt: editedAt,
+    deletedAt: deletedAt,
+    reactions: reactions == null
+        ? this.reactions
+        : List.unmodifiable(reactions),
+    poll: poll ?? this.poll,
+    rootId: rootId,
+    branch: branch ?? this.branch,
+  );
 
   /// This message with [reactions] in place of its own.
   ChatMessage withReactions(List<ChatReaction> reactions) =>
@@ -125,6 +136,32 @@ class ChatMessage {
           ? ChatPoll.fromJson(json['poll'] as Map<String, dynamic>)
           : null,
       rootId: (json['rootId'] as num?)?.toInt(),
+      branch: json['branch'] is Map<String, dynamic>
+          ? ChatBranch.fromJson(json['branch'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+}
+
+/// A channel message's side conversation as the Quark reports it (#4346):
+/// how many replies to it are live, and when the newest was posted.
+class ChatBranch {
+  /// Builds a summary explicitly; tests use it.
+  const ChatBranch({required this.replyCount, this.lastReplyAt});
+
+  /// Live replies; 0 once every one was deleted.
+  final int replyCount;
+
+  /// When the newest live reply was posted, null when there is none.
+  final DateTime? lastReplyAt;
+
+  /// Reads a message's `branch`, or a `chat_branch_changed` event's data,
+  /// which carries the same two fields.
+  factory ChatBranch.fromJson(Map<dynamic, dynamic> json) {
+    final at = json['lastReplyAt'] as String?;
+    return ChatBranch(
+      replyCount: (json['replyCount'] as num?)?.toInt() ?? 0,
+      lastReplyAt: at == null ? null : DateTime.parse(at),
     );
   }
 }

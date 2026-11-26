@@ -58,6 +58,9 @@ typedef UploadChatAttachmentFn =
 ///   encrypted like a message and bound to the message and account too, and
 ///   `chat_reaction_changed` keeps everyone's reactions current. A
 ///   tombstone has none.
+/// - Each message carries the summary of its side conversation, if it has
+///   one (#4346), and `chat_branch_changed` replaces a loaded message's as a
+///   reply is posted or deleted, whether or not that conversation is open.
 /// - [sendPoll] posts a poll (#3894): its question in the encrypted text,
 ///   its settings beside it for the Quark to enforce. [answerPoll] encrypts
 ///   this account's answer, padded so every answer is one size, and
@@ -890,12 +893,18 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   }
 
   /// Puts [edited] over the message it replaces, opened again, keeping the
-  /// reactions and poll held for it: an edit carries neither. A message not
-  /// loaded here is left for paging to bring.
+  /// reactions, poll and branch held for it: an edit carries none of them. A
+  /// message not loaded here is left for paging to bring.
   void _putEdited(ChatMessage edited) {
     final held = _messages[edited.id]?.message;
     if (held == null) return;
-    _put(edited.copyWith(reactions: held.reactions, poll: held.poll));
+    _put(
+      edited.copyWith(
+        reactions: held.reactions,
+        poll: held.poll,
+        branch: held.branch,
+      ),
+    );
   }
 
   /// Deletes message [messageId]: this account's own, or anyone's in a
@@ -1335,6 +1344,16 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
               : null,
           remove: {reactionId},
         );
+      case 'chat_branch_changed':
+        // A reply was posted or deleted in a loaded message's side
+        // conversation (#4346); one not loaded is left for paging to bring.
+        final held = _messages[(data['messageId'] as num?)?.toInt()];
+        if (held == null) return;
+        _messages[held.message.id] = _reentry(
+          held,
+          held.message.copyWith(branch: ChatBranch.fromJson(data)),
+        );
+        notifyListeners();
       case 'chat_poll_answer_changed':
         final messageId = (data['messageId'] as num?)?.toInt();
         final answer = data['answer'];

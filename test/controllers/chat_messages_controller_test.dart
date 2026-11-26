@@ -434,6 +434,16 @@ class _FakeQuark {
         ),
       );
     }
+    if (rootId != null) {
+      // The Quark tells the readers the root's new count too (#4346).
+      final replies = messages.where((m) => m.rootId == rootId && !m.isDeleted);
+      _emit('chat_branch_changed', {
+        'channelId': channelId,
+        'messageId': rootId,
+        'replyCount': replies.length,
+        'lastReplyAt': message.createdAt.toIso8601String(),
+      });
+    }
     return message;
   }
 }
@@ -1531,6 +1541,93 @@ void main() {
         throwsA(anything),
       );
       author.dispose();
+    });
+  });
+
+  group('side conversation summaries (#4346)', () {
+    test('a page carries a root\'s branch, and a live reply raises its chip '
+        'with no side conversation open', () async {
+      final key = crypto.newChannelKey();
+      Uint8List seal(String text, {int? rootId}) => crypto.encrypt(
+        Uint8List.fromList(utf8.encode(text)),
+        key,
+        additionalData: crypto.messageAad(
+          channelId: _channel,
+          keyVersion: 1,
+          rootId: rootId,
+        ),
+      );
+      final lastAt = DateTime.utc(2026, 9, 25, 10, 7);
+      quark.messages.add(
+        ChatMessage.fromJson({
+          'id': 4,
+          'channelId': _channel,
+          'authorId': 2,
+          'keyVersion': 1,
+          'ciphertext': base64Encode(seal('the sink is leaking')),
+          'createdAt': _epoch.toIso8601String(),
+          'branch': {'replyCount': 1, 'lastReplyAt': lastAt.toIso8601String()},
+        }),
+      );
+      final reader = quark.client(_FakeKeys()..grant(1, key), crypto);
+      await reader.open();
+      ChatBranchItem? chip() => ChatController.itemFor(
+        reader.entries.whereType<ChatTimelineMessage>().single,
+        (_) => 'Ada',
+      ).branch;
+      expect(
+        chip(),
+        ChatBranchItem(replyCount: 1, lastReplyAt: lastAt.toLocal()),
+      );
+
+      quark.messages.add(
+        ChatMessage(
+          id: 5,
+          channelId: _channel,
+          authorId: 3,
+          keyVersion: 1,
+          ciphertext: seal('first', rootId: 4),
+          createdAt: lastAt,
+          rootId: 4,
+        ),
+      );
+      final reply = quark.post(
+        _channel,
+        1,
+        seal('plumber at 3', rootId: 4),
+        rootId: 4,
+      );
+      await pumpEventQueue();
+      expect(texts(reader), ['the sink is leaking']);
+      expect(
+        chip(),
+        ChatBranchItem(replyCount: 2, lastReplyAt: reply.createdAt.toLocal()),
+      );
+
+      await reader.edit(4, 'the sink is fixed');
+      await pumpEventQueue();
+      expect(chip()?.replyCount, 2, reason: 'an edit carries no branch');
+
+      quark.live.add(
+        FileEvent(
+          kind: 'chat_branch_changed',
+          path: '',
+          data: {'channelId': _channel, 'messageId': 4, 'replyCount': 0},
+        ),
+      );
+      await pumpEventQueue();
+      expect(chip(), isNull, reason: 'its last reply was deleted');
+
+      quark.live.add(
+        FileEvent(
+          kind: 'chat_branch_changed',
+          path: '',
+          data: {'channelId': _channel, 'messageId': 77, 'replyCount': 3},
+        ),
+      );
+      await pumpEventQueue();
+      expect(reader.entries, hasLength(1), reason: 'a root not loaded');
+      reader.dispose();
     });
   });
 
