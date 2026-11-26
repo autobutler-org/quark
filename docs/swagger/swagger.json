@@ -4826,7 +4826,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns messages oldest first. With after, the page starts after that id (after=0 is the beginning), which is how a client catches up on anything the events socket dropped. Otherwise it ends before before, or at the newest message when before is left out. Deleted messages come back as tombstones with deletedAt and no ciphertext. Needs read_messages; anyone else gets 404, delegated managers and admins included.",
+                "description": "Returns messages oldest first. With after, the page starts after that id (after=0 is the beginning), which is how a client catches up on anything the events socket dropped. Otherwise it ends before before, or at the newest message when before is left out. Deleted messages come back as tombstones with deletedAt and no ciphertext. A side conversation's replies are left out: GET /chat/messages/{id}/replies pages them. Needs read_messages; anyone else gets 404, delegated managers and admins included.",
                 "produces": [
                     "application/json"
                 ],
@@ -4894,7 +4894,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Stores ciphertext, base64, that the caller's client encrypted under the channel key of keyVersion, and sends the stored row to the channel's readers as chat_message_created. The Quark never sees the text. A ciphertext's 24-byte nonce is taken once per channel and key version: repeating your own live post byte for byte returns it with 200 and stores nothing, and any other reuse is 409. clientMessageId, up to 64 bytes, names the send: a retry encrypts again under a fresh nonce, so it carries the same clientMessageId, and one the caller already sent to this channel returns that message with 200 and stores nothing, whatever the ciphertext. attachmentIds, when set, names up to 10 attachments the caller already uploaded to this channel and has not bound to a message. Each id is 64 lowercase hex characters, sent in the clear so the Quark can delete the files with the message; the name, the media type and the key stay in the ciphertext. They are bound to this message in the same transaction. A retry of this clientMessageId or ciphertext still returns the stored message when those ids are already bound to it. More than 10, or an id that is not 64 lowercase hex characters, is 400. An id the caller cannot bind is 404 and the message is not stored. Ciphertext is at most 16 KiB. poll, when set, makes the message a poll whose question and options are in the ciphertext: closesAt, when set, is when it stops taking answers and has to be in the future and at most a year after the post; allowChange lets an account replace its answer; anonymous serves answers without who gave them, to everyone; resultsAfterClose shows answers only to the author until it closes. A poll field of the wrong type, or one the Quark does not know, is refused. Needs send_messages, and attach_files when attachmentIds is set; a reader without the one it needs gets 403, and anyone without read_messages 404, delegated managers and admins included.",
+                "description": "Stores ciphertext, base64, that the caller's client encrypted under the channel key of keyVersion, and sends the stored row to the channel's readers as chat_message_created. The Quark never sees the text. A ciphertext's 24-byte nonce is taken once per channel and key version: repeating your own live post byte for byte returns it with 200 and stores nothing, and any other reuse is 409. clientMessageId, up to 64 bytes, names the send: a retry encrypts again under a fresh nonce, so it carries the same clientMessageId, and one the caller already sent to this channel returns that message with 200 and stores nothing, whatever the ciphertext. attachmentIds, when set, names up to 10 attachments the caller already uploaded to this channel and has not bound to a message. Each id is 64 lowercase hex characters, sent in the clear so the Quark can delete the files with the message; the name, the media type and the key stay in the ciphertext. They are bound to this message in the same transaction. A retry of this clientMessageId or ciphertext still returns the stored message when those ids are already bound to it. More than 10, or an id that is not 64 lowercase hex characters, is 400. An id the caller cannot bind is 404 and the message is not stored. Ciphertext is at most 16 KiB. poll, when set, makes the message a poll whose question and options are in the ciphertext: closesAt, when set, is when it stops taking answers and has to be in the future and at most a year after the post; allowChange lets an account replace its answer; anonymous serves answers without who gave them, to everyone; resultsAfterClose shows answers only to the author until it closes. A poll field of the wrong type, or one the Quark does not know, is refused. rootId, when set, posts the message as a reply in the side conversation of that channel message, which the channel's message list leaves out and GET /chat/messages/{id}/replies pages: a root that does not exist or is in another channel is 404, a root that is itself a reply is 409, and a poll is 400. A deleted root is fine. Needs send_messages, and attach_files when attachmentIds is set; a reader without the one it needs gets 403, and anyone without read_messages 404, delegated managers and admins included.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4937,7 +4937,7 @@
                         }
                     },
                     "400": {
-                        "description": "ciphertext too short, a key version the channel doesn't have, a clientMessageId over 64 bytes, more than 10 attachment ids, an attachment id that is not 64 lowercase hex characters, poll settings of the wrong shape, or a closesAt in the past or more than a year ahead",
+                        "description": "ciphertext too short, a key version the channel doesn't have, a clientMessageId over 64 bytes, more than 10 attachment ids, an attachment id that is not 64 lowercase hex characters, poll settings of the wrong shape, a closesAt in the past or more than a year ahead, or a poll with a rootId",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -4955,13 +4955,13 @@
                         }
                     },
                     "404": {
-                        "description": "no such channel, the caller lacks read_messages, or an attachment the caller cannot bind to this message",
+                        "description": "no such channel, the caller lacks read_messages, an attachment the caller cannot bind to this message, or a rootId naming no message in this channel",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
                     "409": {
-                        "description": "the channel already has a message with this nonce under keyVersion, deleted ones included",
+                        "description": "the channel already has a message with this nonce under keyVersion, deleted ones included, or a rootId naming a message that is itself a reply",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -5751,6 +5751,76 @@
                     },
                     "409": {
                         "description": "the message was deleted, or the caller already holds 20 reactions on it",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/messages/{id}/replies": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the replies posted with this message as their rootId, oldest first, each with its reactions. before, after and limit work as they do on GET /chat/channels/{id}/messages. Deleted replies come back as tombstones. A message no one replied to, a deleted one among them, has an empty page. Needs read_messages on the message's channel; anyone else gets 404, delegated managers and admins included.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Page the encrypted replies in a chat message's side conversation",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Root message id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page backward from this message id",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page forward from this message id",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "At most this many, 50 by default, capped at 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ListMessagesResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such message, or the caller lacks read_messages on its channel",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -14469,6 +14539,10 @@
                     "items": {
                         "$ref": "#/definitions/chatutil.Reaction"
                     }
+                },
+                "rootId": {
+                    "description": "RootID is the channel message a side conversation's reply belongs to\n(#4345), absent on a channel message. Ciphertext of a reply carries it\nin its additional data too.",
+                    "type": "integer"
                 }
             }
         },
@@ -16421,6 +16495,9 @@
                 },
                 "poll": {
                     "$ref": "#/definitions/chatutil.PollSettings"
+                },
+                "rootId": {
+                    "type": "integer"
                 }
             }
         },

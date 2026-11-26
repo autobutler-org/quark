@@ -855,6 +855,12 @@ definitions:
         items:
           $ref: '#/definitions/chatutil.Reaction'
         type: array
+      rootId:
+        description: |-
+          RootID is the channel message a side conversation's reply belongs to
+          (#4345), absent on a channel message. Ciphertext of a reply carries it
+          in its additional data too.
+        type: integer
     type: object
   chatutil.PendingGrant:
     properties:
@@ -2397,6 +2403,8 @@ definitions:
         type: integer
       poll:
         $ref: '#/definitions/chatutil.PollSettings'
+      rootId:
+        type: integer
     type: object
   v0_chat.putMyChannelKeysBody:
     properties:
@@ -7368,12 +7376,13 @@ paths:
       - chat
   /chat/channels/{id}/messages:
     get:
-      description: Returns messages oldest first. With after, the page starts after
+      description: 'Returns messages oldest first. With after, the page starts after
         that id (after=0 is the beginning), which is how a client catches up on anything
         the events socket dropped. Otherwise it ends before before, or at the newest
         message when before is left out. Deleted messages come back as tombstones
-        with deletedAt and no ciphertext. Needs read_messages; anyone else gets 404,
-        delegated managers and admins included.
+        with deletedAt and no ciphertext. A side conversation''s replies are left
+        out: GET /chat/messages/{id}/replies pages them. Needs read_messages; anyone
+        else gets 404, delegated managers and admins included.'
       parameters:
       - description: Channel id
         in: path
@@ -7441,10 +7450,14 @@ paths:
         and at most a year after the post; allowChange lets an account replace its
         answer; anonymous serves answers without who gave them, to everyone; resultsAfterClose
         shows answers only to the author until it closes. A poll field of the wrong
-        type, or one the Quark does not know, is refused. Needs send_messages, and
-        attach_files when attachmentIds is set; a reader without the one it needs
-        gets 403, and anyone without read_messages 404, delegated managers and admins
-        included.'
+        type, or one the Quark does not know, is refused. rootId, when set, posts
+        the message as a reply in the side conversation of that channel message, which
+        the channel''s message list leaves out and GET /chat/messages/{id}/replies
+        pages: a root that does not exist or is in another channel is 404, a root
+        that is itself a reply is 409, and a poll is 400. A deleted root is fine.
+        Needs send_messages, and attach_files when attachmentIds is set; a reader
+        without the one it needs gets 403, and anyone without read_messages 404, delegated
+        managers and admins included.'
       parameters:
       - description: Channel id
         in: path
@@ -7473,7 +7486,8 @@ paths:
           description: ciphertext too short, a key version the channel doesn't have,
             a clientMessageId over 64 bytes, more than 10 attachment ids, an attachment
             id that is not 64 lowercase hex characters, poll settings of the wrong
-            shape, or a closesAt in the past or more than a year ahead
+            shape, a closesAt in the past or more than a year ahead, or a poll with
+            a rootId
           schema:
             $ref: '#/definitions/serverutil.Response'
         "401":
@@ -7486,13 +7500,14 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
-          description: no such channel, the caller lacks read_messages, or an attachment
-            the caller cannot bind to this message
+          description: no such channel, the caller lacks read_messages, an attachment
+            the caller cannot bind to this message, or a rootId naming no message
+            in this channel
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":
           description: the channel already has a message with this nonce under keyVersion,
-            deleted ones included
+            deleted ones included, or a rootId naming a message that is itself a reply
           schema:
             $ref: '#/definitions/serverutil.Response'
         "413":
@@ -8095,6 +8110,56 @@ paths:
       security:
       - BearerAuth: []
       summary: React to a chat message
+      tags:
+      - chat
+  /chat/messages/{id}/replies:
+    get:
+      description: Returns the replies posted with this message as their rootId, oldest
+        first, each with its reactions. before, after and limit work as they do on
+        GET /chat/channels/{id}/messages. Deleted replies come back as tombstones.
+        A message no one replied to, a deleted one among them, has an empty page.
+        Needs read_messages on the message's channel; anyone else gets 404, delegated
+        managers and admins included.
+      parameters:
+      - description: Root message id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Page backward from this message id
+        in: query
+        name: before
+        type: integer
+      - description: Page forward from this message id
+        in: query
+        name: after
+        type: integer
+      - description: At most this many, 50 by default, capped at 200
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chatutil.ListMessagesResult'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no such message, or the caller lacks read_messages on its channel
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Page the encrypted replies in a chat message's side conversation
       tags:
       - chat
   /chat/reactions/{id}:

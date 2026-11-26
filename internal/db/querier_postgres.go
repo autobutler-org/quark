@@ -995,6 +995,30 @@ func (a *postgresQueries) ListChatReactionsBetween(ctx context.Context, arg List
 	return items, nil
 }
 
+func (a *postgresQueries) ListChatRepliesAfter(ctx context.Context, arg ListChatRepliesAfterParams) ([]ChatMessage, error) {
+	rows, err := a.q.ListChatRepliesAfter(ctx, pgdb.ListChatRepliesAfterParams(arg))
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ChatMessage, len(rows))
+	for i, row := range rows {
+		items[i] = ChatMessage(row)
+	}
+	return items, nil
+}
+
+func (a *postgresQueries) ListChatRepliesBefore(ctx context.Context, arg ListChatRepliesBeforeParams) ([]ChatMessage, error) {
+	rows, err := a.q.ListChatRepliesBefore(ctx, pgdb.ListChatRepliesBeforeParams(arg))
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]ChatMessage, len(rows))
+	for i, row := range rows {
+		items[i] = ChatMessage(row)
+	}
+	return items, nil
+}
+
 func (a *postgresQueries) ListChildAlbums(ctx context.Context, parentID sql.NullInt64) ([]PhotoAlbum, error) {
 	rows, err := a.q.ListChildAlbums(ctx, parentID)
 	if err != nil || rows == nil {

@@ -83,7 +83,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"slices"
 	"strings"
 	"time"
@@ -1894,6 +1893,15 @@ var (
 	// holds under that key version (#2487): a replay of another message,
 	// deleted ones included, or a client reusing a nonce.
 	ErrDuplicateMessage = errors.New("this channel already has a message with that nonce; encrypt it again to send it")
+	// ErrRootNotFound reports a reply whose root doesn't exist or is in
+	// another channel (#4345). A root the caller can't read is in a channel
+	// they don't read, so it is this too.
+	ErrRootNotFound = errors.New("no message in this channel has that id to reply to")
+	// ErrNestedReply reports a reply to a message that is itself a reply:
+	// side conversations are one level deep.
+	ErrNestedReply = errors.New("a reply in a side conversation can't start one of its own")
+	// ErrPollReply reports a poll posted as a reply in a side conversation.
+	ErrPollReply = errors.New("a poll can't be posted in a side conversation")
 )
 
 // Message is one stored chat message. The Quark sees who sent it, when, and
@@ -1911,6 +1919,10 @@ type Message struct {
 	CreatedAt  time.Time  `json:"createdAt"`
 	EditedAt   *time.Time `json:"editedAt,omitempty"`
 	DeletedAt  *time.Time `json:"deletedAt,omitempty"`
+	// RootID is the channel message a side conversation's reply belongs to
+	// (#4345), absent on a channel message. Ciphertext of a reply carries it
+	// in its additional data too.
+	RootID int64 `json:"rootId,omitempty"`
 	// Reactions are the message's reactions, oldest first, in a
 	// ListMessages page. A deleted message has none: they go with its
 	// ciphertext.
@@ -1941,6 +1953,9 @@ type PostMessageParams struct {
 	// AttachmentIDs names files already uploaded to the channel by the caller
 	// and not yet bound to a message. Empty leaves the post unchanged.
 	AttachmentIDs []string
+	// RootID, when set, posts the message as a reply in the side conversation
+	// of that channel message (#4345).
+	RootID int64
 	// DataDir holds the poll voter key an anonymous poll's answers need.
 	DataDir string
 }
@@ -1975,7 +1990,10 @@ type PostMessageResult struct {
 // ErrAttachmentNotFound, which stores nothing. A retry already treated as
 // Repeated does not fail when those ids are bound to that same message, nor
 // when that message was deleted and its attachment rows went with it. Ids
-// bound to a different message are ErrAttachmentNotFound.
+// bound to a different message are ErrAttachmentNotFound. RootID, when set,
+// makes the post a reply in that message's side conversation (#4345): a root
+// that is missing or in another channel is ErrRootNotFound, one that is itself
+// a reply ErrNestedReply, and a poll ErrPollReply. A deleted root is fine.
 func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 	if len(params.Ciphertext) > MaxCiphertextBytes {
 		return PostMessageResult{}, ErrMessageTooLarge
@@ -1988,6 +2006,9 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 	}
 	if err := validateAttachmentIDs(params.AttachmentIDs); err != nil {
 		return PostMessageResult{}, err
+	}
+	if params.RootID != 0 && params.Poll != nil {
+		return PostMessageResult{}, ErrPollReply
 	}
 	if params.Database == nil {
 		return PostMessageResult{}, accessutil.ErrNoDatabase
@@ -2002,6 +2023,9 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 	}
 	if len(params.AttachmentIDs) > 0 && !perms.Has(PermAttachFiles) {
 		return PostMessageResult{}, ErrCannotAttach
+	}
+	if err := checkRoot(params.Ctx, queries, params.ChannelID, params.RootID); err != nil {
+		return PostMessageResult{}, err
 	}
 	versions, err := queries.ListChatChannelKeys(params.Ctx, params.ChannelID)
 	if err != nil {
@@ -2022,6 +2046,7 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 			ClientMessageID: sql.NullString{
 				String: params.ClientMessageID, Valid: params.ClientMessageID != "",
 			},
+			RootID: sql.NullInt64{Int64: params.RootID, Valid: params.RootID != 0},
 		})
 		if err != nil {
 			return err
@@ -2113,33 +2138,15 @@ func ListMessages(params ListMessagesParams) (ListMessagesResult, error) {
 	if _, err := memberPerms(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
 		return ListMessagesResult{}, err
 	}
-	limit := params.Limit
-	if limit <= 0 {
-		limit = DefaultMessagesPage
-	}
-	limit = min(limit, MaxMessagesPage)
-	var rows []db.ChatMessage
-	var err error
-	if params.Forward {
-		rows, err = queries.ListChatMessagesAfter(params.Ctx, db.ListChatMessagesAfterParams{
-			ChannelID: params.ChannelID, ID: params.After, Limit: limit,
+	messages, err := pageMessages(params.Forward, params.Before, params.After, params.Limit,
+		func(id, limit int64) ([]db.ChatMessage, error) {
+			return queries.ListChatMessagesBefore(params.Ctx, db.ListChatMessagesBeforeParams{ChannelID: params.ChannelID, ID: id, Limit: limit})
+		},
+		func(id, limit int64) ([]db.ChatMessage, error) {
+			return queries.ListChatMessagesAfter(params.Ctx, db.ListChatMessagesAfterParams{ChannelID: params.ChannelID, ID: id, Limit: limit})
 		})
-	} else {
-		before := params.Before
-		if before <= 0 {
-			before = math.MaxInt64
-		}
-		rows, err = queries.ListChatMessagesBefore(params.Ctx, db.ListChatMessagesBeforeParams{
-			ChannelID: params.ChannelID, ID: before, Limit: limit,
-		})
-		slices.Reverse(rows)
-	}
 	if err != nil {
 		return ListMessagesResult{}, err
-	}
-	messages := make([]Message, 0, len(rows))
-	for _, row := range rows {
-		messages = append(messages, messageFromRow(row))
 	}
 	if err := attachReactions(params.Ctx, queries, params.ChannelID, messages); err != nil {
 		return ListMessagesResult{}, err
@@ -2148,6 +2155,59 @@ func ListMessages(params ListMessagesParams) (ListMessagesResult, error) {
 		return ListMessagesResult{}, err
 	}
 	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return ListMessagesResult{}, err
+	}
+	for i := range messages {
+		p.message(&messages[i])
+	}
+	return ListMessagesResult{Messages: messages}, p.done()
+}
+
+// ListRepliesParams pages the side conversation of one channel message, its
+// root. Before, After, Forward and Limit work as ListMessagesParams' do.
+type ListRepliesParams struct {
+	Ctx       context.Context
+	Database  *db.DatabaseSqlc
+	Principal accessutil.Principal
+	MessageID int64
+	Before    int64
+	After     int64
+	Forward   bool
+	// Limit is capped at MaxMessagesPage; 0 means DefaultMessagesPage.
+	Limit int64
+}
+
+// ListReplies pages the replies to a message (#4345), oldest first,
+// tombstones included, each with its reactions, for a holder of read_messages
+// on the message's channel. A message that doesn't exist or that the caller
+// doesn't read is ErrMessageNotFound, admins included. A message no one
+// replied to, a deleted one among them, has an empty page.
+func ListReplies(params ListRepliesParams) (ListMessagesResult, error) {
+	if params.Database == nil {
+		return ListMessagesResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	root, _, err := readableMessage(params.Ctx, queries, params.Principal, params.MessageID)
+	if err != nil {
+		return ListMessagesResult{}, err
+	}
+	rootID := sql.NullInt64{Int64: root.ID, Valid: true}
+	messages, err := pageMessages(params.Forward, params.Before, params.After, params.Limit,
+		func(id, limit int64) ([]db.ChatMessage, error) {
+			return queries.ListChatRepliesBefore(params.Ctx, db.ListChatRepliesBeforeParams{RootID: rootID, ID: id, Limit: limit})
+		},
+		func(id, limit int64) ([]db.ChatMessage, error) {
+			return queries.ListChatRepliesAfter(params.Ctx, db.ListChatRepliesAfterParams{RootID: rootID, ID: id, Limit: limit})
+		})
+	if err != nil {
+		return ListMessagesResult{}, err
+	}
+	// A reply is never a poll (ErrPollReply), so only reactions are filled in.
+	if err := attachReactions(params.Ctx, queries, root.ChannelID, messages); err != nil {
+		return ListMessagesResult{}, err
+	}
+	p, err := loadPseudonyms(params.Ctx, queries, root.ChannelID)
 	if err != nil {
 		return ListMessagesResult{}, err
 	}

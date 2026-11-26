@@ -125,6 +125,7 @@ type ChatMessage struct {
 	DeletedAt       sql.NullTime
 	Nonce           []byte
 	ClientMessageID sql.NullString
+	RootID          sql.NullInt64
 }
 
 type ChatPoll struct {

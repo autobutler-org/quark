@@ -20,6 +20,7 @@ FROM
 WHERE
     chat_messages.id > COALESCE(chat_read_markers.last_read_message_id, 0)
     AND chat_messages.deleted_at IS NULL
+    AND chat_messages.root_id IS NULL
     AND COALESCE(chat_messages.author_id, 0) <> $1
 GROUP BY
     chat_messages.channel_id
@@ -31,7 +32,8 @@ type CountChatUnreadForUserRow struct {
 }
 
 // CountChatUnreadForUser counts, per channel, the messages after an account's
-// marker that someone else wrote and that are not deleted. A channel with
+// marker that someone else wrote and that are not deleted. A side
+// conversation's replies are not counted (#4345). A channel with
 // none has no row. It counts every channel, whatever the account may read
 // there; chatutil keeps only the counts of channels it reads.
 // ponytail: a channel never opened counts its whole history on every list.

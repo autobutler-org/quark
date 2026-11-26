@@ -56,7 +56,8 @@ type Querier interface {
 	CountActiveAdmins(ctx context.Context) (int64, error)
 	CountAlbumItems(ctx context.Context, albumID int64) (int64, error)
 	// CountChatUnreadForUser counts, per channel, the messages after an account's
-	// marker that someone else wrote and that are not deleted. A channel with
+	// marker that someone else wrote and that are not deleted. A side
+	// conversation's replies are not counted (#4345). A channel with
 	// none has no row. It counts every channel, whatever the account may read
 	// there; chatutil keeps only the counts of channels it reads.
 	// ponytail: a channel never opened counts its whole history on every list.
@@ -98,7 +99,8 @@ type Querier interface {
 	// Chat messages (#2418). The Quark stores ciphertext and never opens it.
 	// CreateChatMessage stores a message. nonce is the ciphertext's first 24
 	// bytes, unique per channel and key version (#2487). client_message_id, when
-	// the client sent one, is unique per channel and author (#3531).
+	// the client sent one, is unique per channel and author (#3531). root_id is set
+	// on a side conversation's reply (#4345).
 	CreateChatMessage(ctx context.Context, arg CreateChatMessageParams) (ChatMessage, error)
 	// Chat polls (#3893). The Quark enforces a poll's settings and stores its
 	// answers as ciphertext it never opens.
@@ -405,8 +407,10 @@ type Querier interface {
 	// ListChatKeyGrantsForUser is one account's grants on a channel, every version.
 	ListChatKeyGrantsForUser(ctx context.Context, arg ListChatKeyGrantsForUserParams) ([]ChatKeyGrant, error)
 	// ListChatMessagesAfter pages a channel forward from an id, oldest first.
+	// A side conversation's replies are left out (#4345).
 	ListChatMessagesAfter(ctx context.Context, arg ListChatMessagesAfterParams) ([]ChatMessage, error)
 	// ListChatMessagesBefore pages a channel backward from an id, newest first.
+	// A side conversation's replies are left out (#4345).
 	ListChatMessagesBefore(ctx context.Context, arg ListChatMessagesBeforeParams) ([]ChatMessage, error)
 	ListChatPollAnswers(ctx context.Context, messageID int64) ([]ChatPollAnswer, error)
 	// ListChatPollAnswersBetween is the answers to a channel's polls whose ids
@@ -418,6 +422,12 @@ type Querier interface {
 	// ListChatReactionsBetween is the reactions on a channel's messages whose ids
 	// fall in [first_id, last_id], one page of ListChatMessages*.
 	ListChatReactionsBetween(ctx context.Context, arg ListChatReactionsBetweenParams) ([]ChatReaction, error)
+	// ListChatRepliesAfter pages a side conversation forward from an id, oldest
+	// first (#4345).
+	ListChatRepliesAfter(ctx context.Context, arg ListChatRepliesAfterParams) ([]ChatMessage, error)
+	// ListChatRepliesBefore pages a side conversation backward from an id,
+	// newest first (#4345).
+	ListChatRepliesBefore(ctx context.Context, arg ListChatRepliesBeforeParams) ([]ChatMessage, error)
 	ListChildAlbums(ctx context.Context, parentID sql.NullInt64) ([]PhotoAlbum, error)
 	ListConnectedDevices(ctx context.Context) ([]ConnectedDevice, error)
 	ListExactDuplicates(ctx context.Context) ([]ListExactDuplicatesRow, error)

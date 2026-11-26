@@ -40,6 +40,7 @@ func (r *router) Routes() []*serverutil.Route {
 		putAttachmentRoute,
 		getAttachmentRoute,
 		listMessagesRoute,
+		listRepliesRoute,
 		editMessageRoute,
 		deleteMessageRoute,
 		markReadRoute,
@@ -128,12 +129,14 @@ type signEventBody struct {
 // client's own id for this send, kept the same across its retries (#3531).
 // Poll, when set, makes the message a poll with those settings (#3893).
 // AttachmentIDs names ciphertext already uploaded to the channel, bound to
-// this message.
+// this message. RootID, when set, posts it as a reply in that channel
+// message's side conversation (#4345).
 type postMessageBody struct {
 	Ciphertext      []byte                 `json:"ciphertext"`
 	KeyVersion      int64                  `json:"keyVersion"`
 	ClientMessageID string                 `json:"clientMessageId,omitempty"`
 	AttachmentIDs   []string               `json:"attachmentIds,omitempty"`
+	RootID          int64                  `json:"rootId,omitempty"`
 	Poll            *chatutil.PollSettings `json:"poll,omitempty"`
 }
 
