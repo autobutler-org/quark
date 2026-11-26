@@ -34,6 +34,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///   count next changes.
 /// - In an anonymous channel (#2949) the account is its pseudonym and its
 ///   alias: what the members and messages there name it by.
+/// - Side conversations (#4349): every root in that page whose branch has
+///   unread replies has its newest page of replies read the same way. A
+///   mention there adds to the channel's count, and to [extraUnreadOf] when
+///   the account is not involved in the branch, which is what puts such a
+///   branch on the channel's badge. [mentionsInBranch] says which branches
+///   hold one, for their chips. The channel on screen is still read, for
+///   its chips, but [countOf] and [extraUnreadOf] read zero there, as
+///   `ChatUnreadController.countOf` does.
 class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
   /// Builds a controller following [unread]. Every other collaborator has a
   /// real default; tests pass fakes. [openMessage] is a message's text, or
@@ -46,6 +54,8 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
     Future<List<ChatMessage>> Function(int channelId, {int? limit})
         fetchMessages =
         ChatMessagesService.fetchMessages,
+    Future<List<ChatMessage>> Function(int rootId, {int? limit}) fetchReplies =
+        ChatMessagesService.fetchReplies,
     String? Function(ChatMessage message)? openMessage,
     bool Function()? isUnlocked,
     Listenable? keyChanges,
@@ -55,6 +65,7 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
            ensureKeys ?? ChatChannelKeysController.instance.ensureKeys,
        _listMembers = listMembers,
        _fetchMessages = fetchMessages,
+       _fetchReplies = fetchReplies,
        _openMessage = openMessage ?? _open,
        _isUnlocked =
            isUnlocked ?? (() => ChatKeysController.instance.isUnlocked),
@@ -75,6 +86,8 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
   final Future<List<ChatMember>> Function(int channelId) _listMembers;
   final Future<List<ChatMessage>> Function(int channelId, {int? limit})
   _fetchMessages;
+  final Future<List<ChatMessage>> Function(int rootId, {int? limit})
+  _fetchReplies;
   final String? Function(ChatMessage message) _openMessage;
   final bool Function() _isUnlocked;
   final Listenable _keyChanges;
@@ -85,15 +98,38 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
 
   Map<int, int> _mentions = const {};
 
-  /// The unread count each channel was last read at.
-  final Map<int, int> _readAt = {};
+  /// Per channel, the mentions in branches the account is not involved in.
+  Map<int, int> _extra = const {};
+
+  /// Per channel, the mentions in each of its branches, by root.
+  Map<int, Map<int, int>> _branches = const {};
+
+  /// The unread counts each channel was last read at.
+  final Map<int, ChatUnreadSplit> _readAt = {};
 
   /// The unread messages of each channel that would not open.
   final Map<int, List<ChatMessage>> _unopened = {};
 
-  /// How many unread messages in channel [channelId] mention the signed-in
-  /// account; zero for one not read yet.
-  int countOf(int channelId) => _mentions[channelId] ?? 0;
+  /// How many unread messages in channel [channelId], its side
+  /// conversations' included, mention the signed-in account; zero for one
+  /// not read yet and for the channel on screen.
+  int countOf(int channelId) =>
+      _unread.isViewing(channelId) ? 0 : _mentions[channelId] ?? 0;
+
+  /// How many of [countOf] sit in side conversations the account is not
+  /// involved in, which the channel's unread count leaves out (#4349).
+  int extraUnreadOf(int channelId) =>
+      _unread.isViewing(channelId) ? 0 : _extra[channelId] ?? 0;
+
+  /// How many unread replies in the side conversation of message [rootId]
+  /// mention the signed-in account (#4349).
+  int mentionsInBranch(int rootId) {
+    for (final roots in _branches.values) {
+      final found = roots[rootId];
+      if (found != null) return found;
+    }
+    return 0;
+  }
 
   @override
   void dispose() {
@@ -106,8 +142,10 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
   /// or whose unopened messages now open, and forgets the ones with nothing
   /// unread.
   void _sync() {
-    final counts = _isUnlocked() ? _unread.counts : const <int, int>{};
-    bool isRead(int channelId, _) => (counts[channelId] ?? 0) == 0;
+    final splits = _isUnlocked()
+        ? _unread.splits
+        : const <int, ChatUnreadSplit>{};
+    bool isRead(int channelId, _) => !splits.containsKey(channelId);
     _readAt.removeWhere(isRead);
     _unopened.removeWhere(isRead);
     _unopened.removeWhere((channelId, messages) {
@@ -120,59 +158,98 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
         for (final e in _mentions.entries)
           if (!isRead(e.key, null)) e.key: e.value,
       };
+      _extra = {
+        for (final e in _extra.entries)
+          if (!isRead(e.key, null)) e.key: e.value,
+      };
+      _branches = {
+        for (final e in _branches.entries)
+          if (!isRead(e.key, null)) e.key: e.value,
+      };
       notifyListeners();
     }
-    for (final MapEntry(key: channelId, value: count) in counts.entries) {
-      if (count == 0 || _readAt[channelId] == count) continue;
-      _readAt[channelId] = count;
-      unawaited(_read(channelId, count));
+    for (final MapEntry(key: channelId, value: split) in splits.entries) {
+      if (_readAt[channelId] == split) continue;
+      _readAt[channelId] = split;
+      unawaited(_read(channelId, split));
     }
   }
 
-  // ponytail: every change of a channel's unread count reads its keys,
-  // members and newest page again, and only the newest page is looked at, so
-  // a mention more than a page back is missed. Count the mention in the
+  // ponytail: every change of a channel's unread counts reads its keys,
+  // members and newest page again, and the newest page of replies of each
+  // root in it with unread replies, so a mention more than a page back, or in
+  // a branch whose root is, is missed. Count the mention in the
   // `chat_message_created` event, and page back, if either matters.
-  Future<void> _read(int channelId, int count) async {
+  Future<void> _read(int channelId, ChatUnreadSplit split) async {
     try {
       await _ensureKeys(channelId);
       final (members, page) = await (
         _listMembers(channelId),
         _fetchMessages(channelId, limit: ChatMessagesService.maxPage),
       ).wait;
-      if (isDisposed || _readAt[channelId] != count) return;
+      final roots = [
+        for (final m in page)
+          if ((m.branch?.unreadCount ?? 0) > 0) m,
+      ];
+      final replies = await Future.wait([
+        for (final root in roots)
+          _fetchReplies(root.id, limit: ChatMessagesService.maxPage),
+      ]);
+      if (isDisposed || _readAt[channelId] != split) return;
       final me = _selfIdIn(channelId);
       final name = members.nameOfUser(me);
       final names = members.mentionNames;
       final everyone = members.userIdsHolding(ChatPermission.mentionEveryone);
       final unopened = <ChatMessage>[];
-      var mentions = 0;
-      for (final message
-          in page.reversed
-              .where((m) => !m.isDeleted && m.authorId != me)
-              .take(count)) {
-        final text = _openMessage(message);
-        if (text == null) {
-          unopened.add(message);
-        } else if (name != null &&
-            ChatMentions.mentions(
-              text,
-              ChatMentions.withEveryone(
-                names,
-                allowed: everyone.contains(message.authorId),
-              ),
-              name,
-            )) {
-          mentions++;
+      // The unread [count] newest of [messages] that mention the account.
+      int mentionsIn(List<ChatMessage> messages, int count) {
+        var mentions = 0;
+        for (final message
+            in messages.reversed
+                .where((m) => !m.isDeleted && m.authorId != me)
+                .take(count)) {
+          final text = _openMessage(message);
+          if (text == null) {
+            unopened.add(message);
+          } else if (name != null &&
+              ChatMentions.mentions(
+                text,
+                ChatMentions.withEveryone(
+                  names,
+                  allowed: everyone.contains(message.authorId),
+                ),
+                name,
+              )) {
+            mentions++;
+          }
         }
+        return mentions;
+      }
+
+      var mentions = mentionsIn(page, split.channel);
+      var extra = 0;
+      final branches = <int, int>{};
+      for (final (i, root) in roots.indexed) {
+        final branch = root.branch!;
+        final found = mentionsIn(replies[i], branch.unreadCount);
+        if (found == 0) continue;
+        branches[root.id] = found;
+        mentions += found;
+        if (!branch.involved) extra += found;
       }
       if (unopened.isEmpty) {
         _unopened.remove(channelId);
       } else {
         _unopened[channelId] = unopened;
       }
-      if (countOf(channelId) == mentions) return;
+      if ((_mentions[channelId] ?? 0) == mentions &&
+          (_extra[channelId] ?? 0) == extra &&
+          mapEquals(_branches[channelId] ?? const {}, branches)) {
+        return;
+      }
       _mentions = {..._mentions, channelId: mentions};
+      _extra = {..._extra, channelId: extra};
+      _branches = {..._branches, channelId: branches};
       notifyListeners();
     } catch (e) {
       debugPrint(
@@ -199,6 +276,7 @@ class ChatUnreadMentionsController extends ChangeNotifier with SafeNotifier {
           additionalData: crypto.messageAad(
             channelId: message.channelId,
             keyVersion: message.keyVersion,
+            rootId: message.rootId,
           ),
         ),
       );

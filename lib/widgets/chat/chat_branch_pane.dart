@@ -88,6 +88,7 @@ class ChatBranchPane extends StatelessWidget {
             : Errors.message(error, 'load the side conversation'),
         hasMore: c.hasOlderInBranch,
         onLoadOlder: c.loadOlderInBranch,
+        onAtBottomChanged: c.setBranchAtBottom,
         permissions: permissions,
         currentUserId: c.currentUserKey,
         mentionNames: c.mentionNames,

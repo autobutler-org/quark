@@ -649,9 +649,12 @@ nothing of mentions shows the text as it was typed.
   cannot see the text: each reading device checks the author's set in the member list it already loads and
   otherwise shows `@everyone` as plain text. No new account may be named `everyone`.
 
-A mention badge on a channel that isn't open isn't built. It needs either a plaintext list of mentioned accounts
-sent beside each message, which tells the Quark who was mentioned, or counting on the app alone, which shows
-nothing until a channel is fetched and decrypted. Which of the two is an open decision on #2424.
+A mention badge on a channel that isn't open is counted on the app alone (#3157): it decrypts the newest page of
+each channel with unread messages and counts the ones that mention the account, and keeps nothing it decrypted.
+Side conversations (#4349) keep the same trust model: the Quark reports how many unread replies each channel has
+in branches the account is involved in and in all the others, and the app decrypts the newest page of each branch
+with unread replies to count mentions. A mention there counts toward the channel's badge even in a branch the
+account never touched. The Quark still never learns who was mentioned.
 
 ### Routes
 

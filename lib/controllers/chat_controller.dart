@@ -365,6 +365,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   int? _requestedBranch;
   ChatMessagesController? _branch;
   bool _isLoadingOlderInBranch = false;
+  bool _isBranchAtBottom = false;
   bool _isLoadingOlder = false;
   bool _isAtBottom = false;
   bool _isSearching = false;
@@ -746,7 +747,14 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     final matches = _searchMatches;
     return [
       for (final entry in (matches ?? entries).reversed)
-        itemFor(entry, nameOf, me: me, quoted: (id) => byId[id]),
+        itemFor(
+          entry,
+          nameOf,
+          me: me,
+          quoted: (id) => byId[id],
+          mentionsMeIn: (rootId) =>
+              _unreadMentions.mentionsInBranch(rootId) > 0,
+        ),
       // A fork's line opens its timeline, under the oldest message (#2423).
       // The app draws it from the channel: it is no message, so nothing
       // counts it as unread, and a search never matches it.
@@ -788,7 +796,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
           name: c.name,
           isPrivate: c.isPrivate,
           permissions: c.permissions,
-          unreadCount: _unread.countOf(c.id),
+          unreadCount: _unreadOf(c.id),
           mentionCount: _unreadMentions.countOf(c.id),
         ),
   ];
@@ -803,10 +811,16 @@ class ChatController extends ChangeNotifier with SafeNotifier {
           name: directNameOf(c),
           isPrivate: true,
           isDirect: true,
-          unreadCount: _unread.countOf(c.id),
+          unreadCount: _unreadOf(c.id),
           mentionCount: _unreadMentions.countOf(c.id),
         ),
   ];
+
+  /// Channel [channelId]'s badge: its unread messages, the replies in side
+  /// conversations this account is involved in, and those in any other that
+  /// mention it (#4349).
+  int _unreadOf(int channelId) =>
+      _unread.countOf(channelId) + _unreadMentions.extraUnreadOf(channelId);
 
   /// What direct message [channel] is called here: the other people in it.
   String directNameOf(ChatChannel channel) =>
@@ -1602,13 +1616,16 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   /// poll is tallied as of [now] (`ChatMessagesController.pollItemFor`). A
   /// reply quotes the message [quoted] finds in this channel's loaded
   /// timeline (#2426); one it doesn't find, or that didn't open, is a quote
-  /// with no text, which reads as unavailable.
+  /// with no text, which reads as unavailable. A side conversation's chip is
+  /// unread when it has unread replies and this account is involved in it,
+  /// or [mentionsMeIn] says one of them mentions it (#4349).
   static ChatMessageItem itemFor(
     ChatTimelineEntry entry,
     String Function(int userId) nameOf, {
     int? me,
     DateTime? now,
     ChatTimelineMessage? Function(int messageId)? quoted,
+    bool Function(int rootId)? mentionsMeIn,
   }) => switch (entry) {
     ChatTimelineMessage(
       :final message,
@@ -1657,7 +1674,10 @@ class ChatController extends ChangeNotifier with SafeNotifier {
         poll: question == null
             ? null
             : ChatMessagesController.pollItemFor(entry, me: me, now: now),
-        branch: _branchItemFor(message.branch),
+        branch: _branchItemFor(
+          message.branch,
+          mentionsMe: mentionsMeIn?.call(message.id) ?? false,
+        ),
       ),
     ChatTimelineSystem(:final event, :final isUnverified) => ChatMessageItem(
       id: 'event_${event.id}',
@@ -1672,13 +1692,18 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   };
 
   /// The chip of a message's side conversation [branch], or null when it has
-  /// no live reply (#4346). Unread replies are #4349's, so none is marked.
-  static ChatBranchItem? _branchItemFor(ChatBranch? branch) {
+  /// no live reply (#4346). It is unread when unread replies there concern
+  /// this account: it is involved, or one [mentionsMe] (#4349).
+  static ChatBranchItem? _branchItemFor(
+    ChatBranch? branch, {
+    required bool mentionsMe,
+  }) {
     final at = branch?.lastReplyAt;
     if (branch == null || branch.replyCount == 0 || at == null) return null;
     return ChatBranchItem(
       replyCount: branch.replyCount,
       lastReplyAt: at.toLocal(),
+      hasUnread: branch.unreadCount > 0 && (branch.involved || mentionsMe),
     );
   }
 
@@ -1909,11 +1934,36 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       ..dispose();
     _branch = null;
     _isLoadingOlderInBranch = false;
+    _isBranchAtBottom = false;
     if (_editingInBranch) _editing = null;
     _editingInBranch = false;
   }
 
-  void _onBranchChanged() => notifyListeners();
+  void _onBranchChanged() {
+    _markBranchRead();
+    notifyListeners();
+  }
+
+  /// Records whether the open side conversation's newest reply is in view,
+  /// as its list reports it, and moves the branch's read marker to it when
+  /// it is (#4349), as [setAtBottom] does for the channel.
+  void setBranchAtBottom(bool isAtBottom) {
+    if (isAtBottom == _isBranchAtBottom) return;
+    _isBranchAtBottom = isAtBottom;
+    _markBranchRead();
+  }
+
+  /// Moves the open side conversation's read marker to its newest loaded
+  /// reply while that reply is the one in view.
+  void _markBranchRead() {
+    final branch = _branch;
+    final rootId = branch?.rootId;
+    final newest = branch?.newestMessageId;
+    if (!_isBranchAtBottom || rootId == null || newest == null || isLocked) {
+      return;
+    }
+    unawaited(_unread.markBranchRead(rootId, newest));
+  }
 
   /// Points [_selected] at the channel [_requested] names; see
   /// [_applySelection].

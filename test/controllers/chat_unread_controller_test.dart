@@ -29,6 +29,15 @@ void main() {
         unreadCount: 0,
       );
     },
+    markBranchRead: (rootId, messageId) async {
+      marked.add('branch $rootId $messageId');
+      return ChatReadMarker(
+        channelId: 1,
+        rootId: rootId,
+        lastReadMessageId: messageId,
+        unreadCount: 0,
+      );
+    },
     currentUserId: () => 7,
     events: events.stream,
   );
@@ -267,5 +276,93 @@ void main() {
     await pumpEventQueue();
     expect(unread.countOf(1), 10);
     unread.dispose();
+  });
+
+  group('side conversations (#4349)', () {
+    setUp(() {
+      channels = const [
+        ChatChannel(
+          id: 1,
+          name: 'general',
+          unreadCount: 3,
+          branchUnreadCount: 2,
+          otherBranchUnreadCount: 4,
+        ),
+        ChatChannel(id: 2, name: 'random', otherBranchUnreadCount: 1),
+        ChatChannel(id: 3, name: 'quiet'),
+      ];
+    });
+
+    test(
+      'involved branches add to the count; the others only to splits',
+      () async {
+        final unread = build();
+        await unread.refresh();
+        expect(unread.countOf(1), 5);
+        expect(unread.countOf(2), 0);
+        expect(unread.hasUnread, isTrue);
+        expect(unread.splits, {
+          1: (channel: 3, branches: 2, otherBranches: 4),
+          2: (channel: 0, branches: 0, otherBranches: 1),
+        });
+
+        // The channel on screen reads zero, but its split stays for its chips.
+        unread.setViewing(1, focused: true);
+        expect(unread.countOf(1), 0);
+        expect(unread.isViewing(1), isTrue);
+        expect(unread.splits[1], (channel: 3, branches: 2, otherBranches: 4));
+        unread.dispose();
+      },
+    );
+
+    test('a reply, and a branch marker from another session, read the counts '
+        'again', () async {
+      final unread = build();
+      await unread.refresh();
+      expect(lists, 1);
+      events.add(
+        FileEvent(
+          kind: 'chat_message_created',
+          path: '',
+          data: {
+            'channelId': 1,
+            'rootId': 5,
+            'message': {'id': 99, 'channelId': 1, 'authorId': 8, 'rootId': 5},
+          },
+        ),
+      );
+      await pumpEventQueue();
+      expect(lists, 2);
+      expect(unread.countOf(1), 5, reason: 'a reply never adds one locally');
+
+      events.add(
+        const FileEvent(
+          kind: 'chat_read_marker_changed',
+          path: '',
+          data: {
+            'channelId': 1,
+            'rootId': 5,
+            'lastReadMessageId': 99,
+            'unreadCount': 0,
+          },
+        ),
+      );
+      await pumpEventQueue();
+      expect(lists, 3);
+      expect(unread.countOf(1), 5, reason: 'the channel count is kept');
+      unread.dispose();
+    });
+
+    test('a branch marker is sent once, forward only, then the counts are '
+        'read', () async {
+      final unread = build();
+      await unread.markBranchRead(5, 10);
+      await unread.markBranchRead(5, 10);
+      await unread.markBranchRead(5, 9);
+      await unread.markBranchRead(5, 11);
+      expect(marked, ['branch 5 10', 'branch 5 11']);
+      expect(lists, 2);
+      unread.dispose();
+    });
   });
 }

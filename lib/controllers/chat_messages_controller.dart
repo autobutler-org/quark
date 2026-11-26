@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:quark/controllers/chat_channel_keys_controller.dart';
 import 'package:quark/controllers/chat_keys_controller.dart';
+import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
 import 'package:quark/models/chat_poll.dart';
@@ -61,6 +62,9 @@ typedef UploadChatAttachmentFn =
 /// - Each message carries the summary of its side conversation, if it has
 ///   one (#4346), and `chat_branch_changed` replaces a loaded message's as a
 ///   reply is posted or deleted, whether or not that conversation is open.
+///   Its unread count is this account's (#4349): a reply someone else posts
+///   raises it, one this account posts involves it, and a branch's
+///   `chat_read_marker_changed` sets it.
 /// - [sendPoll] posts a poll (#3894): its question in the encrypted text,
 ///   its settings beside it for the Quark to enforce. [answerPoll] encrypts
 ///   this account's answer, padded so every answer is one size, and
@@ -892,6 +896,20 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     return (ciphertext, version);
   }
 
+  /// Replaces loaded message [rootId]'s side-conversation summary, or an
+  /// empty one, with what [update] makes of it. A message not loaded is left
+  /// for paging to bring.
+  void _updateBranch(int? rootId, ChatBranch Function(ChatBranch) update) {
+    final held = _messages[rootId];
+    if (held == null) return;
+    final branch = held.message.branch ?? const ChatBranch(replyCount: 0);
+    _messages[held.message.id] = _reentry(
+      held,
+      held.message.copyWith(branch: update(branch)),
+    );
+    notifyListeners();
+  }
+
   /// Puts [edited] over the message it replaces, opened again, keeping the
   /// reactions, poll and branch held for it: an edit carries none of them. A
   /// message not loaded here is left for paging to bring.
@@ -1310,10 +1328,22 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       case 'chat_message_created':
         // A side conversation's reply lands only in its own (#4345), and
         // the channel's own messages in no side conversation.
-        if ((data['rootId'] as num?)?.toInt() != rootId) return;
         final message = data['message'];
         if (message is! Map<String, dynamic>) return;
         final created = ChatMessage.fromJson(message);
+        final replyTo = (data['rootId'] as num?)?.toInt();
+        if (replyTo != rootId) {
+          // A reply to a loaded root is unread to this account unless it
+          // wrote it, which involves it in the branch (#4349).
+          final mine = created.authorId == _currentUserId();
+          _updateBranch(
+            replyTo,
+            (b) => mine
+                ? b.copyWith(involved: true)
+                : b.copyWith(unreadCount: b.unreadCount + 1),
+          );
+          return;
+        }
         _put(created);
         _typing.remove(created.authorId)?.cancel();
         notifyListeners();
@@ -1346,14 +1376,24 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
         );
       case 'chat_branch_changed':
         // A reply was posted or deleted in a loaded message's side
-        // conversation (#4346); one not loaded is left for paging to bring.
-        final held = _messages[(data['messageId'] as num?)?.toInt()];
-        if (held == null) return;
-        _messages[held.message.id] = _reentry(
-          held,
-          held.message.copyWith(branch: ChatBranch.fromJson(data)),
+        // conversation (#4346). The event is everyone's, so what this
+        // account has read there is kept.
+        final changed = ChatBranch.fromJson(data);
+        _updateBranch(
+          (data['messageId'] as num?)?.toInt(),
+          (b) => b.copyWith(
+            replyCount: changed.replyCount,
+            lastReplyAt: changed.lastReplyAt,
+          ),
         );
-        notifyListeners();
+      case 'chat_read_marker_changed':
+        // This account read a loaded message's side conversation (#4349).
+        final marker = ChatReadMarker.fromJson(data.cast<String, dynamic>());
+        if (marker.rootId == null) return;
+        _updateBranch(
+          marker.rootId,
+          (b) => b.copyWith(unreadCount: marker.unreadCount),
+        );
       case 'chat_poll_answer_changed':
         final messageId = (data['messageId'] as num?)?.toInt();
         final answer = data['answer'];

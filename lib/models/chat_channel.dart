@@ -15,6 +15,8 @@ class ChatChannel {
     this.permissions = const {},
     this.createdBy,
     this.unreadCount = 0,
+    this.branchUnreadCount = 0,
+    this.otherBranchUnreadCount = 0,
     this.lastReadMessageId = 0,
     this.kind = channelKind,
     this.members = const [],
@@ -58,6 +60,16 @@ class ChatChannel {
   /// marker, deleted ones left out (#2424). Zero on a channel the caller
   /// doesn't read.
   final int unreadCount;
+
+  /// How many side-conversation replies here the caller has not read, in
+  /// branches they wrote the root of or replied in (#4349). They count
+  /// toward the channel's badge.
+  final int branchUnreadCount;
+
+  /// The same count in every other branch here (#4349): it counts toward
+  /// nothing but the replies that mention the caller, which only this device
+  /// can find.
+  final int otherBranchUnreadCount;
 
   /// The caller's read marker here (#3543); 0 before the first read and on a
   /// channel the caller doesn't read.
@@ -121,6 +133,9 @@ class ChatChannel {
     permissions: chatPermissionsFromJson(json['permissions']),
     createdBy: (json['createdBy'] as num?)?.toInt(),
     unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
+    branchUnreadCount: (json['branchUnreadCount'] as num?)?.toInt() ?? 0,
+    otherBranchUnreadCount:
+        (json['otherBranchUnreadCount'] as num?)?.toInt() ?? 0,
     lastReadMessageId: (json['lastReadMessageId'] as num?)?.toInt() ?? 0,
     kind: json['kind'] as String? ?? channelKind,
     forked: json['forked'] as bool? ?? false,
@@ -135,28 +150,36 @@ class ChatChannel {
 }
 
 /// Where the signed-in account's read marker stands in one channel (#2424),
-/// as `PUT /api/v0/chat/channels/:id/read` answers and a
-/// `chat_read_marker_changed` event carries.
+/// or in one side conversation (#4349), as `PUT
+/// /api/v0/chat/channels/:id/read` or `PUT /api/v0/chat/messages/:id/read`
+/// answers and a `chat_read_marker_changed` event carries.
 class ChatReadMarker {
   /// Builds a marker explicitly; tests use it.
   const ChatReadMarker({
     required this.channelId,
     required this.lastReadMessageId,
     required this.unreadCount,
+    this.rootId,
   });
 
   /// The channel the marker is in.
   final int channelId;
 
+  /// The root of the side conversation the marker is in; null for the
+  /// channel's own.
+  final int? rootId;
+
   /// The newest message the account has read there.
   final int lastReadMessageId;
 
-  /// How many messages from other people come after it.
+  /// How many messages from other people come after it, in the channel or
+  /// the side conversation.
   final int unreadCount;
 
   /// Reads one marker.
   factory ChatReadMarker.fromJson(Map<String, dynamic> json) => ChatReadMarker(
     channelId: (json['channelId'] as num).toInt(),
+    rootId: (json['rootId'] as num?)?.toInt(),
     lastReadMessageId: (json['lastReadMessageId'] as num?)?.toInt() ?? 0,
     unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
   );
