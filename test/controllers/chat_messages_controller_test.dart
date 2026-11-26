@@ -94,6 +94,9 @@ class _FakeQuark {
   /// How many times a client said it was typing.
   var typings = 0;
 
+  /// How many times a client read a side conversation's replies.
+  var replyFetches = 0;
+
   int _nextId = 1;
 
   ChatMessagesController client(
@@ -101,17 +104,21 @@ class _FakeQuark {
     ChatCrypto crypto, {
     int userId = 2,
     bool selfFromKeys = false,
+    int? rootId,
     SaveChatAttachmentFn? saveAttachmentFile,
     UploadChatAttachmentFn? uploadAttachmentFile,
     Future<Uint8List?> Function(String name, Uint8List bytes)?
     renderVideoThumbnail,
   }) => ChatMessagesController(
     channelId: _channel,
+    rootId: rootId,
     keys: keys,
     crypto: () => crypto,
     fetchMessages: (channelId, {before, after, limit}) async {
       final n = limit ?? 50;
-      final inChannel = messages.where((m) => m.channelId == channelId);
+      final inChannel = messages.where(
+        (m) => m.channelId == channelId && m.rootId == null,
+      );
       ChatMessage withReactions(ChatMessage m) => m.copyWith(
         reactions: reactions[m.id] ?? const [],
         poll: polls[m.id]?.copyWith(answers: visibleAnswers(m.id, userId)),
@@ -129,6 +136,16 @@ class _FakeQuark {
           .toList();
       return older.sublist(older.length > n ? older.length - n : 0);
     },
+    fetchReplies: (rootId, {before, after, limit}) async {
+      replyFetches++;
+      final replies = messages.where((m) => m.rootId == rootId);
+      return [
+        for (final m in replies)
+          if ((after == null || m.id > after) &&
+              (before == null || m.id < before))
+            m,
+      ];
+    },
     postMessage:
         (
           channelId,
@@ -137,11 +154,18 @@ class _FakeQuark {
           clientMessageId,
           attachmentIds,
           poll,
+          rootId,
         }) async {
           lastAttachmentIds = attachmentIds;
           final stored = byClientId[clientMessageId];
           if (stored != null) return stored;
-          final message = post(channelId, keyVersion, ciphertext, poll: poll);
+          final message = post(
+            channelId,
+            keyVersion,
+            ciphertext,
+            poll: poll,
+            rootId: rootId,
+          );
           if (clientMessageId != null) byClientId[clientMessageId] = message;
           if (loseResponse) {
             loseResponse = false;
@@ -369,16 +393,19 @@ class _FakeQuark {
     int keyVersion,
     Uint8List ciphertext, {
     ChatPoll? poll,
+    int? rootId,
+    int authorId = 2,
   }) {
     final id = _nextId++;
     final message = ChatMessage(
       id: id,
       channelId: channelId,
-      authorId: 2,
+      authorId: authorId,
       keyVersion: keyVersion,
       ciphertext: ciphertext,
       createdAt: _epoch.add(Duration(minutes: id * 2)),
       poll: poll,
+      rootId: rootId,
     );
     if (poll != null) polls[id] = poll;
     messages.add(message);
@@ -391,10 +418,12 @@ class _FakeQuark {
             jsonEncode({
               'channelId': channelId,
               'messageId': id,
+              'rootId': ?rootId,
               'message': {
                 'id': id,
                 'channelId': channelId,
-                'authorId': 2,
+                'authorId': authorId,
+                'rootId': ?rootId,
                 'keyVersion': keyVersion,
                 'ciphertext': base64Encode(ciphertext),
                 'createdAt': message.createdAt.toIso8601String(),
@@ -1444,6 +1473,20 @@ void main() {
           crypto.messageAad(channelId: _channel, keyVersion: 1, rootId: rootId);
       quark.messages.add(
         ChatMessage(
+          id: 4,
+          channelId: _channel,
+          authorId: 2,
+          keyVersion: 1,
+          ciphertext: crypto.encrypt(
+            Uint8List.fromList(utf8.encode('root')),
+            key,
+            additionalData: aad(),
+          ),
+          createdAt: _epoch,
+        ),
+      );
+      quark.messages.add(
+        ChatMessage(
           id: 5,
           channelId: _channel,
           authorId: 2,
@@ -1457,7 +1500,13 @@ void main() {
           rootId: 4,
         ),
       );
-      final author = quark.client(_FakeKeys()..grant(1, key), crypto);
+      // The channel's list leaves replies out: they open in their root's
+      // side conversation.
+      final author = quark.client(
+        _FakeKeys()..grant(1, key),
+        crypto,
+        rootId: 4,
+      );
       await author.open();
       expect(texts(author), ['first']);
 
@@ -1465,7 +1514,7 @@ void main() {
       await pumpEventQueue();
       expect(texts(author), ['second']);
 
-      final stored = quark.messages.single;
+      final stored = quark.messages.last;
       expect(stored.rootId, 4);
       expect(
         utf8.decode(
@@ -1482,6 +1531,146 @@ void main() {
         throwsA(anything),
       );
       author.dispose();
+    });
+  });
+
+  group('a side conversation (#4348)', () {
+    Uint8List seal(SecureKey key, String text, {int? rootId}) => crypto.encrypt(
+      Uint8List.fromList(utf8.encode(text)),
+      key,
+      additionalData: crypto.messageAad(
+        channelId: _channel,
+        keyVersion: 1,
+        rootId: rootId,
+      ),
+    );
+
+    test('a reply posts with its root and lands in the side conversation, '
+        'not the channel', () async {
+      final key = crypto.newChannelKey();
+      final channel = quark.client(_FakeKeys()..grant(1, key), crypto);
+      await channel.open();
+      final root = quark.post(_channel, 1, seal(key, 'the sink'));
+      await pumpEventQueue();
+      final branch = quark.client(
+        _FakeKeys()..grant(1, key),
+        crypto,
+        rootId: root.id,
+      );
+      await branch.open();
+      expect(branch.root?.text, 'the sink');
+      expect(branch.isRootMissing, isFalse);
+
+      await branch.send('on it', clientMessageId: 'c1');
+      await pumpEventQueue();
+
+      final stored = quark.messages.last;
+      expect(stored.rootId, root.id);
+      expect(
+        utf8.decode(
+          crypto.decrypt(
+            stored.ciphertext!,
+            key,
+            additionalData: crypto.messageAad(
+              channelId: _channel,
+              keyVersion: 1,
+              rootId: root.id,
+            ),
+          ),
+        ),
+        'on it',
+      );
+      expect(texts(branch), ['on it']);
+      expect(texts(channel), ['the sink']);
+      channel.dispose();
+      branch.dispose();
+    });
+
+    test('a live reply from someone else lands only in its own side '
+        'conversation', () async {
+      final key = crypto.newChannelKey();
+      final root = quark.post(_channel, 1, seal(key, 'the sink'));
+      final other = quark.post(_channel, 1, seal(key, 'dinner'));
+      final channel = quark.client(_FakeKeys()..grant(1, key), crypto);
+      final branch = quark.client(
+        _FakeKeys()..grant(1, key),
+        crypto,
+        rootId: root.id,
+      );
+      await channel.open();
+      await branch.open();
+
+      quark.post(
+        _channel,
+        1,
+        seal(key, 'plumber at 3', rootId: root.id),
+        rootId: root.id,
+        authorId: 3,
+      );
+      quark.post(
+        _channel,
+        1,
+        seal(key, 'pasta', rootId: other.id),
+        rootId: other.id,
+        authorId: 3,
+      );
+      await pumpEventQueue();
+
+      expect(texts(branch), ['plumber at 3']);
+      expect(texts(channel), ['the sink', 'dinner']);
+      channel.dispose();
+      branch.dispose();
+    });
+
+    test('reconnecting reads the replies again', () async {
+      final key = crypto.newChannelKey();
+      final root = quark.post(_channel, 1, seal(key, 'the sink'));
+      final branch = quark.client(
+        _FakeKeys()..grant(1, key),
+        crypto,
+        rootId: root.id,
+      );
+      await branch.open();
+      final before = quark.replyFetches;
+
+      quark.drop = true;
+      quark.post(
+        _channel,
+        1,
+        seal(key, 'missed', rootId: root.id),
+        rootId: root.id,
+        authorId: 3,
+      );
+      await pumpEventQueue();
+      expect(texts(branch), isEmpty);
+
+      quark.reconnects.add(null);
+      await pumpEventQueue();
+      expect(quark.replyFetches, greaterThan(before));
+      expect(texts(branch), ['missed']);
+      branch.dispose();
+    });
+
+    test('a root that is no channel message here is missing', () async {
+      final key = crypto.newChannelKey();
+      final root = quark.post(_channel, 1, seal(key, 'the sink'));
+      final reply = quark.post(
+        _channel,
+        1,
+        seal(key, 'a reply', rootId: root.id),
+        rootId: root.id,
+      );
+      for (final id in [reply.id, 999]) {
+        final branch = quark.client(
+          _FakeKeys()..grant(1, key),
+          crypto,
+          rootId: id,
+        );
+        await branch.open();
+        expect(branch.isRootMissing, isTrue, reason: '$id');
+        expect(branch.entries, isEmpty);
+        branch.dispose();
+      }
     });
   });
 }

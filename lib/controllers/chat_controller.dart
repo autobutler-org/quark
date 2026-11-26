@@ -71,6 +71,7 @@ class ChatPendingSend {
     required this.sentAt,
     required this.clientMessageId,
     this.replyTo,
+    this.rootId,
     this.error,
   });
 
@@ -94,6 +95,10 @@ class ChatPendingSend {
   /// The id of the message it quotes (#2426), or null.
   final int? replyTo;
 
+  /// The message whose side conversation it is a reply in (#4348), or null
+  /// for the channel.
+  final int? rootId;
+
   /// Why the last attempt failed, for `Errors.message`; null while sending.
   final Object? error;
 
@@ -108,6 +113,7 @@ class ChatPendingSend {
     sentAt: sentAt,
     clientMessageId: clientMessageId,
     replyTo: replyTo,
+    rootId: rootId,
     error: error,
   );
 }
@@ -171,6 +177,14 @@ class ChatPendingSend {
 ///   pictures are never fetched for a pseudonym, and nobody is messaged
 ///   from the member list. A privileged viewer sees each alias's account and
 ///   may rename it with [setAlias].
+/// - [select] also takes the side conversation the URL names (#4348). The
+///   open channel gets at most one more [ChatMessagesController], scoped to
+///   that root, disposed when the branch closes or the channel changes.
+///   One whose root turns out not to be a channel message there closes, and
+///   [branchId] drops it, so the page drops it from the URL. Its replies are
+///   [branchItems], [sendInBranch] posts one through the same pending sends
+///   as the channel, and editing, deleting and reacting go to whichever
+///   timeline holds the message.
 ///
 /// Every collaborator has a real default; tests pass fakes.
 class ChatController extends ChangeNotifier with SafeNotifier {
@@ -197,6 +211,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     void Function(List<ChatChannel> channels)? rememberChannels,
     bool Function()? isAdmin,
     ChatMessagesController Function(int channelId)? messagesFor,
+    ChatMessagesController Function(int channelId, int rootId)? branchFor,
     bool Function()? isUnlocked,
     Future<void> Function(String password)? unlock,
     bool Function(int channelId)? isWaitingForKey,
@@ -242,6 +257,10 @@ class ChatController extends ChangeNotifier with SafeNotifier {
        _messagesFor =
            messagesFor ??
            ((channelId) => ChatMessagesController(channelId: channelId)),
+       _branchFor =
+           branchFor ??
+           ((channelId, rootId) =>
+               ChatMessagesController(channelId: channelId, rootId: rootId)),
        _isUnlocked =
            isUnlocked ?? (() => ChatKeysController.instance.isUnlocked),
        _unlock = unlock ?? ChatKeysController.instance.unlock,
@@ -311,6 +330,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   final void Function(List<ChatChannel> channels) _rememberChannels;
   final bool Function() _isAdmin;
   final ChatMessagesController Function(int channelId) _messagesFor;
+  final ChatMessagesController Function(int channelId, int rootId) _branchFor;
   final bool Function() _isUnlocked;
   final Future<void> Function(String password) _unlock;
   final bool Function(int channelId) _isWaitingForKey;
@@ -342,6 +362,9 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   bool _isChannelMissing = false;
   bool _channelsLoaded = false;
   ChatMessagesController? _messages;
+  int? _requestedBranch;
+  ChatMessagesController? _branch;
+  bool _isLoadingOlderInBranch = false;
   bool _isLoadingOlder = false;
   bool _isAtBottom = false;
   bool _isSearching = false;
@@ -408,8 +431,68 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   /// still going out. None of them are in [messageItems].
   List<ChatPendingSend> get outboundSends => [
     for (final p in _pending)
-      if (p.channelId == _selected?.id) p,
+      if (p.channelId == _selected?.id && p.rootId == null) p,
   ];
+
+  /// The open side conversation's sends the Quark has not stored, as
+  /// [outboundSends] is the channel's.
+  List<ChatPendingSend> get branchOutboundSends => [
+    for (final p in _pending)
+      if (p.rootId != null && p.rootId == _branch?.rootId) p,
+  ];
+
+  /// The side conversation the URL names (#4348), as a message id: the one
+  /// [select] asked for until it proves not to be a channel message here.
+  String? get branchId => _requestedBranch?.toString();
+
+  /// Whether a side conversation is open beside the channel.
+  bool get isBranchOpen => _branch != null;
+
+  /// The message the open side conversation branches from, as the channel
+  /// draws it: from the channel's loaded timeline, so it follows edits and
+  /// deletions, or as the side conversation read it. Null while it loads,
+  /// and when none is open.
+  ChatMessageItem? get branchParent {
+    final branch = _branch;
+    final rootId = branch?.rootId;
+    if (branch == null || rootId == null) return null;
+    final held =
+        _messages?.entries
+            .whereType<ChatTimelineMessage>()
+            .where((e) => e.message.id == rootId)
+            .firstOrNull ??
+        branch.root;
+    return held == null
+        ? null
+        : itemFor(held, nameOf, me: _selfId, now: _now());
+  }
+
+  /// The open side conversation's replies for `QuarkMessageList`, newest
+  /// first.
+  List<ChatMessageItem> get branchItems {
+    final me = _selfId;
+    return [
+      for (final entry in (_branch?.entries ?? const []).reversed)
+        itemFor(entry, nameOf, me: me),
+    ];
+  }
+
+  /// Whether the open side conversation's replies are loading, first page
+  /// or older.
+  bool get isLoadingBranch =>
+      (_branch?.isLoading ?? false) || _isLoadingOlderInBranch;
+
+  /// Why the open side conversation's replies didn't load, for
+  /// `Errors.message`.
+  Object? get branchError => _branch?.error;
+
+  /// Whether replies older than those loaded may exist.
+  bool get hasOlderInBranch => _branch?.hasOlder ?? false;
+
+  /// Whether the message being edited is a reply in the side conversation,
+  /// whose composer then holds it, rather than the channel's.
+  bool get isEditingInBranch => _editingInBranch;
+  bool _editingInBranch = false;
 
   /// Whether chat needs the password before anything can be read: on web
   /// after a reload.
@@ -811,9 +894,12 @@ class ChatController extends ChangeNotifier with SafeNotifier {
 
   /// Opens channel [channelId] from the URL: an id, [defaultChannelSlug], or
   /// null for the default channel. One that isn't listed opens nothing and
-  /// sets [isChannelMissing].
-  void select(String? channelId) {
+  /// sets [isChannelMissing]. [branchId] is the side conversation the URL
+  /// names, opened beside it (#4348); null, or one that isn't a message id,
+  /// opens none.
+  void select(String? channelId, {String? branchId}) {
     _requested = channelId;
+    _requestedBranch = int.tryParse(branchId ?? '');
     _applySelection();
     notifyListeners();
   }
@@ -823,9 +909,11 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   Future<void> refresh() async {
     await _loadChannels();
     final messages = _messages;
+    final branch = _branch;
     await Future.wait([
       _loadMembers(),
       if (messages != null && !isLocked) messages.catchUp(),
+      if (branch != null && !isLocked) branch.catchUp(),
     ]);
   }
 
@@ -941,6 +1029,45 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     _pending = [..._pending, pending];
     notifyListeners();
     await _deliver(pending);
+  }
+
+  /// Sends [text] as a reply in the open side conversation (#4348), the first
+  /// of which starts it, through the same pending sends as [send].
+  Future<void> sendInBranch(String text) async {
+    final channel = _selected;
+    final rootId = _branch?.rootId;
+    if (channel == null || rootId == null) return;
+    final pending = ChatPendingSend(
+      id: 'pending_${_nextPending++}',
+      channelId: channel.id,
+      text: text,
+      sentAt: _now(),
+      clientMessageId: _newClientMessageId(),
+      rootId: rootId,
+    );
+    _pending = [..._pending, pending];
+    notifyListeners();
+    await _deliver(pending);
+  }
+
+  /// Loads the replies before the oldest shown in the open side
+  /// conversation, or the first page again when that failed. Repeats while
+  /// one is out are ignored.
+  Future<void> loadOlderInBranch() async {
+    final branch = _branch;
+    if (branch == null || _isLoadingOlderInBranch) return;
+    _isLoadingOlderInBranch = true;
+    notifyListeners();
+    try {
+      if (branch.error != null && branch.entries.isEmpty) {
+        await _loadBranch(branch);
+      } else {
+        await branch.loadOlder();
+      }
+    } finally {
+      _isLoadingOlderInBranch = false;
+      notifyListeners();
+    }
   }
 
   /// Sends one file to the open channel, with [caption] as its text.
@@ -1084,15 +1211,17 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     notifyListeners();
   }
 
-  /// Text message [messageId] from [messageItems] that opened, or null.
-  ChatMessageItem? _textMessage(String messageId) => messageItems
-      .where(
-        (m) =>
-            m.id == messageId &&
-            m.kind == ChatMessageKind.text &&
-            !m.isUnverified,
-      )
-      .firstOrNull;
+  /// Text message [messageId] from [messageItems] or [branchItems] that
+  /// opened, or null.
+  ChatMessageItem? _textMessage(String messageId) =>
+      [...messageItems, ...branchItems]
+          .where(
+            (m) =>
+                m.id == messageId &&
+                m.kind == ChatMessageKind.text &&
+                !m.isUnverified,
+          )
+          .firstOrNull;
 
   /// The message being edited in the composer, an id from [messageItems],
   /// or null (#2426).
@@ -1112,6 +1241,8 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     final message = _textMessage(messageId);
     _replyingTo = null;
     _editing = message?.authorId == currentUserKey ? message : null;
+    _editingInBranch =
+        _editing != null && (_branch?.holds(int.parse(messageId)) ?? false);
     _editText = _editing?.body ?? '';
     notifyListeners();
   }
@@ -1160,8 +1291,11 @@ class ChatController extends ChangeNotifier with SafeNotifier {
     String messageId,
     Future<void> Function(ChatMessagesController messages, int id) action,
   ) async {
-    final messages = _messages;
     final id = int.tryParse(messageId);
+    final branch = _branch;
+    final messages = id != null && branch != null && branch.holds(id)
+        ? branch
+        : _messages;
     if (messages == null || id == null) return null;
     try {
       await action(messages, id);
@@ -1630,7 +1764,9 @@ class ChatController extends ChangeNotifier with SafeNotifier {
 
   @override
   void dispose() {
-    _pending.where((p) => p.failed).forEach(_keepAsDraft);
+    // ponytail: a failed side conversation reply is dropped here; it has no
+    // draft to go back into until branches keep one.
+    _pending.where((p) => p.failed && p.rootId == null).forEach(_keepAsDraft);
     _events.cancel();
     _keyChanges.removeListener(_onKeysChanged);
     _unread.removeListener(notifyListeners);
@@ -1730,6 +1866,46 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   /// channel. A name that matches no listed channel opens nothing, unless it
   /// was the one open, which falls back to the default.
   void _applySelection() {
+    _applyChannel();
+    // A side conversation opens beside a channel whose timeline is open.
+    final channel = _selected;
+    final wanted = channel != null && _messages != null
+        ? _requestedBranch
+        : null;
+    if (wanted == _branch?.rootId) return;
+    _closeBranch();
+    if (channel == null || wanted == null) return;
+    final branch = _branchFor(channel.id, wanted)
+      ..addListener(_onBranchChanged);
+    _branch = branch;
+    if (!isLocked) unawaited(_loadBranch(branch));
+  }
+
+  /// Opens [branch], and closes it, dropping it from [branchId], when its
+  /// root is no channel message here.
+  Future<void> _loadBranch(ChatMessagesController branch) async {
+    await branch.open();
+    if (_branch != branch || !branch.isRootMissing) return;
+    _requestedBranch = null;
+    _closeBranch();
+    notifyListeners();
+  }
+
+  void _closeBranch() {
+    _branch
+      ?..removeListener(_onBranchChanged)
+      ..dispose();
+    _branch = null;
+    _isLoadingOlderInBranch = false;
+    if (_editingInBranch) _editing = null;
+    _editingInBranch = false;
+  }
+
+  void _onBranchChanged() => notifyListeners();
+
+  /// Points [_selected] at the channel [_requested] names; see
+  /// [_applySelection].
+  void _applyChannel() {
     final requested = _requested;
     final named = requested != null && requested != defaultChannelSlug;
     final id = int.tryParse(requested ?? '');
@@ -1774,6 +1950,7 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   }
 
   void _closeMessages() {
+    _closeBranch();
     _messages
       ?..removeListener(_onMessagesChanged)
       ..dispose();
@@ -1813,8 +1990,10 @@ class ChatController extends ChangeNotifier with SafeNotifier {
   }
 
   Future<void> _deliver(ChatPendingSend pending) async {
-    final messages = _messages;
-    if (messages == null || messages.channelId != pending.channelId) {
+    final messages = pending.rootId == null ? _messages : _branch;
+    if (messages == null ||
+        messages.channelId != pending.channelId ||
+        messages.rootId != pending.rootId) {
       // ponytail: a send only goes to the channel on screen; one left behind
       // by switching fails and waits for retry there.
       _replacePending(pending.id, pending.withError(StateError('left')));
@@ -1870,6 +2049,8 @@ class ChatController extends ChangeNotifier with SafeNotifier {
       _unlockError = null;
       final messages = _messages;
       if (messages != null) unawaited(messages.open());
+      final branch = _branch;
+      if (branch != null) unawaited(_loadBranch(branch));
     }
     if (!unlocked) _closeSearch();
     _wasUnlocked = unlocked;

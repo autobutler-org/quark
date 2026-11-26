@@ -2045,4 +2045,258 @@ void main() {
       chat.controller.dispose();
     });
   });
+
+  group('side conversations (#4348)', () {
+    ChatTimelineMessage entry(
+      int id,
+      String text, {
+      int author = 7,
+      int? rootId,
+    }) => ChatTimelineMessage(
+      message: ChatMessage(
+        id: id,
+        channelId: 1,
+        authorId: author,
+        keyVersion: 1,
+        ciphertext: null,
+        createdAt: DateTime.utc(2026, 9, 25, 10, id),
+        rootId: rootId,
+      ),
+      state: ChatMessageState.ready,
+      text: text,
+    );
+
+    Future<FakeChat> open({String? branch = '5'}) async {
+      final chat = FakeChat();
+      chat.entries[1] = [entry(5, 'the sink')];
+      chat.roots[5] = entry(5, 'the sink');
+      chat.replies[5] = [entry(6, 'on it', author: 8, rootId: 5)];
+      chat.controller.select('1', branchId: branch);
+      await chat.controller.refresh();
+      await pumpEventQueue();
+      return chat;
+    }
+
+    test('the URL opens the side conversation beside its channel', () async {
+      final chat = await open();
+      final c = chat.controller;
+
+      expect(c.isBranchOpen, isTrue);
+      expect(c.branchId, '5');
+      expect(chat.branches[5]!.rootId, 5);
+      expect(chat.branches[5]!.opens, 1);
+      expect(c.branchParent?.body, 'the sink');
+      expect(c.branchItems.map((m) => m.body), ['on it']);
+      // The channel's timeline is its own.
+      expect(c.messageItems.map((m) => m.body), ['the sink']);
+      c.dispose();
+      expect(chat.branches[5]!.disposed, isTrue);
+    });
+
+    test('an id that is no readable parent opens the channel alone', () async {
+      for (final id in ['99', 'nope']) {
+        final chat = await open(branch: id);
+        final c = chat.controller;
+        expect(c.selectedChannel?.id, 1, reason: id);
+        expect(c.isBranchOpen, isFalse, reason: id);
+        expect(c.branchId, isNull, reason: id);
+        expect(chat.branches[99]?.disposed ?? true, isTrue, reason: id);
+        c.dispose();
+      }
+    });
+
+    test('a reply goes through the pending sends to the side conversation, '
+        'not the channel', () async {
+      final chat = await open();
+      final c = chat.controller;
+      final branch = chat.branches[5]!;
+      final reply = Completer<void>();
+      branch.onSend = (_) => reply.future;
+
+      final sending = c.sendInBranch('plumber at 3');
+      expect(c.branchOutboundSends.map((p) => p.text), ['plumber at 3']);
+      expect(c.branchOutboundSends.single.rootId, 5);
+      expect(c.branchOutboundSends.single.clientMessageId, isNotEmpty);
+      expect(c.outboundSends, isEmpty);
+      reply.complete();
+      await sending;
+
+      expect(branch.sent, ['plumber at 3']);
+      expect(chat.opened[1]!.sent, isEmpty);
+      expect(c.branchOutboundSends, isEmpty);
+      c.dispose();
+    });
+
+    test('a failed reply waits for retry or discard there', () async {
+      final chat = await open();
+      final c = chat.controller;
+      final branch = chat.branches[5]!;
+      branch.onSend = (_) async => throw Exception('offline');
+
+      await c.sendInBranch('plumber at 3');
+      final failed = c.branchOutboundSends.single;
+      expect(failed.failed, isTrue);
+
+      branch.onSend = null;
+      await c.retry(failed.id);
+      expect(branch.sentClientIds, [
+        failed.clientMessageId,
+        failed.clientMessageId,
+      ]);
+      expect(c.branchOutboundSends, isEmpty);
+      c.dispose();
+    });
+
+    test(
+      'edit, delete and react reach the reply in the side conversation',
+      () async {
+        final chat = await open();
+        final c = chat.controller;
+        chat.branches[5]!.setEntries([entry(6, 'on it', rootId: 5)]);
+
+        c.startEdit('6');
+        expect(c.editingMessageId, '6');
+        expect(c.isEditingInBranch, isTrue);
+        expect(await c.submitEdit('on it now'), isNull);
+        expect(await c.deleteMessage('6'), isNull);
+        expect(await c.toggleReaction('6', '👍'), isNull);
+        // The channel's own message still goes to the channel.
+        expect(await c.deleteMessage('5'), isNull);
+
+        expect(chat.branches[5]!.edited, ['6 on it now']);
+        expect(chat.branches[5]!.deleted, [6]);
+        expect(chat.branches[5]!.reacted, ['6 👍']);
+        expect(chat.opened[1]!.deleted, [5]);
+        c.dispose();
+      },
+    );
+
+    test('closing it, or changing the channel, disposes it', () async {
+      final chat = await open();
+      final c = chat.controller;
+      final first = chat.branches[5]!;
+
+      c.select('1');
+      expect(c.isBranchOpen, isFalse);
+      expect(first.disposed, isTrue);
+
+      c.select('1', branchId: '5');
+      await pumpEventQueue();
+      final second = chat.branches[5]!;
+      expect(c.isBranchOpen, isTrue);
+      c.select('2', branchId: '5');
+      await pumpEventQueue();
+      expect(second.disposed, isTrue);
+      c.dispose();
+    });
+
+    test('refreshing catches the side conversation up too', () async {
+      final chat = await open();
+      final branch = chat.branches[5]!;
+      final before = branch.catchUps;
+      await chat.controller.refresh();
+      expect(branch.catchUps, before + 1);
+      chat.controller.dispose();
+    });
+
+    test('in an anonymous channel the reply and its root are marked by '
+        'the pseudonym (#2949)', () async {
+      final chat = FakeChat(
+        channels: [
+          ...fakeChannels,
+          const ChatChannel(
+            id: 5,
+            name: 'whispers',
+            anonymous: true,
+            selfId: -70,
+            permissions: memberSet,
+          ),
+        ],
+        members: const [
+          ChatMember(
+            userId: -70,
+            name: 'Anonymous 1',
+            pseudonymId: -70,
+            alias: 'Anonymous 1',
+            permissions: memberSet,
+          ),
+        ],
+      );
+      ChatOpenReaction mine(int messageId) => ChatOpenReaction(
+        reaction: ChatReaction(
+          id: messageId,
+          messageId: messageId,
+          userId: -70,
+          keyVersion: 1,
+          ciphertext: Uint8List(0),
+          createdAt: DateTime.utc(2026, 9, 25),
+        ),
+        emoji: '👍',
+      );
+      final root = ChatTimelineMessage(
+        message: ChatMessage(
+          id: 5,
+          channelId: 5,
+          authorId: -70,
+          keyVersion: 1,
+          ciphertext: null,
+          createdAt: DateTime.utc(2026, 9, 25, 10, 5),
+        ),
+        state: ChatMessageState.ready,
+        text: 'the sink',
+        reactions: [mine(5)],
+      );
+      chat.roots[5] = root;
+      chat.replies[5] = [
+        ChatTimelineMessage(
+          message: ChatMessage(
+            id: 6,
+            channelId: 5,
+            authorId: -70,
+            keyVersion: 1,
+            ciphertext: null,
+            createdAt: DateTime.utc(2026, 9, 25, 10, 6),
+            rootId: 5,
+          ),
+          state: ChatMessageState.ready,
+          text: 'on it',
+          reactions: [mine(6)],
+        ),
+      ];
+      chat.controller.select('5', branchId: '5');
+      await chat.controller.refresh();
+      await pumpEventQueue();
+      final c = chat.controller;
+
+      expect(c.branchParent?.reactions.single.reactedByMe, isTrue);
+      expect(c.branchItems.single.authorName, 'Anonymous 1');
+      expect(c.branchItems.single.reactions.single.reactedByMe, isTrue);
+      c.dispose();
+    });
+
+    test('works in a direct message', () async {
+      final chat = FakeChat(
+        channels: [
+          ...fakeChannels,
+          ChatChannel(
+            id: 3,
+            name: '',
+            isPrivate: true,
+            kind: ChatChannel.directKind,
+            permissions: memberSet,
+          ),
+        ],
+      );
+      chat.roots[9] = entry(9, 'hi');
+      chat.controller.select('3', branchId: '9');
+      await chat.controller.refresh();
+      await pumpEventQueue();
+
+      expect(chat.branches[9]!.channelId, 3);
+      expect(chat.controller.isBranchOpen, isTrue);
+      await chat.controller.sendInBranch('hello');
+      expect(chat.branches[9]!.sent, ['hello']);
+      chat.controller.dispose();
+    });
+  });
 }

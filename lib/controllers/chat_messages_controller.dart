@@ -44,7 +44,7 @@ typedef UploadChatAttachmentFn =
 ///   events socket: `chat_message_created` and `chat_message_deleted` for
 ///   messages, `chat_channel_changed` for events (a new one, or one its actor
 ///   just signed). A `chat_message_created` carrying a `rootId` is a side
-///   conversation's reply (#4345) and stays out of the timeline.
+///   conversation's reply (#4345) and stays out of the channel's timeline.
 /// - The socket drops events when a client falls behind and has no replay.
 ///   [open] fetches `?after=` the newest id held, and [catchUp], on every
 ///   reconnect and refresh, reads the whole loaded window again from the
@@ -78,6 +78,12 @@ typedef UploadChatAttachmentFn =
 /// - In an anonymous channel (#2949) "this account" is its pseudonym, the
 ///   keys controller's `selfIdIn`: what its reactions and named answers are
 ///   bound to, and what marks a message, reaction or answer as its own.
+/// - With a [rootId], the controller is that message's side conversation
+///   (#4348) rather than the channel: it pages
+///   `GET /chat/messages/:id/replies`, posts and seals each reply with the
+///   root, follows only the live replies that name it, and has no system
+///   lines. [open] reads the root itself first, through the channel's own
+///   list, and sets [isRootMissing] when it isn't a channel message there.
 ///
 /// Plaintext stays in memory, and [dispose] drops it, except when an
 /// attachment is saved. That writes the file to a temporary file and deletes
@@ -89,6 +95,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   /// default; tests pass fakes.
   ChatMessagesController({
     required this.channelId,
+    this.rootId,
     ChatChannelKeysController? keys,
     ChatCrypto? Function()? crypto,
     Future<List<ChatMessage>> Function(
@@ -98,6 +105,13 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       int? limit,
     })?
     fetchMessages,
+    Future<List<ChatMessage>> Function(
+      int rootId, {
+      int? before,
+      int? after,
+      int? limit,
+    })?
+    fetchReplies,
     Future<ChatMessage> Function(
       int channelId,
       int keyVersion,
@@ -105,6 +119,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       String? clientMessageId,
       List<String>? attachmentIds,
       ChatPoll? poll,
+      int? rootId,
     })?
     postMessage,
     Future<ChatMessage> Function(
@@ -149,6 +164,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   }) : _keys = keys ?? ChatChannelKeysController.instance,
        _crypto = crypto ?? (() => ChatKeysController.instance.crypto),
        _fetchMessages = fetchMessages ?? ChatMessagesService.fetchMessages,
+       _fetchReplies = fetchReplies ?? ChatMessagesService.fetchReplies,
        _postMessage = postMessage ?? ChatMessagesService.postMessage,
        _editMessage = editMessage ?? ChatMessagesService.editMessage,
        _deleteMessage = deleteMessage ?? ChatMessagesService.deleteMessage,
@@ -177,6 +193,10 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   /// The channel this timeline is for.
   final int channelId;
 
+  /// The channel message whose side conversation this is (#4348), or null
+  /// for the channel itself.
+  final int? rootId;
+
   /// Messages per page of history.
   static const pageSize = 50;
 
@@ -192,6 +212,13 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     int? limit,
   })
   _fetchMessages;
+  final Future<List<ChatMessage>> Function(
+    int rootId, {
+    int? before,
+    int? after,
+    int? limit,
+  })
+  _fetchReplies;
   final Future<ChatMessage> Function(
     int channelId,
     int keyVersion,
@@ -199,6 +226,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     String? clientMessageId,
     List<String>? attachmentIds,
     ChatPoll? poll,
+    int? rootId,
   })
   _postMessage;
   final Future<ChatMessage> Function(
@@ -323,6 +351,28 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   /// none. What a read marker moves to (#2424).
   int? get newestMessageId => _messages.lastKey();
 
+  /// Whether message [messageId] is in this timeline.
+  bool holds(int messageId) => _messages.containsKey(messageId);
+
+  /// A side conversation's root, decrypted, once [open] has read it; null
+  /// for the channel, and before then.
+  // ponytail: read once; an edit of a root the channel hasn't loaded shows
+  // after the panel opens again.
+  ChatTimelineMessage? root;
+
+  /// Whether [open] found [rootId] is no channel message in [channelId]:
+  /// not there, a reply itself, or another channel's.
+  bool isRootMissing = false;
+
+  /// A page of this timeline: the channel's messages, or the replies to
+  /// [rootId].
+  Future<List<ChatMessage>> _page({int? before, int? after, int? limit}) {
+    final rootId = this.rootId;
+    return rootId == null
+        ? _fetchMessages(channelId, before: before, after: after, limit: limit)
+        : _fetchReplies(rootId, before: before, after: after, limit: limit);
+  }
+
   /// The timeline, oldest first: messages and system events merged by time,
   /// a system event first when both share a second. Events older than the
   /// loaded history are left out until [loadOlder] reaches them.
@@ -359,7 +409,21 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     notifyListeners();
     try {
       await _keys.ensureKeys(channelId);
-      final page = await _fetchMessages(channelId, limit: pageSize);
+      final rootId = this.rootId;
+      if (rootId != null) {
+        // The channel's list holds only channel messages, deleted ones too:
+        // the one just before rootId + 1 is the root, when it is one here.
+        final found = await _fetchMessages(
+          channelId,
+          before: rootId + 1,
+          limit: 1,
+        );
+        final held = found.firstOrNull;
+        isRootMissing = held?.id != rootId;
+        if (isRootMissing) return;
+        root = _open(held!);
+      }
+      final page = await _page(limit: pageSize);
       hasOlder = page.length == pageSize;
       page.forEach(_put);
       await _sync(() => _messages.isEmpty ? 0 : _messages.lastKey()!);
@@ -384,11 +448,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   Future<void> loadOlder() async {
     if (!hasOlder || _messages.isEmpty) return;
     try {
-      final page = await _fetchMessages(
-        channelId,
-        before: _messages.firstKey(),
-        limit: pageSize,
-      );
+      final page = await _page(before: _messages.firstKey(), limit: pageSize);
       hasOlder = page.length == pageSize;
       page.forEach(_put);
       error = null;
@@ -434,13 +494,18 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     String? clientMessageId,
     ChatPoll? poll,
   }) async {
-    final (ciphertext, version) = await _encrypt(plaintext, tooLong);
+    final (ciphertext, version) = await _encrypt(
+      plaintext,
+      tooLong,
+      rootId: rootId,
+    );
     final stored = await _postMessage(
       channelId,
       version,
       ciphertext,
       clientMessageId: clientMessageId,
       poll: poll,
+      rootId: rootId,
     );
     _put(stored);
     notifyListeners();
@@ -918,8 +983,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     try {
       var after = from;
       while (true) {
-        final page = await _fetchMessages(
-          channelId,
+        final page = await _page(
           after: after,
           limit: ChatMessagesService.maxPage,
         );
@@ -940,6 +1004,8 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   // ponytail: whole list each time; page after the newest verified event if
   // a channel's history of joins and rotations grows long.
   Future<void> _reloadEvents() async {
+    // A side conversation has no system lines: they are the channel's.
+    if (rootId != null) return;
     final events = <ChatChannelEvent>[];
     while (true) {
       final page = await _fetchEvents(
@@ -1233,8 +1299,9 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     }
     switch (event.kind) {
       case 'chat_message_created':
-        // A side conversation's reply never lands in the channel (#4345).
-        if (data['rootId'] != null) return;
+        // A side conversation's reply lands only in its own (#4345), and
+        // the channel's own messages in no side conversation.
+        if ((data['rootId'] as num?)?.toInt() != rootId) return;
         final message = data['message'];
         if (message is! Map<String, dynamic>) return;
         final created = ChatMessage.fromJson(message);
