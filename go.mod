@@ -11,7 +11,7 @@ require (
 	github.com/KononK/resize v0.0.0-20200801203131-21c514740ed6
 	github.com/andybalholm/brotli v1.3.0
 	github.com/autobutler-org/sprocket v0.2.1
-	github.com/bep/imagemeta v1.1.2
+	github.com/bep/imagemeta v1.2.0
 	github.com/coder/websocket v1.8.15
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/gin-contrib/cors v1.7.11
@@ -37,7 +37,7 @@ require (
 	golang.org/x/time v0.16.0
 	howett.net/plist v1.0.1
 	modernc.org/sqlite v1.63.0
-	tailscale.com v1.104.7
+	tailscale.com v1.106.1
 )
 
 require (
@@ -132,7 +132,7 @@ require (
 	github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f // indirect
 	github.com/tailscale/peercred v0.0.0-20250107143737-35a0c7bd7edc // indirect
 	github.com/tailscale/web-client-prebuilt v0.0.0-20260917222731-e0ed2d0d0fea // indirect
-	github.com/tailscale/wireguard-go v0.0.0-20261106233718-9e0ab45c16ca // indirect
+	github.com/tailscale/wireguard-go v0.0.0-20261121000637-a8c4fbf26d6c // indirect
 	github.com/therootcompany/xz v1.0.1 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
@@ -149,7 +149,7 @@ require (
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb // indirect
 	golang.org/x/arch v0.29.0 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
-	golang.org/x/mod v0.42.0 // indirect
+	golang.org/x/mod v0.43.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect
@@ -158,7 +158,7 @@ require (
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard/windows v1.0.1 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
-	gvisor.dev/gvisor v0.0.0-20260915211658-a6f909f08a72 // indirect
+	gvisor.dev/gvisor v0.0.0-20261117040555-0303b2605d5e // indirect
 	modernc.org/libc v1.80.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
