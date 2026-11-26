@@ -1725,6 +1725,56 @@ void main() {
     }
 
     for (final (label, size) in [('narrow', narrow), ('wide', wide)]) {
+      testWidgets('also send to channel is the side conversation\'s alone '
+          '(#4350, $label)', (tester) async {
+        const box = ValueKey('message_composer_also_channel');
+        final (r, chat) = await pumpChat(
+          tester,
+          size,
+          chat: withRoot(),
+          location: '/chat/1?branch=5',
+        );
+        final branch = chat.branches[5]!;
+
+        // One composer offers it: the side conversation's, which takes no
+        // file, so it never sits beside an attachment.
+        expect(find.byKey(box), findsOneWidget);
+        expect(inBranch(find.byKey(box)), findsOneWidget);
+        expect(
+          inBranch(find.byKey(const ValueKey('message_composer_attach'))),
+          findsNothing,
+        );
+
+        await tester.tap(find.byKey(box));
+        await tester.pump();
+        await tester.enterText(inBranch(find.byKey(field)), 'plumber booked');
+        await tester.pump();
+        await tester.tap(
+          inBranch(find.byKey(const ValueKey('message_composer_send'))),
+        );
+        await tester.pumpAndSettle();
+
+        expect(branch.sent, ['plumber booked']);
+        expect(chat.opened[1]!.sent, ['plumber booked']);
+        expect(chat.opened[1]!.sentReplyTo, [5]);
+        expect(tester.widget<CheckboxListTile>(find.byKey(box)).value, isFalse);
+
+        // Not while editing a reply.
+        branch.setEntries([entry(6, 'plumber booked', author: 7, rootId: 5)]);
+        await tester.pumpAndSettle();
+        await tester.longPress(
+          inBranch(find.byKey(const ValueKey('message_body_6'))),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('message_edit_6')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(box), findsNothing);
+        expect(at(r), '/chat/1?branch=5');
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    for (final (label, size) in [('narrow', narrow), ('wide', wide)]) {
       testWidgets('the chip the Quark reports opens the side conversation '
           '($label)', (tester) async {
         final chat = withRoot();

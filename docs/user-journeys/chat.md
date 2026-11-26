@@ -1050,6 +1050,7 @@ leaking".
 2. As `bob`, edit his reply, then react to `carol`'s.
 3. As `bob`, with the network off, send another reply, then turn it back on and tap **Retry**.
 4. As `carol`, delete her reply.
+5. As `bob`, tick **Also send to channel** under the panel's composer and reply "Plumber booked for Tuesday".
 
 **Expected result:**
 
@@ -1058,14 +1059,19 @@ leaking".
 - In step 3 the reply waits above the panel's composer with **Retry** and **Discard**, and sends once, however
   many times it is retried.
 - After step 4 the reply is a tombstone in both panels.
+- After step 5 the reply is in the side conversation and the same text is in `general` as an ordinary message
+  quoting `bob`'s first message, which counts as unread for `carol` and taps through to it as any quote does. The
+  box is clear again. Had the channel copy failed, it alone would wait under the channel's composer with
+  **Retry** and **Discard**; the reply is not sent twice.
 
 **Notes:**
 
 - Replies are encrypted under the channel's key, bound to the message they branch from, so the Quark can't move
   one to another side conversation ([`docs/chat-security.md`](../chat-security.md)).
 - After the connection drops and comes back, the panel reads its replies again and catches up on what it missed.
-- Search, files and polls stay in the channel. Posting a reply to the channel too comes later (#4350). Unread
-  replies are JN-CHAT-044.
+- Search, files and polls stay in the channel. **Also send to channel** is only under the panel's composer, which
+  takes no files, and not while editing (#4350). The channel copy is not linked to the reply: editing or
+  deleting one leaves the other as it is. Unread replies are JN-CHAT-044.
 
 ---
 

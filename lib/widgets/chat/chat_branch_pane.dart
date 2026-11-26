@@ -9,7 +9,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The open side conversation (#4348) as a `QuarkBranchPanel`, fed from
 /// [chat]: its parent, its replies as a `QuarkMessageList` that offers no
 /// further branch, and a composer that replies with
-/// [ChatController.sendInBranch], or edits a reply after
+/// [ChatController.sendInBranch], with "Also send to channel" from
+/// [ChatController.branchAlsoToChannel] (#4350), or edits a reply after
 /// [ChatController.startEdit] put one there.
 ///
 /// Replies that haven't sent wait above the composer with their own retry
@@ -139,6 +140,9 @@ class ChatBranchPane extends StatelessWidget {
               maxLength: ChatConfig.maxMessageLength,
               mentionNames: c.mentionNames,
               onSend: editing != null ? onSubmitEdit : c.sendInBranch,
+              // An edit stays where it is (#4350).
+              alsoToChannel: editing != null ? null : c.branchAlsoToChannel,
+              onAlsoToChannelChanged: c.setBranchAlsoToChannel,
             ),
           ),
         ],
