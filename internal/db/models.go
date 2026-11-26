@@ -53,6 +53,12 @@ type ChatAttachment struct {
 	CreatedAt  time.Time
 }
 
+type ChatBranchReadMarker struct {
+	UserID            int64
+	RootID            int64
+	LastReadMessageID int64
+}
+
 type ChatChannel struct {
 	ID        int64
 	ServerID  int64

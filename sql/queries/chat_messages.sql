@@ -41,12 +41,28 @@ SELECT * FROM chat_messages WHERE root_id = sqlc.arg(root_id) AND id > sqlc.arg(
 -- ListChatBranchSummariesBetween counts the live replies of each channel
 -- message whose id falls in [first_id, last_id], one page of
 -- ListChatMessages*, with when the newest of them arrived (#4346), sorted by root. A message
--- with no live reply has no row. It reads the (root_id, id) index.
+-- with no live reply has no row. It reads the (root_id, id) index. For
+-- user_id it also counts the live replies after that account's marker in the
+-- branch that someone else wrote, and says whether the account is involved:
+-- it wrote the root or has a live reply there (#4349).
 -- name: ListChatBranchSummariesBetween :many
-SELECT summary.root_id, summary.reply_count, newest.created_at AS last_reply_at
+SELECT
+    summary.root_id,
+    summary.reply_count,
+    newest.created_at AS last_reply_at,
+    summary.unread_count,
+    CAST(COALESCE(root.author_id, 0) = CAST(sqlc.arg(user_id) AS BIGINT) OR summary.mine > 0 AS BOOLEAN) AS involved
 FROM (
-    SELECT CAST(reply.root_id AS BIGINT) AS root_id, COUNT(*) AS reply_count, MAX(reply.id) AS newest_id
+    SELECT
+        CAST(reply.root_id AS BIGINT) AS root_id,
+        COUNT(*) AS reply_count,
+        MAX(reply.id) AS newest_id,
+        COUNT(CASE WHEN reply.id > COALESCE(marker.last_read_message_id, 0)
+            AND COALESCE(reply.author_id, 0) <> sqlc.arg(user_id) THEN 1 END) AS unread_count,
+        COUNT(CASE WHEN reply.author_id = sqlc.arg(user_id) THEN 1 END) AS mine
     FROM chat_messages AS reply
+    LEFT JOIN chat_branch_read_markers AS marker ON marker.root_id = reply.root_id
+        AND marker.user_id = sqlc.arg(user_id)
     WHERE reply.channel_id = sqlc.arg(channel_id)
       AND reply.root_id >= CAST(sqlc.arg(first_id) AS BIGINT)
       AND reply.root_id <= CAST(sqlc.arg(last_id) AS BIGINT)
@@ -54,6 +70,7 @@ FROM (
     GROUP BY reply.root_id
 ) AS summary
 JOIN chat_messages AS newest ON newest.id = summary.newest_id
+JOIN chat_messages AS root ON root.id = summary.root_id
 ORDER BY summary.root_id;
 
 -- name: GetChatMessage :one

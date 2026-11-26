@@ -787,8 +787,9 @@ func publishMessage(ctx context.Context, queries db.Querier, bus *eventbus.Bus, 
 // looks like now that a reply to it was posted or deleted (#4346). A branch
 // with no live reply left has a count of 0 and no lastReplyAt.
 func publishBranch(ctx context.Context, queries db.Querier, bus *eventbus.Bus, channelID, rootID int64, audience []int64) error {
+	// The count and the time are everyone's, so no account's marker is read.
 	root := []Message{{ID: rootID}}
-	if err := attachBranches(ctx, queries, channelID, root); err != nil {
+	if err := attachBranches(ctx, queries, 0, channelID, root); err != nil {
 		return err
 	}
 	data := eventbus.ChatBranchChanged{ChannelID: channelID, MessageID: rootID, Audience: audience}
@@ -828,8 +829,20 @@ func unreadCounts(ctx context.Context, queries db.Querier, userID int64) (map[in
 	return counts, err
 }
 
-// attachReadState sets UnreadCount and LastReadMessageID on each channel the
-// account reads.
+// publishReadMarker tells userID's own sessions where a marker stands after
+// a move. moved is how many rows the move changed; 0 publishes nothing.
+func publishReadMarker(bus *eventbus.Bus, moved, userID int64, result MarkReadResult) {
+	if moved == 0 || bus == nil {
+		return
+	}
+	bus.Publish(eventbus.Event{Kind: eventbus.EventChatReadMarkerChanged, Data: eventbus.ChatReadMarkerChanged{
+		ChannelID: result.ChannelID, RootID: result.RootID, LastReadMessageID: result.LastReadMessageID,
+		UnreadCount: result.UnreadCount, UserID: userID,
+	}})
+}
+
+// attachReadState sets UnreadCount, the branch counts (#4349) and
+// LastReadMessageID on each channel the account reads.
 // ponytail: one marker query per readable channel. Fold the markers into
 // CountChatUnreadForUser if a long channel list ever makes this slow.
 func attachReadState(ctx context.Context, queries db.Querier, userID int64, channels []Channel) error {
@@ -837,11 +850,21 @@ func attachReadState(ctx context.Context, queries db.Querier, userID int64, chan
 	if err != nil {
 		return err
 	}
+	rows, err := queries.CountChatBranchUnreadForUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+	branches := make(map[int64]db.CountChatBranchUnreadForUserRow, len(rows))
+	for _, row := range rows {
+		branches[row.ChannelID] = row
+	}
 	for i := range channels {
 		if !channels[i].Permissions.Has(PermReadMessages) {
 			continue
 		}
 		channels[i].UnreadCount = unread[channels[i].ID]
+		branch := branches[channels[i].ID]
+		channels[i].BranchUnreadCount, channels[i].OtherBranchUnreadCount = branch.InvolvedUnread, branch.OtherUnread
 		marker, err := queries.GetChatReadMarker(ctx, db.GetChatReadMarkerParams{UserID: userID, ChannelID: channels[i].ID})
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
@@ -903,13 +926,13 @@ func attachReactions(ctx context.Context, queries db.Querier, channelID int64, m
 
 // attachBranches fills in the Branch of each of messages, one page of a
 // channel's messages sorted by id, that has a live reply (#4346), with one
-// query for the whole page.
-func attachBranches(ctx context.Context, queries db.Querier, channelID int64, messages []Message) error {
+// query for the whole page. Its unread count and involvement are userID's.
+func attachBranches(ctx context.Context, queries db.Querier, userID, channelID int64, messages []Message) error {
 	if len(messages) == 0 {
 		return nil
 	}
 	rows, err := queries.ListChatBranchSummariesBetween(ctx, db.ListChatBranchSummariesBetweenParams{
-		ChannelID: channelID, FirstID: messages[0].ID, LastID: messages[len(messages)-1].ID,
+		UserID: userID, ChannelID: channelID, FirstID: messages[0].ID, LastID: messages[len(messages)-1].ID,
 	})
 	if err != nil {
 		return err
@@ -917,7 +940,9 @@ func attachBranches(ctx context.Context, queries db.Querier, channelID int64, me
 	for _, row := range rows {
 		i, found := slices.BinarySearchFunc(messages, row.RootID, func(m Message, id int64) int { return cmp.Compare(m.ID, id) })
 		if found {
-			messages[i].Branch = &Branch{ReplyCount: row.ReplyCount, LastReplyAt: row.LastReplyAt}
+			messages[i].Branch = &Branch{
+				ReplyCount: row.ReplyCount, LastReplyAt: row.LastReplyAt, UnreadCount: row.UnreadCount, Involved: row.Involved,
+			}
 		}
 	}
 	return nil

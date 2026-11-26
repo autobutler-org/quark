@@ -9,6 +9,72 @@ import (
 	"context"
 )
 
+const countChatBranchUnreadForUser = `-- name: CountChatBranchUnreadForUser :many
+SELECT
+    branch.channel_id,
+    CAST(SUM(CASE WHEN COALESCE(root.author_id, 0) = CAST(?1 AS BIGINT) OR branch.mine > 0 THEN branch.unread ELSE 0 END) AS BIGINT) AS involved_unread,
+    CAST(SUM(CASE WHEN COALESCE(root.author_id, 0) = CAST(?1 AS BIGINT) OR branch.mine > 0 THEN 0 ELSE branch.unread END) AS BIGINT) AS other_unread
+FROM (
+    SELECT
+        reply.channel_id,
+        reply.root_id,
+        COUNT(CASE WHEN reply.id > COALESCE(marker.last_read_message_id, 0)
+            AND COALESCE(reply.author_id, 0) <> ?1 THEN 1 END) AS unread,
+        COUNT(CASE WHEN reply.author_id = ?1 THEN 1 END) AS mine
+    FROM
+        chat_messages AS reply
+        LEFT JOIN chat_branch_read_markers AS marker ON marker.root_id = reply.root_id
+        AND marker.user_id = ?1
+    WHERE
+        reply.root_id IS NOT NULL
+        AND reply.deleted_at IS NULL
+    GROUP BY
+        reply.channel_id, reply.root_id
+) AS branch
+JOIN chat_messages AS root ON root.id = branch.root_id
+WHERE
+    branch.unread > 0
+GROUP BY
+    branch.channel_id
+`
+
+type CountChatBranchUnreadForUserRow struct {
+	ChannelID      int64
+	InvolvedUnread int64
+	OtherUnread    int64
+}
+
+// CountChatBranchUnreadForUser counts, per channel, the side-conversation
+// replies after an account's marker in their branch that someone else wrote
+// and that are not deleted (#4349), split by whether the account is involved
+// in the branch: it wrote the root or has a live reply there. A channel with
+// none has no row. Like CountChatUnreadForUser it counts every channel, and
+// chatutil keeps only the ones the account reads.
+// ponytail: it reads every live reply on every list. Keep a per-branch count
+// if a busy Quark ever makes the list slow.
+func (q *Queries) CountChatBranchUnreadForUser(ctx context.Context, userID int64) ([]CountChatBranchUnreadForUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, countChatBranchUnreadForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountChatBranchUnreadForUserRow
+	for rows.Next() {
+		var i CountChatBranchUnreadForUserRow
+		if err := rows.Scan(&i.ChannelID, &i.InvolvedUnread, &i.OtherUnread); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countChatUnreadForUser = `-- name: CountChatUnreadForUser :many
 SELECT
     chat_messages.channel_id,
@@ -61,6 +127,22 @@ func (q *Queries) CountChatUnreadForUser(ctx context.Context, userID int64) ([]C
 	return items, nil
 }
 
+const getChatBranchReadMarker = `-- name: GetChatBranchReadMarker :one
+SELECT last_read_message_id FROM chat_branch_read_markers WHERE user_id = ?1 AND root_id = ?2
+`
+
+type GetChatBranchReadMarkerParams struct {
+	UserID int64
+	RootID int64
+}
+
+func (q *Queries) GetChatBranchReadMarker(ctx context.Context, arg GetChatBranchReadMarkerParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getChatBranchReadMarker, arg.UserID, arg.RootID)
+	var last_read_message_id int64
+	err := row.Scan(&last_read_message_id)
+	return last_read_message_id, err
+}
+
 const getChatReadMarker = `-- name: GetChatReadMarker :one
 SELECT last_read_message_id FROM chat_read_markers WHERE user_id = ?1 AND channel_id = ?2
 `
@@ -75,6 +157,31 @@ func (q *Queries) GetChatReadMarker(ctx context.Context, arg GetChatReadMarkerPa
 	var last_read_message_id int64
 	err := row.Scan(&last_read_message_id)
 	return last_read_message_id, err
+}
+
+const setChatBranchReadMarker = `-- name: SetChatBranchReadMarker :execrows
+INSERT INTO chat_branch_read_markers (user_id, root_id, last_read_message_id)
+VALUES (?1, ?2, ?3)
+ON CONFLICT (user_id, root_id) DO UPDATE
+SET last_read_message_id = excluded.last_read_message_id
+WHERE excluded.last_read_message_id > chat_branch_read_markers.last_read_message_id
+`
+
+type SetChatBranchReadMarkerParams struct {
+	UserID            int64
+	RootID            int64
+	LastReadMessageID int64
+}
+
+// SetChatBranchReadMarker moves an account's marker in a side conversation
+// (#4349), named by its root, forward, never backward, as SetChatReadMarker
+// does for a channel.
+func (q *Queries) SetChatBranchReadMarker(ctx context.Context, arg SetChatBranchReadMarkerParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setChatBranchReadMarker, arg.UserID, arg.RootID, arg.LastReadMessageID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setChatReadMarker = `-- name: SetChatReadMarker :execrows

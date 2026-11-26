@@ -82,6 +82,18 @@ func (a *postgresQueries) CountAlbumItems(ctx context.Context, albumID int64) (i
 	return a.q.CountAlbumItems(ctx, albumID)
 }
 
+func (a *postgresQueries) CountChatBranchUnreadForUser(ctx context.Context, userID int64) ([]CountChatBranchUnreadForUserRow, error) {
+	rows, err := a.q.CountChatBranchUnreadForUser(ctx, userID)
+	if err != nil || rows == nil {
+		return nil, err
+	}
+	items := make([]CountChatBranchUnreadForUserRow, len(rows))
+	for i, row := range rows {
+		items[i] = CountChatBranchUnreadForUserRow(row)
+	}
+	return items, nil
+}
+
 func (a *postgresQueries) CountChatUnreadForUser(ctx context.Context, userID int64) ([]CountChatUnreadForUserRow, error) {
 	rows, err := a.q.CountChatUnreadForUser(ctx, userID)
 	if err != nil || rows == nil {
@@ -492,6 +504,10 @@ func (a *postgresQueries) GetCalendarEvent(ctx context.Context, id int64) (GetCa
 func (a *postgresQueries) GetChatAttachment(ctx context.Context, id string) (ChatAttachment, error) {
 	row, err := a.q.GetChatAttachment(ctx, id)
 	return ChatAttachment(row), err
+}
+
+func (a *postgresQueries) GetChatBranchReadMarker(ctx context.Context, arg GetChatBranchReadMarkerParams) (int64, error) {
+	return a.q.GetChatBranchReadMarker(ctx, pgdb.GetChatBranchReadMarkerParams(arg))
 }
 
 func (a *postgresQueries) GetChatChannel(ctx context.Context, id int64) (ChatChannel, error) {
@@ -1539,6 +1555,10 @@ func (a *postgresQueries) RetryJob(ctx context.Context, arg RetryJobParams) (Job
 
 func (a *postgresQueries) RotateInstallID(ctx context.Context, installID string) error {
 	return a.q.RotateInstallID(ctx, installID)
+}
+
+func (a *postgresQueries) SetChatBranchReadMarker(ctx context.Context, arg SetChatBranchReadMarkerParams) (int64, error) {
+	return a.q.SetChatBranchReadMarker(ctx, pgdb.SetChatBranchReadMarkerParams(arg))
 }
 
 func (a *postgresQueries) SetChatChannelGroupMember(ctx context.Context, arg SetChatChannelGroupMemberParams) error {

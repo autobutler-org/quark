@@ -105,3 +105,73 @@ func TestChatReplies_DirectMessageKeepsAdminOut(t *testing.T) {
 		t.Errorf("heard %d chat_message_created and %d chat_branch_changed for the reply, want 1 each", heard, branched)
 	}
 }
+
+// TestChatReplies_BranchReadMarker reads a direct message's side conversation
+// over HTTP (#4349): carol, who is not involved, sees its reply in her other
+// branch count, and reading it clears the count and tells her own sessions
+// alone. A non-member admin gets 404 and hears nothing.
+func TestChatReplies_BranchReadMarker(t *testing.T) {
+	h := newHarness(t)
+	h.expect(t, http.StatusOK, http.MethodPut, "/chat/keys/me", "bob", keysBody('b', false), nil)
+	var dm chatutil.Channel
+	h.expect(t, http.StatusCreated, http.MethodPost, "/chat/dms", "bob", `{"userIds":[`+strconv.FormatInt(h.users["carol"], 10)+`]}`, &dm)
+	path := "/chat/channels/" + strconv.FormatInt(dm.ID, 10)
+	h.expect(t, http.StatusOK, http.MethodPost, path+"/keys", "bob", createKeyBody('b', dm.ID, 1, h.users["bob"]), nil)
+	var root, reply chatutil.Message
+	h.expect(t, http.StatusCreated, http.MethodPost, path+"/messages", "bob", messageBody('r', 64, 1), &root)
+	h.expect(t, http.StatusCreated, http.MethodPost, path+"/messages", "bob", replyBody('a', root.ID, ""), &reply)
+
+	branchCounts := func(as string) [2]int64 {
+		t.Helper()
+		var list chatutil.ListChannelsResult
+		h.expect(t, http.StatusOK, http.MethodGet, "/chat/channels", as, "", &list)
+		for _, c := range list.Channels {
+			if c.ID == dm.ID {
+				return [2]int64{c.BranchUnreadCount, c.OtherBranchUnreadCount}
+			}
+		}
+		return [2]int64{-1, -1}
+	}
+	if got := branchCounts("carol"); got != [2]int64{0, 1} {
+		t.Fatalf("carol's branch counts = %v, want [0 1]", got)
+	}
+	h.drain()
+
+	read := "/chat/messages/" + strconv.FormatInt(root.ID, 10) + "/read"
+	body := `{"messageId":` + strconv.FormatInt(reply.ID, 10) + `}`
+	h.expect(t, http.StatusNotFound, http.MethodPut, read, "admin", body, nil)
+	var marker chatutil.MarkReadResult
+	h.expect(t, http.StatusOK, http.MethodPut, read, "carol", body, &marker)
+	if want := (chatutil.MarkReadResult{ChannelID: dm.ID, RootID: root.ID, LastReadMessageID: reply.ID}); marker != want {
+		t.Errorf("marker = %+v, want %+v", marker, want)
+	}
+	if got := branchCounts("carol"); got != [2]int64{0, 0} {
+		t.Errorf("carol's branch counts after reading = %v, want [0 0]", got)
+	}
+
+	load := func(name string) accessutil.Access {
+		t.Helper()
+		loaded, err := accessutil.Load(accessutil.LoadParams{
+			Ctx: context.Background(), Principal: accessutil.Principal{UserID: h.users[name], IsAdmin: name == "admin"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return loaded.Access
+	}
+	heard := 0
+	for _, evt := range h.drain() {
+		if evt.Kind != eventbus.EventChatReadMarkerChanged {
+			continue
+		}
+		heard++
+		for name, want := range map[string]bool{"carol": true, "bob": false, "admin": false} {
+			if got := accessutil.FilterEvent(accessutil.FilterEventParams{Access: load(name), Event: evt}).Deliver; got != want {
+				t.Errorf("%s hears the branch marker = %v, want %v", name, got, want)
+			}
+		}
+	}
+	if heard != 1 {
+		t.Errorf("heard %d chat_read_marker_changed, want 1", heard)
+	}
+}

@@ -3488,7 +3488,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the channels the caller is a member of, directly, through a group, or through everyone, general first and then by name, each with the caller's effective permissions there: the union of every row that reaches them, and unreadCount: the messages after the caller's read marker (PUT /chat/channels/{id}/read) that someone else wrote and nobody deleted, 0 on a channel the caller lacks read_messages on, and lastReadMessageId: the caller's read marker there, so a session that missed chat_read_marker_changed can restore it, 0 before the first read and without read_messages. A channel on which that set is empty is left out. Admins get only their own channels too, unless they pass all=1: then the channels they are not in follow, in the same order, with an empty set.",
+                "description": "Returns the channels the caller is a member of, directly, through a group, or through everyone, general first and then by name, each with the caller's effective permissions there: the union of every row that reaches them, and unreadCount: the messages after the caller's read marker (PUT /chat/channels/{id}/read) that someone else wrote and nobody deleted, 0 on a channel the caller lacks read_messages on, and lastReadMessageId: the caller's read marker there, so a session that missed chat_read_marker_changed can restore it, 0 before the first read and without read_messages. branchUnreadCount counts the side-conversation replies the caller has not read in branches they wrote the root of or replied in, and otherBranchUnreadCount those in every other branch, both 0 without read_messages. A channel on which that set is empty is left out. Admins get only their own channels too, unless they pass all=1: then the channels they are not in follow, in the same order, with an empty set.",
                 "produces": [
                     "application/json"
                 ],
@@ -4826,7 +4826,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns messages oldest first. With after, the page starts after that id (after=0 is the beginning), which is how a client catches up on anything the events socket dropped. Otherwise it ends before before, or at the newest message when before is left out. Deleted messages come back as tombstones with deletedAt and no ciphertext. A side conversation's replies are left out: GET /chat/messages/{id}/replies pages them. A message with at least one reply that is not deleted carries branch, its reply count and when the newest reply was posted. Needs read_messages; anyone else gets 404, delegated managers and admins included.",
+                "description": "Returns messages oldest first. With after, the page starts after that id (after=0 is the beginning), which is how a client catches up on anything the events socket dropped. Otherwise it ends before before, or at the newest message when before is left out. Deleted messages come back as tombstones with deletedAt and no ciphertext. A side conversation's replies are left out: GET /chat/messages/{id}/replies pages them. A message with at least one reply that is not deleted carries branch, its reply count, when the newest reply was posted, how many replies past the caller's marker there someone else wrote (unreadCount), and whether the caller wrote the message or a live reply (involved). Needs read_messages; anyone else gets 404, delegated managers and admins included.",
                 "produces": [
                     "application/json"
                 ],
@@ -5751,6 +5751,82 @@
                     },
                     "409": {
                         "description": "the message was deleted, or the caller already holds 20 reactions on it",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/messages/{id}/read": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Moves the caller's read marker in the side conversation of the message to messageId, the newest reply they have read there, and returns where the marker stands with rootId and the branch's unread count past it: the live replies after it that someone else wrote. As on PUT /chat/channels/{id}/read, the marker never moves backward, and a move publishes chat_read_marker_changed, with rootId and the branch's unreadCount, to the caller's own sessions alone. Needs read_messages on the message's channel; anyone else gets 404, delegated managers and admins included.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Mark a chat message's side conversation read up to a reply",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Root message id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The newest reply read",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.markReadBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.MarkReadResult"
+                        }
+                    },
+                    "400": {
+                        "description": "the body isn't JSON with a messageId",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such message, the caller lacks read_messages on its channel, or messageId is no reply to it",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "the caller sent too many of these in a short time; the limit is per account",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -14030,10 +14106,18 @@
         "chatutil.Branch": {
             "type": "object",
             "properties": {
+                "involved": {
+                    "description": "Involved is whether the caller wrote the root or has a live reply in\nthe branch, which is when its unread replies count toward the channel's\nbadge (#4349).",
+                    "type": "boolean"
+                },
                 "lastReplyAt": {
                     "type": "string"
                 },
                 "replyCount": {
+                    "type": "integer"
+                },
+                "unreadCount": {
+                    "description": "UnreadCount is how many live replies after the caller's marker in the\nbranch someone else wrote (#4349).",
                     "type": "integer"
                 }
             }
@@ -14044,6 +14128,10 @@
                 "anonymous": {
                     "description": "Anonymous marks a channel whose members see each other only by\npseudonym (#2949). It is set when the channel is created and never\nchanges; a direct message is never anonymous.",
                     "type": "boolean"
+                },
+                "branchUnreadCount": {
+                    "description": "BranchUnreadCount is how many side-conversation replies there the\ncaller has not read, in branches they are involved in: they wrote the\nroot or have a live reply (#4349). It counts toward the channel's badge.\n0 without read_messages.",
+                    "type": "integer"
                 },
                 "createdAt": {
                     "type": "string"
@@ -14088,6 +14176,10 @@
                 },
                 "name": {
                     "type": "string"
+                },
+                "otherBranchUnreadCount": {
+                    "description": "OtherBranchUnreadCount is the same count in every other branch, which\ncounts toward nothing unless a reply there mentions the caller, which\nonly their device can tell (#4349). 0 without read_messages.",
+                    "type": "integer"
                 },
                 "permissions": {
                     "description": "Permissions is the caller's effective set: the union of every row that\nreaches them. Empty for an admin managing a channel they are not in.",
@@ -14418,6 +14510,10 @@
                     "type": "integer"
                 },
                 "lastReadMessageId": {
+                    "type": "integer"
+                },
+                "rootId": {
+                    "description": "RootID names the side conversation of a branch marker (#4349); absent\nfor a channel's.",
                     "type": "integer"
                 },
                 "unreadCount": {

@@ -12,7 +12,7 @@ import (
 
 // listMessages godoc
 // @Summary Page a chat channel's encrypted messages
-// @Description Returns messages oldest first. With after, the page starts after that id (after=0 is the beginning), which is how a client catches up on anything the events socket dropped. Otherwise it ends before before, or at the newest message when before is left out. Deleted messages come back as tombstones with deletedAt and no ciphertext. A side conversation's replies are left out: GET /chat/messages/{id}/replies pages them. A message with at least one reply that is not deleted carries branch, its reply count and when the newest reply was posted. Needs read_messages; anyone else gets 404, delegated managers and admins included.
+// @Description Returns messages oldest first. With after, the page starts after that id (after=0 is the beginning), which is how a client catches up on anything the events socket dropped. Otherwise it ends before before, or at the newest message when before is left out. Deleted messages come back as tombstones with deletedAt and no ciphertext. A side conversation's replies are left out: GET /chat/messages/{id}/replies pages them. A message with at least one reply that is not deleted carries branch, its reply count, when the newest reply was posted, how many replies past the caller's marker there someone else wrote (unreadCount), and whether the caller wrote the message or a live reply (involved). Needs read_messages; anyone else gets 404, delegated managers and admins included.
 // @Tags chat
 // @Produce json
 // @Param id path int true "Channel id"

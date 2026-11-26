@@ -55,6 +55,15 @@ type Querier interface {
 	// A disabled admin cannot sign in, so only active admins count (#1908).
 	CountActiveAdmins(ctx context.Context) (int64, error)
 	CountAlbumItems(ctx context.Context, albumID int64) (int64, error)
+	// CountChatBranchUnreadForUser counts, per channel, the side-conversation
+	// replies after an account's marker in their branch that someone else wrote
+	// and that are not deleted (#4349), split by whether the account is involved
+	// in the branch: it wrote the root or has a live reply there. A channel with
+	// none has no row. Like CountChatUnreadForUser it counts every channel, and
+	// chatutil keeps only the ones the account reads.
+	// ponytail: it reads every live reply on every list. Keep a per-branch count
+	// if a busy Quark ever makes the list slow.
+	CountChatBranchUnreadForUser(ctx context.Context, userID int64) ([]CountChatBranchUnreadForUserRow, error)
 	// CountChatUnreadForUser counts, per channel, the messages after an account's
 	// marker that someone else wrote and that are not deleted. A side
 	// conversation's replies are not counted (#4345). A channel with
@@ -268,6 +277,7 @@ type Querier interface {
 	// Reads carry the owner's username, empty for an event with no owner (#2544).
 	GetCalendarEvent(ctx context.Context, id int64) (GetCalendarEventRow, error)
 	GetChatAttachment(ctx context.Context, id string) (ChatAttachment, error)
+	GetChatBranchReadMarker(ctx context.Context, arg GetChatBranchReadMarkerParams) (int64, error)
 	GetChatChannel(ctx context.Context, id int64) (ChatChannel, error)
 	GetChatChannelEvent(ctx context.Context, arg GetChatChannelEventParams) (ChatChannelEvent, error)
 	GetChatDirectMessage(ctx context.Context, dmKey sql.NullString) (ChatChannel, error)
@@ -376,7 +386,10 @@ type Querier interface {
 	// ListChatBranchSummariesBetween counts the live replies of each channel
 	// message whose id falls in [first_id, last_id], one page of
 	// ListChatMessages*, with when the newest of them arrived (#4346), sorted by root. A message
-	// with no live reply has no row. It reads the (root_id, id) index.
+	// with no live reply has no row. It reads the (root_id, id) index. For
+	// user_id it also counts the live replies after that account's marker in the
+	// branch that someone else wrote, and says whether the account is involved:
+	// it wrote the root or has a live reply there (#4349).
 	ListChatBranchSummariesBetween(ctx context.Context, arg ListChatBranchSummariesBetweenParams) ([]ListChatBranchSummariesBetweenRow, error)
 	// ListChatChannelEvents pages a channel's events oldest first, after an id.
 	ListChatChannelEvents(ctx context.Context, arg ListChatChannelEventsParams) ([]ChatChannelEvent, error)
@@ -653,6 +666,10 @@ type Querier interface {
 	// The id is made in Go (db.NewInstallID), so no engine needs a random-bytes
 	// function.
 	RotateInstallID(ctx context.Context, installID string) error
+	// SetChatBranchReadMarker moves an account's marker in a side conversation
+	// (#4349), named by its root, forward, never backward, as SetChatReadMarker
+	// does for a channel.
+	SetChatBranchReadMarker(ctx context.Context, arg SetChatBranchReadMarkerParams) (int64, error)
 	// SetChatChannelGroupMember gives a group a set on a channel, replacing the
 	// set any earlier row for it carried.
 	SetChatChannelGroupMember(ctx context.Context, arg SetChatChannelGroupMemberParams) error

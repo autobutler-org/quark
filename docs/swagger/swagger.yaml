@@ -438,9 +438,20 @@ definitions:
     type: object
   chatutil.Branch:
     properties:
+      involved:
+        description: |-
+          Involved is whether the caller wrote the root or has a live reply in
+          the branch, which is when its unread replies count toward the channel's
+          badge (#4349).
+        type: boolean
       lastReplyAt:
         type: string
       replyCount:
+        type: integer
+      unreadCount:
+        description: |-
+          UnreadCount is how many live replies after the caller's marker in the
+          branch someone else wrote (#4349).
         type: integer
     type: object
   chatutil.Channel:
@@ -451,6 +462,13 @@ definitions:
           pseudonym (#2949). It is set when the channel is created and never
           changes; a direct message is never anonymous.
         type: boolean
+      branchUnreadCount:
+        description: |-
+          BranchUnreadCount is how many side-conversation replies there the
+          caller has not read, in branches they are involved in: they wrote the
+          root or have a live reply (#4349). It counts toward the channel's badge.
+          0 without read_messages.
+        type: integer
       createdAt:
         type: string
       createdBy:
@@ -493,6 +511,12 @@ definitions:
         type: array
       name:
         type: string
+      otherBranchUnreadCount:
+        description: |-
+          OtherBranchUnreadCount is the same count in every other branch, which
+          counts toward nothing unless a reply there mentions the caller, which
+          only their device can tell (#4349). 0 without read_messages.
+        type: integer
       permissions:
         description: |-
           Permissions is the caller's effective set: the union of every row that
@@ -743,6 +767,11 @@ definitions:
       channelId:
         type: integer
       lastReadMessageId:
+        type: integer
+      rootId:
+        description: |-
+          RootID names the side conversation of a branch marker (#4349); absent
+          for a channel's.
         type: integer
       unreadCount:
         type: integer
@@ -6398,10 +6427,12 @@ paths:
         that someone else wrote and nobody deleted, 0 on a channel the caller lacks
         read_messages on, and lastReadMessageId: the caller''s read marker there,
         so a session that missed chat_read_marker_changed can restore it, 0 before
-        the first read and without read_messages. A channel on which that set is empty
-        is left out. Admins get only their own channels too, unless they pass all=1:
-        then the channels they are not in follow, in the same order, with an empty
-        set.'
+        the first read and without read_messages. branchUnreadCount counts the side-conversation
+        replies the caller has not read in branches they wrote the root of or replied
+        in, and otherBranchUnreadCount those in every other branch, both 0 without
+        read_messages. A channel on which that set is empty is left out. Admins get
+        only their own channels too, unless they pass all=1: then the channels they
+        are not in follow, in the same order, with an empty set.'
       parameters:
       - description: 1 adds the channels an admin is not in; refused for anyone else
         in: query
@@ -7395,8 +7426,10 @@ paths:
         message when before is left out. Deleted messages come back as tombstones
         with deletedAt and no ciphertext. A side conversation''s replies are left
         out: GET /chat/messages/{id}/replies pages them. A message with at least one
-        reply that is not deleted carries branch, its reply count and when the newest
-        reply was posted. Needs read_messages; anyone else gets 404, delegated managers
+        reply that is not deleted carries branch, its reply count, when the newest
+        reply was posted, how many replies past the caller''s marker there someone
+        else wrote (unreadCount), and whether the caller wrote the message or a live
+        reply (involved). Needs read_messages; anyone else gets 404, delegated managers
         and admins included.'
       parameters:
       - description: Channel id
@@ -8127,6 +8160,64 @@ paths:
       security:
       - BearerAuth: []
       summary: React to a chat message
+      tags:
+      - chat
+  /chat/messages/{id}/read:
+    put:
+      consumes:
+      - application/json
+      description: 'Moves the caller''s read marker in the side conversation of the
+        message to messageId, the newest reply they have read there, and returns where
+        the marker stands with rootId and the branch''s unread count past it: the
+        live replies after it that someone else wrote. As on PUT /chat/channels/{id}/read,
+        the marker never moves backward, and a move publishes chat_read_marker_changed,
+        with rootId and the branch''s unreadCount, to the caller''s own sessions alone.
+        Needs read_messages on the message''s channel; anyone else gets 404, delegated
+        managers and admins included.'
+      parameters:
+      - description: Root message id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: The newest reply read
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_chat.markReadBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chatutil.MarkReadResult'
+        "400":
+          description: the body isn't JSON with a messageId
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no such message, the caller lacks read_messages on its channel,
+            or messageId is no reply to it
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "429":
+          description: the caller sent too many of these in a short time; the limit
+            is per account
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Mark a chat message's side conversation read up to a reply
       tags:
       - chat
   /chat/messages/{id}/replies:

@@ -308,6 +308,15 @@ type Channel struct {
 	// else wrote and nobody deleted (#2424). It is 0 without read_messages,
 	// so 0 on every channel an admin lists without being in it.
 	UnreadCount int64 `json:"unreadCount"`
+	// BranchUnreadCount is how many side-conversation replies there the
+	// caller has not read, in branches they are involved in: they wrote the
+	// root or have a live reply (#4349). It counts toward the channel's badge.
+	// 0 without read_messages.
+	BranchUnreadCount int64 `json:"branchUnreadCount"`
+	// OtherBranchUnreadCount is the same count in every other branch, which
+	// counts toward nothing unless a reply there mentions the caller, which
+	// only their device can tell (#4349). 0 without read_messages.
+	OtherBranchUnreadCount int64 `json:"otherBranchUnreadCount"`
 	// LastReadMessageID is the caller's read marker there, as PUT
 	// /chat/channels/{id}/read leaves it, so a session that missed
 	// chat_read_marker_changed can restore it (#3543). It is 0 before the
@@ -1942,6 +1951,13 @@ type Message struct {
 type Branch struct {
 	ReplyCount  int64     `json:"replyCount"`
 	LastReplyAt time.Time `json:"lastReplyAt"`
+	// UnreadCount is how many live replies after the caller's marker in the
+	// branch someone else wrote (#4349).
+	UnreadCount int64 `json:"unreadCount"`
+	// Involved is whether the caller wrote the root or has a live reply in
+	// the branch, which is when its unread replies count toward the channel's
+	// badge (#4349).
+	Involved bool `json:"involved"`
 }
 
 // PostMessageParams posts ciphertext to a channel.
@@ -2165,7 +2181,7 @@ func ListMessages(params ListMessagesParams) (ListMessagesResult, error) {
 	if err := attachPolls(params.Ctx, queries, params.DataDir, params.ChannelID, params.Principal.UserID, messages); err != nil {
 		return ListMessagesResult{}, err
 	}
-	if err := attachBranches(params.Ctx, queries, params.ChannelID, messages); err != nil {
+	if err := attachBranches(params.Ctx, queries, params.Principal.UserID, params.ChannelID, messages); err != nil {
 		return ListMessagesResult{}, err
 	}
 	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
@@ -2249,7 +2265,10 @@ type MarkReadParams struct {
 // MarkReadResult is where the caller's marker stands and what is still
 // unread past it.
 type MarkReadResult struct {
-	ChannelID         int64 `json:"channelId"`
+	ChannelID int64 `json:"channelId"`
+	// RootID names the side conversation of a branch marker (#4349); absent
+	// for a channel's.
+	RootID            int64 `json:"rootId,omitempty"`
 	LastReadMessageID int64 `json:"lastReadMessageId"`
 	UnreadCount       int64 `json:"unreadCount"`
 }
@@ -2291,11 +2310,66 @@ func MarkRead(params MarkReadParams) (MarkReadResult, error) {
 		return MarkReadResult{}, err
 	}
 	result := MarkReadResult{ChannelID: params.ChannelID, LastReadMessageID: marker, UnreadCount: unread[params.ChannelID]}
-	if moved > 0 && params.EventBus != nil {
-		params.EventBus.Publish(eventbus.Event{Kind: eventbus.EventChatReadMarkerChanged, Data: eventbus.ChatReadMarkerChanged{
-			ChannelID: result.ChannelID, LastReadMessageID: result.LastReadMessageID, UnreadCount: result.UnreadCount, UserID: userID,
-		}})
+	publishReadMarker(params.EventBus, moved, userID, result)
+	return result, nil
+}
+
+// MarkBranchReadParams moves the caller's read marker in a side conversation.
+type MarkBranchReadParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_read_marker_changed. Nil skips it.
+	EventBus  *eventbus.Bus
+	Principal accessutil.Principal
+	// RootID is the channel message the side conversation branches from.
+	RootID int64
+	// MessageID is the newest reply the caller has read there.
+	MessageID int64
+}
+
+// MarkBranchRead moves the caller's read marker in the side conversation of
+// RootID up to a reply there, for a holder of read_messages (#4349). As
+// MarkRead does for a channel, it never moves the marker backward, and a move
+// publishes chat_read_marker_changed, with the root, to the caller's own
+// sessions. UnreadCount is the branch's. A root the caller can't read, and a
+// MessageID that is no reply to it, a deleted one aside, are
+// ErrMessageNotFound.
+func MarkBranchRead(params MarkBranchReadParams) (MarkReadResult, error) {
+	if params.Database == nil {
+		return MarkReadResult{}, accessutil.ErrNoDatabase
 	}
+	queries := params.Database.Queries
+	userID := params.Principal.UserID
+	root, _, err := readableMessage(params.Ctx, queries, params.Principal, params.RootID)
+	if err != nil {
+		return MarkReadResult{}, err
+	}
+	message, err := queries.GetChatMessage(params.Ctx, params.MessageID)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && message.RootID.Int64 != root.ID) {
+		return MarkReadResult{}, ErrMessageNotFound
+	}
+	if err != nil {
+		return MarkReadResult{}, err
+	}
+	moved, err := queries.SetChatBranchReadMarker(params.Ctx, db.SetChatBranchReadMarkerParams{
+		UserID: userID, RootID: root.ID, LastReadMessageID: params.MessageID,
+	})
+	if err != nil {
+		return MarkReadResult{}, err
+	}
+	marker, err := queries.GetChatBranchReadMarker(params.Ctx, db.GetChatBranchReadMarkerParams{UserID: userID, RootID: root.ID})
+	if err != nil {
+		return MarkReadResult{}, err
+	}
+	branch := []Message{{ID: root.ID}}
+	if err := attachBranches(params.Ctx, queries, userID, root.ChannelID, branch); err != nil {
+		return MarkReadResult{}, err
+	}
+	result := MarkReadResult{ChannelID: root.ChannelID, RootID: root.ID, LastReadMessageID: marker}
+	if branch[0].Branch != nil {
+		result.UnreadCount = branch[0].Branch.UnreadCount
+	}
+	publishReadMarker(params.EventBus, moved, userID, result)
 	return result, nil
 }
 

@@ -34,7 +34,7 @@ func TestAttachBranchesOneQueryPerPage(t *testing.T) {
 		{RootID: 2, ReplyCount: 9, LastReplyAt: at}, // not in the page
 		{RootID: 399, ReplyCount: 1, LastReplyAt: at},
 	}}
-	if err := attachBranches(context.Background(), q, 7, messages); err != nil {
+	if err := attachBranches(context.Background(), q, 0, 7, messages); err != nil {
 		t.Fatal(err)
 	}
 	if q.calls != 1 {
