@@ -18,9 +18,12 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// An anonymous channel, [isAnonymous], carries a crossed-out eye whose
 /// tooltip says its members see each other only by alias (#2949).
 ///
-/// With [onSearch] set, a search button sits before the settings (#2429).
+/// With [onSearch] set, a search button sits before the settings (#2429),
+/// and with [onBranches] a button that lists the side conversations before
+/// that (#4351).
 ///
-/// Keys: `chat_channel_search` on the search button; `chat_channel_settings`
+/// Keys: `chat_channel_branches` on the side conversations button;
+/// `chat_channel_search` on the search button; `chat_channel_settings`
 /// on the settings button; `chat_channel_private` on the lock;
 /// `chat_channel_anonymous` on the anonymous mark;
 /// `chat_channel_edit`, `chat_channel_members`, `chat_channel_add_people`,
@@ -34,6 +37,7 @@ class ChatChannelHeader extends StatelessWidget {
     this.isPrivate = false,
     this.isDirect = false,
     this.isAnonymous = false,
+    this.onBranches,
     this.onSearch,
     this.onEdit,
     this.onMembers,
@@ -68,6 +72,9 @@ class ChatChannelHeader extends StatelessWidget {
 
   /// Whether only the channel's members can see it, marked with a lock.
   final bool isPrivate;
+
+  /// Lists the channel's side conversations; null leaves the button out.
+  final VoidCallback? onBranches;
 
   /// Opens or closes the search of this channel's messages; null leaves the
   /// button out.
@@ -201,6 +208,13 @@ class ChatChannelHeader extends StatelessWidget {
             ],
           ),
         ),
+        if (onBranches case final onBranches?)
+          QuarkBarIconButton(
+            key: const ValueKey('chat_channel_branches'),
+            icon: QuarkIcons.side_conversation,
+            tooltip: 'Side conversations',
+            onPressed: onBranches,
+          ),
         if (onSearch case final onSearch?)
           QuarkBarIconButton(
             key: const ValueKey('chat_channel_search'),

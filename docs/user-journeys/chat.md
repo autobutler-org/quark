@@ -1152,3 +1152,33 @@ it.
 - The Quark keeps a read marker per side conversation and counts from message ids alone
   ([`docs/chat-security.md`](../chat-security.md)). The drawer's **Chat** dot does not yet light for a mention in a
   side conversation you are not in.
+
+---
+
+### JN-CHAT-045: Find an old side conversation from the list
+
+**Preconditions:** In `family`, `bob`'s "The sink is leaking" has a reply from today and "Holiday plans" has none
+newer than a month ago. Another message's side conversation had every reply deleted.
+
+**Steps:**
+
+1. Tap **Side conversations** in the channel's header.
+2. Tap **Quiet** at the bottom of the list.
+3. Tap "Holiday plans".
+4. As `carol`, reply in "Holiday plans", then as `bob` open the list again.
+
+**Expected result:**
+
+- Step 1 lists "The sink is leaking" with its author and "1 reply, last 2h ago". "Holiday plans" is folded under
+  **Quiet (1)**, and the side conversation whose replies are all deleted is not listed.
+- Step 2 unfolds the quiet ones; step 3 closes the list and opens that side conversation beside the channel, as
+  the chip does (JN-CHAT-042), with `?branch=` in the address bar.
+- After step 4 "Holiday plans" is at the top, above the fold. With the list still open it moves there as the
+  reply arrives.
+
+**Notes:**
+
+- The list is a sheet on every window size. A message that is deleted or still waiting for its key reads "Original
+  message unavailable" and its side conversation still opens.
+- Folding is only drawing: a side conversation is quiet a week after its last reply (`ChatConfig`), and nothing
+  hides or deletes one on the Quark (#4351).

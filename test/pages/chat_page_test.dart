@@ -1725,6 +1725,47 @@ void main() {
     }
 
     for (final (label, size) in [('narrow', narrow), ('wide', wide)]) {
+      testWidgets('the channel\'s side conversations list opens one, quiet '
+          'ones folded (#4351, $label)', (tester) async {
+        final chat = withRoot();
+        final recent = DateTime.now().toUtc();
+        chat.roots[5] = entry(5, 'the sink is leaking');
+        chat.branchLists[1] = [
+          entry(
+            5,
+            'the sink is leaking',
+            branch: ChatBranch(replyCount: 2, lastReplyAt: recent),
+          ),
+          entry(
+            4,
+            'holiday plans',
+            branch: ChatBranch(
+              replyCount: 1,
+              lastReplyAt: recent.subtract(const Duration(days: 30)),
+            ),
+          ),
+        ];
+        final (r, _) = await pumpChat(tester, size, chat: chat);
+
+        await tester.tap(find.byKey(const ValueKey('chat_channel_branches')));
+        await tester.pumpAndSettle();
+        expect(chat.opened[1]!.branchLoads, 1);
+        expect(find.byKey(const ValueKey('branch_row_5')), findsOneWidget);
+        expect(find.byKey(const ValueKey('branch_row_4')), findsNothing);
+        await tester.tap(find.byKey(const ValueKey('branch_list_quiet')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('branch_row_4')), findsOneWidget);
+
+        await tester.tap(find.byKey(const ValueKey('branch_row_5')));
+        await tester.pumpAndSettle();
+        expect(at(r), '/chat/1?branch=5');
+        expect(find.byKey(const ValueKey('chat_layout_branch')), findsOne);
+        expect(find.byKey(const ValueKey('branch_list_quiet')), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    for (final (label, size) in [('narrow', narrow), ('wide', wide)]) {
       testWidgets('also send to channel is the side conversation\'s alone '
           '(#4350, $label)', (tester) async {
         const box = ValueKey('message_composer_also_channel');

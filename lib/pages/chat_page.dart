@@ -22,6 +22,7 @@ import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/folder_picker.dart';
 import 'package:quark/widgets/chat/chat_attachment_preview.dart';
+import 'package:quark/widgets/chat/chat_branch_list_sheet.dart';
 import 'package:quark/widgets/chat/chat_branch_pane.dart';
 import 'package:quark/widgets/chat/chat_channel_header.dart';
 import 'package:quark/widgets/chat/chat_channel_not_found.dart';
@@ -653,6 +654,24 @@ class _ChatPageState extends State<ChatPage>
     );
   }
 
+  /// Lists the open channel's side conversations in a sheet (#4351), read
+  /// afresh each time it opens. Choosing one closes the sheet and opens it.
+  Future<void> _openBranchList() async {
+    unawaited(_controller.loadBranchList());
+    await showQuarkSheet<void>(
+      context,
+      title: 'Side conversations',
+      scrollable: false,
+      builder: (sheetContext) => ChatBranchListSheet(
+        chat: _controller,
+        onOpen: (id) {
+          Navigator.of(sheetContext).pop();
+          _openBranch(id);
+        },
+      ),
+    );
+  }
+
   Future<void> _openMembers() async {
     final channel = _controller.selectedChannel;
     if (channel == null) return;
@@ -835,6 +854,7 @@ class _ChatPageState extends State<ChatPage>
                           topic: channel.topic,
                           isPrivate: channel.isPrivate,
                           isAnonymous: channel.anonymous,
+                          onBranches: _openBranchList,
                           onSearch: c.canSearch ? c.toggleSearch : null,
                           onEdit: c.canManageSelected ? _editChannel : null,
                           onMembers: c.canManageMembers ? _openMembers : null,

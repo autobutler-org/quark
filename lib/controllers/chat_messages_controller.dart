@@ -119,6 +119,11 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
       int? limit,
     })?
     fetchReplies,
+    Future<({List<ChatMessage> messages, int? nextBefore})> Function(
+      int channelId, {
+      int? before,
+    })?
+    fetchBranches,
     Future<ChatMessage> Function(
       int channelId,
       int keyVersion,
@@ -172,6 +177,7 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
        _crypto = crypto ?? (() => ChatKeysController.instance.crypto),
        _fetchMessages = fetchMessages ?? ChatMessagesService.fetchMessages,
        _fetchReplies = fetchReplies ?? ChatMessagesService.fetchReplies,
+       _fetchBranches = fetchBranches ?? ChatMessagesService.fetchBranches,
        _postMessage = postMessage ?? ChatMessagesService.postMessage,
        _editMessage = editMessage ?? ChatMessagesService.editMessage,
        _deleteMessage = deleteMessage ?? ChatMessagesService.deleteMessage,
@@ -219,6 +225,11 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
     int? limit,
   })
   _fetchMessages;
+  final Future<({List<ChatMessage> messages, int? nextBefore})> Function(
+    int channelId, {
+    int? before,
+  })
+  _fetchBranches;
   final Future<List<ChatMessage>> Function(
     int rootId, {
     int? before,
@@ -366,6 +377,87 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
   // ponytail: read once; an edit of a root the channel hasn't loaded shows
   // after the panel opens again.
   ChatTimelineMessage? root;
+
+  /// The channel's side conversations once [loadBranches] has read them
+  /// (#4351): each root, decrypted, with its branch, newest last reply first.
+  /// A `chat_branch_changed` moves a listed one to where its new last reply
+  /// puts it, or drops it at no replies.
+  // ponytail: a root opened while its key was missing stays waiting until
+  // the list loads again.
+  List<ChatTimelineMessage> branches = const [];
+
+  /// Whether [loadBranches] is out.
+  bool isLoadingBranches = false;
+
+  /// Why [loadBranches] last failed, or null.
+  Object? branchesError;
+
+  /// The `before` of the next page of [branches], null once the last page
+  /// is in.
+  int? _branchesBefore;
+
+  /// Whether a page of [branches] has been read, so events keep it current.
+  bool _branchesRead = false;
+
+  /// Whether [branches] has a page after it to load.
+  bool get hasMoreBranches => _branchesBefore != null;
+
+  /// Reads the first page of the channel's side conversations, or with
+  /// [more] the page after [branches]. Failures land in [branchesError].
+  Future<void> loadBranches({bool more = false}) async {
+    if (isLoadingBranches || (more && !hasMoreBranches)) return;
+    isLoadingBranches = true;
+    notifyListeners();
+    try {
+      await _keys.ensureKeys(channelId);
+      final page = await _fetchBranches(
+        channelId,
+        before: more ? _branchesBefore : null,
+      );
+      branches = [if (more) ...branches, ...page.messages.map(_open)];
+      _branchesBefore = page.nextBefore;
+      _branchesRead = true;
+      branchesError = null;
+    } catch (e) {
+      branchesError = e;
+    } finally {
+      isLoadingBranches = false;
+      notifyListeners();
+    }
+  }
+
+  /// Puts [rootId]'s listed side conversation where [update] leaves it, once
+  /// [branches] has been read. One not listed that now has replies brings
+  /// the first page again.
+  // ponytail: that reread drops the pages after the first; keep them if
+  // long branch lists make it noticeable.
+  void _updateListedBranch(
+    int? rootId,
+    ChatBranch Function(ChatBranch) update,
+  ) {
+    if (!_branchesRead) return;
+    final held = branches.where((b) => b.message.id == rootId).firstOrNull;
+    final branch = update(
+      held?.message.branch ?? const ChatBranch(replyCount: 0),
+    );
+    if (held == null) {
+      if (branch.replyCount > 0) unawaited(loadBranches());
+      return;
+    }
+    final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+    branches =
+        [
+          for (final b in branches)
+            if (b != held) b,
+          if (branch.replyCount > 0)
+            _reentry(held, held.message.copyWith(branch: branch)),
+        ]..sort(
+          (a, b) => (b.message.branch?.lastReplyAt ?? epoch).compareTo(
+            a.message.branch?.lastReplyAt ?? epoch,
+          ),
+        );
+    notifyListeners();
+  }
 
   /// Whether [open] found [rootId] is no channel message in [channelId]:
   /// not there, a reply itself, or another channel's.
@@ -1336,12 +1428,11 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
           // A reply to a loaded root is unread to this account unless it
           // wrote it, which involves it in the branch (#4349).
           final mine = created.authorId == _currentUserId();
-          _updateBranch(
-            replyTo,
-            (b) => mine
-                ? b.copyWith(involved: true)
-                : b.copyWith(unreadCount: b.unreadCount + 1),
-          );
+          ChatBranch apply(ChatBranch b) => mine
+              ? b.copyWith(involved: true)
+              : b.copyWith(unreadCount: b.unreadCount + 1);
+          _updateBranch(replyTo, apply);
+          _updateListedBranch(replyTo, apply);
           return;
         }
         _put(created);
@@ -1379,21 +1470,21 @@ class ChatMessagesController extends ChangeNotifier with SafeNotifier {
         // conversation (#4346). The event is everyone's, so what this
         // account has read there is kept.
         final changed = ChatBranch.fromJson(data);
-        _updateBranch(
-          (data['messageId'] as num?)?.toInt(),
-          (b) => b.copyWith(
-            replyCount: changed.replyCount,
-            lastReplyAt: changed.lastReplyAt,
-          ),
+        ChatBranch apply(ChatBranch b) => b.copyWith(
+          replyCount: changed.replyCount,
+          lastReplyAt: changed.lastReplyAt,
         );
+        final messageId = (data['messageId'] as num?)?.toInt();
+        _updateBranch(messageId, apply);
+        _updateListedBranch(messageId, apply);
       case 'chat_read_marker_changed':
         // This account read a loaded message's side conversation (#4349).
         final marker = ChatReadMarker.fromJson(data.cast<String, dynamic>());
         if (marker.rootId == null) return;
-        _updateBranch(
-          marker.rootId,
-          (b) => b.copyWith(unreadCount: marker.unreadCount),
-        );
+        ChatBranch apply(ChatBranch b) =>
+            b.copyWith(unreadCount: marker.unreadCount);
+        _updateBranch(marker.rootId, apply);
+        _updateListedBranch(marker.rootId, apply);
       case 'chat_poll_answer_changed':
         final messageId = (data['messageId'] as num?)?.toInt();
         final answer = data['answer'];

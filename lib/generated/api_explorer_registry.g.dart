@@ -3059,6 +3059,7 @@ const List<ApiEndpoint> apiEndpoints = [
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],
+    callers: ['ChatMessagesService.fetchBranches'],
   ),
   ApiEndpoint(
     method: 'GET',

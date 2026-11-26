@@ -51,6 +51,9 @@ lib/widgets/
     chat_branch_pane.dart       the open side conversation (#4348) as a
                                 QuarkBranchPanel fed from ChatController, with
                                 its failed sends and edit bar; reads Errors
+    chat_branch_list_sheet.dart the open channel's side conversations (#4351)
+                                as a QuarkBranchList fed from ChatController;
+                                reads Errors and ChatConfig
     show_chat_poll_editor.dart  opens QuarkPollEditor as a sheet or a dialog
                                 and posts through ChatController (#3894)
     show_chat_poll_export.dart  asks a poll export's format and destination;
