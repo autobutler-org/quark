@@ -2716,6 +2716,38 @@ final List<GalleryEntry> registry = [
     build: (context, log) => ChatLayoutDemo(log: log),
   ),
   GalleryEntry(
+    name: 'QuarkBranchPanel',
+    group: 'Chat',
+    build: (context, log) {
+      QuarkBranchPanel panel(ChatMessageItem? parent) => QuarkBranchPanel(
+        parent: parent,
+        onClose: () => log('QuarkBranchPanel.onClose'),
+        messages: QuarkMessageList(
+          messages: galleryBranchReplies,
+          isBranch: true,
+          onCopy: (id) => log('QuarkMessageList.onCopy($id)'),
+        ),
+        composer: QuarkMessageComposer(
+          hintText: 'Reply',
+          onSend: (text) => log('QuarkMessageComposer.onSend($text)'),
+        ),
+      );
+      return Wrap(
+        spacing: 24,
+        runSpacing: 24,
+        children: [
+          SizedBox(
+            width: 360,
+            height: 520,
+            child: panel(galleryChatMessages.firstWhere((m) => m.id == 'm6')),
+          ),
+          // A deleted parent: its replies stay readable.
+          SizedBox(width: 360, height: 520, child: panel(null)),
+        ],
+      );
+    },
+  ),
+  GalleryEntry(
     name: 'QuarkChannelList',
     group: 'Chat',
     build: (context, log) => Wrap(

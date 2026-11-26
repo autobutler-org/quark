@@ -173,3 +173,29 @@ final List<ChatMessageItem> galleryChatMessages = [
     body: 'Where are we meeting this week?',
   ),
 ];
+
+/// The replies in the side conversation branched from the projector message,
+/// newest first.
+final List<ChatMessageItem> galleryBranchReplies = [
+  ChatMessageItem(
+    id: 'r3',
+    authorId: 'ada',
+    authorName: 'Ada Lovelace',
+    sentAt: DateTime(2026, 9, 24, 9, 45),
+    body: 'Perfect, thanks!',
+  ),
+  ChatMessageItem(
+    id: 'r2',
+    authorId: 'eve',
+    authorName: 'Eve',
+    sentAt: DateTime(2026, 9, 24, 9, 30),
+    body: 'I have a spare HDMI cable too.',
+  ),
+  ChatMessageItem(
+    id: 'r1',
+    authorId: 'ada',
+    authorName: 'Ada Lovelace',
+    sentAt: DateTime(2026, 9, 24, 9, 20),
+    body: "I'll bring mine.",
+  ),
+];

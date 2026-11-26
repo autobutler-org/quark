@@ -393,4 +393,86 @@ void main() {
     }
     await expectTapTargetGuidelines(tester);
   });
+
+  group('side conversation (#4347)', () {
+    const branch = ValueKey('branch_body');
+
+    QuarkChatLayout withBranch(
+      List<String> events, {
+      bool membersOpen = false,
+    }) => QuarkChatLayout(
+      header: const Text('# general'),
+      channelList: const SizedBox.expand(key: channels),
+      messages: const SizedBox.expand(key: messages),
+      memberList: const SizedBox.expand(key: members),
+      isMemberListOpen: membersOpen,
+      onToggleChannelList: () => events.add('channels'),
+      onToggleMemberList: () => events.add('members'),
+      branch: const SizedBox.expand(key: branch),
+      branchTitle: 'The sink is leaking',
+      onCloseBranch: () => events.add('close'),
+    );
+
+    testBothViewports('opens beside the messages', (tester, size) async {
+      await pumpAt(tester, withBranch([]), size: size);
+
+      expect(find.byKey(branch), findsOneWidget);
+      expect(find.byKey(messages), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat_layout_branch')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('wide: takes the member pane\'s place', (tester) async {
+      await pumpAt(tester, withBranch([]), size: wideViewport);
+
+      expect(find.byKey(members), findsNothing);
+      expect(
+        find.byKey(const ValueKey('chat_layout_members_toggle')),
+        findsNothing,
+      );
+      expect(
+        tester.getTopLeft(find.byKey(messages)).dx,
+        lessThan(tester.getTopLeft(find.byKey(branch)).dx),
+      );
+      expect(
+        find.byKey(const ValueKey('resizable_pane_handle_chat_branch')),
+        findsOneWidget,
+      );
+      // A quarter of the window at most, so the messages keep half.
+      expect(
+        tester.getSize(find.byKey(const ValueKey('chat_layout_branch'))).width,
+        lessThanOrEqualTo(wideViewport.width * QuarkChatLayout.paneMaxFraction),
+      );
+    });
+
+    testWidgets('narrow: a sheet titled for it, ahead of the members', (
+      tester,
+    ) async {
+      await pumpAt(
+        tester,
+        withBranch([], membersOpen: true),
+        size: narrowViewport,
+      );
+
+      expect(find.byKey(members), findsNothing);
+      expect(find.text('The sink is leaking'), findsOneWidget);
+      expect(find.byKey(const ValueKey('quark_sheet_close')), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('chat_layout_branch'))).width,
+        narrowViewport.width,
+      );
+    });
+
+    testWidgets('narrow: the close button, scrim and back close it', (
+      tester,
+    ) async {
+      final events = <String>[];
+      await pumpAt(tester, withBranch(events), size: narrowViewport);
+
+      await tester.tap(find.byKey(const ValueKey('quark_sheet_close')));
+      await tester.tapAt(const Offset(180, 20));
+      await tester.binding.handlePopRoute();
+      expect(events, ['close', 'close', 'close']);
+    });
+  });
 }

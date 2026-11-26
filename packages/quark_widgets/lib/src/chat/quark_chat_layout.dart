@@ -38,13 +38,24 @@ import '../theme/quark_tokens.dart';
 /// once a collapse callback is supplied, hide and reopen it. Each pane may
 /// take a quarter of the window, so the messages always keep half.
 ///
+/// A side conversation (#3561), [branch], usually a `QuarkBranchPanel`,
+/// opens beside the messages. On a wide window it takes the member pane's
+/// place as a [QuarkResizablePane] of its own width, [branchPaneWidth] in
+/// and [onBranchPaneWidthChanged] out, and the members button stands aside
+/// until it closes. On a narrow one it opens as a [QuarkSheet] titled
+/// [branchTitle] over the messages, ahead of the member sheet, and its
+/// close button, the scrim and system back fire [onCloseBranch]. Null
+/// [branch] is no side conversation open.
+///
 /// Key prefixes: `chat_layout_channels`, `chat_layout_messages` and
-/// `chat_layout_members` on the three panes, `chat_layout_channels_toggle`
+/// `chat_layout_members` on the three panes, `chat_layout_branch` on the
+/// side conversation's pane or sheet, `chat_layout_channels_toggle`
 /// and `chat_layout_members_toggle` on the buttons beside [header],
-/// [QuarkResizablePane]'s keys with the ids `chat_channels` and
-/// `chat_members` on the wide layout's panes and handles,
+/// [QuarkResizablePane]'s keys with the ids `chat_channels`,
+/// `chat_members` and `chat_branch` on the wide layout's panes and handles,
 /// `chat_layout_scrim` behind an open drawer or sheet, and [QuarkSheet]'s
-/// `quark_sheet_close` on the member sheet's close button.
+/// `quark_sheet_close` on the member and side conversation sheets' close
+/// buttons.
 ///
 /// ```dart
 /// QuarkChatLayout(
@@ -82,6 +93,11 @@ class QuarkChatLayout extends StatelessWidget {
     this.isMemberPaneCollapsed = false,
     this.onMemberPaneWidthChanged,
     this.onMemberPaneCollapsedChanged,
+    this.branch,
+    this.branchTitle = 'Side conversation',
+    this.onCloseBranch,
+    this.branchPaneWidth = branchWidth,
+    this.onBranchPaneWidthChanged,
     super.key,
   });
 
@@ -91,6 +107,9 @@ class QuarkChatLayout extends StatelessWidget {
 
   /// The default width of the member pane in the wide layout.
   static const double memberListWidth = 240;
+
+  /// The default width of a side conversation's pane in the wide layout.
+  static const double branchWidth = 360;
 
   /// The share of the window each side pane may take, so the two together
   /// leave the messages at least half.
@@ -162,10 +181,30 @@ class QuarkChatLayout extends StatelessWidget {
   /// and keeps the pane open.
   final ValueChanged<bool>? onMemberPaneCollapsedChanged;
 
+  /// The open side conversation: a pane in the member pane's place when
+  /// wide, a sheet when narrow. Null when none is open.
+  final Widget? branch;
+
+  /// The narrow layout's sheet title for [branch], usually
+  /// `QuarkBranchPanel.titleFor` its parent.
+  final String branchTitle;
+
+  /// Fires when the narrow layout's sheet is closed by its button, the
+  /// scrim or system back, with the caller expected to clear [branch].
+  final VoidCallback? onCloseBranch;
+
+  /// The side conversation pane's width in the wide layout.
+  final double branchPaneWidth;
+
+  /// Fires with the side conversation pane's new width as its handle is
+  /// dragged. Null keeps the pane at [branchPaneWidth].
+  final ValueChanged<double>? onBranchPaneWidthChanged;
+
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final memberList = this.memberList;
+    final branch = this.branch;
     final header = this.header;
     final wide = !QuarkSplitView.isCollapsed(context);
     final onChannelPaneCollapsedChanged = this.onChannelPaneCollapsedChanged;
@@ -181,7 +220,7 @@ class QuarkChatLayout extends StatelessWidget {
             onPressed: () =>
                 onChannelPaneCollapsedChanged(!isChannelPaneCollapsed),
           );
-    final memberButton = memberList == null
+    final memberButton = memberList == null || (wide && branch != null)
         ? null
         : !wide
         ? (tooltip: 'Members', onPressed: onToggleMemberList)
@@ -264,7 +303,22 @@ class QuarkChatLayout extends StatelessWidget {
             ),
           ),
           Expanded(child: messagePane),
-          if (memberList != null)
+          if (branch != null)
+            QuarkResizablePane(
+              id: 'chat_branch',
+              semanticLabel: 'Resize side conversation',
+              edge: QuarkPaneEdge.end,
+              width: branchPaneWidth,
+              defaultWidth: branchWidth,
+              maxFraction: paneMaxFraction,
+              onWidthChanged: onBranchPaneWidthChanged,
+              child: Material(
+                key: const ValueKey('chat_layout_branch'),
+                color: tokens.background,
+                child: branch,
+              ),
+            )
+          else if (memberList != null)
             QuarkResizablePane(
               id: 'chat_members',
               semanticLabel: 'Resize members',
@@ -286,13 +340,26 @@ class QuarkChatLayout extends StatelessWidget {
     }
 
     final scrimColor = tokens.background.withValues(alpha: 0.7);
-    final showMembers = isMemberListOpen && memberList != null;
+    // One sheet at a time: a side conversation ahead of the members.
+    final sheet = branch != null
+        ? (
+            key: 'chat_layout_branch',
+            title: branchTitle,
+            onClose: onCloseBranch,
+            child: branch,
+          )
+        : isMemberListOpen && memberList != null
+        ? (
+            key: 'chat_layout_members',
+            title: 'Members',
+            onClose: onToggleMemberList,
+            child: memberList,
+          )
+        : null;
 
     final closeOverlay = isChannelListOpen
         ? onToggleChannelList
-        : showMembers
-        ? onToggleMemberList
-        : null;
+        : sheet?.onClose;
 
     // Back closes the drawer or the sheet before it leaves the page.
     return PopScope(
@@ -322,16 +389,16 @@ class QuarkChatLayout extends StatelessWidget {
                 ),
               ),
             ),
-          ] else if (showMembers) ...[
+          ] else if (sheet != null) ...[
             ModalBarrier(
               key: const ValueKey('chat_layout_scrim'),
               color: scrimColor,
-              onDismiss: onToggleMemberList,
+              onDismiss: sheet.onClose,
             ),
             Align(
               alignment: Alignment.bottomCenter,
               child: Material(
-                key: const ValueKey('chat_layout_members'),
+                key: ValueKey(sheet.key),
                 color: tokens.sidebar,
                 elevation: 8,
                 borderRadius: BorderRadius.vertical(
@@ -339,10 +406,10 @@ class QuarkChatLayout extends StatelessWidget {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: QuarkSheet(
-                  title: 'Members',
-                  onClose: onToggleMemberList ?? () {},
+                  title: sheet.title,
+                  onClose: sheet.onClose ?? () {},
                   scrollable: false,
-                  child: memberList,
+                  child: sheet.child,
                 ),
               ),
             ),

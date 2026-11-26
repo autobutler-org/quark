@@ -5,8 +5,9 @@ import 'chat_demo_data.dart';
 import 'framed_viewport.dart';
 
 /// Shows [QuarkChatLayout] wide and narrow at once, composed from the real
-/// chat widgets, and holds the drawer, sheet, channel and expansion state the
-/// widgets refuse to hold: the gallery is the caller.
+/// chat widgets, and holds the drawer, sheet, side conversation, channel and
+/// expansion state the widgets refuse to hold: the gallery is the caller. It
+/// opens with a side conversation open.
 class ChatLayoutDemo extends StatefulWidget {
   /// Creates the example, logging every callback through [log].
   const ChatLayoutDemo({required this.log, super.key});
@@ -27,11 +28,22 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
   double _memberWidth = QuarkChatLayout.memberListWidth;
   bool _channelsCollapsed = false;
   bool _membersCollapsed = false;
+  String? _branchId = 'm6';
+  double _branchWidth = QuarkChatLayout.branchWidth;
+
+  void _closeBranch() {
+    widget.log('QuarkBranchPanel.onClose');
+    setState(() => _branchId = null);
+  }
 
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final theme = Theme.of(context);
+    final branchId = _branchId;
+    final branchParent = galleryChatMessages
+        .where((m) => m.id == branchId)
+        .firstOrNull;
     // One configuration, shown in both frames.
     final layout = QuarkChatLayout(
       header: Text(
@@ -61,6 +73,10 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
               permissions: ChatPermissionPreset.moderator.permissions,
               currentUserId: galleryChatUserId,
               onDelete: (id) => widget.log('QuarkMessageList.onDelete($id)'),
+              onOpenBranch: (id) {
+                widget.log('QuarkMessageList.onOpenBranch($id)');
+                setState(() => _branchId = id);
+              },
               onOpenLink: (uri) =>
                   widget.log('QuarkMessageList.onOpenLink($uri)'),
               onOpenAttachment: (id, item) => widget.log(
@@ -106,6 +122,34 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
           );
         },
       ),
+      branch: branchId == null
+          ? null
+          : QuarkBranchPanel(
+              parent: branchParent,
+              onClose: _closeBranch,
+              messages: QuarkMessageList(
+                messages: galleryBranchReplies,
+                isBranch: true,
+                permissions: ChatPermissionPreset.moderator.permissions,
+                currentUserId: galleryChatUserId,
+                onDelete: (id) => widget.log('QuarkMessageList.onDelete($id)'),
+              ),
+              composer: QuarkMessageComposer(
+                hintText: 'Reply',
+                permissions: ChatPermissionPreset.moderator.permissions,
+                onSend: (text) =>
+                    widget.log('QuarkMessageComposer.onSend($text)'),
+              ),
+            ),
+      branchTitle: QuarkBranchPanel.titleFor(branchParent),
+      onCloseBranch: _closeBranch,
+      branchPaneWidth: _branchWidth,
+      onBranchPaneWidthChanged: (width) {
+        widget.log(
+          'QuarkChatLayout.onBranchPaneWidthChanged(${width.round()})',
+        );
+        setState(() => _branchWidth = width);
+      },
       isChannelListOpen: _channelsOpen,
       isMemberListOpen: _membersOpen,
       onToggleChannelList: () {
@@ -146,8 +190,9 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Above the breakpoint: channels, messages and members side by side; '
-          'drag a pane\'s edge to resize it, or use the header buttons',
+          'Above the breakpoint: channels, messages and members side by side, '
+          'or a side conversation in the members\' place; drag a pane\'s '
+          'edge to resize it, or use the header buttons',
           style: theme.textTheme.titleSmall,
         ),
         SizedBox(height: tokens.spacingSm),
@@ -155,7 +200,7 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
         SizedBox(height: tokens.spacingLg),
         Text(
           'Below it: messages alone; the buttons open the channel drawer and '
-          'the member sheet',
+          'the member sheet, and a side conversation opens as a sheet',
           style: theme.textTheme.titleSmall,
         ),
         SizedBox(height: tokens.spacingSm),
