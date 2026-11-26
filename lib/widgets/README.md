@@ -48,6 +48,9 @@ lib/widgets/
                                 settings menu
     chat_channel_not_found.dart a link to a channel the account can't open,
                                 in place of the messages; reads Errors
+    chat_branch_pane.dart       the open side conversation (#4348) as a
+                                QuarkBranchPanel fed from ChatController, with
+                                its failed sends and edit bar; reads Errors
     show_chat_poll_editor.dart  opens QuarkPollEditor as a sheet or a dialog
                                 and posts through ChatController (#3894)
     show_chat_poll_export.dart  asks a poll export's format and destination;
