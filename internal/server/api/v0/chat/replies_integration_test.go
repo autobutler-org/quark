@@ -54,10 +54,16 @@ func TestChatReplies_PostAndPage(t *testing.T) {
 		t.Errorf("replies = %v, want %d", got, reply.ID)
 	}
 	h.expect(t, http.StatusNotFound, http.MethodGet, "/chat/messages/999999/replies", "bob", "", nil)
+
+	var branches chatutil.ListBranchesResult
+	h.expect(t, http.StatusOK, http.MethodGet, room+"/branches", "bob", "", &branches)
+	if got := branches.Messages; len(got) != 1 || got[0].ID != root.ID || got[0].Branch == nil || got[0].Branch.ReplyCount != 1 {
+		t.Errorf("branches = %+v, want the root %d with 1 reply (#4351)", got, root.ID)
+	}
 }
 
 // TestChatReplies_DirectMessageKeepsAdminOut checks a non-member admin gets
-// 404 on the replies route of a direct message, and that the event for a
+// 404 on the replies and branches routes of a direct message (#4351), and that the event for a
 // reply there, and the root's chat_branch_changed, never reach the admin's
 // stream (#4345, #4346).
 func TestChatReplies_DirectMessageKeepsAdminOut(t *testing.T) {
@@ -73,6 +79,7 @@ func TestChatReplies_DirectMessageKeepsAdminOut(t *testing.T) {
 	h.expect(t, http.StatusCreated, http.MethodPost, path+"/messages", "bob", replyBody('a', root.ID, ""), &reply)
 
 	h.expect(t, http.StatusNotFound, http.MethodGet, "/chat/messages/"+strconv.FormatInt(root.ID, 10)+"/replies", "admin", "", nil)
+	h.expect(t, http.StatusNotFound, http.MethodGet, path+"/branches", "admin", "", nil)
 
 	admin, err := accessutil.Load(accessutil.LoadParams{
 		Ctx: context.Background(), Principal: accessutil.Principal{UserID: h.users["admin"], IsAdmin: true},

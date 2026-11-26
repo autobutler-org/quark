@@ -391,6 +391,13 @@ type Querier interface {
 	// branch that someone else wrote, and says whether the account is involved:
 	// it wrote the root or has a live reply there (#4349).
 	ListChatBranchSummariesBetween(ctx context.Context, arg ListChatBranchSummariesBetweenParams) ([]ListChatBranchSummariesBetweenRow, error)
+	// ListChatBranchesBefore pages a channel's side conversations (#4351): each
+	// root with at least one live reply, deleted roots included, with its summary
+	// as ListChatBranchSummariesBetween counts it, newest last reply first. The
+	// cursor is the newest live reply's id, unique to its branch, so a page ends
+	// where the next begins. ponytail: it groups every reply in the channel to
+	// page them; a (channel_id, root_id) index if a channel's replies grow large.
+	ListChatBranchesBefore(ctx context.Context, arg ListChatBranchesBeforeParams) ([]ListChatBranchesBeforeRow, error)
 	// ListChatChannelEvents pages a channel's events oldest first, after an id.
 	ListChatChannelEvents(ctx context.Context, arg ListChatChannelEventsParams) ([]ChatChannelEvent, error)
 	// ListChatChannelGroupUsers expands each group row on a channel into the

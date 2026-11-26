@@ -83,6 +83,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -2245,6 +2246,73 @@ func ListReplies(params ListRepliesParams) (ListMessagesResult, error) {
 		p.message(&messages[i])
 	}
 	return ListMessagesResult{Messages: messages}, p.done()
+}
+
+// ListBranchesParams pages a channel's side conversations (#4351). Before is
+// the NextBefore of the page above, 0 for the newest.
+type ListBranchesParams struct {
+	Ctx       context.Context
+	Database  *db.DatabaseSqlc
+	Principal accessutil.Principal
+	ChannelID int64
+	Before    int64
+	// Limit is capped at MaxMessagesPage; 0 means DefaultMessagesPage.
+	Limit int64
+}
+
+// ListBranchesResult is one page of a channel's side conversations: each
+// root, a tombstone when it was deleted, with its Branch, newest last reply
+// first. NextBefore is the Before of the next page, absent on a short page,
+// which is the last.
+type ListBranchesResult struct {
+	Messages   []Message `json:"messages"`
+	NextBefore int64     `json:"nextBefore,omitempty"`
+}
+
+// ListBranches pages the messages of a channel that have at least one live
+// reply (#4351), for a holder of read_messages. Their reactions and poll
+// answers are left out: the list shows a branch, not the message. Access
+// errors are GetChannelKeys'.
+func ListBranches(params ListBranchesParams) (ListBranchesResult, error) {
+	if params.Database == nil {
+		return ListBranchesResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	if _, err := memberPerms(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
+		return ListBranchesResult{}, err
+	}
+	limit := params.Limit
+	if limit <= 0 {
+		limit = DefaultMessagesPage
+	}
+	limit = min(limit, MaxMessagesPage)
+	before := params.Before
+	if before <= 0 {
+		before = math.MaxInt64
+	}
+	rows, err := queries.ListChatBranchesBefore(params.Ctx, db.ListChatBranchesBeforeParams{
+		UserID: params.Principal.UserID, ChannelID: params.ChannelID, Before: before, Limit: limit,
+	})
+	if err != nil {
+		return ListBranchesResult{}, err
+	}
+	p, err := loadPseudonyms(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return ListBranchesResult{}, err
+	}
+	result := ListBranchesResult{Messages: make([]Message, 0, len(rows))}
+	for _, row := range rows {
+		message := messageFromRow(row.ChatMessage)
+		message.Branch = &Branch{
+			ReplyCount: row.ReplyCount, LastReplyAt: row.LastReplyAt, UnreadCount: row.UnreadCount, Involved: row.Involved,
+		}
+		p.message(&message)
+		result.Messages = append(result.Messages, message)
+	}
+	if int64(len(rows)) == limit {
+		result.NextBefore = rows[len(rows)-1].NewestID
+	}
+	return result, p.done()
 }
 
 // MaxMarkReadRequestBytes caps a mark-read request's body.

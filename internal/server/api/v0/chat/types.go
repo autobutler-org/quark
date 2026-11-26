@@ -41,6 +41,7 @@ func (r *router) Routes() []*serverutil.Route {
 		getAttachmentRoute,
 		listMessagesRoute,
 		listRepliesRoute,
+		listBranchesRoute,
 		editMessageRoute,
 		deleteMessageRoute,
 		markReadRoute,

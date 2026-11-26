@@ -272,6 +272,104 @@ func (q *Queries) ListChatBranchSummariesBetween(ctx context.Context, arg ListCh
 	return items, nil
 }
 
+const listChatBranchesBefore = `-- name: ListChatBranchesBefore :many
+SELECT
+    root.id, root.channel_id, root.author_id, root.key_version, root.ciphertext, root.created_at, root.edited_at, root.deleted_at, root.nonce, root.client_message_id, root.root_id,
+    summary.reply_count,
+    summary.newest_id,
+    newest.created_at AS last_reply_at,
+    summary.unread_count,
+    CAST(COALESCE(root.author_id, 0) = CAST($1 AS BIGINT) OR summary.mine > 0 AS BOOLEAN) AS involved
+FROM (
+    SELECT
+        CAST(reply.root_id AS BIGINT) AS root_id,
+        COUNT(*) AS reply_count,
+        CAST(MAX(reply.id) AS BIGINT) AS newest_id,
+        COUNT(CASE WHEN reply.id > COALESCE(marker.last_read_message_id, 0)
+            AND COALESCE(reply.author_id, 0) <> $1 THEN 1 END) AS unread_count,
+        COUNT(CASE WHEN reply.author_id = $1 THEN 1 END) AS mine
+    FROM chat_messages AS reply
+    LEFT JOIN chat_branch_read_markers AS marker ON marker.root_id = reply.root_id
+        AND marker.user_id = $1
+    WHERE reply.channel_id = $2
+      AND reply.root_id IS NOT NULL
+      AND reply.deleted_at IS NULL
+    GROUP BY reply.root_id
+    HAVING MAX(reply.id) < CAST($3 AS BIGINT)
+) AS summary
+JOIN chat_messages AS newest ON newest.id = summary.newest_id
+JOIN chat_messages AS root ON root.id = summary.root_id
+ORDER BY summary.newest_id DESC
+LIMIT CAST($4 AS BIGINT)
+`
+
+type ListChatBranchesBeforeParams struct {
+	UserID    int64
+	ChannelID int64
+	Before    int64
+	Limit     int64
+}
+
+type ListChatBranchesBeforeRow struct {
+	ChatMessage ChatMessage
+	ReplyCount  int64
+	NewestID    int64
+	LastReplyAt time.Time
+	UnreadCount int64
+	Involved    bool
+}
+
+// ListChatBranchesBefore pages a channel's side conversations (#4351): each
+// root with at least one live reply, deleted roots included, with its summary
+// as ListChatBranchSummariesBetween counts it, newest last reply first. The
+// cursor is the newest live reply's id, unique to its branch, so a page ends
+// where the next begins. ponytail: it groups every reply in the channel to
+// page them; a (channel_id, root_id) index if a channel's replies grow large.
+func (q *Queries) ListChatBranchesBefore(ctx context.Context, arg ListChatBranchesBeforeParams) ([]ListChatBranchesBeforeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listChatBranchesBefore,
+		arg.UserID,
+		arg.ChannelID,
+		arg.Before,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChatBranchesBeforeRow
+	for rows.Next() {
+		var i ListChatBranchesBeforeRow
+		if err := rows.Scan(
+			&i.ChatMessage.ID,
+			&i.ChatMessage.ChannelID,
+			&i.ChatMessage.AuthorID,
+			&i.ChatMessage.KeyVersion,
+			&i.ChatMessage.Ciphertext,
+			&i.ChatMessage.CreatedAt,
+			&i.ChatMessage.EditedAt,
+			&i.ChatMessage.DeletedAt,
+			&i.ChatMessage.Nonce,
+			&i.ChatMessage.ClientMessageID,
+			&i.ChatMessage.RootID,
+			&i.ReplyCount,
+			&i.NewestID,
+			&i.LastReplyAt,
+			&i.UnreadCount,
+			&i.Involved,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChatMessagesAfter = `-- name: ListChatMessagesAfter :many
 SELECT id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at, nonce, client_message_id, root_id FROM chat_messages WHERE channel_id = $1 AND root_id IS NULL AND id > $2 ORDER BY id LIMIT CAST($3 AS BIGINT)
 `

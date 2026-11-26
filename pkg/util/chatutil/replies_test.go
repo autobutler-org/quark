@@ -275,4 +275,12 @@ func TestRepliesInAnonymousChannel(t *testing.T) {
 	if len(page.Messages) != 1 || page.Messages[0].AuthorID != carol.SelfID {
 		t.Errorf("replies = %+v, want one by carol's pseudonym %d", page.Messages, carol.SelfID)
 	}
+	// The channel's list of side conversations (#4351) names its roots' authors the same way.
+	branches, err := chatutil.ListBranches(chatutil.ListBranchesParams{Ctx: ctx, Database: f.database, Principal: f.as("carol"), ChannelID: room.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(branches.Messages) != 1 || branches.Messages[0].AuthorID != room.SelfID {
+		t.Errorf("branches = %+v, want bob's root under his pseudonym %d", branches.Messages, room.SelfID)
+	}
 }
