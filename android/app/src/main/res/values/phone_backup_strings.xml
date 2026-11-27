@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The notification channel a long background backup run shows its progress in (#4165). -->
+    <string name="phone_backup_channel_name">Phone backup</string>
+    <string name="phone_backup_notification_title">Backing up your phone</string>
+    <!-- e.g. "Backing up 120 of 3,400 to your Quark" -->
+    <string name="phone_backup_notification_progress">Backing up %1$s of %2$s to your Quark</string>
+</resources>
