@@ -30,6 +30,7 @@ void main() {
   late Directory index;
   late MemoryCacheSystem previewFiles;
   late MemoryCacheSystem originalFiles;
+  late MemoryCacheSystem keptFiles;
   final open = <PhotoDiskStore>[];
 
   /// Opens both stores as the app does at launch: a second call finds what
@@ -45,9 +46,21 @@ void main() {
       originalFiles,
       storeKey: 'originals',
     );
-    open.addAll([previews, originals]);
+    final keptPreviews = memoryPhotoDiskStore(
+      index,
+      keptFiles,
+      storeKey: 'keptPreviews',
+    );
+    final keptOriginals = memoryPhotoDiskStore(
+      index,
+      keptFiles,
+      storeKey: 'keptOriginals',
+    );
+    open.addAll([previews, originals, keptPreviews, keptOriginals]);
     PhotoDiskCache.previews = Future.value(previews);
     PhotoDiskCache.originals = Future.value(originals);
+    PhotoDiskCache.keptPreviews = Future.value(keptPreviews);
+    PhotoDiskCache.keptOriginals = Future.value(keptOriginals);
   }
 
   /// Closes the stores, writing out their index, as the app does on exit.
@@ -77,6 +90,7 @@ void main() {
     index = await Directory.systemTemp.createTemp('photo_disk_cache');
     previewFiles = MemoryCacheSystem();
     originalFiles = MemoryCacheSystem();
+    keptFiles = MemoryCacheSystem();
     launch();
   });
 
@@ -202,5 +216,92 @@ void main() {
     await settings.load();
 
     expect(settings.photoPreviewCacheBytes.value, picked);
+  });
+
+  group('kept albums (#4222)', () {
+    Future<Uint8List?> download() async => photo;
+
+    test('a kept photo opens with no network after a restart, and the cache '
+        'neither counts nor clears it', () async {
+      final kept = await PhotoDiskCache.keep(
+        'photos/beach.jpg',
+        rendition: KeptRendition.preview,
+        download: download,
+      );
+      expect(kept, photo.length);
+      expect(await PhotoDiskCache.sizeInBytes(), 0);
+      await PhotoDiskCache.clear();
+
+      await quit();
+      launch();
+      goOffline();
+      expect(
+        await PhotoPreviewService.downloadPreviewBytes('photos/beach.jpg'),
+        photo,
+      );
+    });
+
+    test('keeping a photo already cached moves it out of the budget with '
+        'no download', () async {
+      answerWith((_) => http.Response.bytes(photo, 200));
+      await FilesService.downloadFileBytes('photos/beach.jpg');
+      expect(await PhotoDiskCache.sizeInBytes(), photo.length);
+
+      final kept = await PhotoDiskCache.keep(
+        'photos/beach.jpg',
+        rendition: KeptRendition.original,
+        download: () => fail('downloaded a photo already on the device'),
+      );
+
+      expect(kept, photo.length);
+      expect(await PhotoDiskCache.sizeInBytes(), 0);
+      expect(
+        await PhotoDiskCache.keptLength(
+          'photos/beach.jpg',
+          rendition: KeptRendition.original,
+        ),
+        photo.length,
+      );
+    });
+
+    test('releasing a kept photo frees its bytes', () async {
+      await PhotoDiskCache.keep(
+        'photos/beach.jpg',
+        rendition: KeptRendition.original,
+        download: download,
+      );
+
+      await PhotoDiskCache.release(
+        'photos/beach.jpg',
+        rendition: KeptRendition.original,
+      );
+
+      expect(
+        await PhotoDiskCache.keptLength(
+          'photos/beach.jpg',
+          rendition: KeptRendition.original,
+        ),
+        isNull,
+      );
+      expect(await (await PhotoDiskCache.keptOriginals)!.sizeInBytes(), 0);
+    });
+
+    test('forgetting an account drops its kept photos too', () async {
+      await PhotoDiskCache.keep(
+        'photos/beach.jpg',
+        rendition: KeptRendition.preview,
+        download: download,
+      );
+
+      await PhotoDiskCache.forget(host: 'https://quark.local', account: 'ada');
+
+      expect(
+        await PhotoDiskCache.keptLength(
+          'photos/beach.jpg',
+          rendition: KeptRendition.preview,
+        ),
+        isNull,
+      );
+    });
   });
 }

@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/controllers/kept_albums_controller.dart';
 import 'package:quark/controllers/photos_controller.dart';
 import 'package:quark/controllers/sidebar_controller.dart';
 import 'package:quark/models/photo_album.dart';
@@ -37,6 +39,7 @@ import 'package:quark/widgets/photos/album_item_menu.dart';
 import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark/widgets/photos/album_picker_sheet.dart';
 import 'package:quark/widgets/photos/delete_album_dialog.dart';
+import 'package:quark/widgets/photos/keep_album_dialog.dart';
 import 'package:quark/widgets/photos/photo_library_nav.dart';
 import 'package:quark/widgets/photos/photo_library_sheet.dart';
 import 'package:quark/widgets/photos/photo_sort_button.dart';
@@ -790,12 +793,46 @@ class PhotosPageState extends State<PhotosPage>
     }
   }
 
+  /// Keeps [album] on this phone, after asking how (#4222), or stops
+  /// keeping it.
+  Future<void> _toggleKeepOnPhone(AlbumItem album) async {
+    final kept = KeptAlbumsController.instance;
+    if (kept.isKept(album.id)) {
+      await kept.stopKeeping(album.id);
+      if (mounted) {
+        showMessage(context, '"${album.name}" is no longer kept on this phone');
+      }
+      return;
+    }
+    final choice = await KeepAlbumDialog.show(
+      context,
+      albumName: album.name,
+      photoCount: album.itemCount,
+    );
+    if (choice == null || !mounted) return;
+    showMessage(
+      context,
+      'Downloading "${album.name}" to this phone. Settings shows how it is '
+      'going.',
+    );
+    await kept.keepAlbum(
+      albumId: album.id,
+      name: album.name,
+      originals: choice.originals,
+      allowMobileData: choice.allowMobileData,
+    );
+  }
+
   void _showAlbumActions(AlbumItem album, Offset position) {
     AlbumActionsMenu(
       onRename: () => _renameAlbum(album),
       onCreateSubAlbum: () => _createAlbum(parentId: album.id),
       onExport: () => _exportPhotos(albumId: album.id),
       onDelete: () => _deleteAlbum(album),
+      // The web leaves caching to the browser, and Demo mode's albums are
+      // not on a Quark.
+      onKeepOnPhone: kIsWeb || _demo ? null : () => _toggleKeepOnPhone(album),
+      isKeptOnPhone: KeptAlbumsController.instance.isKept(album.id),
     ).showAt(context, position);
   }
 

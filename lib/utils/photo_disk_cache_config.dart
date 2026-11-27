@@ -10,6 +10,22 @@ abstract final class PhotoDiskCacheConfig {
   /// originals. Changing it orphans every original already on disk.
   static const String originalsStoreKey = 'quarkOriginals';
 
+  /// Names the folder and index of the store holding the previews of albums
+  /// kept on this phone (#4222). Changing it orphans every kept preview.
+  static const String keptPreviewsStoreKey = 'quarkKeptPreviews';
+
+  /// Names the folder and index of the store holding the originals of albums
+  /// kept on this phone (#4222). Changing it orphans every kept original.
+  static const String keptOriginalsStoreKey = 'quarkKeptOriginals';
+
+  /// The budget of a kept store: none. What a kept album holds stays until
+  /// the person stops keeping it, so nothing is ever trimmed for size.
+  static const int keptBudgetBytes = 1000 * 1000 * _mib;
+
+  /// How long a kept photo nobody opens stays on disk: as long as the album
+  /// is kept, which this outlasts.
+  static const Duration keptStalePeriod = Duration(days: 365 * 100);
+
   /// One MiB, the unit the budgets are written in.
   static const int _mib = 1024 * 1024;
 

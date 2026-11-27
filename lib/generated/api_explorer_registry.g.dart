@@ -1160,7 +1160,7 @@ const List<ApiEndpoint> apiEndpoints = [
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],
-    callers: ['AlbumService.listAlbums'],
+    callers: ['AlbumService._fetchAlbums', 'AlbumService.listAlbums'],
   ),
   ApiEndpoint(
     method: 'POST',
@@ -1428,7 +1428,7 @@ const List<ApiEndpoint> apiEndpoints = [
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],
-    callers: ['AlbumService.listAlbumItems'],
+    callers: ['AlbumService.fetchAlbumItems', 'AlbumService.listAlbumItems'],
   ),
   ApiEndpoint(
     method: 'POST',
@@ -5334,7 +5334,7 @@ const List<ApiEndpoint> apiEndpoints = [
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],
-    callers: ['CodeViewerService.readRange', 'FilesService._downloadBytes', 'FilesService.constructMediaUrl', 'FilesService.downloadFileBytes', 'FilesService.downloadForOpenWith', 'FilesService.downloadOriginalBytes', 'SlidesService.readImageSize', 'downloadPhotoAsJpeg'],
+    callers: ['CodeViewerService.readRange', 'FilesService._downloadBytes', 'FilesService.constructMediaUrl', 'FilesService.downloadFileBytes', 'FilesService.downloadForOpenWith', 'FilesService.downloadOriginalBytes', 'FilesService.fetchPhotoBytes', 'SlidesService.readImageSize', 'downloadPhotoAsJpeg'],
   ),
   ApiEndpoint(
     method: 'GET',
@@ -9133,7 +9133,7 @@ const List<ApiEndpoint> apiEndpoints = [
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],
-    callers: ['FilesService._storedPreviewBytes', 'FilesService.constructThumbnailUrl', 'FilesService.probeThumbnail', 'PhotoPreviewService.downloadPreviewBytes'],
+    callers: ['FilesService._storedPreviewBytes', 'FilesService.constructThumbnailUrl', 'FilesService.fetchPhotoBytes', 'FilesService.probeThumbnail', 'PhotoPreviewService.downloadPreviewBytes', 'PhotoPreviewService.fetchPreviewBytes'],
   ),
   ApiEndpoint(
     method: 'PUT',

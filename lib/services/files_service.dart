@@ -1051,6 +1051,20 @@ class FilesService with AuthenticatedService {
     return _downloadBytes(filePath, serial: serial);
   }
 
+  /// The photo at [filePath] from the Quark, exactly as [downloadFileBytes]
+  /// gives it but never from or into the device's cache: for a kept album
+  /// (#4222), which files it among its own. A HEIC comes as its stored
+  /// preview, any other photo as its original.
+  ///
+  /// api: GET /api/v0/files/download
+  /// api: GET /api/v0/thumbnails/{filePath}
+  static Future<Uint8List?> fetchPhotoBytes(
+    String filePath, {
+    String? serial,
+  }) => heicImageExtensions.contains(fileExtension(filePath))
+      ? _storedPreviewBytes(filePath, serial: serial)
+      : _downloadBytes(filePath, serial: serial);
+
   /// The file at [filePath] from the Quark, as [downloadFileBytes] gives it.
   ///
   /// api: GET /api/v0/files/download

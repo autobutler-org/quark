@@ -91,7 +91,8 @@ class SettingsGeneralTab extends StatelessWidget {
   final Widget? notifications;
 
   /// The section sizing and clearing the photos kept on this device
-  /// (#4221), shown under [notifications]; null shows nothing, as on the web.
+  /// (#4221), and the albums kept on it for offline viewing (#4222), shown
+  /// under [notifications]; null shows nothing, as on the web.
   final Widget? photoCache;
 
   /// How often pages refresh themselves, in seconds; 0 is off.

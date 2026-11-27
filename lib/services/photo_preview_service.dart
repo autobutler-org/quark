@@ -29,17 +29,28 @@ abstract final class PhotoPreviewService {
   }) => PhotoDiskCache.preview(
     filePath,
     serial: serial,
-    download: () async {
-      final uri = FilesService.constructThumbnailUrl(
-        filePath,
-        serial: serial,
-        size: 'preview',
-      );
-      final response = await FilesService.instance.authenticatedGet(uri);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw ApiException(response.statusCode, 'Failed to load the preview');
-      }
-      return response.bodyBytes;
-    },
+    download: () => fetchPreviewBytes(filePath, serial: serial),
   );
+
+  /// The preview of the photo at [filePath] on the device [serial] from the
+  /// Quark, never from or into the device's cache: for a kept album
+  /// (#4222), which files it among its own. Throws as
+  /// [downloadPreviewBytes] does.
+  ///
+  /// api: GET /api/v0/thumbnails/{filePath}
+  static Future<Uint8List> fetchPreviewBytes(
+    String filePath, {
+    String? serial,
+  }) async {
+    final uri = FilesService.constructThumbnailUrl(
+      filePath,
+      serial: serial,
+      size: 'preview',
+    );
+    final response = await FilesService.instance.authenticatedGet(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to load the preview');
+    }
+    return response.bodyBytes;
+  }
 }

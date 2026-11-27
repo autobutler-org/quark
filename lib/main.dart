@@ -14,6 +14,7 @@ import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/jobs_controller.dart';
+import 'package:quark/controllers/kept_albums_controller.dart';
 import 'package:quark/controllers/upload_sessions_controller.dart';
 import 'package:quark/controllers/notifications_controller.dart';
 import 'package:quark/router.dart';
@@ -103,6 +104,9 @@ Future<void> _startServices() async {
   ChatKeysController.instance.start();
   // Shares channel keys with members who are waiting for them (#2417).
   ChatChannelKeysController.instance.start();
+  // Resumes downloading the albums kept on this phone (#4222). Not awaited:
+  // a sync runs as long as its downloads do.
+  if (!kIsWeb) unawaited(KeptAlbumsController.instance.start());
   // A right-click opens an item's own menu everywhere it has one (#2276), so
   // the browser's menu is turned off once, for the whole app. Text fields
   // fall back to Flutter's own copy/paste menu.

@@ -207,6 +207,9 @@ lib/widgets/
                                 the admin's device name card on the Network
                                 tab and on setup's last step, absent on a
                                 Quark that can't be renamed
+    kept_albums_setting.dart    the albums kept on this phone (#4222): each
+                                one's size and download state, and Remove;
+                                listens to KeptAlbumsController
     photo_cache_setting.dart    the General tab's photo cache section
                                 (#4221): its size, the preview budget and
                                 "Clear cached photos"; reads PhotoDiskCache
@@ -404,7 +407,7 @@ over its disk cache),
 `photos_empty_state.dart`, `photos_search_bar.dart` (the strip the page opens
 to search by file name, #2059),
 the album dialogs and menu (`album_name_dialog.dart`,
-`delete_album_dialog.dart`, `album_actions_menu.dart`), the menu and
+`delete_album_dialog.dart`, `keep_album_dialog.dart`, `album_actions_menu.dart`), the menu and
 confirmation for a photo in an album view (`album_item_menu.dart`,
 `remove_from_album_dialog.dart`), the menu for a photo in the library
 (`library_photo_menu.dart`), and
