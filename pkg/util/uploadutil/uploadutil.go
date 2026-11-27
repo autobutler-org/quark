@@ -60,6 +60,11 @@ var (
 	// ErrInvalidRequest marks a session that cannot be opened as described.
 	ErrInvalidRequest = errors.New("uploadutil: invalid upload session request")
 
+	// ErrChecksumMismatch is a fully staged upload whose bytes do not hash to
+	// the SHA-256 its session was opened with. The session ends and nothing is
+	// written; the endpoint answers 422.
+	ErrChecksumMismatch = errors.New("uploadutil: uploaded file did not match its checksum")
+
 	// ErrTooManySessions refuses a session past MaxSessionsPerUser or
 	// MaxSessions. The client finishes or cancels one first, or waits for an
 	// abandoned one to expire.
@@ -338,6 +343,11 @@ type CreateSessionParams struct {
 	// Setting it with Overwrite is ErrInvalidRequest; setting neither makes a
 	// taken name vfs.ErrConflict, at creation as well as at commit.
 	KeepBoth bool
+	// SHA256 is the hash the client computed for the whole file, as 64
+	// lowercase hex characters. Empty skips the check; anything else that is
+	// not that shape is ErrInvalidRequest. When set, the commit hashes the
+	// staged bytes first and refuses with ErrChecksumMismatch if they differ.
+	SHA256 string
 	// UserID is who opened the session. Every later call on it has to come
 	// from the same user; anyone else is told it does not exist (#1903).
 	UserID int64
@@ -377,6 +387,9 @@ type WriteChunkResult struct {
 	Serial string
 	// Created is false when the finished file replaced one already there.
 	Created bool
+	// SHA256 is the verified hash of the finished file, set only when the
+	// session was opened with one.
+	SHA256 string
 	// ProgressDue is true when this chunk is the first to land at least
 	// ProgressInterval after the last one that was. The caller publishes a
 	// progress hint then, so a fast upload does not flood the event stream.

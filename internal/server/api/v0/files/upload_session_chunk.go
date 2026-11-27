@@ -16,7 +16,7 @@ import (
 
 // uploadSessionChunk godoc
 // @Summary Send one chunk of a resumable upload
-// @Description Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A commit that replaces a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. A session opened by someone else is not found. A 409 carrying X-Upload-Offset is a chunk out of step; one without it is a name already in use. A photo or video's client-rendered thumbnail goes to PUT /thumbnails/{filePath} once the last chunk answers with where the file landed.
+// @Description Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A commit that replaces a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. A session opened by someone else is not found. A 409 carrying X-Upload-Offset is a chunk out of step; one without it is a name already in use. A session opened with a sha256 hashes the staged file on the last chunk: a match completes and returns the hash, and a mismatch is a 422 that ends the session and writes nothing. A photo or video's client-rendered thumbnail goes to PUT /thumbnails/{filePath} once the last chunk answers with where the file landed.
 // @Tags files
 // @Accept octet-stream
 // @Produce json
@@ -26,6 +26,7 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 409 {object} serverutil.Response "Conflict"
+// @Failure 422 {object} serverutil.Response "Unprocessable Entity — the file did not match the session's sha256"
 // @Security BearerAuth
 // @Router /files/upload-session/{sessionId} [put]
 func uploadSessionChunk(c *gin.Context) *serverutil.Response {
@@ -77,6 +78,7 @@ func uploadSessionChunk(c *gin.Context) *serverutil.Response {
 		Offset:    result.Offset,
 		Complete:  result.Complete,
 		Path:      result.Path,
+		SHA256:    result.SHA256,
 	})
 }
 
