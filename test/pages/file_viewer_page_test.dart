@@ -243,18 +243,18 @@ void main() {
   });
 
   testWidgets('a type with no viewer opens the generic one', (tester) async {
-    final r = await openFromFolder(tester, 'papers', 'papers/my report.docx');
+    final r = await openFromFolder(tester, 'papers', 'papers/my report.epub');
 
-    expect(at(r), '/view/papers/my%20report.docx');
+    expect(at(r), '/view/papers/my%20report.epub');
     expect(find.byType(GenericFileViewerPage), findsOneWidget);
-    expect(find.text('my report.docx'), findsWidgets);
+    expect(find.text('my report.epub'), findsWidgets);
   });
 
   testWidgets('closing a generic file replaces it with its folder', (
     tester,
   ) async {
-    final r = await openFromFolder(tester, 'papers', 'papers/notes.docx');
-    expect(history, ['/files/papers', '/view/papers/notes.docx']);
+    final r = await openFromFolder(tester, 'papers', 'papers/notes.epub');
+    expect(history, ['/files/papers', '/view/papers/notes.epub']);
 
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();

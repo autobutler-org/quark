@@ -159,7 +159,8 @@ func DetermineFileTypeFromPath(filePath string) FileType {
 		return FileTypeQsheet
 	case ".qslide":
 		return FileTypeQslide
-	case ".docx":
+	// Every format the read-only document viewer opens (#3265).
+	case ".docx", ".docm", ".odt", ".rtf":
 		return FileTypeDocx
 	// .xlsm is the same OOXML package as .xlsx with macros attached, so it
 	// reads identically. .xls is deliberately absent: the legacy binary

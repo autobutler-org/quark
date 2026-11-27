@@ -155,6 +155,21 @@ lib/widgets/
                                 button that expands the host list
     host_switcher.dart          ActiveHostCard plus the inline HostManager,
                                 shared by the login and setup pages
+  document_viewer/
+    document_viewer_body.dart   QuarkDocumentView fed from a
+                                DocumentViewerController; reads AppSettings
+                                for the disconnected state and writes its
+                                sentences with Errors
+    document_viewer_image.dart  a picture inside a document, loaded from the
+                                previews part endpoint through
+                                previewPartUrl
+    document_convert_conflict_dialog.dart
+                                asks whether to open or replace the .qdoc
+                                that "Open as Quark doc" found already there;
+                                pops a route
+    document_converted_dialog.dart
+                                lists what the converted .qdoc left out and
+                                offers to open it; pops a route
   markdown_viewer/
     markdown_viewer_body.dart   QuarkMarkdownView fed from a
                                 MarkdownViewerController; reads AppSettings

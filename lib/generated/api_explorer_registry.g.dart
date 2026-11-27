@@ -5211,6 +5211,7 @@ const List<ApiEndpoint> apiEndpoints = [
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],
+    callers: ['FilesService.convertDocumentToQdoc'],
   ),
   ApiEndpoint(
     method: 'POST',
@@ -7518,6 +7519,7 @@ const List<ApiEndpoint> apiEndpoints = [
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],
+    callers: ['PreviewsService.document'],
   ),
   ApiEndpoint(
     method: 'GET',
@@ -7570,6 +7572,7 @@ const List<ApiEndpoint> apiEndpoints = [
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],
+    callers: ['previewPartUrl'],
   ),
   ApiEndpoint(
     method: 'GET',

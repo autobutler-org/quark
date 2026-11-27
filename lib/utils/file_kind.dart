@@ -142,6 +142,10 @@ const _kindByExtension = {
   '.qslide': FileKind.qslide,
   '.pdf': FileKind.pdf,
   '.docx': FileKind.docx,
+  // The other formats the document viewer reads (#3265).
+  '.docm': FileKind.docx,
+  '.odt': FileKind.docx,
+  '.rtf': FileKind.docx,
   '.pptx': FileKind.slideshow,
   '.ppt': FileKind.slideshow,
   '.epub': FileKind.epub,

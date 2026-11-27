@@ -11,6 +11,8 @@ void main() {
       'build/Makefile': '/code/build/Makefile',
       'docs/readme.md': '/markdown/docs/readme.md',
       'parts/gear.stl': '/model/parts/gear.stl',
+      'papers/cv.docx': '/document/papers/cv.docx',
+      'papers/letter.rtf': '/document/papers/letter.rtf',
       'a/plan.qdoc': '/docs/a/plan.qdoc',
       'a/budget.qsheet': '/sheets/a/budget.qsheet',
       'a/talk.qslide': '/slides/a/talk.qslide',
