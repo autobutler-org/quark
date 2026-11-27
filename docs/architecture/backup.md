@@ -329,17 +329,16 @@ refuses a file this Quark did not write, changes nothing, and says why.
   in `quark.db`, which no snapshot copies, so nothing on the drive can produce the key. HKDF rather than
   `HMAC(secret, label)`, because `/auth/salt` answers `HMAC(secret, username)` for any name asked. No new table, no
   new dependency, and no new secret to lose.
-- **The drive record.** Before it writes the first bound file to a drive, a snapshot writes the settings row
-  `backupBound:<serial>`. A file with no MAC on a drive this Quark has bound is refused, so deleting the MAC does not
-  pass a planted file off as an old snapshot.
-- **Unbound files.** A file with no MAC, on a drive with no record, restores: that is what a snapshot taken before
-  binding wrote. Those snapshots sit in the root layout, which restore no longer reads
-  ([Older snapshots](#older-snapshots-in-the-root-layout)), so in practice every run a restore reads is bound.
+- **A file with no MAC is refused**, on every drive (quark-project#267). Every run a restore reads was written with
+  one: binding (#4010) shipped before the dated `backups/` folders (#4032), and the root layout older snapshots sit
+  in is not read ([Older snapshots](#older-snapshots-in-the-root-layout)). Restore used to take such a file from a
+  drive this Quark had no record of writing to, the `backupBound:<serial>` settings row that nothing reads or writes
+  now. A new install has that record for no drive, and a new install is where a restore runs, so a planted file with
+  its MAC removed passed there for an old snapshot.
 - **What it does not cover.** The key is this install's. A Quark rebuilt on new hardware has a new salt secret and
   refuses the bound files of the one it replaces; a bundle (`quark bundle export`) carries the settings rows, secret
-  included, so a Quark moved by bundle keeps restoring its own snapshots. A drive this Quark never bound still takes an
-  unbound file. The MAC and its file are written inside the run's partial folder, so a power cut between the two
-  leaves a pair no restore reads, and the next run deletes it.
+  included, so a Quark moved by bundle keeps restoring its own snapshots. The MAC and its file are written inside the
+  run's partial folder, so a power cut between the two leaves a pair no restore reads, and the next run deletes it.
 
 `ExportChat` and `ExportVault` on their own write unbound files and remove a stale MAC; only `SnapshotBackup` binds.
 On PostgreSQL a run holds neither the files nor their MACs.

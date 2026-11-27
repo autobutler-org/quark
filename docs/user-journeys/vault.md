@@ -393,7 +393,8 @@ account here of the same username, letter for letter. The caller is an admin.
 4. The snack bar reports how many vaults and entries were restored and from which backup, and names anyone who must
    unlock with the password they had when the backup was taken.
 5. Each of those accounts opens `/vault`, enters the password they had when the backup was taken and the password
-   they sign in with now. The vault then opens with the sign-in password.
+   they sign in with now. The vault then opens with the sign-in password. The prompt says to use only a password
+   they chose themselves, and to use **Start over** rather than type one someone else gave them.
 
 **Expected:** Every backed-up vault comes back under its account, its items as they were. The answer counts the
 accounts and items and names, in `backupPasswordAccounts`, every account whose vault opens with its backup-time
@@ -402,6 +403,7 @@ that vault again under the sign-in password when the account unlocks it. A vault
 nothing changes. An account that already has a vault key, even an empty vault, is a 409 naming it, and nothing
 changes: the account deletes its empty vault first. A backed-up vault with no account of its username is a 409 naming
 the usernames, and nothing changes. A drive without the `snapshot-backup` role, a backup this version cannot read,
+a backup this Quark did not write (another Quark's, one changed since, or one with no `.mac` file beside it),
 or a backed-up key or item this Quark would refuse from the app is a 400 naming the account when one is at fault,
 and nothing changes. A drive that is gone, or whose chosen backup holds no vault backup, is a 404; a drive that holds
 no backup yet says so and to back up onto it first. Backups taken before the dated `backups/` folders, at the drive's

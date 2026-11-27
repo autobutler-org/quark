@@ -38,6 +38,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// list, search, add, edit, delete, import and export. A vault restored onto
 /// new hardware asks for the password it was backed up with and the password
 /// the account signs in with now, and then opens with that sign-in password.
+/// That prompt warns against typing a password someone else supplied
+/// (quark-project#267): opening a vault that way would keep it under a key
+/// that person knows.
 ///
 /// On a phone (#4234) the bar holds Lock vault and a More menu with Export;
 /// the search field and folder chips come first under it, and a `+` button
@@ -323,9 +326,11 @@ class _VaultPageState extends State<VaultPage>
               title: 'Your vault is locked',
               message: restored
                   ? 'Enter the password you had when this vault was backed '
-                        'up. Your vault is then re-wrapped under the password '
-                        'you sign in with now, and that password opens it '
-                        'from then on.'
+                        'up. Use only a password you chose yourself: if '
+                        'someone else gave you one to type here, do not enter '
+                        'it, and use Start over instead. Your vault is then '
+                        're-wrapped under the password you sign in with now, '
+                        'and that password opens it from then on.'
                   : 'Enter the password you sign in to Quark with. Your vault '
                         'opens on this device; the Quark never sees what is in it.',
               submitLabel: 'Unlock',

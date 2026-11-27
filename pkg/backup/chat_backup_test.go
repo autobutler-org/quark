@@ -664,15 +664,7 @@ func TestRestoreChat_ReadsTheBackupDrive(t *testing.T) {
 	untouched("its binding")
 
 	// Made the Quark that wrote it, the chat comes back from the run.
-	for _, key := range []string{"authSaltSecret", boundDriveKeyPrefix + "BACKUP-1"} {
-		value, err := source.Queries.GetSetting(ctx, key)
-		if err != nil {
-			t.Fatalf("read %s: %v", key, err)
-		}
-		if err := live.Queries.SetSetting(ctx, db.SetSettingParams{Key: key, Value: value}); err != nil {
-			t.Fatal(err)
-		}
-	}
+	shareSaltSecret(t, source.Queries, live.Queries)
 	result, err := RestoreChat(params)
 	if err != nil {
 		t.Fatalf("RestoreChat: %v", err)

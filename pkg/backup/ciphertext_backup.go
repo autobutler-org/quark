@@ -125,8 +125,8 @@ func (b ciphertextBackup) require(liveDB *sql.DB) error {
 //
 // A key binds the file to this Quark: its MAC goes beside it, under
 // [bindingSuffix], and [ciphertextBackup.checkBinding] reads it back (#4010).
-// With no key the file is unbound and any binding an earlier export left is
-// removed, so it cannot refuse the new file.
+// With no key the file is unbound, which no restore from a drive takes, and
+// any binding an earlier export left is removed.
 func (b ciphertextBackup) export(ctx context.Context, liveDB *sql.DB, targetDir string, key []byte) (string, error) {
 	if err := b.require(liveDB); err != nil {
 		return "", err
@@ -385,12 +385,6 @@ func discardConn(conn *sql.Conn) {
 // Quark that wrote it (#4010).
 const bindingSuffix = ".mac"
 
-// boundDriveKeyPrefix starts the settings key recording that this Quark binds
-// the chat and vault files it writes to a drive: backupBound:<serial>. Without
-// the record, a bound file whose MAC was deleted would pass for one written
-// before binding.
-const boundDriveKeyPrefix = "backupBound:"
-
 // bindingKeyInfo separates the binding key from every other use of the salt
 // secret. HKDF, not HMAC(secret, label): /auth/salt answers HMAC(secret,
 // username) for any username, so a label there could be asked for.
@@ -406,16 +400,6 @@ func bindingKey(ctx context.Context, queries db.Querier) ([]byte, error) {
 		return nil, fmt.Errorf("read the backup binding key: %w", err)
 	}
 	return hkdf.Key(sha256.New, secret, nil, bindingKeyInfo, sha256.Size)
-}
-
-// markDriveBound records that this Quark binds what it writes to the drive
-// serial. It is written before the first bound file, so a failure afterwards
-// leaves the drive refusing unbound files rather than accepting them.
-func markDriveBound(ctx context.Context, queries db.Querier, serial string) error {
-	if err := queries.SetSetting(ctx, db.SetSettingParams{Key: boundDriveKeyPrefix + serial, Value: "true"}); err != nil {
-		return fmt.Errorf("record the backup binding for the drive: %w", err)
-	}
-	return nil
 }
 
 // fileMAC is the binding MAC of the file at path, read as a stream.
@@ -466,13 +450,13 @@ func (b ciphertextBackup) writeBinding(key []byte, filePath, targetDir string) e
 // nothing was restored.
 var ErrBackupNotFromThisQuark = errors.New("this Quark did not write this backup file, so nothing was restored")
 
-// checkBinding refuses the backup in backupDir, on the drive serial, unless
-// this Quark wrote it. A file with a binding must match it under this
-// Quark's key. A file without one restores only from a drive this Quark has
-// never bound a snapshot to: that is a snapshot taken before binding, and the
-// drives already on the shelf keep working. A missing file is left to the
-// restore, which names it.
-func (b ciphertextBackup) checkBinding(ctx context.Context, queries db.Querier, serial, backupDir string) error {
+// checkBinding refuses the backup in backupDir unless this Quark wrote it:
+// the file must have a binding, and match it under this Quark's key. A file
+// with none is refused on every drive (quark-project#267). Every run a
+// restore reads was written with one, and a new install has never written to
+// any drive, so a record of the drives written to cannot tell a planted file
+// from an old snapshot. A missing file is left to the restore, which names it.
+func (b ciphertextBackup) checkBinding(ctx context.Context, queries db.Querier, backupDir string) error {
 	dbPath := filepath.Join(backupDir, b.filename)
 	if _, err := os.Stat(dbPath); errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -480,14 +464,7 @@ func (b ciphertextBackup) checkBinding(ctx context.Context, queries db.Querier, 
 	// Bounded: a MAC is 64 hex characters, and the drive is not trusted.
 	want, err := readBinding(filepath.Join(backupDir, b.filename+bindingSuffix))
 	if errors.Is(err, fs.ErrNotExist) {
-		_, err := queries.GetSetting(ctx, boundDriveKeyPrefix+serial)
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("read the drive's backup binding record: %w", err)
-		}
-		return fmt.Errorf("%w: %s has no binding, but this Quark binds every snapshot it writes to this drive",
+		return fmt.Errorf("%w: %s has no binding, and this Quark binds every snapshot it writes",
 			ErrBackupNotFromThisQuark, b.filename)
 	}
 	if err != nil {
@@ -537,7 +514,7 @@ func (b ciphertextBackup) fromDrive(params RestoreVaultParams) (Run, string, err
 	if err != nil {
 		return Run{}, "", err
 	}
-	if err := b.checkBinding(params.Ctx, params.Queries, params.DeviceSerial, dir); err != nil {
+	if err := b.checkBinding(params.Ctx, params.Queries, dir); err != nil {
 		return Run{}, "", err
 	}
 	return run, dir, nil

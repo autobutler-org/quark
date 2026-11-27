@@ -374,9 +374,6 @@ func exportCiphertextTo(ctx context.Context, params SnapshotBackupParams, target
 		if key, err = bindingKey(ctx, params.Queries); err != nil {
 			return err
 		}
-		if err := markDriveBound(ctx, params.Queries, params.TargetDeviceSerial); err != nil {
-			return err
-		}
 	}
 	for _, b := range ciphertextBackups {
 		if _, err := b.export(ctx, params.LiveDB, hostPath, key); err != nil {

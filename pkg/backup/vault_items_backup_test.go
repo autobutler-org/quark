@@ -362,6 +362,7 @@ func TestRestoreVault_ReadsTheBackupDrive(t *testing.T) {
 	liveDB := dbtest.NewDB(t)
 	live := liveDB.Db
 	addChatUsers(t, live, "alice")
+	bindVaultFile(t, liveDB.Queries, filepath.Join(driveDir, BackupsDir, newestRun))
 	params := RestoreVaultParams{Ctx: context.Background(), LiveDB: live, Queries: liveDB.Queries, Registry: reg, DeviceSerial: "BACKUP-1"}
 
 	// A drive holding the file is not enough: it must be the snapshots' drive.
