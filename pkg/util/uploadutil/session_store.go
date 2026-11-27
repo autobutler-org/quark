@@ -3,6 +3,7 @@ package uploadutil
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -40,6 +41,8 @@ type session struct {
 	serial    string
 	overwrite bool
 	keepBoth  bool
+	// sha256 is the hash the finished file has to match, or empty.
+	sha256 string
 	// userID is who opened the session; nobody else can see or use it.
 	userID    int64
 	tempPath  string
@@ -86,6 +89,10 @@ func (s *SessionStore) CreateSession(params CreateSessionParams) (CreateSessionR
 	if params.Overwrite && params.KeepBoth {
 		return CreateSessionResult{}, fmt.Errorf("%w: choose overwrite or keepBoth, not both", ErrInvalidRequest)
 	}
+	if params.SHA256 != "" && !isSHA256Hex(params.SHA256) {
+		return CreateSessionResult{}, fmt.Errorf(
+			"%w: sha256 must be 64 lowercase hex characters", ErrInvalidRequest)
+	}
 	if !params.Destination.Writable(params.Serial) {
 		return CreateSessionResult{}, ErrNoDestination
 	}
@@ -119,6 +126,7 @@ func (s *SessionStore) CreateSession(params CreateSessionParams) (CreateSessionR
 		serial:    params.Serial,
 		overwrite: params.Overwrite,
 		keepBoth:  params.KeepBoth,
+		sha256:    params.SHA256,
 		userID:    params.UserID,
 		tempPath:  file.Name(),
 		createdAt: now,
@@ -491,6 +499,19 @@ func (s *SessionStore) commit(sess *session, params WriteChunkParams) (WriteChun
 	if err := sess.file.Sync(); err != nil {
 		return WriteChunkResult{}, fmt.Errorf("failed to flush staged upload: %w", err)
 	}
+	// The staged bytes are checked before the move, not after it: a file that
+	// fails never lands, so a bad overwrite cannot replace a good file and no
+	// listing event goes out for something that was then removed (#4160).
+	if sess.sha256 != "" {
+		sum, err := sess.stagedSHA256()
+		if err != nil {
+			return WriteChunkResult{}, err
+		}
+		if sum != sess.sha256 {
+			s.endLocked(sess, SessionFailed, ErrChecksumMismatch.Error())
+			return WriteChunkResult{}, ErrChecksumMismatch
+		}
+	}
 	if _, err := sess.file.Seek(0, io.SeekStart); err != nil {
 		return WriteChunkResult{}, fmt.Errorf("failed to rewind staged upload: %w", err)
 	}
@@ -536,6 +557,7 @@ func (s *SessionStore) commit(sess *session, params WriteChunkParams) (WriteChun
 		Path:      written.Path,
 		Serial:    sess.serial,
 		Created:   written.Created,
+		SHA256:    sess.sha256,
 	}, nil
 }
 
@@ -588,6 +610,20 @@ func (sess *session) append(chunk ContentRange, body io.Reader) error {
 
 	sess.offset += got
 	return nil
+}
+
+// stagedSHA256 hashes the staged file from its first byte, streaming it so a
+// multi-gigabyte upload costs one copy buffer. Called with the session's lock
+// held, once every byte is staged.
+func (sess *session) stagedSHA256() (string, error) {
+	if _, err := sess.file.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("failed to rewind staged upload: %w", err)
+	}
+	digest := sha256.New()
+	if _, err := io.Copy(digest, sess.file); err != nil {
+		return "", fmt.Errorf("failed to hash staged upload: %w", err)
+	}
+	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
 // rollback cuts the staged file back to the committed offset after a failed
@@ -661,6 +697,20 @@ func cleanRootDir(rootDir string) (string, error) {
 		return "", fmt.Errorf("%w: rootDir %q escapes the upload root", ErrInvalidRequest, rootDir)
 	}
 	return path.Clean(trimmed), nil
+}
+
+// isSHA256Hex reports whether s is a SHA-256 written as 64 lowercase hex
+// characters, the one spelling a session accepts.
+func isSHA256Hex(s string) bool {
+	if len(s) != hex.EncodedLen(sha256.Size) {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // newSessionID returns an opaque, URL-safe id. It has to be unguessable: the id

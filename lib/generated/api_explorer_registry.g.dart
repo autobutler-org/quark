@@ -6097,7 +6097,7 @@ const List<ApiEndpoint> apiEndpoints = [
     inSwagger: true,
     tags: ['files'],
     summary: 'Open a resumable upload session',
-    description: 'Reserve a session for one file; the bytes follow as chunks on PUT. Needs write access on the directory the file lands in. The session belongs to the caller: it is not found for anyone else. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.',
+    description: 'Reserve a session for one file; the bytes follow as chunks on PUT. Needs write access on the directory the file lands in. The session belongs to the caller: it is not found for anyone else. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. An optional sha256, 64 lowercase hex characters, makes the last chunk verify the file before it lands.',
     parameters: [
       ApiParameter(
         name: 'session',
@@ -6107,7 +6107,7 @@ const List<ApiEndpoint> apiEndpoints = [
         description: 'File the session will carry',
       ),
     ],
-    requestSchema: '{"type":"object","properties":{"fileName":{"type":"string"},"keepBoth":{"type":"boolean"},"overwrite":{"type":"boolean"},"rootDir":{"type":"string"},"serial":{"type":"string"},"totalSize":{"type":"integer"}}}',
+    requestSchema: '{"type":"object","properties":{"fileName":{"type":"string"},"keepBoth":{"type":"boolean"},"overwrite":{"type":"boolean"},"rootDir":{"type":"string"},"serial":{"type":"string"},"sha256":{"description":"SHA256 is optional: the file\'s SHA-256 as 64 lowercase hex characters.\\nWhen set, the upload completes only if the staged bytes hash to it.","type":"string"},"totalSize":{"type":"integer"}}}',
     responses: [
       ApiResponse(
         status: '200',
@@ -6183,7 +6183,7 @@ const List<ApiEndpoint> apiEndpoints = [
     inSwagger: true,
     tags: ['files'],
     summary: 'Send one chunk of a resumable upload',
-    description: 'Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A commit that replaces a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. A session opened by someone else is not found. A 409 carrying X-Upload-Offset is a chunk out of step; one without it is a name already in use. A photo or video\'s client-rendered thumbnail goes to PUT /thumbnails/{filePath} once the last chunk answers with where the file landed.',
+    description: 'Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A commit that replaces a .qslide, .qsheet or .qdoc on the internal device first snapshots its old content into its version history. A session opened by someone else is not found. A 409 carrying X-Upload-Offset is a chunk out of step; one without it is a name already in use. A session opened with a sha256 hashes the staged file on the last chunk: a match completes and returns the hash, and a mismatch is a 422 that ends the session and writes nothing. A photo or video\'s client-rendered thumbnail goes to PUT /thumbnails/{filePath} once the last chunk answers with where the file landed.',
     parameters: [
       ApiParameter(
         name: 'sessionId',
@@ -6204,7 +6204,7 @@ const List<ApiEndpoint> apiEndpoints = [
       ApiResponse(
         status: '200',
         description: 'OK',
-        schema: '{"type":"object","properties":{"complete":{"type":"boolean"},"offset":{"type":"integer"},"path":{"type":"string"},"sessionId":{"type":"string"}}}',
+        schema: '{"type":"object","properties":{"complete":{"type":"boolean"},"offset":{"type":"integer"},"path":{"type":"string"},"sessionId":{"type":"string"},"sha256":{"description":"SHA256 is the verified hash of the finished file, present only when the\\nsession was opened with one.","type":"string"}}}',
       ),
       ApiResponse(
         status: '400',
@@ -6219,6 +6219,11 @@ const List<ApiEndpoint> apiEndpoints = [
       ApiResponse(
         status: '409',
         description: 'Conflict',
+        schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
+      ),
+      ApiResponse(
+        status: '422',
+        description: 'Unprocessable Entity — the file did not match the session\'s sha256',
         schema: '{"type":"object","properties":{"contentType":{"type":"string","enum":["text/html","application/json"],"x-enum-varnames":["ContentTypeHTML","ContentTypeJSON"]},"data":{},"error":{},"statusCode":{"type":"integer"}}}',
       ),
     ],

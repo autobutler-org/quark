@@ -65,6 +65,10 @@ sequenceDiagram
 Small files take `POST /files/upload`, which streams the multipart body straight into `vfs.Write`. An abandoned
 session is swept by the upload-session sweeper.
 
+A session may be opened with the file's `sha256`. The last chunk then streams the staging file through SHA-256
+before the move: a match completes and returns the hash, and a mismatch is a `422` that ends the session, so a
+file that fails the check never lands and no event is published for it.
+
 ## Live events
 
 ```mermaid

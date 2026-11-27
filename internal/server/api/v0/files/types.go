@@ -86,6 +86,9 @@ type createUploadSessionRequest struct {
 	Serial    string `json:"serial"`
 	Overwrite bool   `json:"overwrite"`
 	KeepBoth  bool   `json:"keepBoth"`
+	// SHA256 is optional: the file's SHA-256 as 64 lowercase hex characters.
+	// When set, the upload completes only if the staged bytes hash to it.
+	SHA256 string `json:"sha256"`
 }
 
 type createUploadSessionResponse struct {
@@ -143,6 +146,17 @@ type uploadChunkResponse struct {
 	Offset    int64  `json:"offset"`
 	Complete  bool   `json:"complete"`
 	Path      string `json:"path,omitempty"`
+	// SHA256 is the verified hash of the finished file, present only when the
+	// session was opened with one.
+	SHA256 string `json:"sha256,omitempty"`
+}
+
+// checksumMismatchError is what a client reads when an upload did not hash to
+// the SHA-256 its session was opened with.
+type checksumMismatchError struct{}
+
+func (checksumMismatchError) Error() string {
+	return "The uploaded file did not match its checksum."
 }
 
 // uploadFilesResponse lists where each uploaded file landed, files-relative
