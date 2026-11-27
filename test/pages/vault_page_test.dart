@@ -422,6 +422,12 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Password you sign in with'), findsOneWidget);
+      // The prompt warns against a password someone else supplied
+      // (quark-project#267).
+      expect(
+        find.textContaining('if someone else gave you one to type here'),
+        findsOneWidget,
+      );
 
       await tester.enterText(
         find.byKey(const ValueKey('vault_password_field')),

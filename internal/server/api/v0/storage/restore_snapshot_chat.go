@@ -21,7 +21,7 @@ import (
 // @Description Then restores the chat backup a snapshot wrote into one run on the drive, which must have the snapshot-backup role: run, a folder under backups/, or the newest complete run when it is empty. The answer names the run.
 // @Description The restore replaces an empty chat: one with no message and no channel but general. A chat that already has messages or channels is refused, and a refused or failed restore changes nothing.
 // @Description The backup does not carry accounts. Every account it names is matched by username on this Quark; unmatchedUsers names the ones that are not here, whose messages stay with no author and whose memberships, reactions and chat keys are not restored.
-// @Description Also refused, changing nothing, when this Quark did not write the backup: its MAC is another Quark's, the file changed after the snapshot, or its MAC is gone from a drive this Quark binds its snapshots to. A snapshot taken before binding still restores.
+// @Description Also refused, changing nothing, when this Quark did not write the backup: its MAC is another Quark's, the file changed after the snapshot, or it has no MAC. Every snapshot this Quark writes has one.
 // @Description Every channel's members are sent chat_channel_changed. Every attempt past the password check is written to the server log.
 // @Tags storage
 // @Accept json

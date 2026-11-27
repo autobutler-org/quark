@@ -64,18 +64,35 @@ func newBindFixture(t *testing.T) bindFixture {
 	}
 }
 
-// shareSecret makes the live database the Quark that wrote the snapshot: the
-// same salt secret, and the record that it binds what it writes to the drive.
+// shareSecret makes the live database the Quark that wrote the snapshot.
 func (f bindFixture) shareSecret(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"authSaltSecret", boundDriveKeyPrefix + "BACKUP-1"} {
-		value, err := f.source.Queries.GetSetting(context.Background(), key)
-		if err != nil {
-			t.Fatalf("read %s: %v", key, err)
-		}
-		if err := f.live.Queries.SetSetting(context.Background(), db.SetSettingParams{Key: key, Value: value}); err != nil {
-			t.Fatal(err)
-		}
+	shareSaltSecret(t, f.source.Queries, f.live.Queries)
+}
+
+// shareSaltSecret gives to the salt secret of from, so each restores what the
+// other's snapshots bound.
+func shareSaltSecret(t *testing.T, from, to db.Querier) {
+	t.Helper()
+	value, err := from.GetSetting(context.Background(), "authSaltSecret")
+	if err != nil {
+		t.Fatalf("read authSaltSecret: %v", err)
+	}
+	if err := to.SetSetting(context.Background(), db.SetSettingParams{Key: "authSaltSecret", Value: value}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// bindVaultFile binds the vault backup an unbound export wrote to dir to the
+// Quark of queries, as its snapshot would have.
+func bindVaultFile(t *testing.T, queries db.Querier, dir string) {
+	t.Helper()
+	key, err := bindingKey(context.Background(), queries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := vaultBackup.writeBinding(key, filepath.Join(dir, backupVaultFilename), dir); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -148,17 +165,19 @@ func TestRestoreVault_RefusesAStrippedBinding(t *testing.T) {
 	f.refused(t, "a bound drive's file with its binding removed")
 }
 
-// A snapshot taken before binding still restores, from a drive this Quark
-// has not bound a snapshot to.
-func TestRestoreVault_RestoresASnapshotFromBeforeBinding(t *testing.T) {
+// A file with no binding is refused even on a drive this Quark has never
+// written a snapshot to, as every drive is on a new install
+// (quark-project#267). Chat and vault alike.
+func TestRestore_RefusesAnUnboundFileOnADriveNeverBound(t *testing.T) {
 	f := newBindFixture(t)
 	for _, name := range []string{backupChatFilename, backupVaultFilename} {
 		if err := os.Remove(filepath.Join(f.driveDir, name+bindingSuffix)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := RestoreVault(f.params); err != nil {
-		t.Fatalf("RestoreVault of a snapshot from before binding: %v", err)
+	f.refused(t, "a file with no binding")
+	if _, err := RestoreChat(f.params); !errors.Is(err, ErrBackupNotFromThisQuark) {
+		t.Errorf("RestoreChat of a file with no binding = %v, want ErrBackupNotFromThisQuark", err)
 	}
 }
 

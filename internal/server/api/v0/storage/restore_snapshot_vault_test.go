@@ -2,10 +2,17 @@ package v0_storage_test
 
 import (
 	"context"
+	"crypto/hkdf"
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -21,6 +28,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
@@ -129,7 +137,7 @@ func newRestoreEngine(t *testing.T, live *db.DatabaseSqlc, driveDir string) rest
 }
 
 // exportRun writes source's vault backup into a run on the drive at driveDir,
-// as a snapshot does.
+// with no binding; [bindRun] adds one.
 func exportRun(t *testing.T, source *db.DatabaseSqlc, driveDir string) {
 	t.Helper()
 	drive, err := vfs.NewLocalVFS(driveDir, vfs.FilesNamespace(backupSerial))
@@ -138,6 +146,35 @@ func exportRun(t *testing.T, source *db.DatabaseSqlc, driveDir string) {
 	}
 	putRun(t, drive, testRun, nil, nil)
 	if _, err := backup.ExportVault(context.Background(), source.Db, runHostDir(driveDir)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// bindRun binds the vault backup in the test run on the drive at driveDir to
+// live, as live's own snapshot would have: the hex of HMAC-SHA256, under the
+// HKDF of live's salt secret, over the file's name, a NUL and its bytes. A
+// drive with no vault backup is left alone.
+func bindRun(t *testing.T, live *db.DatabaseSqlc, driveDir string) {
+	t.Helper()
+	const name = "vault_items_backup.db"
+	data, err := os.ReadFile(filepath.Join(runHostDir(driveDir), name))
+	if errors.Is(err, fs.ErrNotExist) {
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret, err := settingsutil.AuthSaltSecretIn(context.Background(), live.Queries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := hkdf.Key(sha256.New, secret, nil, "quark snapshot backup binding v1", sha256.Size)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mac := hmac.New(sha256.New, key)
+	mac.Write(append([]byte(name+"\x00"), data...))
+	if err := os.WriteFile(filepath.Join(runHostDir(driveDir), name+".mac"), []byte(hex.EncodeToString(mac.Sum(nil))), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -170,6 +207,7 @@ func TestRestoreSnapshotVault_RestoresOntoANewQuark(t *testing.T) {
 	exportRun(t, source, driveDir)
 
 	live := vaultQuark(t, map[string]bool{"bob": false, "alice": false})
+	bindRun(t, live, driveDir)
 	engine := newRestoreEngine(t, live, driveDir)
 	w := restoreVault(engine, backupSerial)
 	if w.Code != http.StatusOK {
@@ -266,6 +304,7 @@ func TestRestoreSnapshotVault_Refusals(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(t, live)
 			}
+			bindRun(t, live, tc.dir)
 			engine := newRestoreEngine(t, live, tc.dir)
 			w := restoreVaultBody(engine, tc.body)
 			if w.Code != tc.want || !strings.Contains(w.Body.String(), tc.wantBody) {
@@ -309,6 +348,7 @@ func TestRestoreSnapshotVault_RefusesARowOutsideTheValidationBounds(t *testing.T
 	backupDB.Close()
 
 	live := vaultQuark(t, map[string]bool{"carol": false, "dave": false})
+	bindRun(t, live, driveDir)
 	w := restoreVault(newRestoreEngine(t, live, driveDir), backupSerial)
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "(dave)") {
 		t.Errorf("restore = %d %s, want 400 naming dave alone", w.Code, w.Body.String())
@@ -336,6 +376,24 @@ func TestRestoreSnapshotVault_RefusesAnotherQuarksSnapshot(t *testing.T) {
 	}, nil, target); err != nil {
 		t.Fatal(err)
 	}
+
+	live := vaultQuark(t, map[string]bool{"carol": false})
+	w := restoreVault(newRestoreEngine(t, live, driveDir), backupSerial)
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "did not write") {
+		t.Errorf("restore = %d %s, want 400 saying this Quark did not write it", w.Code, w.Body.String())
+	}
+	var keys int
+	if err := live.Db.QueryRow(`SELECT COUNT(*) FROM vault_keys`).Scan(&keys); err != nil || keys != 0 {
+		t.Errorf("a refused restore left %d vault keys (%v)", keys, err)
+	}
+}
+
+// A vault backup with no binding is refused on a Quark that has never written
+// a snapshot to the drive, as a new install has not (quark-project#267), and
+// nothing changes.
+func TestRestoreSnapshotVault_RefusesAnUnboundFile(t *testing.T) {
+	driveDir := t.TempDir()
+	exportRun(t, vaultQuark(t, map[string]bool{"carol": true}), driveDir)
 
 	live := vaultQuark(t, map[string]bool{"carol": false})
 	w := restoreVault(newRestoreEngine(t, live, driveDir), backupSerial)

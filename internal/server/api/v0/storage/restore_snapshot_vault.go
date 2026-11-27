@@ -21,7 +21,7 @@ import (
 // @Description Then restores the vault backup a snapshot wrote into one run on the drive, which must have the snapshot-backup role: run, a folder under backups/, or the newest complete run when it is empty. The answer names the run.
 // @Description Each vault comes back under the account of the same username, letter for letter. Refused while any vault has items, when an account the backup has a vault for already has a vault key here (a restore never replaces one),
 // @Description when a backed-up vault has no account of its username here, and when a backed-up key or item would be refused as an API write. Every refusal names the accounts and changes nothing.
-// @Description Also refused, changing nothing, when this Quark did not write the backup: its MAC is another Quark's, the file changed after the snapshot, or its MAC is gone from a drive this Quark binds its snapshots to. A snapshot taken before binding still restores.
+// @Description Also refused, changing nothing, when this Quark did not write the backup: its MAC is another Quark's, the file changed after the snapshot, or it has no MAC. Every snapshot this Quark writes has one.
 // @Description restoredAccounts names every account that got a vault back, and each is sent vault_changed. backupPasswordAccounts names the accounts whose vault opens with the
 // @Description password they had when the backup was taken, as every vault restored onto new hardware does. Every attempt past the password check is written to the server log.
 // @Tags storage

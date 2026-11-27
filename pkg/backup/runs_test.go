@@ -350,12 +350,15 @@ func TestVerifyBackup_ChoosesARun(t *testing.T) {
 
 // The vault comes back from the run asked for, or the newest one.
 func TestRestoreVault_ReadsTheChosenRun(t *testing.T) {
-	source := dbtest.NewDB(t).Db
+	sourceDB := dbtest.NewDB(t)
+	source := sourceDB.Db
 	addChatUsers(t, source, "alice", "bob")
 	seedVault(t, source, vaultOwner{"alice", randomBytes(t, 32), []string{"a", "b"}})
 	target := makeTarget(t)
 	snap := func() {
-		if err := SnapshotBackup(context.Background(), SnapshotBackupParams{Job: newJob("BACKUP-1"), LiveDB: source}, nil, target.VFS); err != nil {
+		if err := SnapshotBackup(context.Background(), SnapshotBackupParams{
+			TargetDeviceSerial: "BACKUP-1", Job: newJob("BACKUP-1"), LiveDB: source, Queries: sourceDB.Queries,
+		}, nil, target.VFS); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -368,6 +371,7 @@ func TestRestoreVault_ReadsTheChosenRun(t *testing.T) {
 	restore := func(run string) (VaultImportResult, error) {
 		live := dbtest.NewDB(t)
 		addChatUsers(t, live.Db, "alice", "bob")
+		shareSaltSecret(t, sourceDB.Queries, live.Queries)
 		chatExec(t, live.Db, `INSERT INTO device_roles (device_serial, role) VALUES ('BACKUP-1', 'snapshot-backup')`)
 		return RestoreVault(RestoreVaultParams{
 			Ctx: context.Background(), LiveDB: live.Db, Queries: live.Queries, Registry: reg, DeviceSerial: "BACKUP-1", Run: run,
