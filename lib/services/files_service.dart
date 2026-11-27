@@ -37,6 +37,15 @@ class FilesRequestException implements Exception {
   String toString() => message;
 }
 
+/// What "Open as Quark doc" wrote: the new `.qdoc`'s files-relative [path],
+/// whether the document was too long to convert whole, and sentences naming
+/// what the `.qdoc` could not hold.
+typedef DocumentConversion = ({
+  String path,
+  bool truncated,
+  List<String> warnings,
+});
+
 /// Calls `/api/v0/files` and its neighbors: listing, searching, uploading and downloading files, archives, photos
 /// and thumbnails; deleting, moving, converting and extracting them; video edits; and the installed version and
 /// updates.
@@ -441,6 +450,57 @@ class FilesService with AuthenticatedService {
       throw Exception('Convert response carried no path');
     }
     return path;
+  }
+
+  /// Converts the .docx, .docm, .odt or .rtf document at [filePath] into a
+  /// sibling `.qdoc` ("Open as Quark doc") and says where it landed and what
+  /// it could not hold. The document is left in place.
+  ///
+  /// Throws an [ApiException] with status 409 when a `.qdoc` of that name
+  /// already exists and [overwrite] was not set, so the caller can offer to
+  /// replace it rather than silently overwriting the user's own work.
+  ///
+  /// api: POST /api/v0/files/convert/document
+  static Future<DocumentConversion> convertDocumentToQdoc(
+    String filePath, {
+    String? serial,
+    bool overwrite = false,
+  }) async {
+    final serialValue = serial?.trim() ?? '';
+    final uri = apiBaseUri
+        .resolve('/api/v0/files/convert/document')
+        .replace(
+          query: [
+            'filePath=${Uri.encodeQueryComponent(filePath)}',
+            if (serialValue.isNotEmpty)
+              'serial=${Uri.encodeQueryComponent(serialValue)}',
+            if (overwrite) 'overwrite=true',
+          ].join('&'),
+        );
+    final response = await instance.authenticatedPost(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      // The conflict is answered by the caller, so the status is what travels.
+      throwFileApiError(
+        response.statusCode,
+        response.body,
+        'Failed to convert document',
+      );
+    }
+    final decoded = jsonDecode(response.body);
+    final path = decoded is Map<String, dynamic> ? decoded['path'] : null;
+    if (path is! String || path.isEmpty) {
+      throw Exception('Convert response carried no path');
+    }
+    final warnings = decoded['warnings'];
+    return (
+      path: path,
+      truncated: decoded['truncated'] == true,
+      warnings: [
+        if (warnings is List)
+          for (final warning in warnings)
+            if (warning is String) warning,
+      ],
+    );
   }
 
   /// Returns filesystem metadata for [filePath]: whether it is a directory

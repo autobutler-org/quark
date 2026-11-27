@@ -36,7 +36,7 @@ FakeIoQuark _recordingQuark() => FakeIoQuark((method, url) async {
 
 /// Extensions the fake stat reports as files. Every other path is a folder.
 bool _statNamesAFile(String path) =>
-    const ['.pdf', '.qslide', '.jpg', '.docx'].any(path.endsWith);
+    const ['.pdf', '.qslide', '.jpg', '.epub'].any(path.endsWith);
 
 /// A path under `missing` does not exist: stat and listing both 404, as the
 /// Quark answers for a deep link to a folder that is not there.
@@ -89,11 +89,11 @@ String _bodyFor(Uri url) {
         'fileType': 'pdf',
       },
       {
-        'name': 'notes.docx',
+        'name': 'notes.epub',
         'size': 12,
         'isDir': false,
-        'dirPath': '${url.queryParameters['rootDir'] ?? ''}/notes.docx',
-        'fileType': 'docx',
+        'dirPath': '${url.queryParameters['rootDir'] ?? ''}/notes.epub',
+        'fileType': 'epub',
       },
       {
         'name': 'clip.mp4',
@@ -511,8 +511,8 @@ void main() {
     final cases = <(String folder, String name, Type viewer)>[
       ('/files', 'beach.jpg', ImageViewerPage),
       ('/files/photos', 'beach.jpg', ImageViewerPage),
-      ('/files', 'notes.docx', GenericFileViewerPage),
-      ('/files/papers', 'notes.docx', GenericFileViewerPage),
+      ('/files', 'notes.epub', GenericFileViewerPage),
+      ('/files/papers', 'notes.epub', GenericFileViewerPage),
     ];
 
     String viewPath(String folder, String name) => folder == '/files'
@@ -615,16 +615,16 @@ void main() {
     final links = <(String link, String opened, Type viewer)>[
       ('/files/beach.jpg', '/view/beach.jpg', ImageViewerPage),
       ('/files/photos/beach.jpg', '/view/photos/beach.jpg', ImageViewerPage),
-      ('/files/notes.docx', '/view/notes.docx', GenericFileViewerPage),
+      ('/files/notes.epub', '/view/notes.epub', GenericFileViewerPage),
       (
-        '/files/papers/notes.docx',
-        '/view/papers/notes.docx',
+        '/files/papers/notes.epub',
+        '/view/papers/notes.epub',
         GenericFileViewerPage,
       ),
       ('/view/photos/beach.jpg', '/view/photos/beach.jpg', ImageViewerPage),
       (
-        '/view/papers/notes.docx',
-        '/view/papers/notes.docx',
+        '/view/papers/notes.epub',
+        '/view/papers/notes.epub',
         GenericFileViewerPage,
       ),
     ];

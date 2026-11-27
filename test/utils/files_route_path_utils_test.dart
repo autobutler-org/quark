@@ -58,9 +58,13 @@ void main() {
   group('usesGenericFileViewer', () {
     test('covers the document types that had no viewer', () {
       // These reached the "No supported editor" dead end before #1184.
-      expect(usesGenericFileViewer(FileKind.docx), isTrue);
       expect(usesGenericFileViewer(FileKind.slideshow), isTrue);
       expect(usesGenericFileViewer(FileKind.epub), isTrue);
+    });
+
+    test('leaves out a document, which has its own viewer', () {
+      // The read-only document viewer opens these (#3265).
+      expect(usesGenericFileViewer(FileKind.docx), isFalse);
     });
 
     test('covers a raw workbook opened by URL', () {

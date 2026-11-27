@@ -1,9 +1,10 @@
 # Read-only documents: DOCX, ODT, RTF, Markdown, PPTX/ODP, ODS/XLS
 
-**Status: proposal; the readers have landed, the viewers have not.** Built: Markdown (#3175), the office zip
-reader, the DOCX and DOCM reader, ODT, RTF, ODS, legacy XLS, ODP, and package-part images in the slides package.
-Not built yet: the previews API, document properties, the document view widget, the viewer pages, slides and sheets
-previews, and the Markdown SVG and alert gaps. This is the design for #2987 under epic #2994. Markdown has already
+**Status: proposal; the readers and the document viewer have landed, the other viewers have not.** Built:
+Markdown (#3175), the office zip reader, the DOCX and DOCM reader, ODT, RTF, ODS, legacy XLS, ODP, package-part
+images in the slides package, the document and part previews API, the document view widget, and the document
+viewer page at `/document/<path>` with Open as Quark doc (#3265). Not built yet: document properties in the
+viewers, the presentation and workbook viewer pages, and the Markdown SVG and alert gaps. This is the design for #2987 under epic #2994. Markdown has already
 shipped (#3175), so this page records that choice and does not reopen it. For everything else it sets out the
 decisions that need the owner's call: where documents are parsed, how a word-processing document is drawn, how a
 shared zip reader is factored, and which reader opens legacy `.xls`. It recommends one option for each, then splits

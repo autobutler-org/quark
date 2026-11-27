@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
-import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/services/previews_service.dart';
 import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/fullscreen.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
@@ -15,28 +15,6 @@ import 'package:quark_slides/quark_slides.dart';
 /// package on the device [serial] (null for the Quark's own storage).
 typedef PartUrlFn =
     Uri Function(String part, {required String filePath, String? serial});
-
-/// Builds a [PartUrlFn] for `GET /api/v0/previews/part`.
-///
-/// The bearer token is added when the app holds one, so an image widget,
-/// which cannot send an Authorization header, can still authenticate.
-Uri previewPartUrl(String part, {required String filePath, String? serial}) {
-  final querySegments = <String>[
-    'filePath=${Uri.encodeQueryComponent(filePath)}',
-    'part=${Uri.encodeQueryComponent(part)}',
-  ];
-  final serialValue = serial?.trim() ?? '';
-  if (serialValue.isNotEmpty) {
-    querySegments.add('serial=${Uri.encodeQueryComponent(serialValue)}');
-  }
-  final token = AppSettings.instance.bearerToken;
-  if (token != null && token.isNotEmpty) {
-    querySegments.add('token=${Uri.encodeQueryComponent(token)}');
-  }
-  return apiBaseUri
-      .resolve('/api/v0/previews/part')
-      .replace(query: querySegments.join('&'));
-}
 
 /// State behind presenting a `.qslide` (#1165): the presentation, the slide
 /// showing, the presenter view with its clock, the control bar that hides

@@ -11,6 +11,7 @@ import 'package:quark/pages/chat_page.dart';
 import 'package:quark/pages/code_viewer_page.dart';
 import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
+import 'package:quark/pages/document_viewer_page.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/pages/file_viewer_page.dart';
 import 'package:quark/pages/login_page.dart';
@@ -39,6 +40,7 @@ import 'package:quark/pages/vault_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/utils/code_viewer_files.dart';
+import 'package:quark/utils/document_viewer_files.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/file_kind.dart';
@@ -233,6 +235,9 @@ class AppRoutes {
   /// The 3D model viewer, `/model/<path>` (#2988).
   static const modelViewer = '/model';
 
+  /// The read-only document viewer, `/document/<path>` (#3265).
+  static const documentViewer = '/document';
+
   /// Percent-encode a file path for use in a URL, keeping `/` as the segment
   /// separator.
   ///
@@ -294,6 +299,12 @@ class AppRoutes {
   /// Device serial is passed as a query param when non-empty.
   static String modelViewerPath(String path, {String? serial}) =>
       _withSerial('$modelViewer/${encodeFilePath(path)}', serial);
+
+  /// Build a URL for the read-only document viewer.
+  /// e.g. documentViewerPath('papers/cv.docx') → '/document/papers/cv.docx'
+  /// Device serial is passed as a query param when non-empty.
+  static String documentViewerPath(String path, {String? serial}) =>
+      _withSerial('$documentViewer/${encodeFilePath(path)}', serial);
 
   /// Build a deep-link URL that opens [path] in the correct viewer.
   /// e.g. viewFile('photos/beach.jpg') → '/view/photos/beach.jpg'
@@ -989,6 +1000,16 @@ final router = GoRouter(
         deviceSerial: state.uri.queryParameters['serial'] ?? '',
       ),
     ),
+    GoRoute(
+      // Matches /document/<anything including slashes> — the read-only
+      // document viewer.
+      path: '${AppRoutes.documentViewer}/:path(.*)',
+      builder: (context, state) => DocumentViewerPage(
+        key: ValueKey(state.uri.toString()),
+        filePath: state.pathParameters['path'] ?? '',
+        deviceSerial: state.uri.queryParameters['serial'] ?? '',
+      ),
+    ),
   ],
   errorBuilder: (context, state) =>
       Scaffold(body: Center(child: Text('Page not found: ${state.uri}'))),
@@ -997,7 +1018,8 @@ final router = GoRouter(
 /// Where `/view/[path]` belongs instead, or null when [FileViewerPage] shows
 /// it. Docs, sheets and presentations have editors at their own URLs, source
 /// and plain text the code viewer, Markdown its rendered viewer, 3D models the
-/// model viewer; a folder or an archive is browsed in Files. [serial] rides
+/// model viewer, Word, OpenDocument and RTF documents the document viewer; a
+/// folder or an archive is browsed in Files. [serial] rides
 /// along to whichever it is.
 String? viewFileRedirect(String path, String? serial) {
   final folder = AppRoutes.filesPath(path);
@@ -1010,7 +1032,8 @@ String? viewFileRedirect(String path, String? serial) {
 
 /// The URL of the page of its own that opens the file at [path], or null for
 /// a kind [FileViewerPage] shows at `/view`. Source and plain text open in the
-/// code viewer, Markdown rendered, 3D models in the model viewer, and docs,
+/// code viewer, Markdown rendered, 3D models in the model viewer, Word,
+/// OpenDocument and RTF documents in the document viewer, and docs,
 /// sheets and presentations in their editors. [from] is where a presentation
 /// is opened from, for [AppRoutes.editorOrigin].
 String? viewerRouteFor(String path, {String? serial, String? from}) {
@@ -1023,6 +1046,9 @@ String? viewerRouteFor(String path, {String? serial, String? from}) {
   }
   if (opensInModelViewer(name)) {
     return AppRoutes.modelViewerPath(path, serial: serial);
+  }
+  if (opensInDocumentViewer(name)) {
+    return AppRoutes.documentViewerPath(path, serial: serial);
   }
   return switch (fileKindForName(name)) {
     FileKind.qdoc => AppRoutes.docFile(path, serial: serial),

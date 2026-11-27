@@ -380,7 +380,7 @@ JN-FB-013).
 
 ### JN-FB-019: Open a generic/unsupported file (native open)
 
-**Preconditions:** A file of a type without a dedicated viewer (e.g. `.docx`, `.epub`) exists in Files.
+**Preconditions:** A file of a type without a dedicated viewer (e.g. `.pptx`, `.epub`) exists in Files.
 
 **Steps:**
 
@@ -1004,7 +1004,8 @@ them goes there. Files inside an archive still open over the browser and have no
   reaches the system one.
 - The viewer needs no internet connection: the PDF engine ships inside the app, the web build included.
 - A PDF inside an archive (JN-FB-020) still downloads; it has no viewer there.
-- Word, Excel, PowerPoint and EPUB files still open in the generic viewer (JN-FB-019).
+- Excel, PowerPoint and EPUB files still open in the generic viewer (JN-FB-019). A Word document has a viewer
+  of its own (JN-FB-050).
 
 ---
 
@@ -1105,3 +1106,40 @@ Quark holds an earlier version of it.
 - **Download** still saves the original file, at full size.
 - A large TIFF saved with JPEG compression, separate color planes, CMYK or floating-point samples keeps the plain
   icon, as does a BMP over 256 MiB decoded.
+
+---
+
+### JN-FB-050: Read a Word document and open it as a Quark doc
+
+**Preconditions:** A `.docx`, `.docm`, `.odt` or `.rtf` file exists in a folder in Files.
+
+**Steps:**
+
+1. Tap the document, or open its `/view/<path>` URL directly.
+2. Scroll through it.
+3. Tap **Open as Quark doc** in the top bar.
+
+**Expected result:**
+
+- The document opens read-only at its `/document/<path>` URL, under a top bar naming the file: its headings,
+  lists, tables and pictures, with bold, italic, underline and links kept. Nothing is downloaded to the device to
+  read it.
+- A link to a web page or an email address opens in the browser or the mail app. No other link does anything.
+- **Open as Quark doc** saves a copy beside the document with the same name ending in `.qdoc`, and opens that
+  copy in the document editor. The original is not changed. Back from the editor returns to the document.
+- When the copy could not hold everything, a message lists what was left out before it opens, with **Open** and
+  **Not now**.
+- When a `.qdoc` of that name is already there, the app asks first: **Open existing**, **Replace** or **Cancel**.
+- **Download** saves the original file to the device.
+- A document that cannot be read shows a "Couldn't open the document" message with **Retry**. **Download**
+  still works.
+
+**Notes:**
+
+- The Quark reads the document; the app only draws what it sends. Macros never run, and a picture the document
+  links to on the web is never fetched.
+- The copy leaves pictures out and turns each table row into one line, because a Quark doc cannot hold either
+  yet.
+- Text color and highlighting are not shown, so a document stays readable in the dark theme.
+- A very long document is shown up to a limit, with a notice at the top saying so.
+- A document inside an archive (JN-FB-020) still downloads; it has no viewer there.

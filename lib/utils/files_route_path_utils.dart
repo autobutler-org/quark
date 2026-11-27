@@ -34,9 +34,10 @@ bool hasSupportedFilesEditorForType(FileKind kind) =>
 ///
 /// These open in `GenericFileViewerPage` — download plus "Open with…" — rather
 /// than falling through to the "No supported editor" dead end. Named document
-/// types are included deliberately: without them a `.docx` ends up worse off
+/// types are included deliberately: without them a `.pptx` ends up worse off
 /// than an unclassified file, which reaches that page as `generic` (#1184).
-/// A PDF is not one of them: it has `PdfViewerPage`.
+/// A PDF is not one of them: it has `PdfViewerPage`. Nor is a `.docx`, which
+/// has the document viewer (#3265).
 ///
 /// `xlsx` is here for the same reason, and only as a fallback: the file
 /// browser offers to convert a workbook to a `.qsheet` before reaching this,
@@ -46,7 +47,6 @@ bool hasSupportedFilesEditorForType(FileKind kind) =>
 bool usesGenericFileViewer(FileKind kind) => const {
   FileKind.generic,
   FileKind.csv,
-  FileKind.docx,
   FileKind.slideshow,
   FileKind.epub,
   FileKind.xlsx,

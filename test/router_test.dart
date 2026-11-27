@@ -1487,6 +1487,22 @@ void main() {
       );
     });
 
+    test('a /view link to a document opens the document viewer', () {
+      for (final name in ['cv.docx', 'cv.DOCM', 'cv.odt', 'cv.rtf']) {
+        expect(
+          viewFileRedirect('papers/$name', null),
+          '/document/papers/$name',
+          reason: name,
+        );
+      }
+      expect(
+        viewFileRedirect('my papers/cv.docx', 's1'),
+        '/document/my%20papers/cv.docx?serial=s1',
+      );
+      // Still the generic viewer: a presentation has no viewer yet.
+      expect(viewFileRedirect('talks/deck.pptx', null), isNull);
+    });
+
     test('the viewer paths encode the path and carry the serial', () {
       for (final (build, path, serial, want) in [
         (
@@ -1512,6 +1528,18 @@ void main() {
           'a/b.md',
           'usb 1',
           '/markdown/a/b.md?serial=usb+1',
+        ),
+        (
+          AppRoutes.documentViewerPath,
+          '/my papers/cover letter.docx',
+          null,
+          '/document/my%20papers/cover%20letter.docx',
+        ),
+        (
+          AppRoutes.documentViewerPath,
+          'papers/cv.odt',
+          'usb 1',
+          '/document/papers/cv.odt?serial=usb+1',
         ),
         (
           AppRoutes.modelViewerPath,
