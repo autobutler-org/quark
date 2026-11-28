@@ -11,7 +11,7 @@ require (
 	github.com/KononK/resize v0.0.0-20200801203131-21c514740ed6
 	github.com/andybalholm/brotli v1.3.0
 	github.com/autobutler-org/sprocket v0.2.1
-	github.com/bep/imagemeta v1.2.0
+	github.com/bep/imagemeta v1.2.1
 	github.com/coder/websocket v1.8.15
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/gin-contrib/cors v1.7.11
